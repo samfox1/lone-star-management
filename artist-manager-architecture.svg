@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#495057"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1180" height="780" fill="#ffffff"/>
+  <text x="590" y="40" text-anchor="middle" font-size="24" font-weight="700" fill="#1e1e1e">Artist Site Manager — multi-tenant CMS + sync</text>
+
+  <!-- Backend zone -->
+  <rect x="340" y="115" width="380" height="470" rx="14" fill="#eef0ff" stroke="#b197fc" stroke-width="1.5"/>
+  <text x="530" y="144" text-anchor="middle" font-size="18" font-weight="700" fill="#6d28d9">Shared Backend (Supabase)</text>
+
+  <rect x="365" y="168" width="330" height="48" rx="9" fill="#ffd8a8" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="530" y="197" text-anchor="middle" font-size="14" fill="#1e1e1e">Auth + RLS (tenant isolation)</text>
+
+  <rect x="365" y="226" width="330" height="56" rx="9" fill="#a5d8ff" stroke="#4a9eed" stroke-width="1.5"/>
+  <text x="530" y="249" text-anchor="middle" font-size="14" fill="#1e1e1e">Content tables</text>
+  <text x="530" y="269" text-anchor="middle" font-size="12" fill="#1e3a5f">artists · tracks · tour_dates · merch · links</text>
+
+  <rect x="365" y="292" width="330" height="46" rx="9" fill="#b2f2bb" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="530" y="320" text-anchor="middle" font-size="14" fill="#1e1e1e">CRUD API (scoped per artist)</text>
+
+  <rect x="365" y="348" width="330" height="46" rx="9" fill="#c3fae8" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="530" y="376" text-anchor="middle" font-size="14" fill="#1e1e1e">Sync jobs (pull &#8594; publish)</text>
+
+  <rect x="365" y="404" width="330" height="46" rx="9" fill="#eebefa" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="530" y="432" text-anchor="middle" font-size="14" fill="#1e1e1e">Public read API (public-safe)</text>
+
+  <rect x="420" y="478" width="220" height="46" rx="9" fill="#dee2e6" stroke="#868e96" stroke-width="1.5"/>
+  <text x="530" y="506" text-anchor="middle" font-size="13" fill="#343a40">Postgres · Storage</text>
+
+  <!-- Frontends -->
+  <rect x="40" y="150" width="190" height="70" rx="12" fill="#a5d8ff" stroke="#4a9eed" stroke-width="1.5"/>
+  <text x="135" y="180" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1e1e">Public artist sites</text>
+  <text x="135" y="200" text-anchor="middle" font-size="12" fill="#1e3a5f">(what fans see)</text>
+
+  <rect x="40" y="270" width="190" height="70" rx="12" fill="#d0bfff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="135" y="300" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1e1e">Manager dashboard</text>
+  <text x="135" y="320" text-anchor="middle" font-size="12" fill="#4c1d95">(build now)</text>
+
+  <rect x="40" y="390" width="190" height="70" rx="12" fill="#ffffff" stroke="#868e96" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="135" y="420" text-anchor="middle" font-size="15" font-weight="600" fill="#495057">MCP app</text>
+  <text x="135" y="440" text-anchor="middle" font-size="12" fill="#868e96">(later)</text>
+
+  <!-- Frontend arrows -->
+  <path d="M230,185 L338,420" stroke="#495057" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+  <text x="262" y="270" text-anchor="middle" font-size="13" fill="#495057">reads (public)</text>
+  <path d="M230,305 L338,315" stroke="#495057" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+  <text x="284" y="300" text-anchor="middle" font-size="13" fill="#495057">edit content</text>
+  <path d="M230,425 L338,372" stroke="#868e96" stroke-width="2" fill="none" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+  <text x="280" y="420" text-anchor="middle" font-size="13" fill="#868e96">edit by chat</text>
+
+  <!-- External services -->
+  <rect x="800" y="158" width="190" height="66" rx="12" fill="#b2f2bb" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="895" y="186" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1e1e">Spotify API</text>
+  <text x="895" y="206" text-anchor="middle" font-size="12" fill="#14532d">(catalog)</text>
+
+  <rect x="800" y="268" width="190" height="66" rx="12" fill="#ffd8a8" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="895" y="296" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1e1e">Bandsintown API</text>
+  <text x="895" y="316" text-anchor="middle" font-size="12" fill="#7c4a03">(tour dates)</text>
+
+  <rect x="800" y="378" width="190" height="66" rx="12" fill="#d0bfff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="895" y="406" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1e1e">Shopify API</text>
+  <text x="895" y="426" text-anchor="middle" font-size="12" fill="#4c1d95">(merch)</text>
+
+  <!-- Sync arrows -->
+  <path d="M695,365 L798,195" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+  <text x="762" y="262" text-anchor="middle" font-size="13" fill="#198754">pull catalog</text>
+  <path d="M695,371 L798,300" stroke="#f59e0b" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+  <text x="748" y="324" text-anchor="middle" font-size="13" fill="#b45309">pull dates</text>
+  <path d="M695,377 L798,408" stroke="#8b5cf6" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+  <text x="745" y="404" text-anchor="middle" font-size="13" fill="#6d28d9">pull merch</text>
+</svg>
