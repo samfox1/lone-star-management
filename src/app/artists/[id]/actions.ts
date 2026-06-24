@@ -17,16 +17,30 @@ import {
   publishAll,
   updateContent,
 } from '@/lib/content'
+import { isUrlField, safeHref } from '@/lib/url'
 
 const NUMERIC = new Set(['price', 'sort_order'])
 
-/** Pull a type's editable fields out of FormData, converting numbers. */
+/**
+ * Pull a type's editable fields out of FormData. Numbers are coerced and
+ * rejected if non-finite; URL fields with a dangerous scheme are dropped so
+ * they never persist (render-time safeHref is still the primary guard).
+ */
 function extractFields(type: EntityType, formData: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const field of ENTITIES[type].fields) {
     const raw = String(formData.get(field) ?? '').trim()
     if (raw === '') continue
-    out[field] = NUMERIC.has(field) ? Number(raw) : raw
+    if (NUMERIC.has(field)) {
+      const n = Number(raw)
+      if (Number.isFinite(n)) out[field] = n
+      continue
+    }
+    if (isUrlField(field)) {
+      if (safeHref(raw) !== undefined) out[field] = raw
+      continue
+    }
+    out[field] = raw
   }
   return out
 }

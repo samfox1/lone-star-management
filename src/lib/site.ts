@@ -34,7 +34,9 @@ export type SiteMerch = {
   id: string
   title: string
   image_url: string | null
-  price: number | null
+  // Postgres `numeric` serializes as a string over JSON to preserve precision,
+  // so price is a string at runtime (both published and working paths).
+  price: number | string | null
   url: string | null
 }
 

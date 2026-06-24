@@ -22,7 +22,8 @@ const FIELD_UI: Record<EntityType, { heading: string; fields: FieldUI[] }> = {
     fields: [
       { name: 'date', placeholder: 'Date', type: 'date', width: 'w-40' },
       { name: 'venue', placeholder: 'Venue' },
-      { name: 'city', placeholder: 'City', width: 'w-40' },
+      { name: 'city', placeholder: 'City', width: 'w-32' },
+      { name: 'ticket_url', placeholder: 'Tickets URL', type: 'url', width: 'w-44' },
     ],
   },
   merch: {
@@ -30,6 +31,8 @@ const FIELD_UI: Record<EntityType, { heading: string; fields: FieldUI[] }> = {
     fields: [
       { name: 'title', placeholder: 'Item name' },
       { name: 'price', placeholder: 'Price', type: 'number', width: 'w-24' },
+      { name: 'url', placeholder: 'Buy URL', type: 'url', width: 'w-44' },
+      { name: 'image_url', placeholder: 'Image URL', type: 'url', width: 'w-44' },
     ],
   },
   link: {

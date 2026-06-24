@@ -43,7 +43,9 @@ export const ENTITIES: Record<EntityType, EntityConfig> = {
   merch: {
     table: 'merch',
     fields: ['title', 'image_url', 'price', 'url'],
-    snapshot: ['id', 'title', 'image_url', 'price', 'url'],
+    // created_at is snapshotted so the public site can order merch the same way
+    // the dashboard/preview does (by creation order).
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'created_at'],
     orderBy: ['created_at'],
   },
   link: {
@@ -123,7 +125,16 @@ export async function deleteContent(
   if (error) throw new Error(error.message)
 }
 
-/** Snapshot every working row of one type into `revisions`. Returns the count. */
+/**
+ * Reconcile the published state of one content type to match the working rows.
+ *
+ * Publish is the gate: the live site becomes exactly what the working table
+ * looks like NOW. So we (1) snapshot every current working row, and
+ * (2) tombstone every entity_id previously published for this type that no
+ * longer has a working row — otherwise a deleted row's last snapshot would stay
+ * "latest" and remain live forever. get_public_site drops entities whose latest
+ * revision is a tombstone. Returns the number of revision rows written.
+ */
 export async function publishContent(
   supabase: SupabaseClient,
   type: EntityType,
@@ -131,14 +142,39 @@ export async function publishContent(
   publishedBy?: string,
 ): Promise<number> {
   const rows = await listContent(supabase, type, artistId)
-  if (rows.length === 0) return 0
-  const revisions = rows.map((row) => ({
-    artist_id: artistId,
-    entity_type: type,
-    entity_id: row.id,
-    data: publicSnapshot(type, row),
-    published_by: publishedBy ?? null,
-  }))
+  const liveIds = new Set(rows.map((row) => row.id))
+
+  // entity_ids already published for this (artist, type). RLS scopes this read
+  // to the caller's own artist (revisions_rw policy).
+  const { data: published, error: pubErr } = await supabase
+    .from('revisions')
+    .select('entity_id')
+    .eq('artist_id', artistId)
+    .eq('entity_type', type)
+    .not('entity_id', 'is', null)
+  if (pubErr) throw new Error(pubErr.message)
+
+  const publishedIds = new Set((published ?? []).map((r) => r.entity_id as string))
+  const tombstoneIds = [...publishedIds].filter((id) => !liveIds.has(id))
+
+  const revisions = [
+    ...rows.map((row) => ({
+      artist_id: artistId,
+      entity_type: type,
+      entity_id: row.id,
+      data: publicSnapshot(type, row),
+      published_by: publishedBy ?? null,
+    })),
+    ...tombstoneIds.map((id) => ({
+      artist_id: artistId,
+      entity_type: type,
+      entity_id: id,
+      data: { _deleted: true } as Record<string, unknown>,
+      published_by: publishedBy ?? null,
+    })),
+  ]
+
+  if (revisions.length === 0) return 0
   const { error } = await supabase.from('revisions').insert(revisions)
   if (error) throw new Error(error.message)
   return revisions.length
