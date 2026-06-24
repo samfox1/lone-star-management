@@ -101,6 +101,14 @@ whole restructure** — do it first (§6, phase 0).
 needs the public-read isolation tests re-run. Template field-set must map to
 versioned entities.
 
+**RESOLVED — field classification (user):** ALL fan-visible artist fields
+(`name`, `bio`, `hero_image_url`, `template`, `spotify_artist_id`) = **content**
+(draft→publish, versioned together as one `entity_type='artist'` snapshot). Only
+`slug` stays live (the public-URL lookup key). Integration config
+(`shopify_domain`, `bandsintown_name`) is never public and never in the snapshot.
+A site is "live" once its profile has been published at least once → an artist
+with no published profile makes `/[slug]` 404.
+
 ### 4.2 Audio hosting + player (Tracks) — DECIDED: GATED (no download)
 **Decision (user): gated audio.** Uploaded audio must not be freely downloadable
 (protects unreleased exclusives). Architecture:
