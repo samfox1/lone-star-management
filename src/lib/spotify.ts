@@ -92,14 +92,17 @@ export function createSpotifyClient(opts: Options = {}) {
     return items
   }
 
+  // Note: no `limit` param — Spotify rejects it (400 "Invalid limit") for apps
+  // in Development mode. Default page size + `next` pagination works in both
+  // modes, so we let the API default and follow cursors.
   function getArtistAlbums(artistId: string): Promise<SpotifyAlbum[]> {
     return getAllPages<SpotifyAlbum>(
-      `/artists/${artistId}/albums?include_groups=album,single&limit=50`,
+      `/artists/${artistId}/albums?include_groups=album,single`,
     )
   }
 
   function getAlbumTracks(albumId: string): Promise<SpotifyAlbumTrack[]> {
-    return getAllPages<SpotifyAlbumTrack>(`/albums/${albumId}/tracks?limit=50`)
+    return getAllPages<SpotifyAlbumTrack>(`/albums/${albumId}/tracks`)
   }
 
   /**
