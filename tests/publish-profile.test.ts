@@ -61,6 +61,14 @@ describe('profile is draft until published', () => {
     expect((await publicArtist())?.bio).toBe(DRAFT_BIO)
   })
 
+  it('CRITICAL: an artist with no published profile is not live (get_public_site null)', async () => {
+    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'artist')
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    expect(data).toBeNull()
+    // re-establish a published profile for the remaining tests.
+    await publishProfile(asA, artistA)
+  })
+
   it('preview shows the unpublished draft; public shows the last published', async () => {
     const previewOnly = 'PUBLISH-PROFILE preview-only'
     await asA.from('artists').update({ bio: previewOnly }).eq('id', artistA)

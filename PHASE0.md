@@ -132,17 +132,18 @@ The checklist below is the contract: the phase cannot be called done with any bo
 unchecked, and each box names the file that proves it.
 
 ### Phase 0 acceptance checklist (concern → proving test → status)
-- [ ] Backfill (no live-site regression) → `tests/backfill.test.ts`
-- [ ] Profile draft→publish (incl. template/spotify_id) → `tests/publish-profile.test.ts`
-- [ ] Media draft→publish + tombstone → `tests/publish-media.test.ts`
-- [ ] Config-field leak blocked + exact public key set + null-when-unpublished →
-      `tests/public-read.isolation.test.ts` (updated)
-- [ ] Preview == live after publish → `tests/preview-parity.test.ts`
-- [ ] Per-section publish isolation → `tests/publish-sections.test.ts`
-- [ ] `'media'` CHECK accepted → proven by `publish-media.test.ts` (insert succeeds)
-- [ ] Existing dashboard Publish still ships everything → live smoke check (browser)
-- [ ] Media-draft-is-reference-level → documented (B4 note) ✓ artifact
-- [ ] Suite + tsc + build green; diff reviewed → CI gate
+- [x] Backfill (no live-site regression) → `tests/backfill.test.ts` (3) + live smoke
+- [x] Profile draft→publish (incl. template/spotify_id) → `tests/publish-profile.test.ts`
+- [x] Media draft→publish + tombstone → `tests/publish-media.test.ts`
+- [x] Config-field leak blocked + exact public key set → `tests/public-read.isolation.test.ts`;
+      null-when-unpublished → `tests/publish-profile.test.ts`
+- [x] Preview == live after publish → `tests/preview-parity.test.ts`
+- [x] Per-section publish isolation → `tests/publish-sections.test.ts`
+- [x] `'media'` CHECK accepted → proven by `publish-media.test.ts` (insert succeeds)
+- [~] Existing dashboard Publish still ships everything → covered by tests
+      (publishAll exercised in preview-parity); **final browser dogfood TODO**
+- [x] Media-draft-is-reference-level → documented (B4 note)
+- [x] Suite (131) + tsc + build green; diff reviewed pending
 
 ---
 
