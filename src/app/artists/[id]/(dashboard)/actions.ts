@@ -21,11 +21,18 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor } from '@/lib/site-content-schema'
+import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/catalog'
 import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
+import { createDeezerClient } from '@/lib/deezer'
 import { createBandsintownClient } from '@/lib/bandsintown'
 import { createShopifyClient } from '@/lib/shopify'
-import { syncBandsintownTourDates, syncShopifyMerch, syncSpotifyTracks } from '@/lib/sync'
+import {
+  syncBandsintownTourDates,
+  syncDeezerTracks,
+  syncShopifyMerch,
+  syncSpotifyTracks,
+} from '@/lib/sync'
 
 const NUMERIC = new Set(['price', 'sort_order'])
 
@@ -229,6 +236,46 @@ export async function syncSpotifyAction(artistId: string) {
   const client = createSpotifyClient()
   const tracks = await client.getDiscographyTracks(artist.spotify_artist_id)
   await syncSpotifyTracks(supabase, artistId, tracks)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Choose the artist's catalog source. Switching deletes the previous importer's
+ * working tracks (manual preserved); config applies instantly.
+ */
+export async function setCatalogSourceAction(artistId: string, formData: FormData) {
+  const next = String(formData.get('catalog_source') ?? 'manual') as CatalogSource
+  if (!CATALOG_SOURCES.includes(next)) return
+  const supabase = await createClient()
+  await setCatalogSource(supabase, artistId, next)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Save (or clear) the artist's Deezer artist id used to pull their catalog. */
+export async function saveDeezerIdAction(artistId: string, formData: FormData) {
+  const value = String(formData.get('deezer_artist_id') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('artists')
+    .update({ deezer_artist_id: value || null })
+    .eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Pull the artist's Deezer catalog into draft tracks (metadata + link-out). */
+export async function syncDeezerAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('deezer_artist_id')
+    .eq('id', artistId)
+    .single()
+  if (!artist?.deezer_artist_id) return
+
+  const client = createDeezerClient()
+  const tracks = await client.getArtistTracks(artist.deezer_artist_id)
+  await syncDeezerTracks(supabase, artistId, tracks)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

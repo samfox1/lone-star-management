@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SpotifyTrackInput } from '@/lib/spotify'
+import type { DeezerTrackInput } from '@/lib/deezer'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { ShopifyMerch } from '@/lib/shopify'
 
@@ -120,6 +121,24 @@ export function syncSpotifyTracks(
     items: tracks.map((t) => ({
       externalId: t.spotify_id,
       values: { title: t.title, cover_url: t.cover_url, stream_url: t.stream_url },
+    })),
+  })
+}
+
+/** Deezer is a metadata + link-out source: no stream_url, a provider_url link. */
+export function syncDeezerTracks(
+  supabase: SupabaseClient,
+  artistId: string,
+  tracks: DeezerTrackInput[],
+): Promise<SyncResult> {
+  return syncExternal(supabase, {
+    table: 'tracks',
+    externalIdCol: 'deezer_id',
+    source: 'deezer',
+    artistId,
+    items: tracks.map((t) => ({
+      externalId: t.deezer_id,
+      values: { title: t.title, cover_url: t.cover_url, provider_url: t.provider_url },
     })),
   })
 }

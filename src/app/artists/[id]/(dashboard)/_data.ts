@@ -14,7 +14,7 @@ export const requireArtist = cache(async (id: string) => {
   const supabase = await createClient()
   const { data: artist, error } = await supabase
     .from('artists')
-    .select('id, name, slug, template, spotify_artist_id, bandsintown_name')
+    .select('id, name, slug, template, spotify_artist_id, bandsintown_name, catalog_source, deezer_artist_id')
     .eq('id', id)
     .single()
   if (error || !artist) notFound()
