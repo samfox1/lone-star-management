@@ -26,21 +26,47 @@ const NUMERIC = new Set(['price', 'sort_order'])
  * rejected if non-finite; URL fields with a dangerous scheme are dropped so
  * they never persist (render-time safeHref is still the primary guard).
  */
+/** Coerce/validate one raw field value; undefined means "drop it". */
+function coerce(field: string, raw: string): unknown {
+  if (NUMERIC.has(field)) {
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : undefined
+  }
+  if (isUrlField(field)) {
+    return safeHref(raw) !== undefined ? raw : undefined
+  }
+  return raw
+}
+
+/** Create: only fields the user actually filled (empty → use the DB default). */
 function extractFields(type: EntityType, formData: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const field of ENTITIES[type].fields) {
     const raw = String(formData.get(field) ?? '').trim()
     if (raw === '') continue
-    if (NUMERIC.has(field)) {
-      const n = Number(raw)
-      if (Number.isFinite(n)) out[field] = n
+    const value = coerce(field, raw)
+    if (value !== undefined) out[field] = value
+  }
+  return out
+}
+
+/**
+ * Update: only fields present in the submitted form are touched (absent fields
+ * are left alone). An empty optional field is set to null so a manager can clear
+ * it; a required (NOT NULL) field is never nulled.
+ */
+function extractUpdate(type: EntityType, formData: FormData): Record<string, unknown> {
+  const required = new Set(ENTITIES[type].required)
+  const out: Record<string, unknown> = {}
+  for (const field of ENTITIES[type].fields) {
+    if (!formData.has(field)) continue
+    const raw = String(formData.get(field) ?? '').trim()
+    if (raw === '') {
+      if (!required.has(field)) out[field] = null
       continue
     }
-    if (isUrlField(field)) {
-      if (safeHref(raw) !== undefined) out[field] = raw
-      continue
-    }
-    out[field] = raw
+    const value = coerce(field, raw)
+    if (value !== undefined) out[field] = value
   }
   return out
 }
@@ -63,7 +89,8 @@ export async function updateContentAction(
   artistId: string,
   formData: FormData,
 ) {
-  const input = extractFields(type, formData)
+  const input = extractUpdate(type, formData)
+  if (Object.keys(input).length === 0) return
   const supabase = await createClient()
   await updateContent(supabase, type, id, input)
   revalidatePath(`/artists/${artistId}`)

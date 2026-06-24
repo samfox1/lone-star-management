@@ -21,6 +21,8 @@ type EntityConfig = {
   table: string
   /** Columns a manager may set on create/update (everything else is ignored). */
   fields: string[]
+  /** NOT NULL columns — never cleared to null on edit. */
+  required: string[]
   /** Public-safe columns copied into a published revision. */
   snapshot: string[]
   /** Ordering for list/snapshot. */
@@ -31,18 +33,21 @@ export const ENTITIES: Record<EntityType, EntityConfig> = {
   track: {
     table: 'tracks',
     fields: ['title', 'cover_url', 'stream_url', 'sort_order'],
+    required: ['title'],
     snapshot: ['id', 'title', 'cover_url', 'stream_url', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {
     table: 'tour_dates',
     fields: ['date', 'venue', 'city', 'country', 'ticket_url'],
+    required: ['date'],
     snapshot: ['id', 'date', 'venue', 'city', 'country', 'ticket_url'],
     orderBy: ['date'],
   },
   merch: {
     table: 'merch',
     fields: ['title', 'image_url', 'price', 'url'],
+    required: ['title'],
     // created_at is snapshotted so the public site can order merch the same way
     // the dashboard/preview does (by creation order).
     snapshot: ['id', 'title', 'image_url', 'price', 'url', 'created_at'],
@@ -51,6 +56,7 @@ export const ENTITIES: Record<EntityType, EntityConfig> = {
   link: {
     table: 'links',
     fields: ['label', 'url', 'sort_order'],
+    required: ['label', 'url'],
     snapshot: ['id', 'label', 'url', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
