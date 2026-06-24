@@ -59,6 +59,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await svc.from('revisions').delete().eq('artist_id', artistA)
+    .in('entity_type', ['track', 'tour_date', 'merch', 'link'])
   for (const c of DENY) {
     await svc.from(c.table).delete().eq('id', bRowIds[c.type])
     await svc.from(c.table).delete().eq('artist_id', artistA)

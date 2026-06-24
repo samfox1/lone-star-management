@@ -10,7 +10,22 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type EntityType = 'track' | 'tour_date' | 'merch' | 'link'
+export type EntityType = 'track' | 'tour_date' | 'merch' | 'link' | 'media'
+
+/** Content types edited via the generic dashboard CRUD (media has its own
+ *  uploader but is still versioned through the publish layer). */
+export type CrudEntity = Exclude<EntityType, 'media'>
+
+/** Fan-visible artist-profile columns that publish together as one snapshot.
+ *  Deliberately excludes config/secret columns (shopify_domain, bandsintown_name)
+ *  so they can never reach the public read path. */
+export const ARTIST_SNAPSHOT = [
+  'name',
+  'bio',
+  'hero_image_url',
+  'template',
+  'spotify_artist_id',
+] as const
 
 export type ContentRow = Record<string, unknown> & {
   id: string
@@ -59,6 +74,15 @@ export const ENTITIES: Record<EntityType, EntityConfig> = {
     required: ['label', 'url'],
     snapshot: ['id', 'label', 'url', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
+  },
+  // Media is not edited via the generic content CRUD (it has its own uploader),
+  // but it IS versioned/published through the same reconcile loop.
+  media: {
+    table: 'media',
+    fields: [],
+    required: [],
+    snapshot: ['purpose', 'storage_path', 'sort_order'],
+    orderBy: ['sort_order'],
   },
 }
 
@@ -186,12 +210,45 @@ export async function publishContent(
   return revisions.length
 }
 
-/** Publish every content type for an artist. Returns total rows snapshotted. */
+/**
+ * Publish the artist's profile: snapshot the allowlisted fan-visible columns into
+ * a single `entity_type='artist'` revision (a singleton — no tombstone). The
+ * public read path reads the latest such snapshot, so profile edits are draft
+ * until this runs.
+ */
+export async function publishProfile(
+  supabase: SupabaseClient,
+  artistId: string,
+  publishedBy?: string,
+): Promise<void> {
+  const { data: artist, error } = await supabase
+    .from('artists')
+    .select('name, bio, hero_image_url, template, spotify_artist_id')
+    .eq('id', artistId)
+    .single()
+  if (error || !artist) throw new Error(error?.message ?? 'artist not found')
+
+  const row = artist as unknown as Record<string, unknown>
+  const data: Record<string, unknown> = {}
+  for (const k of ARTIST_SNAPSHOT) data[k] = row[k]
+
+  const { error: insErr } = await supabase.from('revisions').insert({
+    artist_id: artistId,
+    entity_type: 'artist',
+    entity_id: artistId,
+    data,
+    published_by: publishedBy ?? null,
+  })
+  if (insErr) throw new Error(insErr.message)
+}
+
+/** Publish everything for an artist: profile + media + every content type. */
 export async function publishAll(
   supabase: SupabaseClient,
   artistId: string,
   publishedBy?: string,
 ): Promise<number> {
+  await publishProfile(supabase, artistId, publishedBy)
   const types = Object.keys(ENTITIES) as EntityType[]
   let total = 0
   for (const type of types) {

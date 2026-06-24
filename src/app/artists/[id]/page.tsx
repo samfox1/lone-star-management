@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { type EntityType, listContent } from '@/lib/content'
+import { type CrudEntity, listContent } from '@/lib/content'
 import { ContentSection } from './content-sections'
 import { SyncPanel } from './sync-panel'
 import { ShopifyPanel } from './shopify-panel'
@@ -19,7 +19,7 @@ import {
   syncSpotifyAction,
 } from './actions'
 
-const SECTIONS: EntityType[] = ['track', 'tour_date', 'merch', 'link']
+const SECTIONS: CrudEntity[] = ['track', 'tour_date', 'merch', 'link']
 
 export default async function ArtistPage({
   params,

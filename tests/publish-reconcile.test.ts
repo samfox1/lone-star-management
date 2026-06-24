@@ -26,6 +26,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await svc.from('revisions').delete().eq('artist_id', artistA)
+    .in('entity_type', ['track', 'tour_date', 'merch', 'link'])
   await svc.from('tracks').delete().eq('artist_id', artistA)
 })
 

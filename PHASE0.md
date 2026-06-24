@@ -113,6 +113,39 @@ Regression guard: the full suite (121) stays green; #4 is the canary for any
 
 ---
 
+## E. Definition of Done — how we PROVE a phase is complete
+
+You know a concern is addressed because **it has a named test that is green** —
+not because someone says so. A phase is "Done" only when ALL of:
+
+1. **Every concern in the phase's checklist has a green, named test** (the test is
+   the proof). A concern that can't be a test (e.g. "documented") gets an explicit
+   artifact + a ticked box — never an unticked one.
+2. **Full suite green** — no regressions; the test count only grows. The
+   public-read isolation test is the security canary.
+3. **`tsc --noEmit` clean + `npm run build` clean.**
+4. **Live smoke check** of the user-visible behavior (e.g. Skeen's published site
+   renders unchanged; the existing Publish flow still works).
+5. **Diff reviewed** (`/code-review` on the change, like we've done each milestone).
+
+The checklist below is the contract: the phase cannot be called done with any box
+unchecked, and each box names the file that proves it.
+
+### Phase 0 acceptance checklist (concern → proving test → status)
+- [ ] Backfill (no live-site regression) → `tests/backfill.test.ts`
+- [ ] Profile draft→publish (incl. template/spotify_id) → `tests/publish-profile.test.ts`
+- [ ] Media draft→publish + tombstone → `tests/publish-media.test.ts`
+- [ ] Config-field leak blocked + exact public key set + null-when-unpublished →
+      `tests/public-read.isolation.test.ts` (updated)
+- [ ] Preview == live after publish → `tests/preview-parity.test.ts`
+- [ ] Per-section publish isolation → `tests/publish-sections.test.ts`
+- [ ] `'media'` CHECK accepted → proven by `publish-media.test.ts` (insert succeeds)
+- [ ] Existing dashboard Publish still ships everything → live smoke check (browser)
+- [ ] Media-draft-is-reference-level → documented (B4 note) ✓ artifact
+- [ ] Suite + tsc + build green; diff reviewed → CI gate
+
+---
+
 ## D. §9 concerns — where each is handled
 | §9 concern | Phase | Here |
 |---|---|---|

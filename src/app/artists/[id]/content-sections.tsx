@@ -3,7 +3,7 @@
  * existing item, all wired to the generic content server actions. Field layout
  * per type lives in FIELD_UI so adding a column is a one-line change.
  */
-import type { EntityType, ContentRow } from '@/lib/content'
+import type { CrudEntity, ContentRow } from '@/lib/content'
 import {
   addContentAction,
   deleteContentAction,
@@ -12,7 +12,7 @@ import {
 
 type FieldUI = { name: string; placeholder: string; type?: string; width?: string }
 
-const FIELD_UI: Record<EntityType, { heading: string; fields: FieldUI[] }> = {
+const FIELD_UI: Record<CrudEntity, { heading: string; fields: FieldUI[] }> = {
   track: {
     heading: 'Tracks',
     fields: [{ name: 'title', placeholder: 'Track title' }],
@@ -52,7 +52,7 @@ export function ContentSection({
   artistId,
   rows,
 }: {
-  type: EntityType
+  type: CrudEntity
   artistId: string
   rows: ContentRow[]
 }) {

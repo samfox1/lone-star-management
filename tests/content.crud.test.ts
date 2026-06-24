@@ -72,7 +72,10 @@ beforeAll(async () => {
 afterAll(async () => {
   // Sequential test files + seed has no content, so all of A's revisions are
   // ours. Wipe them plus the working rows we created.
+  // Scope to content types — never delete the profile/media snapshots that keep
+  // the artist's public site "live".
   await svc.from('revisions').delete().eq('artist_id', artistA)
+    .in('entity_type', ['track', 'tour_date', 'merch', 'link'])
   for (const c of CASES) {
     await svc.from(c.table).delete().eq('artist_id', artistA)
   }
