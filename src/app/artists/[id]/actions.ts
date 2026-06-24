@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   type CrudEntity,
-  ENTITIES,
+  CRUD,
   createContent,
   deleteContent,
   publishAll,
@@ -45,7 +45,7 @@ function coerce(field: string, raw: string): unknown {
 /** Create: only fields the user actually filled (empty → use the DB default). */
 function extractFields(type: CrudEntity, formData: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-  for (const field of ENTITIES[type].fields) {
+  for (const field of CRUD[type].fields) {
     const raw = String(formData.get(field) ?? '').trim()
     if (raw === '') continue
     const value = coerce(field, raw)
@@ -60,9 +60,9 @@ function extractFields(type: CrudEntity, formData: FormData): Record<string, unk
  * it; a required (NOT NULL) field is never nulled.
  */
 function extractUpdate(type: CrudEntity, formData: FormData): Record<string, unknown> {
-  const required = new Set(ENTITIES[type].required)
+  const required = new Set(CRUD[type].required)
   const out: Record<string, unknown> = {}
-  for (const field of ENTITIES[type].fields) {
+  for (const field of CRUD[type].fields) {
     if (!formData.has(field)) continue
     const raw = String(formData.get(field) ?? '').trim()
     if (raw === '') {

@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  type EntityType,
+  type CrudEntity,
   createContent,
   deleteContent,
   listContent,
@@ -19,7 +19,7 @@ import {
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 type Case = {
-  type: EntityType
+  type: CrudEntity
   table: string
   create: Record<string, unknown>
   edit: Record<string, unknown>

@@ -10,7 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  type EntityType,
+  type CrudEntity,
   createContent,
   deleteContent,
   publishAll,
@@ -19,7 +19,7 @@ import {
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 type DenyCase = {
-  type: EntityType
+  type: CrudEntity
   table: string
   bRow: Record<string, unknown>
   edit: Record<string, unknown>

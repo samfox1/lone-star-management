@@ -10,11 +10,13 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type EntityType = 'track' | 'tour_date' | 'merch' | 'link' | 'media'
+/** Types a manager edits through the generic dashboard CRUD forms. */
+export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link'
 
-/** Content types edited via the generic dashboard CRUD (media has its own
- *  uploader but is still versioned through the publish layer). */
-export type CrudEntity = Exclude<EntityType, 'media'>
+/** Every entity that is snapshotted into `revisions` and reconciled on publish.
+ *  Media is published here but has no CRUD form (it has its own uploader). The
+ *  artist PROFILE is published separately as a singleton (publishProfile). */
+export type PublishableEntity = CrudEntity | 'media'
 
 /** Fan-visible artist-profile columns that publish together as one snapshot.
  *  Deliberately excludes config/secret columns (shopify_domain, bandsintown_name)
@@ -32,86 +34,81 @@ export type ContentRow = Record<string, unknown> & {
   artist_id: string
 }
 
-type EntityConfig = {
-  table: string
+/** Form config for the manager-editable types (which columns, which are NOT NULL). */
+type CrudConfig = {
   /** Columns a manager may set on create/update (everything else is ignored). */
   fields: string[]
   /** NOT NULL columns — never cleared to null on edit. */
   required: string[]
+}
+
+export const CRUD: Record<CrudEntity, CrudConfig> = {
+  track: { fields: ['title', 'cover_url', 'stream_url', 'sort_order'], required: ['title'] },
+  tour_date: { fields: ['date', 'venue', 'city', 'country', 'ticket_url'], required: ['date'] },
+  merch: { fields: ['title', 'image_url', 'price', 'url'], required: ['title'] },
+  link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
+}
+
+/** Table + public-safe snapshot + ordering for every versioned/published entity. */
+type PublishConfig = {
+  table: string
   /** Public-safe columns copied into a published revision. */
   snapshot: string[]
-  /** Ordering for list/snapshot. */
+  /** Ordering for list/snapshot (also the published order, kept in sync). */
   orderBy: string[]
 }
 
-export const ENTITIES: Record<EntityType, EntityConfig> = {
+export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   track: {
     table: 'tracks',
-    fields: ['title', 'cover_url', 'stream_url', 'sort_order'],
-    required: ['title'],
     snapshot: ['id', 'title', 'cover_url', 'stream_url', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {
     table: 'tour_dates',
-    fields: ['date', 'venue', 'city', 'country', 'ticket_url'],
-    required: ['date'],
     snapshot: ['id', 'date', 'venue', 'city', 'country', 'ticket_url'],
     orderBy: ['date'],
   },
   merch: {
     table: 'merch',
-    fields: ['title', 'image_url', 'price', 'url'],
-    required: ['title'],
-    // created_at is snapshotted so the public site can order merch the same way
-    // the dashboard/preview does (by creation order).
     snapshot: ['id', 'title', 'image_url', 'price', 'url', 'created_at'],
     orderBy: ['created_at'],
   },
   link: {
     table: 'links',
-    fields: ['label', 'url', 'sort_order'],
-    required: ['label', 'url'],
     snapshot: ['id', 'label', 'url', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
-  // Media is not edited via the generic content CRUD (it has its own uploader),
-  // but it IS versioned/published through the same reconcile loop.
   media: {
     table: 'media',
-    fields: [],
-    required: [],
-    // created_at is snapshotted so the public site orders media exactly like the
-    // dashboard/preview (stable secondary key after sort_order).
     snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at'],
     orderBy: ['sort_order', 'created_at'],
   },
 }
 
-/** Keep only the editable columns for a type, dropping anything else. */
-function pickFields(type: EntityType, input: Record<string, unknown>) {
-  const allowed = ENTITIES[type].fields
+/** Keep only the editable columns for a CRUD type, dropping anything else. */
+function pickFields(type: CrudEntity, input: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
-  for (const key of allowed) {
+  for (const key of CRUD[type].fields) {
     if (key in input) out[key] = input[key]
   }
   return out
 }
 
 /** The public-safe projection of a row — the shape published and previewed. */
-export function publicSnapshot(type: EntityType, row: ContentRow) {
+export function publicSnapshot(type: PublishableEntity, row: ContentRow) {
   const out: Record<string, unknown> = {}
-  for (const key of ENTITIES[type].snapshot) out[key] = row[key]
+  for (const key of PUBLISHABLE[type].snapshot) out[key] = row[key]
   return out
 }
 
 export async function listContent(
   supabase: SupabaseClient,
-  type: EntityType,
+  type: PublishableEntity,
   artistId: string,
 ): Promise<ContentRow[]> {
-  let query = supabase.from(ENTITIES[type].table).select('*').eq('artist_id', artistId)
-  for (const col of ENTITIES[type].orderBy) query = query.order(col)
+  let query = supabase.from(PUBLISHABLE[type].table).select('*').eq('artist_id', artistId)
+  for (const col of PUBLISHABLE[type].orderBy) query = query.order(col)
   const { data, error } = await query
   if (error) throw new Error(error.message)
   return (data ?? []) as ContentRow[]
@@ -119,12 +116,12 @@ export async function listContent(
 
 export async function createContent(
   supabase: SupabaseClient,
-  type: EntityType,
+  type: CrudEntity,
   artistId: string,
   input: Record<string, unknown>,
 ): Promise<ContentRow> {
   const { data, error } = await supabase
-    .from(ENTITIES[type].table)
+    .from(PUBLISHABLE[type].table)
     .insert({ ...pickFields(type, input), artist_id: artistId })
     .select('*')
     .single()
@@ -134,12 +131,12 @@ export async function createContent(
 
 export async function updateContent(
   supabase: SupabaseClient,
-  type: EntityType,
+  type: CrudEntity,
   id: string,
   input: Record<string, unknown>,
 ): Promise<ContentRow> {
   const { data, error } = await supabase
-    .from(ENTITIES[type].table)
+    .from(PUBLISHABLE[type].table)
     .update(pickFields(type, input))
     .eq('id', id)
     .select('*')
@@ -150,10 +147,10 @@ export async function updateContent(
 
 export async function deleteContent(
   supabase: SupabaseClient,
-  type: EntityType,
+  type: CrudEntity,
   id: string,
 ): Promise<void> {
-  const { error } = await supabase.from(ENTITIES[type].table).delete().eq('id', id)
+  const { error } = await supabase.from(PUBLISHABLE[type].table).delete().eq('id', id)
   if (error) throw new Error(error.message)
 }
 
@@ -169,7 +166,7 @@ export async function deleteContent(
  */
 export async function publishContent(
   supabase: SupabaseClient,
-  type: EntityType,
+  type: PublishableEntity,
   artistId: string,
   publishedBy?: string,
 ): Promise<number> {
@@ -254,7 +251,7 @@ export async function publishAll(
   artistId: string,
   publishedBy?: string,
 ): Promise<number> {
-  const types = Object.keys(ENTITIES) as EntityType[]
+  const types = Object.keys(PUBLISHABLE) as PublishableEntity[]
   let total = 0
   for (const type of types) {
     total += await publishContent(supabase, type, artistId, publishedBy)

@@ -11,7 +11,7 @@
  * separate mock (PLAN decision #7).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { type EntityType, listContent, publicSnapshot } from '@/lib/content'
+import { type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
 
 export type SiteTrack = {
   id: string
@@ -93,7 +93,7 @@ export async function getPublishedSite(
 
 async function workingSection<T>(
   supabase: SupabaseClient,
-  type: EntityType,
+  type: PublishableEntity,
   artistId: string,
 ): Promise<T[]> {
   const rows = await listContent(supabase, type, artistId)
