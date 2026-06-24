@@ -12,8 +12,20 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-/** Pages reachable while logged out. Everything else requires a session. */
-const PUBLIC_PATHS = ['/login']
+/**
+ * The dashboard surface that REQUIRES a session. Everything else (public artist
+ * sites at /[slug], /login) is reachable logged out. Tenant data is still
+ * guarded by RLS regardless of this gate, which is the second line of defense.
+ *
+ * Add any new authenticated area here, or it will be publicly reachable.
+ */
+const PROTECTED_EXACT = ['/'] // the "your artists" landing
+const PROTECTED_PREFIXES = ['/artists'] // artist dashboards + preview
+
+function isProtected(path: string): boolean {
+  if (PROTECTED_EXACT.includes(path)) return true
+  return PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -45,11 +57,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Exact-match allowlist: keep the public surface exactly as wide as intended.
-  // Add new logged-out routes (e.g. '/auth/callback') here explicitly.
-  const isPublic = PUBLIC_PATHS.includes(request.nextUrl.pathname)
-
-  if (!user && !isPublic) {
+  if (!user && isProtected(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     const redirectResponse = NextResponse.redirect(url)

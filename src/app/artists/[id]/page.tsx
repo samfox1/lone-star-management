@@ -26,6 +26,9 @@ export default async function ArtistPage({
     .single()
   if (error || !artist) notFound()
 
+  const linkClass =
+    'rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900'
+
   const tracks = await listTracks(supabase, id)
 
   return (
@@ -39,14 +42,22 @@ export default async function ArtistPage({
             {artist.name}
           </span>
         </div>
-        <form action={publishAction.bind(null, artist.id)}>
-          <button
-            type="submit"
-            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
-            Publish
-          </button>
-        </form>
+        <div className="flex items-center gap-2">
+          <Link href={`/artists/${artist.id}/preview`} className={linkClass}>
+            Preview
+          </Link>
+          <Link href={`/${artist.slug}`} className={linkClass}>
+            View site
+          </Link>
+          <form action={publishAction.bind(null, artist.id)}>
+            <button
+              type="submit"
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Publish
+            </button>
+          </form>
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-3xl px-6 py-10">
