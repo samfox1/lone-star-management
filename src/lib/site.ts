@@ -126,6 +126,7 @@ export async function getWorkingSite(
       .select('purpose, storage_path, sort_order')
       .eq('artist_id', artistId)
       .order('sort_order')
+      .order('created_at') // secondary key — matches get_public_site's media order
       .then(({ data }) => data ?? []),
   ])
 

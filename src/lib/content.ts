@@ -81,8 +81,10 @@ export const ENTITIES: Record<EntityType, EntityConfig> = {
     table: 'media',
     fields: [],
     required: [],
-    snapshot: ['purpose', 'storage_path', 'sort_order'],
-    orderBy: ['sort_order'],
+    // created_at is snapshotted so the public site orders media exactly like the
+    // dashboard/preview (stable secondary key after sort_order).
+    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at'],
+    orderBy: ['sort_order', 'created_at'],
   },
 }
 
@@ -221,9 +223,10 @@ export async function publishProfile(
   artistId: string,
   publishedBy?: string,
 ): Promise<void> {
+  // Single source of truth: select exactly the snapshotted columns.
   const { data: artist, error } = await supabase
     .from('artists')
-    .select('name, bio, hero_image_url, template, spotify_artist_id')
+    .select(ARTIST_SNAPSHOT.join(', '))
     .eq('id', artistId)
     .single()
   if (error || !artist) throw new Error(error?.message ?? 'artist not found')
@@ -242,17 +245,20 @@ export async function publishProfile(
   if (insErr) throw new Error(insErr.message)
 }
 
-/** Publish everything for an artist: profile + media + every content type. */
+/** Publish everything for an artist: every content type + media, THEN the
+ *  profile. The profile is published LAST because a site is "live" exactly when
+ *  its profile snapshot exists — so a partial failure mid-publish never flips a
+ *  never-published site live with empty content. */
 export async function publishAll(
   supabase: SupabaseClient,
   artistId: string,
   publishedBy?: string,
 ): Promise<number> {
-  await publishProfile(supabase, artistId, publishedBy)
   const types = Object.keys(ENTITIES) as EntityType[]
   let total = 0
   for (const type of types) {
     total += await publishContent(supabase, type, artistId, publishedBy)
   }
+  await publishProfile(supabase, artistId, publishedBy)
   return total
 }

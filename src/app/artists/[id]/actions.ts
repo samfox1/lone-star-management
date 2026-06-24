@@ -10,7 +10,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
-  type EntityType,
+  type CrudEntity,
   ENTITIES,
   createContent,
   deleteContent,
@@ -43,7 +43,7 @@ function coerce(field: string, raw: string): unknown {
 }
 
 /** Create: only fields the user actually filled (empty → use the DB default). */
-function extractFields(type: EntityType, formData: FormData): Record<string, unknown> {
+function extractFields(type: CrudEntity, formData: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const field of ENTITIES[type].fields) {
     const raw = String(formData.get(field) ?? '').trim()
@@ -59,7 +59,7 @@ function extractFields(type: EntityType, formData: FormData): Record<string, unk
  * are left alone). An empty optional field is set to null so a manager can clear
  * it; a required (NOT NULL) field is never nulled.
  */
-function extractUpdate(type: EntityType, formData: FormData): Record<string, unknown> {
+function extractUpdate(type: CrudEntity, formData: FormData): Record<string, unknown> {
   const required = new Set(ENTITIES[type].required)
   const out: Record<string, unknown> = {}
   for (const field of ENTITIES[type].fields) {
@@ -76,7 +76,7 @@ function extractUpdate(type: EntityType, formData: FormData): Record<string, unk
 }
 
 export async function addContentAction(
-  type: EntityType,
+  type: CrudEntity,
   artistId: string,
   formData: FormData,
 ) {
@@ -88,7 +88,7 @@ export async function addContentAction(
 }
 
 export async function updateContentAction(
-  type: EntityType,
+  type: CrudEntity,
   id: string,
   artistId: string,
   formData: FormData,
@@ -101,7 +101,7 @@ export async function updateContentAction(
 }
 
 export async function deleteContentAction(
-  type: EntityType,
+  type: CrudEntity,
   id: string,
   artistId: string,
 ) {
@@ -119,10 +119,16 @@ export async function publishAction(artistId: string) {
   revalidatePath(`/artists/${artistId}`)
 }
 
-/** Remove a media asset: delete the Storage object and its registry row. */
-export async function deleteMediaAction(mediaId: string, storagePath: string, artistId: string) {
+/**
+ * Remove a media asset from the working set (a DRAFT deletion). We delete only
+ * the registry row, NOT the Storage object: the published site still references
+ * it until the manager republishes (deleting is a draft change like any other).
+ * Once the next publish tombstones the reference, the object is orphaned —
+ * TODO: garbage-collect orphaned objects (e.g. during the publish tombstone
+ * step) so they don't accumulate.
+ */
+export async function deleteMediaAction(mediaId: string, _storagePath: string, artistId: string) {
   const supabase = await createClient()
-  await supabase.storage.from('media').remove([storagePath])
   const { error } = await supabase.from('media').delete().eq('id', mediaId)
   if (error) throw new Error(error.message)
   revalidatePath(`/artists/${artistId}`)

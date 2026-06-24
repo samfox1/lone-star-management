@@ -12,6 +12,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
+import { publishProfile } from '../src/lib/content'
 
 config({ path: '.env.local' })
 
@@ -95,6 +96,12 @@ async function main() {
     { user_id: managerAId, artist_id: artistAId },
     { user_id: managerBId, artist_id: artistBId },
   ])
+
+  // A site is "live" only once its profile is published. Publish each seeded
+  // artist's profile so a fresh environment renders (the migration backfill only
+  // covers artists that existed at migration time).
+  await publishProfile(admin, artistAId)
+  await publishProfile(admin, artistBId)
 
   console.log('Seeded:')
   console.log(`  admin       admin@lonestar.test       (${adminId})`)
