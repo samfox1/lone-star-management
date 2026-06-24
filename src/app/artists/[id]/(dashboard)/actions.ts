@@ -11,10 +11,13 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   type CrudEntity,
+  type PublishableEntity,
   CRUD,
   createContent,
   deleteContent,
   publishAll,
+  publishContent,
+  publishProfile,
   updateContent,
 } from '@/lib/content'
 import { isUrlField, safeHref } from '@/lib/url'
@@ -84,7 +87,7 @@ export async function addContentAction(
   if (Object.keys(input).length === 0) return
   const supabase = await createClient()
   await createContent(supabase, type, artistId, input)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 export async function updateContentAction(
@@ -97,7 +100,7 @@ export async function updateContentAction(
   if (Object.keys(input).length === 0) return
   const supabase = await createClient()
   await updateContent(supabase, type, id, input)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 export async function deleteContentAction(
@@ -107,7 +110,7 @@ export async function deleteContentAction(
 ) {
   const supabase = await createClient()
   await deleteContent(supabase, type, id)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 export async function publishAction(artistId: string) {
@@ -116,7 +119,28 @@ export async function publishAction(artistId: string) {
     data: { user },
   } = await supabase.auth.getUser()
   await publishAll(supabase, artistId, user?.id)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Publish ONE content/media section (per-section Publish button). */
+export async function publishSectionAction(type: PublishableEntity, artistId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  await publishContent(supabase, type, artistId, user?.id)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Publish the Site section: the artist profile + its media together. */
+export async function publishSiteAction(artistId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  await publishContent(supabase, 'media', artistId, user?.id)
+  await publishProfile(supabase, artistId, user?.id)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /**
@@ -131,7 +155,7 @@ export async function deleteMediaAction(mediaId: string, _storagePath: string, a
   const supabase = await createClient()
   const { error } = await supabase.from('media').delete().eq('id', mediaId)
   if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /** Choose which public-site template this artist's page renders. */
@@ -140,7 +164,7 @@ export async function saveTemplateAction(artistId: string, formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase.from('artists').update({ template }).eq('id', artistId)
   if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /** Save (or clear) the artist's Spotify artist id used to pull the discography. */
@@ -152,7 +176,7 @@ export async function saveSpotifyIdAction(artistId: string, formData: FormData) 
     .update({ spotify_artist_id: value || null })
     .eq('id', artistId)
   if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /**
@@ -172,7 +196,7 @@ export async function syncSpotifyAction(artistId: string) {
   const client = createSpotifyClient()
   const tracks = await client.getDiscographyTracks(artist.spotify_artist_id)
   await syncSpotifyTracks(supabase, artistId, tracks)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /** Save (or clear) the artist's Bandsintown name used to pull tour dates. */
@@ -184,7 +208,7 @@ export async function saveBandsintownNameAction(artistId: string, formData: Form
     .update({ bandsintown_name: value || null })
     .eq('id', artistId)
   if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /**
@@ -203,7 +227,7 @@ export async function syncBandsintownAction(artistId: string) {
   const client = createBandsintownClient()
   const events = await client.getArtistEvents(artist.bandsintown_name)
   await syncBandsintownTourDates(supabase, artistId, events)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /** Connect (or rotate) the artist's Shopify store. Token is stored in Vault. */
@@ -218,14 +242,14 @@ export async function connectShopifyAction(artistId: string, formData: FormData)
     p_token: token,
   })
   if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 export async function disconnectShopifyAction(artistId: string) {
   const supabase = await createClient()
   const { error } = await supabase.rpc('disconnect_shopify', { p_artist_id: artistId })
   if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /**
@@ -244,5 +268,5 @@ export async function syncShopifyAction(artistId: string) {
   const client = createShopifyClient({ domain: store_domain, token })
   const products = await client.getProducts()
   await syncShopifyMerch(supabase, artistId, products)
-  revalidatePath(`/artists/${artistId}`)
+  revalidatePath(`/artists/${artistId}`, 'layout')
 }
