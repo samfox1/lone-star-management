@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { getShopifyDomain, requireArtist } from '../_data'
 
 /**
  * Settings: integrations hub + (soon) SEO/OG and account. Config here applies
@@ -7,19 +7,8 @@ import { createClient } from '@/lib/supabase/server'
  */
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('spotify_artist_id, bandsintown_name')
-    .eq('id', id)
-    .single()
-  const { data: shopify } = await supabase
-    .from('integrations')
-    .select('metadata')
-    .eq('artist_id', id)
-    .eq('provider', 'shopify')
-    .maybeSingle()
-  const shopifyDomain = (shopify?.metadata as { store_domain?: string } | null)?.store_domain ?? null
+  const artist = await requireArtist(id)
+  const shopifyDomain = await getShopifyDomain(id)
 
   const integrations = [
     { name: 'Spotify', connected: !!artist?.spotify_artist_id, where: 'Tracks', detail: artist?.spotify_artist_id },

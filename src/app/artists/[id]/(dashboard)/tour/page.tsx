@@ -3,16 +3,13 @@ import { listContent } from '@/lib/content'
 import { ContentSection } from '../content-sections'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
+import { requireArtist } from '../_data'
 import { saveBandsintownNameAction, syncBandsintownAction } from '../actions'
 
 export default async function TourPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('bandsintown_name')
-    .eq('id', id)
-    .single()
+  const artist = await requireArtist(id)
   const rows = await listContent(supabase, 'tour_date', id)
 
   return (

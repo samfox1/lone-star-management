@@ -3,6 +3,7 @@ import { listContent } from '@/lib/content'
 import { ContentSection } from '../content-sections'
 import { ShopifyPanel } from '../shopify-panel'
 import { SectionShell } from '../section-shell'
+import { getShopifyDomain, requireArtist } from '../_data'
 import {
   connectShopifyAction,
   disconnectShopifyAction,
@@ -12,13 +13,8 @@ import {
 export default async function MerchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: shopify } = await supabase
-    .from('integrations')
-    .select('metadata')
-    .eq('artist_id', id)
-    .eq('provider', 'shopify')
-    .maybeSingle()
-  const shopifyDomain = (shopify?.metadata as { store_domain?: string } | null)?.store_domain ?? null
+  await requireArtist(id)
+  const shopifyDomain = await getShopifyDomain(id)
   const rows = await listContent(supabase, 'merch', id)
 
   return (

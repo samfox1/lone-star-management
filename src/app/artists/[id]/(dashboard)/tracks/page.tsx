@@ -3,16 +3,13 @@ import { listContent } from '@/lib/content'
 import { ContentSection } from '../content-sections'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
+import { requireArtist } from '../_data'
 import { saveSpotifyIdAction, syncSpotifyAction } from '../actions'
 
 export default async function TracksPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('spotify_artist_id')
-    .eq('id', id)
-    .single()
+  const artist = await requireArtist(id)
   const rows = await listContent(supabase, 'track', id)
 
   return (

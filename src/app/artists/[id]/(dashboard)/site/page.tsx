@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { MediaPanel, type MediaRow } from '../media-panel'
 import { TEMPLATES } from '@/components/artist-template'
+import { requireArtist } from '../_data'
 import { publishSiteAction, saveTemplateAction } from '../actions'
 
 /**
@@ -11,11 +12,7 @@ import { publishSiteAction, saveTemplateAction } from '../actions'
 export default async function SitePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('template')
-    .eq('id', id)
-    .single()
+  const artist = await requireArtist(id)
   const { data: media } = await supabase
     .from('media')
     .select('id, purpose, storage_path')

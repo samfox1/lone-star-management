@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished } from '@/lib/content'
 import { Sidebar } from './sidebar'
+import { requireArtist } from './_data'
 import { publishAction } from './actions'
 
 /**
@@ -21,13 +21,7 @@ export default async function DashboardLayout({
 }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: artist, error } = await supabase
-    .from('artists')
-    .select('id, name, slug')
-    .eq('id', id)
-    .single()
-  if (error || !artist) notFound()
-
+  const artist = await requireArtist(id)
   const diff = await diffUnpublished(supabase, id)
   const dirty = {
     track: diff.track.dirty,

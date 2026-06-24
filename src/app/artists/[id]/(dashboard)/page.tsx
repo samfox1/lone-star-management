@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, type SectionDiff } from '@/lib/content'
+import { requireArtist } from './_data'
 
 const SECTIONS = [
   { key: 'profile', label: 'Site / profile', href: 'site' },
@@ -23,6 +24,7 @@ function summarize(d: SectionDiff): string {
 export default async function OverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  await requireArtist(id)
   const diff = await diffUnpublished(supabase, id)
 
   return (

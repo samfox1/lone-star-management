@@ -291,26 +291,27 @@ export async function diffUnpublished(
   supabase: SupabaseClient,
   artistId: string,
 ): Promise<UnpublishedDiff> {
-  // Latest revision per (entity_type, entity_id) — RLS scopes to the caller.
-  const { data: revs, error } = await supabase
-    .from('revisions')
-    .select('entity_type, entity_id, data, published_at, id')
-    .eq('artist_id', artistId)
-    .order('published_at', { ascending: false })
-    .order('id', { ascending: false })
-  if (error) throw new Error(error.message)
+  const types = Object.keys(PUBLISHABLE) as PublishableEntity[]
+
+  // One wave: latest revision PER ENTITY (server-side DISTINCT ON, so it isn't
+  // capped by PostgREST's 1000-row limit the way pulling the whole revisions
+  // table was), the profile row, and every section's working rows in parallel.
+  const [revsRes, artistRes, ...rowsByType] = await Promise.all([
+    supabase.rpc('latest_revisions', { p_artist_id: artistId }),
+    supabase.from('artists').select(ARTIST_SNAPSHOT.join(', ')).eq('id', artistId).single(),
+    ...types.map((type) => listContent(supabase, type, artistId)),
+  ])
+  if (revsRes.error) throw new Error(revsRes.error.message)
 
   const latest = new Map<string, Record<string, unknown>>()
-  for (const r of revs ?? []) {
-    const key = `${r.entity_type}:${r.entity_id}`
-    if (!latest.has(key)) latest.set(key, r.data as Record<string, unknown>)
+  for (const r of (revsRes.data ?? []) as { entity_type: string; entity_id: string; data: Record<string, unknown> }[]) {
+    latest.set(`${r.entity_type}:${r.entity_id}`, r.data)
   }
 
   const result = { profile: emptyDiff() } as UnpublishedDiff
-  for (const type of Object.keys(PUBLISHABLE) as PublishableEntity[]) {
+  types.forEach((type, i) => {
     const d = (result[type] = emptyDiff())
-    const rows = await listContent(supabase, type, artistId)
-    const working = new Map(rows.map((r) => [r.id, publicSnapshot(type, r)]))
+    const working = new Map(rowsByType[i].map((r) => [r.id, publicSnapshot(type, r)]))
 
     for (const [id, snap] of working) {
       const pub = latest.get(`${type}:${id}`)
@@ -323,18 +324,13 @@ export async function diffUnpublished(
       if (!working.has(id)) d.deleted++
     }
     d.dirty = d.added + d.edited + d.deleted > 0
-  }
+  })
 
   // Profile singleton.
-  const { data: artist } = await supabase
-    .from('artists')
-    .select(ARTIST_SNAPSHOT.join(', '))
-    .eq('id', artistId)
-    .single()
   const profilePub = latest.get(`artist:${artistId}`)
   const p = result.profile
   if (!profilePub) p.added = 1
-  else if (!sameSnapshot(ARTIST_SNAPSHOT, artist as unknown as Record<string, unknown>, profilePub)) p.edited = 1
+  else if (!sameSnapshot(ARTIST_SNAPSHOT, artistRes.data as unknown as Record<string, unknown>, profilePub)) p.edited = 1
   p.dirty = p.added + p.edited + p.deleted > 0
 
   return result
