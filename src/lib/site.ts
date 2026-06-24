@@ -47,6 +47,16 @@ export type SiteLink = {
   sort_order: number
 }
 
+export type SiteMedia = {
+  purpose: 'hero_video' | 'profile_photo' | 'gallery_image'
+  url: string
+}
+
+/** Public URL for an object in the `media` storage bucket. */
+export function mediaUrl(path: string): string {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`
+}
+
 export type SiteData = {
   artist: {
     id: string
@@ -61,6 +71,12 @@ export type SiteData = {
   tour_dates: SiteTourDate[]
   merch: SiteMerch[]
   links: SiteLink[]
+  media: SiteMedia[]
+}
+
+/** Map the rpc's media ({purpose, path}) to public URLs. */
+function toSiteMedia(raw: { purpose: SiteMedia['purpose']; path: string }[]): SiteMedia[] {
+  return (raw ?? []).map((m) => ({ purpose: m.purpose, url: mediaUrl(m.path) }))
 }
 
 /** Published site for a slug, via the public read path. null if no such artist. */
@@ -70,7 +86,9 @@ export async function getPublishedSite(
 ): Promise<SiteData | null> {
   const { data, error } = await supabase.rpc('get_public_site', { p_slug: slug })
   if (error) throw new Error(error.message)
-  return (data as SiteData | null) ?? null
+  if (!data) return null
+  const site = data as SiteData & { media: { purpose: SiteMedia['purpose']; path: string }[] }
+  return { ...site, media: toSiteMedia(site.media) }
 }
 
 async function workingSection<T>(
@@ -98,12 +116,25 @@ export async function getWorkingSite(
     .single()
   if (!artist) return null
 
-  const [tracks, tour_dates, merch, links] = await Promise.all([
+  const [tracks, tour_dates, merch, links, mediaRows] = await Promise.all([
     workingSection<SiteTrack>(supabase, 'track', artistId),
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId),
     workingSection<SiteMerch>(supabase, 'merch', artistId),
     workingSection<SiteLink>(supabase, 'link', artistId),
+    supabase
+      .from('media')
+      .select('purpose, storage_path, sort_order')
+      .eq('artist_id', artistId)
+      .order('sort_order')
+      .then(({ data }) => data ?? []),
   ])
 
-  return { artist, tracks, tour_dates, merch, links }
+  const media = toSiteMedia(
+    (mediaRows as { purpose: SiteMedia['purpose']; storage_path: string }[]).map((m) => ({
+      purpose: m.purpose,
+      path: m.storage_path,
+    })),
+  )
+
+  return { artist, tracks, tour_dates, merch, links, media }
 }

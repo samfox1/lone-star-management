@@ -9,12 +9,6 @@ import { safeHref } from '@/lib/url'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
 import { CinematicWork, type WorkTab } from './cinematic-work'
 
-// Hero video clips per slug. Videos aren't in the data model yet, so this
-// bridges until media storage exists; files live in /public/videos/{slug}/.
-const HERO_CLIPS: Record<string, string[]> = {
-  skeen: ['video1', 'video2', 'video3'],
-}
-
 function formatDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -177,12 +171,16 @@ function Footer({ name, links }: { name: string; links: SiteLink[] }) {
 }
 
 export function CinematicTemplate({ data }: { data: SiteData }) {
-  const { artist, tour_dates, links } = data
+  const { artist, tour_dates, links, media } = data
 
-  const clips: HeroClip[] = (HERO_CLIPS[artist.slug] ?? []).map((file) => ({
-    mp4: `/videos/${artist.slug}/${file}.mp4`,
-    webm: `/videos/${artist.slug}/${file}.webm`,
-  }))
+  // Hero montage = the artist's hero videos from Storage. We upload an mp4 + a
+  // webm per clip; the registry stores the mp4, so derive the webm by extension.
+  const clips: HeroClip[] = media
+    .filter((m) => m.purpose === 'hero_video')
+    .map((m) => ({ mp4: m.url, webm: m.url.replace(/\.mp4($|\?)/, '.webm$1') }))
+
+  // Profile photo for About (≠ hero video); fall back to the hero image.
+  const profilePhoto = media.find((m) => m.purpose === 'profile_photo')?.url ?? artist.hero_image_url
 
   const today = new Date().toISOString().slice(0, 10)
   const upcoming = tour_dates.filter((d) => d.date >= today)
@@ -221,10 +219,10 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
     <div className="theme-cinematic flex min-h-screen flex-col">
       <Nav name={artist.name} sections={sections} />
       <main className="flex flex-1 flex-col">
-        <CinematicHero name={artist.name} clips={clips} poster={artist.hero_image_url} />
+        <CinematicHero name={artist.name} clips={clips} poster={profilePhoto} />
         <Shows upcoming={upcoming} past={past} />
         <CinematicWork tabs={tabs} />
-        <About bio={artist.bio} photo={artist.hero_image_url} name={artist.name} />
+        <About bio={artist.bio} photo={profilePhoto} name={artist.name} />
       </main>
       <Footer name={artist.name} links={links} />
     </div>

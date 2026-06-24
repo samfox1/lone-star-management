@@ -1,14 +1,15 @@
 # TODO
 
-## Cinematic template — host hero videos for production
-- [ ] Skeen's hero videos live in `public/videos/skeen/` but are **gitignored**
-      (18MB; kept local for dev). Before deploying, upload them to Supabase
-      Storage (a public `hero` bucket) and point the cinematic Hero at those URLs
-      — the design was built for this. Until then the video hero only works
-      locally; deployed `/skeen` falls back to the hero image.
-- [ ] Videos aren't in the data model yet — `HERO_CLIPS` in
-      `src/components/templates/cinematic.tsx` maps slug→clips as a bridge. A
-      proper per-artist video/media field would replace it.
+## Media — done; next steps
+- [x] Hero videos now stream from Supabase Storage (`media` bucket,
+      `{artist_id}/hero-videos/`), registered in the `media` table by purpose.
+      The `HERO_CLIPS` local-file bridge is gone.
+- [ ] **Dashboard upload UI** — managers can't upload media from the dashboard
+      yet (done via `scripts/upload-skeen-media.ts`). Add an uploader per use
+      (hero videos, profile photo) that writes to `{artist_id}/{use}/` and a
+      `media` row. Storage RLS already restricts writes to the artist's folder.
+- [ ] Wire `profile_photo` media into the dashboard + use it for the About photo
+      (currently falls back to `hero_image_url`).
 
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 
