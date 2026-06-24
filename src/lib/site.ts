@@ -54,6 +54,8 @@ export type SiteData = {
     name: string
     bio: string | null
     hero_image_url: string | null
+    template: string
+    spotify_artist_id: string | null
   }
   tracks: SiteTrack[]
   tour_dates: SiteTourDate[]
@@ -91,7 +93,7 @@ export async function getWorkingSite(
 ): Promise<SiteData | null> {
   const { data: artist } = await supabase
     .from('artists')
-    .select('id, slug, name, bio, hero_image_url')
+    .select('id, slug, name, bio, hero_image_url, template, spotify_artist_id')
     .eq('id', artistId)
     .single()
   if (!artist) return null

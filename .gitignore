@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Local tooling state
 .claude/
+
+# Large media — host in Supabase Storage for production, keep local for dev
+public/videos/

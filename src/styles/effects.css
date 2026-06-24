@@ -1,0 +1,91 @@
+/*
+ * Skeen — visual FX layer (edgy / electronic)
+ * Kept separate and modular so the whole treatment can be swapped or
+ * prototyped without touching component markup. Apply .fx-* classes to
+ * the hero overlay / wordmark to dial effects in or out.
+ */
+
+/* --- Glitch wordmark: RGB split + jitter ------------------------------- */
+.fx-glitch {
+  position: relative;
+  display: inline-block;
+}
+
+.fx-glitch::before,
+.fx-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  clip-path: inset(0 0 0 0);
+}
+
+.fx-glitch::before {
+  color: var(--flash-2); /* cyan */
+  animation: fx-glitch-a 2.6s infinite steps(2, end);
+}
+
+.fx-glitch::after {
+  color: var(--flash-1); /* magenta */
+  animation: fx-glitch-b 3.1s infinite steps(2, end);
+}
+
+@keyframes fx-glitch-a {
+  0%, 92%, 100% { transform: translate(0, 0); opacity: 0; }
+  93% { transform: translate(-2px, 1px); opacity: 0.8; }
+  96% { transform: translate(2px, -1px); opacity: 0.8; }
+}
+
+@keyframes fx-glitch-b {
+  0%, 90%, 100% { transform: translate(0, 0); opacity: 0; }
+  91% { transform: translate(2px, -1px); opacity: 0.7; }
+  95% { transform: translate(-2px, 1px); opacity: 0.7; }
+}
+
+/* --- Color flash overlay: cycles through the palette on cuts ----------- */
+.fx-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  animation: fx-flash-cycle 12s infinite;
+}
+
+@keyframes fx-flash-cycle {
+  0%, 100% { background: transparent; }
+  8% { background: var(--flash-1); }
+  9% { background: transparent; }
+  33% { background: transparent; }
+  34% { background: var(--flash-2); }
+  35% { background: transparent; }
+  58% { background: transparent; }
+  59% { background: var(--flash-3); }
+  60% { background: transparent; }
+  83% { background: transparent; }
+  84% { background: var(--flash-4); }
+  85% { background: transparent; }
+}
+
+/* --- Scanlines (subtle) ----------------------------------------------- */
+.fx-scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03) 0px,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-glitch::before,
+  .fx-glitch::after,
+  .fx-flash {
+    animation: none;
+    opacity: 0;
+  }
+}

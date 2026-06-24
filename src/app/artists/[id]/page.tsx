@@ -5,12 +5,14 @@ import { type EntityType, listContent } from '@/lib/content'
 import { ContentSection } from './content-sections'
 import { SyncPanel } from './sync-panel'
 import { ShopifyPanel } from './shopify-panel'
+import { TEMPLATES } from '@/components/artist-template'
 import {
   connectShopifyAction,
   disconnectShopifyAction,
   publishAction,
   saveBandsintownNameAction,
   saveSpotifyIdAction,
+  saveTemplateAction,
   syncBandsintownAction,
   syncShopifyAction,
   syncSpotifyAction,
@@ -30,7 +32,7 @@ export default async function ArtistPage({
   // → 404. A manager guessing another artist's id gets not-found, never a leak.
   const { data: artist, error } = await supabase
     .from('artists')
-    .select('id, name, slug, spotify_artist_id, bandsintown_name')
+    .select('id, name, slug, spotify_artist_id, bandsintown_name, template')
     .eq('id', id)
     .single()
   if (error || !artist) notFound()
@@ -67,6 +69,22 @@ export default async function ArtistPage({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <form action={saveTemplateAction.bind(null, artist.id)} className="flex items-center gap-1">
+            <select
+              name="template"
+              defaultValue={artist.template}
+              className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+            >
+              {TEMPLATES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className={linkClass}>
+              Apply
+            </button>
+          </form>
           <Link href={`/artists/${artist.id}/preview`} className={linkClass}>
             Preview
           </Link>

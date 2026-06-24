@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { ArtistSite } from '@/components/artist-site'
+import { ArtistTemplate } from '@/components/artist-template'
 import { createClient } from '@/lib/supabase/server'
 import { getPublishedSite } from '@/lib/site'
 
@@ -16,7 +16,7 @@ export default async function PublicArtistPage({
   const site = await getPublishedSite(supabase, slug)
   if (!site) notFound()
 
-  return <ArtistSite data={site} />
+  return <ArtistTemplate data={site} />
 }
 
 export async function generateMetadata({

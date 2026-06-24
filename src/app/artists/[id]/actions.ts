@@ -119,6 +119,15 @@ export async function publishAction(artistId: string) {
   revalidatePath(`/artists/${artistId}`)
 }
 
+/** Choose which public-site template this artist's page renders. */
+export async function saveTemplateAction(artistId: string, formData: FormData) {
+  const template = String(formData.get('template') ?? 'classic')
+  const supabase = await createClient()
+  const { error } = await supabase.from('artists').update({ template }).eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`)
+}
+
 /** Save (or clear) the artist's Spotify artist id used to pull the discography. */
 export async function saveSpotifyIdAction(artistId: string, formData: FormData) {
   const value = String(formData.get('spotify_artist_id') ?? '').trim()

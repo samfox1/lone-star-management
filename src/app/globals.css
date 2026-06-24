@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../styles/effects.css";
 
 :root {
   --background: #ffffff;
@@ -8,8 +9,17 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Cinematic-template tokens. Values are scoped to .theme-cinematic below, so
+     they never affect the (light) dashboard, which uses zinc-* utilities. */
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-flash-1: var(--flash-1);
+  --color-flash-2: var(--flash-2);
+  --color-flash-3: var(--flash-3);
+  --color-flash-4: var(--flash-4);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +33,20 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Cinematic public-site template — dark, self-contained palette. Scoped here so
+   the dashboard is untouched. */
+.theme-cinematic {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --muted: #8a8a8a;
+  --border: #1e1e1e;
+  --flash-1: #ff2e63;
+  --flash-2: #2ee6e6;
+  --flash-3: #b14aed;
+  --flash-4: #f5d90a;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
 }

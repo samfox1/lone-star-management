@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArtistSite } from '@/components/artist-site'
+import { ArtistTemplate } from '@/components/artist-template'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkingSite } from '@/lib/site'
 
@@ -28,7 +28,7 @@ export default async function PreviewPage({
           ← Back to editing
         </Link>
       </div>
-      <ArtistSite data={site} />
+      <ArtistTemplate data={site} />
     </div>
   )
 }

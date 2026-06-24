@@ -114,7 +114,7 @@ afterAll(async () => {
 })
 
 describe('get_public_site — public-safe shape', () => {
-  it('CRITICAL: artist object has EXACTLY id/slug/name/bio/hero_image_url', async () => {
+  it('CRITICAL: artist object exposes only the public-safe fields', async () => {
     const { data, error } = await anonClient().rpc('get_public_site', {
       p_slug: SEED.artistASlug,
     })
@@ -123,17 +123,19 @@ describe('get_public_site — public-safe shape', () => {
 
     const artist = (data as Record<string, unknown>).artist as Record<string, unknown>
     expect(artist).toBeTruthy()
+    // spotify_artist_id and template are public (the id is in the artist's
+    // public Spotify URL); the template drives which public design renders.
     expect(Object.keys(artist).sort()).toEqual(
-      ['bio', 'hero_image_url', 'id', 'name', 'slug'].sort(),
+      ['bio', 'hero_image_url', 'id', 'name', 'slug', 'spotify_artist_id', 'template'].sort(),
     )
   })
 
-  it('CRITICAL: no integration ids / secrets / timestamps leak anywhere', async () => {
+  it('CRITICAL: private integration fields never leak', async () => {
     const { data } = await anonClient().rpc('get_public_site', {
       p_slug: SEED.artistASlug,
     })
     const blob = JSON.stringify(data)
-    expect(blob).not.toContain('spotify_artist_id')
+    // bandsintown_name / shopify_domain are not needed publicly and stay private.
     expect(blob).not.toContain('bandsintown_name')
     expect(blob).not.toContain('shopify_domain')
   })
