@@ -5,6 +5,7 @@ import { type EntityType, listContent } from '@/lib/content'
 import { ContentSection } from './content-sections'
 import { SyncPanel } from './sync-panel'
 import { ShopifyPanel } from './shopify-panel'
+import { MediaPanel, type MediaRow } from './media-panel'
 import { TEMPLATES } from '@/components/artist-template'
 import {
   connectShopifyAction,
@@ -53,6 +54,12 @@ export default async function ArtistPage({
     .eq('provider', 'shopify')
     .maybeSingle()
   const shopifyDomain = (shopify?.metadata as { store_domain?: string } | null)?.store_domain ?? null
+
+  const { data: media } = await supabase
+    .from('media')
+    .select('id, purpose, storage_path')
+    .eq('artist_id', id)
+    .order('sort_order')
 
   const linkClass =
     'rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900'
@@ -129,6 +136,7 @@ export default async function ArtistPage({
           pullAction={syncShopifyAction.bind(null, artist.id)}
           disconnectAction={disconnectShopifyAction.bind(null, artist.id)}
         />
+        <MediaPanel artistId={artist.id} media={(media ?? []) as MediaRow[]} />
 
         {SECTIONS.map((type) => (
           <ContentSection

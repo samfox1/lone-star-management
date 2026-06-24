@@ -119,6 +119,15 @@ export async function publishAction(artistId: string) {
   revalidatePath(`/artists/${artistId}`)
 }
 
+/** Remove a media asset: delete the Storage object and its registry row. */
+export async function deleteMediaAction(mediaId: string, storagePath: string, artistId: string) {
+  const supabase = await createClient()
+  await supabase.storage.from('media').remove([storagePath])
+  const { error } = await supabase.from('media').delete().eq('id', mediaId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`)
+}
+
 /** Choose which public-site template this artist's page renders. */
 export async function saveTemplateAction(artistId: string, formData: FormData) {
   const template = String(formData.get('template') ?? 'classic')

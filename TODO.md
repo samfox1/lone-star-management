@@ -1,15 +1,13 @@
 # TODO
 
-## Media — done; next steps
-- [x] Hero videos now stream from Supabase Storage (`media` bucket,
+## Media — done
+- [x] Hero videos stream from Supabase Storage (`media` bucket,
       `{artist_id}/hero-videos/`), registered in the `media` table by purpose.
-      The `HERO_CLIPS` local-file bridge is gone.
-- [ ] **Dashboard upload UI** — managers can't upload media from the dashboard
-      yet (done via `scripts/upload-skeen-media.ts`). Add an uploader per use
-      (hero videos, profile photo) that writes to `{artist_id}/{use}/` and a
-      `media` row. Storage RLS already restricts writes to the artist's folder.
-- [ ] Wire `profile_photo` media into the dashboard + use it for the About photo
-      (currently falls back to `hero_image_url`).
+- [x] Dashboard upload UI (MediaPanel): managers upload/delete hero videos and a
+      profile photo, direct-to-Storage (RLS scopes writes to their folder).
+- [x] profile_photo wired into the public About (falls back to hero_image_url).
+- [ ] (Later) gallery_image purpose is in the schema but unused; add a gallery
+      section + uploader when a template needs it.
 
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 

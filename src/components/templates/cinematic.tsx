@@ -173,11 +173,10 @@ function Footer({ name, links }: { name: string; links: SiteLink[] }) {
 export function CinematicTemplate({ data }: { data: SiteData }) {
   const { artist, tour_dates, links, media } = data
 
-  // Hero montage = the artist's hero videos from Storage. We upload an mp4 + a
-  // webm per clip; the registry stores the mp4, so derive the webm by extension.
+  // Hero montage = the artist's hero videos from Storage (one file per clip).
   const clips: HeroClip[] = media
     .filter((m) => m.purpose === 'hero_video')
-    .map((m) => ({ mp4: m.url, webm: m.url.replace(/\.mp4($|\?)/, '.webm$1') }))
+    .map((m) => ({ url: m.url }))
 
   // Profile photo for About (≠ hero video); fall back to the hero image.
   const profilePhoto = media.find((m) => m.purpose === 'profile_photo')?.url ?? artist.hero_image_url

@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export type HeroClip = { mp4: string; webm?: string }
+export type HeroClip = { url: string }
+
+function videoMime(url: string): string {
+  const ext = url.split('?')[0].split('.').pop()?.toLowerCase()
+  if (ext === 'webm') return 'video/webm'
+  if (ext === 'mov') return 'video/quicktime'
+  if (ext === 'ogg' || ext === 'ogv') return 'video/ogg'
+  return 'video/mp4'
+}
 
 /**
  * Fullscreen hero. If the artist has video clips it plays a muted montage
@@ -58,7 +66,7 @@ export function CinematicHero({
       {hasVideo ? (
         <video
           ref={videoRef}
-          key={clip.mp4}
+          key={clip.url}
           className="absolute inset-0 h-full w-full object-cover"
           autoPlay
           muted={muted}
@@ -67,8 +75,7 @@ export function CinematicHero({
           preload="auto"
           poster={poster ?? undefined}
         >
-          {clip.webm && <source src={clip.webm} type="video/webm" />}
-          <source src={clip.mp4} type="video/mp4" />
+          <source src={clip.url} type={videoMime(clip.url)} />
         </video>
       ) : poster ? (
         // eslint-disable-next-line @next/next/no-img-element
