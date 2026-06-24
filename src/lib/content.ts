@@ -259,3 +259,83 @@ export async function publishAll(
   await publishProfile(supabase, artistId, publishedBy)
   return total
 }
+
+/** Pending changes for one section: counts + a convenience `dirty` flag. */
+export type SectionDiff = { added: number; edited: number; deleted: number; dirty: boolean }
+/** Per-section pending changes for an artist (profile + every publishable type). */
+export type UnpublishedDiff = { profile: SectionDiff } & Record<PublishableEntity, SectionDiff>
+
+const emptyDiff = (): SectionDiff => ({ added: 0, edited: 0, deleted: 0, dirty: false })
+
+/** Compare two snapshots key-by-key (jsonb key order isn't stable, so don't
+ *  stringify whole objects). null and missing are equal. */
+function sameSnapshot(
+  keys: readonly string[],
+  a: Record<string, unknown> | undefined,
+  b: Record<string, unknown> | undefined,
+): boolean {
+  for (const k of keys) {
+    if (JSON.stringify(a?.[k] ?? null) !== JSON.stringify(b?.[k] ?? null)) return false
+  }
+  return true
+}
+
+/**
+ * What has changed since the last publish, per section. Compares each working
+ * row's public snapshot against the latest published revision for that entity
+ * (and the profile against its latest singleton snapshot), so the comparison is
+ * apples-to-apples and a freshly published artist reports nothing (no false
+ * positives). Powers the Overview summary and per-section dirty badges.
+ */
+export async function diffUnpublished(
+  supabase: SupabaseClient,
+  artistId: string,
+): Promise<UnpublishedDiff> {
+  // Latest revision per (entity_type, entity_id) — RLS scopes to the caller.
+  const { data: revs, error } = await supabase
+    .from('revisions')
+    .select('entity_type, entity_id, data, published_at, id')
+    .eq('artist_id', artistId)
+    .order('published_at', { ascending: false })
+    .order('id', { ascending: false })
+  if (error) throw new Error(error.message)
+
+  const latest = new Map<string, Record<string, unknown>>()
+  for (const r of revs ?? []) {
+    const key = `${r.entity_type}:${r.entity_id}`
+    if (!latest.has(key)) latest.set(key, r.data as Record<string, unknown>)
+  }
+
+  const result = { profile: emptyDiff() } as UnpublishedDiff
+  for (const type of Object.keys(PUBLISHABLE) as PublishableEntity[]) {
+    const d = (result[type] = emptyDiff())
+    const rows = await listContent(supabase, type, artistId)
+    const working = new Map(rows.map((r) => [r.id, publicSnapshot(type, r)]))
+
+    for (const [id, snap] of working) {
+      const pub = latest.get(`${type}:${id}`)
+      if (!pub || pub._deleted === true) d.added++
+      else if (!sameSnapshot(PUBLISHABLE[type].snapshot, snap, pub)) d.edited++
+    }
+    for (const [key, data] of latest) {
+      if (!key.startsWith(`${type}:`) || data._deleted === true) continue
+      const id = key.slice(type.length + 1)
+      if (!working.has(id)) d.deleted++
+    }
+    d.dirty = d.added + d.edited + d.deleted > 0
+  }
+
+  // Profile singleton.
+  const { data: artist } = await supabase
+    .from('artists')
+    .select(ARTIST_SNAPSHOT.join(', '))
+    .eq('id', artistId)
+    .single()
+  const profilePub = latest.get(`artist:${artistId}`)
+  const p = result.profile
+  if (!profilePub) p.added = 1
+  else if (!sameSnapshot(ARTIST_SNAPSHOT, artist as unknown as Record<string, unknown>, profilePub)) p.edited = 1
+  p.dirty = p.added + p.edited + p.deleted > 0
+
+  return result
+}
