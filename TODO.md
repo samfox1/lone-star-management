@@ -1,5 +1,15 @@
 # TODO
 
+## Cinematic template — host hero videos for production
+- [ ] Skeen's hero videos live in `public/videos/skeen/` but are **gitignored**
+      (18MB; kept local for dev). Before deploying, upload them to Supabase
+      Storage (a public `hero` bucket) and point the cinematic Hero at those URLs
+      — the design was built for this. Until then the video hero only works
+      locally; deployed `/skeen` falls back to the hero image.
+- [ ] Videos aren't in the data model yet — `HERO_CLIPS` in
+      `src/components/templates/cinematic.tsx` maps slug→clips as a bridge. A
+      proper per-artist video/media field would replace it.
+
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 
 The Bandsintown integration (Milestone 7) is built and tested, but **do not enable
