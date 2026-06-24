@@ -14,9 +14,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link'
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
- *  Media is published here but has no CRUD form (it has its own uploader). The
- *  artist PROFILE is published separately as a singleton (publishProfile). */
-export type PublishableEntity = CrudEntity | 'media'
+ *  Media + site_content are published here but have no generic CRUD form (each
+ *  has its own bespoke editor). The artist PROFILE is published separately as a
+ *  singleton (publishProfile). */
+export type PublishableEntity = CrudEntity | 'media' | 'site_content'
 
 /** Fan-visible artist-profile columns that publish together as one snapshot.
  *  Deliberately excludes config/secret columns (shopify_domain, bandsintown_name)
@@ -83,6 +84,13 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     table: 'media',
     snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at'],
     orderBy: ['sort_order', 'created_at'],
+  },
+  // Editable site text (key/value). entity_id = row id; the snapshot carries the
+  // key→value pair. get_public_site folds these into a {key: value} object.
+  site_content: {
+    table: 'site_content',
+    snapshot: ['id', 'key', 'value'],
+    orderBy: ['key'],
   },
 }
 

@@ -21,10 +21,14 @@ export function CinematicHero({
   name,
   clips,
   poster,
+  tagline,
+  cta,
 }: {
   name: string
   clips: HeroClip[]
   poster: string | null
+  tagline: string
+  cta: string
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [index, setIndex] = useState(0)
@@ -95,13 +99,13 @@ export function CinematicHero({
           {name}
         </h1>
         <p className="mt-4 max-w-md text-sm uppercase tracking-[0.3em] text-muted">
-          DJ &amp; Producer
+          {tagline}
         </p>
         <a
           href="#shows"
           className="mt-10 border border-white/30 px-8 py-3 text-xs font-semibold uppercase tracking-widest transition hover:border-flash-1 hover:text-flash-1"
         >
-          Upcoming Shows
+          {cta}
         </a>
       </div>
 

@@ -21,7 +21,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await svc.from('media').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).in('entity_type', ['media', 'artist'])
+  await svc.from('site_content').delete().eq('artist_id', artistA)
+  await svc.from('revisions').delete().eq('artist_id', artistA).in('entity_type', ['media', 'artist', 'site_content'])
   await svc.from('artists').update({ bio: SEED_BIO, template: 'classic' }).eq('id', artistA)
   await publishProfile(svc, artistA)
 })
@@ -32,6 +33,9 @@ describe('preview == live after a full publish', () => {
     await asA
       .from('media')
       .insert({ artist_id: artistA, purpose: 'profile_photo', storage_path: `${artistA}/profile/parity.jpg` })
+    await asA
+      .from('site_content')
+      .upsert({ artist_id: artistA, key: 'tracks_heading', value: 'PARITY heading' }, { onConflict: 'artist_id,key' })
 
     await publishAll(asA, artistA)
 
@@ -41,5 +45,8 @@ describe('preview == live after a full publish', () => {
 
     expect(working!.artist).toEqual(published!.artist)
     expect(working!.media).toEqual(published!.media)
+    // The SQL jsonb_object_agg and the JS Object.fromEntries fold must agree.
+    expect(working!.site_content).toEqual(published!.site_content)
+    expect(published!.site_content.tracks_heading).toBe('PARITY heading')
   })
 })

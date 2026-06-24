@@ -10,6 +10,7 @@
  */
 import type { SiteData } from '@/lib/site'
 import { safeHref } from '@/lib/url'
+import { fieldValue } from '@/lib/site-content-schema'
 
 function Section({
   title,
@@ -34,6 +35,7 @@ function Section({
 export function ArtistSite({ data }: { data: SiteData }) {
   const { artist, tracks, tour_dates, merch, links } = data
   const heroSrc = safeHref(artist.hero_image_url)
+  const text = (key: string) => fieldValue(data.site_content, artist.template, key)
 
   return (
     <div className="min-h-full bg-white text-zinc-900 dark:bg-black dark:text-zinc-50">
@@ -56,7 +58,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
         </div>
       </section>
 
-      <Section title="Tracks" show={tracks.length > 0}>
+      <Section title={text('tracks_heading')} show={tracks.length > 0}>
         <ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-900">
           {tracks.map((track) => {
             const cover = safeHref(track.cover_url)
@@ -86,7 +88,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
         </ul>
       </Section>
 
-      <Section title="Tour dates" show={tour_dates.length > 0}>
+      <Section title={text('tour_dates_heading')} show={tour_dates.length > 0}>
         <ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-900">
           {tour_dates.map((show) => {
             const tickets = safeHref(show.ticket_url)
@@ -113,7 +115,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
         </ul>
       </Section>
 
-      <Section title="Merch" show={merch.length > 0}>
+      <Section title={text('merch_heading')} show={merch.length > 0}>
         <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
           {merch.map((item) => {
             const buy = safeHref(item.url)
@@ -147,7 +149,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
         </ul>
       </Section>
 
-      <Section title="Links" show={links.length > 0}>
+      <Section title={text('links_heading')} show={links.length > 0}>
         <ul className="mt-4 flex flex-wrap gap-2">
           {links.map((link) => {
             const href = safeHref(link.url)

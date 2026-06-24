@@ -20,6 +20,7 @@ import {
   publishProfile,
   updateContent,
 } from '@/lib/content'
+import { acceptsValue, fieldsFor } from '@/lib/site-content-schema'
 import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
 import { createBandsintownClient } from '@/lib/bandsintown'
@@ -132,14 +133,46 @@ export async function publishSectionAction(type: PublishableEntity, artistId: st
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
-/** Publish the Site section: the artist profile + its media together. */
+/** Publish the Site section: media + site text + the artist profile together. */
 export async function publishSiteAction(artistId: string) {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   await publishContent(supabase, 'media', artistId, user?.id)
+  await publishContent(supabase, 'site_content', artistId, user?.id)
+  // Profile LAST (the live-gate invariant — see publishAll).
   await publishProfile(supabase, artistId, user?.id)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Save the artist's editable site text. Upserts one row per (artist_id, key) for
+ * the keys the active template declares; a blank value deletes the override (the
+ * template falls back to its default). Emails are validated before persisting.
+ * Draft until the Site section is published.
+ */
+export async function saveSiteContentAction(artistId: string, formData: FormData) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('template')
+    .eq('id', artistId)
+    .single()
+  const fields = fieldsFor(artist?.template ?? 'classic')
+
+  for (const field of fields) {
+    if (!formData.has(field.key)) continue
+    const raw = String(formData.get(field.key) ?? '').trim()
+    if (raw === '') {
+      await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', field.key)
+      continue
+    }
+    if (!acceptsValue(field, raw)) continue
+    await supabase
+      .from('site_content')
+      .upsert({ artist_id: artistId, key: field.key, value: raw }, { onConflict: 'artist_id,key' })
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

@@ -52,6 +52,10 @@ export type SiteMedia = {
   url: string
 }
 
+/** Editable site text as key → override value (published or working). Absent
+ *  keys fall back to the template default (see lib/site-content-schema). */
+export type SiteContent = Record<string, string>
+
 /** Public URL for an object in the `media` storage bucket. */
 export function mediaUrl(path: string): string {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`
@@ -72,6 +76,7 @@ export type SiteData = {
   merch: SiteMerch[]
   links: SiteLink[]
   media: SiteMedia[]
+  site_content: SiteContent
 }
 
 /** Map the rpc's media ({purpose, path}) to public URLs. */
@@ -116,7 +121,7 @@ export async function getWorkingSite(
     .single()
   if (!artist) return null
 
-  const [tracks, tour_dates, merch, links, mediaRows] = await Promise.all([
+  const [tracks, tour_dates, merch, links, mediaRows, contentRows] = await Promise.all([
     workingSection<SiteTrack>(supabase, 'track', artistId),
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId),
     workingSection<SiteMerch>(supabase, 'merch', artistId),
@@ -128,6 +133,11 @@ export async function getWorkingSite(
       .order('sort_order')
       .order('created_at') // secondary key — matches get_public_site's media order
       .then(({ data }) => data ?? []),
+    supabase
+      .from('site_content')
+      .select('key, value')
+      .eq('artist_id', artistId)
+      .then(({ data }) => data ?? []),
   ])
 
   const media = toSiteMedia(
@@ -137,5 +147,13 @@ export async function getWorkingSite(
     })),
   )
 
-  return { artist, tracks, tour_dates, merch, links, media }
+  // Same key→value shape get_public_site's jsonb_object_agg produces, so preview
+  // matches the public site. Null values (cleared overrides) are dropped.
+  const site_content = Object.fromEntries(
+    (contentRows as { key: string; value: string | null }[])
+      .filter((r) => r.value != null)
+      .map((r) => [r.key, r.value as string]),
+  )
+
+  return { artist, tracks, tour_dates, merch, links, media, site_content }
 }

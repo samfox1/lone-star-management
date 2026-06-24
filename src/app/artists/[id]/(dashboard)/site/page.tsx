@@ -1,23 +1,30 @@
 import { createClient } from '@/lib/supabase/server'
 import { MediaPanel, type MediaRow } from '../media-panel'
 import { TEMPLATES } from '@/components/artist-template'
+import { fieldsFor } from '@/lib/site-content-schema'
 import { requireArtist } from '../_data'
-import { publishSiteAction, saveTemplateAction } from '../actions'
+import { publishSiteAction, saveSiteContentAction, saveTemplateAction } from '../actions'
+
+const inputClass =
+  'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100'
 
 /**
- * Site section: template choice + media. (Profile text — name/bio/taglines — is
- * lifted into editable fields in the next step; for now it's set via scripts.)
- * "Publish site" publishes the profile + media together (publishSiteAction).
+ * Site section: template choice, editable site text (template-declared fields),
+ * and media. "Publish site" publishes the profile + site text + media together
+ * (publishSiteAction). Site text is draft until then.
  */
 export default async function SitePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const artist = await requireArtist(id)
-  const { data: media } = await supabase
-    .from('media')
-    .select('id, purpose, storage_path')
-    .eq('artist_id', id)
-    .order('sort_order')
+  const [{ data: media }, { data: contentRows }] = await Promise.all([
+    supabase.from('media').select('id, purpose, storage_path').eq('artist_id', id).order('sort_order'),
+    supabase.from('site_content').select('key, value').eq('artist_id', id),
+  ])
+  const content = Object.fromEntries(
+    (contentRows ?? []).map((r) => [r.key as string, (r.value as string | null) ?? '']),
+  )
+  const fields = fieldsFor(artist.template)
 
   return (
     <section>
@@ -61,6 +68,37 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
             </button>
           </form>
         </div>
+
+        {fields.length > 0 && (
+          <div>
+            <h2 className="text-sm font-medium text-zinc-500">Site text</h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              Leave blank to use the template default. Draft until you publish.
+            </p>
+            <form action={saveSiteContentAction.bind(null, id)} className="mt-3 space-y-3">
+              {fields.map((f) => (
+                <label key={f.key} className="block">
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    {f.label}
+                  </span>
+                  <input
+                    name={f.key}
+                    type={f.type === 'email' ? 'email' : 'text'}
+                    defaultValue={content[f.key] ?? ''}
+                    placeholder={f.default || 'Default'}
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </label>
+              ))}
+              <button
+                type="submit"
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              >
+                Save site text
+              </button>
+            </form>
+          </div>
+        )}
 
         <MediaPanel artistId={id} media={(media ?? []) as MediaRow[]} />
       </div>

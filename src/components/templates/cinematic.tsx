@@ -6,6 +6,7 @@
  */
 import type { SiteData, SiteLink, SiteTourDate } from '@/lib/site'
 import { safeHref } from '@/lib/url'
+import { fieldHref, fieldValue } from '@/lib/site-content-schema'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
 import { CinematicWork, type WorkTab } from './cinematic-work'
 
@@ -68,10 +69,18 @@ function ShowRow({ show, past }: { show: SiteTourDate; past?: boolean }) {
   )
 }
 
-function Shows({ upcoming, past }: { upcoming: SiteTourDate[]; past: SiteTourDate[] }) {
+function Shows({
+  upcoming,
+  past,
+  heading,
+}: {
+  upcoming: SiteTourDate[]
+  past: SiteTourDate[]
+  heading: string
+}) {
   return (
     <section id="shows" className="mx-auto w-full max-w-4xl px-6 py-24">
-      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">Shows</h2>
+      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
       {upcoming.length > 0 ? (
         <ul className="mt-10">
           {upcoming.map((s) => (
@@ -105,12 +114,22 @@ function Shows({ upcoming, past }: { upcoming: SiteTourDate[]; past: SiteTourDat
   )
 }
 
-function About({ bio, photo, name }: { bio: string | null; photo: string | null; name: string }) {
+function About({
+  bio,
+  photo,
+  name,
+  heading,
+}: {
+  bio: string | null
+  photo: string | null
+  name: string
+  heading: string
+}) {
   const img = safeHref(photo)
   if (!bio && !img) return null
   return (
     <section id="about" className="mx-auto w-full max-w-4xl px-6 py-24">
-      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">About</h2>
+      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
       <div className="mt-10 grid gap-10 md:grid-cols-2">
         {bio && (
           <div className="space-y-4 leading-relaxed text-muted">
@@ -130,20 +149,35 @@ function About({ bio, photo, name }: { bio: string | null; photo: string | null;
   )
 }
 
-function Footer({ name, links }: { name: string; links: SiteLink[] }) {
-  const mailto = links.find((l) => l.url.toLowerCase().startsWith('mailto:'))
-  const socials = links.filter((l) => l !== mailto)
+function Footer({
+  name,
+  links,
+  heading,
+  inquiry,
+  email,
+}: {
+  name: string
+  links: SiteLink[]
+  heading: string
+  inquiry: string
+  email?: string
+}) {
+  const mailtoLink = links.find((l) => l.url.toLowerCase().startsWith('mailto:'))
+  const socials = links.filter((l) => l !== mailtoLink)
+  // Prefer the editable booking email (already a safe mailto href) over a links one.
+  const bookingHref = email ?? safeHref(mailtoLink?.url)
+  const bookingLabel = (email ?? mailtoLink?.url)?.replace(/^mailto:/i, '')
   return (
     <footer id="contact" className="mt-auto border-t border-border px-6 py-16 text-center">
-      <h2 className="font-display text-3xl font-black uppercase tracking-tight">Bookings</h2>
-      {mailto && (
+      <h2 className="font-display text-3xl font-black uppercase tracking-tight">{heading}</h2>
+      {bookingHref && (
         <>
-          <p className="mt-4 text-muted">For show &amp; booking enquiries:</p>
+          <p className="mt-4 text-muted">{inquiry}</p>
           <a
-            href={safeHref(mailto.url)}
+            href={bookingHref}
             className="mt-6 inline-block font-display text-lg font-bold transition hover:text-flash-1"
           >
-            {mailto.url.replace(/^mailto:/i, '')}
+            {bookingLabel}
           </a>
         </>
       )}
@@ -172,6 +206,7 @@ function Footer({ name, links }: { name: string; links: SiteLink[] }) {
 
 export function CinematicTemplate({ data }: { data: SiteData }) {
   const { artist, tour_dates, links, media } = data
+  const text = (key: string) => fieldValue(data.site_content, artist.template, key)
 
   // Hero montage = the artist's hero videos from Storage (one file per clip).
   const clips: HeroClip[] = media
@@ -208,9 +243,9 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
   }
 
   const sections = [
-    { href: '#shows', label: 'Shows' },
-    { href: '#work', label: 'Work' },
-    { href: '#about', label: 'About' },
+    { href: '#shows', label: text('shows_heading') },
+    { href: '#work', label: text('work_heading') },
+    { href: '#about', label: text('about_heading') },
     { href: '#contact', label: 'Contact' },
   ]
 
@@ -218,12 +253,24 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
     <div className="theme-cinematic flex min-h-screen flex-col">
       <Nav name={artist.name} sections={sections} />
       <main className="flex flex-1 flex-col">
-        <CinematicHero name={artist.name} clips={clips} poster={profilePhoto} />
-        <Shows upcoming={upcoming} past={past} />
-        <CinematicWork tabs={tabs} />
-        <About bio={artist.bio} photo={profilePhoto} name={artist.name} />
+        <CinematicHero
+          name={artist.name}
+          clips={clips}
+          poster={profilePhoto}
+          tagline={text('hero_tagline')}
+          cta={text('hero_cta')}
+        />
+        <Shows upcoming={upcoming} past={past} heading={text('shows_heading')} />
+        <CinematicWork tabs={tabs} heading={text('work_heading')} />
+        <About bio={artist.bio} photo={profilePhoto} name={artist.name} heading={text('about_heading')} />
       </main>
-      <Footer name={artist.name} links={links} />
+      <Footer
+        name={artist.name}
+        links={links}
+        heading={text('bookings_heading')}
+        inquiry={text('booking_inquiry_copy')}
+        email={fieldHref(data.site_content, artist.template, 'booking_email')}
+      />
     </div>
   )
 }
