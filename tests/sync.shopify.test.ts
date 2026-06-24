@@ -40,7 +40,7 @@ describe('syncShopifyMerch', () => {
       product('shp-auto', 'Fresh Tee'),
       product('shp-new', 'New Tee'),
     ])
-    expect(result).toEqual({ added: 1, updated: 1, skipped: 1 })
+    expect(result).toMatchObject({ added: 1, updated: 1, skipped: 1, failed: 0 })
 
     const { data } = await svc
       .from('merch')
@@ -61,5 +61,37 @@ describe('syncShopifyMerch', () => {
       .select('id', { count: 'exact', head: true })
       .eq('artist_id', artistB)
     expect(count).toBe(0)
+  })
+
+  it('partial failure: a bad row is reported, the good rows still land', async () => {
+    // 9999999999.00 is finite (survives coercion) but overflows numeric(10,2).
+    const result = await syncShopifyMerch(asA, artistA, [
+      product('shp-ok-1', 'Good Tee'),
+      { ...product('shp-bad', 'Overflow Tee'), price: '9999999999.00' },
+      product('shp-ok-2', 'Another Good Tee'),
+    ])
+    expect(result.added).toBe(2)
+    expect(result.failed).toBe(1)
+    expect(result.errors[0]).toMatchObject({ externalId: 'shp-bad', op: 'insert' })
+
+    const { data } = await svc.from('merch').select('shopify_product_id').eq('artist_id', artistA)
+    const ids = (data ?? []).map((r) => r.shopify_product_id)
+    expect(ids).toEqual(expect.arrayContaining(['shp-ok-1', 'shp-ok-2']))
+    expect(ids).not.toContain('shp-bad') // failed row never half-written
+  })
+
+  it('dedupes a repeated product id (last-wins)', async () => {
+    const result = await syncShopifyMerch(asA, artistA, [
+      product('shp-dup', 'First'),
+      product('shp-dup', 'Second'),
+    ])
+    expect(result.added).toBe(1)
+    const { data } = await svc
+      .from('merch')
+      .select('title')
+      .eq('artist_id', artistA)
+      .eq('shopify_product_id', 'shp-dup')
+      .single()
+    expect(data?.title).toBe('Second')
   })
 })

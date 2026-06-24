@@ -40,7 +40,7 @@ describe('syncBandsintownTourDates', () => {
       ev('bit-auto', 'Fresh Venue'),
       ev('bit-new', 'New Venue'),
     ])
-    expect(result).toEqual({ added: 1, updated: 1, skipped: 1 })
+    expect(result).toMatchObject({ added: 1, updated: 1, skipped: 1, failed: 0 })
 
     const { data } = await svc
       .from('tour_dates')

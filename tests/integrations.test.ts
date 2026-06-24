@@ -101,6 +101,55 @@ describe('public read path', () => {
   })
 })
 
+describe('domain validation', () => {
+  it('CRITICAL: rejects a non-myshopify.com domain (no token exfiltration host)', async () => {
+    for (const bad of ['evil.com', 'lonepine.myshopify.com/x', 'lonepine.myshopify.com:1337']) {
+      const { error } = await asA.rpc('connect_shopify', {
+        p_artist_id: artistA,
+        p_domain: bad,
+        p_token: 'shptok_should_be_rejected',
+      })
+      expect(error).not.toBeNull()
+    }
+  })
+})
+
+describe('disconnect', () => {
+  it('CRITICAL: removes the row, empties credentials, and destroys the secret', async () => {
+    // Throwaway connect on artist B so the suite fixture on A is undisturbed.
+    await asB.rpc('connect_shopify', {
+      p_artist_id: artistB,
+      p_domain: 'gulf-test.myshopify.com',
+      p_token: 'shptok_disconnect_me_0xC3',
+    })
+    const before = await asB.rpc('shopify_credentials', { p_artist_id: artistB })
+    expect(before.data).toHaveLength(1)
+
+    const { error } = await asB.rpc('disconnect_shopify', { p_artist_id: artistB })
+    expect(error).toBeNull()
+
+    const { count } = await asB
+      .from('integrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('artist_id', artistB)
+    expect(count).toBe(0)
+
+    // Empty credentials proves the row is gone AND the Vault secret is no longer
+    // reachable (shopify_credentials joins decrypted_secrets by secret_ref).
+    const after = await asB.rpc('shopify_credentials', { p_artist_id: artistB })
+    expect(after.error).toBeNull()
+    expect(after.data).toHaveLength(0)
+  })
+
+  it('CRITICAL: a non-owner cannot disconnect another tenant', async () => {
+    const { error } = await asB.rpc('disconnect_shopify', { p_artist_id: artistA })
+    expect(error).not.toBeNull()
+    // The owner's connection is untouched.
+    const { data } = await asA.rpc('shopify_credentials', { p_artist_id: artistA })
+    expect(data).toHaveLength(1)
+  })
+})
+
 describe('rotation', () => {
   it('reconnecting updates the token in place (still one row)', async () => {
     const { error } = await asA.rpc('connect_shopify', {

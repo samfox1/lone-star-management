@@ -15,7 +15,20 @@ import type { SpotifyTrackInput } from '@/lib/spotify'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { ShopifyMerch } from '@/lib/shopify'
 
-export type SyncResult = { added: number; updated: number; skipped: number }
+export type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
+
+export type SyncResult = {
+  added: number
+  updated: number
+  skipped: number
+  /** Rows that errored at write time. 0 on a fully clean sync. */
+  failed: number
+  /** Per-item failures, in encounter order. Empty on a fully clean sync. */
+  errors: SyncError[]
+}
+
+/** Postgres RLS / authorization denial — a hard contract breach, never partial. */
+const RLS_DENIED = '42501'
 
 /** One incoming external item: its stable id + the columns to write. */
 type ExternalItem = { externalId: string; values: Record<string, unknown> }
@@ -48,20 +61,32 @@ async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<S
     if (ext) byExternalId.set(ext, { id: row.id as string, source: row.source as string })
   }
 
-  const toInsert: Record<string, unknown>[] = []
+  // Upstream can repeat an externalId; collapse to one item, last-wins, so we
+  // never insert the same row twice or fight ourselves on updates.
+  const deduped = Array.from(new Map(items.map((i) => [i.externalId, i])).values())
+
+  let added = 0
   let updated = 0
   let skipped = 0
+  const errors: SyncError[] = []
 
-  for (const item of items) {
+  for (const item of deduped) {
     const match = byExternalId.get(item.externalId)
 
+    // New row: insert one at a time so a single bad row (e.g. a value that
+    // overflows the column) fails only itself, not the whole batch. A
+    // permission denial is fatal (a security breach, not a flaky upstream row).
     if (!match) {
-      toInsert.push({
+      const { error } = await supabase.from(table).insert({
         artist_id: artistId,
         ...item.values,
         [externalIdCol]: item.externalId,
         source,
       })
+      if (error) {
+        if (error.code === RLS_DENIED) throw new Error(error.message)
+        errors.push({ externalId: item.externalId, op: 'insert', message: error.message })
+      } else added++
       continue
     }
 
@@ -73,16 +98,13 @@ async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<S
     }
 
     const { error } = await supabase.from(table).update(item.values).eq('id', match.id)
-    if (error) throw new Error(error.message)
-    updated++
+    if (error) {
+      if (error.code === RLS_DENIED) throw new Error(error.message)
+      errors.push({ externalId: item.externalId, op: 'update', message: error.message })
+    } else updated++
   }
 
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from(table).insert(toInsert)
-    if (error) throw new Error(error.message)
-  }
-
-  return { added: toInsert.length, updated, skipped }
+  return { added, updated, skipped, failed: errors.length, errors }
 }
 
 export function syncSpotifyTracks(
@@ -119,6 +141,18 @@ export function syncBandsintownTourDates(
   })
 }
 
+/**
+ * Shopify sends price as a raw string ('25.00'); merch.price is numeric(10,2).
+ * Coerce like the manual path (Number + isFinite); drop a non-numeric price to
+ * null rather than letting it abort the row. A numerically valid but too-large
+ * value still errors at the DB and is reported in SyncResult.errors.
+ */
+function coercePrice(raw: string | null): number | null {
+  if (raw === null) return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
 export function syncShopifyMerch(
   supabase: SupabaseClient,
   artistId: string,
@@ -131,7 +165,7 @@ export function syncShopifyMerch(
     artistId,
     items: products.map((p) => ({
       externalId: p.shopify_product_id,
-      values: { title: p.title, image_url: p.image_url, price: p.price, url: p.url },
+      values: { title: p.title, image_url: p.image_url, price: coercePrice(p.price), url: p.url },
     })),
   })
 }

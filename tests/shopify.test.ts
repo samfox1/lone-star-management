@@ -100,3 +100,40 @@ describe('getProducts', () => {
     await expect(c.getProducts()).rejects.toThrow(/not configured/i)
   })
 })
+
+describe('store domain validation', () => {
+  const BAD = [
+    'evil.com',
+    'evil.com/x#',
+    'user@evil.com',
+    'store.myshopify.com/path',
+    'store.myshopify.com:1337',
+    'store.myshopify.com ',
+    ' store.myshopify.com',
+    'store.myshopify.com.evil.com',
+    'STORE.myshopify.com',
+    '-bad.myshopify.com',
+  ]
+
+  it.each(BAD)('throws and never calls fetch for %s', async (domain) => {
+    const fetchImpl = vi.fn()
+    const c = createShopifyClient({ domain, token: 'tok', fetchImpl: fetchImpl as unknown as typeof fetch })
+    await expect(c.getProducts()).rejects.toThrow(/invalid shopify store domain/i)
+    expect(fetchImpl).not.toHaveBeenCalled() // token never left the process
+  })
+
+  it('accepts a valid *.myshopify.com host', async () => {
+    const fetchImpl = vi.fn(async () => page([productEdge('p1', 'Tee', 'c1')], false, null) as unknown as Response)
+    const c = createShopifyClient({ domain: 'lone-star.myshopify.com', token: 'tok', fetchImpl: fetchImpl as unknown as typeof fetch })
+    await expect(c.getProducts()).resolves.toHaveLength(1)
+  })
+})
+
+describe('pagination termination', () => {
+  it('breaks when hasNextPage is true but endCursor is null (no dup spin)', async () => {
+    const fetchImpl = vi.fn(async () => page([productEdge('p1', 'Tee', 'c1')], true, null) as unknown as Response)
+    const products = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(products).toHaveLength(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(1) // did not re-fetch page 1
+  })
+})

@@ -43,7 +43,7 @@ describe('syncSpotifyTracks', () => {
     ]
 
     const result = await syncSpotifyTracks(asA, artistA, incoming)
-    expect(result).toEqual({ added: 1, updated: 1, skipped: 1 })
+    expect(result).toMatchObject({ added: 1, updated: 1, skipped: 1, failed: 0 })
 
     const { data } = await svc
       .from('tracks')
@@ -66,7 +66,7 @@ describe('syncSpotifyTracks', () => {
     const first = await syncSpotifyTracks(asA, artistA, incoming)
     expect(first.added).toBe(1)
     const second = await syncSpotifyTracks(asA, artistA, incoming)
-    expect(second).toEqual({ added: 0, updated: 1, skipped: 0 })
+    expect(second).toMatchObject({ added: 0, updated: 1, skipped: 0, failed: 0 })
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {

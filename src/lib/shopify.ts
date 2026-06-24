@@ -10,6 +10,19 @@
 
 const API_VERSION = '2024-01'
 
+// A storefront's Storefront API host is always {shop}.myshopify.com — custom
+// primary domains front only the online store, never the GraphQL endpoint.
+// Validating here keeps a bad manager-supplied domain from redirecting the
+// request (and its storefront token) to an attacker host. connect_shopify
+// validates authoritatively in SQL; this is defense in depth.
+const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/
+
+function assertShopDomain(domain: string): void {
+  if (domain !== domain.trim() || !SHOP_DOMAIN_RE.test(domain)) {
+    throw new Error(`Invalid Shopify store domain: ${JSON.stringify(domain)}`)
+  }
+}
+
 /** The shape the merch sync consumes (one Shopify product). */
 export type ShopifyMerch = {
   shopify_product_id: string
@@ -60,6 +73,7 @@ export function createShopifyClient(opts: Options = {}) {
     if (!domain || !token) {
       throw new Error('Shopify store not configured (missing domain or token).')
     }
+    assertShopDomain(domain)
     const url = `https://${domain}/api/${API_VERSION}/graphql.json`
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const res = await doFetch(url, {
@@ -99,14 +113,18 @@ export function createShopifyClient(opts: Options = {}) {
   async function getProducts(): Promise<ShopifyMerch[]> {
     const out: ShopifyMerch[] = []
     let cursor: string | null = null
-    // hasNextPage guards the loop; the cap is a safety net against a bad cursor.
-    for (let guard = 0; guard < 1000; guard++) {
+    // hasNextPage drives the loop; break if the cursor can't advance (null or
+    // unchanged) so a misbehaving hasNextPage:true response can't spin and
+    // accumulate duplicates. The equality break guarantees termination.
+    while (true) {
       const body: ProductsResponse = await graphql(cursor)
       const products = body.data?.products
       if (!products) break
       for (const edge of products.edges) out.push(mapNode(edge.node))
       if (!products.pageInfo.hasNextPage) break
-      cursor = products.pageInfo.endCursor
+      const next = products.pageInfo.endCursor
+      if (next === null || next === cursor) break
+      cursor = next
     }
     return out
   }
