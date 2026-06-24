@@ -70,6 +70,12 @@ caching (segments cache independently).
 
 ## 4. Cross-cutting decisions & risks (resolve BEFORE coding)
 
+> **⚠ §4 is the first draft. §9 (pressure-test) amends it — where they conflict,
+> §9 wins.** Key reversals: gated-audio mint must be a SECURITY DEFINER function
+> (not a service-role route); Deezer is metadata-only (can't back a player);
+> Phase 0 needs a data backfill + CHECK-constraint migrations; the artist object
+> is a hand-built field union, not `to_jsonb(a)`.
+
 ### 4.1 Publish-versioning consistency — THE foundational decision
 You chose **per-section publish**. But today **only content is draft→publish;
 profile + media are live**. So "Publish site edits" currently has nothing to
@@ -121,9 +127,10 @@ source's track id (the existing `syncExternal` model already does this).
 - **Tracks page:** a "catalog source" selector (pick one of Spotify/Apple/Deezer,
   or Manual). Switching source is allowed but replaces the imported set for that
   source (manual tracks untouched, per the existing don't-clobber rule).
-- **Per-source clients:** Spotify [built] → **Deezer** (public API, easiest) →
-  **Apple Music** (signed ES256 JWT, server-generated/refreshed — more work).
-  Keys are *global* (we read public catalogs), in env like Spotify.
+- **Per-source clients:** Spotify [built] → **Apple Music** (signed ES256 JWT;
+  only marginally harder than Spotify — see §9). **Deezer = metadata + link-out
+  ONLY** (30s-preview API + ToS bars exposing audio — §9), not a playable catalog
+  source. Keys are *global* (we read public catalogs), in env like Spotify.
 - **Separate content types (no conflict with the catalog):** **YouTube** →
   Videos page (API key, quota); **SoundCloud** → embed/link only (API closed).
 - **Schema:** `tracks` keeps a per-source id (`spotify_id`, add `apple_id`,
@@ -321,3 +328,131 @@ For every new table/bucket: an **isolation test is mandatory and comes first**
 **Regression guard:** the current suite (121 tests) must stay green through every
 phase; the public-read isolation tests are the canary for any `get_public_site`
 change (Phase 0 + 1 touch it heavily).
+
+---
+
+## 9. Pressure-test findings & resolutions (4-agent adversarial review)
+
+The review (architecture, security, feasibility, product/test) found real issues
+the §1–8 draft glossed. Resolutions below **amend** the sections noted. Severity:
+🔴 critical · 🟠 high · 🟡 medium.
+
+### Foundation / publish-versioning (amends §4.1, §6, §8)
+- 🔴 **Backfill is mandatory.** Switching `get_public_site` to read profile+media
+  from `revisions` makes every *existing* live site (Skeen) render empty
+  bio/hero/photo/template until re-published. **Phase 0's migration must, in the
+  same transaction, snapshot each existing artist's current profile + media into
+  `revisions`** (a backfill publish). Test: `get_public_site('skeen')` byte-
+  identical before/after the migration.
+- 🔴 **The artist object stops being `to_jsonb(a)`.** It becomes a hand-built
+  union: stable/config fields (`id`, `slug`, `template`, `spotify_artist_id`)
+  from the live row + content fields (`bio`, `hero_image_url`, `name`?) from the
+  published `entity_type='artist'` revision. **Lock a field-classification table
+  before coding.** Open: `name` (fan-visible → content?), `template` (fan-visible;
+  classing it "config/instant" lets it desync from the bio/media it pairs with —
+  reconsider as content), `spotify_artist_id` (rendered by cinematic Work → arguably
+  content). This is the crux; decide explicitly.
+- 🔴 **CHECK-constraint migrations are missing entirely.** `revisions.entity_type`
+  CHECK is `('artist','track','tour_date','merch','link')` — must add **`'media'`**
+  (Phase 0) and **`'video'`** (Phase 4). `tracks.source`/`tour_dates.source` CHECK
+  lacks **`'deezer'`,`'apple'`,`'ticketmaster'`,`'youtube'`** — each importer needs
+  one. They fail at insert time, not migrate time.
+- 🟠 **Two publish shapes, not one.** `publishContent` assumes multi-row entities
+  (it reconciles ids + tombstones). Profile is a **singleton** — add
+  `publishSingleton('artist')` that snapshots an **allowlisted** column set, no
+  tombstone. Media + content use the existing row-reconcile loop (media:
+  `entity_id = media.id`, add to the `ENTITIES` registry, `sort_order` ordering).
+- 🟠 **Config-field leak risk.** If the artist snapshot is whole-row
+  (`to_jsonb(artists)`/`select *`), `shopify_domain`/`bandsintown_name` leak onto
+  the anon path. **Snapshot via an allowlist** (reuse the `publicSnapshot`
+  registry: `['name','bio','hero_image_url','template','spotify_artist_id']`).
+  Make the negative isolation assertion a CI gate.
+- 🟠 **`diffUnpublished` is three diff strategies** (singleton for profile,
+  row-reconcile for media/content), comparing `publicSnapshot(working)` vs
+  `revision.data`. Must handle add / edit / **delete-pending** and **no false
+  positive** (null vs '' bio). Compute a cheap dirty *count* in the layout; run
+  the full diff only on Overview/Publish (it runs on every nav otherwise).
+- 🟡 **No broken intermediate state.** Versioning (backend) and the Site editor +
+  per-section publish (UI) must ship **together** — otherwise, between phases,
+  profile/media edits on the old mega-page write live but the public path reads
+  published, so editing silently stops working. **Merge into one phase**, or
+  auto-publish profile/media on save as a stopgap.
+- 🟡 **Media draft is reference-level, not object-level** (the `media` bucket is
+  public-read): an "unpublished" hero video is still fetchable by URL — it's just
+  not *referenced* by the published site. State this (same caveat as audio).
+
+### Gated audio (amends §4.2)
+- 🔴 **The signing route is an IDOR-by-design** if it's a "service-role route keyed
+  by slug+track." Make it a **SECURITY DEFINER `sign_audio(p_slug, p_track_id)`**
+  (Shopify-Vault pattern): resolve `artist_id` from the slug *inside* the function,
+  require a **published, non-tombstoned track revision** carrying the audio path,
+  never accept a path/`artist_id`/expiry from the caller; `revoke all` + grant
+  `anon`. Track UUIDs are NOT secret (the public payload returns them), so the
+  published-only check is the real gate. **Verify the `audio` bucket is created
+  `public=false`** (a copy-paste of the public `media` migration is the likely way
+  it ends up public — a total bypass). Test the **unpublished→403** case explicitly.
+- 🟠 **TTL must exceed track length.** 60–300s < many tracks → scrubbing after
+  expiry breaks playback mid-track. Use TTL ≥ track length + margin (gating value =
+  unguessable + unlisted, not a tight TTL), or re-sign on `error` preserving
+  `currentTime`. Add a `Range: bytes=0-` → `206`/`Accept-Ranges` smoke test
+  (Supabase range support is present post-v3 but has historically flapped).
+
+### site_content / XSS (amends §4.5)
+- 🟠 **Stored-XSS surface.** Lifted free-text renders on the public fan page.
+  Mandate: **escaped text only, zero `dangerouslySetInnerHTML`** (line breaks via
+  `split('\n')`, the existing bio pattern). The `safeHref`/`isUrlField` guard is a
+  fixed *column* allowlist — values inside a `site_content` JSON blob bypass it.
+  **Type-tag each field** (`text|url|email`) in the template schema and route
+  url/email through `safeHref` at write *and* render. Add an XSS test (a stored
+  `javascript:`/`<img onerror>` renders inert). Add `sandbox` to embed iframes;
+  validate new provider ids (`apple_id`, `deezer_id`) to the provider's charset,
+  don't rely on `encodeURIComponent` alone.
+
+### Importers / feasibility (amends §4.3, §5.2–5.4)
+- 🔴 **Deezer can't back a player — demote it.** API returns only a **30s preview**
+  and its ToS **bars exposing/downloading audio**. Deezer is **metadata + link-out
+  only** (SoundCloud tier), NOT a playable catalog source. ⇒ The only path to
+  *playable* audio is **uploaded + gated** (§4.2). So "one catalog source" for
+  *linked* tracks = **Spotify or Apple** (metadata + embed/link); Deezer/SoundCloud
+  are link-out adornments.
+- 🟡 **Apple is only marginally harder than Spotify** — just an ES256 token getter
+  (sign a JWT with the .p8 key; catalog reads need *only* the developer token, no
+  user token; 6-month max token life). Don't over-budget it.
+- 🟡 **YouTube:** use `channels.list → contentDetails.relatedPlaylists.uploads →
+  playlistItems.list` (≈1 unit/page), **not** `search.list` (100 units). Cache the
+  channel id on the artist. Quota is then a non-issue.
+- 🟡 **Ticketmaster:** resolve artist via the **attraction** entity, then
+  `events?attractionId=`. Note the `size*page < 1000` deep-paging cap. 5k/day, 5 rps.
+- 🟡 **Vercel wildcard (parked §4.4):** wildcard TLS requires **delegating the base
+  domain's nameservers to Vercel** (no external-DNS wildcard) — bigger than a CNAME;
+  record now so the base-domain choice accounts for it.
+
+### Publish UX & routing (amends §5.1, §6, §8)
+- 🟠 **Keep "Publish all" + add per-section.** Resolve the plan's open question:
+  per-section is the precise tool, "Publish all" (on Overview) is the escape hatch.
+  Show **per-section dirty badges** + a **global dirty count** in the sidebar so
+  "what's unpublished where" is visible; label config fields "saved instantly."
+- 🟡 **Sub-route protection test needs the non-owner case.** The proxy only checks
+  "is there a user," not ownership — the real guard for a logged-in manager B
+  hitting `/artists/{A}/tracks` is RLS + `notFound()`. Test **both** anon→/login
+  *and* manager-B→404.
+
+### Catalog-source switching (amends §4.3, §8)
+- 🟠 **Define switch semantics.** Switching Spotify→Apple must **delete that
+  artist's working rows where `source` = the old service** (manual preserved); the
+  next publish tombstones their published revisions — else stale tracks linger live.
+  Tests: switch deletes old-source rows, manual survives, publish-after-switch
+  tombstones old-source live revisions.
+
+### Missing tests to add to §8
+preview/live **parity** (deep-equal after publish) · **backfill** byte-identity ·
+**template field-schema** (per-template field sets; no stale overrides on switch) ·
+catalog-switch reconcile + delete · gated-audio **unpublished→403** ·
+`diffUnpublished` delete-pending + no-false-positive · logged-in-**non-owner→404** ·
+site_content **XSS-inert** · `analytics_events` anon-write via SECURITY DEFINER
+`record_event(slug)` (Phase 5; never `with check(true)`).
+
+### Correction for implementers
+The **live** `get_public_site` is in `…140000_media_storage.sql` (latest), NOT the
+older `…094000_tombstone…`. Diff against 140000 or you'll "re-add" columns that
+already exist.
