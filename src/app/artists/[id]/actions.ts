@@ -20,7 +20,8 @@ import {
 import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
 import { createBandsintownClient } from '@/lib/bandsintown'
-import { syncBandsintownTourDates, syncSpotifyTracks } from '@/lib/sync'
+import { createShopifyClient } from '@/lib/shopify'
+import { syncBandsintownTourDates, syncShopifyMerch, syncSpotifyTracks } from '@/lib/sync'
 
 const NUMERIC = new Set(['price', 'sort_order'])
 
@@ -178,5 +179,46 @@ export async function syncBandsintownAction(artistId: string) {
   const client = createBandsintownClient()
   const events = await client.getArtistEvents(artist.bandsintown_name)
   await syncBandsintownTourDates(supabase, artistId, events)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+/** Connect (or rotate) the artist's Shopify store. Token is stored in Vault. */
+export async function connectShopifyAction(artistId: string, formData: FormData) {
+  const domain = String(formData.get('store_domain') ?? '').trim()
+  const token = String(formData.get('storefront_token') ?? '').trim()
+  if (!domain || !token) return
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('connect_shopify', {
+    p_artist_id: artistId,
+    p_domain: domain,
+    p_token: token,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+export async function disconnectShopifyAction(artistId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('disconnect_shopify', { p_artist_id: artistId })
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+/**
+ * Pull the store's products into draft merch. The storefront token is fetched
+ * server-side from Vault via the owner-gated RPC; it never reaches the browser.
+ */
+export async function syncShopifyAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: creds, error } = await supabase.rpc('shopify_credentials', {
+    p_artist_id: artistId,
+  })
+  if (error) throw new Error(error.message)
+  if (!creds || creds.length === 0) return
+
+  const { store_domain, token } = creds[0] as { store_domain: string; token: string }
+  const client = createShopifyClient({ domain: store_domain, token })
+  const products = await client.getProducts()
+  await syncShopifyMerch(supabase, artistId, products)
   revalidatePath(`/artists/${artistId}`)
 }

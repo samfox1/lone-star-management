@@ -13,6 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SpotifyTrackInput } from '@/lib/spotify'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
+import type { ShopifyMerch } from '@/lib/shopify'
 
 export type SyncResult = { added: number; updated: number; skipped: number }
 
@@ -114,6 +115,23 @@ export function syncBandsintownTourDates(
     items: events.map((e) => ({
       externalId: e.bandsintown_id,
       values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url },
+    })),
+  })
+}
+
+export function syncShopifyMerch(
+  supabase: SupabaseClient,
+  artistId: string,
+  products: ShopifyMerch[],
+): Promise<SyncResult> {
+  return syncExternal(supabase, {
+    table: 'merch',
+    externalIdCol: 'shopify_product_id',
+    source: 'shopify',
+    artistId,
+    items: products.map((p) => ({
+      externalId: p.shopify_product_id,
+      values: { title: p.title, image_url: p.image_url, price: p.price, url: p.url },
     })),
   })
 }

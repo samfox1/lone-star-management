@@ -4,11 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { type EntityType, listContent } from '@/lib/content'
 import { ContentSection } from './content-sections'
 import { SyncPanel } from './sync-panel'
+import { ShopifyPanel } from './shopify-panel'
 import {
+  connectShopifyAction,
+  disconnectShopifyAction,
   publishAction,
   saveBandsintownNameAction,
   saveSpotifyIdAction,
   syncBandsintownAction,
+  syncShopifyAction,
   syncSpotifyAction,
 } from './actions'
 
@@ -37,6 +41,16 @@ export default async function ArtistPage({
       SECTIONS.map(async (type) => [type, await listContent(supabase, type, id)] as const),
     ),
   )
+
+  // Shopify connection state (the row holds only a pointer; the token lives in
+  // Vault and is never read here).
+  const { data: shopify } = await supabase
+    .from('integrations')
+    .select('metadata')
+    .eq('artist_id', id)
+    .eq('provider', 'shopify')
+    .maybeSingle()
+  const shopifyDomain = (shopify?.metadata as { store_domain?: string } | null)?.store_domain ?? null
 
   const linkClass =
     'rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900'
@@ -90,6 +104,12 @@ export default async function ArtistPage({
           pullLabel="Pull tour dates"
           saveAction={saveBandsintownNameAction.bind(null, artist.id)}
           pullAction={syncBandsintownAction.bind(null, artist.id)}
+        />
+        <ShopifyPanel
+          storeDomain={shopifyDomain}
+          connectAction={connectShopifyAction.bind(null, artist.id)}
+          pullAction={syncShopifyAction.bind(null, artist.id)}
+          disconnectAction={disconnectShopifyAction.bind(null, artist.id)}
         />
 
         {SECTIONS.map((type) => (
