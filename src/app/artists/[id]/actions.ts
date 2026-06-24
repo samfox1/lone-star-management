@@ -18,6 +18,8 @@ import {
   updateContent,
 } from '@/lib/content'
 import { isUrlField, safeHref } from '@/lib/url'
+import { createSpotifyClient } from '@/lib/spotify'
+import { syncSpotifyTracks } from '@/lib/sync'
 
 const NUMERIC = new Set(['price', 'sort_order'])
 
@@ -112,5 +114,37 @@ export async function publishAction(artistId: string) {
     data: { user },
   } = await supabase.auth.getUser()
   await publishAll(supabase, artistId, user?.id)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+/** Save (or clear) the artist's Spotify artist id used to pull the discography. */
+export async function saveSpotifyIdAction(artistId: string, formData: FormData) {
+  const value = String(formData.get('spotify_artist_id') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('artists')
+    .update({ spotify_artist_id: value || null })
+    .eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+/**
+ * Pull the artist's Spotify discography and sync it into draft tracks. Inserts
+ * new tracks and refreshes spotify-owned ones; manual edits are left untouched
+ * (see syncSpotifyTracks). Requires SPOTIFY_CLIENT_ID/SECRET configured.
+ */
+export async function syncSpotifyAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('spotify_artist_id')
+    .eq('id', artistId)
+    .single()
+  if (!artist?.spotify_artist_id) return
+
+  const client = createSpotifyClient()
+  const tracks = await client.getDiscographyTracks(artist.spotify_artist_id)
+  await syncSpotifyTracks(supabase, artistId, tracks)
   revalidatePath(`/artists/${artistId}`)
 }
