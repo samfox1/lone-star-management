@@ -11,13 +11,37 @@
  * separate mock (PLAN decision #7).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { listTracks } from '@/lib/tracks'
+import { type EntityType, listContent, publicSnapshot } from '@/lib/content'
 
 export type SiteTrack = {
   id: string
   title: string
   cover_url: string | null
   stream_url: string | null
+  sort_order: number
+}
+
+export type SiteTourDate = {
+  id: string
+  date: string
+  venue: string | null
+  city: string | null
+  country: string | null
+  ticket_url: string | null
+}
+
+export type SiteMerch = {
+  id: string
+  title: string
+  image_url: string | null
+  price: number | null
+  url: string | null
+}
+
+export type SiteLink = {
+  id: string
+  label: string
+  url: string
   sort_order: number
 }
 
@@ -30,9 +54,9 @@ export type SiteData = {
     hero_image_url: string | null
   }
   tracks: SiteTrack[]
-  tour_dates: unknown[]
-  merch: unknown[]
-  links: unknown[]
+  tour_dates: SiteTourDate[]
+  merch: SiteMerch[]
+  links: SiteLink[]
 }
 
 /** Published site for a slug, via the public read path. null if no such artist. */
@@ -45,10 +69,19 @@ export async function getPublishedSite(
   return (data as SiteData | null) ?? null
 }
 
+async function workingSection<T>(
+  supabase: SupabaseClient,
+  type: EntityType,
+  artistId: string,
+): Promise<T[]> {
+  const rows = await listContent(supabase, type, artistId)
+  return rows.map((r) => publicSnapshot(type, r)) as T[]
+}
+
 /**
- * Working (unpublished) site for an artist, assembled from live rows. RLS scopes
- * the read to the caller's tenant, so a non-owner gets null. Same shape as the
- * published site so the same template renders both.
+ * Working (unpublished) site for an artist, assembled from live rows through
+ * the SAME public-safe projection as a published snapshot, so preview matches
+ * the public site exactly. RLS scopes the read, so a non-owner gets null.
  */
 export async function getWorkingSite(
   supabase: SupabaseClient,
@@ -61,19 +94,12 @@ export async function getWorkingSite(
     .single()
   if (!artist) return null
 
-  const tracks = await listTracks(supabase, artistId)
+  const [tracks, tour_dates, merch, links] = await Promise.all([
+    workingSection<SiteTrack>(supabase, 'track', artistId),
+    workingSection<SiteTourDate>(supabase, 'tour_date', artistId),
+    workingSection<SiteMerch>(supabase, 'merch', artistId),
+    workingSection<SiteLink>(supabase, 'link', artistId),
+  ])
 
-  return {
-    artist,
-    tracks: tracks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      cover_url: t.cover_url,
-      stream_url: t.stream_url,
-      sort_order: t.sort_order,
-    })),
-    tour_dates: [],
-    merch: [],
-    links: [],
-  }
+  return { artist, tracks, tour_dates, merch, links }
 }
