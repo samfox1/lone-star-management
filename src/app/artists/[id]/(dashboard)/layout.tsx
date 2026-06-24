@@ -28,7 +28,7 @@ export default async function DashboardLayout({
     tour_date: diff.tour_date.dirty,
     merch: diff.merch.dirty,
     link: diff.link.dirty,
-    site: diff.profile.dirty || diff.media.dirty,
+    site: diff.profile.dirty || diff.media.dirty || diff.site_content.dirty,
   }
   const anyDirty = Object.values(dirty).some(Boolean)
 

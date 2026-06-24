@@ -10,6 +10,7 @@ const SECTIONS = [
   { key: 'merch', label: 'Merch', href: 'merch' },
   { key: 'link', label: 'Links', href: 'links' },
   { key: 'media', label: 'Media', href: 'site' },
+  { key: 'site_content', label: 'Site text', href: 'site' },
 ] as const
 
 function summarize(d: SectionDiff): string {

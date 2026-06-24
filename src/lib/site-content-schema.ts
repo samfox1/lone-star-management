@@ -19,6 +19,10 @@ export type SiteContentField = {
   default: string
 }
 
+// A CURATED set, not every string in each template. Headings, hero copy, and
+// the booking email are editable; fixed chrome (the "Contact" nav label, empty
+// states like "No upcoming dates", mute-button labels) stays hardcoded for now.
+// Lifting more = add the field here + read it via fieldValue in that template.
 export const TEMPLATE_FIELDS: Record<string, SiteContentField[]> = {
   cinematic: [
     { key: 'hero_tagline', label: 'Hero tagline', type: 'text', default: 'DJ & Producer' },

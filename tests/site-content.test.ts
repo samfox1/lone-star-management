@@ -4,7 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishContent } from '@/lib/content'
+import { diffUnpublished, publishContent } from '@/lib/content'
 import { getWorkingSite } from '@/lib/site'
 import { fieldHref, fieldValue } from '@/lib/site-content-schema'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -70,6 +70,24 @@ describe('site_content draft → publish', () => {
 
     await publishContent(asA, 'site_content', artistA)
     expect((await publicContent()).shows_heading).toBe('Gigs') // now live
+  })
+
+  it('diffUnpublished reports site_content dirty on edit, clean after publish (badge canary)', async () => {
+    await asA
+      .from('site_content')
+      .upsert({ artist_id: artistA, key: 'about_heading', value: 'Bio' }, { onConflict: 'artist_id,key' })
+    await publishContent(asA, 'site_content', artistA)
+    expect((await diffUnpublished(asA, artistA)).site_content.dirty).toBe(false)
+
+    await asA
+      .from('site_content')
+      .update({ value: 'Story' })
+      .eq('artist_id', artistA)
+      .eq('key', 'about_heading')
+    expect((await diffUnpublished(asA, artistA)).site_content.dirty).toBe(true)
+
+    await publishContent(asA, 'site_content', artistA)
+    expect((await diffUnpublished(asA, artistA)).site_content.dirty).toBe(false)
   })
 
   it('removing a key tombstones it off the published site', async () => {
