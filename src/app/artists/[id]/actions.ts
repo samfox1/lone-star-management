@@ -19,7 +19,8 @@ import {
 } from '@/lib/content'
 import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
-import { syncSpotifyTracks } from '@/lib/sync'
+import { createBandsintownClient } from '@/lib/bandsintown'
+import { syncBandsintownTourDates, syncSpotifyTracks } from '@/lib/sync'
 
 const NUMERIC = new Set(['price', 'sort_order'])
 
@@ -146,5 +147,36 @@ export async function syncSpotifyAction(artistId: string) {
   const client = createSpotifyClient()
   const tracks = await client.getDiscographyTracks(artist.spotify_artist_id)
   await syncSpotifyTracks(supabase, artistId, tracks)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+/** Save (or clear) the artist's Bandsintown name used to pull tour dates. */
+export async function saveBandsintownNameAction(artistId: string, formData: FormData) {
+  const value = String(formData.get('bandsintown_name') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('artists')
+    .update({ bandsintown_name: value || null })
+    .eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`)
+}
+
+/**
+ * Pull the artist's Bandsintown events and sync them into draft tour dates.
+ * Same conflict policy as Spotify. Requires BANDSINTOWN_APP_ID configured.
+ */
+export async function syncBandsintownAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('bandsintown_name')
+    .eq('id', artistId)
+    .single()
+  if (!artist?.bandsintown_name) return
+
+  const client = createBandsintownClient()
+  const events = await client.getArtistEvents(artist.bandsintown_name)
+  await syncBandsintownTourDates(supabase, artistId, events)
   revalidatePath(`/artists/${artistId}`)
 }
