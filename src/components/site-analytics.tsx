@@ -2,8 +2,7 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-
-const TYPES = new Set(['view', 'link_click', 'ticket_click', 'buy_click', 'play'])
+import { EVENT_TYPE_SET } from '@/lib/events'
 
 /**
  * Fan-side analytics for the public site: fires a `view` on mount, then captures
@@ -17,7 +16,7 @@ export function SiteAnalytics({ slug }: { slug: string }) {
   useEffect(() => {
     const supabase = createClient()
     const fire = (type: string, target?: string | null) => {
-      if (!TYPES.has(type)) return
+      if (!EVENT_TYPE_SET.has(type)) return
       void supabase.rpc('record_event', { p_slug: slug, p_type: type, p_target: target ?? null })
     }
 

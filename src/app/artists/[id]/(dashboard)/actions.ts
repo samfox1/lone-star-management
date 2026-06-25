@@ -11,6 +11,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   type CrudEntity,
+  type GenericEntity,
   type PublishableEntity,
   CRUD,
   createContent,
@@ -61,7 +62,7 @@ function coerce(field: string, raw: string): unknown {
 }
 
 /** Create: only fields the user actually filled (empty → use the DB default). */
-function extractFields(type: CrudEntity, formData: FormData): Record<string, unknown> {
+function extractFields(type: GenericEntity, formData: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const field of CRUD[type].fields) {
     const raw = String(formData.get(field) ?? '').trim()
@@ -77,7 +78,7 @@ function extractFields(type: CrudEntity, formData: FormData): Record<string, unk
  * are left alone). An empty optional field is set to null so a manager can clear
  * it; a required (NOT NULL) field is never nulled.
  */
-function extractUpdate(type: CrudEntity, formData: FormData): Record<string, unknown> {
+function extractUpdate(type: GenericEntity, formData: FormData): Record<string, unknown> {
   const required = new Set(CRUD[type].required)
   const out: Record<string, unknown> = {}
   for (const field of CRUD[type].fields) {
@@ -94,7 +95,7 @@ function extractUpdate(type: CrudEntity, formData: FormData): Record<string, unk
 }
 
 export async function addContentAction(
-  type: CrudEntity,
+  type: GenericEntity,
   artistId: string,
   formData: FormData,
 ) {
@@ -106,7 +107,7 @@ export async function addContentAction(
 }
 
 export async function updateContentAction(
-  type: CrudEntity,
+  type: GenericEntity,
   id: string,
   artistId: string,
   formData: FormData,
@@ -275,7 +276,24 @@ export async function addReleaseAction(artistId: string, formData: FormData) {
   const cover_url = coverRaw ? (safeHref(coverRaw) ?? null) : null
 
   const supabase = await createClient()
-  await createContent(supabase, 'release', artistId, { title, slug, release_date, cover_url, links: [] })
+  // unique(artist_id, slug): on a title collision, suffix the slug rather than
+  // surfacing a raw 23505 to the manager.
+  const { data: existing } = await supabase
+    .from('releases')
+    .select('slug')
+    .eq('artist_id', artistId)
+    .like('slug', `${slug}%`)
+  const taken = new Set((existing ?? []).map((r) => r.slug as string))
+  let finalSlug = slug
+  for (let n = 2; taken.has(finalSlug); n++) finalSlug = `${slug}-${n}`
+
+  await createContent(supabase, 'release', artistId, {
+    title,
+    slug: finalSlug,
+    release_date,
+    cover_url,
+    links: [],
+  })
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

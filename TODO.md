@@ -50,6 +50,31 @@ These are consolidation/altitude items, each best done as a focused pass:
       section (safe iframes) + a conditional #videos nav item; `videos_heading`
       added to the cinematic schema.
 
+## Phase 5 review follow-ups
+
+The review was clean on security (all 3 anon doors IDOR-closed, no with-check(true),
+allowlisted, safeHref at render). Fixed inline: generic-update guard (release/video
+can't be raw-updated — actions typed GenericEntity), analytics silent-undercount
+(now an exact SQL group-by via analytics_summary), slug-collision suffixing,
+event-type list deduped (lib/events). Remaining:
+
+Deferred SCOPE the plan (§5.9) named but v1 cut (build when needed):
+- [ ] **Releases group tracks** — §5.9 said "grouping tracks + DSP links"; v1 ships
+      DSP links only. Add track membership (a track_ids array or join) + render the
+      tracklist on the smart-link page.
+- [ ] **Pre-save** — §5.9 listed it; not built.
+- [ ] **EPK-only fields + file uploads** — §5.9 listed stage-plot / tech-rider +
+      "a few EPK-only fields"; v1 EPK is 100% derived from published content. Add
+      EPK config fields + a (private?) asset upload for the rider/stage plot.
+- [ ] **Analytics consent banner** — privacy is handled (no PII, target truncated),
+      but no consent UI. Add if/when targeting jurisdictions that require it.
+
+Hardening (low priority):
+- [ ] **Atomic release-link edits** — addReleaseLinkAction/removeReleaseLinkAction
+      read-modify-write the links jsonb; two concurrent edits last-write-win (drop a
+      link). Single-manager today so low-prob; fix via in-SQL `links = links || $1`
+      / `links - $index` (an RPC) when multi-session/roles land.
+
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 
 The Bandsintown integration (Milestone 7) is built and tested, but **do not enable

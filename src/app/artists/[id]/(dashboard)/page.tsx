@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, type SectionDiff } from '@/lib/content'
+import { EVENT_TYPES } from '@/lib/events'
 import { DIFF_SECTIONS } from './sections'
 import { requireArtist } from './_data'
 
@@ -13,29 +14,18 @@ function summarize(d: SectionDiff): string {
   return parts.join(', ')
 }
 
-const METRICS = [
-  { type: 'view', label: 'Views' },
-  { type: 'play', label: 'Plays' },
-  { type: 'link_click', label: 'Link clicks' },
-  { type: 'ticket_click', label: 'Ticket clicks' },
-  { type: 'buy_click', label: 'Buy clicks' },
-] as const
-
 export default async function OverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   await requireArtist(id)
   const diff = await diffUnpublished(supabase, id)
 
-  // Last-30-day insights (RLS scopes the read to the owner).
+  // Last-30-day insights: exact SQL group-by (RLS scopes to the owner), so the
+  // counts don't silently undercount past PostgREST's 1000-row cap.
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: events } = await supabase
-    .from('analytics_events')
-    .select('type')
-    .eq('artist_id', id)
-    .gte('created_at', since)
+  const { data: rows } = await supabase.rpc('analytics_summary', { p_artist_id: id, p_since: since })
   const counts: Record<string, number> = {}
-  for (const e of events ?? []) counts[e.type] = (counts[e.type] ?? 0) + 1
+  for (const r of (rows ?? []) as { type: string; count: number }[]) counts[r.type] = Number(r.count)
 
   return (
     <div className="space-y-8">
@@ -46,7 +36,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
       <section>
         <h2 className="text-sm font-medium text-zinc-500">Insights · last 30 days</h2>
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {METRICS.map((m) => (
+          {EVENT_TYPES.map((m) => (
             <li
               key={m.type}
               className="rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800"

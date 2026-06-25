@@ -4,14 +4,17 @@
  * type or unknown slug) rather than erroring.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SEED, anonClient, artistIdBySlug, serviceClient } from './helpers/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
+let asA: SupabaseClient
 const svc = serviceClient()
 const anon = anonClient()
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
+  asA = await signInAs(SEED.managerA)
 })
 
 afterAll(async () => {
@@ -41,5 +44,19 @@ describe('record_event', () => {
     const before = (await eventsForA()).length
     await anon.rpc('record_event', { p_slug: 'no-such-artist-slug', p_type: 'view' })
     expect((await eventsForA()).length).toBe(before)
+  })
+
+  it('analytics_summary returns exact owner-read counts grouped by type', async () => {
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view' })
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view' })
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play' })
+
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { data } = await asA.rpc('analytics_summary', { p_artist_id: artistA, p_since: since })
+    const counts = Object.fromEntries(
+      ((data ?? []) as { type: string; count: number }[]).map((r) => [r.type, Number(r.count)]),
+    )
+    expect(counts.view).toBeGreaterThanOrEqual(2)
+    expect(counts.play).toBeGreaterThanOrEqual(1)
   })
 })
