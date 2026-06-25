@@ -20,6 +20,8 @@ export type SiteTrack = {
   stream_url: string | null
   /** Link-out URL for sources that don't host audio (e.g. Deezer). */
   provider_url: string | null
+  /** Private-bucket path for gated hosted audio; play via the signed-URL route. */
+  audio_path: string | null
   sort_order: number
 }
 
