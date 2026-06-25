@@ -7,6 +7,8 @@
  * token state; fetch and sleep are injectable for deterministic tests.
  */
 
+import { httpGetJson } from '@/lib/http'
+
 const ACCOUNTS_URL = 'https://accounts.spotify.com/api/token'
 const API_BASE = 'https://api.spotify.com/v1'
 
@@ -62,23 +64,15 @@ export function createSpotifyClient(opts: Options = {}) {
   }
 
   /** GET a path or absolute URL, retrying on 429 with Retry-After backoff. */
-  async function apiGet<T>(pathOrUrl: string): Promise<T> {
+  function apiGet<T>(pathOrUrl: string): Promise<T> {
     const url = pathOrUrl.startsWith('http') ? pathOrUrl : API_BASE + pathOrUrl
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const accessToken = await getAccessToken()
-      const res = await doFetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-      if (res.status === 429) {
-        const parsed = Number(res.headers.get('retry-after') ?? '1')
-        const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 1 // date-form header → NaN
-        await sleep(retryAfter * 1000)
-        continue
-      }
-      if (!res.ok) throw new Error(`Spotify API error ${res.status} for ${url}`)
-      return (await res.json()) as T
-    }
-    throw new Error(`Spotify API rate-limited after ${maxRetries} retries: ${url}`)
+    return httpGetJson<T>(url, {
+      fetchImpl: doFetch,
+      sleep,
+      maxRetries,
+      provider: 'Spotify',
+      headers: async () => ({ Authorization: `Bearer ${await getAccessToken()}` }),
+    })
   }
 
   /** Follow `next` cursors and concatenate every page's items. */

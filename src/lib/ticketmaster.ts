@@ -8,6 +8,8 @@
  * pulls events for that attraction. A factory with injectable fetch/sleep.
  */
 
+import { httpGetJson } from '@/lib/http'
+
 const API_BASE = 'https://app.ticketmaster.com/discovery/v2'
 
 /** The shape the tour-dates sync consumes (one Ticketmaster event). */
@@ -47,20 +49,10 @@ export function createTicketmasterClient(opts: Options = {}) {
   const maxRetries = opts.maxRetries ?? 3
   const maxPages = opts.maxPages ?? 10 // size 100 * 10 = 1000, the deep-paging cap
 
-  async function apiGet(path: string): Promise<TmPage> {
+  function apiGet(path: string): Promise<TmPage> {
     if (!apiKey) throw new Error('Ticketmaster API key not configured (TICKETMASTER_API_KEY).')
     const url = `${API_BASE}${path}&apikey=${encodeURIComponent(apiKey)}`
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const res = await doFetch(url)
-      if (res.status === 429) {
-        const parsed = Number(res.headers.get('retry-after') ?? '1')
-        await sleep((Number.isFinite(parsed) && parsed > 0 ? parsed : 1) * 1000)
-        continue
-      }
-      if (!res.ok) throw new Error(`Ticketmaster API error ${res.status}`)
-      return (await res.json()) as TmPage
-    }
-    throw new Error(`Ticketmaster API rate-limited after ${maxRetries} retries`)
+    return httpGetJson<TmPage>(url, { fetchImpl: doFetch, sleep, maxRetries, provider: 'Ticketmaster' })
   }
 
   function map(e: TmEvent): TicketmasterTourDate {

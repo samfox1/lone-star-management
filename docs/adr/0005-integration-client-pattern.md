@@ -31,6 +31,14 @@ credentials or network, and must never overwrite a manager's hand edits.
 
 - Every client follows the same shape, so a new one is a small, well-tested
   addition. New providers need a `*.source` CHECK-constraint value.
+- **Shared GET-with-retry (added at 7 clients).** The 429 / Retry-After backoff
+  loop is now in one place — `src/lib/http.ts` `httpGetJson(url, {fetchImpl,
+  sleep, maxRetries, provider, headers?, onBody?})`. Per-client quirks
+  parameterize: `headers` (a thunk, so token clients — Spotify/Apple — refresh
+  per attempt), `onBody` (Deezer's in-body quota code 4 → retry). Each GET client
+  is now URL-build + auth + map. Shopify (GraphQL POST) keeps its own request
+  path. This removed the copy-paste that had already let a NaN-`Retry-After` guard
+  drift out of the two oldest clients (Spotify/Bandsintown).
 - The sync result is structured so a future UI can show "imported X, Y failed."
 - Compliance gates live outside the code (e.g. Bandsintown's terms/app_id — see
   `TODO.md`); the client being built ≠ cleared to run in production.

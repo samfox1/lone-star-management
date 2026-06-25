@@ -6,6 +6,8 @@
  * A factory with injectable fetch/sleep for deterministic tests.
  */
 
+import { httpGetJson } from '@/lib/http'
+
 const API_BASE = 'https://rest.bandsintown.com'
 
 /** The shape the tour-dates sync consumes (one Bandsintown event). */
@@ -56,23 +58,15 @@ export function createBandsintownClient(opts: Options = {}) {
       throw new Error('Bandsintown app id not configured (BANDSINTOWN_APP_ID).')
     }
     const url = `${API_BASE}/artists/${encodeURIComponent(artistName)}/events?app_id=${encodeURIComponent(appId)}`
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const res = await doFetch(url)
-      if (res.status === 429) {
-        const parsed = Number(res.headers.get('retry-after') ?? '1')
-        const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 1 // date-form header → NaN
-        await sleep(retryAfter * 1000)
-        continue
-      }
-      if (!res.ok) throw new Error(`Bandsintown API error ${res.status} for ${artistName}`)
-
-      const body = await res.json()
-      // Unknown artist returns a non-array body (e.g. { errorMessage }).
-      if (!Array.isArray(body)) return []
-      return (body as BandsintownEvent[]).map(mapEvent)
-    }
-    throw new Error(`Bandsintown API rate-limited after ${maxRetries} retries: ${artistName}`)
+    const body = await httpGetJson<unknown>(url, {
+      fetchImpl: doFetch,
+      sleep,
+      maxRetries,
+      provider: 'Bandsintown',
+    })
+    // Unknown artist returns a non-array body (e.g. { errorMessage }).
+    if (!Array.isArray(body)) return []
+    return (body as BandsintownEvent[]).map(mapEvent)
   }
 
   return { getArtistEvents }

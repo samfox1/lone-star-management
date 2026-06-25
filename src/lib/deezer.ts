@@ -6,6 +6,8 @@
  * with HTTP 200. A factory with injectable fetch/sleep for deterministic tests.
  */
 
+import { httpGetJson } from '@/lib/http'
+
 const API_BASE = 'https://api.deezer.com'
 
 /** The shape the tracks sync consumes (one Deezer track). */
@@ -35,30 +37,20 @@ export function createDeezerClient(opts: Options = {}) {
   const maxRetries = opts.maxRetries ?? 3
   const maxPages = opts.maxPages ?? 50
 
-  async function apiGet(pathOrUrl: string): Promise<DeezerPage> {
+  function apiGet(pathOrUrl: string): Promise<DeezerPage> {
     const url = pathOrUrl.startsWith('http') ? pathOrUrl : API_BASE + pathOrUrl
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const res = await doFetch(url)
-      if (res.status === 429) {
-        const parsed = Number(res.headers.get('retry-after') ?? '1')
-        const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 1
-        await sleep(retryAfter * 1000)
-        continue
-      }
-      if (!res.ok) throw new Error(`Deezer API error ${res.status} for ${url}`)
-
-      const body = (await res.json()) as DeezerPage
+    return httpGetJson<DeezerPage>(url, {
+      fetchImpl: doFetch,
+      sleep,
+      maxRetries,
+      provider: 'Deezer',
       // Deezer returns quota exhaustion in the body (code 4) with HTTP 200.
-      if (body.error) {
-        if (body.error.code === 4) {
-          await sleep(1000)
-          continue
-        }
-        throw new Error(`Deezer API error: ${body.error.message}`)
-      }
-      return body
-    }
-    throw new Error(`Deezer API rate-limited after ${maxRetries} retries: ${pathOrUrl}`)
+      onBody: (body) => {
+        const err = (body as DeezerPage).error
+        if (err?.code === 4) return 'retry'
+        if (err) throw new Error(`Deezer API error: ${err.message}`)
+      },
+    })
   }
 
   /** Follow `next` cursors and concatenate every page's tracks. Bounded by

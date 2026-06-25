@@ -32,13 +32,11 @@ Built and tested; these are accepted-by-record gaps, not blockers.
 The Phase-4 security review was clean (embed-XSS gate airtight, videos allowlist
 correct, Apple JWT sound). The NaN-retry bug + iframe sandbox were fixed inline.
 These are consolidation/altitude items, each best done as a focused pass:
-- [ ] **Extract a shared HTTP helper** (ADR-0005's predicted ~4-client threshold —
-      we're at 7). `src/lib/http.ts`: `httpGetJson<T>(url, {fetchImpl, sleep,
-      maxRetries, headers, shouldRetry})` owning the 429/NaN-guarded Retry-After
-      loop + `paginate<T>(fetchPage, {maxPages})`. Divergent retry triggers
-      parameterize as `shouldRetry(res, body)`: default HTTP-429; deezer →
-      `body.error?.code === 4`. Each client collapses to URL + auth + map
-      (~150-line net deletion). Update ADR-0005. Client tests are the safety net.
+- [x] **Extract a shared HTTP helper** — DONE. `src/lib/http.ts` `httpGetJson`
+      now owns the 429/NaN-guarded Retry-After loop for the 6 GET clients
+      (Spotify/Bandsintown/Deezer/Ticketmaster/Apple/YouTube); quirks via
+      `headers`/`onBody`. Shopify (GraphQL POST) keeps its own path. ADR-0005
+      updated; tests/http.test.ts locks the NaN guard.
 - [ ] **Consolidate the three section lists** (sidebar NAV / Overview SECTIONS /
       layout dirty map). Adding a section is 3 hand-edits with no compile link;
       it's drifted (sidebar/layout fold media+site_content+video into 'Site';

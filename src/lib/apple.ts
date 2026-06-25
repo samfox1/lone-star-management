@@ -9,6 +9,7 @@
  * signing in tests.
  */
 import { sign } from 'node:crypto'
+import { httpGetJson } from '@/lib/http'
 
 const API_BASE = 'https://api.music.apple.com'
 
@@ -69,20 +70,15 @@ export function createAppleMusicClient(opts: Options = {}) {
     return `${signingInput}.${signature}`
   }
 
-  async function apiGet(pathOrUrl: string): Promise<ApplePage> {
+  function apiGet(pathOrUrl: string): Promise<ApplePage> {
     const url = pathOrUrl.startsWith('http') ? pathOrUrl : API_BASE + pathOrUrl
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const token = await getDeveloperToken()
-      const res = await doFetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      if (res.status === 429) {
-        const parsed = Number(res.headers.get('retry-after') ?? '1')
-        await sleep((Number.isFinite(parsed) && parsed > 0 ? parsed : 1) * 1000)
-        continue
-      }
-      if (!res.ok) throw new Error(`Apple Music API error ${res.status}`)
-      return (await res.json()) as ApplePage
-    }
-    throw new Error(`Apple Music API rate-limited after ${maxRetries} retries`)
+    return httpGetJson<ApplePage>(url, {
+      fetchImpl: doFetch,
+      sleep,
+      maxRetries,
+      provider: 'Apple Music',
+      headers: async () => ({ Authorization: `Bearer ${await getDeveloperToken()}` }),
+    })
   }
 
   function map(s: AppleSong): AppleTrackInput {

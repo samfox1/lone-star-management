@@ -6,6 +6,8 @@
  * injectable fetch/sleep.
  */
 
+import { httpGetJson } from '@/lib/http'
+
 const API_BASE = 'https://www.googleapis.com/youtube/v3'
 
 /** The shape the videos sync consumes (one YouTube upload). */
@@ -37,20 +39,10 @@ export function createYouTubeClient(opts: Options = {}) {
   const maxRetries = opts.maxRetries ?? 3
   const maxPages = opts.maxPages ?? 20
 
-  async function apiGet<T>(path: string): Promise<T> {
+  function apiGet<T>(path: string): Promise<T> {
     if (!apiKey) throw new Error('YouTube API key not configured (YOUTUBE_API_KEY).')
     const url = `${API_BASE}${path}&key=${encodeURIComponent(apiKey)}`
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const res = await doFetch(url)
-      if (res.status === 429) {
-        const parsed = Number(res.headers.get('retry-after') ?? '1')
-        await sleep((Number.isFinite(parsed) && parsed > 0 ? parsed : 1) * 1000)
-        continue
-      }
-      if (!res.ok) throw new Error(`YouTube API error ${res.status}`)
-      return (await res.json()) as T
-    }
-    throw new Error(`YouTube API rate-limited after ${maxRetries} retries`)
+    return httpGetJson<T>(url, { fetchImpl: doFetch, sleep, maxRetries, provider: 'YouTube' })
   }
 
   /** Every video on a channel's uploads playlist (the cheap path). */
