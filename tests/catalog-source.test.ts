@@ -11,11 +11,13 @@ import { publishContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
+let artistB: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
+  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
 })
 
@@ -62,5 +64,31 @@ describe('catalog source switch', () => {
     await setCatalogSource(asA, artistA, 'deezer') // deletes the working spotify track
     await publishContent(asA, 'track', artistA) // reconcile → tombstone
     expect(await publicTrackTitles()).not.toContain('CAT pub spotify')
+  })
+
+  it('publishes a Deezer track provider_url (link-out) to the public site', async () => {
+    await svc.from('tracks').delete().eq('artist_id', artistA)
+    await svc.from('artists').update({ catalog_source: 'deezer' }).eq('id', artistA)
+    await svc.from('tracks').insert({
+      artist_id: artistA,
+      title: 'CAT dz link',
+      source: 'deezer',
+      deezer_id: 'dz9',
+      provider_url: 'https://deezer.com/track/9',
+    })
+    await publishContent(asA, 'track', artistA)
+
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const track = ((data as { tracks?: { title: string; provider_url?: string }[] } | null)?.tracks ?? []).find(
+      (t) => t.title === 'CAT dz link',
+    )
+    expect(track?.provider_url).toBe('https://deezer.com/track/9')
+  })
+
+  it("CRITICAL: a manager cannot switch another tenant's catalog source", async () => {
+    const { data: before } = await svc.from('artists').select('catalog_source').eq('id', artistB).single()
+    await expect(setCatalogSource(asA, artistB, 'spotify')).rejects.toThrow()
+    const { data: after } = await svc.from('artists').select('catalog_source').eq('id', artistB).single()
+    expect(after!.catalog_source).toBe(before!.catalog_source)
   })
 })

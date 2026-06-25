@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
-import { CATALOG_SOURCES } from '@/lib/catalog'
+import { CATALOG_SOURCES, type CatalogSource } from '@/lib/catalog'
 import { ContentSection } from '../content-sections'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
@@ -13,11 +13,39 @@ import {
   syncSpotifyAction,
 } from '../actions'
 
-const SOURCE_LABEL: Record<string, string> = {
-  manual: 'Manual only',
-  spotify: 'Spotify',
-  apple: 'Apple Music',
-  deezer: 'Deezer',
+type Importer = {
+  idField: 'spotify_artist_id' | 'deezer_artist_id'
+  placeholder: string
+  pullLabel: string
+  save: (artistId: string, formData: FormData) => Promise<void>
+  pull: (artistId: string) => Promise<void>
+}
+
+/** One config per catalog source — label for the selector + (for importers) the
+ *  id field and bound actions that drive the SyncPanel. Adding Apple = one entry. */
+const SOURCES: Record<CatalogSource, { label: string; importer?: Importer; comingSoon?: boolean }> = {
+  manual: { label: 'Manual only' },
+  spotify: {
+    label: 'Spotify',
+    importer: {
+      idField: 'spotify_artist_id',
+      placeholder: 'Spotify artist ID',
+      pullLabel: 'Pull from Spotify',
+      save: saveSpotifyIdAction,
+      pull: syncSpotifyAction,
+    },
+  },
+  deezer: {
+    label: 'Deezer',
+    importer: {
+      idField: 'deezer_artist_id',
+      placeholder: 'Deezer artist ID',
+      pullLabel: 'Pull from Deezer',
+      save: saveDeezerIdAction,
+      pull: syncDeezerAction,
+    },
+  },
+  apple: { label: 'Apple Music', comingSoon: true },
 }
 
 export default async function TracksPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +53,8 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
   const supabase = await createClient()
   const artist = await requireArtist(id)
   const rows = await listContent(supabase, 'track', id)
-  const source = artist.catalog_source ?? 'manual'
+  const source = (artist.catalog_source ?? 'manual') as CatalogSource
+  const cfg = SOURCES[source]
 
   return (
     <SectionShell title="Tracks" publishType="track" artistId={id}>
@@ -42,7 +71,7 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
           >
             {CATALOG_SOURCES.map((s) => (
               <option key={s} value={s}>
-                {SOURCE_LABEL[s]}
+                {SOURCES[s].label}
               </option>
             ))}
           </select>
@@ -55,35 +84,22 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
         </form>
       </div>
 
-      {source === 'spotify' && (
+      {cfg.importer && (
         <SyncPanel
-          title="Spotify"
-          idName="spotify_artist_id"
-          idValue={artist.spotify_artist_id ?? ''}
-          placeholder="Spotify artist ID"
-          hasId={!!artist.spotify_artist_id}
-          pullLabel="Pull from Spotify"
-          saveAction={saveSpotifyIdAction.bind(null, id)}
-          pullAction={syncSpotifyAction.bind(null, id)}
+          title={cfg.label}
+          idName={cfg.importer.idField}
+          idValue={artist[cfg.importer.idField] ?? ''}
+          placeholder={cfg.importer.placeholder}
+          hasId={!!artist[cfg.importer.idField]}
+          pullLabel={cfg.importer.pullLabel}
+          saveAction={cfg.importer.save.bind(null, id)}
+          pullAction={cfg.importer.pull.bind(null, id)}
         />
       )}
 
-      {source === 'deezer' && (
-        <SyncPanel
-          title="Deezer"
-          idName="deezer_artist_id"
-          idValue={artist.deezer_artist_id ?? ''}
-          placeholder="Deezer artist ID"
-          hasId={!!artist.deezer_artist_id}
-          pullLabel="Pull from Deezer"
-          saveAction={saveDeezerIdAction.bind(null, id)}
-          pullAction={syncDeezerAction.bind(null, id)}
-        />
-      )}
-
-      {source === 'apple' && (
+      {cfg.comingSoon && (
         <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700">
-          Apple Music import is coming soon. Add tracks manually for now.
+          {cfg.label} import is coming soon. Add tracks manually for now.
         </p>
       )}
 

@@ -12,7 +12,7 @@ import type { SiteData } from '@/lib/site'
 function makeData(site_content: Record<string, string>): SiteData {
   return {
     artist: { id: 'a', slug: 'a', name: 'A', bio: null, hero_image_url: null, template: 'classic', spotify_artist_id: null },
-    tracks: [{ id: 't', title: 'Song', cover_url: null, stream_url: null, sort_order: 0 }],
+    tracks: [{ id: 't', title: 'Song', cover_url: null, stream_url: null, provider_url: null, sort_order: 0 }],
     tour_dates: [],
     merch: [],
     links: [],

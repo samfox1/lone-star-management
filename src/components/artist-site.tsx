@@ -62,7 +62,8 @@ export function ArtistSite({ data }: { data: SiteData }) {
         <ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-900">
           {tracks.map((track) => {
             const cover = safeHref(track.cover_url)
-            const stream = safeHref(track.stream_url)
+            // Hosted stream, else a link-out (Deezer etc.).
+            const stream = safeHref(track.stream_url) ?? safeHref(track.provider_url)
             return (
               <li key={track.id} className="flex items-center gap-4 py-3">
                 {cover ? (

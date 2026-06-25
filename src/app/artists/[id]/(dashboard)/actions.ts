@@ -228,10 +228,11 @@ export async function syncSpotifyAction(artistId: string) {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
-    .select('spotify_artist_id')
+    .select('spotify_artist_id, catalog_source')
     .eq('id', artistId)
     .single()
-  if (!artist?.spotify_artist_id) return
+  // Only pull when Spotify is the active source — keeps one source per artist.
+  if (artist?.catalog_source !== 'spotify' || !artist?.spotify_artist_id) return
 
   const client = createSpotifyClient()
   const tracks = await client.getDiscographyTracks(artist.spotify_artist_id)
@@ -268,10 +269,11 @@ export async function syncDeezerAction(artistId: string) {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
-    .select('deezer_artist_id')
+    .select('deezer_artist_id, catalog_source')
     .eq('id', artistId)
     .single()
-  if (!artist?.deezer_artist_id) return
+  // Only pull when Deezer is the active source — keeps one source per artist.
+  if (artist?.catalog_source !== 'deezer' || !artist?.deezer_artist_id) return
 
   const client = createDeezerClient()
   const tracks = await client.getArtistTracks(artist.deezer_artist_id)

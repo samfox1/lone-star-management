@@ -18,6 +18,8 @@ export type SiteTrack = {
   title: string
   cover_url: string | null
   stream_url: string | null
+  /** Link-out URL for sources that don't host audio (e.g. Deezer). */
+  provider_url: string | null
   sort_order: number
 }
 

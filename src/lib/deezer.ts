@@ -24,19 +24,24 @@ type Options = {
   fetchImpl?: typeof fetch
   sleep?: (ms: number) => Promise<void>
   maxRetries?: number
+  /** Hard cap on `next`-cursor pages, so a looping cursor can't spin forever. */
+  maxPages?: number
 }
 
 export function createDeezerClient(opts: Options = {}) {
+  // No credentials: Deezer's public catalog API needs none (see header).
   const doFetch = opts.fetchImpl ?? fetch
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const maxRetries = opts.maxRetries ?? 3
+  const maxPages = opts.maxPages ?? 50
 
   async function apiGet(pathOrUrl: string): Promise<DeezerPage> {
     const url = pathOrUrl.startsWith('http') ? pathOrUrl : API_BASE + pathOrUrl
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const res = await doFetch(url)
       if (res.status === 429) {
-        const retryAfter = Number(res.headers.get('retry-after') ?? '1')
+        const parsed = Number(res.headers.get('retry-after') ?? '1')
+        const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 1
         await sleep(retryAfter * 1000)
         continue
       }
@@ -56,11 +61,16 @@ export function createDeezerClient(opts: Options = {}) {
     throw new Error(`Deezer API rate-limited after ${maxRetries} retries: ${pathOrUrl}`)
   }
 
-  /** Follow `next` cursors and concatenate every page's tracks. */
+  /** Follow `next` cursors and concatenate every page's tracks. Bounded by
+   *  maxPages and a seen-URL guard so a self-referential cursor can't loop. */
   async function getAllPages(firstPath: string): Promise<DeezerTrack[]> {
     const items: DeezerTrack[] = []
+    const seen = new Set<string>()
     let url: string | null = firstPath
-    while (url) {
+    let pages = 0
+    while (url && pages < maxPages && !seen.has(url)) {
+      seen.add(url)
+      pages++
       const page = await apiGet(url)
       items.push(...(page.data ?? []))
       url = page.next ?? null
