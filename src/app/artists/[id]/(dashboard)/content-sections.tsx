@@ -9,6 +9,7 @@ import {
   deleteContentAction,
   updateContentAction,
 } from './actions'
+import { TrackAudioUploader } from './track-audio-uploader'
 
 type FieldUI = { name: string; placeholder: string; type?: string; width?: string }
 
@@ -124,6 +125,13 @@ export function ContentSection({
                   Save
                 </button>
               </form>
+              {type === 'track' && (
+                <TrackAudioUploader
+                  artistId={artistId}
+                  trackId={row.id as string}
+                  hasAudio={!!row.audio_path}
+                />
+              )}
               <form
                 action={deleteContentAction.bind(null, type, row.id as string, artistId)}
               >

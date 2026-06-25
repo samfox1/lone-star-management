@@ -11,6 +11,7 @@
 import type { SiteData } from '@/lib/site'
 import { safeHref } from '@/lib/url'
 import { fieldValue } from '@/lib/site-content-schema'
+import { TrackPlayButton } from '@/components/track-play-button'
 
 function Section({
   title,
@@ -73,15 +74,20 @@ export function ArtistSite({ data }: { data: SiteData }) {
                   <div className="h-12 w-12 rounded bg-zinc-100 dark:bg-zinc-900" />
                 )}
                 <span className="flex-1 font-medium">{track.title}</span>
-                {stream && (
-                  <a
-                    href={stream}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                  >
-                    Listen →
-                  </a>
+                {track.audio_path ? (
+                  // Gated hosted audio — play in-page, no download link.
+                  <TrackPlayButton slug={artist.slug} trackId={track.id} />
+                ) : (
+                  stream && (
+                    <a
+                      href={stream}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    >
+                      Listen →
+                    </a>
+                  )
                 )}
               </li>
             )
