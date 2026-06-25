@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { label: 'Videos', seg: 'videos' },
   { label: 'Tour', seg: 'tour' },
   { label: 'Merch', seg: 'merch' },
+  { label: 'Releases', seg: 'releases' },
   { label: 'Links', seg: 'links' },
   { label: 'Site', seg: 'site' },
   { label: 'Settings', seg: 'settings' },

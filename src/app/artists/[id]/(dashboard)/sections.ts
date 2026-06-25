@@ -16,6 +16,7 @@ export const DIFF_SECTIONS: DiffSection[] = [
   { key: 'video', label: 'Videos', seg: 'videos' },
   { key: 'tour_date', label: 'Tour dates', seg: 'tour' },
   { key: 'merch', label: 'Merch', seg: 'merch' },
+  { key: 'release', label: 'Releases', seg: 'releases' },
   { key: 'link', label: 'Links', seg: 'links' },
   { key: 'media', label: 'Media', seg: 'site' },
   { key: 'site_content', label: 'Site text', seg: 'site' },

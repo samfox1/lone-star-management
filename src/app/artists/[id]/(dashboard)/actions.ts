@@ -254,6 +254,54 @@ export async function syncYouTubeAction(artistId: string) {
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+}
+
+type ReleaseLink = { label: string; url: string }
+
+/** Create a release (draft). DSP links are added separately. */
+export async function addReleaseAction(artistId: string, formData: FormData) {
+  const title = String(formData.get('title') ?? '').trim()
+  if (!title) return
+  const slug = slugify(title)
+  if (!slug) return
+  const release_date = String(formData.get('release_date') ?? '').trim() || null
+  const coverRaw = String(formData.get('cover_url') ?? '').trim()
+  const cover_url = coverRaw ? (safeHref(coverRaw) ?? null) : null
+
+  const supabase = await createClient()
+  await createContent(supabase, 'release', artistId, { title, slug, release_date, cover_url, links: [] })
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Append a DSP link to a release (url sanitized; RLS scopes to the owner). */
+export async function addReleaseLinkAction(releaseId: string, artistId: string, formData: FormData) {
+  const label = String(formData.get('label') ?? '').trim()
+  const url = safeHref(String(formData.get('url') ?? '').trim())
+  if (!label || !url) return
+  const supabase = await createClient()
+  const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
+  const links = [...((rel?.links as ReleaseLink[]) ?? []), { label, url }]
+  const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Remove the DSP link at `index` from a release. */
+export async function removeReleaseLinkAction(releaseId: string, index: number, artistId: string) {
+  const supabase = await createClient()
+  const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
+  const links = ((rel?.links as ReleaseLink[]) ?? []).filter((_, i) => i !== index)
+  const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
 /** Choose which public-site template this artist's page renders. */
 export async function saveTemplateAction(artistId: string, formData: FormData) {
   const template = String(formData.get('template') ?? 'classic')

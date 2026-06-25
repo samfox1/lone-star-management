@@ -11,12 +11,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 /** Types a manager edits through the generic dashboard CRUD forms. */
-export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video'
+export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
 
-/** CRUD types that use the GENERIC dashboard form. Video is a CrudEntity (it has
- *  create/update/delete + a field allowlist) but a BESPOKE editor (the Videos
- *  page, so adds run through embedInfo) — so it's excluded from the generic form. */
-export type GenericEntity = Exclude<CrudEntity, 'video'>
+/** CRUD types that use the GENERIC dashboard form. Video + release are CrudEntities
+ *  (create/update/delete + a field allowlist) but have BESPOKE editors (their own
+ *  pages — video runs through embedInfo, release manages a links jsonb) — so they
+ *  are excluded from the generic form. */
+export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
@@ -56,6 +57,11 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   // Manual video adds set provider + a normalized embed_url (validated by the
   // add action via embedInfo); the generic update touches title/sort_order.
   video: { fields: ['title', 'provider', 'embed_url', 'sort_order'], required: ['title', 'provider', 'embed_url'] },
+  // Releases manage a DSP-links jsonb via their own page (links validated there).
+  release: {
+    fields: ['title', 'slug', 'cover_url', 'release_date', 'links', 'sort_order'],
+    required: ['title', 'slug'],
+  },
 }
 
 /** Table + public-safe snapshot + ordering for every versioned/published entity. */
@@ -92,6 +98,11 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     table: 'videos',
     // Allowlist: youtube_id/source stay server-side, never reach the public site.
     snapshot: ['id', 'title', 'provider', 'embed_url', 'sort_order'],
+    orderBy: ['sort_order', 'created_at'],
+  },
+  release: {
+    table: 'releases',
+    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'links', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   media: {
