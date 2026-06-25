@@ -14,6 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SpotifyTrackInput } from '@/lib/spotify'
 import type { DeezerTrackInput } from '@/lib/deezer'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
+import type { TicketmasterTourDate } from '@/lib/ticketmaster'
 import type { ShopifyMerch } from '@/lib/shopify'
 
 export type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
@@ -155,6 +156,23 @@ export function syncBandsintownTourDates(
     artistId,
     items: events.map((e) => ({
       externalId: e.bandsintown_id,
+      values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url },
+    })),
+  })
+}
+
+export function syncTicketmasterTourDates(
+  supabase: SupabaseClient,
+  artistId: string,
+  events: TicketmasterTourDate[],
+): Promise<SyncResult> {
+  return syncExternal(supabase, {
+    table: 'tour_dates',
+    externalIdCol: 'ticketmaster_id',
+    source: 'ticketmaster',
+    artistId,
+    items: events.map((e) => ({
+      externalId: e.ticketmaster_id,
       values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url },
     })),
   })

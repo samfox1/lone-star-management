@@ -26,12 +26,14 @@ import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
 import { createDeezerClient } from '@/lib/deezer'
 import { createBandsintownClient } from '@/lib/bandsintown'
+import { createTicketmasterClient } from '@/lib/ticketmaster'
 import { createShopifyClient } from '@/lib/shopify'
 import {
   syncBandsintownTourDates,
   syncDeezerTracks,
   syncShopifyMerch,
   syncSpotifyTracks,
+  syncTicketmasterTourDates,
 } from '@/lib/sync'
 
 const NUMERIC = new Set(['price', 'sort_order'])
@@ -309,6 +311,35 @@ export async function syncBandsintownAction(artistId: string) {
   const client = createBandsintownClient()
   const events = await client.getArtistEvents(artist.bandsintown_name)
   await syncBandsintownTourDates(supabase, artistId, events)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Save (or clear) the artist's Ticketmaster attraction id used to pull events. */
+export async function saveTicketmasterIdAction(artistId: string, formData: FormData) {
+  const value = String(formData.get('ticketmaster_attraction_id') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('artists')
+    .update({ ticketmaster_attraction_id: value || null })
+    .eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Pull the artist's Ticketmaster events into draft tour dates (a second source
+ *  alongside Bandsintown). Requires TICKETMASTER_API_KEY configured. */
+export async function syncTicketmasterAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('ticketmaster_attraction_id')
+    .eq('id', artistId)
+    .single()
+  if (!artist?.ticketmaster_attraction_id) return
+
+  const client = createTicketmasterClient()
+  const events = await client.getArtistEvents(artist.ticketmaster_attraction_id)
+  await syncTicketmasterTourDates(supabase, artistId, events)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

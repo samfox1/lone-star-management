@@ -4,7 +4,12 @@ import { ContentSection } from '../content-sections'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
 import { requireArtist } from '../_data'
-import { saveBandsintownNameAction, syncBandsintownAction } from '../actions'
+import {
+  saveBandsintownNameAction,
+  saveTicketmasterIdAction,
+  syncBandsintownAction,
+  syncTicketmasterAction,
+} from '../actions'
 
 export default async function TourPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -23,6 +28,16 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
         pullLabel="Pull tour dates"
         saveAction={saveBandsintownNameAction.bind(null, id)}
         pullAction={syncBandsintownAction.bind(null, id)}
+      />
+      <SyncPanel
+        title="Ticketmaster"
+        idName="ticketmaster_attraction_id"
+        idValue={artist?.ticketmaster_attraction_id ?? ''}
+        placeholder="Ticketmaster attraction ID"
+        hasId={!!artist?.ticketmaster_attraction_id}
+        pullLabel="Pull tour dates"
+        saveAction={saveTicketmasterIdAction.bind(null, id)}
+        pullAction={syncTicketmasterAction.bind(null, id)}
       />
       <ContentSection type="tour_date" artistId={id} rows={rows} />
     </SectionShell>
