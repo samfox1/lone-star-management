@@ -29,6 +29,7 @@ export const TEMPLATE_FIELDS: Record<string, SiteContentField[]> = {
     { key: 'hero_cta', label: 'Hero button label', type: 'text', default: 'Upcoming Shows' },
     { key: 'shows_heading', label: 'Shows heading', type: 'text', default: 'Shows' },
     { key: 'work_heading', label: 'Work heading', type: 'text', default: 'Work' },
+    { key: 'videos_heading', label: 'Videos heading', type: 'text', default: 'Videos' },
     { key: 'about_heading', label: 'About heading', type: 'text', default: 'About' },
     { key: 'bookings_heading', label: 'Bookings heading', type: 'text', default: 'Bookings' },
     {

@@ -1,18 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, type SectionDiff } from '@/lib/content'
+import { DIFF_SECTIONS } from './sections'
 import { requireArtist } from './_data'
-
-const SECTIONS = [
-  { key: 'profile', label: 'Site / profile', href: 'site' },
-  { key: 'track', label: 'Tracks', href: 'tracks' },
-  { key: 'video', label: 'Videos', href: 'videos' },
-  { key: 'tour_date', label: 'Tour dates', href: 'tour' },
-  { key: 'merch', label: 'Merch', href: 'merch' },
-  { key: 'link', label: 'Links', href: 'links' },
-  { key: 'media', label: 'Media', href: 'site' },
-  { key: 'site_content', label: 'Site text', href: 'site' },
-] as const
 
 function summarize(d: SectionDiff): string {
   if (!d.dirty) return 'Published'
@@ -38,12 +28,12 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
       <section>
         <h2 className="text-sm font-medium text-zinc-500">Unpublished changes</h2>
         <ul className="mt-3 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {SECTIONS.map((s) => {
-            const d = diff[s.key as keyof typeof diff]
+          {DIFF_SECTIONS.map((s) => {
+            const d = diff[s.key]
             return (
               <li key={s.key} className="flex items-center justify-between px-4 py-2.5 text-sm">
                 <Link
-                  href={`/artists/${id}/${s.href}`}
+                  href={`/artists/${id}/${s.seg}`}
                   className="font-medium text-zinc-800 hover:underline dark:text-zinc-200"
                 >
                   {s.label}

@@ -3,7 +3,7 @@
  * existing item, all wired to the generic content server actions. Field layout
  * per type lives in FIELD_UI so adding a column is a one-line change.
  */
-import type { CrudEntity, ContentRow } from '@/lib/content'
+import type { GenericEntity, ContentRow } from '@/lib/content'
 import {
   addContentAction,
   deleteContentAction,
@@ -13,7 +13,7 @@ import { TrackAudioUploader } from './track-audio-uploader'
 
 type FieldUI = { name: string; placeholder: string; type?: string; width?: string }
 
-const FIELD_UI: Record<CrudEntity, { heading: string; fields: FieldUI[] }> = {
+const FIELD_UI: Record<GenericEntity, { heading: string; fields: FieldUI[] }> = {
   track: {
     heading: 'Tracks',
     fields: [{ name: 'title', placeholder: 'Track title' }],
@@ -43,9 +43,6 @@ const FIELD_UI: Record<CrudEntity, { heading: string; fields: FieldUI[] }> = {
       { name: 'url', placeholder: 'https://…', type: 'url' },
     ],
   },
-  // Videos have a bespoke editor (the Videos page), not the generic form; this
-  // entry only satisfies the CrudEntity record.
-  video: { heading: 'Videos', fields: [{ name: 'title', placeholder: 'Title' }] },
 }
 
 const inputClass =
@@ -56,7 +53,7 @@ export function ContentSection({
   artistId,
   rows,
 }: {
-  type: CrudEntity
+  type: GenericEntity
   artistId: string
   rows: ContentRow[]
 }) {

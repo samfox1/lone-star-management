@@ -3,21 +3,21 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-type NavItem = { label: string; seg: string; dirtyKey?: string }
+type NavItem = { label: string; seg: string }
 
 const NAV: NavItem[] = [
   { label: 'Overview', seg: '' },
-  { label: 'Tracks', seg: 'tracks', dirtyKey: 'track' },
-  { label: 'Videos', seg: 'videos', dirtyKey: 'video' },
-  { label: 'Tour', seg: 'tour', dirtyKey: 'tour_date' },
-  { label: 'Merch', seg: 'merch', dirtyKey: 'merch' },
-  { label: 'Links', seg: 'links', dirtyKey: 'link' },
-  { label: 'Site', seg: 'site', dirtyKey: 'site' },
+  { label: 'Tracks', seg: 'tracks' },
+  { label: 'Videos', seg: 'videos' },
+  { label: 'Tour', seg: 'tour' },
+  { label: 'Merch', seg: 'merch' },
+  { label: 'Links', seg: 'links' },
+  { label: 'Site', seg: 'site' },
   { label: 'Settings', seg: 'settings' },
 ]
 
-/** Left nav for one artist. A filled dot marks a section with unpublished edits
- *  (`dirty` is keyed by content type + 'site'; Settings is config, never dirty). */
+/** Left nav for one artist. A filled dot marks a route segment with unpublished
+ *  edits (`dirty` is keyed by segment — see dirtyBySeg; Settings is config). */
 export function Sidebar({
   artistId,
   artistName,
@@ -46,7 +46,7 @@ export function Sidebar({
         {NAV.map((item) => {
           const href = item.seg ? `${base}/${item.seg}` : base
           const active = item.seg ? pathname.startsWith(href) : pathname === base
-          const isDirty = item.dirtyKey ? dirty[item.dirtyKey] : false
+          const isDirty = item.seg ? (dirty[item.seg] ?? false) : false
           return (
             <li key={item.seg || 'overview'}>
               <Link

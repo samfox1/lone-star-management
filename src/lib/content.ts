@@ -13,6 +13,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video'
 
+/** CRUD types that use the GENERIC dashboard form. Video is a CrudEntity (it has
+ *  create/update/delete + a field allowlist) but a BESPOKE editor (the Videos
+ *  page, so adds run through embedInfo) — so it's excluded from the generic form. */
+export type GenericEntity = Exclude<CrudEntity, 'video'>
+
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
  *  has its own bespoke editor). The artist PROFILE is published separately as a

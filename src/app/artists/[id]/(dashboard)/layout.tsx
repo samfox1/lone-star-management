@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished } from '@/lib/content'
 import { Sidebar } from './sidebar'
+import { dirtyBySeg } from './sections'
 import { requireArtist } from './_data'
 import { publishAction } from './actions'
 
@@ -23,14 +24,7 @@ export default async function DashboardLayout({
   const supabase = await createClient()
   const artist = await requireArtist(id)
   const diff = await diffUnpublished(supabase, id)
-  const dirty = {
-    track: diff.track.dirty,
-    video: diff.video.dirty,
-    tour_date: diff.tour_date.dirty,
-    merch: diff.merch.dirty,
-    link: diff.link.dirty,
-    site: diff.profile.dirty || diff.media.dirty || diff.site_content.dirty,
-  }
+  const dirty = dirtyBySeg(diff)
   const anyDirty = Object.values(dirty).some(Boolean)
 
   const linkClass =

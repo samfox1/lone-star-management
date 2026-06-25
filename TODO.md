@@ -37,20 +37,18 @@ These are consolidation/altitude items, each best done as a focused pass:
       (Spotify/Bandsintown/Deezer/Ticketmaster/Apple/YouTube); quirks via
       `headers`/`onBody`. Shopify (GraphQL POST) keeps its own path. ADR-0005
       updated; tests/http.test.ts locks the NaN guard.
-- [ ] **Consolidate the three section lists** (sidebar NAV / Overview SECTIONS /
-      layout dirty map). Adding a section is 3 hand-edits with no compile link;
-      it's drifted (sidebar/layout fold media+site_content+video into 'Site';
-      Overview lists them separately). One `SECTIONS` config → derive all three.
-- [ ] **Video altitude**: video is a `CrudEntity` with a bespoke page, leaving a
-      dead `FIELD_UI.video` stub. Either drop video from `CrudEntity` (like media)
-      with its own create path, or model `genericEditor: boolean` on the registry.
-      Also drop `embed_url` from `CRUD.video.fields` (or re-validate via embedInfo)
-      so `updateContentAction` can't store an unsanitized embed_url — non-exploitable
-      (isSafeEmbedSrc gates render) but dirty.
-- [ ] **Cinematic Videos** (real §5.3 scope gap): the cinematic template ignores
-      `data.videos` (Work is Spotify/SoundCloud embeds only), so a cinematic-template
-      artist's imported videos never show. Wire `data.videos` into cinematic Work +
-      add `videos_heading` to its schema. (Classic renders videos today.)
+- [x] **Consolidate the three section lists** — DONE. `(dashboard)/sections.ts`
+      `DIFF_SECTIONS` (typed against UnpublishedDiff) is the single source; the
+      sidebar dirty dot is DERIVED via `dirtyBySeg(diff)`, and Overview renders
+      DIFF_SECTIONS. Adding a section can't silently miss its dot now.
+- [x] **Video altitude** — DONE. `GenericEntity = Exclude<CrudEntity,'video'>`
+      types the generic form (FIELD_UI/ContentSection); the dead `FIELD_UI.video`
+      stub is gone and `video` can't reach the generic form (compile error).
+      (embed_url-via-updateContent left as-is: no UI calls it and isSafeEmbedSrc
+      gates render — non-exploitable.)
+- [x] **Cinematic Videos** — DONE. cinematic template now renders a themed Videos
+      section (safe iframes) + a conditional #videos nav item; `videos_heading`
+      added to the cinematic schema.
 
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 

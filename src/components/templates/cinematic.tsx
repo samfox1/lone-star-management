@@ -4,8 +4,9 @@
  * select it. The dark theme is scoped to `.theme-cinematic` (see globals.css)
  * so it never leaks into the dashboard.
  */
-import type { SiteData, SiteLink, SiteTourDate } from '@/lib/site'
+import type { SiteData, SiteLink, SiteTourDate, SiteVideo } from '@/lib/site'
 import { safeHref } from '@/lib/url'
+import { isSafeEmbedSrc } from '@/lib/embed'
 import { fieldHref, fieldValue } from '@/lib/site-content-schema'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
 import { CinematicWork, type WorkTab } from './cinematic-work'
@@ -204,8 +205,37 @@ function Footer({
   )
 }
 
+function Videos({ videos, heading }: { videos: SiteVideo[]; heading: string }) {
+  const safe = videos.filter((v) => isSafeEmbedSrc(v.embed_url))
+  if (safe.length === 0) return null
+  return (
+    <section id="videos" className="mx-auto w-full max-w-4xl px-6 py-24">
+      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
+      <ul className="mt-10 grid gap-6 md:grid-cols-2">
+        {safe.map((v) => (
+          <li key={v.id}>
+            <div className="aspect-video w-full overflow-hidden border border-border bg-black">
+              <iframe
+                src={v.embed_url}
+                title={v.title}
+                loading="lazy"
+                sandbox="allow-scripts allow-same-origin allow-presentation"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full border-0"
+              />
+            </div>
+            <p className="mt-2 text-sm text-muted">{v.title}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 export function CinematicTemplate({ data }: { data: SiteData }) {
-  const { artist, tour_dates, links, media } = data
+  const { artist, tour_dates, links, media, videos } = data
   const text = (key: string) => fieldValue(data.site_content, artist.template, key)
 
   // Hero montage = the artist's hero videos from Storage (one file per clip).
@@ -245,6 +275,7 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
   const sections = [
     { href: '#shows', label: text('shows_heading') },
     { href: '#work', label: text('work_heading') },
+    ...(videos.length > 0 ? [{ href: '#videos', label: text('videos_heading') }] : []),
     { href: '#about', label: text('about_heading') },
     { href: '#contact', label: 'Contact' },
   ]
@@ -262,6 +293,7 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
         />
         <Shows upcoming={upcoming} past={past} heading={text('shows_heading')} />
         <CinematicWork tabs={tabs} heading={text('work_heading')} />
+        <Videos videos={videos} heading={text('videos_heading')} />
         <About bio={artist.bio} photo={profilePhoto} name={artist.name} heading={text('about_heading')} />
       </main>
       <Footer
