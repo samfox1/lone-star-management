@@ -59,6 +59,8 @@ function ShowRow({ show, past }: { show: SiteTourDate; past?: boolean }) {
           href={ticket}
           target="_blank"
           rel="noopener noreferrer"
+          data-track="ticket_click"
+          data-target={show.venue}
           className="border border-white/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest transition hover:border-flash-1 hover:text-flash-1"
         >
           Tickets
@@ -176,6 +178,8 @@ function Footer({
           <p className="mt-4 text-muted">{inquiry}</p>
           <a
             href={bookingHref}
+            data-track="link_click"
+            data-target="booking"
             className="mt-6 inline-block font-display text-lg font-bold transition hover:text-flash-1"
           >
             {bookingLabel}
@@ -192,6 +196,8 @@ function Footer({
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
+                data-track="link_click"
+                data-target={s.label}
                 className="text-muted transition hover:text-flash-2"
               >
                 {s.label}

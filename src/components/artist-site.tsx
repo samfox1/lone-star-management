@@ -84,6 +84,8 @@ export function ArtistSite({ data }: { data: SiteData }) {
                       href={stream}
                       target="_blank"
                       rel="noopener noreferrer"
+                      data-track="link_click"
+                      data-target={track.title}
                       className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                     >
                       Listen →
@@ -134,6 +136,8 @@ export function ArtistSite({ data }: { data: SiteData }) {
                     href={tickets}
                     target="_blank"
                     rel="noopener noreferrer"
+                    data-track="ticket_click"
+                    data-target={show.venue}
                     className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                   >
                     Tickets →
@@ -167,7 +171,14 @@ export function ArtistSite({ data }: { data: SiteData }) {
             return (
               <li key={item.id}>
                 {buy ? (
-                  <a href={buy} target="_blank" rel="noopener noreferrer" className="block">
+                  <a
+                    href={buy}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-track="buy_click"
+                    data-target={item.title}
+                    className="block"
+                  >
                     {card}
                   </a>
                 ) : (
@@ -190,6 +201,8 @@ export function ArtistSite({ data }: { data: SiteData }) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
+                    data-track="link_click"
+                    data-target={link.label}
                     className="inline-block rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                   >
                     {link.label}

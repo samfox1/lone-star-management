@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { ArtistTemplate } from '@/components/artist-template'
+import { SiteAnalytics } from '@/components/site-analytics'
 import { createClient } from '@/lib/supabase/server'
 import { getPublishedSite } from '@/lib/site'
 import { siteMetadata } from '@/lib/seo'
@@ -17,7 +18,12 @@ export default async function PublicArtistPage({
   const site = await getPublishedSite(supabase, slug)
   if (!site) notFound()
 
-  return <ArtistTemplate data={site} />
+  return (
+    <>
+      <ArtistTemplate data={site} />
+      <SiteAnalytics slug={slug} />
+    </>
+  )
 }
 
 export async function generateMetadata({
