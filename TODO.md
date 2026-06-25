@@ -9,6 +9,24 @@
 - [ ] (Later) gallery_image purpose is in the schema but unused; add a gallery
       section + uploader when a template needs it.
 
+## Gated audio (Phase 3) — deferred follow-ups (from the security review)
+
+Built and tested; these are accepted-by-record gaps, not blockers.
+- [ ] **Rate-limit the play route** `src/app/api/audio/[slug]/[trackId]/route.ts`.
+      It's anon and mints a signed URL per call → a DoS / Storage-egress vector and
+      a way to harvest a rolling stream of valid 1h links. Needs a rate-limiter
+      (per slug+track, or a token/Referer check). The 1h share window is inherent
+      to signed URLs ("gated raises the bar, isn't DRM" — §4.2).
+- [ ] **Cinematic template has no per-track player** — gated audio surfaces only on
+      `classic` (`artist-site.tsx`); cinematic is embed-first (`cinematic-work.tsx`).
+      A manager on cinematic who uploads audio gets no player. Either wire a player
+      into cinematic or annotate/disable the uploader when `template === 'cinematic'`.
+- [ ] **"I own this recording" ack on upload** (`track-audio-uploader.tsx`) — §4.2
+      asked for a rights ack before hosting audio; not built. Rights/DMCA posture.
+- [ ] **Extract a shared `useStorageUpload` hook** — `track-audio-uploader.tsx` and
+      `media-uploader.tsx` are ~75% the same (busy/error state, orphan-cleanup,
+      refresh). Two callers is borderline; consolidate at the third uploader.
+
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 
 The Bandsintown integration (Milestone 7) is built and tested, but **do not enable
