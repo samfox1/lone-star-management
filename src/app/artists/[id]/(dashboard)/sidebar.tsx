@@ -8,6 +8,7 @@ type NavItem = { label: string; seg: string; dirtyKey?: string }
 const NAV: NavItem[] = [
   { label: 'Overview', seg: '' },
   { label: 'Tracks', seg: 'tracks', dirtyKey: 'track' },
+  { label: 'Videos', seg: 'videos', dirtyKey: 'video' },
   { label: 'Tour', seg: 'tour', dirtyKey: 'tour_date' },
   { label: 'Merch', seg: 'merch', dirtyKey: 'merch' },
   { label: 'Links', seg: 'links', dirtyKey: 'link' },

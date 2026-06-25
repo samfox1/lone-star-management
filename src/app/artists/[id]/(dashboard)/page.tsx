@@ -6,6 +6,7 @@ import { requireArtist } from './_data'
 const SECTIONS = [
   { key: 'profile', label: 'Site / profile', href: 'site' },
   { key: 'track', label: 'Tracks', href: 'tracks' },
+  { key: 'video', label: 'Videos', href: 'videos' },
   { key: 'tour_date', label: 'Tour dates', href: 'tour' },
   { key: 'merch', label: 'Merch', href: 'merch' },
   { key: 'link', label: 'Links', href: 'links' },

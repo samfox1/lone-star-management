@@ -25,6 +25,7 @@ export default async function DashboardLayout({
   const diff = await diffUnpublished(supabase, id)
   const dirty = {
     track: diff.track.dirty,
+    video: diff.video.dirty,
     tour_date: diff.tour_date.dirty,
     merch: diff.merch.dirty,
     link: diff.link.dirty,

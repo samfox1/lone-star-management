@@ -11,7 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 /** Types a manager edits through the generic dashboard CRUD forms. */
-export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link'
+export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video'
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
@@ -48,6 +48,9 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   tour_date: { fields: ['date', 'venue', 'city', 'country', 'ticket_url'], required: ['date'] },
   merch: { fields: ['title', 'image_url', 'price', 'url'], required: ['title'] },
   link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
+  // Manual video adds set provider + a normalized embed_url (validated by the
+  // add action via embedInfo); the generic update touches title/sort_order.
+  video: { fields: ['title', 'provider', 'embed_url', 'sort_order'], required: ['title', 'provider', 'embed_url'] },
 }
 
 /** Table + public-safe snapshot + ordering for every versioned/published entity. */
@@ -78,6 +81,12 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   link: {
     table: 'links',
     snapshot: ['id', 'label', 'url', 'sort_order'],
+    orderBy: ['sort_order', 'created_at'],
+  },
+  video: {
+    table: 'videos',
+    // Allowlist: youtube_id/source stay server-side, never reach the public site.
+    snapshot: ['id', 'title', 'provider', 'embed_url', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   media: {

@@ -18,6 +18,7 @@ function makeData(site_content: Record<string, string>): SiteData {
     tour_dates: [],
     merch: [],
     links: [],
+    videos: [],
     media: [],
     site_content,
   }

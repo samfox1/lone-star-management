@@ -14,6 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SpotifyTrackInput } from '@/lib/spotify'
 import type { DeezerTrackInput } from '@/lib/deezer'
 import type { AppleTrackInput } from '@/lib/apple'
+import type { YouTubeVideoInput } from '@/lib/youtube'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { TicketmasterTourDate } from '@/lib/ticketmaster'
 import type { ShopifyMerch } from '@/lib/shopify'
@@ -176,6 +177,24 @@ export function syncBandsintownTourDates(
     items: events.map((e) => ({
       externalId: e.bandsintown_id,
       values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url },
+    })),
+  })
+}
+
+/** YouTube uploads → videos (embed-only). source='youtube', keyed by youtube_id. */
+export function syncYouTubeVideos(
+  supabase: SupabaseClient,
+  artistId: string,
+  videos: YouTubeVideoInput[],
+): Promise<SyncResult> {
+  return syncExternal(supabase, {
+    table: 'videos',
+    externalIdCol: 'youtube_id',
+    source: 'youtube',
+    artistId,
+    items: videos.map((v) => ({
+      externalId: v.youtube_id,
+      values: { title: v.title, provider: v.provider, embed_url: v.embed_url },
     })),
   })
 }

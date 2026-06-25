@@ -21,6 +21,8 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor } from '@/lib/site-content-schema'
+import { embedInfo } from '@/lib/embed'
+import { createYouTubeClient } from '@/lib/youtube'
 import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/catalog'
 import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
@@ -36,6 +38,7 @@ import {
   syncShopifyMerch,
   syncSpotifyTracks,
   syncTicketmasterTourDates,
+  syncYouTubeVideos,
 } from '@/lib/sync'
 
 const NUMERIC = new Set(['price', 'sort_order'])
@@ -199,6 +202,55 @@ export async function deleteMediaAction(mediaId: string, _storagePath: string, a
   const supabase = await createClient()
   const { error } = await supabase.from('media').delete().eq('id', mediaId)
   if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Add a video by URL: validate + normalize to a safe embed via embedInfo (only
+ * YouTube/SoundCloud), derive the provider, then create the draft video. An
+ * unrecognized URL is rejected.
+ */
+export async function addVideoAction(artistId: string, formData: FormData) {
+  const title = String(formData.get('title') ?? '').trim()
+  const url = String(formData.get('embed_url') ?? '').trim()
+  if (!title || !url) return
+  const info = embedInfo(url)
+  if (!info) return // not a YouTube/SoundCloud URL — reject
+
+  const supabase = await createClient()
+  await createContent(supabase, 'video', artistId, {
+    title,
+    provider: info.provider,
+    embed_url: info.embedUrl,
+  })
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Save (or clear) the artist's YouTube channel id used to import their uploads. */
+export async function saveYoutubeChannelAction(artistId: string, formData: FormData) {
+  const value = String(formData.get('youtube_channel_id') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('artists')
+    .update({ youtube_channel_id: value || null })
+    .eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Pull the artist's YouTube uploads into draft videos. Requires YOUTUBE_API_KEY. */
+export async function syncYouTubeAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('youtube_channel_id')
+    .eq('id', artistId)
+    .single()
+  if (!artist?.youtube_channel_id) return
+
+  const client = createYouTubeClient()
+  const videos = await client.getChannelVideos(artist.youtube_channel_id)
+  await syncYouTubeVideos(supabase, artistId, videos)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

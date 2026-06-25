@@ -43,6 +43,9 @@ const FIELD_UI: Record<CrudEntity, { heading: string; fields: FieldUI[] }> = {
       { name: 'url', placeholder: 'https://…', type: 'url' },
     ],
   },
+  // Videos have a bespoke editor (the Videos page), not the generic form; this
+  // entry only satisfies the CrudEntity record.
+  video: { heading: 'Videos', fields: [{ name: 'title', placeholder: 'Title' }] },
 }
 
 const inputClass =

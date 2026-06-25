@@ -23,6 +23,7 @@ function site(artist: Partial<SiteData['artist']> = {}): SiteData {
     tour_dates: [],
     merch: [],
     links: [],
+    videos: [],
     media: [],
     site_content: {},
   }

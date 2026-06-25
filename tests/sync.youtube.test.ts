@@ -1,0 +1,60 @@
+/**
+ * PHASE 4 (Videos) — YouTube video sync (real DB). Same conflict policy: insert
+ * new, refresh youtube-owned, never clobber a manual video; RLS-scoped.
+ */
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { syncYouTubeVideos } from '@/lib/sync'
+import type { YouTubeVideoInput } from '@/lib/youtube'
+import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+
+let artistA: string
+let artistB: string
+let asA: SupabaseClient
+const svc = serviceClient()
+
+beforeAll(async () => {
+  artistA = await artistIdBySlug(SEED.artistASlug)
+  artistB = await artistIdBySlug(SEED.artistBSlug)
+  asA = await signInAs(SEED.managerA)
+})
+
+afterEach(async () => {
+  await svc.from('videos').delete().eq('artist_id', artistA)
+  await svc.from('videos').delete().eq('artist_id', artistB)
+})
+
+const yt = (id: string, title: string): YouTubeVideoInput => ({
+  youtube_id: id,
+  title,
+  provider: 'youtube',
+  embed_url: `https://www.youtube.com/embed/${id}`,
+})
+
+describe('syncYouTubeVideos', () => {
+  it('inserts new, refreshes youtube-owned, never clobbers manual', async () => {
+    await svc.from('videos').insert([
+      { artist_id: artistA, title: 'My Edit', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/m', youtube_id: 'yt-manual', source: 'manual' },
+      { artist_id: artistA, title: 'Stale', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/a', youtube_id: 'yt-auto', source: 'youtube' },
+    ])
+
+    const result = await syncYouTubeVideos(asA, artistA, [
+      yt('yt-manual', 'SHOULD NOT OVERWRITE'),
+      yt('yt-auto', 'Fresh'),
+      yt('yt-new', 'Brand New'),
+    ])
+    expect(result).toMatchObject({ added: 1, updated: 1, skipped: 1, failed: 0 })
+
+    const { data } = await svc.from('videos').select('title, source, youtube_id').eq('artist_id', artistA)
+    const byId = Object.fromEntries((data ?? []).map((r) => [r.youtube_id, r]))
+    expect(byId['yt-manual']).toMatchObject({ title: 'My Edit', source: 'manual' })
+    expect(byId['yt-auto']).toMatchObject({ title: 'Fresh', source: 'youtube' })
+    expect(byId['yt-new']).toMatchObject({ title: 'Brand New', source: 'youtube' })
+  })
+
+  it("CRITICAL: cannot sync into another tenant's artist", async () => {
+    await expect(syncYouTubeVideos(asA, artistB, [yt('yt-evil', 'evil')])).rejects.toThrow()
+    const { count } = await svc.from('videos').select('id', { count: 'exact', head: true }).eq('artist_id', artistB)
+    expect(count).toBe(0)
+  })
+})

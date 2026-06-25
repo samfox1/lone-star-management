@@ -10,6 +10,7 @@
  */
 import type { SiteData } from '@/lib/site'
 import { safeHref } from '@/lib/url'
+import { isSafeEmbedSrc } from '@/lib/embed'
 import { fieldValue } from '@/lib/site-content-schema'
 import { TrackPlayButton } from '@/components/track-play-button'
 
@@ -34,7 +35,7 @@ function Section({
 }
 
 export function ArtistSite({ data }: { data: SiteData }) {
-  const { artist, tracks, tour_dates, merch, links } = data
+  const { artist, tracks, tour_dates, merch, links, videos } = data
   const heroSrc = safeHref(artist.hero_image_url)
   const text = (key: string) => fieldValue(data.site_content, artist.template, key)
 
@@ -92,6 +93,26 @@ export function ArtistSite({ data }: { data: SiteData }) {
               </li>
             )
           })}
+        </ul>
+      </Section>
+
+      <Section title={text('videos_heading')} show={videos.length > 0}>
+        <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+          {videos.filter((v) => isSafeEmbedSrc(v.embed_url)).map((v) => (
+            <li key={v.id}>
+              <div className="aspect-video w-full overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
+                <iframe
+                  src={v.embed_url}
+                  title={v.title}
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="h-full w-full border-0"
+                />
+              </div>
+              <p className="mt-1 text-sm font-medium">{v.title}</p>
+            </li>
+          ))}
         </ul>
       </Section>
 

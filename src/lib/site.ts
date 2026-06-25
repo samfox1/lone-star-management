@@ -52,6 +52,14 @@ export type SiteLink = {
   sort_order: number
 }
 
+export type SiteVideo = {
+  id: string
+  title: string
+  provider: 'youtube' | 'soundcloud'
+  embed_url: string
+  sort_order: number
+}
+
 export type SiteMedia = {
   purpose: 'hero_video' | 'profile_photo' | 'gallery_image'
   url: string
@@ -80,6 +88,7 @@ export type SiteData = {
   tour_dates: SiteTourDate[]
   merch: SiteMerch[]
   links: SiteLink[]
+  videos: SiteVideo[]
   media: SiteMedia[]
   site_content: SiteContent
 }
@@ -126,7 +135,7 @@ export async function getWorkingSite(
     .single()
   if (!artist) return null
 
-  const [tracks, tour_dates, merch, links, mediaRows, contentRows] = await Promise.all([
+  const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows] = await Promise.all([
     // Tracks mirror get_public_site: expose has_audio, never the raw audio_path.
     listContent(supabase, 'track', artistId).then((rows) =>
       rows.map((r) => {
@@ -145,6 +154,7 @@ export async function getWorkingSite(
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId),
     workingSection<SiteMerch>(supabase, 'merch', artistId),
     workingSection<SiteLink>(supabase, 'link', artistId),
+    workingSection<SiteVideo>(supabase, 'video', artistId),
     supabase
       .from('media')
       .select('purpose, storage_path, sort_order')
@@ -174,5 +184,5 @@ export async function getWorkingSite(
       .map((r) => [r.key, r.value as string]),
   )
 
-  return { artist, tracks, tour_dates, merch, links, media, site_content }
+  return { artist, tracks, tour_dates, merch, links, videos, media, site_content }
 }
