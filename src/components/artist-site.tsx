@@ -105,6 +105,8 @@ export function ArtistSite({ data }: { data: SiteData }) {
                   src={v.embed_url}
                   title={v.title}
                   loading="lazy"
+                  sandbox="allow-scripts allow-same-origin allow-presentation"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                   className="h-full w-full border-0"

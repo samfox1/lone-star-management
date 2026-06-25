@@ -27,6 +27,33 @@ Built and tested; these are accepted-by-record gaps, not blockers.
       `media-uploader.tsx` are ~75% the same (busy/error state, orphan-cleanup,
       refresh). Two callers is borderline; consolidate at the third uploader.
 
+## Phase 4 review follow-ups (consolidation — not bugs)
+
+The Phase-4 security review was clean (embed-XSS gate airtight, videos allowlist
+correct, Apple JWT sound). The NaN-retry bug + iframe sandbox were fixed inline.
+These are consolidation/altitude items, each best done as a focused pass:
+- [ ] **Extract a shared HTTP helper** (ADR-0005's predicted ~4-client threshold —
+      we're at 7). `src/lib/http.ts`: `httpGetJson<T>(url, {fetchImpl, sleep,
+      maxRetries, headers, shouldRetry})` owning the 429/NaN-guarded Retry-After
+      loop + `paginate<T>(fetchPage, {maxPages})`. Divergent retry triggers
+      parameterize as `shouldRetry(res, body)`: default HTTP-429; deezer →
+      `body.error?.code === 4`. Each client collapses to URL + auth + map
+      (~150-line net deletion). Update ADR-0005. Client tests are the safety net.
+- [ ] **Consolidate the three section lists** (sidebar NAV / Overview SECTIONS /
+      layout dirty map). Adding a section is 3 hand-edits with no compile link;
+      it's drifted (sidebar/layout fold media+site_content+video into 'Site';
+      Overview lists them separately). One `SECTIONS` config → derive all three.
+- [ ] **Video altitude**: video is a `CrudEntity` with a bespoke page, leaving a
+      dead `FIELD_UI.video` stub. Either drop video from `CrudEntity` (like media)
+      with its own create path, or model `genericEditor: boolean` on the registry.
+      Also drop `embed_url` from `CRUD.video.fields` (or re-validate via embedInfo)
+      so `updateContentAction` can't store an unsanitized embed_url — non-exploitable
+      (isSafeEmbedSrc gates render) but dirty.
+- [ ] **Cinematic Videos** (real §5.3 scope gap): the cinematic template ignores
+      `data.videos` (Work is Spotify/SoundCloud embeds only), so a cinematic-template
+      artist's imported videos never show. Wire `data.videos` into cinematic Work +
+      add `videos_heading` to its schema. (Classic renders videos today.)
+
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 
 The Bandsintown integration (Milestone 7) is built and tested, but **do not enable

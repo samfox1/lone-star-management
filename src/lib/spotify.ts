@@ -70,7 +70,8 @@ export function createSpotifyClient(opts: Options = {}) {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
       if (res.status === 429) {
-        const retryAfter = Number(res.headers.get('retry-after') ?? '1')
+        const parsed = Number(res.headers.get('retry-after') ?? '1')
+        const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 1 // date-form header → NaN
         await sleep(retryAfter * 1000)
         continue
       }
