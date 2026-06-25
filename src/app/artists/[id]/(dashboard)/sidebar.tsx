@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { label: 'Releases', seg: 'releases' },
   { label: 'Links', seg: 'links' },
   { label: 'Site', seg: 'site' },
+  { label: 'Press kit', seg: 'epk' },
   { label: 'Settings', seg: 'settings' },
 ]
 
