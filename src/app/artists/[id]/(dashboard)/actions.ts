@@ -25,10 +25,12 @@ import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/cat
 import { isUrlField, safeHref } from '@/lib/url'
 import { createSpotifyClient } from '@/lib/spotify'
 import { createDeezerClient } from '@/lib/deezer'
+import { createAppleMusicClient } from '@/lib/apple'
 import { createBandsintownClient } from '@/lib/bandsintown'
 import { createTicketmasterClient } from '@/lib/ticketmaster'
 import { createShopifyClient } from '@/lib/shopify'
 import {
+  syncAppleTracks,
   syncBandsintownTourDates,
   syncDeezerTracks,
   syncShopifyMerch,
@@ -280,6 +282,35 @@ export async function syncDeezerAction(artistId: string) {
   const client = createDeezerClient()
   const tracks = await client.getArtistTracks(artist.deezer_artist_id)
   await syncDeezerTracks(supabase, artistId, tracks)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Save (or clear) the artist's Apple Music artist id used to pull their catalog. */
+export async function saveAppleIdAction(artistId: string, formData: FormData) {
+  const value = String(formData.get('apple_artist_id') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('artists')
+    .update({ apple_artist_id: value || null })
+    .eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Pull the artist's Apple Music catalog into draft tracks (metadata + link-out). */
+export async function syncAppleAction(artistId: string) {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('apple_artist_id, catalog_source')
+    .eq('id', artistId)
+    .single()
+  // Only pull when Apple is the active source — keeps one source per artist.
+  if (artist?.catalog_source !== 'apple' || !artist?.apple_artist_id) return
+
+  const client = createAppleMusicClient()
+  const tracks = await client.getArtistTracks(artist.apple_artist_id)
+  await syncAppleTracks(supabase, artistId, tracks)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

@@ -13,6 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SpotifyTrackInput } from '@/lib/spotify'
 import type { DeezerTrackInput } from '@/lib/deezer'
+import type { AppleTrackInput } from '@/lib/apple'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { TicketmasterTourDate } from '@/lib/ticketmaster'
 import type { ShopifyMerch } from '@/lib/shopify'
@@ -122,6 +123,24 @@ export function syncSpotifyTracks(
     items: tracks.map((t) => ({
       externalId: t.spotify_id,
       values: { title: t.title, cover_url: t.cover_url, stream_url: t.stream_url },
+    })),
+  })
+}
+
+/** Apple Music is a metadata + link-out catalog source (no hosted audio). */
+export function syncAppleTracks(
+  supabase: SupabaseClient,
+  artistId: string,
+  tracks: AppleTrackInput[],
+): Promise<SyncResult> {
+  return syncExternal(supabase, {
+    table: 'tracks',
+    externalIdCol: 'apple_id',
+    source: 'apple',
+    artistId,
+    items: tracks.map((t) => ({
+      externalId: t.apple_id,
+      values: { title: t.title, cover_url: t.cover_url, provider_url: t.provider_url },
     })),
   })
 }

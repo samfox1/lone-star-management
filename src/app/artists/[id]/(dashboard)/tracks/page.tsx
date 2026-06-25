@@ -7,15 +7,17 @@ import { SectionShell } from '../section-shell'
 import { CatalogSourceForm } from '../catalog-source-form'
 import { requireArtist } from '../_data'
 import {
+  saveAppleIdAction,
   saveDeezerIdAction,
   saveSpotifyIdAction,
   setCatalogSourceAction,
+  syncAppleAction,
   syncDeezerAction,
   syncSpotifyAction,
 } from '../actions'
 
 type Importer = {
-  idField: 'spotify_artist_id' | 'deezer_artist_id'
+  idField: 'spotify_artist_id' | 'deezer_artist_id' | 'apple_artist_id'
   placeholder: string
   pullLabel: string
   save: (artistId: string, formData: FormData) => Promise<void>
@@ -46,7 +48,16 @@ const SOURCES: Record<CatalogSource, { label: string; importer?: Importer; comin
       pull: syncDeezerAction,
     },
   },
-  apple: { label: 'Apple Music', comingSoon: true },
+  apple: {
+    label: 'Apple Music',
+    importer: {
+      idField: 'apple_artist_id',
+      placeholder: 'Apple Music artist ID',
+      pullLabel: 'Pull from Apple Music',
+      save: saveAppleIdAction,
+      pull: syncAppleAction,
+    },
+  },
 }
 
 export default async function TracksPage({ params }: { params: Promise<{ id: string }> }) {
