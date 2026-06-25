@@ -45,10 +45,13 @@ export function TrackAudioUploader({
     setBusy(true)
     const supabase = createClient()
     const path = `${artistId}/audio/${crypto.randomUUID()}.${ext}`
+    // Send a content-type the bucket's allowed_mime_types accepts (browsers report
+    // m4a inconsistently), so a valid file isn't rejected by the bucket guard.
+    const contentType = ext === 'mp3' ? 'audio/mpeg' : 'audio/mp4'
 
     const { error: upErr } = await supabase.storage
       .from('audio')
-      .upload(path, file, { contentType: file.type || undefined, upsert: false })
+      .upload(path, file, { contentType, upsert: false })
     if (upErr) {
       setError(upErr.message)
       setBusy(false)

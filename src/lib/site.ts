@@ -20,8 +20,9 @@ export type SiteTrack = {
   stream_url: string | null
   /** Link-out URL for sources that don't host audio (e.g. Deezer). */
   provider_url: string | null
-  /** Private-bucket path for gated hosted audio; play via the signed-URL route. */
-  audio_path: string | null
+  /** Whether this track has gated hosted audio. The raw path never leaves the
+   *  server; the player streams it via the signed-URL route (slug + track id). */
+  has_audio: boolean
   sort_order: number
 }
 
@@ -126,7 +127,21 @@ export async function getWorkingSite(
   if (!artist) return null
 
   const [tracks, tour_dates, merch, links, mediaRows, contentRows] = await Promise.all([
-    workingSection<SiteTrack>(supabase, 'track', artistId),
+    // Tracks mirror get_public_site: expose has_audio, never the raw audio_path.
+    listContent(supabase, 'track', artistId).then((rows) =>
+      rows.map((r) => {
+        const s = publicSnapshot('track', r) as Record<string, unknown>
+        return {
+          id: s.id as string,
+          title: s.title as string,
+          cover_url: (s.cover_url as string | null) ?? null,
+          stream_url: (s.stream_url as string | null) ?? null,
+          provider_url: (s.provider_url as string | null) ?? null,
+          has_audio: s.audio_path != null,
+          sort_order: (s.sort_order as number) ?? 0,
+        } satisfies SiteTrack
+      }),
+    ),
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId),
     workingSection<SiteMerch>(supabase, 'merch', artistId),
     workingSection<SiteLink>(supabase, 'link', artistId),

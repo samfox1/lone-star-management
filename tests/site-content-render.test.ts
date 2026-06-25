@@ -13,7 +13,7 @@ function makeData(site_content: Record<string, string>): SiteData {
   return {
     artist: { id: 'a', slug: 'a', name: 'A', bio: null, hero_image_url: null, template: 'classic', spotify_artist_id: null },
     tracks: [
-      { id: 't', title: 'Song', cover_url: null, stream_url: null, provider_url: null, audio_path: null, sort_order: 0 },
+      { id: 't', title: 'Song', cover_url: null, stream_url: null, provider_url: null, has_audio: false, sort_order: 0 },
     ],
     tour_dates: [],
     merch: [],

@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
 let artistB: string
@@ -50,5 +50,13 @@ describe('gated audio storage isolation', () => {
   it('CRITICAL: the raw audio object is NOT publicly reachable', async () => {
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/public/audio/${artistA}/audio/iso.mp3`)
     expect(res.ok).toBe(false) // private bucket → no public read
+  })
+
+  it('CRITICAL: anon cannot download the object; the owning manager can', async () => {
+    const path = `${artistA}/audio/iso.mp3`
+    const anon = await anonClient().storage.from('audio').download(path)
+    expect(anon.data).toBeNull() // the manager-read policy does NOT grant anon
+    const owner = await asA.storage.from('audio').download(path)
+    expect(owner.error).toBeNull()
   })
 })

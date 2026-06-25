@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { signAudioUrl } from '@/lib/audio'
 
 /**
@@ -14,12 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string; trackId: string }> },
 ) {
   const { slug, trackId } = await params
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  )
-  const url = await signAudioUrl(admin, slug, trackId)
+  const url = await signAudioUrl(createAdminClient(), slug, trackId)
   if (!url) return Response.json({ error: 'not found' }, { status: 404 })
   // Don't let a proxy/browser cache the signed URL past its life.
   return Response.json({ url }, { headers: { 'Cache-Control': 'no-store' } })

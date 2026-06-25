@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { signAudioUrl } from '@/lib/audio'
+import { GET } from '@/app/api/audio/[slug]/[trackId]/route'
 import { publishContent } from '@/lib/content'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
@@ -43,7 +44,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await svc.from('tracks').delete().eq('artist_id', artistA)
   await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'track')
-  await svc.storage.from('audio').remove([audioPath('pub'), audioPath('unpub')])
+  await svc.storage.from('audio').remove([audioPath('pub'), audioPath('unpub'), audioPath('tomb')])
 })
 
 describe('signAudioUrl', () => {
@@ -68,5 +69,43 @@ describe('signAudioUrl', () => {
   it("CRITICAL: refuses to sign under another artist's slug", async () => {
     const url = await signAudioUrl(svc, SEED.artistBSlug, publishedTrackId)
     expect(url).toBeNull()
+  })
+
+  it('the play route returns the URL for a published track, 404 otherwise', async () => {
+    const ok = await GET(new Request('http://t/'), {
+      params: Promise.resolve({ slug: SEED.artistASlug, trackId: publishedTrackId }),
+    })
+    expect(ok.status).toBe(200)
+    expect((await ok.json()).url).toBeTruthy()
+
+    const no = await GET(new Request('http://t/'), {
+      params: Promise.resolve({ slug: SEED.artistASlug, trackId: unpublishedTrackId }),
+    })
+    expect(no.status).toBe(404)
+  })
+
+  it('the signed URL expires', async () => {
+    const url = await signAudioUrl(svc, SEED.artistASlug, publishedTrackId, 1) // 1s TTL
+    expect(url).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 2000))
+    const res = await fetch(url!)
+    expect(res.ok).toBe(false)
+  })
+
+  it('CRITICAL: a deleted (tombstoned) track is no longer signable', async () => {
+    await svc.storage.from('audio').upload(audioPath('tomb'), body, { contentType: 'audio/mpeg', upsert: true })
+    const { data: t } = await svc
+      .from('tracks')
+      .insert({ artist_id: artistA, title: 'AUDIO tomb', source: 'manual', audio_path: audioPath('tomb') })
+      .select('id')
+      .single()
+    await publishContent(asA, 'track', artistA)
+    expect(await signAudioUrl(svc, SEED.artistASlug, t!.id)).toBeTruthy()
+
+    // Delete the working row + republish → tombstone; the latest revision now
+    // carries no audio_path, so signing must refuse.
+    await svc.from('tracks').delete().eq('id', t!.id)
+    await publishContent(asA, 'track', artistA)
+    expect(await signAudioUrl(svc, SEED.artistASlug, t!.id)).toBeNull()
   })
 })

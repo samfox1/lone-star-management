@@ -74,7 +74,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
                   <div className="h-12 w-12 rounded bg-zinc-100 dark:bg-zinc-900" />
                 )}
                 <span className="flex-1 font-medium">{track.title}</span>
-                {track.audio_path ? (
+                {track.has_audio ? (
                   // Gated hosted audio — play in-page, no download link.
                   <TrackPlayButton slug={artist.slug} trackId={track.id} />
                 ) : (

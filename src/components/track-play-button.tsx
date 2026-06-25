@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // One track plays at a time across the page: starting one pauses the previous.
 let current: HTMLAudioElement | null = null
@@ -16,6 +16,14 @@ export function TrackPlayButton({ slug, trackId }: { slug: string; trackId: stri
   const loaded = useRef(false)
   const [busy, setBusy] = useState(false)
   const [playing, setPlaying] = useState(false)
+
+  // Don't leave the shared one-at-a-time ref pointing at an unmounted element.
+  useEffect(() => {
+    const audio = ref.current
+    return () => {
+      if (current === audio) current = null
+    }
+  }, [])
 
   async function toggle() {
     const audio = ref.current
