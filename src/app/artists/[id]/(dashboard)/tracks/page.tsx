@@ -4,6 +4,7 @@ import { CATALOG_SOURCES, type CatalogSource } from '@/lib/catalog'
 import { ContentSection } from '../content-sections'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
+import { CatalogSourceForm } from '../catalog-source-form'
 import { requireArtist } from '../_data'
 import {
   saveDeezerIdAction,
@@ -55,6 +56,8 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
   const rows = await listContent(supabase, 'track', id)
   const source = (artist.catalog_source ?? 'manual') as CatalogSource
   const cfg = SOURCES[source]
+  // Confirm a switch only when it would actually delete imported tracks.
+  const hasImportedTracks = source !== 'manual' && rows.some((r) => r.source === source)
 
   return (
     <SectionShell title="Tracks" publishType="track" artistId={id}>
@@ -63,25 +66,13 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
         <p className="mt-1 text-xs text-zinc-400">
           Import from one service. Switching replaces that import; your manual tracks stay.
         </p>
-        <form action={setCatalogSourceAction.bind(null, id)} className="mt-2 flex items-center gap-2">
-          <select
-            name="catalog_source"
-            defaultValue={source}
-            className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
-          >
-            {CATALOG_SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {SOURCES[s].label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          >
-            Apply
-          </button>
-        </form>
+        <CatalogSourceForm
+          action={setCatalogSourceAction.bind(null, id)}
+          current={source}
+          currentLabel={cfg.label}
+          hasImportedTracks={hasImportedTracks}
+          sources={CATALOG_SOURCES.map((s) => ({ value: s, label: SOURCES[s].label }))}
+        />
       </div>
 
       {cfg.importer && (
