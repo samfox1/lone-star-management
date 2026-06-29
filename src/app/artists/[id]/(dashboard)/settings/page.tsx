@@ -1,53 +1,73 @@
+import Link from 'next/link'
+import { Card, KLabel, buttonClass } from '@/components/ui/ui'
 import { getShopifyDomain, requireArtist } from '../_data'
 
 /**
- * Settings: integrations hub + (soon) SEO/OG and account. Config here applies
- * instantly — it is NOT part of the draft/publish flow. For now this summarizes
- * integration connection state; connect/pull still live on the section pages.
+ * Settings: the per-artist integrations hub + (soon) SEO/account. Config here
+ * applies instantly — it is NOT part of the draft/publish flow. Connection state
+ * lives per-artist on `artists.*_id` columns and the `integrations` table;
+ * connect/pull controls still live on the section pages (linked via "Manage"),
+ * to be folded in here as those pages are restyled.
  */
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const artist = await requireArtist(id)
   const shopifyDomain = await getShopifyDomain(id)
 
-  const integrations = [
-    { name: 'Spotify', connected: !!artist?.spotify_artist_id, where: 'Tracks', detail: artist?.spotify_artist_id },
-    { name: 'Bandsintown', connected: !!artist?.bandsintown_name, where: 'Tour dates', detail: artist?.bandsintown_name },
-    { name: 'Shopify', connected: !!shopifyDomain, where: 'Merch', detail: shopifyDomain },
+  const providers = [
+    { name: 'Spotify', desc: 'Catalog, tracks & artist id', connected: !!artist?.spotify_artist_id, detail: artist?.spotify_artist_id, seg: 'tracks' },
+    { name: 'Apple Music', desc: 'Catalog source for releases', connected: !!artist?.apple_artist_id, detail: artist?.apple_artist_id, seg: 'tracks' },
+    { name: 'Deezer', desc: 'Catalog source for releases', connected: !!artist?.deezer_artist_id, detail: artist?.deezer_artist_id, seg: 'tracks' },
+    { name: 'YouTube', desc: 'Import music videos', connected: !!artist?.youtube_channel_id, detail: artist?.youtube_channel_id, seg: 'videos' },
+    { name: 'Bandsintown', desc: 'Sync tour dates', connected: !!artist?.bandsintown_name, detail: artist?.bandsintown_name, seg: 'tour' },
+    { name: 'Ticketmaster', desc: 'Import tour dates', connected: !!artist?.ticketmaster_attraction_id, detail: artist?.ticketmaster_attraction_id, seg: 'tour' },
+    { name: 'Shopify', desc: 'Sync merch products', connected: !!shopifyDomain, detail: shopifyDomain, seg: 'merch' },
   ]
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-        Settings
-      </h1>
+    <div className="space-y-10">
+      <h1 className="text-[19px] font-bold tracking-[-0.01em]">Settings</h1>
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-500">Integrations</h2>
-        <ul className="mt-3 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {integrations.map((i) => (
-            <li key={i.name} className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <div>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">{i.name}</span>
-                <span className="ml-2 text-xs text-zinc-500">manage on {i.where}</span>
+        <KLabel>Integrations · this artist</KLabel>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {providers.map((p) => (
+            <Card key={p.name} className="flex flex-col gap-4 p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 flex-none items-center justify-center rounded-[10px] bg-surface font-space text-sm font-bold">
+                  {p.name[0]}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold">{p.name}</div>
+                  <div className="mt-1 font-space text-[11px] leading-snug text-ink-muted">{p.desc}</div>
+                </div>
               </div>
-              <span
-                className={
-                  i.connected
-                    ? 'text-emerald-700 dark:text-emerald-400'
-                    : 'text-zinc-400 dark:text-zinc-500'
-                }
-              >
-                {i.connected ? `Connected${i.detail ? ` · ${i.detail}` : ''}` : 'Not connected'}
-              </span>
-            </li>
+              <div className="mt-auto flex items-center justify-between gap-3">
+                <span className="inline-flex min-w-0 items-center gap-2 font-space text-[11px] text-ink-muted">
+                  {p.connected ? (
+                    <>
+                      <span className="h-[7px] w-[7px] flex-none rounded-full bg-accent" />
+                      <span className="truncate">Connected{p.detail ? ` · ${p.detail}` : ''}</span>
+                    </>
+                  ) : (
+                    <span className="text-ink-faint">Not connected</span>
+                  )}
+                </span>
+                <Link href={`/artists/${id}/${p.seg}`} className={buttonClass('ghost')}>
+                  Manage
+                </Link>
+              </div>
+            </Card>
           ))}
-        </ul>
+        </div>
+        <p className="mt-3 font-space text-xs text-ink-faint">
+          Each artist connects their own sources — different artists can use different providers.
+        </p>
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-500">SEO &amp; account</h2>
-        <p className="mt-2 text-sm text-zinc-500">Coming soon.</p>
+        <KLabel>SEO &amp; account</KLabel>
+        <p className="mt-2 font-space text-sm text-ink-muted">Coming soon.</p>
       </section>
     </div>
   )

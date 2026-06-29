@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, type SectionDiff } from '@/lib/content'
 import { EVENT_TYPES } from '@/lib/events'
+import { KLabel, StatusDot } from '@/components/ui/ui'
 import { DIFF_SECTIONS } from './sections'
 import { requireArtist } from './_data'
 
@@ -14,6 +15,12 @@ function summarize(d: SectionDiff): string {
   return parts.join(', ')
 }
 
+// Lifted out of the component body so the analytics window isn't an impure call
+// during render (react-hooks/purity).
+function thirtyDaysAgoIso(): string {
+  return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+}
+
 export default async function OverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -22,62 +29,60 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
 
   // Last-30-day insights: exact SQL group-by (RLS scopes to the owner), so the
   // counts don't silently undercount past PostgREST's 1000-row cap.
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: rows } = await supabase.rpc('analytics_summary', { p_artist_id: id, p_since: since })
+  const { data: rows } = await supabase.rpc('analytics_summary', {
+    p_artist_id: id,
+    p_since: thirtyDaysAgoIso(),
+  })
   const counts: Record<string, number> = {}
   for (const r of (rows ?? []) as { type: string; count: number }[]) counts[r.type] = Number(r.count)
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-        Overview
-      </h1>
-
+    <div className="space-y-10">
       <section>
-        <h2 className="text-sm font-medium text-zinc-500">Insights · last 30 days</h2>
-        <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <KLabel>Insights · last 30 days</KLabel>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
           {EVENT_TYPES.map((m) => (
-            <li
-              key={m.type}
-              className="rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800"
-            >
-              <div className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+            <div key={m.type} className="rounded-xl border border-hairline px-4 py-3.5">
+              <div className="font-space text-2xl font-bold tabular-nums tracking-[-0.02em]">
                 {counts[m.type] ?? 0}
               </div>
-              <div className="text-xs text-zinc-500">{m.label}</div>
-            </li>
+              <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
+                {m.label}
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-500">Unpublished changes</h2>
-        <ul className="mt-3 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {DIFF_SECTIONS.map((s) => {
+        <KLabel>Unpublished changes</KLabel>
+        <div className="mt-3 overflow-hidden rounded-xl border border-hairline">
+          {DIFF_SECTIONS.map((s, i) => {
             const d = diff[s.key]
             return (
-              <li key={s.key} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <Link
-                  href={`/artists/${id}/${s.seg}`}
-                  className="font-medium text-zinc-800 hover:underline dark:text-zinc-200"
-                >
-                  {s.label}
-                </Link>
+              <Link
+                key={s.key}
+                href={`/artists/${id}/${s.seg}`}
+                className={`flex items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-surface-hover ${
+                  i > 0 ? 'border-t border-hairline' : ''
+                }`}
+              >
+                <span className="font-medium">{s.label}</span>
                 <span
-                  className={
-                    d.dirty
-                      ? 'text-amber-700 dark:text-amber-400'
-                      : 'text-zinc-400 dark:text-zinc-500'
-                  }
+                  className={`inline-flex items-center gap-2 font-space text-xs ${
+                    d.dirty ? 'text-ink' : 'text-ink-faint'
+                  }`}
                 >
+                  {d.dirty && <StatusDot tone="pending" />}
                   {summarize(d)}
                 </span>
-              </li>
+              </Link>
             )
           })}
-        </ul>
-        <p className="mt-2 text-xs text-zinc-500">
-          Use a section&apos;s <strong>Publish</strong> button, or <strong>Publish all</strong> above.
+        </div>
+        <p className="mt-2.5 font-space text-xs text-ink-faint">
+          Use a section&apos;s <strong className="font-bold text-ink-muted">Publish</strong> button, or{' '}
+          <strong className="font-bold text-ink-muted">Publish all</strong> above.
         </p>
       </section>
     </div>
