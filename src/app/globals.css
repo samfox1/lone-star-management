@@ -20,6 +20,32 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-display);
+
+  /* ── Manager redesign design system (additive) ───────────────────────────
+     Black-and-white base with restrained blue/red accents. These tokens are
+     new utilities (bg-ink, text-ink-muted, border-hairline, bg-accent,
+     font-space, …) used only by the redesigned manager surface; existing
+     dashboard pages keep their zinc-* classes until each is ported. */
+  --color-ink: #111111;
+  --color-ink-muted: #6b7280;
+  --color-ink-faint: #9aa0a6;
+  --color-hairline: #ececec;
+  --color-hairline-soft: #f1f1f3;
+  --color-paper: #ffffff;
+  --color-surface: #fafafa;
+  --color-surface-hover: #f6f7f8;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4fd8;
+  --color-accent-soft: #eef4ff;
+  --color-accent-red: #e5484d;
+  --color-status-pending: #d99a2b;
+  --color-avatar: #ececef;
+  --color-avatar-ink: #3f3f46;
+  --color-track: #f4f4f5;
+  --color-danger-soft: #fef5f5;
+  --color-danger-border: #f3c9c9;
+  --font-ui: var(--font-body);
+  --font-space: var(--font-space-mono);
 }
 
 @media (prefers-color-scheme: dark) {
