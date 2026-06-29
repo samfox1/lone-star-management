@@ -1,17 +1,20 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished } from '@/lib/content'
-import { Sidebar } from './sidebar'
+import { Icon } from '@/components/ui/icons'
+import { Avatar, Button, buttonClass, initials, StatusDot } from '@/components/ui/ui'
+import { ArtistTabs } from './artist-tabs'
 import { dirtyBySeg } from './sections'
 import { requireArtist } from './_data'
 import { publishAction } from './actions'
 
 /**
- * Dashboard shell for one artist: loads the artist once (the .single() guard is
+ * Artist-scoped dashboard shell: loads the artist once (the .single() guard is
  * the non-owner→404 gate for every sub-route, alongside the proxy's anon→login),
- * computes the unpublished diff for the sidebar badges, and renders the sidebar
- * + persistent action bar around each section page. Does NOT wrap /preview,
- * which lives outside this route group.
+ * computes the unpublished diff for the per-tab dirty dots, and renders the
+ * artist context bar (back / avatar / name + the Publish action bar) and the
+ * section tabs around each page. Does NOT wrap /preview, which is outside this
+ * route group.
  */
 export default async function DashboardLayout({
   children,
@@ -27,39 +30,38 @@ export default async function DashboardLayout({
   const dirty = dirtyBySeg(diff)
   const anyDirty = Object.values(dirty).some(Boolean)
 
-  const linkClass =
-    'rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900'
-
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-black">
-      <Sidebar artistId={id} artistName={artist.name} dirty={dirty} />
+    <div className="font-ui text-ink flex flex-1 flex-col bg-paper">
+      <header className="flex items-center gap-3 px-5 py-3.5">
+        <Link href="/" title="All artists" className="group flex items-center gap-2.5">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-muted transition-colors group-hover:bg-surface group-hover:text-ink">
+            <Icon name="chevronLeft" size={18} />
+          </span>
+          <Avatar initials={initials(artist.name)} size={28} />
+          <span className="text-[15px] font-bold tracking-[-0.01em]">{artist.name}</span>
+        </Link>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-end gap-2 border-b border-zinc-200 bg-white px-6 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-          {anyDirty && (
-            <span className="mr-auto flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Unpublished changes
-            </span>
-          )}
-          <Link href={`/artists/${id}/preview`} className={linkClass}>
-            Preview
-          </Link>
-          <Link href={`/${artist.slug}`} className={linkClass}>
-            View site
-          </Link>
-          <form action={publishAction.bind(null, id)}>
-            <button
-              type="submit"
-              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
-              Publish all
-            </button>
-          </form>
-        </header>
+        <div className="flex-1" />
 
-        <main className="mx-auto w-full max-w-3xl px-6 py-8">{children}</main>
-      </div>
+        {anyDirty && (
+          <span className="mr-1 inline-flex items-center gap-2 font-space text-xs text-ink-muted">
+            <StatusDot tone="pending" /> Unpublished changes
+          </span>
+        )}
+        <Link href={`/artists/${id}/preview`} className={buttonClass('ghost')}>
+          Preview
+        </Link>
+        <Link href={`/${artist.slug}`} className={buttonClass('ghost')}>
+          View site <Icon name="external" size={15} />
+        </Link>
+        <form action={publishAction.bind(null, id)}>
+          <Button type="submit">Publish all</Button>
+        </form>
+      </header>
+
+      <ArtistTabs artistId={id} dirty={dirty} />
+
+      <main className="mx-auto w-full max-w-4xl px-6 py-8">{children}</main>
     </div>
   )
 }

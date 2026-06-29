@@ -3,14 +3,11 @@ import { cx } from '@/lib/cx'
 import { Icon, type IconName } from './icons'
 
 /* ── Button ──────────────────────────────────────────────────────────────── */
-type ButtonVariant = 'solid' | 'accent' | 'ghost'
+export type ButtonVariant = 'solid' | 'accent' | 'ghost'
 
-export function Button({
-  variant = 'solid',
-  className,
-  children,
-  ...rest
-}: { variant?: ButtonVariant } & ComponentProps<'button'>) {
+/** Button classes, exported so links that should look like buttons (e.g. a
+ *  next/link) can share them without nesting a <button> inside an <a>. */
+export function buttonClass(variant: ButtonVariant = 'solid', className?: string): string {
   const base =
     'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors disabled:opacity-50'
   const styles: Record<ButtonVariant, string> = {
@@ -18,8 +15,17 @@ export function Button({
     accent: 'bg-accent text-white hover:bg-accent-hover',
     ghost: 'border border-hairline bg-paper text-ink hover:border-ink-faint',
   }
+  return cx(base, styles[variant], className)
+}
+
+export function Button({
+  variant = 'solid',
+  className,
+  children,
+  ...rest
+}: { variant?: ButtonVariant } & ComponentProps<'button'>) {
   return (
-    <button className={cx(base, styles[variant], className)} {...rest}>
+    <button className={buttonClass(variant, className)} {...rest}>
       {children}
     </button>
   )
@@ -72,6 +78,12 @@ export function Avatar({
       {initials}
     </span>
   )
+}
+
+/** First letters of the first two words — avatar fallback for a name. */
+export function initials(name: string): string {
+  const p = name.trim().split(/\s+/)
+  return (((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || '?').slice(0, 2)
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────── */

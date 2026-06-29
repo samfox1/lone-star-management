@@ -4,15 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { requestArtist } from './actions'
 import { Icon } from '@/components/ui/icons'
-import { Avatar, Button, Field, Input, StatusDot, Textarea } from '@/components/ui/ui'
+import { Avatar, Button, Field, initials, Input, StatusDot, Textarea } from '@/components/ui/ui'
 
 type Artist = { id: string; name: string; slug: string }
 type Pending = { id: string; name: string; handle: string | null }
-
-function initials(name: string) {
-  const p = name.trim().split(/\s+/)
-  return (((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || '?').slice(0, 2)
-}
 
 export function RosterView({
   artists,

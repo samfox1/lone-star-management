@@ -8,10 +8,14 @@ import type { SVGProps } from 'react'
 export type IconName =
   | 'roster'
   | 'analytics'
+  | 'tracks'
   | 'releases'
   | 'tour'
   | 'videos'
   | 'merch'
+  | 'links'
+  | 'site'
+  | 'epk'
   | 'integrations'
   | 'search'
   | 'settings'
@@ -39,6 +43,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M8 16l3-4 3 2 4-6" />
     </>
   ),
+  tracks: (
+    <>
+      <path d="M9 18V5l11-2v11" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="17" cy="16" r="3" />
+    </>
+  ),
   releases: (
     <>
       <circle cx="12" cy="12" r="8.2" />
@@ -61,6 +72,25 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M6 8h12l-1 12H7L6 8z" />
       <path d="M9 8a3 3 0 0 1 6 0" />
+    </>
+  ),
+  links: (
+    <>
+      <path d="M9 15l6-6" />
+      <path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1" />
+      <path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1" />
+    </>
+  ),
+  site: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.5 2.4 2.5 14.6 0 17M12 3.5c-2.5 2.4-2.5 14.6 0 17" />
+    </>
+  ),
+  epk: (
+    <>
+      <path d="M6.5 3.5h7l4 4v13h-11z" />
+      <path d="M13.5 3.5v4h4M9.5 13h5M9.5 16.5h5" />
     </>
   ),
   integrations: (
