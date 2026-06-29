@@ -18,7 +18,7 @@ function DeleteButton({ row, artistId }: { row: MediaRow; artistId: string }) {
     <form action={deleteMediaAction.bind(null, row.id, row.storage_path, artistId)}>
       <button
         type="submit"
-        className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+        className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
       >
         Delete
       </button>
@@ -31,13 +31,13 @@ export function MediaPanel({ artistId, media }: { artistId: string; media: Media
   const profile = media.find((m) => m.purpose === 'profile_photo')
 
   return (
-    <section className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-      <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Media</h2>
+    <section className="mb-4 rounded-xl border border-hairline bg-paper p-4">
+      <h2 className="text-[15px] font-bold tracking-[-0.01em]">Media</h2>
 
       {/* Hero videos */}
       <div className="mt-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+          <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
             Hero videos {heroVideos.length > 0 && `(${heroVideos.length})`}
           </span>
           <MediaUploader
@@ -53,7 +53,7 @@ export function MediaPanel({ artistId, media }: { artistId: string; media: Media
             {heroVideos.map((m) => (
               <li
                 key={m.id}
-                className="flex items-center gap-3 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800"
+                className="flex items-center gap-3 rounded-xl border border-hairline p-2"
               >
                 <video
                   src={mediaUrl(m.storage_path)}
@@ -61,7 +61,7 @@ export function MediaPanel({ artistId, media }: { artistId: string; media: Media
                   muted
                   preload="metadata"
                 />
-                <span className="flex-1 truncate text-xs text-zinc-500">
+                <span className="flex-1 truncate font-space text-[11px] text-ink-faint">
                   {m.storage_path.split('/').pop()}
                 </span>
                 <DeleteButton row={m} artistId={artistId} />
@@ -69,14 +69,14 @@ export function MediaPanel({ artistId, media }: { artistId: string; media: Media
             ))}
           </ul>
         ) : (
-          <p className="mt-2 text-xs text-zinc-400">No hero videos yet.</p>
+          <p className="mt-2 font-space text-xs text-ink-faint">No hero videos yet.</p>
         )}
       </div>
 
       {/* Profile photo */}
       <div className="mt-5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+          <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
             Profile photo
           </span>
           <MediaUploader
@@ -88,16 +88,16 @@ export function MediaPanel({ artistId, media }: { artistId: string; media: Media
           />
         </div>
         {profile ? (
-          <div className="mt-2 flex items-center gap-3 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800">
+          <div className="mt-2 flex items-center gap-3 rounded-xl border border-hairline p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={mediaUrl(profile.storage_path)} alt="" className="h-16 w-16 rounded object-cover" />
-            <span className="flex-1 truncate text-xs text-zinc-500">
+            <span className="flex-1 truncate font-space text-[11px] text-ink-faint">
               {profile.storage_path.split('/').pop()}
             </span>
             <DeleteButton row={profile} artistId={artistId} />
           </div>
         ) : (
-          <p className="mt-2 text-xs text-zinc-400">
+          <p className="mt-2 font-space text-xs text-ink-faint">
             No profile photo — the public About falls back to the hero image.
           </p>
         )}

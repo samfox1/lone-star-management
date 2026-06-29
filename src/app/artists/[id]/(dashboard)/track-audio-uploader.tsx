@@ -72,7 +72,7 @@ export function TrackAudioUploader({
   }
 
   return (
-    <label className="inline-flex w-fit cursor-pointer items-center whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+    <label className="inline-flex w-fit cursor-pointer items-center whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-surface hover:text-ink">
       {busy ? 'Uploading…' : hasAudio ? '♪ Replace audio' : '♪ Add audio'}
       <input
         ref={inputRef}
@@ -82,7 +82,7 @@ export function TrackAudioUploader({
         disabled={busy}
         className="hidden"
       />
-      {error && <span className="ml-2 text-red-600">{error}</span>}
+      {error && <span className="ml-2 text-accent-red">{error}</span>}
     </label>
   )
 }

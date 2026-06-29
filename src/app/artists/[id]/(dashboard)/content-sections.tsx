@@ -4,6 +4,7 @@
  * per type lives in FIELD_UI so adding a column is a one-line change.
  */
 import type { GenericEntity, ContentRow } from '@/lib/content'
+import { buttonClass, inputClass } from '@/components/ui/ui'
 import {
   addContentAction,
   deleteContentAction,
@@ -45,9 +46,6 @@ const FIELD_UI: Record<GenericEntity, { heading: string; fields: FieldUI[] }> = 
   },
 }
 
-const inputClass =
-  'min-w-0 rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100'
-
 export function ContentSection({
   type,
   artistId,
@@ -62,10 +60,8 @@ export function ContentSection({
   return (
     <section className="mt-10">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {ui.heading}
-        </h2>
-        <span className="text-sm text-zinc-400">{rows.length} total</span>
+        <h2 className="text-[15px] font-bold tracking-[-0.01em]">{ui.heading}</h2>
+        <span className="font-space text-xs text-ink-faint">{rows.length} total</span>
       </div>
 
       {/* Add */}
@@ -83,10 +79,7 @@ export function ContentSection({
             className={`${inputClass} ${f.width ?? 'flex-1'}`}
           />
         ))}
-        <button
-          type="submit"
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-        >
+        <button type="submit" className={buttonClass('solid')}>
           Add
         </button>
       </form>
@@ -97,7 +90,7 @@ export function ContentSection({
           {rows.map((row) => (
             <li
               key={row.id as string}
-              className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950"
+              className="flex items-center gap-2 rounded-xl border border-hairline bg-paper px-3 py-2"
             >
               <form
                 action={updateContentAction.bind(null, type, row.id as string, artistId)}
@@ -114,13 +107,13 @@ export function ContentSection({
                   />
                 ))}
                 {row.source !== undefined && row.source !== 'manual' && (
-                  <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">
+                  <span className="rounded bg-surface px-1.5 py-0.5 font-space text-[10px] uppercase tracking-[0.04em] text-ink-faint">
                     {row.source as string}
                   </span>
                 )}
                 <button
                   type="submit"
-                  className="rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="rounded-md px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-surface hover:text-ink"
                 >
                   Save
                 </button>
@@ -132,12 +125,10 @@ export function ContentSection({
                   hasAudio={!!row.audio_path}
                 />
               )}
-              <form
-                action={deleteContentAction.bind(null, type, row.id as string, artistId)}
-              >
+              <form action={deleteContentAction.bind(null, type, row.id as string, artistId)}>
                 <button
                   type="submit"
-                  className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
                 >
                   Delete
                 </button>
@@ -146,7 +137,7 @@ export function ContentSection({
           ))}
         </ul>
       ) : (
-        <p className="mt-3 rounded-lg border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="mt-3 rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
           None yet.
         </p>
       )}

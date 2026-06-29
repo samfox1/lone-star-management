@@ -73,8 +73,8 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
   return (
     <SectionShell title="Tracks" publishType="track" artistId={id}>
       <div>
-        <h2 className="text-sm font-medium text-zinc-500">Catalog source</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+        <h2 className="text-[15px] font-bold tracking-[-0.01em]">Catalog source</h2>
+        <p className="mt-1 font-space text-xs text-ink-faint">
           Import from one service. Switching replaces that import; your manual tracks stay.
         </p>
         <CatalogSourceForm
@@ -100,7 +100,7 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
       )}
 
       {cfg.comingSoon && (
-        <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="rounded-xl border border-dashed border-hairline px-4 py-3 font-space text-sm text-ink-muted">
           {cfg.label} import is coming soon. Add tracks manually for now.
         </p>
       )}

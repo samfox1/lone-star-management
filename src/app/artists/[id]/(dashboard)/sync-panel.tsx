@@ -3,6 +3,8 @@
  * catalog into draft rows. Used for Spotify and Bandsintown — the save/pull
  * server actions are passed in already bound to the artist.
  */
+import { buttonClass, inputClass } from '@/components/ui/ui'
+
 type BoundAction = (formData: FormData) => void | Promise<void>
 
 export function SyncPanel({
@@ -25,16 +27,14 @@ export function SyncPanel({
   pullAction: BoundAction
 }) {
   return (
-    <section className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+    <section className="mb-4 rounded-xl border border-hairline bg-paper p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {title}
-        </h2>
+        <h2 className="text-[15px] font-bold tracking-[-0.01em]">{title}</h2>
         <form action={pullAction}>
           <button
             type="submit"
             disabled={!hasId}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            className={buttonClass('ghost', 'disabled:cursor-not-allowed disabled:opacity-40')}
           >
             {pullLabel}
           </button>
@@ -45,18 +45,18 @@ export function SyncPanel({
           name={idName}
           defaultValue={idValue}
           placeholder={placeholder}
-          className="flex-1 rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
+          className={`${inputClass} flex-1`}
         />
         <button
           type="submit"
-          className="rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded-md px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-surface hover:text-ink"
         >
           Save
         </button>
       </form>
-      <p className="mt-2 text-xs text-zinc-400">
-        Pulls into draft rows. Your manual edits are never overwritten. Requires
-        API credentials configured.
+      <p className="mt-2 font-space text-xs text-ink-faint">
+        Pulls into draft rows. Your manual edits are never overwritten. Requires API
+        credentials configured.
       </p>
     </section>
   )

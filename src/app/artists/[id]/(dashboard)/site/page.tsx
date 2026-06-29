@@ -2,11 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { MediaPanel, type MediaRow } from '../media-panel'
 import { TEMPLATES } from '@/components/artist-template'
 import { fieldsFor } from '@/lib/site-content-schema'
+import { buttonClass, inputClass } from '@/components/ui/ui'
 import { requireArtist } from '../_data'
 import { publishSiteAction, saveSiteContentAction, saveTemplateAction } from '../actions'
 
-const inputClass =
-  'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100'
+const selectClass =
+  'rounded-lg border border-hairline bg-paper px-2.5 py-2 text-sm text-ink outline-none focus:border-ink-faint'
 
 /**
  * Site section: template choice, editable site text (template-declared fields),
@@ -28,15 +29,10 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
 
   return (
     <section>
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Site
-        </h1>
+      <div className="flex items-center justify-between border-b border-hairline pb-3">
+        <h1 className="text-[19px] font-bold tracking-[-0.01em]">Site</h1>
         <form action={publishSiteAction.bind(null, id)}>
-          <button
-            type="submit"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          >
+          <button type="submit" className={buttonClass('ghost')}>
             Publish site
           </button>
         </form>
@@ -44,26 +40,16 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
 
       <div className="mt-6 space-y-8">
         <div>
-          <h2 className="text-sm font-medium text-zinc-500">Template</h2>
-          <form
-            action={saveTemplateAction.bind(null, id)}
-            className="mt-2 flex items-center gap-2"
-          >
-            <select
-              name="template"
-              defaultValue={artist?.template ?? 'classic'}
-              className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
-            >
+          <h2 className="text-[15px] font-bold tracking-[-0.01em]">Template</h2>
+          <form action={saveTemplateAction.bind(null, id)} className="mt-2 flex items-center gap-2">
+            <select name="template" defaultValue={artist?.template ?? 'classic'} className={selectClass}>
               {TEMPLATES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
               ))}
             </select>
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
+            <button type="submit" className={buttonClass('ghost')}>
               Apply
             </button>
           </form>
@@ -71,14 +57,14 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
 
         {fields.length > 0 && (
           <div>
-            <h2 className="text-sm font-medium text-zinc-500">Site text</h2>
-            <p className="mt-1 text-xs text-zinc-400">
+            <h2 className="text-[15px] font-bold tracking-[-0.01em]">Site text</h2>
+            <p className="mt-1 font-space text-xs text-ink-faint">
               Leave blank to use the template default. Draft until you publish.
             </p>
             <form action={saveSiteContentAction.bind(null, id)} className="mt-3 space-y-3">
               {fields.map((f) => (
                 <label key={f.key} className="block">
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <span className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">
                     {f.label}
                   </span>
                   <input
@@ -86,14 +72,11 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
                     type={f.type === 'email' ? 'email' : 'text'}
                     defaultValue={content[f.key] ?? ''}
                     placeholder={f.default || 'Default'}
-                    className={`mt-1 ${inputClass}`}
+                    className={`mt-1.5 ${inputClass} w-full`}
                   />
                 </label>
               ))}
-              <button
-                type="submit"
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-              >
+              <button type="submit" className={buttonClass('ghost')}>
                 Save site text
               </button>
             </form>

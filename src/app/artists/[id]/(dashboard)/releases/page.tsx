@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
+import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SectionShell } from '../section-shell'
 import { requireArtist } from '../_data'
 import {
@@ -10,8 +11,6 @@ import {
   removeReleaseLinkAction,
 } from '../actions'
 
-const inputClass =
-  'min-w-0 rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100'
 type ReleaseLink = { label: string; url: string }
 
 /**
@@ -28,15 +27,12 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
   return (
     <SectionShell title="Releases" publishType="release" artistId={id}>
       <div>
-        <h2 className="text-sm font-medium text-zinc-500">Add a release</h2>
+        <h2 className="text-[15px] font-bold tracking-[-0.01em]">Add a release</h2>
         <form action={addReleaseAction.bind(null, id)} className="mt-2 flex flex-wrap items-center gap-2">
           <input name="title" placeholder="Title" required className={`${inputClass} w-44`} />
           <input name="release_date" type="date" className={`${inputClass} w-40`} />
           <input name="cover_url" type="url" placeholder="Cover image URL" className={`${inputClass} flex-1`} />
-          <button
-            type="submit"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          >
+          <button type="submit" className={buttonClass('solid')}>
             Add
           </button>
         </form>
@@ -49,14 +45,14 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
             return (
               <li
                 key={row.id as string}
-                className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
+                className="rounded-xl border border-hairline bg-paper p-4"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-medium">{row.title as string}</span>
+                    <span className="font-semibold">{row.title as string}</span>
                     <Link
                       href={`/${artist.slug}/r/${row.slug as string}`}
-                      className="ml-3 text-xs text-zinc-500 hover:underline"
+                      className="ml-3 font-space text-xs text-ink-muted hover:underline"
                     >
                       /{artist.slug}/r/{row.slug as string}
                     </Link>
@@ -64,7 +60,7 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
                   <form action={deleteContentAction.bind(null, 'release', row.id as string, id)}>
                     <button
                       type="submit"
-                      className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                      className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
                     >
                       Delete
                     </button>
@@ -75,9 +71,9 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
                   {links.map((l, i) => (
                     <li key={i} className="flex items-center gap-2 text-sm">
                       <span className="font-medium">{l.label}</span>
-                      <span className="flex-1 truncate text-xs text-zinc-400">{l.url}</span>
+                      <span className="flex-1 truncate font-space text-xs text-ink-faint">{l.url}</span>
                       <form action={removeReleaseLinkAction.bind(null, row.id as string, i, id)}>
-                        <button type="submit" className="text-xs text-red-600 hover:underline">
+                        <button type="submit" className="font-space text-xs text-accent-red hover:underline">
                           remove
                         </button>
                       </form>
@@ -93,7 +89,7 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
                   <input name="url" type="url" placeholder="https://…" required className={`${inputClass} flex-1`} />
                   <button
                     type="submit"
-                    className="rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="rounded-md px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-surface hover:text-ink"
                   >
                     Add link
                   </button>
@@ -103,7 +99,7 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
           })}
         </ul>
       ) : (
-        <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
           No releases yet.
         </p>
       )}

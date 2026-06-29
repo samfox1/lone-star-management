@@ -1,4 +1,5 @@
 import type { PublishableEntity } from '@/lib/content'
+import { buttonClass } from '@/components/ui/ui'
 import { publishSectionAction } from './actions'
 
 /** A section page header with title + an optional per-section Publish button. */
@@ -15,16 +16,11 @@ export function SectionShell({
 }) {
   return (
     <section>
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {title}
-        </h1>
+      <div className="flex items-center justify-between border-b border-hairline pb-3">
+        <h1 className="text-[19px] font-bold tracking-[-0.01em]">{title}</h1>
         {publishType && (
           <form action={publishSectionAction.bind(null, publishType, artistId)}>
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
+            <button type="submit" className={buttonClass('ghost')}>
               Publish {title.toLowerCase()}
             </button>
           </form>

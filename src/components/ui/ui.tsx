@@ -31,6 +31,10 @@ export function Button({
   )
 }
 
+/** Shared text-input classes for the dashboard's compact inline edit forms. */
+export const inputClass =
+  'min-w-0 rounded-lg border border-hairline px-2.5 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
+
 /** Square icon button with a hairline border. */
 export function IconButton({
   name,

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { buttonClass } from '@/components/ui/ui'
 import type { SiteMedia } from '@/lib/site'
 
 /**
@@ -66,7 +67,7 @@ export function MediaUploader({
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="inline-flex w-fit cursor-pointer items-center rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900">
+      <label className={buttonClass('ghost', 'w-fit cursor-pointer')}>
         {busy ? 'Uploading…' : label}
         <input
           ref={inputRef}
@@ -77,7 +78,7 @@ export function MediaUploader({
           className="hidden"
         />
       </label>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="font-space text-xs text-accent-red">{error}</p>}
     </div>
   )
 }
