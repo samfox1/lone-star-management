@@ -57,7 +57,7 @@ export function StatsPanel({
           </div>
 
           <div className="mt-4 font-space text-[31px] font-bold tracking-[-0.02em]">
-            {totals.views ? compactNumber(totals.views) : '—'}
+            {compactNumber(totals.views)}
           </div>
           <div className="mt-1 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
             Site views · 30 days

@@ -46,18 +46,9 @@ export default async function Home() {
   }
   const top = leaderboard[0] ? { name: leaderboard[0].name, views: leaderboard[0].views } : null
 
-  const isAdmin = user?.app_metadata?.role === 'admin'
-
   return (
     <RosterShell active="roster" page="Roster" email={user?.email ?? null}>
-      <RosterView
-        artists={artists}
-        pending={pending}
-        stats={stats}
-        totals={totals}
-        top={top}
-        subtitle={isAdmin ? 'Admin — every artist on the platform.' : 'The artists you manage.'}
-      />
+      <RosterView artists={artists} pending={pending} stats={stats} totals={totals} top={top} />
     </RosterShell>
   )
 }

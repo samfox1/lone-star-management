@@ -6,6 +6,7 @@ import { requestArtist } from './actions'
 import { compactNumber } from '@/lib/format'
 import { Icon } from '@/components/ui/icons'
 import { Avatar, Button, Field, initials, Input, StatusDot, Textarea } from '@/components/ui/ui'
+import { Sparkline } from '@/components/ui/charts'
 import { StatsPanel, type RosterTotals } from './stats-panel'
 
 export type ArtistStat = { views: number; plays: number; linkClicks: number }
@@ -18,14 +19,12 @@ export function RosterView({
   stats,
   totals,
   top,
-  subtitle,
 }: {
   artists: Artist[]
   pending: Pending[]
   stats: Record<string, ArtistStat>
   totals: RosterTotals
   top: { name: string; views: number } | null
-  subtitle: string
 }) {
   const [view, setView] = useState<'list' | 'grid'>('list')
   const [q, setQ] = useState('')
@@ -77,10 +76,7 @@ export function RosterView({
       <div className="min-w-0 flex-1 px-7 py-6">
         {/* toolbar */}
         <div className="flex items-center gap-3.5">
-          <div>
-            <h1 className="text-[19px] font-bold tracking-[-0.01em]">Your artists</h1>
-            <p className="mt-0.5 font-space text-xs text-ink-muted">{subtitle}</p>
-          </div>
+          <h1 className="text-[19px] font-bold tracking-[-0.01em]">Your artists</h1>
           <div className="flex-1" />
           <label className="hidden items-center gap-2 rounded-lg border border-hairline px-3 py-2 focus-within:border-ink-faint sm:flex">
             <Icon name="search" size={16} className="text-ink-faint" />
@@ -107,9 +103,16 @@ export function RosterView({
               <Icon name="list" size={17} />
             </button>
           </div>
-          <Button onClick={openModal}>
-            <Icon name="plus" size={16} /> Request artist
-          </Button>
+          <button
+            onClick={openModal}
+            title="Request artist"
+            className="group inline-flex items-center rounded-lg bg-ink px-2.5 py-2.5 text-white transition-colors hover:bg-black"
+          >
+            <Icon name="plus" size={16} />
+            <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-[13px] font-semibold opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[140px] group-hover:opacity-100">
+              Request artist
+            </span>
+          </button>
         </div>
 
         {/* roster */}
@@ -133,15 +136,19 @@ export function RosterView({
                     <div className="text-[15px] font-semibold">{a.name}</div>
                     <div className="font-space text-xs text-ink-muted">/{a.slug}</div>
                   </div>
-                  <div className="ml-auto flex items-center gap-7">
+                  <div className="ml-auto flex items-center gap-6">
+                    <Sparkline className="hidden h-7 w-[72px] flex-none text-ink sm:block" />
                     <div className="text-right">
                       <div className="font-space text-sm font-bold tabular-nums">
-                        {s?.views ? compactNumber(s.views) : '—'}
+                        {compactNumber(s?.views ?? 0)}
                       </div>
                       <div className="font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
                         views · 30d
                       </div>
                     </div>
+                    <span className="hidden w-12 text-right font-space text-xs text-ink-faint sm:inline">
+                      0.0%
+                    </span>
                     <Icon
                       name="chevronRight"
                       size={18}
@@ -173,7 +180,7 @@ export function RosterView({
                   key={a.id}
                   href={`/artists/${a.id}`}
                   {...track(a.id)}
-                  className="group rounded-2xl border border-hairline px-5 py-5 transition-colors hover:bg-surface-hover"
+                  className="group overflow-hidden rounded-2xl border border-hairline px-5 py-5 transition-colors hover:bg-surface-hover"
                 >
                   <div className="flex items-center gap-3">
                     <Avatar initials={initials(a.name)} />
@@ -188,7 +195,7 @@ export function RosterView({
                   <div className="mt-4 flex items-end justify-between">
                     <div>
                       <div className="font-space text-[22px] font-bold tabular-nums tracking-[-0.02em]">
-                        {s?.views ? compactNumber(s.views) : '—'}
+                        {compactNumber(s?.views ?? 0)}
                       </div>
                       <div className="mt-1 font-space text-[10px] uppercase tracking-[0.07em] text-ink-faint">
                         views · 30 days
@@ -200,6 +207,7 @@ export function RosterView({
                       className="text-ink-faint group-hover:text-accent"
                     />
                   </div>
+                  <Sparkline className="-mx-5 -mb-5 mt-3 h-12 w-[calc(100%+2.5rem)] text-ink" />
                 </Link>
               )
             })}
@@ -241,7 +249,7 @@ export function RosterView({
             </div>
           </div>
           <div className="mt-3 font-space text-[23px] font-bold tracking-[-0.02em]">
-            {hStat?.views ? compactNumber(hStat.views) : '—'}
+            {compactNumber(hStat?.views ?? 0)}
           </div>
           <div className="font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
             Site views · 30 days
