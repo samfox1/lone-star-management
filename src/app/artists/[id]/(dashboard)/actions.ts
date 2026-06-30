@@ -8,6 +8,7 @@
  * leading args from the page.
  */
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
   type CrudEntity,
@@ -327,6 +328,22 @@ export async function saveTemplateAction(artistId: string, formData: FormData) {
   const { error } = await supabase.from('artists').update({ template }).eq('id', artistId)
   if (error) throw new Error(error.message)
   revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Rename the artist (the one identity field not editable elsewhere). The handle
+ * (slug) is intentionally not editable here — changing it would break the public
+ * site URL and every release smart-link. Redirects back to the artist on success.
+ */
+export async function updateArtistAction(artistId: string, formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) throw new Error('Artist name is required.')
+  if (name.length > 200) throw new Error('Artist name is too long (max 200 characters).')
+  const supabase = await createClient()
+  const { error } = await supabase.from('artists').update({ name }).eq('id', artistId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  redirect(`/artists/${artistId}`)
 }
 
 /** Save (or clear) the artist's Spotify artist id used to pull the discography. */

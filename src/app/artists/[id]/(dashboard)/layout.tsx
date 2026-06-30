@@ -98,7 +98,7 @@ export default async function DashboardLayout({
               View site <Icon name="external" size={15} />
             </Link>
             <Link
-              href={`/artists/${id}/settings`}
+              href={`/artists/${id}/edit`}
               title="Edit info"
               className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-hairline text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
             >
