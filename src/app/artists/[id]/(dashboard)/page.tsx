@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, type SectionDiff } from '@/lib/content'
-import { EVENT_TYPES } from '@/lib/events'
+import { compactNumber } from '@/lib/format'
 import { KLabel, StatusDot } from '@/components/ui/ui'
 import { DIFF_SECTIONS } from './sections'
 import { requireArtist } from './_data'
@@ -21,6 +21,13 @@ function thirtyDaysAgoIso(): string {
   return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 }
 
+const KPIS = [
+  { type: 'play', label: 'Plays' },
+  { type: 'link_click', label: 'Link clicks' },
+  { type: 'ticket_click', label: 'Ticket clicks' },
+  { type: 'buy_click', label: 'Buy clicks' },
+] as const
+
 export default async function OverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -38,53 +45,74 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-10">
+      {/* analytics band — real site views + honest trend empty state */}
       <section>
-        <KLabel>Insights · last 30 days</KLabel>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {EVENT_TYPES.map((m) => (
-            <div key={m.type} className="rounded-xl border border-hairline px-4 py-3.5">
-              <div className="font-space text-2xl font-bold tabular-nums tracking-[-0.02em]">
-                {counts[m.type] ?? 0}
+        <div className="font-space text-[44px] font-bold leading-none tracking-[-0.015em]">
+          {compactNumber(counts.view ?? 0)}
+        </div>
+        <div className="mt-2 font-space text-xs uppercase tracking-[0.1em] text-ink-faint">
+          Site views · last 30 days
+        </div>
+
+        {/* KPI divider row */}
+        <div className="mt-6 flex flex-wrap gap-y-6 border-y border-hairline py-5">
+          {KPIS.map((k) => (
+            <div
+              key={k.type}
+              className="min-w-[110px] flex-1 border-hairline pr-9 [&:not(:last-child)]:mr-9 [&:not(:last-child)]:border-r"
+            >
+              <div className="font-space text-[25px] font-bold tabular-nums tracking-[-0.02em]">
+                {compactNumber(counts[k.type] ?? 0)}
               </div>
-              <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
-                {m.label}
+              <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                {k.label}
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      <section>
-        <KLabel>Unpublished changes</KLabel>
-        <div className="mt-3 overflow-hidden rounded-xl border border-hairline">
-          {DIFF_SECTIONS.map((s, i) => {
-            const d = diff[s.key]
-            return (
-              <Link
-                key={s.key}
-                href={`/artists/${id}/${s.seg}`}
-                className={`flex items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-surface-hover ${
-                  i > 0 ? 'border-t border-hairline' : ''
-                }`}
-              >
-                <span className="font-medium">{s.label}</span>
-                <span
-                  className={`inline-flex items-center gap-2 font-space text-xs ${
-                    d.dirty ? 'text-ink' : 'text-ink-faint'
+      <div className="grid gap-10 md:grid-cols-2">
+        <section>
+          <KLabel>Unpublished changes</KLabel>
+          <div className="mt-3 overflow-hidden rounded-xl border border-hairline">
+            {DIFF_SECTIONS.map((s, i) => {
+              const d = diff[s.key]
+              return (
+                <Link
+                  key={s.key}
+                  href={`/artists/${id}/${s.seg}`}
+                  className={`flex items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-surface-hover ${
+                    i > 0 ? 'border-t border-hairline' : ''
                   }`}
                 >
-                  {d.dirty && <StatusDot tone="pending" />}
-                  {summarize(d)}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
-        <p className="mt-2.5 font-space text-xs text-ink-faint">
-          Use a section&apos;s <strong className="font-bold text-ink-muted">Publish</strong> button, or{' '}
-          <strong className="font-bold text-ink-muted">Publish all</strong> above.
-        </p>
-      </section>
+                  <span className="font-medium">{s.label}</span>
+                  <span
+                    className={`inline-flex items-center gap-2 font-space text-xs ${
+                      d.dirty ? 'text-ink' : 'text-ink-faint'
+                    }`}
+                  >
+                    {d.dirty && <StatusDot tone="pending" />}
+                    {summarize(d)}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+          <p className="mt-2.5 font-space text-xs text-ink-faint">
+            Use a section&apos;s Publish button, or Publish all above.
+          </p>
+        </section>
+
+        <section>
+          <KLabel>Audience</KLabel>
+          <div className="mt-3 rounded-xl border border-dashed border-hairline p-5 font-space text-xs leading-relaxed text-ink-muted">
+            Streaming audience, top tracks, and cities appear here once this artist connects a
+            streaming source (Spotify / Apple Music) on the Settings tab. Today we report exact
+            last-30-day site events above.
+          </div>
+        </section>
+      </div>
     </div>
   )
 }
