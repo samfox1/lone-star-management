@@ -19,7 +19,17 @@ import { NextResponse, type NextRequest } from 'next/server'
  *
  * Add any new authenticated area here, or it will be publicly reachable.
  */
-const PROTECTED_EXACT = ['/'] // the "your artists" landing
+const PROTECTED_EXACT = [
+  '/', // the "your artists" landing
+  // roster-wide section pages (centered top-nav) — these are static routes that
+  // shadow /[slug], so they never serve a public site; gate them like the roster.
+  '/analytics',
+  '/releases',
+  '/tour',
+  '/videos',
+  '/merch',
+  '/account',
+]
 const PROTECTED_PREFIXES = ['/artists'] // artist dashboards + preview
 
 function isProtected(path: string): boolean {

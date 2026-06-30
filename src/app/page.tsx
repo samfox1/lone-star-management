@@ -1,15 +1,10 @@
-import { logout } from '@/app/auth-actions'
 import { createClient } from '@/lib/supabase/server'
-import { AppShell, Wordmark } from '@/components/ui/app-shell'
-import { Avatar, Button, initials } from '@/components/ui/ui'
+import { RosterShell } from './roster-chrome'
+import { ownedArtists, rosterAnalytics } from './roster-data'
 import { RosterView, type ArtistStat } from './roster-view'
 import type { RosterTotals } from './stats-panel'
 
 export const metadata = { title: 'Your artists — Lone Star Management' }
-
-function thirtyDaysAgoIso(): string {
-  return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-}
 
 export default async function Home() {
   const supabase = await createClient()
@@ -20,13 +15,7 @@ export default async function Home() {
   } = await supabase.auth.getUser()
 
   // RLS scopes this to only the artists this manager manages (admins see all).
-  const { data: artists, error } = await supabase
-    .from('artists')
-    .select('id, name, slug')
-    .order('name')
-
-  // A failed read must never look like an empty result on the security gate.
-  if (error) throw error
+  const artists = await ownedArtists(supabase)
 
   // Pending build requests show as "Site in progress" cards. Tolerate only the
   // "table not migrated yet" case (42P01) by degrading to none; a real DB/RLS
@@ -37,57 +26,38 @@ export default async function Home() {
     .in('status', ['requested', 'in_build'])
     .order('created_at', { ascending: false })
   if (requestsError && requestsError.code !== '42P01') throw requestsError
-
-  const list = artists ?? []
   const pending = requests ?? []
 
-  // Real last-30-day traction per artist (the same exact group-by RPC the artist
-  // Overview uses). One call per owned artist, in parallel — the roster is small.
-  const since = thirtyDaysAgoIso()
+  // Real last-30-day traction per artist (rolled up from the same RPC the artist
+  // Overview uses) — drives the cards, popover, and stats panel.
+  const { byArtist, totals: t, leaderboard } = await rosterAnalytics(supabase, artists)
   const stats: Record<string, ArtistStat> = {}
-  await Promise.all(
-    list.map(async (a) => {
-      const { data } = await supabase.rpc('analytics_summary', { p_artist_id: a.id, p_since: since })
-      const c: Record<string, number> = {}
-      for (const r of (data ?? []) as { type: string; count: number }[]) c[r.type] = Number(r.count)
-      stats[a.id] = { views: c.view ?? 0, plays: c.play ?? 0, linkClicks: c.link_click ?? 0 }
-    }),
-  )
+  for (const a of artists) {
+    const e = byArtist[a.id]
+    stats[a.id] = { views: e?.views ?? 0, plays: e?.plays ?? 0, linkClicks: e?.linkClicks ?? 0 }
+  }
 
   const totals: RosterTotals = {
-    artists: list.length,
+    artists: artists.length,
     pending: pending.length,
-    views: list.reduce((n, a) => n + (stats[a.id]?.views ?? 0), 0),
-    plays: list.reduce((n, a) => n + (stats[a.id]?.plays ?? 0), 0),
-    linkClicks: list.reduce((n, a) => n + (stats[a.id]?.linkClicks ?? 0), 0),
+    views: t.views,
+    plays: t.plays,
+    linkClicks: t.linkClicks,
   }
-  const top = list
-    .map((a) => ({ name: a.name, views: stats[a.id]?.views ?? 0 }))
-    .sort((x, y) => y.views - x.views)[0] ?? null
+  const top = leaderboard[0] ? { name: leaderboard[0].name, views: leaderboard[0].views } : null
 
   const isAdmin = user?.app_metadata?.role === 'admin'
 
-  const tools = (
-    <>
-      <form action={logout}>
-        <Button variant="ghost" type="submit">
-          Sign out
-        </Button>
-      </form>
-      <Avatar initials={initials(user?.email ?? '?')} size={30} title={user?.email ?? undefined} />
-    </>
-  )
-
   return (
-    <AppShell brand={<Wordmark page="Roster" />} items={[]} tools={tools}>
+    <RosterShell active="roster" page="Roster" email={user?.email ?? null}>
       <RosterView
-        artists={list}
+        artists={artists}
         pending={pending}
         stats={stats}
         totals={totals}
         top={top}
         subtitle={isAdmin ? 'Admin — every artist on the platform.' : 'The artists you manage.'}
       />
-    </AppShell>
+    </RosterShell>
   )
 }
