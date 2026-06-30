@@ -20,7 +20,8 @@ import { NextResponse, type NextRequest } from 'next/server'
  * Add any new authenticated area here, or it will be publicly reachable.
  */
 const PROTECTED_EXACT = [
-  '/', // the "your artists" landing
+  '/', // the manager landing launcher
+  '/roster', // the full roster grid
   // roster-wide section pages (centered top-nav) — these are static routes that
   // shadow /[slug], so they never serve a public site; gate them like the roster.
   '/analytics',

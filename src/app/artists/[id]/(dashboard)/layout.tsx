@@ -46,7 +46,7 @@ export default async function DashboardLayout({
     <div className="font-ui text-ink flex flex-1 flex-col bg-paper">
       <header className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline px-5 py-3.5">
         {/* brand: back to roster + small avatar + name */}
-        <Link href="/" title="Back to roster" className="group flex min-w-0 items-center gap-2">
+        <Link href="/roster" title="Back to roster" className="group flex min-w-0 items-center gap-2">
           <span className="inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors group-hover:bg-surface group-hover:text-ink">
             <Icon name="chevronLeft" size={18} />
           </span>

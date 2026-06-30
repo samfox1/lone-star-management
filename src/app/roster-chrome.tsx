@@ -13,7 +13,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 export type RosterSection = 'roster' | 'analytics' | 'releases' | 'tour' | 'videos' | 'merch'
 
 const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[] = [
-  { key: 'roster', label: 'Roster', icon: 'roster', href: '/' },
+  { key: 'roster', label: 'Roster', icon: 'roster', href: '/roster' },
   { key: 'analytics', label: 'Analytics', icon: 'analytics', href: '/analytics' },
   { key: 'releases', label: 'Releases', icon: 'releases', href: '/releases' },
   { key: 'tour', label: 'Tour', icon: 'tour', href: '/tour' },
@@ -28,6 +28,9 @@ function rosterNav(active?: RosterSection): NavItem[] {
 function RosterTools({ email }: { email: string | null }) {
   return (
     <>
+      <Link href="/" title="Home / search" className="inline-flex text-ink-muted transition-colors hover:text-ink">
+        <Icon name="search" size={18} />
+      </Link>
       <Link href="/account" title="Settings" className="inline-flex text-ink-muted transition-colors hover:text-ink">
         <Icon name="settings" size={18} />
       </Link>
@@ -56,7 +59,7 @@ export function RosterShell({
   return (
     <AppShell
       brand={
-        <Link href="/" title="Back to roster">
+        <Link href="/roster" title="Back to roster">
           <Wordmark page={page} />
         </Link>
       }
