@@ -5,6 +5,7 @@
  */
 import type { GenericEntity, ContentRow } from '@/lib/content'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
 import {
   addContentAction,
   deleteContentAction,
@@ -92,6 +93,18 @@ export function ContentSection({
               key={row.id as string}
               className="flex items-center gap-2 rounded-xl border border-hairline bg-paper px-3 py-2"
             >
+              {type === 'merch' && (
+                <div className="h-10 w-10 flex-none overflow-hidden rounded-md border border-hairline bg-surface">
+                  {row.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={String(row.image_url)} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full items-center justify-center text-ink-faint">
+                      <Icon name="merch" size={18} />
+                    </span>
+                  )}
+                </div>
+              )}
               <form
                 action={updateContentAction.bind(null, type, row.id as string, artistId)}
                 className="flex flex-1 flex-wrap items-center gap-2"

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
 import { SectionShell } from '../section-shell'
 import { requireArtist } from '../_data'
 import {
@@ -42,12 +43,25 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
         <ul className="space-y-4">
           {rows.map((row) => {
             const links = (row.links as ReleaseLink[]) ?? []
+            const cover = row.cover_url as string | null
             return (
               <li
                 key={row.id as string}
                 className="rounded-xl border border-hairline bg-paper p-4"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="h-16 w-16 flex-none overflow-hidden rounded-lg border border-hairline bg-surface">
+                    {cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cover} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-ink-faint">
+                        <Icon name="releases" size={24} />
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
                   <div>
                     <span className="font-semibold">{row.title as string}</span>
                     <Link
@@ -94,6 +108,8 @@ export default async function ReleasesPage({ params }: { params: Promise<{ id: s
                     Add link
                   </button>
                 </form>
+                  </div>
+                </div>
               </li>
             )
           })}

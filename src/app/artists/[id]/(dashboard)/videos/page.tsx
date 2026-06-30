@@ -3,6 +3,7 @@ import { listContent } from '@/lib/content'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
+import { Icon } from '@/components/ui/icons'
 import { requireArtist } from '../_data'
 import {
   addVideoAction,
@@ -10,6 +11,13 @@ import {
   saveYoutubeChannelAction,
   syncYouTubeAction,
 } from '../actions'
+
+/** YouTube poster from a normalized embed URL; null for other providers. */
+function youtubePoster(url: string, provider: string): string | null {
+  if (provider !== 'youtube') return null
+  const m = url.match(/(?:embed\/|v=|youtu\.be\/)([\w-]{11})/)
+  return m ? `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg` : null
+}
 
 /**
  * Videos: YouTube import + paste a YouTube/SoundCloud URL. A bespoke editor (not
@@ -60,11 +68,22 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
         </div>
         {rows.length > 0 ? (
           <ul className="mt-3 space-y-2">
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const poster = youtubePoster(String(row.embed_url ?? ''), String(row.provider ?? ''))
+              return (
               <li
                 key={row.id as string}
                 className="flex items-center gap-3 rounded-xl border border-hairline bg-paper px-3 py-2"
               >
+                <div className="relative flex aspect-video w-20 flex-none items-center justify-center overflow-hidden rounded-md bg-ink">
+                  {poster && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={poster} alt="" className="h-full w-full object-cover opacity-90" />
+                  )}
+                  <span className="absolute text-white/95">
+                    <Icon name="videos" size={16} />
+                  </span>
+                </div>
                 <span className="rounded bg-surface px-1.5 py-0.5 font-space text-[10px] uppercase tracking-[0.04em] text-ink-faint">
                   {row.provider as string}
                 </span>
@@ -81,7 +100,8 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
                   </button>
                 </form>
               </li>
-            ))}
+              )
+            })}
           </ul>
         ) : (
           <p className="mt-3 rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
