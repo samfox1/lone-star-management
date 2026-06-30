@@ -64,14 +64,17 @@ export function Avatar({
   size = 38,
   pending = false,
   className,
+  title,
 }: {
   initials: string
   size?: number
   pending?: boolean
   className?: string
+  title?: string
 }) {
   return (
     <span
+      title={title}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.34) }}
       className={cx(
         'inline-flex flex-none items-center justify-center rounded-full font-space font-bold',
