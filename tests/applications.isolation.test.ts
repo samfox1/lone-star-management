@@ -84,3 +84,38 @@ describe('applications isolation', () => {
     expect(data![0].email).toBe(EMAIL)
   })
 })
+
+describe('applications status updates (admin inbox)', () => {
+  async function markerId(): Promise<string> {
+    const { data } = await asAdmin.from('applications').select('id').eq('artist_name', MARKER).limit(1)
+    const id = data?.[0]?.id
+    expect(id).toBeTruthy()
+    return id as string
+  }
+
+  it('admin can move an application through its status', async () => {
+    const id = await markerId()
+    const { error } = await asAdmin.from('applications').update({ status: 'contacted' }).eq('id', id)
+    expect(error).toBeNull()
+    const { data } = await asAdmin.from('applications').select('status').eq('id', id).single()
+    expect(data?.status).toBe('contacted')
+  })
+
+  it('CRITICAL: a non-admin manager cannot update an application', async () => {
+    const id = await markerId()
+    const { data } = await asManager
+      .from('applications')
+      .update({ status: 'approved' })
+      .eq('id', id)
+      .select()
+    expect(data).toEqual([]) // RLS: the row isn't visible/updatable to a manager
+    const { data: after } = await asAdmin.from('applications').select('status').eq('id', id).single()
+    expect(after?.status).not.toBe('approved')
+  })
+
+  it('rejects an out-of-enum status (CHECK constraint)', async () => {
+    const id = await markerId()
+    const { error } = await asAdmin.from('applications').update({ status: 'bogus' }).eq('id', id)
+    expect(error).not.toBeNull()
+  })
+})

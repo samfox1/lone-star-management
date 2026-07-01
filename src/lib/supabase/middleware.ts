@@ -31,7 +31,7 @@ const PROTECTED_EXACT = [
   '/merch',
   '/account',
 ]
-const PROTECTED_PREFIXES = ['/artists'] // artist dashboards + preview
+const PROTECTED_PREFIXES = ['/artists', '/admin'] // artist dashboards + preview; admin tools
 
 function isProtected(path: string): boolean {
   if (PROTECTED_EXACT.includes(path)) return true

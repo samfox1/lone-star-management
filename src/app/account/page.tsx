@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 import { logout } from '@/app/auth-actions'
 import { createClient } from '@/lib/supabase/server'
 import { KLabel, buttonClass } from '@/components/ui/ui'
@@ -37,6 +38,17 @@ export default async function AccountPage() {
             value={`Lone Star Management · ${artists.length} ${artists.length === 1 ? 'artist' : 'artists'}`}
           />
           {isAdmin && <Row label="Role" value="Admin — every artist on the platform" />}
+          {isAdmin && (
+            <Row
+              label="Applications"
+              value="Review public sign-up requests"
+              action={
+                <Link href="/admin/applications" className={buttonClass('ghost')}>
+                  Open
+                </Link>
+              }
+            />
+          )}
         </div>
 
         <div className="mt-5 rounded-xl border border-dashed border-hairline p-4 font-space text-xs leading-relaxed text-ink-muted">
