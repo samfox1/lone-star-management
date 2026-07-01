@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { ownedArtists, rosterAnalytics } from './roster-data'
+import { seriesTrend } from '@/lib/format'
+import { ownedArtists, rosterAnalytics, rosterDailyViews } from './roster-data'
 import { Launcher } from './launcher'
 
 export const metadata = { title: 'Lone Star Management' }
@@ -13,7 +14,12 @@ export default async function Home() {
 
   const artists = await ownedArtists(supabase)
   const { byArtist } = await rosterAnalytics(supabase, artists)
-  const launchArtists = artists.map((a) => ({ ...a, views: byArtist[a.id]?.views ?? 0 }))
+  const { byArtist: daily } = await rosterDailyViews(supabase, artists)
+  const launchArtists = artists.map((a) => ({
+    ...a,
+    views: byArtist[a.id]?.views ?? 0,
+    trend: seriesTrend(daily[a.id] ?? []),
+  }))
 
   return <Launcher artists={launchArtists} email={user?.email ?? null} />
 }

@@ -77,6 +77,64 @@ export async function rosterAnalytics(
   }
 }
 
+const DAY_MS = 86_400_000
+
+/** UTC-midnight ms of the first day in an N-day window ending today. */
+function windowStartMs(days: number): number {
+  const todayMidnight = Math.floor(Date.now() / DAY_MS) * DAY_MS
+  return todayMidnight - (days - 1) * DAY_MS
+}
+
+type DailyRow = { artist_id: string; day: string; views: number }
+
+/** Bucket daily-view rows into a fixed-length per-day array (0-filled). */
+function fillInto(target: number[], rows: DailyRow[], startMs: number, days: number): void {
+  for (const r of rows) {
+    const idx = Math.round((Date.parse(r.day) - startMs) / DAY_MS)
+    if (idx >= 0 && idx < days) target[idx] += Number(r.views)
+  }
+}
+
+/** Per-artist daily VIEW series + the roster total series over the last `days`. */
+export async function rosterDailyViews(
+  supabase: SupabaseClient,
+  artists: RosterArtist[],
+  days = 30,
+): Promise<{ byArtist: Record<string, number[]>; total: number[] }> {
+  const startMs = windowStartMs(days)
+  const { data } = await supabase.rpc('analytics_daily', {
+    p_since: new Date(startMs).toISOString(),
+  })
+  const rows = (data ?? []) as DailyRow[]
+  const byArtist: Record<string, number[]> = {}
+  for (const a of artists) byArtist[a.id] = new Array(days).fill(0)
+  const total = new Array(days).fill(0)
+  for (const r of rows) {
+    const idx = Math.round((Date.parse(r.day) - startMs) / DAY_MS)
+    if (idx < 0 || idx >= days) continue
+    const v = Number(r.views)
+    if (byArtist[r.artist_id]) byArtist[r.artist_id][idx] += v
+    total[idx] += v
+  }
+  return { byArtist, total }
+}
+
+/** One artist's daily VIEW series over the last `days`. */
+export async function artistDailyViews(
+  supabase: SupabaseClient,
+  artistId: string,
+  days = 30,
+): Promise<number[]> {
+  const startMs = windowStartMs(days)
+  const { data } = await supabase.rpc('analytics_daily', {
+    p_since: new Date(startMs).toISOString(),
+    p_artist_id: artistId,
+  })
+  const series = new Array(days).fill(0)
+  fillInto(series, (data ?? []) as DailyRow[], startMs, days)
+  return series
+}
+
 export type RosterRow = { row: ContentRow; artist: RosterArtist }
 
 /** Flatten one content type across every owned artist, each row tagged with its artist. */

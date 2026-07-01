@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { logout } from '@/app/auth-actions'
-import { compactNumber } from '@/lib/format'
+import { compactNumber, formatTrend, trendTextClass } from '@/lib/format'
+import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { Avatar, KLabel, initials } from '@/components/ui/ui'
 
-type LaunchArtist = { id: string; name: string; slug: string; views: number }
+type LaunchArtist = { id: string; name: string; slug: string; views: number; trend: number | null }
 
 const CHIPS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Roster', icon: 'roster', href: '/roster' },
@@ -74,7 +75,9 @@ export function Launcher({ artists, email }: { artists: LaunchArtist[]; email: s
             </p>
           ) : (
             <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-              {filtered.map((a) => (
+              {filtered.map((a) => {
+                const tr = formatTrend(a.trend)
+                return (
                 <Link
                   key={a.id}
                   href={`/artists/${a.id}`}
@@ -88,11 +91,14 @@ export function Launcher({ artists, email }: { artists: LaunchArtist[]; email: s
                       <span className="font-space text-[17px] font-bold tabular-nums tracking-[-0.01em]">
                         {compactNumber(a.views)}
                       </span>
-                      <span className="font-space text-xs text-ink-faint">0.0%</span>
+                      <span className={cx('font-space text-xs', trendTextClass(tr.dir))}>
+                        {tr.label}
+                      </span>
                     </div>
                   </div>
                 </Link>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

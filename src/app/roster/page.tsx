@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { RosterShell } from '../roster-chrome'
-import { ownedArtists, rosterAnalytics } from '../roster-data'
+import { ownedArtists, rosterAnalytics, rosterDailyViews } from '../roster-data'
 import { RosterView, type ArtistStat } from '../roster-view'
 import type { RosterTotals } from '../stats-panel'
 
@@ -31,10 +31,16 @@ export default async function RosterPage() {
   // Real last-30-day traction per artist (rolled up from the same RPC the artist
   // Overview uses) — drives the cards, popover, and stats panel.
   const { byArtist, totals: t, leaderboard } = await rosterAnalytics(supabase, artists)
+  const { byArtist: daily } = await rosterDailyViews(supabase, artists)
   const stats: Record<string, ArtistStat> = {}
   for (const a of artists) {
     const e = byArtist[a.id]
-    stats[a.id] = { views: e?.views ?? 0, plays: e?.plays ?? 0, linkClicks: e?.linkClicks ?? 0 }
+    stats[a.id] = {
+      views: e?.views ?? 0,
+      plays: e?.plays ?? 0,
+      linkClicks: e?.linkClicks ?? 0,
+      series: daily[a.id] ?? [],
+    }
   }
 
   const totals: RosterTotals = {

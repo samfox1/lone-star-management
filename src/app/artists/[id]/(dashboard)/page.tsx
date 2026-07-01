@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, type SectionDiff } from '@/lib/content'
-import { compactNumber } from '@/lib/format'
+import { compactNumber, formatTrend, seriesTrend, trendLineClass, trendTextClass } from '@/lib/format'
+import { cx } from '@/lib/cx'
+import { AreaChart } from '@/components/ui/charts'
 import { KLabel, StatusDot } from '@/components/ui/ui'
+import { artistDailyViews } from '@/app/roster-data'
 import { DIFF_SECTIONS } from './sections'
 import { requireArtist } from './_data'
 
@@ -43,16 +46,22 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
   const counts: Record<string, number> = {}
   for (const r of (rows ?? []) as { type: string; count: number }[]) counts[r.type] = Number(r.count)
 
+  const series = await artistDailyViews(supabase, id)
+  const trend = formatTrend(seriesTrend(series))
+
   return (
     <div className="space-y-10">
       {/* analytics band — real site views + honest trend empty state */}
       <section>
-        <div className="font-space text-[44px] font-bold leading-none tracking-[-0.015em]">
+        <div className="flex items-baseline gap-3 font-space text-[44px] font-bold leading-none tracking-[-0.015em]">
           {compactNumber(counts.view ?? 0)}
+          <span className={cx('text-sm font-bold', trendTextClass(trend.dir))}>{trend.label}</span>
         </div>
         <div className="mt-2 font-space text-xs uppercase tracking-[0.1em] text-ink-faint">
           Site views · last 30 days
         </div>
+
+        <AreaChart values={series} className={cx('mt-4', trendLineClass(trend.dir))} height={140} />
 
         {/* KPI divider row */}
         <div className="mt-6 flex flex-wrap gap-y-6 border-y border-hairline py-5">

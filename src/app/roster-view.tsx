@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { requestArtist } from './actions'
-import { compactNumber } from '@/lib/format'
+import { compactNumber, formatTrend, seriesTrend, trendLineClass, trendTextClass } from '@/lib/format'
+import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { Avatar, Button, Field, initials, Input, StatusDot, Textarea } from '@/components/ui/ui'
 import { Sparkline } from '@/components/ui/charts'
 import { StatsPanel, type RosterTotals } from './stats-panel'
 
-export type ArtistStat = { views: number; plays: number; linkClicks: number }
+export type ArtistStat = { views: number; plays: number; linkClicks: number; series: number[] }
 type Artist = { id: string; name: string; slug: string }
 type Pending = { id: string; name: string; handle: string | null }
 
@@ -124,6 +125,7 @@ export function RosterView({
           <div className="mt-5 flex flex-col">
             {fArtists.map((a) => {
               const s = stats[a.id]
+              const tr = formatTrend(seriesTrend(s?.series ?? []))
               return (
                 <Link
                   key={a.id}
@@ -137,7 +139,10 @@ export function RosterView({
                     <div className="font-space text-xs text-ink-muted">/{a.slug}</div>
                   </div>
                   <div className="ml-auto flex items-center gap-6">
-                    <Sparkline className="hidden h-7 w-[72px] flex-none text-ink sm:block" />
+                    <Sparkline
+                      values={s?.series}
+                      className={cx('hidden h-7 w-[72px] flex-none sm:block', trendLineClass(tr.dir))}
+                    />
                     <div className="text-right">
                       <div className="font-space text-sm font-bold tabular-nums">
                         {compactNumber(s?.views ?? 0)}
@@ -146,8 +151,13 @@ export function RosterView({
                         views · 30d
                       </div>
                     </div>
-                    <span className="hidden w-12 text-right font-space text-xs text-ink-faint sm:inline">
-                      0.0%
+                    <span
+                      className={cx(
+                        'hidden w-12 text-right font-space text-xs sm:inline',
+                        trendTextClass(tr.dir),
+                      )}
+                    >
+                      {tr.label}
                     </span>
                     <Icon
                       name="chevronRight"
@@ -175,6 +185,7 @@ export function RosterView({
           <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {fArtists.map((a) => {
               const s = stats[a.id]
+              const tr = formatTrend(seriesTrend(s?.series ?? []))
               return (
                 <Link
                   key={a.id}
@@ -194,8 +205,11 @@ export function RosterView({
                   </div>
                   <div className="mt-4 flex items-end justify-between">
                     <div>
-                      <div className="font-space text-[22px] font-bold tabular-nums tracking-[-0.02em]">
+                      <div className="flex items-baseline gap-2 font-space text-[22px] font-bold tabular-nums tracking-[-0.02em]">
                         {compactNumber(s?.views ?? 0)}
+                        <span className={cx('text-xs font-bold', trendTextClass(tr.dir))}>
+                          {tr.label}
+                        </span>
                       </div>
                       <div className="mt-1 font-space text-[10px] uppercase tracking-[0.07em] text-ink-faint">
                         views · 30 days
@@ -207,7 +221,10 @@ export function RosterView({
                       className="text-ink-faint group-hover:text-accent"
                     />
                   </div>
-                  <Sparkline className="-mx-5 -mb-5 mt-3 h-12 w-[calc(100%+2.5rem)] text-ink" />
+                  <Sparkline
+                    values={s?.series}
+                    className={cx('-mx-5 -mb-5 mt-3 h-12 w-[calc(100%+2.5rem)]', trendLineClass(tr.dir))}
+                  />
                 </Link>
               )
             })}
