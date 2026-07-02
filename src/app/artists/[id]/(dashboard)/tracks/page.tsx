@@ -1,12 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { CATALOG_SOURCES, type CatalogSource } from '@/lib/catalog'
-import { ContentSection } from '../content-sections'
+import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SyncPanel } from '../sync-panel'
 import { SectionShell } from '../section-shell'
 import { CatalogSourceForm } from '../catalog-source-form'
 import { requireArtist } from '../_data'
+import { TrackCard } from './track-card'
 import {
+  addContentAction,
   saveAppleIdAction,
   saveDeezerIdAction,
   saveSpotifyIdAction,
@@ -105,7 +107,42 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
         </p>
       )}
 
-      <ContentSection type="track" artistId={id} rows={rows} />
+      <section className="mt-10">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[15px] font-bold tracking-[-0.01em]">Tracks</h2>
+          <span className="font-space text-xs text-ink-faint">{rows.length} total</span>
+        </div>
+
+        <form action={addContentAction.bind(null, 'track', id)} className="mt-3 flex items-center gap-2">
+          <input name="title" placeholder="Track title" required className={`${inputClass} flex-1`} />
+          <button type="submit" className={buttonClass('solid')}>
+            Add
+          </button>
+        </form>
+
+        {rows.length > 0 ? (
+          <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-5 gap-y-7">
+            {rows.map((row) => (
+              <TrackCard
+                key={row.id as string}
+                artistId={id}
+                track={{
+                  id: row.id as string,
+                  title: row.title as string,
+                  cover_url: (row.cover_url as string | null) ?? null,
+                  stream_url: (row.stream_url as string | null) ?? null,
+                  source: (row.source as string | null) ?? null,
+                  audio_path: (row.audio_path as string | null) ?? null,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
+            None yet.
+          </p>
+        )}
+      </section>
     </SectionShell>
   )
 }

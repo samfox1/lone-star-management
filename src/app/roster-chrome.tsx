@@ -15,7 +15,6 @@ export type RosterSection = 'roster' | 'analytics' | 'releases' | 'tour' | 'vide
 const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[] = [
   { key: 'roster', label: 'Roster', icon: 'roster', href: '/roster' },
   { key: 'analytics', label: 'Analytics', icon: 'analytics', href: '/analytics' },
-  { key: 'releases', label: 'Releases', icon: 'releases', href: '/releases' },
   { key: 'tour', label: 'Tour', icon: 'tour', href: '/tour' },
   { key: 'videos', label: 'Videos', icon: 'videos', href: '/videos' },
   { key: 'merch', label: 'Merch', icon: 'merch', href: '/merch' },

@@ -25,7 +25,6 @@ const PROTECTED_EXACT = [
   // roster-wide section pages (centered top-nav) — these are static routes that
   // shadow /[slug], so they never serve a public site; gate them like the roster.
   '/analytics',
-  '/releases',
   '/tour',
   '/videos',
   '/merch',
