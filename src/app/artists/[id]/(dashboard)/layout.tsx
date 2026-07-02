@@ -2,11 +2,10 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished } from '@/lib/content'
 import { Icon } from '@/components/ui/icons'
-import { Avatar, Button, buttonClass, initials, StatusDot } from '@/components/ui/ui'
+import { Avatar, initials, StatusDot } from '@/components/ui/ui'
 import { ArtistNav } from './artist-tabs'
 import { dirtyBySeg } from './sections'
 import { requireArtist } from './_data'
-import { publishAction } from './actions'
 
 /** Today as YYYY-MM-DD, out of render so it isn't an impure call. */
 function todayIso(): string {
@@ -15,10 +14,10 @@ function todayIso(): string {
 
 /**
  * Artist-scoped dashboard shell. One compact top bar: brand (back / avatar / name
- * / on-tour) on the left, the CENTERED section nav, and the actions on the right
- * (View site / Preview / Publish all / edit) — no repeated hero. The .single() in
- * requireArtist is the non-owner→404 gate for every sub-route. Does NOT wrap
- * /preview.
+ * / on-tour) on the left, the CENTERED section nav, and a minimal tools cluster
+ * (search / settings / avatar) on the right — the per-artist publish / preview /
+ * view-site / edit actions live on the Settings tab. Full-width content. The
+ * .single() in requireArtist is the non-owner→404 gate. Does NOT wrap /preview.
  */
 export default async function DashboardLayout({
   children,
@@ -30,9 +29,11 @@ export default async function DashboardLayout({
   const { id } = await params
   const supabase = await createClient()
   const artist = await requireArtist(id)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const diff = await diffUnpublished(supabase, id)
   const dirty = dirtyBySeg(diff)
-  const anyDirty = Object.values(dirty).some(Boolean)
 
   // "On tour" = has an upcoming tour date (RLS-scoped). Real signal, not a flag.
   const { count } = await supabase
@@ -62,28 +63,20 @@ export default async function DashboardLayout({
         {/* centered artist section nav */}
         <ArtistNav artistId={id} dirty={dirty} layout="bar" />
 
-        {/* actions */}
-        <div className="flex items-center justify-end gap-2.5">
-          {anyDirty && (
-            <span className="hidden items-center gap-2 font-space text-xs text-ink-muted xl:inline-flex">
-              <StatusDot tone="pending" /> Unpublished
-            </span>
-          )}
-          <Link href={`/${artist.slug}`} className={buttonClass('ghost', 'hidden sm:inline-flex')}>
-            View site <Icon name="external" size={15} />
+        {/* tools: search / settings / avatar (like the roster) */}
+        <div className="flex items-center justify-end gap-3.5 text-ink-muted">
+          <Link href="/" title="Home / search" className="inline-flex transition-colors hover:text-ink">
+            <Icon name="search" size={18} />
           </Link>
-          <Link href={`/artists/${id}/preview`} className={buttonClass('ghost', 'hidden sm:inline-flex')}>
-            Preview
-          </Link>
-          <form action={publishAction.bind(null, id)}>
-            <Button type="submit">Publish all</Button>
-          </form>
           <Link
-            href={`/artists/${id}/edit`}
-            title="Edit info"
-            className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-hairline text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+            href={`/artists/${id}/settings`}
+            title="Artist settings"
+            className="inline-flex transition-colors hover:text-ink"
           >
-            <Icon name="edit" size={16} />
+            <Icon name="settings" size={18} />
+          </Link>
+          <Link href="/account" title={user?.email ?? 'Account'}>
+            <Avatar initials={initials(user?.email ?? '?')} size={30} />
           </Link>
         </div>
       </header>
@@ -91,7 +84,7 @@ export default async function DashboardLayout({
       {/* mobile section strip */}
       <ArtistNav artistId={id} dirty={dirty} layout="strip" />
 
-      <main className="mx-auto w-full max-w-5xl px-6 py-8">{children}</main>
+      <main className="w-full px-7 py-8">{children}</main>
     </div>
   )
 }

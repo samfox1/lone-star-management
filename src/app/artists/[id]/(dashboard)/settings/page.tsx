@@ -1,6 +1,8 @@
 import Link from 'next/link'
-import { Card, KLabel, buttonClass } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
+import { Button, Card, KLabel, buttonClass } from '@/components/ui/ui'
 import { getShopifyDomain, requireArtist } from '../_data'
+import { publishAction } from '../actions'
 
 /**
  * Settings: the per-artist integrations hub + (soon) SEO/account. Config here
@@ -27,6 +29,24 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-10">
       <h1 className="text-[19px] font-bold tracking-[-0.01em]">Settings</h1>
+
+      <section>
+        <KLabel>This artist</KLabel>
+        <div className="mt-3 flex flex-wrap items-center gap-2.5">
+          <Link href={`/${artist.slug}`} className={buttonClass('ghost')}>
+            View site <Icon name="external" size={15} />
+          </Link>
+          <Link href={`/artists/${id}/preview`} className={buttonClass('ghost')}>
+            Preview
+          </Link>
+          <Link href={`/artists/${id}/edit`} className={buttonClass('ghost')}>
+            Edit info
+          </Link>
+          <form action={publishAction.bind(null, id)}>
+            <Button type="submit">Publish all</Button>
+          </form>
+        </div>
+      </section>
 
       <section>
         <KLabel>Integrations · this artist</KLabel>

@@ -1,14 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { CATALOG_SOURCES, type CatalogSource } from '@/lib/catalog'
-import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SyncPanel } from '../sync-panel'
-import { SectionShell } from '../section-shell'
 import { CatalogSourceForm } from '../catalog-source-form'
 import { requireArtist } from '../_data'
 import { TrackCard } from './track-card'
+import { TracksHeader } from './tracks-header'
 import {
   addContentAction,
+  publishSectionAction,
   saveAppleIdAction,
   saveDeezerIdAction,
   saveSpotifyIdAction,
@@ -26,9 +26,7 @@ type Importer = {
   pull: (artistId: string) => Promise<void>
 }
 
-/** One config per catalog source — label for the selector + (for importers) the
- *  id field and bound actions that drive the SyncPanel. Adding Apple = one entry. */
-const SOURCES: Record<CatalogSource, { label: string; importer?: Importer; comingSoon?: boolean }> = {
+const SOURCES: Record<CatalogSource, { label: string; importer?: Importer }> = {
   manual: { label: 'Manual only' },
   spotify: {
     label: 'Spotify',
@@ -69,13 +67,16 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
   const rows = await listContent(supabase, 'track', id)
   const source = (artist.catalog_source ?? 'manual') as CatalogSource
   const cfg = SOURCES[source]
-  // Confirm a switch only when it would actually delete imported tracks.
   const hasImportedTracks = source !== 'manual' && rows.some((r) => r.source === source)
 
-  return (
-    <SectionShell title="Tracks" publishType="track" artistId={id}>
+  // Import machinery (catalog source + sync) — tucked behind the header's Import
+  // toggle so it never wastes space above the grid.
+  const importPanel = (
+    <div className="space-y-4">
       <div>
-        <h2 className="text-[15px] font-bold tracking-[-0.01em]">Catalog source</h2>
+        <div className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+          Catalog source
+        </div>
         <p className="mt-1 font-space text-xs text-ink-faint">
           Import from one service. Switching replaces that import; your manual tracks stay.
         </p>
@@ -87,7 +88,6 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
           sources={CATALOG_SOURCES.map((s) => ({ value: s, label: SOURCES[s].label }))}
         />
       </div>
-
       {cfg.importer && (
         <SyncPanel
           title={cfg.label}
@@ -100,49 +100,40 @@ export default async function TracksPage({ params }: { params: Promise<{ id: str
           pullAction={cfg.importer.pull.bind(null, id)}
         />
       )}
+    </div>
+  )
 
-      {cfg.comingSoon && (
-        <p className="rounded-xl border border-dashed border-hairline px-4 py-3 font-space text-sm text-ink-muted">
-          {cfg.label} import is coming soon. Add tracks manually for now.
+  return (
+    <div>
+      <TracksHeader
+        count={rows.length}
+        addAction={addContentAction.bind(null, 'track', id)}
+        publishAction={publishSectionAction.bind(null, 'track', id)}
+        importPanel={importPanel}
+      />
+
+      {rows.length > 0 ? (
+        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-5 gap-y-8">
+          {rows.map((row) => (
+            <TrackCard
+              key={row.id as string}
+              artistId={id}
+              track={{
+                id: row.id as string,
+                title: row.title as string,
+                cover_url: (row.cover_url as string | null) ?? null,
+                stream_url: (row.stream_url as string | null) ?? null,
+                source: (row.source as string | null) ?? null,
+                audio_path: (row.audio_path as string | null) ?? null,
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-6 rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
+          None yet.
         </p>
       )}
-
-      <section className="mt-10">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-[15px] font-bold tracking-[-0.01em]">Tracks</h2>
-          <span className="font-space text-xs text-ink-faint">{rows.length} total</span>
-        </div>
-
-        <form action={addContentAction.bind(null, 'track', id)} className="mt-3 flex items-center gap-2">
-          <input name="title" placeholder="Track title" required className={`${inputClass} flex-1`} />
-          <button type="submit" className={buttonClass('solid')}>
-            Add
-          </button>
-        </form>
-
-        {rows.length > 0 ? (
-          <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-5 gap-y-7">
-            {rows.map((row) => (
-              <TrackCard
-                key={row.id as string}
-                artistId={id}
-                track={{
-                  id: row.id as string,
-                  title: row.title as string,
-                  cover_url: (row.cover_url as string | null) ?? null,
-                  stream_url: (row.stream_url as string | null) ?? null,
-                  source: (row.source as string | null) ?? null,
-                  audio_path: (row.audio_path as string | null) ?? null,
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-5 rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
-            None yet.
-          </p>
-        )}
-      </section>
-    </SectionShell>
+    </div>
   )
 }
