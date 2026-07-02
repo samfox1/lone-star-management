@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { Icon } from '@/components/ui/icons'
 import { EmptyState, RosterShell, SectionToolbar } from '../roster-chrome'
 import { ownedArtists, rosterRows } from '../roster-data'
 
@@ -27,26 +26,24 @@ export default async function ReleasesPage() {
           sub="Add releases inside an artist (Releases tab) and they roll up across your roster here."
         />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(152px,1fr))] gap-5 px-7 pb-12">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-6 gap-y-8 px-7 pb-14">
           {rows.map(({ row, artist }) => {
             const cover = row.cover_url as string | null
             const year = (row.release_date as string | null)?.slice(0, 4)
             return (
               <Link key={row.id as string} href={`/artists/${artist.id}/releases`} className="group">
-                <div className="aspect-square overflow-hidden rounded-xl border border-hairline bg-surface">
+                <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={cover} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="flex h-full items-center justify-center text-ink-faint">
-                      <Icon name="releases" size={34} />
-                    </span>
+                    <span className="h-9 w-9 rounded-full bg-ink" />
                   )}
                 </div>
-                <div className="mt-2.5 truncate text-sm font-semibold group-hover:text-accent">
+                <div className="mt-3 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
                   {row.title as string}
                 </div>
-                <div className="font-space text-[11px] text-ink-muted">
+                <div className="mt-0.5 font-space text-[13px] text-ink-muted">
                   {artist.name}
                   {year ? ` · ${year}` : ''}
                 </div>
