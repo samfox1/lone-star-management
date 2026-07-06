@@ -1,12 +1,23 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { safeHref } from '@/lib/url'
+import { TrackPlayButton } from '@/components/track-play-button'
+
+/** A track on the release (get_release projects these like get_public_site). */
+type ReleaseTrack = {
+  id: string
+  title: string
+  has_audio: boolean
+  featured_artists: string[] | null
+}
 
 type Release = {
   title: string
   cover_url: string | null
   release_date: string | null
   links: { label: string; url: string }[]
+  /** Tracks matched to this release by album_name. Absent on pre-migration data. */
+  tracks?: ReleaseTrack[]
 }
 
 async function loadRelease(slug: string, release: string): Promise<Release | null> {
@@ -31,6 +42,7 @@ export default async function ReleasePage({
 
   const cover = safeHref(r.cover_url)
   const links = (r.links ?? []).map((l) => ({ label: l.label, href: safeHref(l.url) })).filter((l) => l.href)
+  const tracks = r.tracks ?? []
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center px-6 py-16 text-center">
@@ -56,6 +68,31 @@ export default async function ReleasePage({
           </a>
         ))}
       </div>
+
+      {tracks.length > 0 && (
+        <div className="mt-10 w-full text-left">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Tracklist</h2>
+          <ol className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-900">
+            {tracks.map((t, i) => {
+              const feat = t.featured_artists ?? []
+              return (
+                <li key={t.id} className="flex items-center gap-3 py-2.5">
+                  <span className="w-5 flex-none text-right font-mono text-xs text-zinc-400">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{t.title}</div>
+                    {feat.length > 0 && (
+                      <div className="truncate text-xs text-zinc-500">feat. {feat.join(', ')}</div>
+                    )}
+                  </div>
+                  {t.has_audio && <TrackPlayButton slug={slug} trackId={t.id} />}
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+      )}
     </main>
   )
 }
