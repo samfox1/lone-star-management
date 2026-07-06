@@ -45,6 +45,15 @@ export function SubscribeForm({ slug, variant = 'classic' }: { slug: string; var
 
   return (
     <form action={formAction} className={s.form}>
+      {/* Honeypot: hidden from humans; a filled value flags a bot (see subscribeAction). */}
+      <input
+        type="text"
+        name="website"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        className="hidden"
+      />
       <input
         name="email"
         type="email"

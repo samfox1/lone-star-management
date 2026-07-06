@@ -19,6 +19,13 @@ function toDescription(s: string): string {
   return truncate(s.replace(/\s+/g, ' ').trim())
 }
 
+/** Manager override → bio → a generic default. */
+function resolveDescription(override: string, bio: string | null, name: string): string {
+  if (override) return toDescription(override)
+  if (bio) return toDescription(bio)
+  return `${name} — official site`
+}
+
 export function siteMetadata(site: SiteData | null): Metadata {
   if (!site) return { title: 'Not found' }
 
@@ -26,12 +33,7 @@ export function siteMetadata(site: SiteData | null): Metadata {
   const c = site.site_content
 
   const title = (c.seo_title || '').trim() || name
-  const descOverride = (c.seo_description || '').trim()
-  const description = descOverride
-    ? toDescription(descOverride)
-    : bio
-      ? toDescription(bio)
-      : `${name} — official site`
+  const description = resolveDescription((c.seo_description || '').trim(), bio, name)
   // Override image wins; never emit an unsafe (javascript:/data:) URL as og:image.
   const ogImage = safeHref((c.og_image || '').trim() || hero_image_url)
   const images = ogImage ? [ogImage] : []
