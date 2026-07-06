@@ -53,8 +53,8 @@ export default async function AccountPage() {
 
         <div className="mt-5 rounded-xl border border-dashed border-hairline p-4 font-space text-xs leading-relaxed text-ink-muted">
           Data sources connect <b className="font-bold text-ink">per artist</b> — open an artist and
-          use its <b className="font-bold text-ink">Settings</b> tab and the per-section sync panels
-          (Tour → Bandsintown / Ticketmaster, Videos → YouTube, Merch → Shopify).
+          use <b className="font-bold text-ink">Manager tools → Integrations</b> to connect Spotify,
+          YouTube, Bandsintown, Ticketmaster, and Shopify.
         </div>
       </div>
     </RosterShell>
