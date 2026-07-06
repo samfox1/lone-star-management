@@ -2,8 +2,11 @@
 
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { GridCard } from '../grid-card'
-import { deleteContentAction, updateContentAction } from '../actions'
+import { deleteContentAction, setTrackReleaseAction, updateContentAction } from '../actions'
 import { TrackAudioUploader } from '../track-audio-uploader'
+
+/** A release the track can be assigned to (id + title, for the selector). */
+export type ReleaseOption = { id: string; title: string }
 
 export type Track = {
   id: string
@@ -12,13 +15,22 @@ export type Track = {
   stream_url: string | null
   source: string | null
   audio_path: string | null
+  release_id: string | null
 }
 
 /**
- * A track as a cover-grid tile; opens a modal to rename, attach hosted audio,
- * open the source, or delete.
+ * A track as a cover-grid tile; opens a modal to rename, assign it to a release,
+ * attach hosted audio, open the source, or delete.
  */
-export function TrackCard({ track, artistId }: { track: Track; artistId: string }) {
+export function TrackCard({
+  track,
+  artistId,
+  releases,
+}: {
+  track: Track
+  artistId: string
+  releases: ReleaseOption[]
+}) {
   const badge = track.source && track.source !== 'manual' ? track.source : null
 
   return (
@@ -80,6 +92,30 @@ export function TrackCard({ track, artistId }: { track: Track; artistId: string 
           </a>
         )}
       </div>
+
+      {releases.length > 0 && (
+        <form
+          action={setTrackReleaseAction.bind(null, track.id, artistId)}
+          className="mt-4 flex items-center gap-2"
+        >
+          <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release</span>
+          <select
+            name="release_id"
+            defaultValue={track.release_id ?? ''}
+            className="min-w-0 flex-1 rounded-lg border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink-faint"
+          >
+            <option value="">— None —</option>
+            {releases.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className={buttonClass('ghost')}>
+            Save
+          </button>
+        </form>
+      )}
     </GridCard>
   )
 }

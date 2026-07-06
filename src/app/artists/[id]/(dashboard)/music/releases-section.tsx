@@ -14,7 +14,17 @@ import { ReleasesBrowser } from './releases-browser'
 export async function ReleasesSection({ id }: { id: string }) {
   const supabase = await createClient()
   const artist = await requireArtist(id)
-  const rows = await listContent(supabase, 'release', id)
+  const [rows, trackRows] = await Promise.all([
+    listContent(supabase, 'release', id),
+    listContent(supabase, 'track', id),
+  ])
+
+  // Tracks assigned to each release — the umbrella count shown on the card.
+  const counts = new Map<string, number>()
+  for (const t of trackRows) {
+    const rid = t.release_id as string | null
+    if (rid) counts.set(rid, (counts.get(rid) ?? 0) + 1)
+  }
 
   const releases = rows.map((row) => ({
     id: row.id as string,
@@ -24,6 +34,7 @@ export async function ReleasesSection({ id }: { id: string }) {
     release_date: (row.release_date as string | null) ?? null,
     release_type: toReleaseType(row.release_type as string | null),
     links: (row.links as ReleaseLink[]) ?? [],
+    track_count: counts.get(row.id as string) ?? 0,
   }))
 
   return (

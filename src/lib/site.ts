@@ -29,6 +29,8 @@ export type SiteTrack = {
   /** The release the track belongs to, from Spotify sync. May be absent on older
    *  revisions — render with `?? null`. */
   album_name: string | null
+  /** The release this track is assigned to (umbrella membership), or null. */
+  release_id: string | null
   sort_order: number
 }
 
@@ -155,6 +157,7 @@ export async function getWorkingSite(
           has_audio: s.audio_path != null,
           featured_artists: (s.featured_artists as string[] | null) ?? [],
           album_name: (s.album_name as string | null) ?? null,
+          release_id: (s.release_id as string | null) ?? null,
           sort_order: (s.sort_order as number) ?? 0,
         } satisfies SiteTrack
       }),

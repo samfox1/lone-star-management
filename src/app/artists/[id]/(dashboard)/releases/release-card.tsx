@@ -20,6 +20,8 @@ export type Release = {
   release_date: string | null
   release_type: ReleaseType
   links: ReleaseLink[]
+  /** How many tracks are assigned to this release (the umbrella count). */
+  track_count?: number
 }
 
 /**
@@ -57,7 +59,15 @@ export function ReleaseCard({
           <div className="mt-3 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
             {release.title}
           </div>
-          {year && <div className="mt-0.5 font-space text-[13px] text-ink-muted">{year}</div>}
+          {(() => {
+            const meta = [
+              year,
+              release.track_count ? `${release.track_count} track${release.track_count === 1 ? '' : 's'}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+            return meta ? <div className="mt-0.5 font-space text-[13px] text-ink-muted">{meta}</div> : null
+          })()}
         </>
       }
     >

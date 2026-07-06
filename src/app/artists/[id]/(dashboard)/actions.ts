@@ -332,6 +332,14 @@ export async function setReleaseTypeAction(releaseId: string, artistId: string, 
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
+/** Assign a track to a release (empty = unassign). RLS scopes the update. */
+export async function setTrackReleaseAction(trackId: string, artistId: string, formData: FormData) {
+  const release_id = String(formData.get('release_id') ?? '').trim() || null
+  const supabase = await createClient()
+  await supabase.from('tracks').update({ release_id }).eq('id', trackId)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
 /** Append a DSP link to a release (url sanitized; RLS scopes to the owner). */
 export async function addReleaseLinkAction(releaseId: string, artistId: string, formData: FormData) {
   const label = String(formData.get('label') ?? '').trim()

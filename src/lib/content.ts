@@ -76,7 +76,7 @@ type PublishConfig = {
 export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   track: {
     table: 'tracks',
-    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name'],
+    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name', 'release_id'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {

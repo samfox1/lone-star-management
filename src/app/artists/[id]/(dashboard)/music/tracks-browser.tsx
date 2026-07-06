@@ -5,7 +5,7 @@ import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SectionToolbar } from '../section-toolbar'
 import { CardGrid } from '../card-grid'
 import { FilterBar } from '../filter-bar'
-import { TrackCard, type Track } from '../tracks/track-card'
+import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 
 export type BrowserTrack = Track & { created_at: string }
 
@@ -31,11 +31,13 @@ const sourceLabel = (s: string) => SOURCE_LABEL[s] ?? s
 export function TracksBrowser({
   tracks,
   artistId,
+  releases,
   addAction,
   publishAction,
 }: {
   tracks: BrowserTrack[]
   artistId: string
+  releases: ReleaseOption[]
   addAction: BoundAction
   publishAction: BoundAction
 }) {
@@ -89,7 +91,7 @@ export function TracksBrowser({
         empty={source === 'all' ? 'None yet.' : `No ${sourceLabel(source)} tracks.`}
       >
         {shown.map((t) => (
-          <TrackCard key={t.id} artistId={artistId} track={t} />
+          <TrackCard key={t.id} artistId={artistId} track={t} releases={releases} />
         ))}
       </CardGrid>
     </div>
