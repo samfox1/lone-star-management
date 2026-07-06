@@ -1,28 +1,38 @@
 'use client'
 
-import { useState } from 'react'
-import type { ReactNode } from 'react'
-import { KLabel, buttonClass, inputClass } from '@/components/ui/ui'
+import { useState, type ReactNode } from 'react'
+import { KLabel, buttonClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 
 type BoundAction = (formData: FormData) => void | Promise<void>
 
 /**
- * One compact toolbar for the Tracks page: the count on the left, and Import /
- * Publish / + Add on the right — the import (catalog source + sync) and add-track
- * controls stay tucked away until toggled, so no vertical space is wasted above
- * the grid.
+ * One compact toolbar for a content grid: the count on the left, and (optional)
+ * Import / Publish / + Add on the right. The add form and the import panel are
+ * passed as children/slots and stay tucked away until toggled, so nothing wastes
+ * vertical space above the grid. Shared by the Tracks and Releases views so both
+ * halves of the Music tab read identically.
  */
-export function TracksHeader({
+export function SectionToolbar({
   count,
-  addAction,
+  singular,
+  plural,
   publishAction,
+  publishLabel = 'Publish',
+  addLabel,
   importPanel,
+  children,
 }: {
   count: number
-  addAction: BoundAction
+  singular: string
+  plural: string
   publishAction: BoundAction
-  importPanel: ReactNode
+  publishLabel?: string
+  /** aria-label for the + button (e.g. "Add track"). */
+  addLabel: string
+  importPanel?: ReactNode
+  /** The add form, revealed by the + button. */
+  children: ReactNode
 }) {
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -31,7 +41,7 @@ export function TracksHeader({
     <div>
       <div className="flex items-center gap-2.5">
         <KLabel>
-          {count} {count === 1 ? 'track' : 'tracks'}
+          {count} {count === 1 ? singular : plural}
         </KLabel>
         <div className="flex-1" />
         {importPanel && (
@@ -45,28 +55,21 @@ export function TracksHeader({
         )}
         <form action={publishAction}>
           <button type="submit" className={buttonClass('ghost')}>
-            Publish
+            {publishLabel}
           </button>
         </form>
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}
-          title="Add track"
-          aria-label="Add track"
+          title={addLabel}
+          aria-label={addLabel}
           className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-ink text-white transition-colors hover:bg-black"
         >
           <Icon name="plus" size={18} />
         </button>
       </div>
 
-      {adding && (
-        <form action={addAction} className="mt-3 flex items-center gap-2">
-          <input name="title" placeholder="Track title" required autoFocus className={`${inputClass} flex-1`} />
-          <button type="submit" className={buttonClass('solid')}>
-            Add
-          </button>
-        </form>
-      )}
+      {adding && <div className="mt-3">{children}</div>}
 
       {importing && importPanel && (
         <div className="mt-3 rounded-xl border border-hairline bg-paper p-4">{importPanel}</div>

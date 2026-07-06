@@ -1,45 +1,58 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
-import { ContentSection } from '../content-sections'
-import { SyncPanel } from '../sync-panel'
+import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SectionShell } from '../section-shell'
+import { SectionMeta, ConnectLink } from '../section-meta'
 import { requireArtist } from '../_data'
-import {
-  saveBandsintownNameAction,
-  saveTicketmasterIdAction,
-  syncBandsintownAction,
-  syncTicketmasterAction,
-} from '../actions'
+import { addContentAction } from '../actions'
+import { TourRow } from './tour-row'
 
 export default async function TourPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const artist = await requireArtist(id)
+  await requireArtist(id)
   const rows = await listContent(supabase, 'tour_date', id)
 
   return (
     <SectionShell title="Tour dates" publishType="tour_date" artistId={id}>
-      <SyncPanel
-        title="Bandsintown"
-        idName="bandsintown_name"
-        idValue={artist?.bandsintown_name ?? ''}
-        placeholder="Bandsintown artist name"
-        hasId={!!artist?.bandsintown_name}
-        pullLabel="Pull tour dates"
-        saveAction={saveBandsintownNameAction.bind(null, id)}
-        pullAction={syncBandsintownAction.bind(null, id)}
-      />
-      <SyncPanel
-        title="Ticketmaster"
-        idName="ticketmaster_attraction_id"
-        idValue={artist?.ticketmaster_attraction_id ?? ''}
-        placeholder="Ticketmaster attraction ID"
-        hasId={!!artist?.ticketmaster_attraction_id}
-        pullLabel="Pull tour dates"
-        saveAction={saveTicketmasterIdAction.bind(null, id)}
-        pullAction={syncTicketmasterAction.bind(null, id)}
-      />
-      <ContentSection type="tour_date" artistId={id} rows={rows} />
+      <SectionMeta count={rows.length} singular="date" plural="dates">
+        <ConnectLink href={`/artists/${id}/tools/integrations`}>
+          Sync from Bandsintown / Ticketmaster →
+        </ConnectLink>
+      </SectionMeta>
+
+      <form action={addContentAction.bind(null, 'tour_date', id)} className="flex flex-wrap items-center gap-2">
+        <input name="date" type="date" required className={`${inputClass} w-40`} />
+        <input name="venue" placeholder="Venue" className={`${inputClass} flex-1`} />
+        <input name="city" placeholder="City" className={`${inputClass} w-32`} />
+        <input name="ticket_url" type="url" placeholder="Tickets URL" className={`${inputClass} w-44`} />
+        <button type="submit" className={buttonClass('solid')}>
+          Add
+        </button>
+      </form>
+
+      {rows.length > 0 ? (
+        <div>
+          {rows.map((row) => (
+            <TourRow
+              key={row.id as string}
+              artistId={id}
+              tour={{
+                id: row.id as string,
+                date: (row.date as string | null) ?? null,
+                venue: (row.venue as string | null) ?? null,
+                city: (row.city as string | null) ?? null,
+                ticket_url: (row.ticket_url as string | null) ?? null,
+                source: (row.source as string | null) ?? null,
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
+          No upcoming dates.
+        </p>
+      )}
     </SectionShell>
   )
 }

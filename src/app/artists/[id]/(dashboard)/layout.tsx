@@ -69,8 +69,8 @@ export default async function DashboardLayout({
             <Icon name="search" size={18} />
           </Link>
           <Link
-            href={`/artists/${id}/settings`}
-            title="Artist settings"
+            href={`/artists/${id}/tools`}
+            title="Manager tools"
             className="inline-flex transition-colors hover:text-ink"
           >
             <Icon name="settings" size={18} />

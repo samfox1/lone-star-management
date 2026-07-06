@@ -5,28 +5,47 @@ import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 
-type Tab = { label: string; seg: string; icon: IconName }
+type Tab = {
+  label: string
+  /** href segment appended to the artist base ('' = the Analytics index). */
+  seg: string
+  icon: IconName
+  /** First route segments that mark this tab active (its own + folded-in pages). */
+  match: string[]
+  /** dirtyBySeg keys this tab owns — any dirty ⇒ the tab shows a pending dot. */
+  dirtySegs: string[]
+}
 
-// 1:1 with the existing dashboard routes. A filled dot marks a segment with
-// unpublished edits (`dirty` keyed by segment — see dirtyBySeg in sections.ts).
+// Consolidated artist nav: 6 tabs. Music folds Tracks + Releases; Manager tools
+// folds Site, Links, Press kit, Subscribers, Integrations, Settings and the
+// publish/edit actions. A filled dot marks a tab with unpublished edits in any
+// segment it owns (see dirtyBySeg in sections.ts).
 const TABS: Tab[] = [
-  { label: 'Overview', seg: '', icon: 'analytics' },
-  { label: 'Tracks', seg: 'tracks', icon: 'tracks' },
-  { label: 'Releases', seg: 'releases', icon: 'releases' },
-  { label: 'Tour', seg: 'tour', icon: 'tour' },
-  { label: 'Videos', seg: 'videos', icon: 'videos' },
-  { label: 'Merch', seg: 'merch', icon: 'merch' },
-  { label: 'Links', seg: 'links', icon: 'links' },
-  { label: 'Site', seg: 'site', icon: 'site' },
-  { label: 'Press kit', seg: 'epk', icon: 'epk' },
-  { label: 'Settings', seg: 'settings', icon: 'settings' },
+  { label: 'Analytics', seg: '', icon: 'analytics', match: [''], dirtySegs: [] },
+  {
+    label: 'Music',
+    seg: 'music',
+    icon: 'tracks',
+    match: ['music', 'tracks', 'releases'],
+    dirtySegs: ['tracks', 'releases'],
+  },
+  { label: 'Tour', seg: 'tour', icon: 'tour', match: ['tour'], dirtySegs: ['tour'] },
+  { label: 'Videos', seg: 'videos', icon: 'videos', match: ['videos'], dirtySegs: ['videos'] },
+  { label: 'Merch', seg: 'merch', icon: 'merch', match: ['merch'], dirtySegs: ['merch'] },
+  {
+    label: 'Manager tools',
+    seg: 'tools',
+    icon: 'settings',
+    match: ['tools', 'site', 'links', 'epk', 'subscribers', 'settings', 'edit'],
+    dirtySegs: ['site', 'links'],
+  },
 ]
 
 /**
  * Artist section nav. `layout="bar"` is the centered top-nav (icons that reveal
  * their label on hover, like the roster nav) for desktop; `layout="strip"` is a
  * horizontally-scrollable labelled strip for phones. Active is derived from the
- * path; a pending dot is shown per dirty segment.
+ * first path segment; a pending dot is shown per dirty tab.
  */
 export function ArtistNav({
   artistId,
@@ -39,15 +58,14 @@ export function ArtistNav({
 }) {
   const pathname = usePathname()
   const base = `/artists/${artistId}`
+  // Current top-level segment under the artist base ('' on the Analytics index).
+  const current = pathname.startsWith(base) ? pathname.slice(base.length).split('/')[1] ?? '' : ''
 
-  const resolve = (t: Tab) => {
-    const href = t.seg ? `${base}/${t.seg}` : base
-    return {
-      href,
-      active: t.seg ? pathname.startsWith(href) : pathname === base,
-      isDirty: t.seg ? (dirty[t.seg] ?? false) : false,
-    }
-  }
+  const resolve = (t: Tab) => ({
+    href: t.seg ? `${base}/${t.seg}` : base,
+    active: t.match.includes(current),
+    isDirty: t.dirtySegs.some((s) => dirty[s]),
+  })
 
   if (layout === 'bar') {
     return (
@@ -56,7 +74,7 @@ export function ArtistNav({
           const { href, active, isDirty } = resolve(t)
           return (
             <Link
-              key={t.seg || 'overview'}
+              key={t.seg || 'analytics'}
               href={href}
               aria-current={active ? 'page' : undefined}
               className={cx(
@@ -87,7 +105,7 @@ export function ArtistNav({
         const { href, active, isDirty } = resolve(t)
         return (
           <Link
-            key={t.seg || 'overview'}
+            key={t.seg || 'analytics'}
             href={href}
             aria-current={active ? 'page' : undefined}
             className={cx(
