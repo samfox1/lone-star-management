@@ -46,6 +46,7 @@ export const TEMPLATE_FIELDS: Record<string, SiteContentField[]> = {
     { key: 'tour_dates_heading', label: 'Tour dates heading', type: 'text', default: 'Tour dates' },
     { key: 'merch_heading', label: 'Merch heading', type: 'text', default: 'Merch' },
     { key: 'links_heading', label: 'Links heading', type: 'text', default: 'Links' },
+    { key: 'community_heading', label: 'Email signup heading', type: 'text', default: 'Stay in touch' },
   ],
 }
 

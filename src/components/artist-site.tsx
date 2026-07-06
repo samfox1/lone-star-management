@@ -13,6 +13,7 @@ import { safeHref } from '@/lib/url'
 import { isSafeEmbedSrc } from '@/lib/embed'
 import { fieldValue } from '@/lib/site-content-schema'
 import { TrackPlayButton } from '@/components/track-play-button'
+import { SubscribeForm } from '@/components/subscribe-form'
 
 function Section({
   title,
@@ -224,6 +225,13 @@ export function ArtistSite({ data }: { data: SiteData }) {
             )
           })}
         </ul>
+      </Section>
+
+      <Section title={text('community_heading')} show>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          New music, shows, and drops — straight to your inbox.
+        </p>
+        <SubscribeForm slug={artist.slug} />
       </Section>
     </div>
   )
