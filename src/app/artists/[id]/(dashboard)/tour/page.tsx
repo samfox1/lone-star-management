@@ -5,7 +5,7 @@ import { SectionShell } from '../section-shell'
 import { SectionMeta, ConnectLink } from '../section-meta'
 import { requireArtist } from '../_data'
 import { addContentAction } from '../actions'
-import { TourRow } from './tour-row'
+import { TourBrowser } from './tour-browser'
 
 export default async function TourPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -31,28 +31,17 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
         </button>
       </form>
 
-      {rows.length > 0 ? (
-        <div>
-          {rows.map((row) => (
-            <TourRow
-              key={row.id as string}
-              artistId={id}
-              tour={{
-                id: row.id as string,
-                date: (row.date as string | null) ?? null,
-                venue: (row.venue as string | null) ?? null,
-                city: (row.city as string | null) ?? null,
-                ticket_url: (row.ticket_url as string | null) ?? null,
-                source: (row.source as string | null) ?? null,
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-hairline px-4 py-6 text-center font-space text-sm text-ink-muted">
-          No upcoming dates.
-        </p>
-      )}
+      <TourBrowser
+        artistId={id}
+        tours={rows.map((row) => ({
+          id: row.id as string,
+          date: (row.date as string | null) ?? null,
+          venue: (row.venue as string | null) ?? null,
+          city: (row.city as string | null) ?? null,
+          ticket_url: (row.ticket_url as string | null) ?? null,
+          source: (row.source as string | null) ?? null,
+        }))}
+      />
     </SectionShell>
   )
 }

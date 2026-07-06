@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { safeHref } from '@/lib/url'
+import { RELEASE_TYPE_LABEL, toReleaseType } from '@/lib/releases'
 import { TrackPlayButton } from '@/components/track-play-button'
 
 /** A track on the release (get_release projects these like get_public_site). */
@@ -15,6 +16,7 @@ type Release = {
   title: string
   cover_url: string | null
   release_date: string | null
+  release_type?: string
   links: { label: string; url: string }[]
   /** Tracks matched to this release by album_name. Absent on pre-migration data. */
   tracks?: ReleaseTrack[]
@@ -52,7 +54,10 @@ export default async function ReleasePage({
       ) : (
         <div className="h-64 w-64 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
       )}
-      <h1 className="mt-6 text-2xl font-bold tracking-tight">{r.title}</h1>
+      <p className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+        {RELEASE_TYPE_LABEL[toReleaseType(r.release_type)]}
+      </p>
+      <h1 className="mt-1.5 text-2xl font-bold tracking-tight">{r.title}</h1>
       {r.release_date && <p className="mt-1 text-sm text-zinc-500">{r.release_date}</p>}
 
       <div className="mt-8 w-full space-y-3">

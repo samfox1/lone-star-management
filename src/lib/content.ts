@@ -59,7 +59,7 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   video: { fields: ['title', 'provider', 'embed_url', 'sort_order'], required: ['title', 'provider', 'embed_url'] },
   // Releases manage a DSP-links jsonb via their own page (links validated there).
   release: {
-    fields: ['title', 'slug', 'cover_url', 'release_date', 'links', 'sort_order'],
+    fields: ['title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order'],
     required: ['title', 'slug'],
   },
 }
@@ -102,7 +102,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   },
   release: {
     table: 'releases',
-    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'links', 'sort_order'],
+    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   media: {

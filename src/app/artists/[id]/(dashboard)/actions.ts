@@ -27,6 +27,7 @@ import { embedInfo } from '@/lib/embed'
 import { createYouTubeClient } from '@/lib/youtube'
 import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/catalog'
 import { isUrlField, safeHref } from '@/lib/url'
+import { toReleaseType } from '@/lib/releases'
 import { createSpotifyClient } from '@/lib/spotify'
 import { createDeezerClient } from '@/lib/deezer'
 import { createAppleMusicClient } from '@/lib/apple'
@@ -317,8 +318,17 @@ export async function addReleaseAction(artistId: string, formData: FormData) {
     slug: finalSlug,
     release_date,
     cover_url,
+    release_type: toReleaseType(String(formData.get('release_type') ?? '')),
     links: [],
   })
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** Set a release's type (album/single/ep/featured). RLS scopes the update. */
+export async function setReleaseTypeAction(releaseId: string, artistId: string, formData: FormData) {
+  const release_type = toReleaseType(String(formData.get('release_type') ?? ''))
+  const supabase = await createClient()
+  await supabase.from('releases').update({ release_type }).eq('id', releaseId)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

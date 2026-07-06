@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { GridCard } from '../grid-card'
 import {
   addReleaseLinkAction,
   deleteContentAction,
   removeReleaseLinkAction,
+  setReleaseTypeAction,
 } from '../actions'
 
 export type ReleaseLink = { label: string; url: string }
@@ -16,6 +18,7 @@ export type Release = {
   slug: string
   cover_url: string | null
   release_date: string | null
+  release_type: ReleaseType
   links: ReleaseLink[]
 }
 
@@ -40,7 +43,10 @@ export function ReleaseCard({
       deleteLabel="Delete release"
       tile={
         <>
-          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
+          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
+            <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
+              {RELEASE_TYPE_LABEL[release.release_type]}
+            </span>
             {release.cover_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
@@ -71,6 +77,27 @@ export function ReleaseCard({
           </Link>
         </div>
       </div>
+
+      <form
+        action={setReleaseTypeAction.bind(null, release.id, artistId)}
+        className="mt-4 flex items-center gap-2"
+      >
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+        <select
+          name="release_type"
+          defaultValue={release.release_type}
+          className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink-faint"
+        >
+          {RELEASE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {RELEASE_TYPE_LABEL[t]}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className={buttonClass('ghost')}>
+          Save
+        </button>
+      </form>
 
       <div className="mt-5 font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
         Streaming links
