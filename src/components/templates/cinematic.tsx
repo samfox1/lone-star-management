@@ -10,6 +10,7 @@ import { isSafeEmbedSrc } from '@/lib/embed'
 import { fieldHref, fieldValue } from '@/lib/site-content-schema'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
 import { CinematicWork, type WorkTab } from './cinematic-work'
+import { SubscribeForm } from '@/components/subscribe-form'
 
 function formatDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
@@ -154,12 +155,14 @@ function About({
 
 function Footer({
   name,
+  slug,
   links,
   heading,
   inquiry,
   email,
 }: {
   name: string
+  slug: string
   links: SiteLink[]
   heading: string
   inquiry: string
@@ -206,6 +209,7 @@ function Footer({
           })}
         </div>
       )}
+      <SubscribeForm slug={slug} variant="cinematic" />
       <p className="mt-12 text-xs uppercase tracking-widest text-muted">© {name}</p>
     </footer>
   )
@@ -304,6 +308,7 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
       </main>
       <Footer
         name={artist.name}
+        slug={artist.slug}
         links={links}
         heading={text('bookings_heading')}
         inquiry={text('booking_inquiry_copy')}
