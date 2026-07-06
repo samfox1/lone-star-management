@@ -123,7 +123,13 @@ export function syncSpotifyTracks(
     artistId,
     items: tracks.map((t) => ({
       externalId: t.spotify_id,
-      values: { title: t.title, cover_url: t.cover_url, stream_url: t.stream_url },
+      values: {
+        title: t.title,
+        cover_url: t.cover_url,
+        stream_url: t.stream_url,
+        featured_artists: t.featured_artists,
+        album_name: t.album_name,
+      },
     })),
   })
 }
