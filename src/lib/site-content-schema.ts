@@ -54,6 +54,19 @@ export function fieldsFor(template: string): SiteContentField[] {
   return TEMPLATE_FIELDS[template] ?? []
 }
 
+/**
+ * Cross-template SEO overrides. Stored as ordinary `site_content` keys, so they
+ * ride the same draft→publish pipeline and surface in `SiteData.site_content`;
+ * `lib/seo.ts` reads them for the public `<head>`. All optional — each falls back
+ * to an artist-derived default (name, bio, hero image), so an unset field is not
+ * "empty SEO", it's "auto".
+ */
+export const SEO_FIELDS: SiteContentField[] = [
+  { key: 'seo_title', label: 'Browser & tab title', type: 'text', default: '' },
+  { key: 'seo_description', label: 'Search & social description', type: 'text', default: '' },
+  { key: 'og_image', label: 'Social preview image URL', type: 'text', default: '' },
+]
+
 const EMAIL_RE = /^[^\s:@]+@[^\s:@]+\.[^\s:@]+$/
 
 /** Whether a raw value is acceptable to persist for a field (write-side guard;

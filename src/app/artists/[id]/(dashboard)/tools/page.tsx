@@ -20,6 +20,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
 
   const tools: { seg: string; icon: IconName; title: string; desc: string }[] = [
     { seg: 'site', icon: 'site', title: 'Site & profile', desc: 'Template, site text, photos & video' },
+    { seg: 'tools/seo', icon: 'search', title: 'SEO', desc: 'Search & social preview' },
     { seg: 'links', icon: 'links', title: 'Links', desc: 'Social & external links' },
     { seg: 'epk', icon: 'epk', title: 'Press kit', desc: 'Shareable EPK one-pager' },
     { seg: 'subscribers', icon: 'list', title: 'Subscribers', desc: 'Emails from the site popup' },

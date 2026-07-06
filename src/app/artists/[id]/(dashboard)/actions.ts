@@ -22,7 +22,7 @@ import {
   publishProfile,
   updateContent,
 } from '@/lib/content'
-import { acceptsValue, fieldsFor } from '@/lib/site-content-schema'
+import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
 import { embedInfo } from '@/lib/embed'
 import { createYouTubeClient } from '@/lib/youtube'
 import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/catalog'
@@ -175,8 +175,33 @@ export async function saveSiteContentAction(artistId: string, formData: FormData
     .select('template')
     .eq('id', artistId)
     .single()
-  const fields = fieldsFor(artist?.template ?? 'classic')
+  await upsertSiteContentFields(supabase, artistId, fieldsFor(artist?.template ?? 'classic'), formData)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
 
+/**
+ * Save the artist's SEO overrides (custom title / description / OG image) — stored
+ * as ordinary site_content keys, so they're draft until the Site section is
+ * published and then reach the public <head> via siteMetadata. A blank value
+ * clears the override → the page falls back to its artist-derived default.
+ */
+export async function saveSeoAction(artistId: string, formData: FormData) {
+  const supabase = await createClient()
+  await upsertSiteContentFields(supabase, artistId, SEO_FIELDS, formData)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Upsert a set of site_content fields from a form: a present-and-nonblank value
+ * is validated then upserted; a blank value deletes the override (the render
+ * falls back to the default). Shared by the Site-text and SEO editors.
+ */
+async function upsertSiteContentFields(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  artistId: string,
+  fields: SiteContentField[],
+  formData: FormData,
+) {
   for (const field of fields) {
     if (!formData.has(field.key)) continue
     const raw = String(formData.get(field.key) ?? '').trim()
@@ -189,7 +214,6 @@ export async function saveSiteContentAction(artistId: string, formData: FormData
       .from('site_content')
       .upsert({ artist_id: artistId, key: field.key, value: raw }, { onConflict: 'artist_id,key' })
   }
-  revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
 /**
