@@ -17,12 +17,12 @@ Built and tested; these are accepted-by-record gaps, not blockers.
       a way to harvest a rolling stream of valid 1h links. Needs a rate-limiter
       (per slug+track, or a token/Referer check). The 1h share window is inherent
       to signed URLs ("gated raises the bar, isn't DRM" — §4.2).
-- [ ] **Rate-limit the anon subscribe door** `subscribe()` / `subscribeAction`
-      (`src/app/[slug]/actions.ts`). Today only a honeypot guards it; a scripted
-      caller with randomized emails can poison an artist's subscriber list + grow
-      rows unbounded (Medium, per the code review — no confirmation email, so not a
-      subscription-bomb amplifier). Share the per-IP limiter with the play route
-      when it lands; consider a max-subscribers-per-artist cap inside `subscribe()`.
+- [ ] **Per-IP rate-limit for the anon subscribe door** `subscribe()` /
+      `subscribeAction` (`src/app/[slug]/actions.ts`). DONE so far: a honeypot +
+      a per-artist burst cap (15 signups/min) inside `subscribe()`
+      (`20260706150000_subscribe_rate_limit.sql`). STILL OPEN: a DB function can't
+      see the client IP, so a distributed/slow-drip flood across artists isn't
+      capped — add a per-IP limiter at the edge (share it with the play route).
 - [ ] **Cinematic template has no per-track player** — gated audio surfaces only on
       `classic` (`artist-site.tsx`); cinematic is embed-first (`cinematic-work.tsx`).
       A manager on cinematic who uploads audio gets no player. Either wire a player

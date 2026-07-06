@@ -7,7 +7,11 @@ export type SubscribeState = { ok?: true; error?: string }
 // The door's own user-facing messages — the only DB error text we echo to a fan.
 // Anything else (timeout, constraint, connectivity) shows a generic string so we
 // never leak internal Postgres detail to a public page.
-const DOOR_MESSAGES = new Set(['Enter a valid email address.', 'Unknown artist.'])
+const DOOR_MESSAGES = new Set([
+  'Enter a valid email address.',
+  'Unknown artist.',
+  'Too many signups right now — please try again in a minute.',
+])
 
 /**
  * Public email capture for an artist's site. Calls the anon `subscribe()` door,
