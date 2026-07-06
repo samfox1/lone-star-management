@@ -65,9 +65,11 @@ can't be raw-updated — actions typed GenericEntity), analytics silent-undercou
 event-type list deduped (lib/events). Remaining:
 
 Deferred SCOPE the plan (§5.9) named but v1 cut (build when needed):
-- [ ] **Releases group tracks** — §5.9 said "grouping tracks + DSP links"; v1 ships
-      DSP links only. Add track membership (a track_ids array or join) + render the
-      tracklist on the smart-link page.
+- [x] **Releases group tracks** — DONE. Tracks belong to a release via a real
+      `release_id` FK (`20260706170000_track_release_membership.sql`); the release
+      editor assigns them, the smart-link renders the tracklist (get_release, by
+      release_id with an album_name fallback), and the release card shows its
+      track count.
 - [ ] **Pre-save** — §5.9 listed it; not built.
 - [ ] **EPK-only fields + file uploads** — §5.9 listed stage-plot / tech-rider +
       "a few EPK-only fields"; v1 EPK is 100% derived from published content. Add
