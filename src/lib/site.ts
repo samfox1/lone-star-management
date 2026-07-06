@@ -23,6 +23,12 @@ export type SiteTrack = {
   /** Whether this track has gated hosted audio. The raw path never leaves the
    *  server; the player streams it via the signed-URL route (slug + track id). */
   has_audio: boolean
+  /** Collaborators (primary artist excluded), from Spotify sync. May be absent
+   *  on revisions published before the feature — render with `?? []`. */
+  featured_artists: string[]
+  /** The release the track belongs to, from Spotify sync. May be absent on older
+   *  revisions — render with `?? null`. */
+  album_name: string | null
   sort_order: number
 }
 
@@ -147,6 +153,8 @@ export async function getWorkingSite(
           stream_url: (s.stream_url as string | null) ?? null,
           provider_url: (s.provider_url as string | null) ?? null,
           has_audio: s.audio_path != null,
+          featured_artists: (s.featured_artists as string[] | null) ?? [],
+          album_name: (s.album_name as string | null) ?? null,
           sort_order: (s.sort_order as number) ?? 0,
         } satisfies SiteTrack
       }),

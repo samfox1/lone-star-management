@@ -66,6 +66,11 @@ export function ArtistSite({ data }: { data: SiteData }) {
             const cover = safeHref(track.cover_url)
             // Hosted stream, else a link-out (Deezer etc.).
             const stream = safeHref(track.stream_url) ?? safeHref(track.provider_url)
+            // "feat. A, B · Album" — either half may be absent (older revisions).
+            const feat = track.featured_artists ?? []
+            const sub = [feat.length ? `feat. ${feat.join(', ')}` : null, track.album_name || null]
+              .filter(Boolean)
+              .join(' · ')
             return (
               <li key={track.id} className="flex items-center gap-4 py-3">
                 {cover ? (
@@ -74,7 +79,10 @@ export function ArtistSite({ data }: { data: SiteData }) {
                 ) : (
                   <div className="h-12 w-12 rounded bg-zinc-100 dark:bg-zinc-900" />
                 )}
-                <span className="flex-1 font-medium">{track.title}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{track.title}</div>
+                  {sub && <div className="truncate text-xs text-zinc-500">{sub}</div>}
+                </div>
                 {track.has_audio ? (
                   // Gated hosted audio — play in-page, no download link.
                   <TrackPlayButton slug={artist.slug} trackId={track.id} />
