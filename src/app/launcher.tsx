@@ -14,7 +14,7 @@ const CHIPS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Roster', icon: 'roster', href: '/roster' },
   { label: 'Analytics', icon: 'analytics', href: '/analytics' },
   { label: 'Tour', icon: 'tour', href: '/tour' },
-  { label: 'Videos', icon: 'videos', href: '/videos' },
+  { label: 'Book', icon: 'list', href: '/book' },
 ]
 
 /**

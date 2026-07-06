@@ -10,7 +10,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
  * avatar → /account). Sign-out lives on /account. Mirrors the prototype's
  * `.topbar` so every roster-level page shares one shell.
  */
-export type RosterSection = 'roster' | 'analytics' | 'releases' | 'tour' | 'videos' | 'merch'
+export type RosterSection = 'roster' | 'analytics' | 'releases' | 'tour' | 'videos' | 'merch' | 'book'
 
 const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[] = [
   { key: 'roster', label: 'Roster', icon: 'roster', href: '/roster' },
@@ -18,6 +18,7 @@ const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[]
   { key: 'tour', label: 'Tour', icon: 'tour', href: '/tour' },
   { key: 'videos', label: 'Videos', icon: 'videos', href: '/videos' },
   { key: 'merch', label: 'Merch', icon: 'merch', href: '/merch' },
+  { key: 'book', label: 'Book', icon: 'list', href: '/book' },
 ]
 
 function rosterNav(active?: RosterSection): NavItem[] {

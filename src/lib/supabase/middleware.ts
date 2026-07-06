@@ -28,6 +28,7 @@ const PROTECTED_EXACT = [
   '/tour',
   '/videos',
   '/merch',
+  '/book', // roster-wide subscriber rollup (the "Book")
   '/account',
 ]
 const PROTECTED_PREFIXES = ['/artists', '/admin'] // artist dashboards + preview; admin tools
