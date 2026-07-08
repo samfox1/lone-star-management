@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { CardModal } from './card-modal'
 import { SelectToggle } from './select-toggle'
 
-type BoundAction = (formData: FormData) => void | Promise<void>
+type BoundAction = () => Promise<{ error?: string } | void>
 
 /**
  * A cover-grid tile that opens an edit modal — the interaction shared by the
@@ -22,6 +22,7 @@ export function GridCard({
   tile,
   deleteAction,
   deleteLabel,
+  deleteNoun,
   children,
   selected,
   onToggleSelect,
@@ -31,6 +32,7 @@ export function GridCard({
   tile: ReactNode
   deleteAction?: BoundAction
   deleteLabel?: string
+  deleteNoun?: string
   children: ReactNode
   /** On-site selection state. Omit `onToggleSelect` for a non-selectable tile. */
   selected?: boolean
@@ -68,6 +70,7 @@ export function GridCard({
         onClose={() => setOpen(false)}
         deleteAction={deleteAction}
         deleteLabel={deleteLabel}
+        deleteNoun={deleteNoun}
       >
         {children}
       </CardModal>

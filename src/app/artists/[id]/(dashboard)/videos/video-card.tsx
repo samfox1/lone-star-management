@@ -83,6 +83,16 @@ export function VideoCard({
   const [saving, setSaving] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  async function del() {
+    setMenuOpen(false)
+    const res = await deleteContentAction('video', video.id, artistId)
+    if (res?.error) {
+      toast(res.error, 'error')
+      return
+    }
+    toast('Video deleted')
+  }
+
   async function saveRename() {
     if (saving || !name.trim()) return
     setSaving(true)
@@ -171,15 +181,14 @@ export function VideoCard({
             >
               <Icon name="edit" size={15} /> Rename
             </button>
-            <form action={deleteContentAction.bind(null, 'video', video.id, artistId)}>
-              <button
-                type="submit"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
-              >
-                <Icon name="trash" size={15} /> Delete
-              </button>
-            </form>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={del}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
+            >
+              <Icon name="trash" size={15} /> Delete
+            </button>
           </div>
         )}
       </div>

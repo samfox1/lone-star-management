@@ -101,6 +101,7 @@ export function TourRow({
         onClose={() => setOpen(false)}
         deleteAction={deleteContentAction.bind(null, 'tour_date', tour.id, artistId)}
         deleteLabel="Delete date"
+        deleteNoun="Date"
       >
         <h3 className="text-lg font-bold tracking-[-0.01em]">Edit date</h3>
         {badge && (

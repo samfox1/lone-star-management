@@ -6,11 +6,8 @@
 import type { GenericEntity, ContentRow } from '@/lib/content'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
-import {
-  addContentAction,
-  deleteContentAction,
-  updateContentAction,
-} from './actions'
+import { addContentAction, updateContentAction } from './actions'
+import { DeleteButton } from './delete-button'
 import { TrackAudioUploader } from './track-audio-uploader'
 
 type FieldUI = { name: string; placeholder: string; type?: string; width?: string }
@@ -138,14 +135,15 @@ export function ContentSection({
                   hasAudio={!!row.audio_path}
                 />
               )}
-              <form action={deleteContentAction.bind(null, type, row.id as string, artistId)}>
-                <button
-                  type="submit"
-                  className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
-                >
-                  Delete
-                </button>
-              </form>
+              <DeleteButton
+                type={type}
+                id={row.id as string}
+                artistId={artistId}
+                noun="Item"
+                className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
+              >
+                Delete
+              </DeleteButton>
             </li>
           ))}
         </ul>

@@ -52,6 +52,7 @@ export function MerchCard({
     <GridCard
       deleteAction={deleteContentAction.bind(null, 'merch', item.id, artistId)}
       deleteLabel="Delete item"
+      deleteNoun="Product"
       selected={selected}
       onToggleSelect={onToggleSelect}
       visible={item.visible}

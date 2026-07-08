@@ -102,6 +102,7 @@ export function ReleaseCard({
         onClose={() => setEditing(false)}
         deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
         deleteLabel="Delete release"
+        deleteNoun="Release"
       >
         <div className="flex items-start gap-4">
           <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">

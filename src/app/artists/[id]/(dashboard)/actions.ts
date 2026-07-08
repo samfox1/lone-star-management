@@ -145,7 +145,7 @@ export async function deleteContentAction(
   type: CrudEntity,
   id: string,
   artistId: string,
-) {
+): Promise<{ error?: string }> {
   const supabase = await createClient()
   // Grab an uploaded video's object path before the row is gone, so we can clean it up.
   let videoPath: string | null = null
@@ -153,9 +153,14 @@ export async function deleteContentAction(
     const { data } = await supabase.from('videos').select('storage_path').eq('id', id).single()
     videoPath = (data?.storage_path as string | null) ?? null
   }
-  await deleteContent(supabase, type, id)
+  try {
+    await deleteContent(supabase, type, id)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Delete failed.' }
+  }
   if (type === 'video') await gcDeletedVideoObject(supabase, id, videoPath)
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 export async function publishAction(artistId: string) {

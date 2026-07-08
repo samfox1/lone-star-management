@@ -37,6 +37,7 @@ export function TrackCard({
     <GridCard
       deleteAction={deleteContentAction.bind(null, 'track', track.id, artistId)}
       deleteLabel="Delete track"
+      deleteNoun="Track"
       tile={
         <>
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
