@@ -1,21 +1,50 @@
-import type { ReactNode } from 'react'
+'use client'
+
+import { useState, type ReactNode } from 'react'
+import { cx } from '@/lib/cx'
 import { KLabel } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
 
 /**
  * A content page groups its assets by ORIGIN — where they came from and, crucially,
  * what embedding rules they carry (a YouTube clip vs a self-hosted upload vs a
- * Shopify-synced product). Videos group by `provider`, everything else by `source`.
- * Each group is a labelled section (mono header + hairline rule + count).
+ * Shopify-synced product). Videos group by `provider`, music by release type,
+ * everything else by `source`.
+ *
+ * Each group is a COLLAPSIBLE section (mono header + hairline rule + count + chevron):
+ * a manager with hundreds of YouTube videos can fold that group to reach the next type
+ * without scrolling past all of it. The count stays visible while collapsed.
  */
-export function OriginSection({ label, count, children }: { label: string; count: number; children: ReactNode }) {
+export function OriginSection({
+  label,
+  count,
+  defaultOpen = true,
+  children,
+}: {
+  label: string
+  count: number
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <section className="space-y-3">
-      <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="group flex w-full items-center gap-3"
+      >
+        <Icon
+          name="chevronRight"
+          size={13}
+          className={cx('flex-none text-ink-faint transition-transform group-hover:text-ink-muted', open && 'rotate-90')}
+        />
         <KLabel>{label}</KLabel>
-        <div className="h-px flex-1 bg-hairline" />
+        <span className="h-px flex-1 bg-hairline" />
         <span className="font-space text-[10px] tabular-nums text-ink-faint">{count}</span>
-      </div>
-      {children}
+      </button>
+      {open && children}
     </section>
   )
 }

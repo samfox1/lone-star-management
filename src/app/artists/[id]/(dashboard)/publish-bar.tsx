@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { buttonClass, inputClass } from '@/components/ui/ui'
+import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 
 /**
  * The publish control shared by every on-site content list (releases, videos, merch,
@@ -77,10 +77,10 @@ export function PublishBar({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
+          className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <form onSubmit={submit} className="w-[400px] max-w-full rounded-2xl bg-paper p-6 shadow-2xl">
+          <form onSubmit={submit} className={modalCardClass}>
             <h2 className="text-lg font-bold tracking-[-0.01em]">Publish to the site</h2>
             <p className="mt-1 font-space text-xs text-ink-muted">
               {pendingCount} change{pendingCount === 1 ? '' : 's'} to your public {noun}. Enter your password to confirm.

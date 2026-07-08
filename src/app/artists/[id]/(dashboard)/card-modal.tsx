@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import { buttonClass } from '@/components/ui/ui'
+import { buttonClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 
 type BoundAction = (formData: FormData) => void | Promise<void>
 
@@ -38,10 +38,10 @@ export function CardModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
+      className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="max-h-[88vh] w-[460px] max-w-full overflow-auto rounded-2xl bg-paper p-6 shadow-2xl">
+      <div className={modalCardClass}>
         {children}
         <div className="mt-6 flex items-center justify-between">
           {deleteAction ? (

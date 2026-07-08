@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { buttonClass, inputClass, KLabel } from '@/components/ui/ui'
+import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { UploadError } from './file-drop-field'
 
@@ -173,10 +173,10 @@ export function CreateModal({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
+          className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
-          <div className="w-[520px] max-w-full rounded-2xl bg-paper p-6 shadow-2xl">
+          <div className={modalCardClass}>
             <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
               {step !== 'choose' && hasChoice && (
                 <button

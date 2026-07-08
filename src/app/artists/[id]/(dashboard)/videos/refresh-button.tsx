@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { buttonClass } from '@/components/ui/ui'
+import { buttonClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 
 /**
@@ -60,10 +60,10 @@ export function RefreshButton({ action }: { action: () => Promise<{ ok: boolean;
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
+          className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && !pending && setOpen(false)}
         >
-          <div className="w-[420px] max-w-full rounded-2xl bg-paper p-6 shadow-2xl">
+          <div className={modalCardClass}>
             <h3 className="text-lg font-bold tracking-[-0.01em]">Refresh videos</h3>
             <p className="mt-2 text-sm text-ink-muted">
               Import all posts from your linked YouTube channel? New uploads arrive as drafts, sorted into Videos and

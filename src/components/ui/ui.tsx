@@ -35,6 +35,11 @@ export function Button({
 export const inputClass =
   'min-w-0 rounded-lg border border-hairline px-2.5 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
 
+/** One shape for every dashboard modal: a dim overlay + a squarish paper card. Shared
+ *  so Add / edit / publish / confirm dialogs never drift apart. */
+export const modalOverlayClass = 'fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6'
+export const modalCardClass = 'flex max-h-[88vh] w-[560px] max-w-full flex-col overflow-auto rounded-2xl bg-paper p-7 shadow-2xl'
+
 /** Square icon button with a hairline border. */
 export function IconButton({
   name,
