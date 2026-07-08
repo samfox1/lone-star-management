@@ -10,11 +10,12 @@ import { addVideoAction, resolveVideoUrlAction } from '../actions'
 /** Drop/pick a video file → uploads to the videos bucket + inserts an off-site
  *  (draft) `uploaded` video row. The manager then selects + publishes it like any video. */
 function VideoUpload({ artistId, onDone }: { artistId: string; onDone: () => void }) {
-  const { busy, error, upload } = useStorageUpload({
+  const { busy, error, progress, upload } = useStorageUpload({
     bucket: 'videos',
     artistId,
     category: 'videos',
     noun: 'video',
+    resumable: true, // large files: real progress + resume on a dropped connection
     rules: {
       allowedExt: ['mp4', 'mov', 'webm'],
       maxBytes: 500 * 1024 * 1024,
@@ -35,6 +36,7 @@ function VideoUpload({ artistId, onDone }: { artistId: string; onDone: () => voi
       label="Drop a video or click to upload"
       hint="MP4, MOV or WebM · up to 500 MB"
       busy={busy}
+      progress={progress}
       error={error}
       onFile={upload}
     />

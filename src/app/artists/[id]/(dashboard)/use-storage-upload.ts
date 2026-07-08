@@ -11,6 +11,7 @@ import {
   friendlyUploadError,
   type UploadRules,
 } from '@/lib/upload'
+import { resumableUpload } from '@/lib/resumable-upload'
 
 /**
  * The one place the upload dance lives: validate → direct-to-Storage upload → the
@@ -28,6 +29,8 @@ export function useStorageUpload(opts: {
   noun: string
   /** Optional ext/size guard (UX only; the bucket's caps are the real guard). */
   rules?: UploadRules
+  /** Resumable/tus transport with real progress — for large files (video). */
+  resumable?: boolean
   /** Persist the uploaded object; return an error message, or null on success. */
   writeRow: (path: string, file: File) => Promise<string | null>
   /** Called after a successful upload settles (busy cleared, view refreshed). */
@@ -36,6 +39,8 @@ export function useStorageUpload(opts: {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** 0..1 during a resumable upload, null otherwise. */
+  const [progress, setProgress] = useState<number | null>(null)
 
   const fail = (raw: string) =>
     setError(friendlyUploadError(raw, { noun: opts.noun, allowed: opts.rules?.allowedExt, maxBytes: opts.rules?.maxBytes }))
@@ -55,15 +60,38 @@ export function useStorageUpload(opts: {
       ext = dot > 0 ? file.name.slice(dot + 1).toLowerCase() : 'bin'
     }
     setBusy(true)
+    if (opts.resumable) setProgress(0)
     try {
       const supabase = createClient()
       const path = buildStoragePath(opts.artistId, opts.category, ext)
+      const contentType = contentTypeFor(ext) ?? (file.type || undefined)
+
+      // Resumable transport needs the session token for its own Authorization header.
+      let transfer: (() => Promise<string | null>) | undefined
+      if (opts.resumable) {
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (token) {
+          transfer = () =>
+            resumableUpload({
+              supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+              accessToken: token,
+              bucket: opts.bucket,
+              path,
+              file,
+              contentType,
+              onProgress: setProgress,
+            })
+        }
+      }
+
       const res = await performUpload({
         supabase: supabase as never,
         bucket: opts.bucket,
         path,
         file,
-        contentType: contentTypeFor(ext) ?? (file.type || undefined),
+        contentType,
+        transfer,
         writeRow: (p) => opts.writeRow(p, file),
       })
       if ('error' in res) {
@@ -78,8 +106,9 @@ export function useStorageUpload(opts: {
       fail(e instanceof Error ? e.message : 'unknown')
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
 
-  return { busy, error, upload, reset: () => setError(null) }
+  return { busy, error, progress, upload, reset: () => setError(null) }
 }

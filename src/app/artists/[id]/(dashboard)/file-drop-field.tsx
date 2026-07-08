@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { formatProgress } from '@/lib/upload'
 
 /** A styled, specific error banner for upload / file-management failures. */
 export function UploadError({ children }: { children: ReactNode }) {
@@ -28,6 +29,7 @@ export function FileDropField({
   label,
   hint,
   busy,
+  progress,
   error,
   onFile,
   disabled,
@@ -36,6 +38,8 @@ export function FileDropField({
   label: string
   hint?: string
   busy: boolean
+  /** 0..1 for a determinate progress bar (resumable upload); null/undefined = spinner text. */
+  progress?: number | null
   error?: string | null
   onFile: (file: File) => void
   disabled?: boolean
@@ -78,10 +82,32 @@ export function FileDropField({
           }}
           className="hidden"
         />
-        <span className="font-space text-xs uppercase tracking-[0.08em] text-ink-muted">
-          {busy ? 'Uploading…' : label}
-        </span>
-        {hint && !busy && <span className="text-xs text-ink-faint">{hint}</span>}
+        {busy && progress != null ? (
+          <span className="flex w-full max-w-[240px] flex-col items-center gap-2">
+            <span className="font-space text-xs uppercase tracking-[0.08em] text-ink-muted">
+              Uploading {formatProgress(progress)}
+            </span>
+            <span
+              role="progressbar"
+              aria-valuenow={Math.round(progress * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="h-1 w-full overflow-hidden rounded-full bg-hairline"
+            >
+              <span
+                className="block h-full rounded-full bg-ink transition-[width] duration-200 ease-out"
+                style={{ width: formatProgress(progress) }}
+              />
+            </span>
+          </span>
+        ) : (
+          <>
+            <span className="font-space text-xs uppercase tracking-[0.08em] text-ink-muted">
+              {busy ? 'Uploading…' : label}
+            </span>
+            {hint && !busy && <span className="text-xs text-ink-faint">{hint}</span>}
+          </>
+        )}
       </label>
       {error && <UploadError>{error}</UploadError>}
     </div>

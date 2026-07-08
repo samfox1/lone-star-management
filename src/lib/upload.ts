@@ -102,14 +102,26 @@ export async function performUpload(args: {
   file: unknown
   contentType?: string
   writeRow: (path: string) => Promise<string | null>
+  /** Optional transport (e.g. resumable/tus with progress). Returns an error message
+   *  or null. When omitted, a single .upload() is used. On transfer failure we do NOT
+   *  remove the object — a resumable transport may resume the partial later. */
+  transfer?: () => Promise<string | null>
 }): Promise<{ ok: true } | { error: string }> {
   const store = args.supabase.storage.from(args.bucket)
-  const { error: upErr } = await store.upload(args.path, args.file, { contentType: args.contentType, upsert: false })
-  if (upErr) return { error: upErr.message }
+  const upErr = args.transfer
+    ? await args.transfer()
+    : (await store.upload(args.path, args.file, { contentType: args.contentType, upsert: false })).error?.message ?? null
+  if (upErr) return { error: upErr }
   const rowErr = await args.writeRow(args.path)
   if (rowErr) {
     await store.remove([args.path])
     return { error: rowErr }
   }
   return { ok: true }
+}
+
+/** A byte-fraction (0..1) as a whole-percent label, floored (never "100%" until done)
+ *  and clamped. Used by the upload progress bar. */
+export function formatProgress(fraction: number): string {
+  return `${Math.max(0, Math.min(100, Math.floor(fraction * 100)))}%`
 }

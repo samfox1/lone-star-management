@@ -4,7 +4,7 @@
  * have fast regression guards. No DB, no React.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { validateUpload, buildStoragePath, contentTypeFor, performUpload, friendlyUploadError } from '@/lib/upload'
+import { validateUpload, buildStoragePath, contentTypeFor, performUpload, friendlyUploadError, formatProgress } from '@/lib/upload'
 import { videoRenderMode, embedOrStorageValid, publicVideoSrc, isRenderableVideo } from '@/lib/video-render'
 import { orphanedPaths, collectablePaths } from '@/lib/storage-gc'
 
@@ -168,6 +168,41 @@ describe('performUpload (orphan-cleanup orchestrator)', () => {
     const res = await performUpload({ supabase: sb as never, bucket: 'videos', path: 'p', file: {} as never, writeRow })
     expect(res).toEqual({ error: 'storage boom' })
     expect(writeRow).not.toHaveBeenCalled()
+  })
+
+  it('uses an injected transfer (resumable) instead of the simple upload', async () => {
+    const sb = fakeSupabase(null)
+    const transfer = vi.fn(async () => null)
+    const res = await performUpload({ supabase: sb as never, bucket: 'videos', path: 'a/videos/x.mp4', file: {} as never, writeRow: async () => null, transfer })
+    expect(res).toEqual({ ok: true })
+    expect(transfer).toHaveBeenCalledTimes(1)
+  })
+
+  it('a transfer error returns without a row write (partial upload can resume later)', async () => {
+    const sb = fakeSupabase(null)
+    const writeRow = vi.fn(async () => null)
+    const res = await performUpload({ supabase: sb as never, bucket: 'videos', path: 'p', file: {} as never, writeRow, transfer: async () => 'transfer boom' })
+    expect(res).toEqual({ error: 'transfer boom' })
+    expect(writeRow).not.toHaveBeenCalled()
+    expect(sb.remove).not.toHaveBeenCalled()
+  })
+
+  it('still rolls back the object when the row write fails after a resumable transfer', async () => {
+    const sb = fakeSupabase(null)
+    const res = await performUpload({ supabase: sb as never, bucket: 'videos', path: 'a/videos/x.mp4', file: {} as never, writeRow: async () => 'row boom', transfer: async () => null })
+    expect(res).toEqual({ error: 'row boom' })
+    expect(sb.remove).toHaveBeenCalledWith(['a/videos/x.mp4'])
+  })
+})
+
+describe('formatProgress', () => {
+  it('floors to a whole percent and clamps 0..100', () => {
+    expect(formatProgress(0)).toBe('0%')
+    expect(formatProgress(0.5)).toBe('50%')
+    expect(formatProgress(0.999)).toBe('99%') // never show 100% until truly done
+    expect(formatProgress(1)).toBe('100%')
+    expect(formatProgress(1.5)).toBe('100%')
+    expect(formatProgress(-0.2)).toBe('0%')
   })
 })
 
