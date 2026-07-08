@@ -11,8 +11,10 @@
 import type { SiteData } from '@/lib/site'
 import { safeHref } from '@/lib/url'
 import { isSafeEmbedSrc } from '@/lib/embed'
+import { trackAttrs } from '@/lib/events'
 import { fieldValue } from '@/lib/site-content-schema'
 import { TrackPlayButton } from '@/components/track-play-button'
+import { VideoEmbed } from '@/components/video-embed'
 import { SubscribeForm } from '@/components/subscribe-form'
 
 function Section({
@@ -93,8 +95,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
                       href={stream}
                       target="_blank"
                       rel="noopener noreferrer"
-                      data-track="link_click"
-                      data-target={track.title}
+                      {...trackAttrs('link_click', { entity: { kind: 'track', id: track.id, label: track.title } })}
                       className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                     >
                       Listen →
@@ -112,16 +113,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
           {videos.filter((v) => isSafeEmbedSrc(v.embed_url)).map((v) => (
             <li key={v.id}>
               <div className="aspect-video w-full overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
-                <iframe
-                  src={v.embed_url}
-                  title={v.title}
-                  loading="lazy"
-                  sandbox="allow-scripts allow-same-origin allow-presentation"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="h-full w-full border-0"
-                />
+                <VideoEmbed id={v.id} embedUrl={v.embed_url} title={v.title} />
               </div>
               <p className="mt-1 text-sm font-medium">{v.title}</p>
             </li>
@@ -145,8 +137,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
                     href={tickets}
                     target="_blank"
                     rel="noopener noreferrer"
-                    data-track="ticket_click"
-                    data-target={show.venue}
+                    {...trackAttrs('ticket_click', { entity: { kind: 'tour_date', id: show.id, label: show.venue ?? undefined } })}
                     className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                   >
                     Tickets →
@@ -184,8 +175,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
                     href={buy}
                     target="_blank"
                     rel="noopener noreferrer"
-                    data-track="buy_click"
-                    data-target={item.title}
+                    {...trackAttrs('buy_click', { entity: { kind: 'merch', id: item.id, label: item.title } })}
                     className="block"
                   >
                     {card}
@@ -210,8 +200,7 @@ export function ArtistSite({ data }: { data: SiteData }) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    data-track="link_click"
-                    data-target={link.label}
+                    {...trackAttrs('link_click', { entity: { kind: 'link', id: link.id, label: link.label } })}
                     className="inline-block rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                   >
                     {link.label}

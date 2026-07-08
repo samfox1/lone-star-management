@@ -38,3 +38,26 @@ decisions behind them (esp. ADR-0002).
   fans read tenant data (ADR-0001). Each door is a thin **projection** over the
   published state into its output shape (`get_public_site`, `get_release`,
   `get_public_releases`, `audio_path_for_play`).
+
+## Analytics
+
+- **On-site event** — a fan interaction recorded from the PUBLIC site only (never the
+  dashboard): a `view` on load, or a `play` / `link_click` / `ticket_click` /
+  `buy_click` / `video_click`. Declared through `trackAttrs` (`src/lib/events.ts`) —
+  the one typed seam, so an emitter can't forget an attribute or use an off-allowlist
+  type — and ingested by the `record_event` public door (anon, type-allowlisted).
+  `SiteAnalytics` (`src/components/site-analytics.tsx`) is the delegated listener,
+  mounted only on public pages.
+- **Attribution** — the content row an event is about: `entity_id` + `entity_type`
+  (release / track / merch / video / tour_date / link) on `analytics_events`.
+  Unattributed events (`view`) are site-level. Attribution is what lets a stat hang off
+  a specific card.
+- **On-site metric** — the 30-day per-item number on a content card. Its definition
+  (which events sum, what it's labelled) lives once in `ON_SITE_METRIC`
+  (`src/lib/analytics.ts`): release = **listens** (plays + DSP clicks over the release
+  AND its tracks), merch = buy clicks, tour = ticket clicks, video = clicks from your
+  site. Read via `analytics_by_entity` (totals) / `analytics_entity_daily` (the modal
+  sparkline), both owner-read (RLS).
+- **Reach** — a video's GLOBAL YouTube view count (`youtube_views`, cached on sync).
+  Shown ALONGSIDE the on-site metric to contrast total reach vs the lift this site
+  drives — never conflated, since we can't prove a YouTube view came from us.

@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { safeHref } from '@/lib/url'
 import { RELEASE_TYPE_LABEL, toReleaseType } from '@/lib/releases'
 import { TrackPlayButton } from '@/components/track-play-button'
+import { SiteAnalytics } from '@/components/site-analytics'
+import { trackAttrs } from '@/lib/events'
 
 /** A track on the release (get_release projects these like get_public_site). */
 type ReleaseTrack = {
@@ -13,6 +15,7 @@ type ReleaseTrack = {
 }
 
 type Release = {
+  id: string
   title: string
   cover_url: string | null
   release_date: string | null
@@ -48,6 +51,7 @@ export default async function ReleasePage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center px-6 py-16 text-center">
+      <SiteAnalytics slug={slug} />
       {cover ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cover} alt={r.title} className="h-64 w-64 rounded-xl object-cover shadow-lg" />
@@ -67,6 +71,7 @@ export default async function ReleasePage({
             href={l.href}
             target="_blank"
             rel="noopener noreferrer"
+            {...trackAttrs('link_click', { entity: { kind: 'release', id: r.id, label: l.label } })}
             className="block rounded-lg border border-zinc-300 px-4 py-3 text-sm font-semibold transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             {l.label}

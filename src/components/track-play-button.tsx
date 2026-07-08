@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { trackAttrs } from '@/lib/events'
 
 // One track plays at a time across the page: starting one pauses the previous.
 let current: HTMLAudioElement | null = null
@@ -55,7 +56,7 @@ export function TrackPlayButton({ slug, trackId }: { slug: string; trackId: stri
         type="button"
         onClick={toggle}
         aria-label={playing ? 'Pause' : 'Play'}
-        data-track={playing ? undefined : 'play'}
+        {...(playing ? {} : trackAttrs('play', { entity: { kind: 'track', id: trackId } }))}
         className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
       >
         {busy ? '…' : playing ? '❚❚ Pause' : '▶ Play'}

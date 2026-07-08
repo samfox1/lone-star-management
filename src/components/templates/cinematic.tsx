@@ -7,10 +7,12 @@
 import type { SiteData, SiteLink, SiteTourDate, SiteVideo } from '@/lib/site'
 import { safeHref } from '@/lib/url'
 import { isSafeEmbedSrc } from '@/lib/embed'
+import { trackAttrs } from '@/lib/events'
 import { fieldHref, fieldValue } from '@/lib/site-content-schema'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
 import { CinematicWork, type WorkTab } from './cinematic-work'
 import { SubscribeForm } from '@/components/subscribe-form'
+import { VideoEmbed } from '@/components/video-embed'
 
 function formatDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
@@ -60,8 +62,7 @@ function ShowRow({ show, past }: { show: SiteTourDate; past?: boolean }) {
           href={ticket}
           target="_blank"
           rel="noopener noreferrer"
-          data-track="ticket_click"
-          data-target={show.venue}
+          {...trackAttrs('ticket_click', { entity: { kind: 'tour_date', id: show.id, label: show.venue ?? undefined } })}
           className="border border-white/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest transition hover:border-flash-1 hover:text-flash-1"
         >
           Tickets
@@ -181,8 +182,7 @@ function Footer({
           <p className="mt-4 text-muted">{inquiry}</p>
           <a
             href={bookingHref}
-            data-track="link_click"
-            data-target="booking"
+            {...trackAttrs('link_click', { label: 'booking' })}
             className="mt-6 inline-block font-display text-lg font-bold transition hover:text-flash-1"
           >
             {bookingLabel}
@@ -199,8 +199,7 @@ function Footer({
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                data-track="link_click"
-                data-target={s.label}
+                {...trackAttrs('link_click', { entity: { kind: 'link', id: s.id, label: s.label } })}
                 className="text-muted transition hover:text-flash-2"
               >
                 {s.label}
@@ -225,16 +224,7 @@ function Videos({ videos, heading }: { videos: SiteVideo[]; heading: string }) {
         {safe.map((v) => (
           <li key={v.id}>
             <div className="aspect-video w-full overflow-hidden border border-border bg-black">
-              <iframe
-                src={v.embed_url}
-                title={v.title}
-                loading="lazy"
-                sandbox="allow-scripts allow-same-origin allow-presentation"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="h-full w-full border-0"
-              />
+              <VideoEmbed id={v.id} embedUrl={v.embed_url} title={v.title} />
             </div>
             <p className="mt-2 text-sm text-muted">{v.title}</p>
           </li>
