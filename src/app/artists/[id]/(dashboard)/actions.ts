@@ -152,6 +152,7 @@ export async function publishAction(artistId: string) {
     data: { user },
   } = await supabase.auth.getUser()
   await publishAll(supabase, artistId, user?.id)
+  await gcVideoObjects(supabase, artistId) // publishAll includes videos → collect orphans
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
@@ -162,6 +163,7 @@ export async function publishSectionAction(type: PublishableEntity, artistId: st
     data: { user },
   } = await supabase.auth.getUser()
   await publishContent(supabase, type, artistId, user?.id)
+  if (type === 'video') await gcVideoObjects(supabase, artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

@@ -157,15 +157,24 @@ describe('storage GC', () => {
     })
 
     // Still referenced by the working row → GC must NOT touch it.
-    await gcVideoObjects(asA, artistA)
+    await gcVideoObjects(asA, artistA, 0)
     const after1 = await svc.storage.from('videos').list(`${artistA}/videos`)
     expect((after1.data ?? []).some((o) => path.endsWith(o.name))).toBe(true)
 
     // Delete the working row → the object is now an orphan → GC removes it.
     await svc.from('videos').delete().eq('id', row.id as string)
-    await gcVideoObjects(asA, artistA)
+    await gcVideoObjects(asA, artistA, 0)
     const after2 = await svc.storage.from('videos').list(`${artistA}/videos`)
     expect((after2.data ?? []).some((o) => path.endsWith(o.name))).toBe(false)
+  })
+
+  it('CRITICAL: default-age GC leaves a FRESH unreferenced object (mid-upload race guard)', async () => {
+    // Simulate an in-flight upload: object exists, row not yet inserted.
+    const path = buildStoragePath(artistA, 'videos', 'mp4')
+    await put(asA, path)
+    await gcVideoObjects(asA, artistA) // default 15-min age gate
+    const after = await svc.storage.from('videos').list(`${artistA}/videos`)
+    expect((after.data ?? []).some((o) => path.endsWith(o.name))).toBe(true) // survived — not deleted mid-upload
   })
 })
 

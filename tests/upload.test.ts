@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { validateUpload, buildStoragePath, contentTypeFor, performUpload, friendlyUploadError } from '@/lib/upload'
 import { videoRenderMode, embedOrStorageValid, publicVideoSrc, isRenderableVideo } from '@/lib/video-render'
-import { orphanedPaths } from '@/lib/storage-gc'
+import { orphanedPaths, collectablePaths } from '@/lib/storage-gc'
 
 describe('validateUpload', () => {
   const rules = { allowedExt: ['mp4', 'mov', 'webm'], maxBytes: 200_000_000 }
@@ -79,6 +79,25 @@ describe('orphanedPaths (storage GC diff)', () => {
   it('keeps everything when all are referenced, removes nothing on empty input', () => {
     expect(orphanedPaths(['a/1.mp4'], ['a/1.mp4'])).toEqual([])
     expect(orphanedPaths([], ['a/1.mp4'])).toEqual([])
+  })
+})
+
+describe('collectablePaths (age-gated GC — the mid-upload race guard)', () => {
+  const now = 1_700_000_000_000
+  const old = new Date(now - 20 * 60 * 1000).toISOString()
+  const fresh = new Date(now - 60 * 1000).toISOString()
+
+  it('collects an OLD unreferenced object', () => {
+    expect(collectablePaths([{ path: 'a/videos/1.mp4', createdAt: old }], [], now)).toEqual(['a/videos/1.mp4'])
+  })
+  it('SKIPS a fresh unreferenced object — its row may still be mid-write', () => {
+    expect(collectablePaths([{ path: 'a/videos/1.mp4', createdAt: fresh }], [], now)).toEqual([])
+  })
+  it('never collects a referenced object, even an old one', () => {
+    expect(collectablePaths([{ path: 'a/videos/1.mp4', createdAt: old }], ['a/videos/1.mp4'], now)).toEqual([])
+  })
+  it('treats a missing timestamp as fresh (skips, never wrong-deletes)', () => {
+    expect(collectablePaths([{ path: 'a/videos/1.mp4' }], [], now)).toEqual([])
   })
 })
 

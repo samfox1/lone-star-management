@@ -19,6 +19,29 @@ export function orphanedPaths(listed: string[], referenced: Iterable<string>): s
   return listed.filter((p) => !keep.has(p))
 }
 
+/** Default: never collect an object younger than this. performUpload writes the object
+ *  BEFORE its row, so a just-uploaded object briefly looks unreferenced — the age gate
+ *  stops a concurrent publish's GC from deleting it (and the replaced-file race) before
+ *  its row lands. Well above any realistic upload+write time. */
+export const GC_MIN_AGE_MS = 15 * 60 * 1000
+
+/** Objects that are BOTH unreferenced AND old enough to not be mid-upload → collectable. */
+export function collectablePaths(
+  listed: { path: string; createdAt?: string | null }[],
+  referenced: Iterable<string>,
+  nowMs: number,
+  minAgeMs: number = GC_MIN_AGE_MS,
+): string[] {
+  const keep = new Set(referenced)
+  return listed
+    .filter((o) => !keep.has(o.path))
+    .filter((o) => {
+      const age = o.createdAt ? nowMs - new Date(o.createdAt).getTime() : 0 // no timestamp → treat as fresh, skip
+      return age >= minAgeMs
+    })
+    .map((o) => o.path)
+}
+
 /**
  * Remove an uploaded video's object at DELETE time — but ONLY if the video was never
  * published (no revision references it). A published video's object must survive until
@@ -48,7 +71,11 @@ export async function gcDeletedVideoObject(
  * Remove orphaned objects from the `videos` bucket for one artist. Call AFTER
  * publishContent('video'). Best-effort: a GC failure must never fail the publish.
  */
-export async function gcVideoObjects(client: SupabaseClient, artistId: string): Promise<void> {
+export async function gcVideoObjects(
+  client: SupabaseClient,
+  artistId: string,
+  minAgeMs: number = GC_MIN_AGE_MS,
+): Promise<void> {
   try {
     const { data: rows } = await client.from('videos').select('storage_path').eq('artist_id', artistId)
     const referenced = new Set<string>()
@@ -56,9 +83,12 @@ export async function gcVideoObjects(client: SupabaseClient, artistId: string): 
 
     const prefix = `${artistId}/videos`
     const { data: objs } = await client.storage.from('videos').list(prefix, { limit: 1000 })
-    const listed = (objs ?? []).map((o) => `${prefix}/${o.name}`)
+    const listed = (objs ?? []).map((o) => ({
+      path: `${prefix}/${o.name}`,
+      createdAt: (o as { created_at?: string | null }).created_at,
+    }))
 
-    const toRemove = orphanedPaths(listed, referenced)
+    const toRemove = collectablePaths(listed, referenced, Date.now(), minAgeMs)
     if (toRemove.length) await client.storage.from('videos').remove(toRemove)
   } catch {
     // swallow — GC is opportunistic cleanup, not part of the publish contract
