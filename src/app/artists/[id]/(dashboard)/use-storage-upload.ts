@@ -12,6 +12,7 @@ import {
   type UploadRules,
 } from '@/lib/upload'
 import { resumableUpload } from '@/lib/resumable-upload'
+import { toast } from './toast'
 
 /**
  * The one place the upload dance lives: validate → direct-to-Storage upload → the
@@ -31,6 +32,8 @@ export function useStorageUpload(opts: {
   rules?: UploadRules
   /** Resumable/tus transport with real progress — for large files (video). */
   resumable?: boolean
+  /** Success-toast copy; defaults to "{Noun} uploaded". */
+  successMessage?: string
   /** Persist the uploaded object; return an error message, or null on success. */
   writeRow: (path: string, file: File) => Promise<string | null>
   /** Called after a successful upload settles (busy cleared, view refreshed). */
@@ -42,8 +45,13 @@ export function useStorageUpload(opts: {
   /** 0..1 during a resumable upload, null otherwise. */
   const [progress, setProgress] = useState<number | null>(null)
 
-  const fail = (raw: string) =>
-    setError(friendlyUploadError(raw, { noun: opts.noun, allowed: opts.rules?.allowedExt, maxBytes: opts.rules?.maxBytes }))
+  // Surface an error both inline (in the field) and as a toast that persists after the
+  // modal closes — the "did it work?" indicator the manager sees after an upload.
+  const fail = (raw: string) => {
+    const msg = friendlyUploadError(raw, { noun: opts.noun, allowed: opts.rules?.allowedExt, maxBytes: opts.rules?.maxBytes })
+    setError(msg)
+    toast(msg, 'error')
+  }
 
   async function upload(file: File) {
     setError(null)
@@ -52,6 +60,7 @@ export function useStorageUpload(opts: {
       const v = validateUpload(file, opts.rules)
       if (!v.ok) {
         setError(v.error) // already specific + friendly
+        toast(v.error, 'error')
         return
       }
       ext = v.ext
@@ -100,6 +109,7 @@ export function useStorageUpload(opts: {
       }
       router.refresh()
       opts.onSuccess?.()
+      toast(opts.successMessage ?? `${opts.noun.charAt(0).toUpperCase()}${opts.noun.slice(1)} uploaded`)
     } catch (e) {
       // A thrown error (network drop, unexpected client throw) must never leave the
       // field stuck on "Uploading…" with no message.

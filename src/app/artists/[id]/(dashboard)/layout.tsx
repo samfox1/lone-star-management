@@ -6,6 +6,7 @@ import { Avatar, initials, StatusDot } from '@/components/ui/ui'
 import { ArtistNav } from './artist-tabs'
 import { dirtyBySeg } from './sections'
 import { requireArtist } from './_data'
+import { Toaster } from './toast'
 
 /** Today as YYYY-MM-DD, out of render so it isn't an impure call. */
 function todayIso(): string {
@@ -85,6 +86,7 @@ export default async function DashboardLayout({
       <ArtistNav artistId={id} dirty={dirty} layout="strip" />
 
       <main className="w-full px-7 py-8">{children}</main>
+      <Toaster />
     </div>
   )
 }

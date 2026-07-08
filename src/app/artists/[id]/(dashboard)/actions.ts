@@ -129,6 +129,18 @@ export async function updateContentAction(
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
+/** Rename a video (title only) — the 3-dots "Rename". Draft until republished, like any
+ *  edit. Returns an error for the client to toast. */
+export async function renameVideoAction(id: string, artistId: string, title: string): Promise<{ error?: string }> {
+  const t = title.trim()
+  if (!t) return { error: 'Give the video a title.' }
+  const supabase = await createClient()
+  const { error } = await supabase.from('videos').update({ title: t.slice(0, 120) }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 export async function deleteContentAction(
   type: CrudEntity,
   id: string,

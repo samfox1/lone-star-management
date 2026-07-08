@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
+import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { metricLabel } from '@/lib/analytics'
 import { publicVideoSrc } from '@/lib/video-render'
 import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
-import { deleteContentAction } from '../actions'
+import { deleteContentAction, renameVideoAction } from '../actions'
+import { toast } from '../toast'
 
 export type VideoItem = {
   id: string
@@ -76,7 +78,23 @@ export function VideoCard({
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [name, setName] = useState(video.title)
+  const [saving, setSaving] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  async function saveRename() {
+    if (saving || !name.trim()) return
+    setSaving(true)
+    const res = await renameVideoAction(video.id, artistId, name)
+    setSaving(false)
+    if (res.error) {
+      toast(res.error, 'error')
+      return
+    }
+    toast('Video renamed')
+    setRenameOpen(false)
+  }
 
   useEffect(() => {
     if (!menuOpen) return
@@ -141,6 +159,18 @@ export function VideoCard({
             >
               <Icon name="share" size={15} /> Share
             </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                setName(video.title)
+                setRenameOpen(true)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+            >
+              <Icon name="edit" size={15} /> Rename
+            </button>
             <form action={deleteContentAction.bind(null, 'video', video.id, artistId)}>
               <button
                 type="submit"
@@ -186,6 +216,36 @@ export function VideoCard({
         </div>
         <CardStat value={video.stat ?? 0} label={metricLabel('video')} />
       </a>
+
+      {renameOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className={modalOverlayClass}
+          onClick={(e) => e.target === e.currentTarget && setRenameOpen(false)}
+        >
+          <div className={modalCardClass}>
+            <KLabel>Video</KLabel>
+            <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Rename</h2>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveRename()}
+              placeholder="Video title"
+              className={`${inputClass} mt-4 w-full`}
+            />
+            <div className="mt-5 flex justify-end gap-2 border-t border-hairline pt-4">
+              <button type="button" onClick={() => setRenameOpen(false)} className={buttonClass('ghost')}>
+                Cancel
+              </button>
+              <button type="button" onClick={saveRename} disabled={saving || !name.trim()} className={buttonClass('solid')}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
