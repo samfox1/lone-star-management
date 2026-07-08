@@ -65,9 +65,10 @@ Built and tested; these are accepted-by-record gaps, not blockers.
       into cinematic or annotate/disable the uploader when `template === 'cinematic'`.
 - [ ] **"I own this recording" ack on upload** (`track-audio-uploader.tsx`) — §4.2
       asked for a rights ack before hosting audio; not built. Rights/DMCA posture.
-- [ ] **Extract a shared `useStorageUpload` hook** — `track-audio-uploader.tsx` and
-      `media-uploader.tsx` are ~75% the same (busy/error state, orphan-cleanup,
-      refresh). Two callers is borderline; consolidate at the third uploader.
+- [x] **Extract a shared `useStorageUpload` hook** — DONE (2026-07-08). The hook +
+      `lib/upload.ts` (validate/path/orphan-cleanup) + `FileDropField` now back all
+      three uploaders (media, track audio, video). Audio keeps its inline label; media
+      + video use the drop field.
 
 ## Phase 4 review follow-ups (consolidation — not bugs)
 
