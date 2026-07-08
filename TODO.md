@@ -1,5 +1,26 @@
 # TODO
 
+## Analytics — record_event rate limit (review follow-up)
+- [ ] The anon `record_event` door has no per-IP/per-slug rate limit. entity_type is now
+      allowlisted (`20260707200000`) so junk can't accrete, and forgery only inflates an
+      artist's OWN vanity counts (never cross-tenant) — but a flood can still bloat
+      `analytics_events` (DoS). Add a per-slug burst cap like the subscribe door
+      (`20260706150000_subscribe_rate_limit.sql`), ideally shared with the audio play route.
+
+## Manager cross-artist tour calendar (later)
+- [ ] A manager-level view that aggregates EVERY client's tour dates into one
+      place — list + calendar toggle, color-coded by artist — so a manager can
+      plan across the roster. New top-level surface (not the per-artist tour page,
+      which stays a single-artist list). Deferred by decision 2026-07-07.
+
+## Per-artist tour map (prep done — coords captured)
+- [ ] Interactive map for the artist tour page. Coordinates are already captured +
+      stored (`20260707140000_tour_coords.sql`; Bandsintown/Ticketmaster syncs).
+      Remaining: geocode manual/city-only dates → lat/lng, and a client map
+      (**Leaflet + monochrome CARTO/OSM tiles**, no key). Decision 2026-07-07: the
+      map is **NOT always shown** — the default tour view is the centered, spacious
+      date LIST; the map is an opt-in toggle (List / Map).
+
 ## Media — done
 - [x] Hero videos stream from Supabase Storage (`media` bucket,
       `{artist_id}/hero-videos/`), registered in the `media` table by purpose.
@@ -95,8 +116,13 @@ self-serve and has display/storage obligations.
 - [ ] In that email, clarify two things their terms are strict about:
   - **Storage:** their terms permit only *session-based caching* with notice +
     update-on-change + removal when content is removed upstream. We **persist**
-    events in `tour_dates` and publish snapshots into `revisions`. Confirm this
-    intended "sync events to your website" use is acceptable.
+    events in `tour_dates` and publish snapshots into `revisions` — and, as of
+    the tour-map prep (`20260707140000_tour_coords.sql`), also the venue
+    **latitude/longitude**. Coords are dashboard-only (NOT in the public snapshot),
+    but they are still persisted Bandsintown data, so they ride under this same
+    not-live compliance gate. Confirm this "sync events to your website" use
+    (now incl. coordinates) is acceptable. (Ticketmaster coords are captured too;
+    their Discovery API needs attribution — track that when TM goes live.)
   - **Commercial use:** needs Bandsintown's *written approval*. If Lone Star is a
     paid service, get that approval.
 
