@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createContent, publishContent, reconcileVisibility } from '@/lib/content'
 import { performUpload, buildStoragePath } from '@/lib/upload'
-import { gcVideoObjects } from '@/lib/storage-gc'
+import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -166,6 +166,49 @@ describe('storage GC', () => {
     await gcVideoObjects(asA, artistA)
     const after2 = await svc.storage.from('videos').list(`${artistA}/videos`)
     expect((after2.data ?? []).some((o) => path.endsWith(o.name))).toBe(false)
+  })
+})
+
+describe('delete flow → row + storage', () => {
+  const hasObject = async (path: string) => {
+    const { data } = await svc.storage.from('videos').list(`${artistA}/videos`)
+    return (data ?? []).some((o) => path.endsWith(o.name))
+  }
+
+  it('CRITICAL: deleting a DRAFT uploaded video removes both the row AND the object', async () => {
+    const path = buildStoragePath(artistA, 'videos', 'mp4')
+    await put(asA, path)
+    const row = await createContent(asA, 'video', artistA, {
+      title: 'UPL-draftdel',
+      provider: 'uploaded',
+      embed_url: null,
+      storage_path: path,
+    })
+    expect(await hasObject(path)).toBe(true)
+
+    // The real delete path: remove the row, then the delete-time cleanup.
+    await asA.from('videos').delete().eq('id', row.id as string)
+    await gcDeletedVideoObject(asA, row.id as string, path)
+
+    expect((await svc.from('videos').select('id').eq('id', row.id as string)).data ?? []).toHaveLength(0) // row gone
+    expect(await hasObject(path)).toBe(false) // object gone
+  })
+
+  it('a PUBLISHED video keeps its object at delete (still served until tombstone; publish GC handles it)', async () => {
+    const path = buildStoragePath(artistA, 'videos', 'mp4')
+    await put(asA, path)
+    const row = await createContent(asA, 'video', artistA, {
+      title: 'UPL-pubdel',
+      provider: 'uploaded',
+      embed_url: null,
+      storage_path: path,
+    })
+    await publishContent(asA, 'video', artistA) // now a revision references the path
+
+    await asA.from('videos').delete().eq('id', row.id as string)
+    await gcDeletedVideoObject(asA, row.id as string, path)
+
+    expect(await hasObject(path)).toBe(true) // object survives — get_public_site still serves it
   })
 })
 

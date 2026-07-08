@@ -20,6 +20,31 @@ export function orphanedPaths(listed: string[], referenced: Iterable<string>): s
 }
 
 /**
+ * Remove an uploaded video's object at DELETE time — but ONLY if the video was never
+ * published (no revision references it). A published video's object must survive until
+ * its tombstone is published (the LEFT-JOIN gate keeps serving it), so those are left to
+ * gcVideoObjects at the next publish. This makes the common case — upload a draft, then
+ * delete it — clean up storage immediately. Best-effort.
+ */
+export async function gcDeletedVideoObject(
+  client: SupabaseClient,
+  videoId: string,
+  storagePath: string | null,
+): Promise<void> {
+  if (!storagePath) return
+  try {
+    const { count } = await client
+      .from('revisions')
+      .select('id', { count: 'exact', head: true })
+      .eq('entity_type', 'video')
+      .eq('entity_id', videoId)
+    if (!count) await client.storage.from('videos').remove([storagePath])
+  } catch {
+    // best-effort; the next publish's gcVideoObjects is the backstop
+  }
+}
+
+/**
  * Remove orphaned objects from the `videos` bucket for one artist. Call AFTER
  * publishContent('video'). Best-effort: a GC failure must never fail the publish.
  */

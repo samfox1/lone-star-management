@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
-import { gcVideoObjects } from '@/lib/storage-gc'
+import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
 import {
   type CrudEntity,
   type GenericEntity,
@@ -135,7 +135,14 @@ export async function deleteContentAction(
   artistId: string,
 ) {
   const supabase = await createClient()
+  // Grab an uploaded video's object path before the row is gone, so we can clean it up.
+  let videoPath: string | null = null
+  if (type === 'video') {
+    const { data } = await supabase.from('videos').select('storage_path').eq('id', id).single()
+    videoPath = (data?.storage_path as string | null) ?? null
+  }
   await deleteContent(supabase, type, id)
+  if (type === 'video') await gcDeletedVideoObject(supabase, id, videoPath)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
