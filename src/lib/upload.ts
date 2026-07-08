@@ -45,12 +45,14 @@ export function friendlyUploadError(raw: string, ctx: { noun: string; allowed?: 
   const r = (raw || '').toLowerCase()
   const noun = ctx.noun
   const allowed = ctx.allowed ? upperList(ctx.allowed) : null
-  const limit = ctx.maxBytes ? sizeLabel(ctx.maxBytes) : null
 
   if (/mime|not supported|unsupported|content.?type|invalid_?mime|\b415\b/.test(r))
     return allowed ? `That file type isn't supported — upload a ${allowed} file.` : `That file type isn't supported.`
+  // A 413 is the SERVER's limit (bucket/project global) — which the client can't read
+  // and may not match our own maxBytes — so don't quote a possibly-wrong number here.
+  // (Our client-side validateUpload does name the exact limit it enforces.)
   if (/too large|exceeded|maximum allowed size|maximum size|payload too large|\b413\b|file size/.test(r))
-    return limit ? `That ${noun} is too large — the limit is ${limit}.` : `That ${noun} is too large.`
+    return `That ${noun} is too large to upload. Try a smaller or compressed file.`
   if (/row-level security|violates.*policy|not authorized|unauthorized|permission|\b403\b/.test(r))
     return `You don't have permission to upload this ${noun}. Try signing out and back in.`
   if (/already exists|duplicate|\b409\b/.test(r)) return `A file with that name already exists — try again.`

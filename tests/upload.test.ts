@@ -47,9 +47,14 @@ describe('friendlyUploadError (raw Supabase/DB errors → specific manager-facin
     expect(msg).toMatch(/MP4, MOV, WEBM/)
     expect(msg).not.toMatch(/text\/html/) // no raw jargon
   })
-  it('maps a too-large rejection, naming the limit', () => {
-    expect(friendlyUploadError('Payload too large', ctx)).toMatch(/500 MB/)
-    expect(friendlyUploadError('The object exceeded the maximum allowed size', ctx)).toMatch(/500 MB/)
+  it('maps a too-large (413) rejection to a smaller/compress hint, NOT a possibly-wrong number', () => {
+    // The 413 is the server's limit (project global / bucket), which the client can't
+    // read and may not equal ctx.maxBytes — so it must not quote a specific size here.
+    const msg = friendlyUploadError('Payload too large', ctx)
+    expect(msg).toMatch(/too large/i)
+    expect(msg).toMatch(/smaller|compress/i)
+    expect(msg).not.toMatch(/500 MB/)
+    expect(friendlyUploadError('The object exceeded the maximum allowed size', ctx)).toMatch(/too large/i)
   })
   it('maps an RLS/permission violation to a permission message', () => {
     expect(friendlyUploadError('new row violates row-level security policy', ctx)).toMatch(/permission/i)
