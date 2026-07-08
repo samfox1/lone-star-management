@@ -25,7 +25,7 @@ afterEach(async () => {
 })
 
 function ev(id: string, venue: string): BandsintownTourDate {
-  return { bandsintown_id: id, date: '2026-09-01', venue, city: 'Austin', country: 'US', ticket_url: null }
+  return { bandsintown_id: id, date: '2026-09-01', venue, city: 'Austin', country: 'US', ticket_url: null, latitude: 30.2672, longitude: -97.7431 }
 }
 
 describe('syncBandsintownTourDates', () => {
@@ -44,12 +44,12 @@ describe('syncBandsintownTourDates', () => {
 
     const { data } = await svc
       .from('tour_dates')
-      .select('venue, source, bandsintown_id')
+      .select('venue, source, bandsintown_id, latitude, longitude')
       .eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.bandsintown_id, r]))
     expect(byId['bit-manual']).toMatchObject({ venue: 'My Manual Venue', source: 'manual' })
     expect(byId['bit-auto']).toMatchObject({ venue: 'Fresh Venue', source: 'bandsintown' })
-    expect(byId['bit-new']).toMatchObject({ venue: 'New Venue', source: 'bandsintown' })
+    expect(byId['bit-new']).toMatchObject({ venue: 'New Venue', source: 'bandsintown', latitude: 30.2672, longitude: -97.7431 })
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {

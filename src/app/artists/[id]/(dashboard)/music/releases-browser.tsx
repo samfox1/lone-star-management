@@ -1,27 +1,31 @@
 'use client'
 
 import { useState } from 'react'
-import { buttonClass, inputClass } from '@/components/ui/ui'
-import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
-import { SectionToolbar } from '../section-toolbar'
-import { CardGrid } from '../card-grid'
+import { useRouter } from 'next/navigation'
+import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
+import { CardGrid } from '../card-grid'
+import { PublishBar } from '../publish-bar'
+import { EmptyState } from '../empty-state'
+import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
+import { OriginSection, groupByOrigin } from '../origin'
+import { useOnSiteSelection } from '../use-on-site-selection'
+import { publishReleasesAction } from '../actions'
 import { ReleaseCard, type Release } from '../releases/release-card'
+import { RefreshButton } from './refresh-button'
 
-type BoundAction = (formData: FormData) => void | Promise<void>
-type Filter = 'all' | ReleaseType
 type Sort = 'newest' | 'oldest' | 'az'
 
-const CHIP_LABEL: Record<Filter, string> = {
-  all: 'All',
+// Music groups by RELEASE TYPE (its natural category) rather than catalog source —
+// releases nearly all share one source, but singles/EPs/albums is how a manager thinks.
+const TYPE_LABEL: Record<string, string> = {
   single: 'Singles',
   ep: 'EPs',
   album: 'Albums',
   featured: 'Featured',
 }
-
-const selectClass =
-  'rounded-lg border border-hairline bg-paper px-2.5 py-2 text-sm text-ink outline-none focus:border-ink-faint'
+const typeLabel = (t: string) => TYPE_LABEL[t] ?? t
+const TYPE_ORDER = ['single', 'ep', 'album', 'featured'] as const
 
 function sorted(releases: Release[], sort: Sort): Release[] {
   const copy = [...releases]
@@ -32,61 +36,52 @@ function sorted(releases: Release[], sort: Sort): Release[] {
 }
 
 /**
- * Releases view for the Music tab: add/publish toolbar, a type filter (chips) +
- * sort, and the cover grid. Filtering/sorting is client-side over the full list
- * the server passed, so it's instant.
+ * Releases view: a filterable, sortable list of the artist's releases. Each row
+ * carries a select checkbox and a live/off indicator; an album/EP expands to its
+ * tracklist. The manager selects which releases should be on the site, then hits
+ * Publish — a password-gated commit (PublishBar) that flips visibility and
+ * snapshots content. Selection re-syncs to the server's live truth after a
+ * publish (keyed on which releases are actually visible).
  */
 export function ReleasesBrowser({
   releases,
   artistId,
   artistSlug,
-  addAction,
-  publishAction,
+  refreshAction,
 }: {
   releases: Release[]
   artistId: string
   artistSlug: string
-  addAction: BoundAction
-  publishAction: BoundAction
+  refreshAction: () => Promise<{ ok: boolean; error?: string }>
 }) {
-  const [filter, setFilter] = useState<Filter>('all')
+  const router = useRouter()
+  const [site, setSite] = useState<SiteFilter>('all')
   const [sort, setSort] = useState<Sort>('newest')
+  const { selected, toggle: toggleSelect, pendingCount } = useOnSiteSelection(releases)
 
-  const shown = sorted(
-    releases.filter((r) => filter === 'all' || r.release_type === filter),
-    sort,
-  )
+  const shown = sorted(filterBySite(releases, site), sort)
+  const groups = groupByOrigin(shown, (r) => r.release_type, TYPE_ORDER, typeLabel)
+
+  async function publish(password: string): Promise<{ ok: boolean; error?: string }> {
+    const res = await publishReleasesAction(artistId, [...selected], password)
+    if (res.ok) router.refresh()
+    return res
+  }
 
   return (
-    <div className="space-y-5">
-      <SectionToolbar
-        count={releases.length}
-        singular="release"
-        plural="releases"
-        addLabel="Add release"
-        publishAction={publishAction}
-      >
-        <form action={addAction} className="flex flex-wrap items-center gap-2">
-          <input name="title" placeholder="Title" required autoFocus className={`${inputClass} w-44`} />
-          <select name="release_type" defaultValue="single" className={selectClass}>
-            {RELEASE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {RELEASE_TYPE_LABEL[t]}
-              </option>
-            ))}
-          </select>
-          <input name="release_date" type="date" className={`${inputClass} w-40`} />
-          <input name="cover_url" type="url" placeholder="Cover image URL" className={`${inputClass} flex-1`} />
-          <button type="submit" className={buttonClass('solid')}>
-            Add
-          </button>
-        </form>
-      </SectionToolbar>
-
+    <div className="space-y-6 pb-24">
       <FilterBar
-        chips={(['all', ...RELEASE_TYPES] as Filter[]).map((k) => ({ key: k, label: CHIP_LABEL[k] }))}
-        active={filter}
-        onChip={setFilter}
+        leading={
+          <div className="flex items-center gap-3">
+            <KLabel>
+              {releases.length} {releases.length === 1 ? 'release' : 'releases'}
+            </KLabel>
+            <OnSiteFilter value={site} onChange={setSite} />
+          </div>
+        }
+        chips={[]}
+        active=""
+        onChip={() => {}}
         sortOptions={[
           { key: 'newest', label: 'Newest' },
           { key: 'oldest', label: 'Oldest' },
@@ -94,17 +89,37 @@ export function ReleasesBrowser({
         ]}
         sort={sort}
         onSort={setSort}
+        trailing={<RefreshButton action={refreshAction} />}
       />
 
-      <CardGrid
-        size="md"
-        count={shown.length}
-        empty={filter === 'all' ? 'No releases yet.' : `No ${CHIP_LABEL[filter].toLowerCase()} yet.`}
-      >
-        {shown.map((r) => (
-          <ReleaseCard key={r.id} artistId={artistId} artistSlug={artistSlug} release={r} />
-        ))}
-      </CardGrid>
+      {groups.length === 0 ? (
+        <EmptyState
+          icon="releases"
+          title={siteEmptyTitle(site, 'No releases yet')}
+          hint={site === 'all' ? 'Hit Refresh to pull them from Spotify.' : undefined}
+        />
+      ) : (
+        <div className="space-y-8">
+          {groups.map((g) => (
+            <OriginSection key={g.key} label={g.label} count={g.items.length}>
+              <CardGrid size="md" count={g.items.length}>
+                {g.items.map((r) => (
+                  <ReleaseCard
+                    key={r.id}
+                    release={r}
+                    artistId={artistId}
+                    artistSlug={artistSlug}
+                    selected={selected.has(r.id)}
+                    onToggleSelect={() => toggleSelect(r.id)}
+                  />
+                ))}
+              </CardGrid>
+            </OriginSection>
+          ))}
+        </div>
+      )}
+
+      <PublishBar pendingCount={pendingCount} onPublish={publish} />
     </div>
   )
 }

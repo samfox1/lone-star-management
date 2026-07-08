@@ -22,7 +22,7 @@ function client(fetchImpl: typeof fetch, appId: string | undefined = 'app123') {
 const EVENT = {
   id: '987',
   datetime: '2026-09-01T20:00:00',
-  venue: { name: 'Mohawk', city: 'Austin', country: 'United States' },
+  venue: { name: 'Mohawk', city: 'Austin', country: 'United States', latitude: '30.2672', longitude: '-97.7431' },
   offers: [{ type: 'Tickets', url: 'https://tix.example/987', status: 'available' }],
   url: 'https://www.bandsintown.com/e/987',
 }
@@ -39,7 +39,20 @@ describe('getArtistEvents', () => {
       city: 'Austin',
       country: 'United States',
       ticket_url: 'https://tix.example/987',
+      latitude: 30.2672,
+      longitude: -97.7431,
     })
+  })
+
+  it('maps venue coordinates to numbers, and null when missing/non-numeric', async () => {
+    const noCoords = { ...EVENT, venue: { name: 'Mohawk', city: 'Austin', country: 'US' } }
+    const badCoords = { ...EVENT, venue: { ...EVENT.venue, latitude: '', longitude: 'n/a' } }
+    const fetchImpl = vi.fn(async () => res({ body: [noCoords, badCoords] }) as unknown as Response)
+    const events = await client(fetchImpl as unknown as typeof fetch).getArtistEvents('Lone Pine')
+    expect(events[0].latitude).toBeNull()
+    expect(events[0].longitude).toBeNull()
+    expect(events[1].latitude).toBeNull()
+    expect(events[1].longitude).toBeNull()
   })
 
   it('falls back to the event url when there is no ticket offer', async () => {

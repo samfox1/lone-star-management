@@ -14,6 +14,7 @@ import {
   createContent,
   deleteContent,
   publishAll,
+  reconcileVisibility,
   updateContent,
 } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -105,6 +106,11 @@ describe('publishAll', () => {
 
     const count = await publishAll(asA, artistA)
     expect(count).toBeGreaterThanOrEqual(4)
+
+    // tour_date + merch land off-site on create (visible=false); toggle them on so
+    // they reach the public door. (track + link have no visibility gate.)
+    await reconcileVisibility(asA, 'tour_date', artistA, [created[1].id])
+    await reconcileVisibility(asA, 'merch', artistA, [created[2].id])
 
     const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
     const blob = JSON.stringify(data)

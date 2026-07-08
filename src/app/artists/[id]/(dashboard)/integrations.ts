@@ -72,7 +72,7 @@ export const INTEGRATIONS: Integration[] = [
   { key: 'spotify', label: 'Spotify', section: 'music', catalogSource: 'spotify', idField: 'spotify_artist_id', placeholder: 'Spotify artist ID', pullLabel: 'Pull from Spotify', save: saveSpotifyIdAction, pull: syncSpotifyAction },
   { key: 'deezer', label: 'Deezer', section: 'music', catalogSource: 'deezer', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID', pullLabel: 'Pull from Deezer', save: saveDeezerIdAction, pull: syncDeezerAction },
   { key: 'apple', label: 'Apple Music', section: 'music', catalogSource: 'apple', idField: 'apple_artist_id', placeholder: 'Apple Music artist ID', pullLabel: 'Pull from Apple Music', save: saveAppleIdAction, pull: syncAppleAction },
-  { key: 'youtube', label: 'YouTube', section: 'videos', idField: 'youtube_channel_id', placeholder: 'YouTube channel ID', pullLabel: 'Import uploads', save: saveYoutubeChannelAction, pull: syncYouTubeAction },
+  { key: 'youtube', label: 'YouTube', section: 'videos', idField: 'youtube_channel_id', placeholder: 'YouTube @handle, channel ID, or URL', pullLabel: 'Import uploads', save: saveYoutubeChannelAction, pull: syncYouTubeAction },
   { key: 'bandsintown', label: 'Bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name', pullLabel: 'Pull tour dates', save: saveBandsintownNameAction, pull: syncBandsintownAction },
   { key: 'ticketmaster', label: 'Ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID', pullLabel: 'Pull tour dates', save: saveTicketmasterIdAction, pull: syncTicketmasterAction },
 ]

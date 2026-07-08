@@ -20,9 +20,25 @@ export type TicketmasterTourDate = {
   city: string | null
   country: string | null
   ticket_url: string | null
+  /** Venue coordinates for the tour map (null when the API omits them). */
+  latitude: number | null
+  longitude: number | null
 }
 
-type TmVenue = { name?: string; city?: { name?: string }; country?: { name?: string } }
+type TmVenue = {
+  name?: string
+  city?: { name?: string }
+  country?: { name?: string }
+  location?: { latitude?: string | number; longitude?: string | number }
+}
+
+/** Parse a coordinate (the API sends lat/lng as strings); blank/non-numeric → null.
+ *  Guards the `Number('') === 0` footgun so a missing coord never becomes 0,0. */
+function coord(v: string | number | undefined): number | null {
+  if (v == null || (typeof v === 'string' && v.trim() === '')) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
 type TmEvent = {
   id: string
   url?: string
@@ -64,6 +80,8 @@ export function createTicketmasterClient(opts: Options = {}) {
       city: venue?.city?.name ?? null,
       country: venue?.country?.name ?? null,
       ticket_url: e.url ?? null,
+      latitude: coord(venue?.location?.latitude),
+      longitude: coord(venue?.location?.longitude),
     }
   }
 

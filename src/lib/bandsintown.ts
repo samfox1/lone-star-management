@@ -18,14 +18,25 @@ export type BandsintownTourDate = {
   city: string | null
   country: string | null
   ticket_url: string | null
+  /** Venue coordinates for the tour map (null when the API omits them). */
+  latitude: number | null
+  longitude: number | null
 }
 
 type BandsintownEvent = {
   id: string | number
   datetime: string
-  venue?: { name?: string; city?: string; country?: string }
+  venue?: { name?: string; city?: string; country?: string; latitude?: string | number; longitude?: string | number }
   offers?: { type?: string; url?: string }[]
   url?: string
+}
+
+/** Parse a coordinate (the API sends lat/lng as strings); blank/non-numeric → null.
+ *  Guards the `Number('') === 0` footgun so a missing coord never becomes 0,0. */
+function coord(v: string | number | undefined): number | null {
+  if (v == null || (typeof v === 'string' && v.trim() === '')) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
 }
 
 type Options = {
@@ -50,6 +61,8 @@ export function createBandsintownClient(opts: Options = {}) {
       city: e.venue?.city ?? null,
       country: e.venue?.country ?? null,
       ticket_url: ticket ?? e.url ?? null,
+      latitude: coord(e.venue?.latitude),
+      longitude: coord(e.venue?.longitude),
     }
   }
 

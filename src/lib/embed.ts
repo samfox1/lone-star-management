@@ -5,25 +5,19 @@
  * null (the caller renders nothing). Returns the provider + a normalized, safe
  * embed URL.
  */
-export type EmbedInfo = { provider: 'youtube' | 'soundcloud'; embedUrl: string }
+export type EmbedInfo = { provider: 'youtube' | 'soundcloud'; embedUrl: string; isShort?: boolean }
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{6,}$/
 
-function youtubeVideoId(u: URL, host: string): string | null {
-  if (host === 'youtu.be') {
-    const id = u.pathname.slice(1).split('/')[0]
-    return VIDEO_ID.test(id) ? id : null
-  }
+/** The video id plus whether the source URL was a Short (/shorts/<id>). */
+function youtubeVideoId(u: URL, host: string): { id: string; isShort: boolean } | null {
+  const ok = (id: string, isShort = false) => (VIDEO_ID.test(id) ? { id, isShort } : null)
+  if (host === 'youtu.be') return ok(u.pathname.slice(1).split('/')[0])
   const isYouTube = host === 'youtube.com' || host.endsWith('.youtube.com') // www, m
   if (!isYouTube) return null
-  if (u.pathname === '/watch') {
-    const id = u.searchParams.get('v') ?? ''
-    return VIDEO_ID.test(id) ? id : null
-  }
-  if (u.pathname.startsWith('/embed/')) {
-    const id = u.pathname.slice('/embed/'.length).split('/')[0]
-    return VIDEO_ID.test(id) ? id : null
-  }
+  if (u.pathname === '/watch') return ok(u.searchParams.get('v') ?? '')
+  if (u.pathname.startsWith('/embed/')) return ok(u.pathname.slice('/embed/'.length).split('/')[0])
+  if (u.pathname.startsWith('/shorts/')) return ok(u.pathname.slice('/shorts/'.length).split('/')[0], true)
   return null
 }
 
@@ -42,8 +36,8 @@ export function embedInfo(raw: string): EmbedInfo | null {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
   const host = parsed.hostname.toLowerCase()
 
-  const ytId = youtubeVideoId(parsed, host)
-  if (ytId) return { provider: 'youtube', embedUrl: `https://www.youtube.com/embed/${ytId}` }
+  const yt = youtubeVideoId(parsed, host)
+  if (yt) return { provider: 'youtube', embedUrl: `https://www.youtube.com/embed/${yt.id}`, isShort: yt.isShort }
 
   if ((host === 'soundcloud.com' || host.endsWith('.soundcloud.com')) && parsed.pathname.length > 1) {
     return { provider: 'soundcloud', embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}` }

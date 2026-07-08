@@ -24,11 +24,12 @@ afterEach(async () => {
   await svc.from('videos').delete().eq('artist_id', artistB)
 })
 
-const yt = (id: string, title: string): YouTubeVideoInput => ({
+const yt = (id: string, title: string, is_short = false): YouTubeVideoInput => ({
   youtube_id: id,
   title,
   provider: 'youtube',
   embed_url: `https://www.youtube.com/embed/${id}`,
+  is_short,
 })
 
 describe('syncYouTubeVideos', () => {
@@ -50,6 +51,14 @@ describe('syncYouTubeVideos', () => {
     expect(byId['yt-manual']).toMatchObject({ title: 'My Edit', source: 'manual' })
     expect(byId['yt-auto']).toMatchObject({ title: 'Fresh', source: 'youtube' })
     expect(byId['yt-new']).toMatchObject({ title: 'Brand New', source: 'youtube' })
+  })
+
+  it('persists is_short so the dashboard can split videos from Shorts', async () => {
+    await syncYouTubeVideos(asA, artistA, [yt('yt-vid', 'A Video', false), yt('yt-short', 'A Short', true)])
+    const { data } = await svc.from('videos').select('youtube_id, is_short').eq('artist_id', artistA)
+    const byId = Object.fromEntries((data ?? []).map((r) => [r.youtube_id, r.is_short]))
+    expect(byId['yt-vid']).toBe(false)
+    expect(byId['yt-short']).toBe(true)
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {

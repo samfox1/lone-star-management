@@ -33,6 +33,8 @@ const tm = (id: string, venue: string): TicketmasterTourDate => ({
   city: 'Austin',
   country: 'US',
   ticket_url: `https://ticketmaster.com/event/${id}`,
+  latitude: 30.2672,
+  longitude: -97.7431,
 })
 
 describe('syncTicketmasterTourDates', () => {
@@ -51,11 +53,12 @@ describe('syncTicketmasterTourDates', () => {
 
     const { data } = await svc
       .from('tour_dates')
-      .select('venue, source, ticketmaster_id')
+      .select('venue, source, ticketmaster_id, latitude, longitude')
       .eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.ticketmaster_id, r]))
     expect(byId['tm-manual']).toMatchObject({ venue: 'My Edit', source: 'manual' })
     expect(byId['tm-auto']).toMatchObject({ venue: 'Fresh', source: 'ticketmaster' })
+    expect(byId['tm-new']).toMatchObject({ venue: 'Brand New', source: 'ticketmaster', latitude: 30.2672, longitude: -97.7431 })
     expect(byId['tm-new']).toMatchObject({ venue: 'Brand New', source: 'ticketmaster' })
   })
 

@@ -9,6 +9,7 @@
  */
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import {
   type CrudEntity,
@@ -20,14 +21,19 @@ import {
   publishAll,
   publishContent,
   publishProfile,
+  reconcileVisibility,
+  type VisibleEntity,
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
 import { embedInfo } from '@/lib/embed'
+import { resolveVideo } from '@/lib/video'
+import { fetchOpenGraph } from '@/lib/og'
 import { createYouTubeClient } from '@/lib/youtube'
 import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/catalog'
 import { isUrlField, safeHref } from '@/lib/url'
 import { toReleaseType } from '@/lib/releases'
+import { slugify } from '@/lib/slug'
 import { createSpotifyClient } from '@/lib/spotify'
 import { createDeezerClient } from '@/lib/deezer'
 import { createAppleMusicClient } from '@/lib/apple'
@@ -39,6 +45,7 @@ import {
   syncBandsintownTourDates,
   syncDeezerTracks,
   syncShopifyMerch,
+  syncSpotifyReleases,
   syncSpotifyTracks,
   syncTicketmasterTourDates,
   syncYouTubeVideos,
@@ -242,15 +249,60 @@ export async function addVideoAction(artistId: string, formData: FormData) {
   const url = String(formData.get('embed_url') ?? '').trim()
   if (!title || !url) return
   const info = embedInfo(url)
-  if (!info) return // not a YouTube/SoundCloud URL — reject
+  if (!info || info.provider !== 'youtube') return // Videos is YouTube-only
 
   const supabase = await createClient()
   await createContent(supabase, 'video', artistId, {
     title,
     provider: info.provider,
     embed_url: info.embedUrl,
+    is_short: info.isShort ?? false,
   })
   revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Auto-detect a video from a pasted URL (the modal's Automatic mode): safe embed URL
+ * via embedInfo + title/thumbnail from the provider's public oEmbed. Signed-in only,
+ * so it isn't an open fetch proxy. Returns data (or an error) for the client to show.
+ */
+export async function resolveVideoUrlAction(
+  url: string,
+): Promise<
+  | { ok: true; title: string; provider: string; embed_url: string; thumbnail: string | null }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const meta = await resolveVideo(String(url ?? '').trim())
+  if (!meta || meta.provider !== 'youtube') return { ok: false, error: 'Paste a YouTube link.' }
+  return { ok: true, ...meta }
+}
+
+/**
+ * Scrape a product URL's Open-Graph tags (the merch modal's Automatic mode) so the
+ * fields prefill. Signed-in only; the fetch is SSRF-guarded in fetchOpenGraph (public
+ * http(s) hosts only). Returns whatever it could read, or an error.
+ */
+export async function scrapeMerchUrlAction(
+  url: string,
+): Promise<
+  | { ok: true; title: string | null; image_url: string | null; price: string | null }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const og = await fetchOpenGraph(String(url ?? '').trim())
+  if (!og || (!og.title && !og.image)) return { ok: false, error: 'Could not read that link.' }
+  return { ok: true, title: og.title, image_url: og.image, price: og.price }
 }
 
 /** Save (or clear) the artist's YouTube channel id used to import their uploads. */
@@ -266,27 +318,40 @@ export async function saveYoutubeChannelAction(artistId: string, formData: FormD
 }
 
 /** Pull the artist's YouTube uploads into draft videos. Requires YOUTUBE_API_KEY. */
-export async function syncYouTubeAction(artistId: string) {
+/** Shared pull: import the channel's uploads into draft videos (Shorts classified),
+ *  returning status so callers can surface an error. Manual videos are preserved. */
+async function pullYouTube(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
     .select('youtube_channel_id')
     .eq('id', artistId)
     .single()
-  if (!artist?.youtube_channel_id) return
+  if (!artist?.youtube_channel_id) return { ok: false, error: 'No YouTube channel linked yet.' }
 
-  const client = createYouTubeClient()
-  const videos = await client.getChannelVideos(artist.youtube_channel_id)
-  await syncYouTubeVideos(supabase, artistId, videos)
+  try {
+    const client = createYouTubeClient()
+    const videos = await client.getChannelVideos(artist.youtube_channel_id)
+    // Global YouTube view counts, cached on each row (ANALYTICS_STATS_PLAN.md).
+    const vc = await client.viewCounts(videos.map((v) => v.youtube_id))
+    for (const v of videos) v.views = vc.get(v.youtube_id) ?? null
+    await syncYouTubeVideos(supabase, artistId, videos)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Import failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
+/** Integrations "Import uploads" (a form action — return ignored). */
+export async function syncYouTubeAction(artistId: string): Promise<void> {
+  await pullYouTube(artistId)
+}
+
+/** Videos-page "Refresh" button: same import, but returns status so the button can
+ *  show a spinner and surface any error inline. */
+export async function refreshYouTubeAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+  return pullYouTube(artistId)
 }
 
 type ReleaseLink = { label: string; url: string }
@@ -330,6 +395,88 @@ export async function setReleaseTypeAction(releaseId: string, artistId: string, 
   const supabase = await createClient()
   await supabase.from('releases').update({ release_type }).eq('id', releaseId)
   revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/**
+ * Verify the signed-in manager's password on a THROWAWAY client (no cookie
+ * persistence), so a wrong password can't publish and the live session is
+ * untouched. Returns the user id on success, or an error string. Shared by every
+ * password-gated publish.
+ */
+async function verifyPasswordGate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  password: string,
+): Promise<{ userId: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.email) return { error: 'Not signed in.' }
+
+  const verifier = createSbClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  )
+  const { error: pwErr } = await verifier.auth.signInWithPassword({ email: user.email, password })
+  if (pwErr) return { error: 'Incorrect password.' }
+  return { userId: user.id }
+}
+
+/**
+ * Publish the artist's releases to their public site — PASSWORD-GATED. `visibleIds`
+ * is the full set of releases that should be live; every other release is taken
+ * off the site. Flow: verify the password, reconcile each release's `visible` flag
+ * to the selection (RLS-scoped), then snapshot release + track content so
+ * newly-live releases and their tracklists render on the site. (Tracks piggyback on
+ * the release publish — they belong to a release — so this stays release-specific.)
+ * Returns an error string instead of throwing, so the client shows it inline.
+ */
+export async function publishReleasesAction(
+  artistId: string,
+  visibleIds: string[],
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+
+  try {
+    await reconcileVisibility(supabase, 'release', artistId, visibleIds)
+    await publishContent(supabase, 'release', artistId, gate.userId)
+    await publishContent(supabase, 'track', artistId, gate.userId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
+/**
+ * Publish one visible-gated content type (video / merch / tour_date) to the public
+ * site — PASSWORD-GATED, same flow as publishReleasesAction: verify the password,
+ * reconcile `visible` to the selection, snapshot the type's content. `visibleIds` is
+ * the desired on-site set; everything else is taken off the site.
+ */
+export async function publishEntityAction(
+  type: VisibleEntity,
+  artistId: string,
+  visibleIds: string[],
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+
+  try {
+    await reconcileVisibility(supabase, type, artistId, visibleIds)
+    await publishContent(supabase, type, artistId, gate.userId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
 /** Assign a track to a release (empty = unassign). RLS scopes the update. */
@@ -401,24 +548,51 @@ export async function saveSpotifyIdAction(artistId: string, formData: FormData) 
 }
 
 /**
- * Pull the artist's Spotify discography and sync it into draft tracks. Inserts
- * new tracks and refreshes spotify-owned ones; manual edits are left untouched
- * (see syncSpotifyTracks). Requires SPOTIFY_CLIENT_ID/SECRET configured.
+ * Pull the artist's Spotify discography — tracks AND releases (albums/EPs/
+ * singles). New tracks are drafted and spotify-owned ones refreshed; releases
+ * are imported HIDDEN for the manager to toggle on. Manual edits are left
+ * untouched (see syncSpotify*). Also the "Refresh from Spotify" button. Requires
+ * SPOTIFY_CLIENT_ID/SECRET configured.
  */
-export async function syncSpotifyAction(artistId: string) {
+/** Shared pull: import the artist's Spotify catalog into draft releases + tracks. */
+async function pullSpotify(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const { data: artist } = await supabase
     .from('artists')
-    .select('spotify_artist_id, catalog_source')
+    .select('spotify_artist_id')
     .eq('id', artistId)
     .single()
-  // Only pull when Spotify is the active source — keeps one source per artist.
-  if (artist?.catalog_source !== 'spotify' || !artist?.spotify_artist_id) return
+  // Need a linked Spotify artist to pull from.
+  if (!artist?.spotify_artist_id) return { ok: false, error: 'No Spotify artist linked yet.' }
 
-  const client = createSpotifyClient()
-  const tracks = await client.getDiscographyTracks(artist.spotify_artist_id)
-  await syncSpotifyTracks(supabase, artistId, tracks)
+  try {
+    const client = createSpotifyClient()
+    const { tracks, releases } = await client.getDiscography(artist.spotify_artist_id)
+    // Tracks first — releases link them by Spotify id.
+    await syncSpotifyTracks(supabase, artistId, tracks)
+    await syncSpotifyReleases(supabase, artistId, releases)
+    // Snapshot a release revision so each imported release has a smart-link ready;
+    // `visible` (false on import) still gates public exposure until a password publish.
+    await publishContent(supabase, 'release', artistId, user?.id)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Refresh failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
+/** Integrations "Pull from Spotify" (a form action — return ignored). */
+export async function syncSpotifyAction(artistId: string): Promise<void> {
+  await pullSpotify(artistId)
+}
+
+/** Music-page "Refresh" button: same pull, but returns status so the button can
+ *  show a spinner and surface any error inline. */
+export async function refreshSpotifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+  return pullSpotify(artistId)
 }
 
 /**

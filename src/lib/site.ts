@@ -122,9 +122,13 @@ async function workingSection<T>(
   supabase: SupabaseClient,
   type: PublishableEntity,
   artistId: string,
+  { onSiteOnly = false }: { onSiteOnly?: boolean } = {},
 ): Promise<T[]> {
   const rows = await listContent(supabase, type, artistId)
-  return rows.map((r) => publicSnapshot(type, r)) as T[]
+  // Visible-gated types (tour_date/merch/video) are hidden from the public door
+  // when visible=false; drop them here too so preview matches the live site.
+  const kept = onSiteOnly ? rows.filter((r) => r.visible !== false) : rows
+  return kept.map((r) => publicSnapshot(type, r)) as T[]
 }
 
 /**
@@ -162,10 +166,10 @@ export async function getWorkingSite(
         } satisfies SiteTrack
       }),
     ),
-    workingSection<SiteTourDate>(supabase, 'tour_date', artistId),
-    workingSection<SiteMerch>(supabase, 'merch', artistId),
+    workingSection<SiteTourDate>(supabase, 'tour_date', artistId, { onSiteOnly: true }),
+    workingSection<SiteMerch>(supabase, 'merch', artistId, { onSiteOnly: true }),
     workingSection<SiteLink>(supabase, 'link', artistId),
-    workingSection<SiteVideo>(supabase, 'video', artistId),
+    workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
       .select('purpose, storage_path, sort_order')

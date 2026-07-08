@@ -8,6 +8,7 @@
  */
 
 import { httpGetJson } from '@/lib/http'
+import { type ReleaseType } from '@/lib/releases'
 
 const ACCOUNTS_URL = 'https://accounts.spotify.com/api/token'
 const API_BASE = 'https://api.spotify.com/v1'
@@ -24,7 +25,29 @@ export type SpotifyTrackInput = {
   album_name: string | null
 }
 
-type SpotifyAlbum = { id: string; name?: string; images?: { url: string }[] }
+/** The shape the releases sync consumes (one Spotify album/EP/single). */
+export type SpotifyReleaseInput = {
+  spotify_id: string
+  title: string
+  release_type: ReleaseType
+  cover_url: string | null
+  /** Normalized to YYYY-MM-DD (Spotify may give year/month precision). */
+  release_date: string | null
+  /** The album's Spotify page — seeds one DSP link on the smart-link. */
+  spotify_url: string | null
+  /** Member track Spotify ids, for linking tracks.release_id. */
+  track_spotify_ids: string[]
+}
+
+type SpotifyAlbum = {
+  id: string
+  name?: string
+  album_type?: string
+  release_date?: string
+  total_tracks?: number
+  images?: { url: string }[]
+  external_urls?: { spotify?: string }
+}
 type SpotifyAlbumTrack = {
   id: string
   name: string
@@ -109,39 +132,69 @@ export function createSpotifyClient(opts: Options = {}) {
     return getAllPages<SpotifyAlbumTrack>(`/albums/${albumId}/tracks`)
   }
 
+  /** album_type + track count → our release type (Spotify has no 'ep' group). */
+  function classifyRelease(album: SpotifyAlbum): ReleaseType {
+    if (album.album_type === 'album') return 'album'
+    return (album.total_tracks ?? 1) >= 4 ? 'ep' : 'single'
+  }
+
+  /** Spotify release_date is year / year-month / full — pad to a valid DATE. */
+  function normalizeDate(d: string | undefined): string | null {
+    if (!d) return null
+    if (/^\d{4}$/.test(d)) return `${d}-01-01`
+    if (/^\d{4}-\d{2}$/.test(d)) return `${d}-01`
+    return d
+  }
+
   /**
-   * Pull the artist's discography as a flat, de-duplicated track list. Tracks
-   * that appear on multiple releases (album + single + compilation) collapse to
-   * the first seen, keyed by lowercased title.
+   * Pull the artist's discography as a de-duplicated track list PLUS the releases
+   * (albums/EPs/singles) they belong to — one albums+tracks fetch feeds both.
+   * Tracks that appear on multiple releases collapse to the first seen (keyed by
+   * lowercased title), so a track links to whichever release's version was kept.
    */
-  async function getDiscographyTracks(artistId: string): Promise<SpotifyTrackInput[]> {
+  async function getDiscography(
+    artistId: string,
+  ): Promise<{ tracks: SpotifyTrackInput[]; releases: SpotifyReleaseInput[] }> {
     const albums = await getArtistAlbums(artistId)
     const seen = new Set<string>()
-    const out: SpotifyTrackInput[] = []
+    const tracks: SpotifyTrackInput[] = []
+    const releases: SpotifyReleaseInput[] = []
     for (const album of albums) {
-      const tracks = await getAlbumTracks(album.id)
-      for (const t of tracks) {
+      const albumTracks = await getAlbumTracks(album.id)
+      releases.push({
+        spotify_id: album.id,
+        title: album.name ?? '',
+        release_type: classifyRelease(album),
+        cover_url: album.images?.[0]?.url ?? null,
+        release_date: normalizeDate(album.release_date),
+        spotify_url: album.external_urls?.spotify ?? null,
+        track_spotify_ids: albumTracks.map((t) => t.id),
+      })
+      for (const t of albumTracks) {
         const key = t.name.trim().toLowerCase()
         if (seen.has(key)) continue
         seen.add(key)
-        out.push({
+        tracks.push({
           spotify_id: t.id,
           title: t.name,
           stream_url: t.external_urls?.spotify ?? null,
           cover_url: album.images?.[0]?.url ?? null,
           // Everyone on the track except the artist we're syncing (matched by
           // Spotify id, so it's robust to name variants / remixes).
-          featured_artists: (t.artists ?? [])
-            .filter((a) => a.id !== artistId)
-            .map((a) => a.name),
+          featured_artists: (t.artists ?? []).filter((a) => a.id !== artistId).map((a) => a.name),
           album_name: album.name ?? null,
         })
       }
     }
-    return out
+    return { tracks, releases }
   }
 
-  return { getAccessToken, getArtistAlbums, getAlbumTracks, getDiscographyTracks }
+  /** Tracks-only convenience (the catalog-only path). */
+  async function getDiscographyTracks(artistId: string): Promise<SpotifyTrackInput[]> {
+    return (await getDiscography(artistId)).tracks
+  }
+
+  return { getAccessToken, getArtistAlbums, getAlbumTracks, getDiscography, getDiscographyTracks }
 }
 
 export type SpotifyClient = ReturnType<typeof createSpotifyClient>

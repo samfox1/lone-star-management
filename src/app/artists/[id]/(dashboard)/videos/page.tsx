@@ -1,12 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
-import { buttonClass, inputClass } from '@/components/ui/ui'
-import { SectionShell } from '../section-shell'
-import { SectionMeta, ConnectLink } from '../section-meta'
-import { CardGrid } from '../card-grid'
+import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { requireArtist } from '../_data'
-import { addVideoAction } from '../actions'
-import { VideoCard } from './video-card'
+import { refreshYouTubeAction } from '../actions'
+import { VideosBrowser } from './videos-browser'
+import { VideoAddButton } from './video-add'
+import { RefreshButton } from './refresh-button'
 
 /** YouTube poster from a normalized embed URL; null for other providers. */
 function youtubePoster(url: string, provider: string): string | null {
@@ -16,57 +15,43 @@ function youtubePoster(url: string, provider: string): string | null {
 }
 
 /**
- * Videos: paste a YouTube/SoundCloud URL (validated through embedInfo) — shown as
- * a 16:9 thumbnail grid. YouTube channel import lives in the Integrations hub.
+ * Videos: a 16:9 thumbnail grid with the Music-page toolbar (filter · sort · import ·
+ * + Add · publish). "+ Add" opens the two-pane modal (Auto detects a pasted link).
+ * New videos land off-site until selected + published.
  */
 export default async function VideosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   await requireArtist(id)
-  const rows = await listContent(supabase, 'video', id)
+  const [rows, counts] = await Promise.all([
+    listContent(supabase, 'video', id),
+    entityCounts(supabase, id, daysAgo(30)),
+  ])
 
   return (
-    <SectionShell title="Videos" publishType="video" artistId={id}>
-      <SectionMeta count={rows.length} singular="video" plural="videos">
-        <ConnectLink href={`/artists/${id}/tools/integrations`}>Import from YouTube →</ConnectLink>
-      </SectionMeta>
-
-      <div>
-        <p className="font-space text-xs text-ink-faint">Paste a YouTube or SoundCloud URL.</p>
-        <form action={addVideoAction.bind(null, id)} className="mt-2 flex flex-wrap items-center gap-2">
-          <input name="title" placeholder="Title" required className={`${inputClass} w-40`} />
-          <input
-            name="embed_url"
-            type="url"
-            placeholder="https://youtube.com/watch?v=… or soundcloud.com/…"
-            required
-            className={`${inputClass} flex-1`}
-          />
-          <button type="submit" className={buttonClass('solid')}>
-            Add
-          </button>
-        </form>
-      </div>
-
-      <CardGrid size="lg" count={rows.length} empty="None yet.">
-        {rows.map((row) => {
-          const provider = String(row.provider ?? '')
-          return (
-            <VideoCard
-              key={row.id as string}
-              artistId={id}
-              video={{
-                id: row.id as string,
-                title: row.title as string,
-                provider: provider || null,
-                poster: youtubePoster(String(row.embed_url ?? ''), provider),
-                embed_url: (row.embed_url as string | null) ?? null,
-                source: (row.source as string | null) ?? null,
-              }}
-            />
-          )
-        })}
-      </CardGrid>
-    </SectionShell>
+    <VideosBrowser
+      artistId={id}
+      videos={rows.map((row) => {
+        const provider = String(row.provider ?? '')
+        return {
+          id: row.id as string,
+          title: row.title as string,
+          provider: provider || null,
+          poster: youtubePoster(String(row.embed_url ?? ''), provider),
+          embed_url: (row.embed_url as string | null) ?? null,
+          source: (row.source as string | null) ?? null,
+          is_short: (row.is_short as boolean | null) ?? false,
+          visible: (row.visible as boolean | null) ?? true,
+          youtube_views: (row.youtube_views as number | null) ?? null,
+          stat: metricValue(counts, 'video', [row.id as string]),
+        }
+      })}
+      trailing={
+        <>
+          <RefreshButton action={refreshYouTubeAction.bind(null, id)} />
+          <VideoAddButton artistId={id} />
+        </>
+      }
+    />
   )
 }

@@ -2,9 +2,10 @@
  * PHASE 4 (Videos) — youtubeClient, test-first. Uses the quota-cheap path
  * (channels.list → contentDetails.relatedPlaylists.uploads → playlistItems.list,
  * ~1 unit/page), NOT search.list (100 units). Mocked at the fetch boundary.
+ * Shorts are classified by probing youtube.com/shorts/<id> (200 ⟹ Short).
  */
 import { describe, expect, it, vi } from 'vitest'
-import { createYouTubeClient } from '@/lib/youtube'
+import { createYouTubeClient, channelSelector } from '@/lib/youtube'
 
 type Resp = { status?: number; headers?: Record<string, string>; body: unknown }
 function res({ status = 200, headers = {}, body }: Resp) {
@@ -15,6 +16,9 @@ function res({ status = 200, headers = {}, body }: Resp) {
     json: async () => body,
   }
 }
+
+// A /shorts/ probe that reports "not a Short" (a normal video 3xx-redirects to /watch).
+const notShort = () => res({ status: 303, body: {} })
 
 function client(fetchImpl: typeof fetch) {
   return createYouTubeClient({ apiKey: 'k', fetchImpl, sleep: () => Promise.resolve() })
@@ -30,6 +34,7 @@ const item = (id: string, title: string) => ({
 describe('getChannelVideos', () => {
   it('resolves the uploads playlist, then maps playlist items to videos', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
       if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
       return res({ body: { items: [item('vid1', 'My Video')] } }) as unknown as Response
     })
@@ -40,6 +45,7 @@ describe('getChannelVideos', () => {
         title: 'My Video',
         provider: 'youtube',
         embed_url: 'https://www.youtube.com/embed/vid1',
+        is_short: false,
       },
     ])
     // proves the cheap path: channels + playlistItems, never search.list
@@ -49,8 +55,33 @@ describe('getChannelVideos', () => {
     expect(urls.some((u) => u.includes('/search'))).toBe(false)
   })
 
+  it('classifies Shorts (200) vs normal uploads (redirect) via the /shorts/ probe', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) {
+        // vid_short serves the Short (200); vid_long redirects to /watch (303).
+        return res({ status: url.includes('vid_short') ? 200 : 303, body: {} }) as unknown as Response
+      }
+      if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
+      return res({ body: { items: [item('vid_long', 'Long'), item('vid_short', 'Short')] } }) as unknown as Response
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getChannelVideos('CH1')
+    expect(out.find((v) => v.youtube_id === 'vid_long')?.is_short).toBe(false)
+    expect(out.find((v) => v.youtube_id === 'vid_short')?.is_short).toBe(true)
+  })
+
+  it('treats a failed /shorts/ probe as a normal video (safe default)', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) throw new Error('network')
+      if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
+      return res({ body: { items: [item('v1', 'One')] } }) as unknown as Response
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getChannelVideos('CH1')
+    expect(out[0].is_short).toBe(false)
+  })
+
   it('follows nextPageToken pagination and concatenates', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
       if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
       return (url.includes('pageToken=PAGE2')
         ? res({ body: { items: [item('v2', 'Two')] } })
@@ -69,6 +100,7 @@ describe('getChannelVideos', () => {
     const sleep = vi.fn(() => Promise.resolve())
     let calls = 0
     const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
       if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
       calls++
       return (calls === 1
@@ -87,7 +119,39 @@ describe('getChannelVideos', () => {
   })
 
   it('throws when no API key is configured', async () => {
+    vi.stubEnv('YOUTUBE_API_KEY', '') // ignore any real key in .env.local
     const c = createYouTubeClient({ fetchImpl: (async () => res({ body: {} })) as unknown as typeof fetch })
     await expect(c.getChannelVideos('CH1')).rejects.toThrow(/YouTube/i)
+    vi.unstubAllEnvs()
+  })
+
+  it('resolves an @handle via forHandle, so importing @Sskeen works', async () => {
+    let channelsUrl = ''
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
+      if (url.includes('/channels')) {
+        channelsUrl = url
+        return channelsResp('UU123') as unknown as Response
+      }
+      return res({ body: { items: [item('v1', 'One')] } }) as unknown as Response
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getChannelVideos('@Sskeen')
+    expect(out).toHaveLength(1)
+    expect(channelsUrl).toContain('forHandle=%40Sskeen')
+    expect(channelsUrl).not.toContain('id=')
+  })
+})
+
+describe('channelSelector', () => {
+  it('maps every channel-reference form to the right channels.list param', () => {
+    // UC id → id=
+    expect(channelSelector('UC1234567890123456789012')).toBe('id=UC1234567890123456789012')
+    // @handle and bare name → forHandle= (@ added)
+    expect(channelSelector('@Sskeen')).toBe('forHandle=%40Sskeen')
+    expect(channelSelector('Sskeen')).toBe('forHandle=%40Sskeen')
+    // pasted URLs
+    expect(channelSelector('https://youtube.com/@Sskeen')).toBe('forHandle=%40Sskeen')
+    expect(channelSelector('https://www.youtube.com/channel/UC1234567890123456789012')).toBe('id=UC1234567890123456789012')
+    expect(channelSelector('https://youtube.com/user/OldName')).toBe('forUsername=OldName')
   })
 })

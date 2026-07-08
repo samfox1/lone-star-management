@@ -10,10 +10,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   type CrudEntity,
+  type VisibleEntity,
+  VISIBLE_ENTITIES,
   createContent,
   deleteContent,
   listContent,
   publishContent,
+  reconcileVisibility,
   updateContent,
 } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -106,6 +109,11 @@ describe.each(CASES)('content type: $type', (c) => {
 
   it('CRITICAL: publishing makes it appear on the public read path under the right key', async () => {
     await publishContent(asA, c.type, artistA)
+    // Visible-gated types (tour_date/merch) land off-site on create; toggle on-site
+    // so they reach the public door (links have no visibility gate).
+    if ((VISIBLE_ENTITIES as readonly string[]).includes(c.type)) {
+      await reconcileVisibility(asA, c.type as VisibleEntity, artistA, [id])
+    }
     const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
     const section = (data as Record<string, unknown[]>)[c.siteKey]
     expect(JSON.stringify(section)).toContain(c.marker)

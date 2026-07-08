@@ -25,7 +25,11 @@ const event = (id: string, date = '2026-09-01') => ({
   id,
   url: `https://ticketmaster.com/event/${id}`,
   dates: { start: { localDate: date } },
-  _embedded: { venues: [{ name: 'The Venue', city: { name: 'Austin' }, country: { name: 'US' } }] },
+  _embedded: {
+    venues: [
+      { name: 'The Venue', city: { name: 'Austin' }, country: { name: 'US' }, location: { latitude: '30.2672', longitude: '-97.7431' } },
+    ],
+  },
 })
 
 const page = (events: unknown[], number = 0, totalPages = 1) => ({
@@ -45,6 +49,8 @@ describe('getArtistEvents', () => {
         city: 'Austin',
         country: 'US',
         ticket_url: 'https://ticketmaster.com/event/e1',
+        latitude: 30.2672,
+        longitude: -97.7431,
       },
     ])
   })

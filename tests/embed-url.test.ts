@@ -9,12 +9,20 @@ import { describe, expect, it } from 'vitest'
 import { embedInfo, isSafeEmbedSrc } from '@/lib/embed'
 
 describe('embedInfo — YouTube', () => {
-  it('normalizes watch / short / embed URLs to a safe embed URL', () => {
-    const want = { provider: 'youtube', embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }
+  it('normalizes watch / youtu.be / embed URLs to a safe embed URL (not a Short)', () => {
+    const want = { provider: 'youtube', embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ', isShort: false }
     expect(embedInfo('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toEqual(want)
     expect(embedInfo('https://youtu.be/dQw4w9WgXcQ')).toEqual(want)
     expect(embedInfo('https://www.youtube.com/embed/dQw4w9WgXcQ')).toEqual(want)
     expect(embedInfo('https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=10s')).toEqual(want)
+  })
+
+  it('flags a /shorts/ URL as a Short (and still normalizes to the same embed URL)', () => {
+    expect(embedInfo('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toEqual({
+      provider: 'youtube',
+      embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+      isShort: true,
+    })
   })
 })
 

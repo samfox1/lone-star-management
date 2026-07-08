@@ -2,7 +2,12 @@
 
 import { useState } from 'react'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
 import { CardModal } from '../card-modal'
+import { SelectToggle } from '../select-toggle'
+import { metricLabel } from '@/lib/analytics'
+import { CardStat } from '../card-stat'
+import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
 
 export type TourDate = {
@@ -12,6 +17,10 @@ export type TourDate = {
   city: string | null
   ticket_url: string | null
   source: string | null
+  /** Whether the date is currently live on the public site. */
+  visible: boolean
+  /** 30-day ticket-clicks (from analytics_by_entity). */
+  stat?: number
 }
 
 /** Split a YYYY-MM-DD date into a day number + short month, for the date block. */
@@ -24,18 +33,35 @@ function dateBlock(date: string | null): { day: string; month: string } {
 }
 
 /**
- * A tour date as a prototype-style row (mono date block · venue/city · tickets);
- * clicking opens a modal to edit its fields or delete. Synced rows carry a source
- * badge. Keeps the list scannable while preserving the full editor.
+ * A tour date as a prototype-style list row (select · mono date block · venue/city ·
+ * tickets). Tour has no cover art, so it's a dense list rather than a grid. A select
+ * checkbox + "On site" badge drive the password-gated publish (owned by the parent
+ * browser); clicking opens the edit modal.
  */
-export function TourRow({ tour, artistId }: { tour: TourDate; artistId: string }) {
+export function TourRow({
+  tour,
+  artistId,
+  selected,
+  onToggleSelect,
+}: {
+  tour: TourDate
+  artistId: string
+  selected: boolean
+  onToggleSelect: () => void
+}) {
   const [open, setOpen] = useState(false)
   const { day, month } = dateBlock(tour.date)
   const badge = tour.source && tour.source !== 'manual' ? tour.source : null
 
   return (
     <>
-      <div className="flex items-center gap-4 border-b border-hairline py-3 last:border-0">
+      <div className="flex items-center gap-5 border-b border-hairline py-5 last:border-0">
+        <SelectToggle
+          selected={selected}
+          visible={tour.visible}
+          onToggle={onToggleSelect}
+          label={tour.venue || 'date'}
+        />
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -50,6 +76,7 @@ export function TourRow({ tour, artistId }: { tour: TourDate; artistId: string }
               {tour.venue || 'Untitled venue'}
             </div>
             {tour.city && <div className="truncate font-space text-xs text-ink-muted">{tour.city}</div>}
+            <CardStat value={tour.stat ?? 0} label={metricLabel('tour_date')} />
           </div>
           {badge && (
             <span className="font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">{badge}</span>
@@ -60,9 +87,11 @@ export function TourRow({ tour, artistId }: { tour: TourDate; artistId: string }
             href={tour.ticket_url}
             target="_blank"
             rel="noopener noreferrer"
-            className={buttonClass('ghost', 'flex-none')}
+            title="Tickets"
+            aria-label="Tickets"
+            className="inline-flex flex-none items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
           >
-            Tickets
+            <Icon name="ticket" size={16} />
           </a>
         )}
       </div>
@@ -75,14 +104,12 @@ export function TourRow({ tour, artistId }: { tour: TourDate; artistId: string }
       >
         <h3 className="text-lg font-bold tracking-[-0.01em]">Edit date</h3>
         {badge && (
-          <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
-            from {badge}
-          </div>
+          <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">from {badge}</div>
         )}
-        <form
-          action={updateContentAction.bind(null, 'tour_date', tour.id, artistId)}
-          className="mt-4 space-y-2"
-        >
+        <div className="mt-4">
+          <EntitySparkline artistId={artistId} entityIds={[tour.id]} label="Ticket clicks · 30d" />
+        </div>
+        <form action={updateContentAction.bind(null, 'tour_date', tour.id, artistId)} className="mt-4 space-y-2">
           <div className="flex gap-2">
             <input name="date" type="date" defaultValue={tour.date ?? ''} required className={`${inputClass} w-40`} />
             <input name="city" defaultValue={tour.city ?? ''} placeholder="City" className={`${inputClass} flex-1`} />

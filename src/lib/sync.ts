@@ -11,7 +11,8 @@
  * database without touching any external API.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SpotifyTrackInput } from '@/lib/spotify'
+import type { SpotifyTrackInput, SpotifyReleaseInput } from '@/lib/spotify'
+import { slugify } from '@/lib/slug'
 import type { DeezerTrackInput } from '@/lib/deezer'
 import type { AppleTrackInput } from '@/lib/apple'
 import type { YouTubeVideoInput } from '@/lib/youtube'
@@ -45,10 +46,13 @@ type SyncSpec = {
   source: string
   artistId: string
   items: ExternalItem[]
+  /** Columns set only on INSERT of a new row (not on refresh), e.g. `visible:false`
+   *  so imported items land off-site until the manager publishes them on. */
+  insertDefaults?: Record<string, unknown>
 }
 
 async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<SyncResult> {
-  const { table, externalIdCol, source, artistId, items } = spec
+  const { table, externalIdCol, source, artistId, items, insertDefaults } = spec
 
   const { data: existing, error: listErr } = await supabase
     .from(table)
@@ -83,6 +87,7 @@ async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<S
     if (!match) {
       const { error } = await supabase.from(table).insert({
         artist_id: artistId,
+        ...insertDefaults,
         ...item.values,
         [externalIdCol]: item.externalId,
         source,
@@ -134,6 +139,86 @@ export function syncSpotifyTracks(
   })
 }
 
+/**
+ * Sync the artist's Spotify releases (albums/EPs/singles) into `releases` and
+ * link their tracks. Deduped by `spotify_id`:
+ *  - existing spotify releases get their metadata refreshed (title/cover/date/
+ *    type) but NEVER their `visible` toggle, slug, or DSP links — those are
+ *    manager-owned;
+ *  - new releases are inserted HIDDEN (`visible=false`) with a unique slug and a
+ *    seed Spotify link, for the manager to toggle on.
+ * Tracks are linked to their release by member Spotify id, but only where the
+ * track isn't already assigned — so a manual assignment (or a prior link) wins.
+ * Run AFTER the tracks sync, so the tracks exist to be linked.
+ */
+export async function syncSpotifyReleases(
+  supabase: SupabaseClient,
+  artistId: string,
+  releases: SpotifyReleaseInput[],
+): Promise<{ added: number; updated: number }> {
+  const { data: existing, error } = await supabase
+    .from('releases')
+    .select('id, slug, spotify_id')
+    .eq('artist_id', artistId)
+  if (error) throw new Error(error.message)
+  const rows = (existing ?? []) as { id: string; slug: string; spotify_id: string | null }[]
+  const idBySpotify = new Map<string, string>()
+  const slugs = new Set<string>()
+  for (const r of rows) {
+    if (r.spotify_id) idBySpotify.set(r.spotify_id, r.id)
+    slugs.add(r.slug)
+  }
+
+  let added = 0
+  let updated = 0
+
+  for (const rel of releases) {
+    const meta = {
+      title: rel.title,
+      cover_url: rel.cover_url,
+      release_date: rel.release_date,
+      release_type: rel.release_type,
+    }
+    const existingId = idBySpotify.get(rel.spotify_id)
+    if (existingId) {
+      const { error: uErr } = await supabase.from('releases').update(meta).eq('id', existingId)
+      if (uErr) throw new Error(uErr.message)
+      updated++
+      continue
+    }
+    // Unique slug within the artist.
+    const base = slugify(rel.title) || rel.spotify_id.slice(0, 8)
+    let slug = base
+    for (let n = 2; slugs.has(slug); n++) slug = `${base}-${n}`
+    slugs.add(slug)
+    const links = rel.spotify_url ? [{ label: 'Spotify', url: rel.spotify_url }] : []
+    const { data: ins, error: iErr } = await supabase
+      .from('releases')
+      .insert({ artist_id: artistId, ...meta, slug, links, visible: false, source: 'spotify', spotify_id: rel.spotify_id })
+      .select('id')
+      .single()
+    if (iErr) throw new Error(iErr.message)
+    idBySpotify.set(rel.spotify_id, ins!.id as string)
+    added++
+  }
+
+  // Link each release's tracks by Spotify id — only unassigned ones, so a manual
+  // (or earlier) assignment is never clobbered.
+  for (const rel of releases) {
+    const releaseId = idBySpotify.get(rel.spotify_id)
+    if (!releaseId || rel.track_spotify_ids.length === 0) continue
+    const { error: lErr } = await supabase
+      .from('tracks')
+      .update({ release_id: releaseId })
+      .eq('artist_id', artistId)
+      .is('release_id', null)
+      .in('spotify_id', rel.track_spotify_ids)
+    if (lErr) throw new Error(lErr.message)
+  }
+
+  return { added, updated }
+}
+
 /** Apple Music is a metadata + link-out catalog source (no hosted audio). */
 export function syncAppleTracks(
   supabase: SupabaseClient,
@@ -182,8 +267,9 @@ export function syncBandsintownTourDates(
     artistId,
     items: events.map((e) => ({
       externalId: e.bandsintown_id,
-      values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url },
+      values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url, latitude: e.latitude, longitude: e.longitude },
     })),
+    insertDefaults: { visible: false },
   })
 }
 
@@ -200,8 +286,15 @@ export function syncYouTubeVideos(
     artistId,
     items: videos.map((v) => ({
       externalId: v.youtube_id,
-      values: { title: v.title, provider: v.provider, embed_url: v.embed_url },
+      values: {
+        title: v.title,
+        provider: v.provider,
+        embed_url: v.embed_url,
+        is_short: v.is_short,
+        ...(v.views != null ? { youtube_views: v.views, youtube_views_at: new Date().toISOString() } : {}),
+      },
     })),
+    insertDefaults: { visible: false },
   })
 }
 
@@ -217,8 +310,9 @@ export function syncTicketmasterTourDates(
     artistId,
     items: events.map((e) => ({
       externalId: e.ticketmaster_id,
-      values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url },
+      values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url, latitude: e.latitude, longitude: e.longitude },
     })),
+    insertDefaults: { visible: false },
   })
 }
 
@@ -248,5 +342,6 @@ export function syncShopifyMerch(
       externalId: p.shopify_product_id,
       values: { title: p.title, image_url: p.image_url, price: coercePrice(p.price), url: p.url },
     })),
+    insertDefaults: { visible: false },
   })
 }

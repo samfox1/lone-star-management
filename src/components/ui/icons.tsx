@@ -27,6 +27,14 @@ export type IconName =
   | 'grid'
   | 'list'
   | 'download'
+  | 'refresh'
+  | 'ticket'
+  | 'bolt'
+  | 'check'
+  | 'tools'
+  | 'more'
+  | 'share'
+  | 'trash'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   roster: (
@@ -127,6 +135,39 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
   list: <path d="M4 6h16M4 12h16M4 18h16" />,
   download: <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />,
+  ticket: (
+    <>
+      <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H6a2 2 0 0 1-2-2 2 2 0 0 0 0-4z" />
+      <path d="M14 6.5v11" strokeDasharray="1.5 2.2" />
+    </>
+  ),
+  bolt: <path d="M13 3L4 14h6l-1 7 9-11h-6l1-7z" />,
+  check: <path d="M5 12.5l4.5 4.5L19 6.5" />,
+  refresh: (
+    <>
+      <path d="M20 11a8 8 0 0 0-14.3-4.5M4 4v3.5h3.5" />
+      <path d="M4 13a8 8 0 0 0 14.3 4.5M20 20v-3.5h-3.5" />
+    </>
+  ),
+  tools: (
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+  ),
+  more: (
+    <>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="6" cy="12" r="2.4" />
+      <circle cx="17" cy="6" r="2.4" />
+      <circle cx="17" cy="18" r="2.4" />
+      <path d="M8.1 10.9l6.8-3.8M8.1 13.1l6.8 3.8" />
+    </>
+  ),
+  trash: <path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13" />,
 }
 
 export function Icon({

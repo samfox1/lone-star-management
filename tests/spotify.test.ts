@@ -127,3 +127,70 @@ describe('getDiscographyTracks', () => {
     expect(tracks[0]).toMatchObject({ spotify_id: 't1', stream_url: 'u1', cover_url: 'cover1' })
   })
 })
+
+describe('getDiscography (releases)', () => {
+  // Three albums exercise each branch: album_type='album', a 4-track single-type
+  // (→ ep), and a 1-track single-type (→ single). Dates cover year / year-month /
+  // full precision.
+  const albums = [
+    {
+      id: 'al1',
+      name: 'Full Length',
+      album_type: 'album',
+      release_date: '2020',
+      total_tracks: 10,
+      images: [{ url: 'cover1' }],
+      external_urls: { spotify: 'https://open.spotify.com/album/al1' },
+    },
+    { id: 'al2', name: 'The EP', album_type: 'single', release_date: '2021-06', total_tracks: 4, images: [] },
+    { id: 'al3', name: 'A Single', album_type: 'single', release_date: '2022-03-15', total_tracks: 1 },
+  ]
+  const tracksByAlbum: Record<string, unknown[]> = {
+    al1: [{ id: 't1', name: 'One' }, { id: 't2', name: 'Two' }],
+    al2: [{ id: 't3', name: 'Three' }],
+    al3: [{ id: 't4', name: 'Four' }],
+  }
+
+  function discoFetch() {
+    return vi.fn(async (url: string) => {
+      if (url === TOKEN_URL) return tokenOk as unknown as Response
+      if (url.includes('/artists/')) return res({ body: { items: albums, next: null } }) as unknown as Response
+      const id = url.match(/\/albums\/(\w+)\//)?.[1] ?? ''
+      return res({ body: { items: tracksByAlbum[id] ?? [], next: null } }) as unknown as Response
+    })
+  }
+
+  it('classifies release type by album_type + track count', async () => {
+    const { releases } = await client(discoFetch() as unknown as typeof fetch).getDiscography('a')
+    const byId = Object.fromEntries(releases.map((r) => [r.spotify_id, r]))
+    expect(byId['al1'].release_type).toBe('album')
+    expect(byId['al2'].release_type).toBe('ep') // single-type, ≥4 tracks
+    expect(byId['al3'].release_type).toBe('single')
+  })
+
+  it('normalizes partial Spotify dates to a valid YYYY-MM-DD', async () => {
+    const { releases } = await client(discoFetch() as unknown as typeof fetch).getDiscography('a')
+    const byId = Object.fromEntries(releases.map((r) => [r.spotify_id, r]))
+    expect(byId['al1'].release_date).toBe('2020-01-01') // year → padded
+    expect(byId['al2'].release_date).toBe('2021-06-01') // year-month → padded
+    expect(byId['al3'].release_date).toBe('2022-03-15') // full → kept
+  })
+
+  it('carries the album cover, Spotify url seed, and member track ids', async () => {
+    const { releases } = await client(discoFetch() as unknown as typeof fetch).getDiscography('a')
+    const byId = Object.fromEntries(releases.map((r) => [r.spotify_id, r]))
+    expect(byId['al1']).toMatchObject({
+      title: 'Full Length',
+      cover_url: 'cover1',
+      spotify_url: 'https://open.spotify.com/album/al1',
+      track_spotify_ids: ['t1', 't2'],
+    })
+    expect(byId['al2'].cover_url).toBeNull() // no images → null
+    expect(byId['al3'].spotify_url).toBeNull() // no external_urls → null
+  })
+
+  it('returns the same deduped track list as getDiscographyTracks, from one fetch', async () => {
+    const { tracks } = await client(discoFetch() as unknown as typeof fetch).getDiscography('a')
+    expect(tracks.map((t) => t.title)).toEqual(['One', 'Two', 'Three', 'Four'])
+  })
+})

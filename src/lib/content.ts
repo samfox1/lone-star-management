@@ -19,6 +19,13 @@ export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'r
  *  are excluded from the generic form. */
 export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
 
+/** Content types with a live `visible` toggle: the manager curates which are on the
+ *  site (a per-card select) and commits with a password-gated publish. A new/imported
+ *  row lands off-site (`visible=false`); publish is the only path to `visible=true`,
+ *  which also snapshots content — so `visible=true` always implies actually-live. */
+export type VisibleEntity = 'release' | 'video' | 'merch' | 'tour_date'
+export const VISIBLE_ENTITIES: readonly VisibleEntity[] = ['release', 'video', 'merch', 'tour_date']
+
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
  *  has its own bespoke editor). The artist PROFILE is published separately as a
@@ -56,7 +63,7 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
   // Manual video adds set provider + a normalized embed_url (validated by the
   // add action via embedInfo); the generic update touches title/sort_order.
-  video: { fields: ['title', 'provider', 'embed_url', 'sort_order'], required: ['title', 'provider', 'embed_url'] },
+  video: { fields: ['title', 'provider', 'embed_url', 'is_short', 'sort_order'], required: ['title', 'provider', 'embed_url'] },
   // Releases manage a DSP-links jsonb via their own page (links validated there).
   release: {
     fields: ['title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order'],
@@ -97,7 +104,8 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   video: {
     table: 'videos',
     // Allowlist: youtube_id/source stay server-side, never reach the public site.
-    snapshot: ['id', 'title', 'provider', 'embed_url', 'sort_order'],
+    // is_short IS public so the site can split normal videos from Shorts.
+    snapshot: ['id', 'title', 'provider', 'embed_url', 'is_short', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   release: {
@@ -147,15 +155,75 @@ export async function listContent(
   return (data ?? []) as ContentRow[]
 }
 
+/**
+ * Reconcile which of an artist's items (of a visible-gated type) are live on the
+ * public site. `visibleIds` is the desired on-site set: rows in it are shown
+ * (`visible=true`), all others are hidden. Only rows that actually change are
+ * written. RLS scopes every write to the caller's tenant, so this can't touch
+ * another artist's rows. Returns how many flipped each way. (The public-facing gate
+ * is this `visible` flag; see get_public_site / get_public_releases / get_release.)
+ */
+export async function reconcileVisibility(
+  supabase: SupabaseClient,
+  type: VisibleEntity,
+  artistId: string,
+  visibleIds: string[],
+): Promise<{ shown: number; hidden: number }> {
+  const table = PUBLISHABLE[type].table
+  const wanted = new Set(visibleIds)
+  const { data: rows, error } = await supabase
+    .from(table)
+    .select('id, visible')
+    .eq('artist_id', artistId)
+  if (error) throw new Error(error.message)
+
+  const toShow = (rows ?? []).filter((r) => !r.visible && wanted.has(r.id as string)).map((r) => r.id)
+  const toHide = (rows ?? []).filter((r) => r.visible && !wanted.has(r.id as string)).map((r) => r.id)
+
+  if (toShow.length) {
+    const { error: e } = await supabase
+      .from(table)
+      .update({ visible: true })
+      .in('id', toShow)
+      .eq('artist_id', artistId)
+    if (e) throw new Error(e.message)
+  }
+  if (toHide.length) {
+    const { error: e } = await supabase
+      .from(table)
+      .update({ visible: false })
+      .in('id', toHide)
+      .eq('artist_id', artistId)
+    if (e) throw new Error(e.message)
+  }
+  return { shown: toShow.length, hidden: toHide.length }
+}
+
+/** @deprecated Releases-specific alias kept for existing callers; use reconcileVisibility. */
+export function reconcileReleaseVisibility(
+  supabase: SupabaseClient,
+  artistId: string,
+  visibleIds: string[],
+): Promise<{ shown: number; hidden: number }> {
+  return reconcileVisibility(supabase, 'release', artistId, visibleIds)
+}
+
+/** New video/merch/tour_date rows land OFF-site (`visible=false`) so a manual add or
+ *  an import shows up as an unpublished draft the manager then selects + publishes on.
+ *  (Releases keep their own path: manual adds stay live, Spotify imports set false in
+ *  the sync — so `release` is intentionally not here.) */
+const INSERT_HIDDEN: readonly CrudEntity[] = ['video', 'merch', 'tour_date']
+
 export async function createContent(
   supabase: SupabaseClient,
   type: CrudEntity,
   artistId: string,
   input: Record<string, unknown>,
 ): Promise<ContentRow> {
+  const hidden = INSERT_HIDDEN.includes(type) ? { visible: false } : {}
   const { data, error } = await supabase
     .from(PUBLISHABLE[type].table)
-    .insert({ ...pickFields(type, input), artist_id: artistId })
+    .insert({ ...pickFields(type, input), ...hidden, artist_id: artistId })
     .select('*')
     .single()
   if (error) throw new Error(error.message)

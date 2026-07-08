@@ -3,6 +3,9 @@
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { GridCard } from '../grid-card'
+import { metricLabel } from '@/lib/analytics'
+import { CardStat } from '../card-stat'
+import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
 
 export type MerchItem = {
@@ -12,6 +15,10 @@ export type MerchItem = {
   url: string | null
   image_url: string | null
   source: string | null
+  /** Whether the item is currently live on the public site. */
+  visible: boolean
+  /** 30-day buy-clicks (from analytics_by_entity). */
+  stat?: number
 }
 
 /** Format a price as a bold mono figure ("$24"), tolerant of string/number/null. */
@@ -22,8 +29,22 @@ function priceLabel(price: string | number | null): string | null {
   return `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`
 }
 
-/** A merch item as a cover-grid tile; opens a modal to edit its fields or delete. */
-export function MerchCard({ item, artistId }: { item: MerchItem; artistId: string }) {
+/**
+ * A merch item as a cover-grid tile; opens a modal to edit its fields or delete. A
+ * select checkbox + "On site" badge drive the password-gated publish (owned by the
+ * parent browser).
+ */
+export function MerchCard({
+  item,
+  artistId,
+  selected,
+  onToggleSelect,
+}: {
+  item: MerchItem
+  artistId: string
+  selected: boolean
+  onToggleSelect: () => void
+}) {
   const price = priceLabel(item.price)
   const badge = item.source && item.source !== 'manual' ? item.source : null
 
@@ -31,6 +52,10 @@ export function MerchCard({ item, artistId }: { item: MerchItem; artistId: strin
     <GridCard
       deleteAction={deleteContentAction.bind(null, 'merch', item.id, artistId)}
       deleteLabel="Delete item"
+      selected={selected}
+      onToggleSelect={onToggleSelect}
+      visible={item.visible}
+      selectLabel={item.title}
       tile={
         <>
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface text-ink-faint">
@@ -48,6 +73,7 @@ export function MerchCard({ item, artistId }: { item: MerchItem; artistId: strin
               <span className="font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">{badge}</span>
             )}
           </div>
+          <CardStat value={item.stat ?? 0} label={metricLabel('merch')} />
         </>
       }
     >
@@ -66,6 +92,10 @@ export function MerchCard({ item, artistId }: { item: MerchItem; artistId: strin
             <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">from {badge}</div>
           )}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <EntitySparkline artistId={artistId} entityIds={[item.id]} label="Buy clicks · 30d" />
       </div>
 
       <form action={updateContentAction.bind(null, 'merch', item.id, artistId)} className="mt-5 space-y-2">
