@@ -7,6 +7,21 @@
       `analytics_events` (DoS). Add a per-slug burst cap like the subscribe door
       (`20260706150000_subscribe_rate_limit.sql`), ideally shared with the audio play route.
 
+## Storage GC — DONE (2026-07-08)
+- [x] Video objects GC'd at PUBLISH (`gcVideoObjects` in publishEntityAction): after
+      publish the working rows are the complete referenced set, so orphaned files
+      (deleted/replaced videos) are removed. Bound to publish, never delete, so the
+      LEFT-JOIN gate keeps serving deleted-but-still-published videos until tombstone.
+- [x] Media objects GC'd at DELETE (`deleteMediaAction`): media is a live table (no
+      revision deferral), so the row delete unpublishes immediately — safe to remove then.
+
+## Upload follow-ups
+- [ ] Very large video uploads use `.upload()` (no resumable/progress). Consider tus/
+      resumable + a real progress bar if managers hit failures on big files.
+- [ ] Public `videos` bucket = no retraction on unpublish (the URL stays fetchable if
+      known, though it's never exposed for unpublished rows). Fine for now; revisit if
+      "unpublish must hide the file" becomes a requirement (would need private+signed, like audio).
+
 ## Manager cross-artist tour calendar (later)
 - [ ] A manager-level view that aggregates EVERY client's tour dates into one
       place — list + calendar toggle, color-coded by artist — so a manager can

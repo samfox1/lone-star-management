@@ -63,8 +63,12 @@ export type SiteLink = {
 export type SiteVideo = {
   id: string
   title: string
-  provider: 'youtube' | 'soundcloud'
-  embed_url: string
+  provider: 'youtube' | 'soundcloud' | 'uploaded'
+  /** Set for embeds (youtube/soundcloud); null for an uploaded (self-hosted) video. */
+  embed_url: string | null
+  /** Set for uploaded videos (path in the public `videos` bucket); null for embeds. */
+  storage_path: string | null
+  is_short?: boolean
   sort_order: number
 }
 

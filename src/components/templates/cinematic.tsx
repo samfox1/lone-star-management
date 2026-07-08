@@ -6,7 +6,7 @@
  */
 import type { SiteData, SiteLink, SiteTourDate, SiteVideo } from '@/lib/site'
 import { safeHref } from '@/lib/url'
-import { isSafeEmbedSrc } from '@/lib/embed'
+import { isRenderableVideo } from '@/lib/video-render'
 import { trackAttrs } from '@/lib/events'
 import { fieldHref, fieldValue } from '@/lib/site-content-schema'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
@@ -215,7 +215,7 @@ function Footer({
 }
 
 function Videos({ videos, heading }: { videos: SiteVideo[]; heading: string }) {
-  const safe = videos.filter((v) => isSafeEmbedSrc(v.embed_url))
+  const safe = videos.filter(isRenderableVideo)
   if (safe.length === 0) return null
   return (
     <section id="videos" className="mx-auto w-full max-w-4xl px-6 py-24">
@@ -224,7 +224,7 @@ function Videos({ videos, heading }: { videos: SiteVideo[]; heading: string }) {
         {safe.map((v) => (
           <li key={v.id}>
             <div className="aspect-video w-full overflow-hidden border border-border bg-black">
-              <VideoEmbed id={v.id} embedUrl={v.embed_url} title={v.title} />
+              <VideoEmbed video={v} />
             </div>
             <p className="mt-2 text-sm text-muted">{v.title}</p>
           </li>

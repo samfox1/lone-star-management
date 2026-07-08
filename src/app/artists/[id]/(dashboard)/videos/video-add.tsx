@@ -1,8 +1,45 @@
 'use client'
 
 import { Icon } from '@/components/ui/icons'
+import { createClient } from '@/lib/supabase/client'
 import { CreateModal } from '../create-modal'
+import { useStorageUpload } from '../use-storage-upload'
+import { FileDropField } from '../file-drop-field'
 import { addVideoAction, resolveVideoUrlAction } from '../actions'
+
+/** Drop/pick a video file → uploads to the videos bucket + inserts an off-site
+ *  (draft) `uploaded` video row. The manager then selects + publishes it like any video. */
+function VideoUpload({ artistId, onDone }: { artistId: string; onDone: () => void }) {
+  const { busy, error, upload } = useStorageUpload({
+    bucket: 'videos',
+    artistId,
+    category: 'videos',
+    noun: 'video',
+    rules: {
+      allowedExt: ['mp4', 'mov', 'webm'],
+      maxBytes: 500 * 1024 * 1024,
+      allowedMime: ['video/mp4', 'video/quicktime', 'video/webm'],
+    },
+    writeRow: async (path, file) => {
+      const title = file.name.replace(/\.[^.]+$/, '').slice(0, 120) || 'Untitled video'
+      const { error: rowErr } = await createClient()
+        .from('videos')
+        .insert({ artist_id: artistId, title, provider: 'uploaded', storage_path: path, source: 'manual', visible: false })
+      return rowErr?.message ?? null
+    },
+    onSuccess: onDone, // close the modal only after the upload fully settles
+  })
+  return (
+    <FileDropField
+      accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
+      label="Drop a video or click to upload"
+      hint="MP4, MOV or WebM · up to 500 MB"
+      busy={busy}
+      error={error}
+      onFile={upload}
+    />
+  )
+}
 
 function VideoPreview({ thumbnail, title }: { thumbnail?: string; title?: string }) {
   return (
@@ -40,6 +77,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
       ]}
       preview={(v) => <VideoPreview thumbnail={v._thumbnail} title={v.title} />}
       submit={(fd) => addVideoAction(artistId, fd)}
+      upload={(close) => <VideoUpload artistId={artistId} onDone={close} />}
     />
   )
 }

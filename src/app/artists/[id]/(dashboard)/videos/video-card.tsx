@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { metricLabel } from '@/lib/analytics'
+import { publicVideoSrc } from '@/lib/video-render'
 import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
 import { deleteContentAction } from '../actions'
@@ -13,6 +14,8 @@ export type VideoItem = {
   provider: string | null
   poster: string | null
   embed_url: string | null
+  /** Path in the public `videos` bucket for an uploaded (self-hosted) video; null for embeds. */
+  storage_path: string | null
   source: string | null
   /** True for a YouTube Short (shown in the Shorts tab, not the default Videos tab). */
   is_short: boolean
@@ -24,6 +27,12 @@ export type VideoItem = {
   stat?: number
 }
 
+const BADGE_LABEL: Record<string, string> = {
+  youtube: 'YouTube',
+  soundcloud: 'SoundCloud',
+  uploaded: 'Uploaded',
+}
+
 /** Compact count label: 1.2M / 45.3K / 812. */
 function compact(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
@@ -31,9 +40,12 @@ function compact(n: number): string {
   return String(n)
 }
 
-/** The public YouTube link to open/share: /shorts/<id> for a Short, /watch?v=<id>
- *  otherwise. Falls back to the stored embed URL if the id can't be parsed. */
-function youtubeUrl(video: VideoItem): string {
+/** The link to open/share: an uploaded video's public file URL, else the public
+ *  YouTube link (/shorts/<id> for a Short, /watch?v=<id> otherwise). */
+function videoOpenUrl(video: VideoItem): string {
+  if (video.provider === 'uploaded') {
+    return publicVideoSrc({ provider: 'uploaded', embed_url: null, storage_path: video.storage_path }) ?? '#'
+  }
   const m = (video.embed_url ?? '').match(/embed\/([\w-]{6,})/)
   if (!m) return video.embed_url ?? '#'
   return video.is_short
@@ -58,8 +70,9 @@ export function VideoCard({
   selected: boolean
   onToggleSelect: () => void
 }) {
-  const badge = video.source && video.source !== 'manual' ? video.source : video.provider
-  const url = youtubeUrl(video)
+  const badgeRaw = video.source && video.source !== 'manual' ? video.source : video.provider
+  const badge = badgeRaw ? (BADGE_LABEL[badgeRaw] ?? badgeRaw) : null
+  const url = videoOpenUrl(video)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [copied, setCopied] = useState(false)

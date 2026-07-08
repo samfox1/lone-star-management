@@ -23,8 +23,8 @@ beforeAll(async () => {
 afterEach(async () => {
   await svc.from('media').delete().in('artist_id', [artistA, artistB])
   await svc.storage.from('media').remove([
-    `${artistA}/hero-videos/iso-test.txt`,
-    `${artistB}/hero-videos/iso-test.txt`,
+    `${artistA}/hero-videos/iso-test.png`,
+    `${artistB}/hero-videos/iso-test.png`,
   ])
 })
 
@@ -62,14 +62,24 @@ describe('storage path isolation', () => {
   it('manager A can upload into their own folder', async () => {
     const { error } = await asA.storage
       .from('media')
-      .upload(`${artistA}/hero-videos/iso-test.txt`, body, { upsert: true })
+      .upload(`${artistA}/hero-videos/iso-test.png`, body, { contentType: 'image/png', upsert: true })
     expect(error).toBeNull()
+  })
+
+  it('CRITICAL: the media bucket rejects a non-image/video mime (no HTML/SVG XSS)', async () => {
+    const { error } = await asA.storage
+      .from('media')
+      .upload(`${artistA}/hero-videos/xss.html`, Buffer.from('<script>alert(1)</script>'), {
+        contentType: 'text/html',
+        upsert: true,
+      })
+    expect(error).not.toBeNull()
   })
 
   it("CRITICAL: manager A cannot upload into artist B's folder", async () => {
     const { error } = await asA.storage
       .from('media')
-      .upload(`${artistB}/hero-videos/iso-test.txt`, body, { upsert: true })
+      .upload(`${artistB}/hero-videos/iso-test.png`, body, { contentType: "image/png", upsert: true })
     expect(error).not.toBeNull()
   })
 })

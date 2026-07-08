@@ -39,6 +39,7 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
           provider: provider || null,
           poster: youtubePoster(String(row.embed_url ?? ''), provider),
           embed_url: (row.embed_url as string | null) ?? null,
+          storage_path: (row.storage_path as string | null) ?? null,
           source: (row.source as string | null) ?? null,
           is_short: (row.is_short as boolean | null) ?? false,
           visible: (row.visible as boolean | null) ?? true,

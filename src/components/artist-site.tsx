@@ -10,7 +10,7 @@
  */
 import type { SiteData } from '@/lib/site'
 import { safeHref } from '@/lib/url'
-import { isSafeEmbedSrc } from '@/lib/embed'
+import { isRenderableVideo } from '@/lib/video-render'
 import { trackAttrs } from '@/lib/events'
 import { fieldValue } from '@/lib/site-content-schema'
 import { TrackPlayButton } from '@/components/track-play-button'
@@ -110,10 +110,10 @@ export function ArtistSite({ data }: { data: SiteData }) {
 
       <Section title={text('videos_heading')} show={videos.length > 0}>
         <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-          {videos.filter((v) => isSafeEmbedSrc(v.embed_url)).map((v) => (
+          {videos.filter(isRenderableVideo).map((v) => (
             <li key={v.id}>
               <div className="aspect-video w-full overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
-                <VideoEmbed id={v.id} embedUrl={v.embed_url} title={v.title} />
+                <VideoEmbed video={v} />
               </div>
               <p className="mt-1 text-sm font-medium">{v.title}</p>
             </li>

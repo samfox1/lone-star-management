@@ -27,6 +27,8 @@ export type IconName =
   | 'grid'
   | 'list'
   | 'download'
+  | 'upload'
+  | 'alert'
   | 'refresh'
   | 'ticket'
   | 'bolt'
@@ -135,6 +137,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
   list: <path d="M4 6h16M4 12h16M4 18h16" />,
   download: <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />,
+  upload: <path d="M12 21V9M7 14l5-5 5 5M5 3h14" />,
+  alert: (
+    <>
+      <path d="M12 4.5 20.5 19.5H3.5z" />
+      <path d="M12 10.5v4" />
+      <path d="M12 17.4h.01" />
+    </>
+  ),
   ticket: (
     <>
       <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H6a2 2 0 0 1-2-2 2 2 0 0 0 0-4z" />

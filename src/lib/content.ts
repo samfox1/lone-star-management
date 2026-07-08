@@ -63,7 +63,9 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
   // Manual video adds set provider + a normalized embed_url (validated by the
   // add action via embedInfo); the generic update touches title/sort_order.
-  video: { fields: ['title', 'provider', 'embed_url', 'is_short', 'sort_order'], required: ['title', 'provider', 'embed_url'] },
+  // embed_url is NOT required: an uploaded video has a storage_path instead. The
+  // embed-or-storage invariant is enforced by the DB CHECK + embedOrStorageValid.
+  video: { fields: ['title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order'], required: ['title', 'provider'] },
   // Releases manage a DSP-links jsonb via their own page (links validated there).
   release: {
     fields: ['title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order'],
@@ -104,8 +106,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   video: {
     table: 'videos',
     // Allowlist: youtube_id/source stay server-side, never reach the public site.
-    // is_short IS public so the site can split normal videos from Shorts.
-    snapshot: ['id', 'title', 'provider', 'embed_url', 'is_short', 'sort_order'],
+    // is_short IS public so the site can split normal videos from Shorts; storage_path
+    // IS public so the site can play an uploaded (self-hosted) video.
+    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order'],
     orderBy: ['sort_order', 'created_at'],
   },
   release: {

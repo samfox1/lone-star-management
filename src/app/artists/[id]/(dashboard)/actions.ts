@@ -11,6 +11,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { gcVideoObjects } from '@/lib/storage-gc'
 import {
   type CrudEntity,
   type GenericEntity,
@@ -232,10 +233,13 @@ async function upsertSiteContentFields(
  * TODO: garbage-collect orphaned objects (e.g. during the publish tombstone
  * step) so they don't accumulate.
  */
-export async function deleteMediaAction(mediaId: string, _storagePath: string, artistId: string) {
+export async function deleteMediaAction(mediaId: string, storagePath: string, artistId: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('media').delete().eq('id', mediaId)
   if (error) throw new Error(error.message)
+  // Media is a live table (no publish/revision deferral), so the row delete unpublishes
+  // it immediately — safe to remove the object now instead of orphaning it.
+  if (storagePath) await supabase.storage.from('media').remove([storagePath])
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
@@ -244,12 +248,13 @@ export async function deleteMediaAction(mediaId: string, _storagePath: string, a
  * YouTube/SoundCloud), derive the provider, then create the draft video. An
  * unrecognized URL is rejected.
  */
-export async function addVideoAction(artistId: string, formData: FormData) {
+export async function addVideoAction(artistId: string, formData: FormData): Promise<{ error: string } | void> {
   const title = String(formData.get('title') ?? '').trim()
   const url = String(formData.get('embed_url') ?? '').trim()
-  if (!title || !url) return
+  if (!title) return { error: 'Give the video a title.' }
+  if (!url) return { error: 'Paste a YouTube link.' }
   const info = embedInfo(url)
-  if (!info || info.provider !== 'youtube') return // Videos is YouTube-only
+  if (!info || info.provider !== 'youtube') return { error: "That's not a YouTube link. Videos added by URL must be from YouTube (or use Upload for a file)." }
 
   const supabase = await createClient()
   await createContent(supabase, 'video', artistId, {
@@ -474,6 +479,10 @@ export async function publishEntityAction(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
   }
+
+  // GC after publish (best-effort): the working rows are now the complete set of
+  // still-needed uploaded objects, so drop any orphaned files (deleted/replaced videos).
+  if (type === 'video') await gcVideoObjects(supabase, artistId)
 
   revalidatePath(`/artists/${artistId}`, 'layout')
   return { ok: true }

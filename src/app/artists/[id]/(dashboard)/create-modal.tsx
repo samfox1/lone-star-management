@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
+import { UploadError } from './file-drop-field'
 
 export type AddField = {
   name: string
@@ -76,6 +77,7 @@ export function CreateModal({
   preview,
   submit,
   auto,
+  upload,
 }: {
   /** Mono eyebrow label above the title, e.g. "Tour date" / "Video" / "Product". */
   kind: string
@@ -84,10 +86,13 @@ export function CreateModal({
   preview: (values: Record<string, string>) => ReactNode
   submit: (formData: FormData) => Promise<unknown>
   auto?: AutoConfig
+  /** Optional "Upload a file" path — renders your uploader; call `close` when done. */
+  upload?: (close: () => void) => ReactNode
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [step, setStep] = useState<'choose' | 'auto' | 'manual'>(auto ? 'choose' : 'manual')
+  const hasChoice = Boolean(auto || upload)
+  const [step, setStep] = useState<'choose' | 'auto' | 'manual' | 'upload'>(hasChoice ? 'choose' : 'manual')
   const [values, setValues] = useState<Record<string, string>>({})
   const [urlInput, setUrlInput] = useState('')
   const [resolved, setResolved] = useState(false)
@@ -95,7 +100,7 @@ export function CreateModal({
   const [pending, start] = useTransition()
 
   function reset() {
-    setStep(auto ? 'choose' : 'manual')
+    setStep(hasChoice ? 'choose' : 'manual')
     setValues({})
     setUrlInput('')
     setResolved(false)
@@ -173,7 +178,7 @@ export function CreateModal({
         >
           <div className="w-[520px] max-w-full rounded-2xl bg-paper p-6 shadow-2xl">
             <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
-              {step !== 'choose' && auto && (
+              {step !== 'choose' && hasChoice && (
                 <button
                   type="button"
                   onClick={() => {
@@ -193,17 +198,19 @@ export function CreateModal({
               </div>
             </div>
 
-            {/* Step 1 — Manual / Automatic, two columns, minimal */}
-            {step === 'choose' && auto && (
-              <div className="mt-4 grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setStep('auto')}
-                  className="flex flex-col items-center gap-2.5 rounded-xl border border-hairline bg-paper px-3 py-6 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
-                >
-                  <Icon name="bolt" size={24} />
-                  <span className="text-sm font-semibold">Auto</span>
-                </button>
+            {/* Step 1 — pick a way in: Auto / Manual / Upload (whichever are wired) */}
+            {step === 'choose' && hasChoice && (
+              <div className={cx('mt-4 grid gap-2.5', auto && upload ? 'grid-cols-3' : 'grid-cols-2')}>
+                {auto && (
+                  <button
+                    type="button"
+                    onClick={() => setStep('auto')}
+                    className="flex flex-col items-center gap-2.5 rounded-xl border border-hairline bg-paper px-3 py-6 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+                  >
+                    <Icon name="bolt" size={24} />
+                    <span className="text-sm font-semibold">Auto</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setStep('manual')}
@@ -212,8 +219,21 @@ export function CreateModal({
                   <Icon name="edit" size={22} />
                   <span className="text-sm font-semibold">Manual</span>
                 </button>
+                {upload && (
+                  <button
+                    type="button"
+                    onClick={() => setStep('upload')}
+                    className="flex flex-col items-center gap-2.5 rounded-xl border border-hairline bg-paper px-3 py-6 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+                  >
+                    <Icon name="upload" size={22} />
+                    <span className="text-sm font-semibold">Upload</span>
+                  </button>
+                )}
               </div>
             )}
+
+            {/* Upload — caller's uploader (drop field); closes the modal on success */}
+            {step === 'upload' && upload && <div className="mt-4">{upload(close)}</div>}
 
             {/* Automatic — paste a URL, load it in */}
             {step === 'auto' && !resolved && auto && (
@@ -227,7 +247,7 @@ export function CreateModal({
                   placeholder={auto.placeholder}
                   className={`${inputClass} w-full`}
                 />
-                {error && <p className="mt-2 font-space text-xs text-accent-red">{error}</p>}
+                {error && <div className="mt-3"><UploadError>{error}</UploadError></div>}
                 <div className="mt-5 flex justify-end gap-2 border-t border-hairline pt-4">
                   <button type="button" onClick={close} className={buttonClass('ghost')}>
                     Cancel
@@ -248,7 +268,7 @@ export function CreateModal({
                     <Fields fields={fields} values={values} set={set} />
                   </div>
                 </div>
-                {error && <p className="mt-2 font-space text-xs text-accent-red">{error}</p>}
+                {error && <div className="mt-3"><UploadError>{error}</UploadError></div>}
                 <div className="mt-5 flex justify-end gap-2 border-t border-hairline pt-4">
                   <button type="button" onClick={close} className={buttonClass('ghost')}>
                     Cancel
