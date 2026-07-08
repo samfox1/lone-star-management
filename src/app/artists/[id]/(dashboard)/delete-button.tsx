@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { deleteContentAction } from './actions'
 import { toast } from './toast'
 import type { CrudEntity } from '@/lib/content'
@@ -26,16 +26,24 @@ export function DeleteButton({
   children: ReactNode
 }) {
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false) // hard re-entry latch (state is a stale closure across fast clicks)
   async function onClick() {
-    if (busy) return
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
-    const res = await deleteContentAction(type, id, artistId)
-    setBusy(false)
-    if (res?.error) {
-      toast(res.error, 'error')
-      return
+    try {
+      const res = await deleteContentAction(type, id, artistId)
+      if (res?.error) {
+        toast(res.error, 'error')
+        return
+      }
+      toast(`${noun} deleted`)
+    } catch {
+      toast(`Couldn't delete that ${noun.toLowerCase()}.`, 'error')
+    } finally {
+      busyRef.current = false
+      setBusy(false)
     }
-    toast(`${noun} deleted`)
   }
   return (
     <button type="button" onClick={onClick} disabled={busy} className={className}>

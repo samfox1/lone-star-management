@@ -6,6 +6,7 @@ import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { UploadError } from './file-drop-field'
+import { toast } from './toast'
 
 export type AddField = {
   name: string
@@ -148,6 +149,7 @@ export function CreateModal({
       }
       router.refresh()
       close()
+      toast(`${kind} added`)
     })
   }
 

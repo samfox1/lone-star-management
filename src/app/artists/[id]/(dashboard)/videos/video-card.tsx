@@ -83,27 +83,40 @@ export function VideoCard({
   const [saving, setSaving] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  const busyRef = useRef(false) // hard re-entry latch shared by delete + rename
   async function del() {
+    if (busyRef.current) return
+    busyRef.current = true
     setMenuOpen(false)
-    const res = await deleteContentAction('video', video.id, artistId)
-    if (res?.error) {
-      toast(res.error, 'error')
-      return
+    try {
+      const res = await deleteContentAction('video', video.id, artistId)
+      if (res?.error) toast(res.error, 'error')
+      else toast('Video deleted')
+    } catch {
+      toast("Couldn't delete that video.", 'error')
+    } finally {
+      busyRef.current = false
     }
-    toast('Video deleted')
   }
 
   async function saveRename() {
-    if (saving || !name.trim()) return
+    if (busyRef.current || !name.trim()) return
+    busyRef.current = true
     setSaving(true)
-    const res = await renameVideoAction(video.id, artistId, name)
-    setSaving(false)
-    if (res.error) {
-      toast(res.error, 'error')
-      return
+    try {
+      const res = await renameVideoAction(video.id, artistId, name)
+      if (res.error) {
+        toast(res.error, 'error')
+        return
+      }
+      toast('Video renamed')
+      setRenameOpen(false)
+    } catch {
+      toast("Couldn't rename that video.", 'error')
+    } finally {
+      busyRef.current = false
+      setSaving(false)
     }
-    toast('Video renamed')
-    setRenameOpen(false)
   }
 
   useEffect(() => {
@@ -119,6 +132,13 @@ export function VideoCard({
       document.removeEventListener('keydown', onKey)
     }
   }, [menuOpen])
+
+  useEffect(() => {
+    if (!renameOpen) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setRenameOpen(false)
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [renameOpen])
 
   async function share() {
     setMenuOpen(false)

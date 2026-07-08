@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { CardModal } from '../card-modal'
+import { SaveForm } from '../save-form'
+import { toast } from '../toast'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
@@ -129,7 +131,7 @@ export function ReleaseCard({
           />
         </div>
 
-        <form action={setReleaseTypeAction.bind(null, release.id, artistId)} className="mt-4 flex items-center gap-2">
+        <SaveForm action={setReleaseTypeAction.bind(null, release.id, artistId)} className="mt-4 flex items-center gap-2">
           <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
           <select
             name="release_type"
@@ -145,7 +147,7 @@ export function ReleaseCard({
           <button type="submit" className={buttonClass('ghost')}>
             Save
           </button>
-        </form>
+        </SaveForm>
 
         {songCount > 0 && (
           <>
@@ -176,21 +178,31 @@ export function ReleaseCard({
             <li key={i} className="flex items-center gap-2 text-sm">
               <span className="font-medium">{l.label}</span>
               <span className="flex-1 truncate font-space text-xs text-ink-faint">{l.url}</span>
-              <form action={removeReleaseLinkAction.bind(null, release.id, i, artistId)}>
-                <button type="submit" className="font-space text-xs text-accent-red hover:underline">
-                  remove
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await removeReleaseLinkAction(release.id, i, artistId)
+                  if (res?.error) toast(res.error, 'error')
+                  else toast('Link removed')
+                }}
+                className="font-space text-xs text-accent-red hover:underline"
+              >
+                remove
+              </button>
             </li>
           ))}
         </ul>
-        <form action={addReleaseLinkAction.bind(null, release.id, artistId)} className="mt-3 flex flex-wrap items-center gap-2">
+        <SaveForm
+          action={addReleaseLinkAction.bind(null, release.id, artistId)}
+          savedMessage="Link added"
+          className="mt-3 flex flex-wrap items-center gap-2"
+        >
           <input name="label" placeholder="Platform (e.g. Spotify)" required className={`${inputClass} w-36`} />
           <input name="url" type="url" placeholder="https://…" required className={`${inputClass} flex-1`} />
           <button type="submit" className={buttonClass('ghost')}>
             Add link
           </button>
-        </form>
+        </SaveForm>
       </CardModal>
     </div>
   )

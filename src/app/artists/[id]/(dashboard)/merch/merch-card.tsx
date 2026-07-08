@@ -7,6 +7,7 @@ import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
+import { SaveForm } from '../save-form'
 
 export type MerchItem = {
   id: string
@@ -99,7 +100,7 @@ export function MerchCard({
         <EntitySparkline artistId={artistId} entityIds={[item.id]} label="Buy clicks · 30d" />
       </div>
 
-      <form action={updateContentAction.bind(null, 'merch', item.id, artistId)} className="mt-5 space-y-2">
+      <SaveForm action={updateContentAction.bind(null, 'merch', item.id, artistId)} className="mt-5 space-y-2">
         <input name="title" defaultValue={item.title} required placeholder="Item name" className={`${inputClass} w-full`} />
         <div className="flex gap-2">
           <input name="price" type="number" step="any" defaultValue={item.price ?? ''} placeholder="Price" className={`${inputClass} w-28`} />
@@ -116,7 +117,7 @@ export function MerchCard({
             </a>
           )}
         </div>
-      </form>
+      </SaveForm>
     </GridCard>
   )
 }

@@ -15,6 +15,16 @@
 - [x] Media objects GC'd at DELETE (`deleteMediaAction`): media is a live table (no
       revision deferral), so the row delete unpublishes immediately — safe to remove then.
 
+## Action-feedback toasts — remaining silent paths (consistency follow-up)
+- [ ] These still use plain `<form action={serverAction}>` and throw on error with no
+      toast (the card edit/delete/rename, uploads, add-modal, media delete, release
+      links all toast now): the generic ADD forms (`addContentAction` in
+      content-sections + tracks-section), `setTrackReleaseAction` (track→release
+      assign), per-section publish (`publishSectionAction` in section-toolbar), and the
+      integrations config saves (saveSpotifyId/saveYoutubeChannel/connectShopify/etc).
+      Convert each to return `{error?}` behind a client wrapper (mirror SaveForm/
+      DeleteButton) and toast, when doing a consistency pass.
+
 ## Upload follow-ups
 - [ ] Very large video uploads use `.upload()` (no resumable/progress). Consider tus/
       resumable + a real progress bar if managers hit failures on big files.

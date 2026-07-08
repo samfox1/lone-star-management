@@ -8,6 +8,7 @@ import { buttonClass, inputClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { addContentAction, updateContentAction } from './actions'
 import { DeleteButton } from './delete-button'
+import { SaveForm } from './save-form'
 import { TrackAudioUploader } from './track-audio-uploader'
 
 type FieldUI = { name: string; placeholder: string; type?: string; width?: string }
@@ -102,7 +103,7 @@ export function ContentSection({
                   )}
                 </div>
               )}
-              <form
+              <SaveForm
                 action={updateContentAction.bind(null, type, row.id as string, artistId)}
                 className="flex flex-1 flex-wrap items-center gap-2"
               >
@@ -127,7 +128,7 @@ export function ContentSection({
                 >
                   Save
                 </button>
-              </form>
+              </SaveForm>
               {type === 'track' && (
                 <TrackAudioUploader
                   artistId={artistId}

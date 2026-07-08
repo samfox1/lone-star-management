@@ -121,12 +121,17 @@ export async function updateContentAction(
   id: string,
   artistId: string,
   formData: FormData,
-) {
+): Promise<{ error?: string }> {
   const input = extractUpdate(type, formData)
-  if (Object.keys(input).length === 0) return
+  if (Object.keys(input).length === 0) return {}
   const supabase = await createClient()
-  await updateContent(supabase, type, id, input)
+  try {
+    await updateContent(supabase, type, id, input)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Save failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /** Rename a video (title only) — the 3-dots "Rename". Draft until republished, like any
@@ -259,14 +264,19 @@ async function upsertSiteContentFields(
  * TODO: garbage-collect orphaned objects (e.g. during the publish tombstone
  * step) so they don't accumulate.
  */
-export async function deleteMediaAction(mediaId: string, storagePath: string, artistId: string) {
+export async function deleteMediaAction(
+  mediaId: string,
+  storagePath: string,
+  artistId: string,
+): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { error } = await supabase.from('media').delete().eq('id', mediaId)
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
   // Media is a live table (no publish/revision deferral), so the row delete unpublishes
   // it immediately — safe to remove the object now instead of orphaning it.
   if (storagePath) await supabase.storage.from('media').remove([storagePath])
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /**
@@ -421,11 +431,17 @@ export async function addReleaseAction(artistId: string, formData: FormData) {
 }
 
 /** Set a release's type (album/single/ep/featured). RLS scopes the update. */
-export async function setReleaseTypeAction(releaseId: string, artistId: string, formData: FormData) {
+export async function setReleaseTypeAction(
+  releaseId: string,
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
   const release_type = toReleaseType(String(formData.get('release_type') ?? ''))
   const supabase = await createClient()
-  await supabase.from('releases').update({ release_type }).eq('id', releaseId)
+  const { error } = await supabase.from('releases').update({ release_type }).eq('id', releaseId)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /**
@@ -523,26 +539,36 @@ export async function setTrackReleaseAction(trackId: string, artistId: string, f
 }
 
 /** Append a DSP link to a release (url sanitized; RLS scopes to the owner). */
-export async function addReleaseLinkAction(releaseId: string, artistId: string, formData: FormData) {
+export async function addReleaseLinkAction(
+  releaseId: string,
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
   const label = String(formData.get('label') ?? '').trim()
   const url = safeHref(String(formData.get('url') ?? '').trim())
-  if (!label || !url) return
+  if (!label || !url) return { error: 'Add a platform name and a valid URL.' }
   const supabase = await createClient()
   const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
   const links = [...((rel?.links as ReleaseLink[]) ?? []), { label, url }]
   const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /** Remove the DSP link at `index` from a release. */
-export async function removeReleaseLinkAction(releaseId: string, index: number, artistId: string) {
+export async function removeReleaseLinkAction(
+  releaseId: string,
+  index: number,
+  artistId: string,
+): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
   const links = ((rel?.links as ReleaseLink[]) ?? []).filter((_, i) => i !== index)
   const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /** Choose which public-site template this artist's page renders. */

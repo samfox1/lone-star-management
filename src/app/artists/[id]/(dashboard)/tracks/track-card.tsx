@@ -3,6 +3,7 @@
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { GridCard } from '../grid-card'
 import { deleteContentAction, setTrackReleaseAction, updateContentAction } from '../actions'
+import { SaveForm } from '../save-form'
 import { TrackAudioUploader } from '../track-audio-uploader'
 
 /** A release the track can be assigned to (id + title, for the selector). */
@@ -65,7 +66,7 @@ export function TrackCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <form
+          <SaveForm
             action={updateContentAction.bind(null, 'track', track.id, artistId)}
             className="flex items-center gap-2"
           >
@@ -73,7 +74,7 @@ export function TrackCard({
             <button type="submit" className={buttonClass('ghost')}>
               Save
             </button>
-          </form>
+          </SaveForm>
           {badge && (
             <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">from {badge}</div>
           )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 
@@ -22,15 +22,18 @@ export function toast(message: string, kind: ToastKind = 'success') {
 /** The toast stack: bottom-right, auto-dismiss, click to dismiss. Mounted once. */
 export function Toaster() {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     const l: Listener = (t) => {
       setToasts((cur) => [...cur, t])
-      setTimeout(() => setToasts((cur) => cur.filter((x) => x.id !== t.id)), 4500)
+      timers.current.push(setTimeout(() => setToasts((cur) => cur.filter((x) => x.id !== t.id)), 4500))
     }
     listeners.push(l)
+    const pending = timers.current
     return () => {
       listeners = listeners.filter((x) => x !== l)
+      for (const id of pending) clearTimeout(id)
     }
   }, [])
 

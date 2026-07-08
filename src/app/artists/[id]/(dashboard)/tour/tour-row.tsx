@@ -9,6 +9,7 @@ import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
+import { SaveForm } from '../save-form'
 
 export type TourDate = {
   id: string
@@ -110,7 +111,7 @@ export function TourRow({
         <div className="mt-4">
           <EntitySparkline artistId={artistId} entityIds={[tour.id]} label="Ticket clicks · 30d" />
         </div>
-        <form action={updateContentAction.bind(null, 'tour_date', tour.id, artistId)} className="mt-4 space-y-2">
+        <SaveForm action={updateContentAction.bind(null, 'tour_date', tour.id, artistId)} className="mt-4 space-y-2">
           <div className="flex gap-2">
             <input name="date" type="date" defaultValue={tour.date ?? ''} required className={`${inputClass} w-40`} />
             <input name="city" defaultValue={tour.city ?? ''} placeholder="City" className={`${inputClass} flex-1`} />
@@ -120,7 +121,7 @@ export function TourRow({
           <button type="submit" className={buttonClass('ghost')}>
             Save
           </button>
-        </form>
+        </SaveForm>
       </CardModal>
     </>
   )

@@ -5,7 +5,7 @@
  */
 import { mediaUrl } from '@/lib/site'
 import { MediaUploader } from './media-uploader'
-import { deleteMediaAction } from './actions'
+import { MediaDeleteButton } from './media-delete-button'
 
 export type MediaRow = {
   id: string
@@ -15,14 +15,13 @@ export type MediaRow = {
 
 function DeleteButton({ row, artistId }: { row: MediaRow; artistId: string }) {
   return (
-    <form action={deleteMediaAction.bind(null, row.id, row.storage_path, artistId)}>
-      <button
-        type="submit"
-        className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
-      >
-        Delete
-      </button>
-    </form>
+    <MediaDeleteButton
+      mediaId={row.id}
+      storagePath={row.storage_path}
+      artistId={artistId}
+      noun={row.purpose === 'profile_photo' ? 'Photo' : 'Video'}
+      className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
+    />
   )
 }
 
