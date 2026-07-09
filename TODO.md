@@ -62,6 +62,10 @@ Decisions that don't change the sequence:
 - **Bandsintown gate**: stays a TODO note (not enforced in code) — see bottom section.
 
 ### New to-dos from the review
+- [ ] **Get a GOOGLE_API_KEY to switch on the Drive integration** (built + tested
+      2026-07-09; see the Drive section below). Google Cloud console → new/any
+      project → enable "Google Drive API" → Credentials → API key → paste into
+      `.env.local` as `GOOGLE_API_KEY`. Free; public-data reads only.
 - [ ] **Get Ticketmaster + Apple Music credentials, then turn them on.** Both are
       code-complete + tested but have no keys, so they show in the Integrations hub
       as clickable and fail at runtime. Apple needs a MusicKit Team ID + Key ID +
@@ -75,6 +79,21 @@ Decisions that don't change the sequence:
       wiring any write/upload/publish tool, decide the transport: move behind the
       app's HTTP APIs (RLS + validation enforced) or an RLS-scoped per-manager client.
       Do not add write tools on the god-key transport.
+
+## Google Drive integration — BUILT 2026-07-09 (needs GOOGLE_API_KEY to go live)
+
+Public-folder-link model: the manager pastes a link-shared folder URL in
+Integrations → Files; the dashboard browses it (names/sizes/thumbnails stream
+from Drive, zero storage cost) and **copy-imports** selected files server-side
+into our buckets so they behave exactly like uploads. Audio → Unreleased songs
+(gated `audio` bucket), videos → uploaded/off-site rows (`videos`), images → a
+new Gallery images block on the Site page (`media`, `gallery_image`). Dedupe via
+`drive_file_id` (partial unique, migration `20260710120000`, pushed). Caps:
+audio 30 MB / images 25 MB / video 100 MB (bigger videos → the direct uploader).
+- [ ] Sam: create the API key (see "New to-dos") — until then the Drive card
+      shows a friendly "key not configured" error on Check/browse.
+- [ ] Later: a public gallery section (gallery images are dashboard-only today);
+      raise the video cap by streaming the server-side copy instead of buffering.
 
 ## Analytics — record_event rate limit (review follow-up)
 - [ ] The anon `record_event` door has no per-IP/per-slug rate limit. entity_type is now

@@ -129,9 +129,9 @@ tracks were public.
     lint 0 errors, prod build, authenticated dogfood of the Music tab (buckets +
     badges + empty states, live DB).
 
-Known v1 gaps (deliberate):
-- No UI creates a manual/unreleased RELEASE yet, so an unreleased release's own card
-  isn't editable anywhere (its tracks group under its title in Unreleased). Build a
-  release-create flow when demos need grouping for real.
-- A manual track can't gain a platform link through the UI (TrackCard edits title
-  only), so promoting an upload to Released means assigning it to a released release.
+~~Known v1 gaps~~ — **both closed later on 2026-07-09** (manual-music follow-up):
+- "Add release" (CreateModal → the existing `addReleaseAction`) creates a manual
+  release; it starts Unreleased by derivation and its card (type / DSP links /
+  delete) renders in the Unreleased half — adding a DSP link promotes it.
+- TrackCard gained a "Listen" link field (`stream_url`): setting one promotes an
+  upload to Released, clearing demotes.
