@@ -60,3 +60,19 @@ describe('PublishBar', () => {
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 })
+
+describe('PublishBar with content edits (dirty)', () => {
+  it('enables on unpublished edits even with zero selection changes', () => {
+    render(<PublishBar pendingCount={0} dirty onPublish={vi.fn(async () => ({ ok: true }))} noun="releases" />)
+    const btn = publishButton()
+    expect(btn).not.toBeDisabled()
+    fireEvent.click(btn)
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText(/Push your latest edits to your public releases/i)).toBeInTheDocument()
+  })
+
+  it('stays disabled when neither selection changes nor edits are pending', () => {
+    render(<PublishBar pendingCount={0} dirty={false} onPublish={vi.fn()} />)
+    expect(publishButton()).toBeDisabled()
+  })
+})

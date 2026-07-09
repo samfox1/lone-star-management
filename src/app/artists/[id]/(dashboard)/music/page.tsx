@@ -1,19 +1,15 @@
-import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { listContent } from '@/lib/content'
+import { diffUnpublished, listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
-import { buttonClass } from '@/components/ui/ui'
 import { requireArtist } from '../_data'
 import {
   addContentAction,
   importDriveFileAction,
   listDriveFilesAction,
-  publishSectionAction,
   refreshSpotifyAction,
 } from '../actions'
-import { ActionButton } from '../action-button'
 import { DriveBrowser } from '../drive-browser'
 import { CardGrid } from '../card-grid'
 import { OriginSection } from '../origin'
@@ -21,38 +17,30 @@ import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 import { type ReleaseLink, type ReleaseSong } from '../releases/release-card'
 import { ReleasesBrowser } from './releases-browser'
 import { ReleaseAddButton } from './release-add'
+import { MusicTabs } from './music-tabs'
 import { UnreleasedBrowser, LOOSE, type UnreleasedTrack } from './unreleased-browser'
-
-/** Bucket heading: bold title + a one-line mono hint, hairline underneath. */
-function BucketHeader({ title, hint, action }: { title: string; hint: string; action?: ReactNode }) {
-  return (
-    <div className="flex items-end justify-between border-b border-hairline pb-3">
-      <div>
-        <h2 className="text-[17px] font-bold tracking-[-0.01em]">{title}</h2>
-        <p className="mt-0.5 font-space text-xs text-ink-muted">{hint}</p>
-      </div>
-      {action}
-    </div>
-  )
-}
 
 /**
  * The Music tab — ONE surface for the artist's whole catalog, split by provenance
- * (lib/music.ts): **Released** (on a platform → public site material: releases with
- * tracklists + the password-gated publish, plus any loose platform tracks) and
- * **Unreleased** (uploads/demos with no platform presence — dashboard-only, never
- * public). No manual toggle: a track moves buckets by joining a released release
- * or gaining a platform link.
+ * (lib/music.ts) into a Released | Unreleased switch: **Released** (on a platform →
+ * public site material: releases with tracklists + the password-gated publish pill,
+ * plus any loose platform songs) and **Unreleased** (uploads/demos with no platform
+ * presence — dashboard-only, never public). No manual toggle: a song moves buckets
+ * by joining a released release or gaining a listen link.
  */
 export default async function MusicPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const artist = await requireArtist(id)
-  const [releaseRows, trackRows, counts] = await Promise.all([
+  const [releaseRows, trackRows, counts, diff] = await Promise.all([
     listContent(supabase, 'release', id),
     listContent(supabase, 'track', id),
     entityCounts(supabase, id, daysAgo(30)),
+    diffUnpublished(supabase, id),
   ])
+  // Unpublished music edits (renames, links…) enable the publish pill even when
+  // the on-site selection hasn't changed, so an edit can't strand as a draft.
+  const musicDirty = diff.release.dirty || diff.track.dirty
 
   // Classify every release once; tracks inherit through their release_id.
   const relBucket = new Map<string, MusicBucket>(
@@ -160,45 +148,31 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   }))
 
   return (
-    <div className="space-y-12">
-      <section className="space-y-6">
-        <BucketHeader
-          title="Released"
-          hint="On platforms — this is what your public site shows."
-          action={
-            <ActionButton
-              action={publishSectionAction.bind(null, 'track', id)}
-              savedMessage="Published songs"
-              busyLabel="Publishing…"
-              className={buttonClass('ghost')}
-            >
-              Publish songs
-            </ActionButton>
-          }
-        />
-        <ReleasesBrowser
-          releases={releases}
-          artistId={id}
-          artistSlug={artist.slug}
-          refreshAction={refreshSpotifyAction.bind(null, id)}
-        />
-        {looseReleased.length > 0 && (
-          <OriginSection label="Loose tracks" count={looseReleased.length}>
-            <CardGrid size="sm" count={looseReleased.length}>
-              {looseReleased.map((t) => (
-                <TrackCard key={t.id} artistId={id} track={t} releases={releaseOptions} />
-              ))}
-            </CardGrid>
-          </OriginSection>
-        )}
-      </section>
-
-      <section className="space-y-6">
-        <BucketHeader
-          title="Unreleased"
-          hint="Uploads and demos — dashboard-only, never public."
-          action={<ReleaseAddButton artistId={id} />}
-        />
+    <MusicTabs
+      releasedCount={releases.length + looseReleased.length}
+      unreleasedCount={unreleasedReleases.length + unreleased.length}
+      released={
+        <div className="space-y-8">
+          <ReleasesBrowser
+            releases={releases}
+            artistId={id}
+            artistSlug={artist.slug}
+            refreshAction={refreshSpotifyAction.bind(null, id)}
+            addButton={<ReleaseAddButton artistId={id} />}
+            dirty={musicDirty}
+          />
+          {looseReleased.length > 0 && (
+            <OriginSection label="Loose songs" count={looseReleased.length}>
+              <CardGrid size="sm" count={looseReleased.length}>
+                {looseReleased.map((t) => (
+                  <TrackCard key={t.id} artistId={id} track={t} releases={releaseOptions} />
+                ))}
+              </CardGrid>
+            </OriginSection>
+          )}
+        </div>
+      }
+      unreleased={
         <UnreleasedBrowser
           tracks={unreleased}
           artistId={id}
@@ -216,7 +190,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
             ) : undefined
           }
         />
-      </section>
-    </div>
+      }
+    />
   )
 }

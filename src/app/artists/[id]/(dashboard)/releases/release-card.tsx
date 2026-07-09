@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { CardModal } from '../card-modal'
 import { SaveForm } from '../save-form'
@@ -80,6 +81,17 @@ export function ReleaseCard({
             />
           </div>
         )}
+
+        {/* Edit — top-right of the cover (the tile click opens the same modal) */}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="Edit release"
+          aria-label={`Edit ${release.title}`}
+          className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-ink-muted shadow-sm transition-colors hover:text-ink"
+        >
+          <Icon name="edit" size={14} />
+        </button>
 
         <button type="button" onClick={() => setEditing(true)} className="block w-full text-left">
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">

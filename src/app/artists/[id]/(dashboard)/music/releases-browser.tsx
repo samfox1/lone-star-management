@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
@@ -48,11 +48,17 @@ export function ReleasesBrowser({
   artistId,
   artistSlug,
   refreshAction,
+  addButton,
+  dirty = false,
 }: {
   releases: Release[]
   artistId: string
   artistSlug: string
   refreshAction: () => Promise<{ ok: boolean; error?: string }>
+  /** The "+ Add" affordance (Add release modal), next to Refresh like other pages. */
+  addButton?: ReactNode
+  /** Unpublished music edits — enables the publish pill without a selection delta. */
+  dirty?: boolean
 }) {
   const router = useRouter()
   const [site, setSite] = useState<SiteFilter>('all')
@@ -89,7 +95,12 @@ export function ReleasesBrowser({
         ]}
         sort={sort}
         onSort={setSort}
-        trailing={<RefreshButton action={refreshAction} />}
+        trailing={
+          <>
+            <RefreshButton action={refreshAction} />
+            {addButton}
+          </>
+        }
       />
 
       {groups.length === 0 ? (
@@ -119,7 +130,7 @@ export function ReleasesBrowser({
         </div>
       )}
 
-      <PublishBar pendingCount={pendingCount} onPublish={publish} />
+      <PublishBar pendingCount={pendingCount} dirty={dirty} onPublish={publish} />
     </div>
   )
 }

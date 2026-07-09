@@ -13,10 +13,14 @@ import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/co
  */
 export function PublishBar({
   pendingCount,
+  dirty = false,
   onPublish,
   noun = 'releases',
 }: {
   pendingCount: number
+  /** Unpublished CONTENT edits (renames, links…) — enables publish even when the
+   *  on-site selection is unchanged, so an edit is never stranded as a draft. */
+  dirty?: boolean
   onPublish: (password: string) => Promise<{ ok: boolean; error?: string }>
   /** Plural noun for the modal copy, e.g. "videos". Defaults to "releases". */
   noun?: string
@@ -34,8 +38,8 @@ export function PublishBar({
   }, [open])
 
   // The bar is ALWAYS visible; it's just greyed out (disabled) until a toggle
-  // creates a pending change, then it lights up with the count.
-  const dirty = pendingCount > 0
+  // creates a pending change (or a content edit is waiting), then it lights up.
+  const enabled = pendingCount > 0 || dirty
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -57,23 +61,29 @@ export function PublishBar({
       <div className="fixed bottom-6 right-6 z-40">
         <button
           type="button"
-          onClick={() => dirty && setOpen(true)}
-          disabled={!dirty}
-          title={dirty ? `Publish ${pendingCount} change${pendingCount === 1 ? '' : 's'}` : 'No changes to publish'}
+          onClick={() => enabled && setOpen(true)}
+          disabled={!enabled}
+          title={
+            pendingCount > 0
+              ? `Publish ${pendingCount} change${pendingCount === 1 ? '' : 's'}`
+              : enabled
+                ? 'Publish your latest edits'
+                : 'No changes to publish'
+          }
           className={
-            dirty
+            enabled
               ? 'inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-black'
               : 'inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-hairline bg-surface px-5 py-3 font-space text-sm font-semibold text-ink-faint shadow-sm'
           }
         >
           Publish
-          {dirty && (
+          {pendingCount > 0 && (
             <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs tabular-nums">{pendingCount}</span>
           )}
         </button>
       </div>
 
-      {open && dirty && (
+      {open && enabled && (
         <div
           role="dialog"
           aria-modal="true"
@@ -83,7 +93,10 @@ export function PublishBar({
           <form onSubmit={submit} className={modalCardClass}>
             <h2 className="text-lg font-bold tracking-[-0.01em]">Publish to the site</h2>
             <p className="mt-1 font-space text-xs text-ink-muted">
-              {pendingCount} change{pendingCount === 1 ? '' : 's'} to your public {noun}. Enter your password to confirm.
+              {pendingCount > 0
+                ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} to your public ${noun}.`
+                : `Push your latest edits to your public ${noun}.`}{' '}
+              Enter your password to confirm.
             </p>
 
             <input
