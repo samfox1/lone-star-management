@@ -13,6 +13,8 @@ export type AddField = {
   placeholder: string
   type?: string
   required?: boolean
+  /** Renders a <select> instead of an input; the first option is the default. */
+  options?: { value: string; label: string }[]
   /** Consecutive fields sharing a `row` sit side by side. */
   row?: number
   /** Width within its row: sm (fixed narrow, e.g. price), grow (fill), or full (default). */
@@ -46,18 +48,35 @@ function Fields({
     <>
       {rows.map((group, i) => (
         <div key={i} className={group.length > 1 ? 'flex gap-2' : ''}>
-          {group.map((f, j) => (
-            <input
-              key={f.name}
-              autoFocus={i === 0 && j === 0}
-              type={f.type ?? 'text'}
-              value={values[f.name] ?? ''}
-              onChange={(e) => set(f.name, e.target.value)}
-              placeholder={f.placeholder}
-              required={f.required}
-              className={cx(inputClass, f.width === 'sm' ? 'w-24' : f.width === 'grow' ? 'min-w-0 flex-1' : 'w-full')}
-            />
-          ))}
+          {group.map((f, j) => {
+            const width = cx(f.width === 'sm' ? 'w-24' : f.width === 'grow' ? 'min-w-0 flex-1' : 'w-full')
+            return f.options ? (
+              <select
+                key={f.name}
+                aria-label={f.placeholder}
+                value={values[f.name] ?? f.options[0].value}
+                onChange={(e) => set(f.name, e.target.value)}
+                className={cx(inputClass, width)}
+              >
+                {f.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                key={f.name}
+                autoFocus={i === 0 && j === 0}
+                type={f.type ?? 'text'}
+                value={values[f.name] ?? ''}
+                onChange={(e) => set(f.name, e.target.value)}
+                placeholder={f.placeholder}
+                required={f.required}
+                className={cx(inputClass, width)}
+              />
+            )
+          })}
         </div>
       ))}
     </>
@@ -140,7 +159,7 @@ export function CreateModal({
     if (pending) return
     setError(null)
     const fd = new FormData()
-    for (const f of fields) fd.set(f.name, values[f.name] ?? '')
+    for (const f of fields) fd.set(f.name, values[f.name] ?? f.options?.[0]?.value ?? '')
     start(async () => {
       const res = (await submit(fd)) as { error?: string } | void
       if (res && typeof res === 'object' && 'error' in res && res.error) {

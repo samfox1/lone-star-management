@@ -57,8 +57,10 @@ export function ReleaseCard({
   release: Release
   artistId: string
   artistSlug: string
-  selected: boolean
-  onToggleSelect: () => void
+  /** On-site selection (publish flow). Omit both for an UNRELEASED release —
+   *  publish doesn't apply, so no checkbox / live badge is shown. */
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const year = release.release_date?.slice(0, 4)
@@ -68,14 +70,16 @@ export function ReleaseCard({
     <div>
       <div className="group relative">
         {/* On-site select — top-left, doesn't open the modal */}
-        <div className="absolute left-2 top-2 z-10">
-          <SelectToggle
-            selected={selected}
-            visible={release.visible}
-            onToggle={onToggleSelect}
-            label={release.title}
-          />
-        </div>
+        {onToggleSelect && (
+          <div className="absolute left-2 top-2 z-10">
+            <SelectToggle
+              selected={!!selected}
+              visible={release.visible}
+              onToggle={onToggleSelect}
+              label={release.title}
+            />
+          </div>
+        )}
 
         <button type="button" onClick={() => setEditing(true)} className="block w-full text-left">
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">

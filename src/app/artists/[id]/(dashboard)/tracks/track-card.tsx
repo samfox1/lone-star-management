@@ -70,8 +70,8 @@ export function TrackCard({
   return (
     <GridCard
       deleteAction={deleteContentAction.bind(null, 'track', track.id, artistId)}
-      deleteLabel="Delete track"
-      deleteNoun="Track"
+      deleteLabel="Delete song"
+      deleteNoun="Song"
       tile={
         <>
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
@@ -131,6 +131,27 @@ export function TrackCard({
           </a>
         )}
       </div>
+
+      {/* Listen link = platform presence: setting one promotes the song to Released
+          (public site material) by derivation; clearing it demotes an upload back
+          to Unreleased. See lib/music.ts. */}
+      <SaveForm
+        action={updateContentAction.bind(null, 'track', track.id, artistId)}
+        savedMessage="Listen link saved"
+        className="mt-4 flex items-center gap-2"
+      >
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Listen</span>
+        <input
+          name="stream_url"
+          type="url"
+          defaultValue={track.stream_url ?? ''}
+          placeholder="https://open.spotify.com/track/…"
+          className={`${inputClass} min-w-0 flex-1`}
+        />
+        <button type="submit" className={buttonClass('ghost')}>
+          Save
+        </button>
+      </SaveForm>
 
       {releases.length > 0 && (
         <SaveForm

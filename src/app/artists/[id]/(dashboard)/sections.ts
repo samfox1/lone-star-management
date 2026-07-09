@@ -12,7 +12,7 @@ export type DiffSection = { key: keyof UnpublishedDiff; label: string; seg: stri
 
 export const DIFF_SECTIONS: DiffSection[] = [
   { key: 'profile', label: 'Site / profile', seg: 'site' },
-  { key: 'track', label: 'Tracks', seg: 'music' },
+  { key: 'track', label: 'Songs', seg: 'music' },
   { key: 'video', label: 'Videos', seg: 'videos' },
   { key: 'tour_date', label: 'Tour dates', seg: 'tour' },
   { key: 'merch', label: 'Merch', seg: 'merch' },

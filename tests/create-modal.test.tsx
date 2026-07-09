@@ -67,3 +67,42 @@ describe('CreateModal', () => {
     expect(screen.queryByText('Tour date added')).not.toBeInTheDocument() // no success toast
   })
 })
+
+describe('CreateModal select fields', () => {
+  it('renders options and submits the chosen value', async () => {
+    const submit = vi.fn<(fd: FormData) => Promise<unknown>>(async () => ({}))
+    render(
+      <>
+        <CreateModal
+          kind="Release"
+          title="Add release"
+          fields={[
+            { name: 'title', placeholder: 'Title', required: true },
+            {
+              name: 'release_type',
+              placeholder: 'Type',
+              options: [
+                { value: 'single', label: 'Single' },
+                { value: 'ep', label: 'EP' },
+                { value: 'album', label: 'Album' },
+              ],
+            },
+          ]}
+          preview={() => null}
+          submit={submit}
+        />
+        <Toaster />
+      </>,
+    )
+    const dialog = openModal()
+
+    fireEvent.change(within(dialog).getByPlaceholderText('Title'), { target: { value: 'Demo EP' } })
+    fireEvent.change(within(dialog).getByDisplayValue('Single'), { target: { value: 'ep' } })
+    fireEvent.click(within(dialog).getByText('Add'))
+
+    expect(await screen.findByText('Release added')).toBeInTheDocument()
+    const fd = submit.mock.calls[0][0] as FormData
+    expect(fd.get('title')).toBe('Demo EP')
+    expect(fd.get('release_type')).toBe('ep')
+  })
+})

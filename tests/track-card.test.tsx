@@ -1,0 +1,55 @@
+// @vitest-environment jsdom
+/**
+ * TrackCard — the song editor modal. Tests the Listen link field (stream_url via
+ * updateContentAction — setting it promotes an upload to Released by derivation)
+ * and the song-not-track copy. The audio uploader and server actions are mocked.
+ */
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
+import { updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
+  TrackAudioUploader: () => <div data-testid="uploader" />,
+}))
+vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
+  updateContentAction: vi.fn(async () => ({})),
+  deleteContentAction: vi.fn(async () => ({})),
+  setTrackReleaseAction: vi.fn(async () => ({})),
+}))
+
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+})
+
+const track = (over: Partial<Track> = {}): Track => ({
+  id: 't1', title: 'Demo', cover_url: null, stream_url: null, source: 'manual',
+  audio_path: null, release_id: null, spotify_id: null, apple_id: null,
+  deezer_id: null, apple_url: null, ...over,
+})
+
+function openModal(t: Track = track()) {
+  render(<TrackCard track={t} artistId="a1" releases={[]} />)
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(t.title) }))
+}
+
+describe('TrackCard listen link', () => {
+  it('saves a pasted listen link through updateContentAction (promotes the song)', async () => {
+    openModal()
+    const input = screen.getByPlaceholderText('https://open.spotify.com/track/…')
+    fireEvent.change(input, { target: { value: 'https://soundcloud.com/x/song' } })
+    fireEvent.submit(input.closest('form')!)
+
+    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
+    const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
+    expect([type, id, artistId]).toEqual(['track', 't1', 'a1'])
+    expect((fd as FormData).get('stream_url')).toBe('https://soundcloud.com/x/song')
+  })
+
+  it('prefills the current listen link', () => {
+    openModal(track({ stream_url: 'https://x/s' }))
+    expect(screen.getByPlaceholderText('https://open.spotify.com/track/…')).toHaveValue('https://x/s')
+  })
+})
