@@ -7,7 +7,8 @@ import { toast } from './toast'
  * A button that runs a field-less bound server action and confirms with a toast —
  * the click-to-run cousin of SaveForm, for actions carrying no form input (per-section
  * Publish, integration Pull, Shopify Disconnect). The action may return `{ error? }`
- * or `{ ok, error? }`; a non-empty `error` toasts as a failure, otherwise `savedMessage`.
+ * or `{ ok, error? }`; a non-empty `error` toasts as a failure, otherwise the action's
+ * own `message` (e.g. "Found 12 media files") or the static `savedMessage`.
  * An optional `confirm` string gates destructive actions behind window.confirm.
  */
 export function ActionButton({
@@ -19,7 +20,7 @@ export function ActionButton({
   className,
   children,
 }: {
-  action: () => Promise<{ error?: string; ok?: boolean } | void>
+  action: () => Promise<{ error?: string; ok?: boolean; message?: string } | void>
   savedMessage: string
   busyLabel?: string
   confirm?: string
@@ -41,7 +42,7 @@ export function ActionButton({
         toast(res.error, 'error')
         return
       }
-      toast(savedMessage)
+      toast((res && 'message' in res && res.message) || savedMessage)
     } catch {
       toast('Something went wrong.', 'error')
     } finally {

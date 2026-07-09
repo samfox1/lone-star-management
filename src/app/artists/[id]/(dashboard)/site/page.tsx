@@ -4,7 +4,15 @@ import { TEMPLATES } from '@/components/artist-template'
 import { fieldsFor } from '@/lib/site-content-schema'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { requireArtist } from '../_data'
-import { publishSiteAction, saveSiteContentAction, saveTemplateAction } from '../actions'
+import {
+  importDriveFileAction,
+  listDriveFilesAction,
+  publishSiteAction,
+  saveSiteContentAction,
+  saveTemplateAction,
+} from '../actions'
+import { DriveBrowser } from '../drive-browser'
+import { DriveImportButton } from '../drive-import-button'
 
 const selectClass =
   'rounded-lg border border-hairline bg-paper px-2.5 py-2 text-sm text-ink outline-none focus:border-ink-faint'
@@ -83,7 +91,21 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
           </div>
         )}
 
-        <MediaPanel artistId={id} media={(media ?? []) as MediaRow[]} />
+        <MediaPanel
+          artistId={id}
+          media={(media ?? []) as MediaRow[]}
+          driveImport={
+            artist.drive_folder_id ? (
+              <DriveImportButton title="Import images from Drive">
+                <DriveBrowser
+                  kind="image"
+                  listAction={listDriveFilesAction.bind(null, id, 'image')}
+                  importAction={importDriveFileAction.bind(null, id, 'image')}
+                />
+              </DriveImportButton>
+            ) : undefined
+          }
+        />
       </div>
     </section>
   )

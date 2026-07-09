@@ -40,6 +40,8 @@ import { createAppleMusicClient } from '@/lib/apple'
 import { createBandsintownClient } from '@/lib/bandsintown'
 import { createTicketmasterClient } from '@/lib/ticketmaster'
 import { createShopifyClient } from '@/lib/shopify'
+import { createDriveClient, parseDriveFolderId, type DriveFile, type DriveKind } from '@/lib/drive'
+import { importDriveFile } from '@/lib/drive-import'
 import {
   syncAppleTracks,
   syncBandsintownTourDates,
@@ -840,6 +842,101 @@ export async function syncShopifyAction(artistId: string): Promise<{ ok: boolean
     await syncShopifyMerch(supabase, artistId, products)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
+/* ------------------------------------------------------------------------- *
+ * Google Drive (public-folder-link model — see lib/drive.ts / lib/drive-import.ts)
+ * ------------------------------------------------------------------------- */
+
+/** The artist's connected folder id, or a friendly error. RLS is the authz gate:
+ *  a non-manager sees no row at all. */
+async function driveFolderFor(artistId: string): Promise<{ folderId: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data } = await supabase.from('artists').select('drive_folder_id').eq('id', artistId).single()
+  if (!data) return { error: 'Artist not found.' }
+  if (!data.drive_folder_id)
+    return { error: 'No Drive folder linked yet — connect one under Manager tools → Integrations.' }
+  return { folderId: data.drive_folder_id as string }
+}
+
+/** Save (or clear) the artist's Drive folder — accepts a pasted share link or a bare id. */
+export async function saveDriveFolderAction(artistId: string, formData: FormData): Promise<{ error?: string }> {
+  const raw = String(formData.get('drive_folder_id') ?? '').trim()
+  if (!raw) return saveArtistField(artistId, 'drive_folder_id', formData) // blank clears
+  const folderId = parseDriveFolderId(raw)
+  if (!folderId) return { error: "That doesn't look like a Google Drive folder link." }
+  const fd = new FormData()
+  fd.set('drive_folder_id', folderId)
+  return saveArtistField(artistId, 'drive_folder_id', fd)
+}
+
+/** Verify the folder is reachable (link-shared) and report how much media it holds. */
+export async function checkDriveFolderAction(
+  artistId: string,
+): Promise<{ ok: boolean; error?: string; message?: string }> {
+  const folder = await driveFolderFor(artistId)
+  if ('error' in folder) return { ok: false, error: folder.error }
+  try {
+    const drive = createDriveClient()
+    await drive.getFolder(folder.folderId)
+    const files = await drive.listAllMediaFiles(folder.folderId, 'all')
+    return { ok: true, message: `Found ${files.length} media file${files.length === 1 ? '' : 's'}.` }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Drive check failed.' }
+  }
+}
+
+/** One page of the folder's files of a kind, plus which are already imported. */
+export async function listDriveFilesAction(
+  artistId: string,
+  kind: DriveKind,
+  pageToken?: string | null,
+): Promise<
+  | { ok: true; files: DriveFile[]; nextPageToken: string | null; imported: string[] }
+  | { ok: false; error: string }
+> {
+  const folder = await driveFolderFor(artistId)
+  if ('error' in folder) return { ok: false, error: folder.error }
+  try {
+    const drive = createDriveClient()
+    await drive.getFolder(folder.folderId) // friendly not-shared error before a silent []
+    const { files, nextPageToken } = await drive.listMediaFiles(folder.folderId, kind, pageToken)
+    const table = kind === 'audio' ? 'tracks' : kind === 'video' ? 'videos' : 'media'
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from(table)
+      .select('drive_file_id')
+      .eq('artist_id', artistId)
+      .not('drive_file_id', 'is', null)
+    const imported = (data ?? []).map((r) => r.drive_file_id as string)
+    return { ok: true, files, nextPageToken, imported }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Drive listing failed.' }
+  }
+}
+
+/** Copy one Drive file into Lone Star (bytes → our bucket, row registered). */
+export async function importDriveFileAction(
+  artistId: string,
+  kind: DriveKind,
+  fileId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const folder = await driveFolderFor(artistId)
+  if ('error' in folder) return { ok: false, error: folder.error }
+  const supabase = await createClient()
+  try {
+    const res = await importDriveFile(supabase as never, createDriveClient(), {
+      artistId,
+      kind,
+      fileId,
+      folderId: folder.folderId,
+    })
+    if ('error' in res) return { ok: false, error: res.error }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Import failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return { ok: true }

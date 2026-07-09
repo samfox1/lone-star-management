@@ -1,7 +1,9 @@
 import {
+  checkDriveFolderAction,
   saveAppleIdAction,
   saveBandsintownNameAction,
   saveDeezerIdAction,
+  saveDriveFolderAction,
   saveSpotifyIdAction,
   saveTicketmasterIdAction,
   saveYoutubeChannelAction,
@@ -39,19 +41,22 @@ export type ArtistIdField =
   | 'youtube_channel_id'
   | 'bandsintown_name'
   | 'ticketmaster_attraction_id'
+  | 'drive_folder_id'
 
 /** The manager-facing section an integration feeds. */
-export type IntegrationSection = 'music' | 'videos' | 'tour'
+export type IntegrationSection = 'music' | 'videos' | 'tour' | 'files'
 
 /** Display label per section — kept beside the registry so it can't drift from `section`. */
 export const SECTION_LABEL: Record<IntegrationSection, string> = {
   music: 'Music',
   videos: 'Videos',
   tour: 'Tour dates',
+  files: 'Files',
 }
 
 type SaveAction = (artistId: string, formData: FormData) => Promise<{ error?: string }>
-type PullAction = (artistId: string) => Promise<{ ok: boolean; error?: string }>
+/** Pull-style actions may report a dynamic success line (e.g. "Found 12 media files"). */
+type PullAction = (artistId: string) => Promise<{ ok: boolean; error?: string; message?: string }>
 
 export type Integration = {
   key: string
@@ -71,6 +76,9 @@ export const INTEGRATIONS: Integration[] = [
   { key: 'youtube', label: 'YouTube', section: 'videos', idField: 'youtube_channel_id', placeholder: 'YouTube @handle, channel ID, or URL', pullLabel: 'Import uploads', save: saveYoutubeChannelAction, pull: syncYouTubeAction },
   { key: 'bandsintown', label: 'Bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name', pullLabel: 'Pull tour dates', save: saveBandsintownNameAction, pull: syncBandsintownAction },
   { key: 'ticketmaster', label: 'Ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID', pullLabel: 'Pull tour dates', save: saveTicketmasterIdAction, pull: syncTicketmasterAction },
+  // Not a catalog source: a link-shared folder the dashboard can browse and
+  // copy-import audio/images/videos from ("Check" verifies sharing + counts).
+  { key: 'drive', label: 'Google Drive', section: 'files', idField: 'drive_folder_id', placeholder: 'Google Drive folder link', pullLabel: 'Check folder', save: saveDriveFolderAction, pull: checkDriveFolderAction },
 ]
 
 /** The subset of the artist row the registry reads — a structural projection. */

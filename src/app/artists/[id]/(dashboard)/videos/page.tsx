@@ -2,10 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { requireArtist } from '../_data'
-import { refreshYouTubeAction } from '../actions'
+import { importDriveFileAction, listDriveFilesAction, refreshYouTubeAction } from '../actions'
 import { VideosBrowser } from './videos-browser'
 import { VideoAddButton } from './video-add'
 import { RefreshButton } from './refresh-button'
+import { DriveBrowser } from '../drive-browser'
+import { DriveImportButton } from '../drive-import-button'
 
 /** YouTube poster from a normalized embed URL; null for other providers. */
 function youtubePoster(url: string, provider: string): string | null {
@@ -22,7 +24,7 @@ function youtubePoster(url: string, provider: string): string | null {
 export default async function VideosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  await requireArtist(id)
+  const artist = await requireArtist(id)
   const [rows, counts] = await Promise.all([
     listContent(supabase, 'video', id),
     entityCounts(supabase, id, daysAgo(30)),
@@ -49,6 +51,15 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
       })}
       trailing={
         <>
+          {artist.drive_folder_id && (
+            <DriveImportButton title="Import videos from Drive">
+              <DriveBrowser
+                kind="video"
+                listAction={listDriveFilesAction.bind(null, id, 'video')}
+                importAction={importDriveFileAction.bind(null, id, 'video')}
+              />
+            </DriveImportButton>
+          )}
           <RefreshButton action={refreshYouTubeAction.bind(null, id)} />
           <VideoAddButton artistId={id} />
         </>

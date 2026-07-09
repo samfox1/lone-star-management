@@ -6,13 +6,21 @@ import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { buttonClass } from '@/components/ui/ui'
 import { requireArtist } from '../_data'
-import { addContentAction, publishSectionAction, refreshSpotifyAction } from '../actions'
+import {
+  addContentAction,
+  importDriveFileAction,
+  listDriveFilesAction,
+  publishSectionAction,
+  refreshSpotifyAction,
+} from '../actions'
 import { ActionButton } from '../action-button'
+import { DriveBrowser } from '../drive-browser'
 import { CardGrid } from '../card-grid'
 import { OriginSection } from '../origin'
 import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 import { type ReleaseLink, type ReleaseSong } from '../releases/release-card'
 import { ReleasesBrowser } from './releases-browser'
+import { ReleaseAddButton } from './release-add'
 import { UnreleasedBrowser, LOOSE, type UnreleasedTrack } from './unreleased-browser'
 
 /** Bucket heading: bold title + a one-line mono hint, hairline underneath. */
@@ -105,28 +113,32 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     songsByRelease.set(rid, list)
   }
 
-  // Released releases → the browser (groups + tracklists + PublishBar).
-  const releases = releaseRows
-    .filter((row) => relBucket.get(row.id as string) === 'released')
-    .map((row) => {
-      const rid = row.id as string
-      const songs = songsByRelease.get(rid) ?? []
-      // Release engagement (30d) = plays + DSP clicks summed over the release AND
-      // its tracks (the metric registry owns which events count).
-      const stat = metricValue(counts, 'release', [rid, ...songs.map((s) => s.id)])
-      return {
-        id: rid,
-        title: row.title as string,
-        slug: row.slug as string,
-        cover_url: (row.cover_url as string | null) ?? null,
-        release_date: (row.release_date as string | null) ?? null,
-        release_type: toReleaseType(row.release_type as string | null),
-        links: (row.links as ReleaseLink[]) ?? [],
-        visible: (row.visible as boolean | null) ?? true,
-        songs,
-        stat,
-      }
-    })
+  const toReleaseCard = (row: Record<string, unknown>) => {
+    const rid = row.id as string
+    const songs = songsByRelease.get(rid) ?? []
+    // Release engagement (30d) = plays + DSP clicks summed over the release AND
+    // its songs (the metric registry owns which events count).
+    const stat = metricValue(counts, 'release', [rid, ...songs.map((s) => s.id)])
+    return {
+      id: rid,
+      title: row.title as string,
+      slug: row.slug as string,
+      cover_url: (row.cover_url as string | null) ?? null,
+      release_date: (row.release_date as string | null) ?? null,
+      release_type: toReleaseType(row.release_type as string | null),
+      links: (row.links as ReleaseLink[]) ?? [],
+      visible: (row.visible as boolean | null) ?? true,
+      songs,
+      stat,
+    }
+  }
+
+  // Released releases → the browser (groups + tracklists + PublishBar); unreleased
+  // ones (a manual demo EP) → manageable cards in the Unreleased half.
+  const releases = releaseRows.filter((row) => relBucket.get(row.id as string) === 'released').map(toReleaseCard)
+  const unreleasedReleases = releaseRows
+    .filter((row) => relBucket.get(row.id as string) === 'unreleased')
+    .map(toReleaseCard)
 
   // Loose released tracks (platform-linked, not on a release) — rare, but they're
   // public site material and need managing (rename / assign to a release / master).
@@ -156,11 +168,11 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
           action={
             <ActionButton
               action={publishSectionAction.bind(null, 'track', id)}
-              savedMessage="Published tracks"
+              savedMessage="Published songs"
               busyLabel="Publishing…"
               className={buttonClass('ghost')}
             >
-              Publish tracks
+              Publish songs
             </ActionButton>
           }
         />
@@ -182,12 +194,27 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       </section>
 
       <section className="space-y-6">
-        <BucketHeader title="Unreleased" hint="Uploads and demos — dashboard-only, never public." />
+        <BucketHeader
+          title="Unreleased"
+          hint="Uploads and demos — dashboard-only, never public."
+          action={<ReleaseAddButton artistId={id} />}
+        />
         <UnreleasedBrowser
           tracks={unreleased}
           artistId={id}
+          artistSlug={artist.slug}
           releases={releaseOptions}
+          unreleasedReleases={unreleasedReleases}
           addAction={addContentAction.bind(null, 'track', id)}
+          importPanel={
+            artist.drive_folder_id ? (
+              <DriveBrowser
+                kind="audio"
+                listAction={listDriveFilesAction.bind(null, id, 'audio')}
+                importAction={importDriveFileAction.bind(null, id, 'audio')}
+              />
+            ) : undefined
+          }
         />
       </section>
     </div>
