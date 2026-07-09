@@ -27,7 +27,8 @@ export function SectionToolbar({
   count: number
   singular: string
   plural: string
-  publishAction: PublishAction
+  /** Omit for sections that never publish (e.g. Unreleased music is dashboard-only). */
+  publishAction?: PublishAction
   publishLabel?: string
   /** aria-label for the + button (e.g. "Add track"). */
   addLabel: string
@@ -54,14 +55,16 @@ export function SectionToolbar({
             Import
           </button>
         )}
-        <ActionButton
-          action={publishAction}
-          savedMessage={`${publishLabel}ed`}
-          busyLabel="Publishing…"
-          className={buttonClass('ghost')}
-        >
-          {publishLabel}
-        </ActionButton>
+        {publishAction && (
+          <ActionButton
+            action={publishAction}
+            savedMessage={`${publishLabel}ed`}
+            busyLabel="Publishing…"
+            className={buttonClass('ghost')}
+          >
+            {publishLabel}
+          </ActionButton>
+        )}
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}

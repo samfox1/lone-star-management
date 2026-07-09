@@ -12,11 +12,11 @@ export type DiffSection = { key: keyof UnpublishedDiff; label: string; seg: stri
 
 export const DIFF_SECTIONS: DiffSection[] = [
   { key: 'profile', label: 'Site / profile', seg: 'site' },
-  { key: 'track', label: 'Tracks', seg: 'tracks' },
+  { key: 'track', label: 'Tracks', seg: 'music' },
   { key: 'video', label: 'Videos', seg: 'videos' },
   { key: 'tour_date', label: 'Tour dates', seg: 'tour' },
   { key: 'merch', label: 'Merch', seg: 'merch' },
-  { key: 'release', label: 'Releases', seg: 'releases' },
+  { key: 'release', label: 'Releases', seg: 'music' },
   { key: 'link', label: 'Links', seg: 'links' },
   { key: 'media', label: 'Media', seg: 'site' },
   { key: 'site_content', label: 'Site text', seg: 'site' },

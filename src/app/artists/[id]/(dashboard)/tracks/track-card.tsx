@@ -1,6 +1,7 @@
 'use client'
 
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { GridCard } from '../grid-card'
 import { deleteContentAction, setTrackReleaseAction, updateContentAction } from '../actions'
 import { SaveForm } from '../save-form'
@@ -9,7 +10,7 @@ import { TrackAudioUploader } from '../track-audio-uploader'
 /** A release the track can be assigned to (id + title, for the selector). */
 export type ReleaseOption = { id: string; title: string }
 
-export type Track = {
+export type Track = TrackPlatformIds & {
   id: string
   title: string
   cover_url: string | null
@@ -17,6 +18,38 @@ export type Track = {
   source: string | null
   audio_path: string | null
   release_id: string | null
+}
+
+/**
+ * The union-model badge row: one chip per platform the track lives on. `linked`
+ * renders each chip as an outbound link — modal only; the grid tile sits inside
+ * GridCard's trigger <button>, where a nested <a> would be invalid.
+ */
+function PlatformBadges({ track, linked = false }: { track: Track; linked?: boolean }) {
+  const platforms = trackPlatforms(track)
+  if (platforms.length === 0) return null
+  const text = 'font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint'
+  return (
+    <span className="inline-flex items-center gap-2">
+      {platforms.map((p) =>
+        linked && p.url ? (
+          <a
+            key={p.key}
+            href={p.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${text} hover:text-ink-muted hover:underline`}
+          >
+            {p.label} ↗
+          </a>
+        ) : (
+          <span key={p.key} className={text}>
+            {p.label}
+          </span>
+        ),
+      )}
+    </span>
+  )
 }
 
 /**
@@ -32,7 +65,7 @@ export function TrackCard({
   artistId: string
   releases: ReleaseOption[]
 }) {
-  const badge = track.source && track.source !== 'manual' ? track.source : null
+  const platforms = trackPlatforms(track)
 
   return (
     <GridCard
@@ -50,8 +83,10 @@ export function TrackCard({
             )}
           </div>
           <div className="mt-2.5 truncate text-sm font-semibold group-hover:text-accent">{track.title}</div>
-          {badge && (
-            <div className="mt-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">{badge}</div>
+          {platforms.length > 0 && (
+            <div className="mt-0.5">
+              <PlatformBadges track={track} />
+            </div>
           )}
         </>
       }
@@ -75,15 +110,17 @@ export function TrackCard({
               Save
             </button>
           </SaveForm>
-          {badge && (
-            <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">from {badge}</div>
+          {platforms.length > 0 && (
+            <div className="mt-1.5">
+              <PlatformBadges track={track} linked />
+            </div>
           )}
         </div>
       </div>
 
       <div className="mt-4 flex items-center gap-4">
         <TrackAudioUploader artistId={artistId} trackId={track.id} hasAudio={!!track.audio_path} />
-        {track.stream_url && (
+        {platforms.length === 0 && track.stream_url && (
           <a
             href={track.stream_url}
             target="_blank"

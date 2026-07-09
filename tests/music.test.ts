@@ -5,7 +5,7 @@
  * public doors (Released-only). See MUSIC_RESTRUCTURE.md.
  */
 import { describe, expect, it } from 'vitest'
-import { releaseBucket, trackBucket, type MusicBucket, type ReleaseProvenance, type TrackProvenance } from '@/lib/music'
+import { releaseBucket, trackBucket, trackPlatforms, type MusicBucket, type ReleaseProvenance, type TrackProvenance } from '@/lib/music'
 
 const rel = (o: Partial<ReleaseProvenance> = {}): ReleaseProvenance => ({
   source: 'manual', spotify_id: null, links: [], ...o,
@@ -61,5 +61,23 @@ describe('trackBucket (in a release)', () => {
     // release_id set but resolver returns undefined → classify by the track's own fields
     expect(trackBucket(trk({ release_id: 'gone', source: 'spotify' }), () => undefined)).toBe('released')
     expect(trackBucket(trk({ release_id: 'gone' }))).toBe('unreleased')
+  })
+})
+
+describe('trackPlatforms (badge derivation)', () => {
+  const ids = { spotify_id: null as string | null, apple_id: null as string | null, deezer_id: null as string | null, apple_url: null as string | null }
+
+  it('no platform ids → no badges', () => {
+    expect(trackPlatforms(ids)).toEqual([])
+  })
+  it('one badge per non-null id, links rebuilt from the id (Apple uses apple_url)', () => {
+    expect(trackPlatforms({ ...ids, spotify_id: 'sp1', apple_id: 'ap1', deezer_id: 'dz1', apple_url: 'https://music.apple.com/x' })).toEqual([
+      { key: 'spotify', label: 'Spotify', url: 'https://open.spotify.com/track/sp1' },
+      { key: 'apple', label: 'Apple', url: 'https://music.apple.com/x' },
+      { key: 'deezer', label: 'Deezer', url: 'https://www.deezer.com/track/dz1' },
+    ])
+  })
+  it('an Apple id without a stored apple_url still badges (no link)', () => {
+    expect(trackPlatforms({ ...ids, apple_id: 'ap1' })).toEqual([{ key: 'apple', label: 'Apple', url: null }])
   })
 })

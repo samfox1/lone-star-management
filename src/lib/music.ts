@@ -51,6 +51,30 @@ function trackOnPlatform(t: TrackProvenance): boolean {
   )
 }
 
+/** The platform id columns a union-model track can carry (subset of TrackProvenance). */
+export type TrackPlatformIds = {
+  spotify_id: string | null
+  apple_id: string | null
+  deezer_id: string | null
+  /** Apple's store link can't be rebuilt from apple_id, so it's stored. */
+  apple_url: string | null
+}
+
+export type PlatformRef = { key: 'spotify' | 'apple' | 'deezer'; label: string; url: string | null }
+
+/**
+ * Which platforms a union-model track lives on — one entry per non-null id, for the
+ * per-platform badges on the Music cards. Spotify/Deezer links rebuild from the id;
+ * Apple's comes from the stored apple_url (null if the link was never captured).
+ */
+export function trackPlatforms(t: TrackPlatformIds): PlatformRef[] {
+  const out: PlatformRef[] = []
+  if (t.spotify_id) out.push({ key: 'spotify', label: 'Spotify', url: `https://open.spotify.com/track/${t.spotify_id}` })
+  if (t.apple_id) out.push({ key: 'apple', label: 'Apple', url: t.apple_url })
+  if (t.deezer_id) out.push({ key: 'deezer', label: 'Deezer', url: `https://www.deezer.com/track/${t.deezer_id}` })
+  return out
+}
+
 /**
  * Classify a track. A track in a release inherits that release's bucket (pass
  * `releaseBucketOf`, e.g. a lookup into the artist's releases). A loose track — or one
