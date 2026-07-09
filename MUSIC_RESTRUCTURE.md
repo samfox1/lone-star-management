@@ -104,22 +104,34 @@ tracks were public.
   `integrations.ts`, and migration `20260708161000_drop_switch_catalog_source` **pushed
   to the live DB** (function verified gone). The catalog-merge effort is complete;
   no more file-ownership split — one terminal owns everything now.
-- NEXT: door narrowing + dashboard Music view + badges, together. Two design
-  notes captured for resume:
-  - **Door narrowing needs snapshot provenance.** To filter the three doors to
-    Released-only without the deleted-track-vanishes bug, add `source` + platform ids to
-    the **track** snapshot and `source`/`spotify_id` to the **release** snapshot
-    (`PUBLISHABLE` in `content.ts`), then classify from the snapshot. Door migration
-    `≥ 20260708170000`. Zero live impact today (0 unreleased items; skeen's 19 tracks are
-    all in Released releases).
+- **ALL STAGES DONE (2026-07-09).** Shipped:
+  - Snapshot provenance: `source` + platform ids on the track snapshot,
+    `source`/`spotify_id` on the release snapshot (`PUBLISHABLE`).
+  - Door migration `20260709120000_public_music_released_only` — pushed + verified:
+    `music_release_is_released` / `music_track_on_platform` helpers (the SQL mirror of
+    `lib/music.ts`), Released-only `get_public_site` tracks (release-bucket inheritance
+    via lateral join), `get_release` excludes Unreleased + **album_name fallback
+    killed**, `get_public_releases` excludes Unreleased. Missing provenance keys (old
+    snapshots) classify Released, so nothing already public vanished — confirmed
+    empirically: every artist's door payload byte-identical before/after the push.
+  - `getWorkingSite` (manager preview) applies the same Released-only filter, so
+    preview still mirrors live (preview-parity guardrail green).
+  - Dashboard Music tab: Released (ReleasesBrowser + loose platform tracks +
+    "Publish tracks") / Unreleased (UnreleasedBrowser: grouped + loose uploads, add +
+    upload flow, NO publish affordance). Per-platform badges (`trackPlatforms` in
+    `lib/music.ts`) replace the single source badge on TrackCard.
+    `tracks-browser`/`tracks-section`/`releases-section` deleted (absorbed).
+  - Copilot: snapshot splits released/unreleased track counts; `catalog_source`
+    read removed; instructions drift fixed.
+  - skeen-website: `mapMusic` groups by `release_id` with authoritative
+    `release_type` (get_public_releases); cover heuristic kept as fallback.
+  - Verified: 438 tests green (+26 in skeen-website), tsc clean (both projects),
+    lint 0 errors, prod build, authenticated dogfood of the Music tab (buckets +
+    badges + empty states, live DB).
 
-Pipeline, each stage verified:
-1. `lib/music.ts` derivation helper + unit tests (no side effects) — do first, everything
-   depends on it. ✅
-
-2. Parallel, once (1) lands: (a) SQL doors migration + regression tests, (b) dashboard
-   Music view merge, (c) copilot snapshot, (d) skeen-website mapper.
-3. Integration pass: full `vitest`, typecheck, lint; dogfood the Music tab + a public
-   site render; confirm the door filter with a live query.
-
-Nothing ships until the behavior-change flag above is confirmed.
+Known v1 gaps (deliberate):
+- No UI creates a manual/unreleased RELEASE yet, so an unreleased release's own card
+  isn't editable anywhere (its tracks group under its title in Unreleased). Build a
+  release-create flow when demos need grouping for real.
+- A manual track can't gain a platform link through the UI (TrackCard edits title
+  only), so promoting an upload to Released means assigning it to a released release.

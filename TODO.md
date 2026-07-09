@@ -40,13 +40,13 @@ Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
    Suite now 70 files / 415 tests, all green. Remaining (optional, lower value —
    thin compositions of already-tested primitives): SyncPanel/ShopifyPanel,
    ReleasesBrowser. Do them if they churn in the restructure.
-4. **Music restructure** (multi-agent, "fix everywhere"): merge `releases/` +
-   `tracks/` into one **Music** surface split into **Released** (pulled from a
-   platform: Spotify/SoundCloud/Apple/etc.) and **Unreleased** (uploaded straight
-   to Lone Star, not on any platform). Kill the `album_name` string-match fallback
-   in `get_release()` and rely on the `release_id` FK only. Update dashboard routes,
-   public templates, the copilot's `artist_snapshot` counts, and skeen-website
-   mappers to match.
+4. [x] **Music restructure** — DONE 2026-07-09 (see MUSIC_RESTRUCTURE.md for the
+   full ledger). One Music surface: **Released** (platform presence, public) vs
+   **Unreleased** (uploads/demos, dashboard-only), derived via `lib/music.ts` and
+   mirrored by the SQL doors (`20260709120000`, pushed + zero live impact
+   verified). `album_name` fallback killed; per-platform badges on track cards;
+   copilot counts split released/unreleased; skeen-website uses authoritative
+   `release_type`. 439 tests green, prod build + authenticated dogfood done.
 5. **EPK-only fields** — build stage plot, tech rider, press quotes, and
    downloadable press assets (see "Phase 5 review follow-ups" below; scope now
    confirmed as build-it, not derived-only).

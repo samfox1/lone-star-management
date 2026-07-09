@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Not this app: the copilot sub-project (own tooling; its .output/ build
+    // artifacts alone OOM eslint) and throwaway HTML mocks.
+    "lone-star-agent/**",
+    "prototypes/**",
   ]),
 ]);
 
