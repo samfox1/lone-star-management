@@ -22,7 +22,7 @@ afterEach(() => {
 describe('ReleaseAddButton', () => {
   it('submits title, type, date, and cover to addReleaseAction', async () => {
     render(<ReleaseAddButton artistId="a1" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add release' }))
     const dialog = screen.getByRole('dialog')
 
     fireEvent.change(within(dialog).getByPlaceholderText('Release title'), { target: { value: 'Basement Demos' } })

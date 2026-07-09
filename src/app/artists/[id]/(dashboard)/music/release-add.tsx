@@ -35,6 +35,7 @@ export function ReleaseAddButton({ artistId }: { artistId: string }) {
     <CreateModal
       kind="Release"
       title="Add release"
+      triggerLabel="Release"
       fields={[
         { name: 'title', placeholder: 'Release title', required: true },
         {

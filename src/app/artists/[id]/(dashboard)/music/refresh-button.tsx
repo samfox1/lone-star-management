@@ -10,12 +10,21 @@ import { Icon } from '@/components/ui/icons'
  * Spotify (imported off-site, ready to publish). Bound server action does the
  * work; this shows the spinner + any error and refreshes the list on success.
  */
-export function RefreshButton({ action }: { action: () => Promise<{ ok: boolean; error?: string }> }) {
+export function RefreshButton({
+  action,
+  disabled = false,
+}: {
+  action: () => Promise<{ ok: boolean; error?: string }>
+  /** Greyed out where a pull doesn't apply (e.g. the Unreleased view — platform
+   *  pulls only ever produce Released music). */
+  disabled?: boolean
+}) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
   function refresh() {
+    if (disabled) return
     setError(null)
     start(async () => {
       const res = await action()
@@ -32,8 +41,8 @@ export function RefreshButton({ action }: { action: () => Promise<{ ok: boolean;
       <button
         type="button"
         onClick={refresh}
-        disabled={pending}
-        title={label}
+        disabled={pending || disabled}
+        title={disabled ? 'Refresh pulls released music from platforms' : label}
         aria-label={label}
         className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-60"
       >

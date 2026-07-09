@@ -4,29 +4,20 @@ import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { requireArtist } from '../_data'
-import {
-  addContentAction,
-  importDriveFileAction,
-  listDriveFilesAction,
-  refreshSpotifyAction,
-} from '../actions'
+import { importDriveFileAction, listDriveFilesAction, refreshSpotifyAction } from '../actions'
 import { DriveBrowser } from '../drive-browser'
-import { CardGrid } from '../card-grid'
-import { OriginSection } from '../origin'
-import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
+import { DriveImportButton } from '../drive-import-button'
+import { type Track, type ReleaseOption } from '../tracks/track-card'
 import { type ReleaseLink, type ReleaseSong } from '../releases/release-card'
-import { ReleasesBrowser } from './releases-browser'
-import { ReleaseAddButton } from './release-add'
-import { MusicTabs } from './music-tabs'
-import { UnreleasedBrowser, LOOSE, type UnreleasedTrack } from './unreleased-browser'
+import { MusicBrowser, LOOSE, type UnreleasedSong } from './music-browser'
 
 /**
- * The Music tab — ONE surface for the artist's whole catalog, split by provenance
- * (lib/music.ts) into a Released | Unreleased switch: **Released** (on a platform →
- * public site material: releases with tracklists + the password-gated publish pill,
- * plus any loose platform songs) and **Unreleased** (uploads/demos with no platform
- * presence — dashboard-only, never public). No manual toggle: a song moves buckets
- * by joining a released release or gaining a listen link.
+ * The Music tab — ONE surface for the artist's whole catalog, classified by
+ * provenance (lib/music.ts): Released (on a platform → public site material) vs
+ * Unreleased (uploads/demos — dashboard-only, never public). The MusicBrowser
+ * filters it with two segmented lenses (release state + site visibility) under
+ * one shared toolbar. No manual toggle: a song moves buckets by joining a
+ * released release or gaining a listen link.
  */
 export default async function MusicPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -132,9 +123,9 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   // public site material and need managing (rename / assign to a release / master).
   const looseReleased = tracks.filter((t) => t.bucket === 'released' && !t.release_id)
 
-  // Unreleased tracks, grouped under their (unreleased) release; loose uploads last.
+  // Unreleased songs, grouped under their (unreleased) release; loose uploads last.
   const relTitle = new Map(releaseRows.map((r) => [r.id as string, r.title as string]))
-  const unreleased: UnreleasedTrack[] = tracks
+  const unreleasedSongs: UnreleasedSong[] = tracks
     .filter((t) => t.bucket === 'unreleased')
     .map((t) => ({
       ...t,
@@ -148,48 +139,26 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   }))
 
   return (
-    <MusicTabs
-      releasedCount={releases.length + looseReleased.length}
-      unreleasedCount={unreleasedReleases.length + unreleased.length}
-      released={
-        <div className="space-y-8">
-          <ReleasesBrowser
-            releases={releases}
-            artistId={id}
-            artistSlug={artist.slug}
-            refreshAction={refreshSpotifyAction.bind(null, id)}
-            addButton={<ReleaseAddButton artistId={id} />}
-            dirty={musicDirty}
-          />
-          {looseReleased.length > 0 && (
-            <OriginSection label="Loose songs" count={looseReleased.length}>
-              <CardGrid size="sm" count={looseReleased.length}>
-                {looseReleased.map((t) => (
-                  <TrackCard key={t.id} artistId={id} track={t} releases={releaseOptions} />
-                ))}
-              </CardGrid>
-            </OriginSection>
-          )}
-        </div>
-      }
-      unreleased={
-        <UnreleasedBrowser
-          tracks={unreleased}
-          artistId={id}
-          artistSlug={artist.slug}
-          releases={releaseOptions}
-          unreleasedReleases={unreleasedReleases}
-          addAction={addContentAction.bind(null, 'track', id)}
-          importPanel={
-            artist.drive_folder_id ? (
-              <DriveBrowser
-                kind="audio"
-                listAction={listDriveFilesAction.bind(null, id, 'audio')}
-                importAction={importDriveFileAction.bind(null, id, 'audio')}
-              />
-            ) : undefined
-          }
-        />
+    <MusicBrowser
+      releases={releases}
+      unreleasedReleases={unreleasedReleases}
+      looseReleased={looseReleased}
+      unreleasedSongs={unreleasedSongs}
+      releaseOptions={releaseOptions}
+      artistId={id}
+      artistSlug={artist.slug}
+      refreshAction={refreshSpotifyAction.bind(null, id)}
+      dirty={musicDirty}
+      importButton={
+        artist.drive_folder_id ? (
+          <DriveImportButton title="Import songs from Drive">
+            <DriveBrowser
+              kind="audio"
+              listAction={listDriveFilesAction.bind(null, id, 'audio')}
+              importAction={importDriveFileAction.bind(null, id, 'audio')}
+            />
+          </DriveImportButton>
+        ) : undefined
       }
     />
   )

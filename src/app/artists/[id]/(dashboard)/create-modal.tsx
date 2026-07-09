@@ -98,6 +98,7 @@ export function CreateModal({
   submit,
   auto,
   upload,
+  triggerLabel,
 }: {
   /** Mono eyebrow label above the title, e.g. "Tour date" / "Video" / "Product". */
   kind: string
@@ -108,6 +109,9 @@ export function CreateModal({
   auto?: AutoConfig
   /** Optional "Upload a file" path — renders your uploader; call `close` when done. */
   upload?: (close: () => void) => ReactNode
+  /** Hover label + aria suffix for the trigger, when several Add buttons share a
+   *  toolbar (e.g. "Song" / "Release" → aria "Add song" / "Add release"). */
+  triggerLabel?: string
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -179,13 +183,13 @@ export function CreateModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="Add"
-        aria-label="Add"
+        title={triggerLabel ? `Add ${triggerLabel.toLowerCase()}` : 'Add'}
+        aria-label={triggerLabel ? `Add ${triggerLabel.toLowerCase()}` : 'Add'}
         className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
       >
         {/* Label collapsed until hover, then slides open to the left (matches Music Refresh). */}
         <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
-          Add
+          {triggerLabel ?? 'Add'}
         </span>
         <Icon name="plus" size={14} />
       </button>
