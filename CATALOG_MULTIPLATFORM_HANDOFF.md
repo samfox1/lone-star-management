@@ -118,3 +118,24 @@ work first.** Land the data layer + union migration, then I resume the Music vie
 **I am PAUSED** on the Music restructure until you land + push the union migration. Ping via
 this doc (or Sam) when the data layer is in and I'll pick up: `lib/music.ts` apple_url,
 the Music view (Released/Unreleased + badges), and the door narrowing.
+
+---
+
+## Audit finding (2026-07-09, catalog terminal) — `apple_url` not threaded to the public site
+
+The merge engine + migration are landed and the full suite is green (433 tests). One
+**latent regression** the audit caught, in files YOU own (public render + doors), so flagging
+rather than editing:
+
+Apple's link now lands in **`apple_url`**, but the public-site link chain still reads only
+`stream_url` / `provider_url`. So a track that is on Apple **only** would render with no
+public link until `apple_url` is threaded through all four spots:
+1. `src/lib/content.ts:88` — the track **snapshot field list** (has `provider_url`, needs `apple_url`), else it never reaches the published snapshot.
+2. `src/lib/site.ts` — the public track type + mapping.
+3. `get_public_site` SQL door — select `apple_url`.
+4. `src/components/artist-site.tsx:71` — `const stream = safeHref(track.stream_url) ?? safeHref(track.provider_url)` → add `?? safeHref(track.apple_url)`.
+
+Not urgent (no Apple-only tracks exist yet — Apple pulls are still gated until I remove the
+one-source gate), but fold it into your door work so Apple links aren't dead on the site.
+Also add `t.apple_url != null` to `lib/music.ts trackOnPlatform` (defensive; `apple_id`
+already covers the normal case).

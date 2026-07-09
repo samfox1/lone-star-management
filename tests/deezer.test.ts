@@ -26,6 +26,7 @@ const track = (id: number, title: string) => ({
   id,
   title,
   link: `https://deezer.com/track/${id}`,
+  duration: 98,
   album: { cover_medium: `https://img/${id}.jpg` },
 })
 
@@ -34,7 +35,7 @@ describe('getArtistTracks', () => {
     const fetchImpl = vi.fn(async () => res({ body: { data: [track(10, 'Drive')], next: null } }) as unknown as Response)
     const out = await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
     expect(out).toEqual([
-      { deezer_id: '10', title: 'Drive', cover_url: 'https://img/10.jpg', provider_url: 'https://deezer.com/track/10' },
+      { deezer_id: '10', title: 'Drive', cover_url: 'https://img/10.jpg', provider_url: 'https://deezer.com/track/10', duration_ms: 98000 },
     ])
   })
 

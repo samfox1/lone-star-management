@@ -37,9 +37,9 @@ describe('syncSpotifyTracks', () => {
     ])
 
     const incoming: SpotifyTrackInput[] = [
-      { spotify_id: 'sp-manual', title: 'SHOULD NOT OVERWRITE', cover_url: 'c', stream_url: 's', featured_artists: [], album_name: null },
-      { spotify_id: 'sp-auto', title: 'Fresh Spotify', cover_url: 'c2', stream_url: 's2', featured_artists: [], album_name: null },
-      { spotify_id: 'sp-new', title: 'Brand New', cover_url: 'c3', stream_url: 's3', featured_artists: [], album_name: null },
+      { spotify_id: 'sp-manual', title: 'SHOULD NOT OVERWRITE', cover_url: 'c', stream_url: 's', featured_artists: [], album_name: null, duration_ms: null },
+      { spotify_id: 'sp-auto', title: 'Fresh Spotify', cover_url: 'c2', stream_url: 's2', featured_artists: [], album_name: null, duration_ms: null },
+      { spotify_id: 'sp-new', title: 'Brand New', cover_url: 'c3', stream_url: 's3', featured_artists: [], album_name: null, duration_ms: null },
     ]
 
     const result = await syncSpotifyTracks(asA, artistA, incoming)
@@ -61,7 +61,7 @@ describe('syncSpotifyTracks', () => {
 
   it('is idempotent — a second sync of the same data changes nothing new', async () => {
     const incoming: SpotifyTrackInput[] = [
-      { spotify_id: 'sp-x', title: 'X', cover_url: null, stream_url: null, featured_artists: [], album_name: null },
+      { spotify_id: 'sp-x', title: 'X', cover_url: null, stream_url: null, featured_artists: [], album_name: null, duration_ms: null },
     ]
     const first = await syncSpotifyTracks(asA, artistA, incoming)
     expect(first.added).toBe(1)
@@ -71,7 +71,7 @@ describe('syncSpotifyTracks', () => {
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
     const incoming: SpotifyTrackInput[] = [
-      { spotify_id: 'sp-evil', title: 'evil', cover_url: null, stream_url: null, featured_artists: [], album_name: null },
+      { spotify_id: 'sp-evil', title: 'evil', cover_url: null, stream_url: null, featured_artists: [], album_name: null, duration_ms: null },
     ]
     await expect(syncSpotifyTracks(asA, artistB, incoming)).rejects.toThrow()
     const { count } = await svc

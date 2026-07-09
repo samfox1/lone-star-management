@@ -23,6 +23,8 @@ export type SpotifyTrackInput = {
   featured_artists: string[]
   /** Title of the release (album / EP / single) the track belongs to. */
   album_name: string | null
+  /** Track length in ms — cross-platform match key + display. */
+  duration_ms: number | null
 }
 
 /** The shape the releases sync consumes (one Spotify album/EP/single). */
@@ -51,6 +53,7 @@ type SpotifyAlbum = {
 type SpotifyAlbumTrack = {
   id: string
   name: string
+  duration_ms?: number
   external_urls?: { spotify?: string }
   artists?: { id: string; name: string }[]
 }
@@ -183,6 +186,7 @@ export function createSpotifyClient(opts: Options = {}) {
           // Spotify id, so it's robust to name variants / remixes).
           featured_artists: (t.artists ?? []).filter((a) => a.id !== artistId).map((a) => a.name),
           album_name: album.name ?? null,
+          duration_ms: t.duration_ms ?? null,
         })
       }
     }

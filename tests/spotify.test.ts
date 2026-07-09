@@ -107,7 +107,7 @@ describe('getDiscographyTracks', () => {
       }
       if (url.includes('/albums/al1/')) {
         return res({
-          body: { items: [{ id: 't1', name: 'Song A', external_urls: { spotify: 'u1' } }], next: null },
+          body: { items: [{ id: 't1', name: 'Song A', duration_ms: 210000, external_urls: { spotify: 'u1' } }], next: null },
         }) as unknown as Response
       }
       // al2 — Song A again (dupe) + Song B
@@ -124,7 +124,7 @@ describe('getDiscographyTracks', () => {
 
     const tracks = await client(fetchImpl as unknown as typeof fetch).getDiscographyTracks('a')
     expect(tracks.map((t) => t.title)).toEqual(['Song A', 'Song B'])
-    expect(tracks[0]).toMatchObject({ spotify_id: 't1', stream_url: 'u1', cover_url: 'cover1' })
+    expect(tracks[0]).toMatchObject({ spotify_id: 't1', stream_url: 'u1', cover_url: 'cover1', duration_ms: 210000 })
   })
 })
 

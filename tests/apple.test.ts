@@ -36,7 +36,7 @@ function client(fetchImpl: typeof fetch) {
 
 describe('getArtistTracks (iTunes Search)', () => {
   it('looks up songs by artist id, with no auth header', async () => {
-    const fetchImpl = vi.fn(async () => res({ body: { resultCount: 2, results: [artist(42), song(1, 'Drive')] } }) as unknown as Response)
+    const fetchImpl = vi.fn(async (_url: string, _init?: RequestInit) => res({ body: { resultCount: 2, results: [artist(42), song(1, 'Drive')] } }) as unknown as Response)
     await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
     const [url, init] = fetchImpl.mock.calls[0]
     expect(url).toContain('itunes.apple.com/lookup')

@@ -26,6 +26,10 @@ export type SyncResult = {
   added: number
   updated: number
   skipped: number
+  /** Incoming rows STAMPED onto an existing cross-platform match (union merge)
+   *  instead of inserted as a duplicate. Only the track syncs produce these; every
+   *  other sync returns 0. */
+  merged: number
   /** Rows that errored at write time. 0 on a fully clean sync. */
   failed: number
   /** Per-item failures, in encounter order. Empty on a fully clean sync. */
@@ -113,7 +117,195 @@ async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<S
     } else updated++
   }
 
-  return { added, updated, skipped, failed: errors.length, errors }
+  return { added, updated, skipped, merged: 0, failed: errors.length, errors }
+}
+
+// ── Multi-platform track merge ─────────────────────────────────────────────────
+// Tracks are a UNION row: one song carries every platform's ids/links, and "which
+// platforms is it on" is derived from which id columns are set. So a pull doesn't
+// switch sources or duplicate — for each incoming song it either refreshes the row
+// that already bears this platform's id, STAMPS this platform onto the same song
+// imported from another platform (matched by title + duration), or inserts it new.
+// Manual edits and other platforms' fields are never clobbered.
+
+/** The per-platform id column an incoming track is keyed by. */
+type TrackIdCol = 'spotify_id' | 'apple_id' | 'deezer_id'
+
+/** One incoming track, normalized across platforms. */
+type IncomingTrack = {
+  externalId: string
+  title: string
+  cover_url: string | null
+  album_name: string | null
+  duration_ms: number | null
+  /** Platform-owned columns, written on insert + same-platform refresh. */
+  owned: Record<string, unknown>
+  /** Fill-if-empty columns (the platform's link) when stamping onto another
+   *  platform's row — never overwrites an existing value. */
+  mergeFill: Record<string, unknown>
+}
+
+/** The columns of an existing row the merge reads. */
+type TrackRow = {
+  id: string
+  source: string
+  title: string
+  duration_ms: number | null
+  spotify_id: string | null
+  apple_id: string | null
+  deezer_id: string | null
+  cover_url: string | null
+  album_name: string | null
+  stream_url: string | null
+  apple_url: string | null
+}
+
+/** Songs within ±3s of each other (same normalized title) are treated as the same. */
+const DURATION_TOLERANCE_MS = 3000
+
+/**
+ * Normalize a title for cross-platform matching: drop parenthetical/bracket
+ * qualifiers ("(feat. X)", "[Explicit]") and punctuation, lowercase, collapse
+ * whitespace. Scoped per-artist, so this can stay permissive without over-merging.
+ */
+export function normalizeTitle(t: string): string {
+  return t
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * Pick an existing row that is the SAME song as `item` but not yet on this platform:
+ * same normalized title, and — when both durations are known — within tolerance
+ * (closest wins). A title-only match (duration unknown on either side) is the
+ * fallback. Rows already claimed this run, or already carrying this platform's id,
+ * are skipped.
+ */
+function matchTrackCandidate(
+  cands: TrackRow[] | undefined,
+  item: IncomingTrack,
+  idCol: TrackIdCol,
+  claimed: Set<string>,
+): TrackRow | undefined {
+  if (!cands) return undefined
+  let durMatch: TrackRow | undefined
+  let durDelta = Infinity
+  let titleOnly: TrackRow | undefined
+  for (const r of cands) {
+    if (claimed.has(r.id) || r[idCol] != null) continue
+    if (r.duration_ms != null && item.duration_ms != null) {
+      const d = Math.abs(r.duration_ms - item.duration_ms)
+      if (d <= DURATION_TOLERANCE_MS && d < durDelta) {
+        durMatch = r
+        durDelta = d
+      }
+    } else if (!titleOnly) {
+      titleOnly = r
+    }
+  }
+  return durMatch ?? titleOnly
+}
+
+async function syncTracks(
+  supabase: SupabaseClient,
+  artistId: string,
+  idCol: TrackIdCol,
+  source: string,
+  incoming: IncomingTrack[],
+): Promise<SyncResult> {
+  const { data, error } = await supabase
+    .from('tracks')
+    .select('id, source, title, duration_ms, spotify_id, apple_id, deezer_id, cover_url, album_name, stream_url, apple_url')
+    .eq('artist_id', artistId)
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as unknown as TrackRow[]
+
+  const byId = new Map<string, TrackRow>()
+  const byTitle = new Map<string, TrackRow[]>()
+  for (const r of rows) {
+    const idv = r[idCol]
+    if (idv) byId.set(idv, r)
+    const key = normalizeTitle(r.title)
+    const bucket = byTitle.get(key)
+    if (bucket) bucket.push(r)
+    else byTitle.set(key, [r])
+  }
+
+  // Upstream can repeat an externalId; collapse last-wins.
+  const deduped = Array.from(new Map(incoming.map((i) => [i.externalId, i])).values())
+  const claimed = new Set<string>()
+
+  let added = 0
+  let updated = 0
+  let skipped = 0
+  let merged = 0
+  const errors: SyncError[] = []
+
+  for (const item of deduped) {
+    // 1) A row already carries THIS platform's id → refresh it, but only if this
+    //    platform owns it (never clobber a manual edit / another provider).
+    const exact = byId.get(item.externalId)
+    if (exact) {
+      if (exact.source !== source) {
+        skipped++
+        continue
+      }
+      const { error: uErr } = await supabase
+        .from('tracks')
+        .update({ title: item.title, cover_url: item.cover_url, album_name: item.album_name, duration_ms: item.duration_ms, ...item.owned })
+        .eq('id', exact.id)
+      if (uErr) {
+        if (uErr.code === RLS_DENIED) throw new Error(uErr.message)
+        errors.push({ externalId: item.externalId, op: 'update', message: uErr.message })
+      } else updated++
+      continue
+    }
+
+    // 2) The same song imported from ANOTHER platform → stamp this platform onto it
+    //    (its id + link + any fields it was missing), never touching title/source.
+    const cand = matchTrackCandidate(byTitle.get(normalizeTitle(item.title)), item, idCol, claimed)
+    if (cand) {
+      claimed.add(cand.id)
+      const fill: Record<string, unknown> = { [idCol]: item.externalId }
+      if (cand.duration_ms == null && item.duration_ms != null) fill.duration_ms = item.duration_ms
+      if (cand.cover_url == null && item.cover_url != null) fill.cover_url = item.cover_url
+      if (cand.album_name == null && item.album_name != null) fill.album_name = item.album_name
+      for (const [k, v] of Object.entries(item.mergeFill)) {
+        if (v != null && (cand as Record<string, unknown>)[k] == null) fill[k] = v
+      }
+      const { error: mErr } = await supabase.from('tracks').update(fill).eq('id', cand.id)
+      if (mErr) {
+        if (mErr.code === RLS_DENIED) throw new Error(mErr.message)
+        errors.push({ externalId: item.externalId, op: 'update', message: mErr.message })
+      } else {
+        merged++
+        cand[idCol] = item.externalId // reflect locally so a later item can't re-merge it
+      }
+      continue
+    }
+
+    // 3) A song we haven't seen on any platform → insert new.
+    const { error: iErr } = await supabase.from('tracks').insert({
+      artist_id: artistId,
+      [idCol]: item.externalId,
+      source,
+      title: item.title,
+      cover_url: item.cover_url,
+      album_name: item.album_name,
+      duration_ms: item.duration_ms,
+      ...item.owned,
+    })
+    if (iErr) {
+      if (iErr.code === RLS_DENIED) throw new Error(iErr.message)
+      errors.push({ externalId: item.externalId, op: 'insert', message: iErr.message })
+    } else added++
+  }
+
+  return { added, updated, skipped, merged, failed: errors.length, errors }
 }
 
 export function syncSpotifyTracks(
@@ -121,22 +313,21 @@ export function syncSpotifyTracks(
   artistId: string,
   tracks: SpotifyTrackInput[],
 ): Promise<SyncResult> {
-  return syncExternal(supabase, {
-    table: 'tracks',
-    externalIdCol: 'spotify_id',
-    source: 'spotify',
+  return syncTracks(
+    supabase,
     artistId,
-    items: tracks.map((t) => ({
+    'spotify_id',
+    'spotify',
+    tracks.map((t) => ({
       externalId: t.spotify_id,
-      values: {
-        title: t.title,
-        cover_url: t.cover_url,
-        stream_url: t.stream_url,
-        featured_artists: t.featured_artists,
-        album_name: t.album_name,
-      },
+      title: t.title,
+      cover_url: t.cover_url,
+      album_name: t.album_name,
+      duration_ms: t.duration_ms,
+      owned: { stream_url: t.stream_url, featured_artists: t.featured_artists },
+      mergeFill: { stream_url: t.stream_url },
     })),
-  })
+  )
 }
 
 /**
@@ -219,40 +410,53 @@ export async function syncSpotifyReleases(
   return { added, updated }
 }
 
-/** Apple Music is a metadata + link-out catalog source (no hosted audio). */
+/** Apple Music is a metadata + link-out source (no hosted audio). Its link lives in
+ *  `apple_url` (not the shared legacy `provider_url`) so a merged row keeps each
+ *  platform's link independently. */
 export function syncAppleTracks(
   supabase: SupabaseClient,
   artistId: string,
   tracks: AppleTrackInput[],
 ): Promise<SyncResult> {
-  return syncExternal(supabase, {
-    table: 'tracks',
-    externalIdCol: 'apple_id',
-    source: 'apple',
+  return syncTracks(
+    supabase,
     artistId,
-    items: tracks.map((t) => ({
+    'apple_id',
+    'apple',
+    tracks.map((t) => ({
       externalId: t.apple_id,
-      values: { title: t.title, cover_url: t.cover_url, provider_url: t.provider_url },
+      title: t.title,
+      cover_url: t.cover_url,
+      album_name: t.album_name,
+      duration_ms: t.duration_ms,
+      owned: { apple_url: t.provider_url },
+      mergeFill: { apple_url: t.provider_url },
     })),
-  })
+  )
 }
 
-/** Deezer is a metadata + link-out source: no stream_url, a provider_url link. */
+/** Deezer is a metadata + link-out source: no stream_url, a deezer.com link in
+ *  `provider_url`. On a merge the link is omitted (it rebuilds from `deezer_id`). */
 export function syncDeezerTracks(
   supabase: SupabaseClient,
   artistId: string,
   tracks: DeezerTrackInput[],
 ): Promise<SyncResult> {
-  return syncExternal(supabase, {
-    table: 'tracks',
-    externalIdCol: 'deezer_id',
-    source: 'deezer',
+  return syncTracks(
+    supabase,
     artistId,
-    items: tracks.map((t) => ({
+    'deezer_id',
+    'deezer',
+    tracks.map((t) => ({
       externalId: t.deezer_id,
-      values: { title: t.title, cover_url: t.cover_url, provider_url: t.provider_url },
+      title: t.title,
+      cover_url: t.cover_url,
+      album_name: null,
+      duration_ms: t.duration_ms,
+      owned: { provider_url: t.provider_url },
+      mergeFill: {},
     })),
-  })
+  )
 }
 
 export function syncBandsintownTourDates(

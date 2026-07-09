@@ -30,6 +30,7 @@ const dz = (id: string, title: string): DeezerTrackInput => ({
   title,
   cover_url: `https://img/${id}.jpg`,
   provider_url: `https://deezer.com/track/${id}`,
+  duration_ms: null,
 })
 
 describe('syncDeezerTracks', () => {

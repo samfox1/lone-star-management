@@ -16,9 +16,11 @@ export type DeezerTrackInput = {
   title: string
   cover_url: string | null
   provider_url: string | null
+  /** Track length in ms (Deezer reports seconds; we normalize). Cross-platform match key. */
+  duration_ms: number | null
 }
 
-type DeezerTrack = { id: number; title: string; link?: string; album?: { cover_medium?: string } }
+type DeezerTrack = { id: number; title: string; link?: string; duration?: number; album?: { cover_medium?: string } }
 type DeezerError = { code: number; type: string; message: string }
 type DeezerPage = { data?: DeezerTrack[]; next?: string | null; error?: DeezerError }
 
@@ -84,6 +86,7 @@ export function createDeezerClient(opts: Options = {}) {
         title: t.title,
         cover_url: t.album?.cover_medium ?? null,
         provider_url: t.link ?? null,
+        duration_ms: t.duration != null ? t.duration * 1000 : null,
       })
     }
     return out
