@@ -29,10 +29,13 @@ async function publicReleases(): Promise<{ title: string; slug: string }[]> {
 
 describe('get_public_releases', () => {
   it('lists published releases, excludes drafts', async () => {
-    await createContent(asA, 'release', artistA, { title: 'Published One', slug: 'pub-one', links: [] })
+    // A DSP link = platform presence: the door lists RELEASED releases only, and
+    // a manual release with no links is Unreleased (dashboard-only). See lib/music.ts.
+    const LINKS = [{ label: 'Spotify', url: 'https://open.spotify.com/album/one' }]
+    await createContent(asA, 'release', artistA, { title: 'Published One', slug: 'pub-one', links: LINKS })
     await publishContent(asA, 'release', artistA)
     // a draft created AFTER publish (no revision yet)
-    await createContent(asA, 'release', artistA, { title: 'Draft Two', slug: 'draft-two', links: [] })
+    await createContent(asA, 'release', artistA, { title: 'Draft Two', slug: 'draft-two', links: LINKS })
 
     const titles = (await publicReleases()).map((r) => r.title)
     expect(titles).toContain('Published One')

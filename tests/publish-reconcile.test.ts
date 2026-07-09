@@ -33,7 +33,8 @@ afterAll(async () => {
 describe('publish reconcile (tombstone)', () => {
   it('CRITICAL: a deleted + re-published entity drops off the live site', async () => {
     const title = 'RECON track to delete'
-    const track = await createContent(asA, 'track', artistA, { title })
+    // stream_url = platform presence, so the track is Released (public-door visible).
+    const track = await createContent(asA, 'track', artistA, { title, stream_url: 'https://open.spotify.com/track/rec' })
 
     await publishContent(asA, 'track', artistA)
     expect((await publicTracks()).map((t) => t.title)).toContain(title)
@@ -48,8 +49,9 @@ describe('publish reconcile (tombstone)', () => {
 
 describe('publish ordering parity', () => {
   it('public tracks come back ordered by sort_order, like the dashboard', async () => {
-    await createContent(asA, 'track', artistA, { title: 'RECON ord LAST', sort_order: 5 })
-    await createContent(asA, 'track', artistA, { title: 'RECON ord FIRST', sort_order: 1 })
+    // stream_url on both: only Released tracks reach the public door.
+    await createContent(asA, 'track', artistA, { title: 'RECON ord LAST', sort_order: 5, stream_url: 'https://open.spotify.com/track/r5' })
+    await createContent(asA, 'track', artistA, { title: 'RECON ord FIRST', sort_order: 1, stream_url: 'https://open.spotify.com/track/r1' })
     await publishContent(asA, 'track', artistA)
 
     const titles = (await publicTracks()).map((t) => t.title)

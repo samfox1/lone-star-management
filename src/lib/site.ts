@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
+import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 
 export type SiteTrack = {
   id: string
@@ -35,6 +36,14 @@ export type SiteTrack = {
   /** The release this track is assigned to (umbrella membership), or null. */
   release_id: string | null
   sort_order: number
+  /** Provenance (who created the row + which platforms carry it). Rides the
+   *  snapshot for the doors' Released/Unreleased gate; public-safe (the ids are
+   *  platform-URL components). Absent on revisions published before the union
+   *  model — render with `?? null`. */
+  source: string | null
+  spotify_id: string | null
+  apple_id: string | null
+  deezer_id: string | null
 }
 
 export type SiteTourDate = {
@@ -155,25 +164,63 @@ export async function getWorkingSite(
   if (!artist) return null
 
   const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows] = await Promise.all([
-    // Tracks mirror get_public_site: expose has_audio, never the raw audio_path.
-    listContent(supabase, 'track', artistId).then((rows) =>
-      rows.map((r) => {
-        const s = publicSnapshot('track', r) as Record<string, unknown>
-        return {
-          id: s.id as string,
-          title: s.title as string,
-          cover_url: (s.cover_url as string | null) ?? null,
-          stream_url: (s.stream_url as string | null) ?? null,
-          provider_url: (s.provider_url as string | null) ?? null,
-          apple_url: (s.apple_url as string | null) ?? null,
-          has_audio: s.audio_path != null,
-          featured_artists: (s.featured_artists as string[] | null) ?? [],
-          album_name: (s.album_name as string | null) ?? null,
-          release_id: (s.release_id as string | null) ?? null,
-          sort_order: (s.sort_order as number) ?? 0,
-        } satisfies SiteTrack
-      }),
-    ),
+    // Tracks mirror get_public_site: expose has_audio (never the raw audio_path)
+    // and show RELEASED music only — a track inherits its release's bucket, a
+    // loose track is classified by its own provenance (lib/music.ts, the same
+    // rule the door mirrors) — so preview matches the live site.
+    Promise.all([
+      listContent(supabase, 'track', artistId),
+      listContent(supabase, 'release', artistId),
+    ]).then(([rows, releaseRows]) => {
+      const relBucket = new Map<string, MusicBucket>(
+        releaseRows.map((r) => [
+          r.id as string,
+          releaseBucket({
+            source: (r.source as string | null) ?? null,
+            spotify_id: (r.spotify_id as string | null) ?? null,
+            links: r.links,
+          }),
+        ]),
+      )
+      return rows
+        .filter(
+          (r) =>
+            trackBucket(
+              {
+                release_id: (r.release_id as string | null) ?? null,
+                source: (r.source as string | null) ?? null,
+                audio_path: (r.audio_path as string | null) ?? null,
+                spotify_id: (r.spotify_id as string | null) ?? null,
+                apple_id: (r.apple_id as string | null) ?? null,
+                deezer_id: (r.deezer_id as string | null) ?? null,
+                provider_url: (r.provider_url as string | null) ?? null,
+                stream_url: (r.stream_url as string | null) ?? null,
+                apple_url: (r.apple_url as string | null) ?? null,
+              },
+              (rid) => relBucket.get(rid),
+            ) === 'released',
+        )
+        .map((r) => {
+          const s = publicSnapshot('track', r) as Record<string, unknown>
+          return {
+            id: s.id as string,
+            title: s.title as string,
+            cover_url: (s.cover_url as string | null) ?? null,
+            stream_url: (s.stream_url as string | null) ?? null,
+            provider_url: (s.provider_url as string | null) ?? null,
+            apple_url: (s.apple_url as string | null) ?? null,
+            has_audio: s.audio_path != null,
+            featured_artists: (s.featured_artists as string[] | null) ?? [],
+            album_name: (s.album_name as string | null) ?? null,
+            release_id: (s.release_id as string | null) ?? null,
+            sort_order: (s.sort_order as number) ?? 0,
+            source: (s.source as string | null) ?? null,
+            spotify_id: (s.spotify_id as string | null) ?? null,
+            apple_id: (s.apple_id as string | null) ?? null,
+            deezer_id: (s.deezer_id as string | null) ?? null,
+          } satisfies SiteTrack
+        })
+    }),
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId, { onSiteOnly: true }),
     workingSection<SiteMerch>(supabase, 'merch', artistId, { onSiteOnly: true }),
     workingSection<SiteLink>(supabase, 'link', artistId),

@@ -96,7 +96,9 @@ describe('publishAll', () => {
       link: 'ISO-A pub link',
     }
     const created = [
-      await createContent(asA, 'track', artistA, { title: markers.track }),
+      // stream_url = platform presence: the doors expose RELEASED music only, and
+      // a bare manual track is Unreleased (dashboard-only). See lib/music.ts.
+      await createContent(asA, 'track', artistA, { title: markers.track, stream_url: 'https://open.spotify.com/track/iso' }),
       await createContent(asA, 'tour_date', artistA, { date: '2026-05-05', venue: markers.tour_date }),
       await createContent(asA, 'merch', artistA, { title: markers.merch, price: 10 }),
       await createContent(asA, 'link', artistA, { label: markers.link, url: 'https://a.example' }),

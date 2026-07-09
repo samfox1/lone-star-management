@@ -97,7 +97,8 @@ describe('tracks isolation (non-owner denied)', () => {
 
 describe('publish loop (draft -> publish -> public read)', () => {
   it('CRITICAL: publishing snapshots tracks into revisions, then they appear via the public read path', async () => {
-    const track = await createTrack(asA, artistA, { title: PUBLISH_TITLE })
+    // stream_url = platform presence, so the track is Released (public-door visible).
+    const track = await createTrack(asA, artistA, { title: PUBLISH_TITLE, stream_url: 'https://open.spotify.com/track/pub' })
     createdTrackIds.push(track.id)
 
     // Before publishing, the working row must NOT be on the public site.

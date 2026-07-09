@@ -37,7 +37,8 @@ describe('per-section publish isolation', () => {
 
     // Pending profile edit (draft) + a new track.
     await asA.from('artists').update({ bio: 'SECTIONS draft bio' }).eq('id', artistA)
-    const track = await createContent(asA, 'track', artistA, { title: 'SECTIONS track' })
+    // stream_url = platform presence, so the track is Released (public-door visible).
+    const track = await createContent(asA, 'track', artistA, { title: 'SECTIONS track', stream_url: 'https://open.spotify.com/track/sec' })
 
     // Publish ONLY tracks.
     await publishContent(asA, 'track', artistA)
