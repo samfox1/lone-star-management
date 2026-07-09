@@ -73,6 +73,11 @@ const CONTENT_TYPES: Record<string, string> = {
   webm: 'video/webm',
   mp3: 'audio/mpeg',
   m4a: 'audio/mp4',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
 }
 /** A content-type the bucket's allowed_mime_types will accept (browsers report some
  *  formats inconsistently, so we set it explicitly rather than trust file.type). */
