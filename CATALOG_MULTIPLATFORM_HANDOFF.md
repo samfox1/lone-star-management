@@ -139,3 +139,16 @@ Not urgent (no Apple-only tracks exist yet — Apple pulls are still gated until
 one-source gate), but fold it into your door work so Apple links aren't dead on the site.
 Also add `t.apple_url != null` to `lib/music.ts trackOnPlatform` (defensive; `apple_id`
 already covers the normal case).
+
+---
+
+## Audit finding RESOLVED (2026-07-09, Music-restructure terminal)
+
+`apple_url` is now threaded to the public site — done + verified (tsc clean, 434 tests):
+1. `content.ts` — `apple_url` added to the track snapshot list ✅
+2. `site.ts` — `SiteTrack.apple_url` + mapping ✅
+3. `get_public_site` — **no change needed**: the door emits the snapshot pass-through
+   (`data - 'audio_path'`), so a snapshot field flows automatically ✅
+4. `artist-site.tsx` — link chain now `… ?? safeHref(track.apple_url)` ✅
+Plus `lib/music.ts trackOnPlatform` now includes `apple_url != null`. No Apple-only tracks
+exist yet, so zero live impact — but the chain is ready for when you lift the pull gate.

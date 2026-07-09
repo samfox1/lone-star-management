@@ -1,0 +1,12 @@
+-- Retire the destructive catalog-source switch. The multi-platform union model
+-- (20260708160000) lets every music service coexist and MERGE into one track set,
+-- so there is no longer an "active source" to switch between — and this function
+-- DELETED the previous source's tracks on every switch, exactly the behavior the
+-- union model removes. No caller remains: `lib/catalog.ts` (setCatalogSource), the
+-- `setCatalogSourceAction` server action, and the `CatalogSourceForm` selector were
+-- all deleted alongside this migration.
+--
+-- The `artists.catalog_source` column is intentionally LEFT in place as a harmless
+-- vestige (NOT NULL default 'manual') so this stays a pure function drop; a later
+-- cleanup can remove the column once nothing selects it.
+drop function if exists public.switch_catalog_source(uuid, text);

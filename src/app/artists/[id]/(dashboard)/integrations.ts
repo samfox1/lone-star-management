@@ -1,4 +1,3 @@
-import type { CatalogSource } from '@/lib/catalog'
 import {
   saveAppleIdAction,
   saveBandsintownNameAction,
@@ -16,17 +15,16 @@ import {
 
 /**
  * The one registry of an artist's syncable data sources — the single place that
- * answers "what integrations exist," so the Integrations hub, the Manager-tools
- * connected-count, and any future connected-badge all project over one list
- * instead of three hand-maintained enumerations. In the spirit of the CRUD /
- * PUBLISHABLE registries (ADR-0003) and the integration-client pattern (ADR-0005).
+ * answers "what integrations exist," so the Integrations hub and the Manager-tools
+ * connected-count both project over one list instead of two hand-maintained
+ * enumerations. In the spirit of the CRUD / PUBLISHABLE registries (ADR-0003) and
+ * the integration-client pattern (ADR-0005).
  *
- * Two shapes live here, distinguished by `catalogSource`:
- *  - **Catalog sources** (Spotify / Deezer / Apple) are MUTUALLY EXCLUSIVE — only
- *    the one matching `artists.catalog_source` is the active importer; they carry
- *    a `catalogSource` tag and share one slot on the Music section.
- *  - **Standalone sources** (YouTube / Bandsintown / Ticketmaster) are independent
- *    and each feed their own section.
+ * Every integration is INDEPENDENT and grouped by the `section` it feeds. The three
+ * music sources (Spotify / Apple / Deezer) coexist: an artist can connect and pull
+ * from all of them, and the tracks sync MERGES their catalogs into union rows
+ * (see `lib/sync.ts syncTracks`) rather than one exclusive importer overwriting the
+ * others. (This replaced the old mutually-exclusive `catalog_source` model.)
  *
  * Shopify is intentionally NOT here: it uses a connect/disconnect storefront-token
  * flow (write-only token → Vault), not an artist id column, so the hub renders it
@@ -52,8 +50,8 @@ export const SECTION_LABEL: Record<IntegrationSection, string> = {
   tour: 'Tour dates',
 }
 
-type SaveAction = (artistId: string, formData: FormData) => Promise<void>
-type PullAction = (artistId: string) => Promise<void>
+type SaveAction = (artistId: string, formData: FormData) => Promise<{ error?: string }>
+type PullAction = (artistId: string) => Promise<{ ok: boolean; error?: string }>
 
 export type Integration = {
   key: string
@@ -64,45 +62,40 @@ export type Integration = {
   pullLabel: string
   save: SaveAction
   pull: PullAction
-  /** Present on the three catalog sources; they share one exclusive slot. */
-  catalogSource?: CatalogSource
 }
 
 export const INTEGRATIONS: Integration[] = [
-  { key: 'spotify', label: 'Spotify', section: 'music', catalogSource: 'spotify', idField: 'spotify_artist_id', placeholder: 'Spotify artist ID', pullLabel: 'Pull from Spotify', save: saveSpotifyIdAction, pull: syncSpotifyAction },
-  { key: 'deezer', label: 'Deezer', section: 'music', catalogSource: 'deezer', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID', pullLabel: 'Pull from Deezer', save: saveDeezerIdAction, pull: syncDeezerAction },
-  { key: 'apple', label: 'Apple Music', section: 'music', catalogSource: 'apple', idField: 'apple_artist_id', placeholder: 'Apple Music artist ID', pullLabel: 'Pull from Apple Music', save: saveAppleIdAction, pull: syncAppleAction },
+  { key: 'spotify', label: 'Spotify', section: 'music', idField: 'spotify_artist_id', placeholder: 'Spotify artist ID', pullLabel: 'Pull from Spotify', save: saveSpotifyIdAction, pull: syncSpotifyAction },
+  { key: 'apple', label: 'Apple Music', section: 'music', idField: 'apple_artist_id', placeholder: 'Apple Music artist ID', pullLabel: 'Pull from Apple Music', save: saveAppleIdAction, pull: syncAppleAction },
+  { key: 'deezer', label: 'Deezer', section: 'music', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID', pullLabel: 'Pull from Deezer', save: saveDeezerIdAction, pull: syncDeezerAction },
   { key: 'youtube', label: 'YouTube', section: 'videos', idField: 'youtube_channel_id', placeholder: 'YouTube @handle, channel ID, or URL', pullLabel: 'Import uploads', save: saveYoutubeChannelAction, pull: syncYouTubeAction },
   { key: 'bandsintown', label: 'Bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name', pullLabel: 'Pull tour dates', save: saveBandsintownNameAction, pull: syncBandsintownAction },
   { key: 'ticketmaster', label: 'Ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID', pullLabel: 'Pull tour dates', save: saveTicketmasterIdAction, pull: syncTicketmasterAction },
 ]
 
 /** The subset of the artist row the registry reads — a structural projection. */
-export type IntegrationArtist = { [K in ArtistIdField]?: string | null } & {
-  catalog_source?: string | null
-}
+export type IntegrationArtist = { [K in ArtistIdField]?: string | null }
 
-/** Catalog sources (Spotify/Deezer/Apple), which share one exclusive slot. */
-export const CATALOG_INTEGRATIONS = INTEGRATIONS.filter((i) => i.catalogSource)
+/** Integrations grouped by the section they feed, in registry order — the hub renders each group. */
+export const INTEGRATIONS_BY_SECTION: Record<IntegrationSection, Integration[]> = INTEGRATIONS.reduce(
+  (acc, intg) => {
+    ;(acc[intg.section] ??= []).push(intg)
+    return acc
+  },
+  {} as Record<IntegrationSection, Integration[]>,
+)
 
-/** Independent sources (YouTube/Bandsintown/Ticketmaster), grouped per section. */
-export const STANDALONE_INTEGRATIONS = INTEGRATIONS.filter((i) => !i.catalogSource)
-
-/** Is this source's id configured on the artist? (Independent of which catalog source is active.) */
+/** Is this source's id configured on the artist? */
 export function isConnected(intg: Integration, artist: IntegrationArtist): boolean {
   return !!artist[intg.idField]
 }
 
 /**
- * Count of connected data sources for the Manager-tools summary. The catalog
- * sources count as ONE slot — only the artist's active `catalog_source` counts,
- * so a stale id left behind by a source-switch doesn't inflate the number past
- * what the hub actually renders. `shopifyConnected` is passed in because Shopify's
- * state lives outside the artist row (Vault/metadata).
+ * Count of connected data sources for the Manager-tools summary. Every configured
+ * integration counts independently — the three music sources are no longer one
+ * exclusive slot — plus Shopify, whose state lives outside the artist row (Vault).
  */
 export function connectedCount(artist: IntegrationArtist, shopifyConnected: boolean): number {
-  const standalone = STANDALONE_INTEGRATIONS.filter((i) => isConnected(i, artist)).length
-  const active = CATALOG_INTEGRATIONS.find((i) => i.catalogSource === artist.catalog_source)
-  const catalog = active && isConnected(active, artist) ? 1 : 0
-  return standalone + catalog + (shopifyConnected ? 1 : 0)
+  const configured = INTEGRATIONS.filter((i) => isConnected(i, artist)).length
+  return configured + (shopifyConnected ? 1 : 0)
 }

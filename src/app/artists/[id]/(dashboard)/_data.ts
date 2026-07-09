@@ -15,7 +15,7 @@ export const requireArtist = cache(async (id: string) => {
   const { data: artist, error } = await supabase
     .from('artists')
     .select(
-      'id, name, slug, template, spotify_artist_id, bandsintown_name, catalog_source, deezer_artist_id, apple_artist_id, ticketmaster_attraction_id, youtube_channel_id',
+      'id, name, slug, template, spotify_artist_id, bandsintown_name, deezer_artist_id, apple_artist_id, ticketmaster_attraction_id, youtube_channel_id',
     )
     .eq('id', id)
     .single()

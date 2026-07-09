@@ -31,7 +31,6 @@ import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
 import { createYouTubeClient } from '@/lib/youtube'
-import { CATALOG_SOURCES, type CatalogSource, setCatalogSource } from '@/lib/catalog'
 import { isUrlField, safeHref } from '@/lib/url'
 import { toReleaseType } from '@/lib/releases'
 import { slugify } from '@/lib/slug'
@@ -108,12 +107,17 @@ export async function addContentAction(
   type: GenericEntity,
   artistId: string,
   formData: FormData,
-) {
+): Promise<{ error?: string }> {
   const input = extractFields(type, formData)
-  if (Object.keys(input).length === 0) return
+  if (Object.keys(input).length === 0) return { error: 'Fill in at least one field.' }
   const supabase = await createClient()
-  await createContent(supabase, type, artistId, input)
+  try {
+    await createContent(supabase, type, artistId, input)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Add failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 export async function updateContentAction(
@@ -178,15 +182,24 @@ export async function publishAction(artistId: string) {
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
-/** Publish ONE content/media section (per-section Publish button). */
-export async function publishSectionAction(type: PublishableEntity, artistId: string) {
+/** Publish ONE content/media section (per-section Publish button). Returns an
+ *  error string for the client to toast instead of throwing. */
+export async function publishSectionAction(
+  type: PublishableEntity,
+  artistId: string,
+): Promise<{ error?: string }> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  await publishContent(supabase, type, artistId, user?.id)
-  if (type === 'video') await gcVideoObjects(supabase, artistId)
+  try {
+    await publishContent(supabase, type, artistId, user?.id)
+    if (type === 'video') await gcVideoObjects(supabase, artistId)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /** Publish the Site section: media + site text + the artist profile together. */
@@ -346,16 +359,31 @@ export async function scrapeMerchUrlAction(
   return { ok: true, title: og.title, image_url: og.image, price: og.price }
 }
 
-/** Save (or clear) the artist's YouTube channel id used to import their uploads. */
-export async function saveYoutubeChannelAction(artistId: string, formData: FormData) {
-  const value = String(formData.get('youtube_channel_id') ?? '').trim()
+/**
+ * Save (or clear) one artist id/name column from a same-named form field — the
+ * shared body of every integration "Save" (Spotify/YouTube/Deezer/Apple/
+ * Bandsintown/Ticketmaster). A blank value clears the column. Returns an error
+ * string for the client to toast instead of throwing.
+ */
+async function saveArtistField(
+  artistId: string,
+  column: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const value = String(formData.get(column) ?? '').trim()
   const supabase = await createClient()
   const { error } = await supabase
     .from('artists')
-    .update({ youtube_channel_id: value || null })
+    .update({ [column]: value || null })
     .eq('id', artistId)
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/** Save (or clear) the artist's YouTube channel id used to import their uploads. */
+export async function saveYoutubeChannelAction(artistId: string, formData: FormData) {
+  return saveArtistField(artistId, 'youtube_channel_id', formData)
 }
 
 /** Pull the artist's YouTube uploads into draft videos. Requires YOUTUBE_API_KEY. */
@@ -384,9 +412,9 @@ async function pullYouTube(artistId: string): Promise<{ ok: boolean; error?: str
   return { ok: true }
 }
 
-/** Integrations "Import uploads" (a form action — return ignored). */
-export async function syncYouTubeAction(artistId: string): Promise<void> {
-  await pullYouTube(artistId)
+/** Integrations "Import uploads". Returns status so the panel can toast. */
+export async function syncYouTubeAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+  return pullYouTube(artistId)
 }
 
 /** Videos-page "Refresh" button: same import, but returns status so the button can
@@ -531,11 +559,17 @@ export async function publishEntityAction(
 }
 
 /** Assign a track to a release (empty = unassign). RLS scopes the update. */
-export async function setTrackReleaseAction(trackId: string, artistId: string, formData: FormData) {
+export async function setTrackReleaseAction(
+  trackId: string,
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
   const release_id = String(formData.get('release_id') ?? '').trim() || null
   const supabase = await createClient()
-  await supabase.from('tracks').update({ release_id }).eq('id', trackId)
+  const { error } = await supabase.from('tracks').update({ release_id }).eq('id', trackId)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /** Append a DSP link to a release (url sanitized; RLS scopes to the owner). */
@@ -598,14 +632,7 @@ export async function updateArtistAction(artistId: string, formData: FormData) {
 
 /** Save (or clear) the artist's Spotify artist id used to pull the discography. */
 export async function saveSpotifyIdAction(artistId: string, formData: FormData) {
-  const value = String(formData.get('spotify_artist_id') ?? '').trim()
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('artists')
-    .update({ spotify_artist_id: value || null })
-    .eq('id', artistId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`, 'layout')
+  return saveArtistField(artistId, 'spotify_artist_id', formData)
 }
 
 /**
@@ -645,9 +672,9 @@ async function pullSpotify(artistId: string): Promise<{ ok: boolean; error?: str
   return { ok: true }
 }
 
-/** Integrations "Pull from Spotify" (a form action — return ignored). */
-export async function syncSpotifyAction(artistId: string): Promise<void> {
-  await pullSpotify(artistId)
+/** Integrations "Pull from Spotify". Returns status so the panel can toast. */
+export async function syncSpotifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+  return pullSpotify(artistId)
 }
 
 /** Music-page "Refresh" button: same pull, but returns status so the button can
@@ -656,173 +683,164 @@ export async function refreshSpotifyAction(artistId: string): Promise<{ ok: bool
   return pullSpotify(artistId)
 }
 
-/**
- * Choose the artist's catalog source. Switching deletes the previous importer's
- * working tracks (manual preserved); config applies instantly.
- */
-export async function setCatalogSourceAction(artistId: string, formData: FormData) {
-  const next = String(formData.get('catalog_source') ?? 'manual') as CatalogSource
-  if (!CATALOG_SOURCES.includes(next)) return
-  const supabase = await createClient()
-  await setCatalogSource(supabase, artistId, next)
-  revalidatePath(`/artists/${artistId}`, 'layout')
-}
-
 /** Save (or clear) the artist's Deezer artist id used to pull their catalog. */
 export async function saveDeezerIdAction(artistId: string, formData: FormData) {
-  const value = String(formData.get('deezer_artist_id') ?? '').trim()
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('artists')
-    .update({ deezer_artist_id: value || null })
-    .eq('id', artistId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`, 'layout')
+  return saveArtistField(artistId, 'deezer_artist_id', formData)
 }
 
-/** Pull the artist's Deezer catalog into draft tracks (metadata + link-out). */
-export async function syncDeezerAction(artistId: string) {
+/** Pull the artist's Deezer catalog into draft tracks (metadata + link-out). Merges
+ *  into the union track set alongside any other connected service. */
+export async function syncDeezerAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
-    .select('deezer_artist_id, catalog_source')
+    .select('deezer_artist_id')
     .eq('id', artistId)
     .single()
-  // Only pull when Deezer is the active source — keeps one source per artist.
-  if (artist?.catalog_source !== 'deezer' || !artist?.deezer_artist_id) return
+  if (!artist?.deezer_artist_id) return { ok: false, error: 'No Deezer artist linked yet.' }
 
-  const client = createDeezerClient()
-  const tracks = await client.getArtistTracks(artist.deezer_artist_id)
-  await syncDeezerTracks(supabase, artistId, tracks)
+  try {
+    const client = createDeezerClient()
+    const tracks = await client.getArtistTracks(artist.deezer_artist_id)
+    await syncDeezerTracks(supabase, artistId, tracks)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
 /** Save (or clear) the artist's Apple Music artist id used to pull their catalog. */
 export async function saveAppleIdAction(artistId: string, formData: FormData) {
-  const value = String(formData.get('apple_artist_id') ?? '').trim()
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('artists')
-    .update({ apple_artist_id: value || null })
-    .eq('id', artistId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`, 'layout')
+  return saveArtistField(artistId, 'apple_artist_id', formData)
 }
 
-/** Pull the artist's Apple Music catalog into draft tracks (metadata + link-out). */
-export async function syncAppleAction(artistId: string) {
+/** Pull the artist's Apple Music catalog into draft tracks (metadata + link-out) via
+ *  the free iTunes Search API. Merges into the union track set alongside any other
+ *  connected service. */
+export async function syncAppleAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
-    .select('apple_artist_id, catalog_source')
+    .select('apple_artist_id')
     .eq('id', artistId)
     .single()
-  // Only pull when Apple is the active source — keeps one source per artist.
-  if (artist?.catalog_source !== 'apple' || !artist?.apple_artist_id) return
+  if (!artist?.apple_artist_id) return { ok: false, error: 'No Apple Music artist linked yet.' }
 
-  const client = createAppleMusicClient()
-  const tracks = await client.getArtistTracks(artist.apple_artist_id)
-  await syncAppleTracks(supabase, artistId, tracks)
+  try {
+    const client = createAppleMusicClient()
+    const tracks = await client.getArtistTracks(artist.apple_artist_id)
+    await syncAppleTracks(supabase, artistId, tracks)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
 /** Save (or clear) the artist's Bandsintown name used to pull tour dates. */
 export async function saveBandsintownNameAction(artistId: string, formData: FormData) {
-  const value = String(formData.get('bandsintown_name') ?? '').trim()
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('artists')
-    .update({ bandsintown_name: value || null })
-    .eq('id', artistId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`, 'layout')
+  return saveArtistField(artistId, 'bandsintown_name', formData)
 }
 
 /**
  * Pull the artist's Bandsintown events and sync them into draft tour dates.
  * Same conflict policy as Spotify. Requires BANDSINTOWN_APP_ID configured.
  */
-export async function syncBandsintownAction(artistId: string) {
+export async function syncBandsintownAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
     .select('bandsintown_name')
     .eq('id', artistId)
     .single()
-  if (!artist?.bandsintown_name) return
+  if (!artist?.bandsintown_name) return { ok: false, error: 'No Bandsintown artist linked yet.' }
 
-  const client = createBandsintownClient()
-  const events = await client.getArtistEvents(artist.bandsintown_name)
-  await syncBandsintownTourDates(supabase, artistId, events)
+  try {
+    const client = createBandsintownClient()
+    const events = await client.getArtistEvents(artist.bandsintown_name)
+    await syncBandsintownTourDates(supabase, artistId, events)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
 /** Save (or clear) the artist's Ticketmaster attraction id used to pull events. */
 export async function saveTicketmasterIdAction(artistId: string, formData: FormData) {
-  const value = String(formData.get('ticketmaster_attraction_id') ?? '').trim()
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('artists')
-    .update({ ticketmaster_attraction_id: value || null })
-    .eq('id', artistId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`, 'layout')
+  return saveArtistField(artistId, 'ticketmaster_attraction_id', formData)
 }
 
 /** Pull the artist's Ticketmaster events into draft tour dates (a second source
  *  alongside Bandsintown). Requires TICKETMASTER_API_KEY configured. */
-export async function syncTicketmasterAction(artistId: string) {
+export async function syncTicketmasterAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
     .select('ticketmaster_attraction_id')
     .eq('id', artistId)
     .single()
-  if (!artist?.ticketmaster_attraction_id) return
+  if (!artist?.ticketmaster_attraction_id) return { ok: false, error: 'No Ticketmaster attraction linked yet.' }
 
-  const client = createTicketmasterClient()
-  const events = await client.getArtistEvents(artist.ticketmaster_attraction_id)
-  await syncTicketmasterTourDates(supabase, artistId, events)
+  try {
+    const client = createTicketmasterClient()
+    const events = await client.getArtistEvents(artist.ticketmaster_attraction_id)
+    await syncTicketmasterTourDates(supabase, artistId, events)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
 /** Connect (or rotate) the artist's Shopify store. Token is stored in Vault. */
-export async function connectShopifyAction(artistId: string, formData: FormData) {
+export async function connectShopifyAction(
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
   const domain = String(formData.get('store_domain') ?? '').trim()
   const token = String(formData.get('storefront_token') ?? '').trim()
-  if (!domain || !token) return
+  if (!domain || !token) return { error: 'Enter a store domain and a storefront token.' }
   const supabase = await createClient()
   const { error } = await supabase.rpc('connect_shopify', {
     p_artist_id: artistId,
     p_domain: domain,
     p_token: token,
   })
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
-export async function disconnectShopifyAction(artistId: string) {
+export async function disconnectShopifyAction(artistId: string): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { error } = await supabase.rpc('disconnect_shopify', { p_artist_id: artistId })
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
 }
 
 /**
  * Pull the store's products into draft merch. The storefront token is fetched
  * server-side from Vault via the owner-gated RPC; it never reaches the browser.
  */
-export async function syncShopifyAction(artistId: string) {
+export async function syncShopifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: creds, error } = await supabase.rpc('shopify_credentials', {
     p_artist_id: artistId,
   })
-  if (error) throw new Error(error.message)
-  if (!creds || creds.length === 0) return
+  if (error) return { ok: false, error: error.message }
+  if (!creds || creds.length === 0) return { ok: false, error: 'Connect a Shopify store first.' }
 
   const { store_domain, token } = creds[0] as { store_domain: string; token: string }
-  const client = createShopifyClient({ domain: store_domain, token })
-  const products = await client.getProducts()
-  await syncShopifyMerch(supabase, artistId, products)
+  try {
+    const client = createShopifyClient({ domain: store_domain, token })
+    const products = await client.getProducts()
+    await syncShopifyMerch(supabase, artistId, products)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
