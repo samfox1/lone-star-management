@@ -64,8 +64,10 @@ export function ContentSection({
       </div>
 
       {/* Add */}
-      <form
+      <SaveForm
         action={addContentAction.bind(null, type, artistId)}
+        savedMessage="Added"
+        resetOnSuccess
         className="mt-3 flex flex-wrap items-center gap-2"
       >
         {ui.fields.map((f, i) => (
@@ -81,7 +83,7 @@ export function ContentSection({
         <button type="submit" className={buttonClass('solid')}>
           Add
         </button>
-      </form>
+      </SaveForm>
 
       {/* Edit / delete */}
       {rows.length > 0 ? (

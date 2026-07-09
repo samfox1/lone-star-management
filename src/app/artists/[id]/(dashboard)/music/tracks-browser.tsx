@@ -3,13 +3,15 @@
 import { useState } from 'react'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SectionToolbar } from '../section-toolbar'
+import { SaveForm } from '../save-form'
 import { CardGrid } from '../card-grid'
 import { FilterBar } from '../filter-bar'
 import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 
 export type BrowserTrack = Track & { created_at: string }
 
-type BoundAction = (formData: FormData) => void | Promise<void>
+type AddAction = (formData: FormData) => Promise<{ error?: string }>
+type PublishAction = () => Promise<{ error?: string }>
 type Sort = 'catalog' | 'newest' | 'az'
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -38,8 +40,8 @@ export function TracksBrowser({
   tracks: BrowserTrack[]
   artistId: string
   releases: ReleaseOption[]
-  addAction: BoundAction
-  publishAction: BoundAction
+  addAction: AddAction
+  publishAction: PublishAction
 }) {
   const [source, setSource] = useState<string>('all')
   const [sort, setSort] = useState<Sort>('catalog')
@@ -59,12 +61,12 @@ export function TracksBrowser({
         addLabel="Add track"
         publishAction={publishAction}
       >
-        <form action={addAction} className="flex items-center gap-2">
+        <SaveForm action={addAction} savedMessage="Track added" resetOnSuccess className="flex items-center gap-2">
           <input name="title" placeholder="Track title" required autoFocus className={`${inputClass} flex-1`} />
           <button type="submit" className={buttonClass('solid')}>
             Add
           </button>
-        </form>
+        </SaveForm>
       </SectionToolbar>
 
       {tracks.length > 0 && (

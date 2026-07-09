@@ -12,11 +12,14 @@ import { toast } from './toast'
 export function SaveForm({
   action,
   savedMessage = 'Saved',
+  resetOnSuccess = false,
   className,
   children,
 }: {
   action: (formData: FormData) => Promise<{ error?: string } | void>
   savedMessage?: string
+  /** Clear the inputs after a successful submit — for "add" forms, not edit forms. */
+  resetOnSuccess?: boolean
   className?: string
   children: ReactNode
 }) {
@@ -25,7 +28,8 @@ export function SaveForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (busyRef.current) return
-    const fd = new FormData(e.currentTarget) // capture before the await
+    const form = e.currentTarget // capture the element before the await (for reset)
+    const fd = new FormData(form)
     busyRef.current = true
     try {
       const res = await action(fd)
@@ -33,6 +37,7 @@ export function SaveForm({
         toast(res.error, 'error')
         return
       }
+      if (resetOnSuccess) form.reset()
       toast(savedMessage)
     } catch {
       toast('Something went wrong saving.', 'error')

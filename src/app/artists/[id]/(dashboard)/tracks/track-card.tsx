@@ -96,8 +96,9 @@ export function TrackCard({
       </div>
 
       {releases.length > 0 && (
-        <form
+        <SaveForm
           action={setTrackReleaseAction.bind(null, track.id, artistId)}
+          savedMessage="Release updated"
           className="mt-4 flex items-center gap-2"
         >
           <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release</span>
@@ -116,7 +117,7 @@ export function TrackCard({
           <button type="submit" className={buttonClass('ghost')}>
             Save
           </button>
-        </form>
+        </SaveForm>
       )}
     </GridCard>
   )

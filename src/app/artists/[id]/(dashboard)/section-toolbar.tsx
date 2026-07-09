@@ -3,8 +3,9 @@
 import { useState, type ReactNode } from 'react'
 import { KLabel, buttonClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
+import { ActionButton } from './action-button'
 
-type BoundAction = (formData: FormData) => void | Promise<void>
+type PublishAction = () => Promise<{ error?: string }>
 
 /**
  * One compact toolbar for a content grid: the count on the left, and (optional)
@@ -26,7 +27,7 @@ export function SectionToolbar({
   count: number
   singular: string
   plural: string
-  publishAction: BoundAction
+  publishAction: PublishAction
   publishLabel?: string
   /** aria-label for the + button (e.g. "Add track"). */
   addLabel: string
@@ -53,11 +54,14 @@ export function SectionToolbar({
             Import
           </button>
         )}
-        <form action={publishAction}>
-          <button type="submit" className={buttonClass('ghost')}>
-            {publishLabel}
-          </button>
-        </form>
+        <ActionButton
+          action={publishAction}
+          savedMessage={`${publishLabel}ed`}
+          busyLabel="Publishing…"
+          className={buttonClass('ghost')}
+        >
+          {publishLabel}
+        </ActionButton>
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}

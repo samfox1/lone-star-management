@@ -1,11 +1,15 @@
 /**
  * A small integration panel: save the artist's external id/name and pull its
- * catalog into draft rows. Used for Spotify and Bandsintown — the save/pull
- * server actions are passed in already bound to the artist.
+ * catalog into draft rows. Used for every catalog + standalone source — the
+ * save/pull server actions are passed in already bound to the artist. Save and
+ * pull both confirm with a toast (SaveForm / ActionButton).
  */
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { SaveForm } from './save-form'
+import { ActionButton } from './action-button'
 
-type BoundAction = (formData: FormData) => void | Promise<void>
+type SaveAction = (formData: FormData) => Promise<{ error?: string }>
+type PullAction = () => Promise<{ ok: boolean; error?: string }>
 
 export function SyncPanel({
   title,
@@ -23,24 +27,24 @@ export function SyncPanel({
   placeholder: string
   hasId: boolean
   pullLabel: string
-  saveAction: BoundAction
-  pullAction: BoundAction
+  saveAction: SaveAction
+  pullAction: PullAction
 }) {
   return (
     <section className="mb-4 rounded-xl border border-hairline bg-paper p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-bold tracking-[-0.01em]">{title}</h2>
-        <form action={pullAction}>
-          <button
-            type="submit"
-            disabled={!hasId}
-            className={buttonClass('ghost', 'disabled:cursor-not-allowed disabled:opacity-40')}
-          >
-            {pullLabel}
-          </button>
-        </form>
+        <ActionButton
+          action={pullAction}
+          savedMessage={`${title}: imported`}
+          busyLabel="Importing…"
+          disabled={!hasId}
+          className={buttonClass('ghost', 'disabled:cursor-not-allowed disabled:opacity-40')}
+        >
+          {pullLabel}
+        </ActionButton>
       </div>
-      <form action={saveAction} className="mt-3 flex items-center gap-2">
+      <SaveForm action={saveAction} savedMessage="Saved" className="mt-3 flex items-center gap-2">
         <input
           name={idName}
           defaultValue={idValue}
@@ -53,7 +57,7 @@ export function SyncPanel({
         >
           Save
         </button>
-      </form>
+      </SaveForm>
       <p className="mt-2 font-space text-xs text-ink-faint">
         Pulls into draft rows. Your manual edits are never overwritten. Requires API
         credentials configured.
