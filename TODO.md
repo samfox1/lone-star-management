@@ -1,5 +1,81 @@
 # TODO
 
+## Roadmap decisions — 2026-07-08 deep-dive review
+
+Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
+
+1. **Finish the uploads/toasts thread** (current work) — close out the remaining
+   silent `<form action>` paths below before starting anything new.
+2. **Hygiene batch** (low-risk, do before the music restructure):
+   - [x] Re-ran `/steaksauce full` (2026-07-08) — `steaksauce.md` re-baselined to the
+         live DB: 17 tables · 2 views · 21 functions · 3 buckets. Verifier clean (no
+         dead-schema tables, no broken rpc calls, all FKs resolve).
+   - [x] Fix stale `.env.example` — now documents `YOUTUBE_API_KEY`,
+         `TICKETMASTER_API_KEY`, and `APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY/STOREFRONT`.
+         (2026-07-08)
+   - [x] `rls_auto_enable` drift — RESOLVED by documenting, not by migration.
+         Exact function def + the event-trigger wiring are now recorded in
+         `steaksauce.md` (Functions section). Decided NOT to add a capture migration:
+         the event trigger is named `ensure_rls` (fires `rls_auto_enable()`), and
+         `CREATE EVENT TRIGGER` needs superuser — a `db push` could fail mid-apply
+         and leave the live RLS-safety trigger DROPPED. Not worth it given this DB is
+         never rebuilt from migrations. If a from-scratch rebuild is ever needed, the
+         def is on hand in steaksauce.md.
+   - [x] Add `visible` columns to `tracks` + `links` (migration
+         `20260708150000_tracks_links_visibility.sql`, pushed + verified). Additive,
+         non-breaking, default true; NOT yet gated in get_public_site — the UI +
+         publish-curation wiring lands with the Music restructure (step 4).
+3. **Thin UI test layer** — SUBSTANTIALLY DONE 2026-07-08. Harness: React Testing
+   Library + jsdom, opted in per-file via `// @vitest-environment jsdom` (the
+   DB-backed suite stays on the `node` env); server actions mocked as plain async
+   fns so these tests touch NO database; `fireEvent` (no user-event dep); no
+   Playwright/E2E (would drive prod data). See [[ui-test-harness]] memory.
+   9 files / 32 tests, covering the logic-heavy client pieces:
+   - [x] toast/form layer: `save-form`, `action-button`, `catalog-source-form`,
+         `delete-button`, `create-modal`
+   - [x] publish password gate: `publish-bar`
+   - [x] on-site selection delta: `use-on-site-selection`
+   - [x] tracks filter/sort/chips: `tracks-browser` (TrackCard stubbed)
+   - [x] chip + sort control: `filter-bar`
+   Suite now 70 files / 415 tests, all green. Remaining (optional, lower value —
+   thin compositions of already-tested primitives): SyncPanel/ShopifyPanel,
+   ReleasesBrowser. Do them if they churn in the restructure.
+4. **Music restructure** (multi-agent, "fix everywhere"): merge `releases/` +
+   `tracks/` into one **Music** surface split into **Released** (pulled from a
+   platform: Spotify/SoundCloud/Apple/etc.) and **Unreleased** (uploaded straight
+   to Lone Star, not on any platform). Kill the `album_name` string-match fallback
+   in `get_release()` and rely on the `release_id` FK only. Update dashboard routes,
+   public templates, the copilot's `artist_snapshot` counts, and skeen-website
+   mappers to match.
+5. **EPK-only fields** — build stage plot, tech rider, press quotes, and
+   downloadable press assets (see "Phase 5 review follow-ups" below; scope now
+   confirmed as build-it, not derived-only).
+6. **Wire skeen-website content-in** — the site fetches `videos`, `site_content`,
+   and `release_type` but never renders them, so publishing videos has no effect on
+   the live site. Consume them in the mappers (Work tab from `videos`, use
+   authoritative `release_type` instead of the cover/track-count heuristic).
+
+Decisions that don't change the sequence:
+- **Analytics landing** (redesign centerpiece): build on data we OWN now (site
+  visits, catalog counts, link/ticket/buy clicks), leave a slot for real streaming
+  data to drop in later. The prototype's "monthly listeners/streams" are fabricated.
+- **Bandsintown gate**: stays a TODO note (not enforced in code) — see bottom section.
+
+### New to-dos from the review
+- [ ] **Get Ticketmaster + Apple Music credentials, then turn them on.** Both are
+      code-complete + tested but have no keys, so they show in the Integrations hub
+      as clickable and fail at runtime. Apple needs a MusicKit Team ID + Key ID +
+      private key (Apple Developer account); Ticketmaster needs a Discovery API key.
+      Once Sam provides them: add to env, wire in, verify the pulls, and add
+      Ticketmaster attribution when it goes live (their terms require it).
+- [ ] **DECIDE copilot write-auth before implementing write tools** (next project
+      step). Today `lone-star-agent` uses the Supabase `service_role` key (full
+      RLS bypass, plaintext `.env`) and ships `placeholderAuth()` on its channel —
+      fine for a local, single-manager, read-only tool, NOT safely deployable. Before
+      wiring any write/upload/publish tool, decide the transport: move behind the
+      app's HTTP APIs (RLS + validation enforced) or an RLS-scoped per-manager client.
+      Do not add write tools on the god-key transport.
+
 ## Analytics — record_event rate limit (review follow-up)
 - [ ] The anon `record_event` door has no per-IP/per-slug rate limit. entity_type is now
       allowlisted (`20260707200000`) so junk can't accrete, and forgery only inflates an
@@ -15,15 +91,17 @@
 - [x] Media objects GC'd at DELETE (`deleteMediaAction`): media is a live table (no
       revision deferral), so the row delete unpublishes immediately — safe to remove then.
 
-## Action-feedback toasts — remaining silent paths (consistency follow-up)
-- [ ] These still use plain `<form action={serverAction}>` and throw on error with no
-      toast (the card edit/delete/rename, uploads, add-modal, media delete, release
-      links all toast now): the generic ADD forms (`addContentAction` in
-      content-sections + tracks-section), `setTrackReleaseAction` (track→release
-      assign), per-section publish (`publishSectionAction` in section-toolbar), and the
-      integrations config saves (saveSpotifyId/saveYoutubeChannel/connectShopify/etc).
-      Convert each to return `{error?}` behind a client wrapper (mirror SaveForm/
-      DeleteButton) and toast, when doing a consistency pass.
+## Action-feedback toasts — DONE (2026-07-08)
+- [x] Every remaining silent `<form action>` now toasts on success AND error. The
+      actions return `{ error? }` (saves/publish/assign) or `{ ok, error? }` (pulls)
+      instead of throwing, and the forms went behind a client wrapper: a new
+      `ActionButton` (field-less: per-section Publish, integration Pull, Shopify
+      Disconnect) and `SaveForm` gained `resetOnSuccess` for the ADD forms. Covered:
+      generic ADD forms (`addContentAction` in content-sections + tracks-browser),
+      `setTrackReleaseAction`, `publishSectionAction` (SectionShell + SectionToolbar),
+      all six integration saves (shared `saveArtistField` helper) + their pulls,
+      Shopify connect/pull/disconnect, and the catalog-source switch. Typecheck + 384
+      tests green.
 
 ## Upload follow-ups
 - [ ] Very large video uploads use `.upload()` (no resumable/progress). Consider tus/

@@ -20,6 +20,9 @@ export type SiteTrack = {
   stream_url: string | null
   /** Link-out URL for sources that don't host audio (e.g. Deezer). */
   provider_url: string | null
+  /** Apple/iTunes store link (union model) — can't be rebuilt from apple_id, so
+   *  it's stored and threaded to the public link chain. */
+  apple_url: string | null
   /** Whether this track has gated hosted audio. The raw path never leaves the
    *  server; the player streams it via the signed-URL route (slug + track id). */
   has_audio: boolean
@@ -162,6 +165,7 @@ export async function getWorkingSite(
           cover_url: (s.cover_url as string | null) ?? null,
           stream_url: (s.stream_url as string | null) ?? null,
           provider_url: (s.provider_url as string | null) ?? null,
+          apple_url: (s.apple_url as string | null) ?? null,
           has_audio: s.audio_path != null,
           featured_artists: (s.featured_artists as string[] | null) ?? [],
           album_name: (s.album_name as string | null) ?? null,

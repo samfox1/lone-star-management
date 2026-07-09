@@ -67,8 +67,8 @@ export function ArtistSite({ data }: { data: SiteData }) {
         <ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-900">
           {tracks.map((track) => {
             const cover = safeHref(track.cover_url)
-            // Hosted stream, else a link-out (Deezer etc.).
-            const stream = safeHref(track.stream_url) ?? safeHref(track.provider_url)
+            // Hosted stream, else a link-out (Deezer / Apple / etc.).
+            const stream = safeHref(track.stream_url) ?? safeHref(track.provider_url) ?? safeHref(track.apple_url)
             // "feat. A, B · Album" — either half may be absent (older revisions).
             const feat = track.featured_artists ?? []
             const sub = [feat.length ? `feat. ${feat.join(', ')}` : null, track.album_name || null]
