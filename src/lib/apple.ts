@@ -1,113 +1,99 @@
 /**
- * appleMusicClient — reads public catalog data with an Apple Music DEVELOPER
- * token (no user token needed for catalog). The token is an ES256 JWT signed
- * with the MusicKit .p8 private key; we sign with node:crypto using
- * `dsaEncoding: 'ieee-p1363'` so the signature is already in JOSE (R||S) form.
- * Apple is a metadata + embed/link source (no hosted/downloadable audio).
+ * appleMusicClient — reads public catalog data from the FREE iTunes Search API
+ * (no key, no developer token). Apple Music's authenticated MusicKit API needs a
+ * paid membership; the iTunes `lookup` endpoint returns the same catalog metadata
+ * (title, album, artwork, duration, store link) for free. Apple is a metadata +
+ * link-out source here (no hosted/downloadable audio).
  *
- * A factory with injectable fetch/sleep; `developerToken` can be injected to skip
- * signing in tests.
+ * A factory with injectable fetch/sleep so tests exercise the mapping / 429
+ * backoff without hitting the network.
  */
-import { sign } from 'node:crypto'
 import { httpGetJson } from '@/lib/http'
 
-const API_BASE = 'https://api.music.apple.com'
+const API_BASE = 'https://itunes.apple.com'
 
-/** The shape the tracks sync consumes (one Apple Music song). */
+/** The shape the tracks sync consumes (one Apple Music / iTunes song). */
 export type AppleTrackInput = {
   apple_id: string
   title: string
+  album_name: string | null
   cover_url: string | null
   provider_url: string | null
+  duration_ms: number | null
 }
 
-type AppleSong = {
-  id: string
-  attributes?: { name?: string; url?: string; artwork?: { url?: string } }
+/** One iTunes Search result row (only the fields we read; the API returns more). */
+type ITunesResult = {
+  wrapperType?: string
+  kind?: string
+  trackId?: number
+  trackName?: string
+  collectionName?: string
+  artworkUrl100?: string
+  trackViewUrl?: string
+  trackTimeMillis?: number
 }
-type ApplePage = { data?: AppleSong[]; next?: string | null }
+type ITunesResponse = { resultCount?: number; results?: ITunesResult[] }
 
 type Options = {
-  teamId?: string
-  keyId?: string
-  privateKey?: string
-  /** Inject a pre-made token to skip signing (tests). */
-  developerToken?: string
-  storefront?: string
+  /** iTunes storefront country (e.g. 'us'). */
+  country?: string
   fetchImpl?: typeof fetch
   sleep?: (ms: number) => Promise<void>
   maxRetries?: number
-  maxPages?: number
+  /** Max songs to pull in one lookup (iTunes caps at 200). */
+  limit?: number
 }
 
-const b64url = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
+/** iTunes artwork is served sized (…/100x100bb.jpg); request a larger square. */
+function upsizeArtwork(url: string | undefined, px = 600): string | null {
+  if (!url) return null
+  return url.replace(/\/\d+x\d+bb\.(jpg|png)/, `/${px}x${px}bb.$1`)
+}
 
 export function createAppleMusicClient(opts: Options = {}) {
-  const teamId = opts.teamId ?? process.env.APPLE_TEAM_ID
-  const keyId = opts.keyId ?? process.env.APPLE_KEY_ID
-  const privateKey = opts.privateKey ?? process.env.APPLE_PRIVATE_KEY
-  const storefront = opts.storefront ?? process.env.APPLE_STOREFRONT ?? 'us'
+  const country = opts.country ?? process.env.APPLE_STOREFRONT ?? 'us'
   const doFetch = opts.fetchImpl ?? fetch
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const maxRetries = opts.maxRetries ?? 3
-  const maxPages = opts.maxPages ?? 10
+  const limit = Math.min(opts.limit ?? 200, 200)
 
-  const injected = 'developerToken' in opts ? opts.developerToken : undefined
-
-  async function getDeveloperToken(): Promise<string> {
-    if (injected) return injected
-    if (!teamId || !keyId || !privateKey) {
-      throw new Error('Apple Music credentials not configured (APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY).')
-    }
-    const now = Math.floor(Date.now() / 1000)
-    const header = { alg: 'ES256', kid: keyId, typ: 'JWT' }
-    const payload = { iss: teamId, iat: now, exp: now + 60 * 60 * 12 } // 12h
-    const signingInput = `${b64url(header)}.${b64url(payload)}`
-    const signature = sign('sha256', Buffer.from(signingInput), {
-      key: privateKey,
-      dsaEncoding: 'ieee-p1363',
-    }).toString('base64url')
-    return `${signingInput}.${signature}`
-  }
-
-  function apiGet(pathOrUrl: string): Promise<ApplePage> {
-    const url = pathOrUrl.startsWith('http') ? pathOrUrl : API_BASE + pathOrUrl
-    return httpGetJson<ApplePage>(url, {
+  function apiGet(path: string): Promise<ITunesResponse> {
+    return httpGetJson<ITunesResponse>(API_BASE + path, {
       fetchImpl: doFetch,
       sleep,
       maxRetries,
       provider: 'Apple Music',
-      headers: async () => ({ Authorization: `Bearer ${await getDeveloperToken()}` }),
     })
   }
 
-  function map(s: AppleSong): AppleTrackInput {
-    const art = s.attributes?.artwork?.url
+  function map(r: ITunesResult): AppleTrackInput {
     return {
-      apple_id: s.id,
-      title: s.attributes?.name ?? '',
-      cover_url: art ? art.replace('{w}', '300').replace('{h}', '300') : null,
-      provider_url: s.attributes?.url ?? null,
+      apple_id: String(r.trackId),
+      title: r.trackName ?? '',
+      album_name: r.collectionName ?? null,
+      cover_url: upsizeArtwork(r.artworkUrl100),
+      provider_url: r.trackViewUrl ?? null,
+      duration_ms: r.trackTimeMillis ?? null,
     }
   }
 
-  /** The artist's top songs as a flat list (link-out only). */
+  /**
+   * The artist's songs via the free iTunes `lookup` endpoint. `lookup` returns the
+   * artist row first, then their songs — we drop the artist and keep the tracks.
+   * One request (no cursor paging); `limit` caps the result set at iTunes' max 200.
+   */
   async function getArtistTracks(artistId: string): Promise<AppleTrackInput[]> {
-    const out: AppleTrackInput[] = []
-    let url: string | null = `/v1/catalog/${encodeURIComponent(storefront)}/artists/${encodeURIComponent(artistId)}/view/top-songs?limit=25`
-    let pages = 0
-    const seen = new Set<string>()
-    while (url && pages < maxPages && !seen.has(url)) {
-      seen.add(url)
-      pages++
-      const page: ApplePage = await apiGet(url)
-      for (const s of page.data ?? []) out.push(map(s))
-      url = page.next ?? null
-    }
-    return out
+    const path =
+      `/lookup?id=${encodeURIComponent(artistId)}` +
+      `&entity=song&limit=${limit}&country=${encodeURIComponent(country)}`
+    const page = await apiGet(path)
+    return (page.results ?? [])
+      .filter((r) => r.trackId != null && (r.wrapperType === 'track' || r.kind === 'song'))
+      .map(map)
   }
 
-  return { getDeveloperToken, getArtistTracks }
+  return { getArtistTracks }
 }
 
 export type AppleMusicClient = ReturnType<typeof createAppleMusicClient>

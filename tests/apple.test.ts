@@ -1,10 +1,9 @@
 /**
- * PHASE 4 — appleMusicClient, test-first. The developer token is an ES256 JWT
- * signed with the MusicKit .p8 key; we sign with node:crypto (ieee-p1363 = JOSE
- * format). Tests generate a throwaway EC key to verify the signature, and inject
- * a token to exercise the catalog mapping/pagination/429 without real creds.
+ * appleMusicClient — reads catalog data from the FREE iTunes Search API (no key,
+ * no developer token; the paid MusicKit API isn't required for catalog lookups).
+ * The client hits the `lookup` endpoint for an artist's songs and maps them to the
+ * tracks-sync shape (metadata + link-out, no hosted audio). Injectable fetch/sleep.
  */
-import { generateKeyPairSync, verify } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createAppleMusicClient } from '@/lib/apple'
 
@@ -18,77 +17,66 @@ function res({ status = 200, headers = {}, body }: Resp) {
   }
 }
 
-const song = (id: string, name: string) => ({
-  id,
-  type: 'songs',
-  attributes: {
-    name,
-    url: `https://music.apple.com/us/song/${id}`,
-    artwork: { url: 'https://is1.mzstatic.com/image/{w}x{h}.jpg', width: 3000, height: 3000 },
-  },
+const artist = (id: number) => ({ wrapperType: 'artist', artistType: 'Artist', artistId: id, artistName: 'Skeen' })
+const song = (id: number, name: string, extra: Record<string, unknown> = {}) => ({
+  wrapperType: 'track',
+  kind: 'song',
+  trackId: id,
+  trackName: name,
+  collectionName: 'OutWest - EP',
+  artworkUrl100: 'https://is1.mzstatic.com/image/thumb/foo/100x100bb.jpg',
+  trackViewUrl: `https://music.apple.com/us/album/x/${id}`,
+  trackTimeMillis: 98000,
+  ...extra,
 })
 
-describe('developer token (ES256 JWT)', () => {
-  it('signs a verifiable ES256 JWT from the .p8 key', async () => {
-    const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
-    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
+function client(fetchImpl: typeof fetch) {
+  return createAppleMusicClient({ fetchImpl, sleep: () => Promise.resolve() })
+}
 
-    const client = createAppleMusicClient({
-      teamId: 'TEAM123',
-      keyId: 'KEY123',
-      privateKey: pem,
-      fetchImpl: (async () => res({ body: { data: [] } })) as unknown as typeof fetch,
-    })
-    const token = await client.getDeveloperToken()
-
-    const [h, p, s] = token.split('.')
-    const header = JSON.parse(Buffer.from(h, 'base64url').toString())
-    const payload = JSON.parse(Buffer.from(p, 'base64url').toString())
-    expect(header).toMatchObject({ alg: 'ES256', kid: 'KEY123', typ: 'JWT' })
-    expect(payload).toMatchObject({ iss: 'TEAM123' })
-    expect(payload.exp).toBeGreaterThan(payload.iat)
-
-    const ok = verify(
-      'sha256',
-      Buffer.from(`${h}.${p}`),
-      { key: publicKey, dsaEncoding: 'ieee-p1363' },
-      Buffer.from(s, 'base64url'),
-    )
-    expect(ok).toBe(true)
+describe('getArtistTracks (iTunes Search)', () => {
+  it('looks up songs by artist id, with no auth header', async () => {
+    const fetchImpl = vi.fn(async () => res({ body: { resultCount: 2, results: [artist(42), song(1, 'Drive')] } }) as unknown as Response)
+    await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
+    const [url, init] = fetchImpl.mock.calls[0]
+    expect(url).toContain('itunes.apple.com/lookup')
+    expect(url).toContain('id=42')
+    expect(url).toContain('entity=song')
+    expect(init).toBeUndefined() // iTunes Search needs no auth
   })
 
-  it('throws when credentials are not configured', async () => {
-    const client = createAppleMusicClient({ developerToken: undefined })
-    await expect(client.getArtistTracks('1')).rejects.toThrow(/Apple/i)
-  })
-})
-
-describe('getArtistTracks', () => {
-  function client(fetchImpl: typeof fetch) {
-    return createAppleMusicClient({ developerToken: 'dev-tok', storefront: 'us', fetchImpl, sleep: () => Promise.resolve() })
-  }
-
-  it('maps top songs to the sync shape (link-out, sized artwork)', async () => {
-    const fetchImpl = vi.fn(async () => res({ body: { data: [song('s1', 'Drive')] } }) as unknown as Response)
+  it('maps songs to the sync shape (upsized artwork) and drops the artist row', async () => {
+    const fetchImpl = vi.fn(async () => res({ body: { results: [artist(42), song(1, 'Drive')] } }) as unknown as Response)
     const out = await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
     expect(out).toEqual([
       {
-        apple_id: 's1',
+        apple_id: '1',
         title: 'Drive',
-        cover_url: 'https://is1.mzstatic.com/image/300x300.jpg',
-        provider_url: 'https://music.apple.com/us/song/s1',
+        album_name: 'OutWest - EP',
+        cover_url: 'https://is1.mzstatic.com/image/thumb/foo/600x600bb.jpg',
+        provider_url: 'https://music.apple.com/us/album/x/1',
+        duration_ms: 98000,
       },
     ])
   })
 
-  it('follows `next` pagination and concatenates', async () => {
-    const fetchImpl = vi.fn(async (url: string) =>
-      (url.includes('offset=25')
-        ? res({ body: { data: [song('s2', 'Two')] } })
-        : res({ body: { data: [song('s1', 'One')], next: '/v1/catalog/us/artists/42/view/top-songs?offset=25' } })) as unknown as Response,
-    )
+  it('tolerates missing optional fields (null, not undefined)', async () => {
+    const bare = song(2, 'Bare', {
+      collectionName: undefined,
+      artworkUrl100: undefined,
+      trackViewUrl: undefined,
+      trackTimeMillis: undefined,
+    })
+    const fetchImpl = vi.fn(async () => res({ body: { results: [bare] } }) as unknown as Response)
     const out = await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
-    expect(out.map((t) => t.apple_id)).toEqual(['s1', 's2'])
+    expect(out[0]).toEqual({
+      apple_id: '2',
+      title: 'Bare',
+      album_name: null,
+      cover_url: null,
+      provider_url: null,
+      duration_ms: null,
+    })
   })
 
   it('retries on 429 with Retry-After backoff', async () => {
@@ -98,9 +86,9 @@ describe('getArtistTracks', () => {
       calls++
       return (calls === 1
         ? res({ status: 429, headers: { 'retry-after': '2' }, body: {} })
-        : res({ body: { data: [song('s1', 'One')] } })) as unknown as Response
+        : res({ body: { results: [song(1, 'One')] } })) as unknown as Response
     })
-    const c = createAppleMusicClient({ developerToken: 'dev-tok', fetchImpl: fetchImpl as unknown as typeof fetch, sleep })
+    const c = createAppleMusicClient({ fetchImpl: fetchImpl as unknown as typeof fetch, sleep })
     const out = await c.getArtistTracks('42')
     expect(out).toHaveLength(1)
     expect(sleep).toHaveBeenCalledWith(2000)
