@@ -31,26 +31,27 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
   // nav animates to the matching width (wrapper + the 28px page gutter folded
   // in), so its right border — THE vertical line — moves in step.
   return (
-    <div className="group relative hidden w-12 flex-none transition-[width] duration-200 hover:w-36 md:block">
+    <div className="group relative hidden w-12 flex-none transition-[width] duration-200 hover:w-[92px] md:block">
       <nav
         aria-label="Asset types"
-        className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper transition-[width] duration-200 group-hover:w-[172px]"
+        className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper transition-[width] duration-200 group-hover:w-[120px]"
       >
         <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-0.5 pl-[17px]">
           {ITEMS.map((it) => (
             <Link
               key={it.key}
               href={`/artists/${artistId}/${it.seg}`}
-              title={it.label}
               aria-label={it.label}
               aria-current={it.key === active ? 'page' : undefined}
               className={cx(
-                'pointer-events-auto inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
+                // group/item: only THIS link's hover reveals its label; the outer
+                // group still widens the drawer for any icon hover.
+                'group/item pointer-events-auto inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
                 it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
               )}
             >
               <Icon name={it.icon} size={22} />
-              <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[110px] group-hover:opacity-100">
+              <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover/item:ml-2 group-hover/item:max-w-[110px] group-hover/item:opacity-100">
                 {it.label}
               </span>
             </Link>
