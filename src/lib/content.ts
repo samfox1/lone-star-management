@@ -117,7 +117,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   release: {
     table: 'releases',
     // source + spotify_id: provenance for the doors' Released/Unreleased check.
-    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order', 'source', 'spotify_id'],
+    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order', 'source', 'spotify_id', 'released'],
     orderBy: ['sort_order', 'created_at'],
   },
   media: {

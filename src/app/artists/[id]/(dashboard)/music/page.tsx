@@ -42,6 +42,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
         source: (r.source as string | null) ?? null,
         spotify_id: (r.spotify_id as string | null) ?? null,
         links: r.links,
+        released: (r.released as boolean | null) ?? false,
       }),
     ]),
   )

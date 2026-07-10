@@ -183,6 +183,7 @@ export async function getWorkingSite(
             source: (r.source as string | null) ?? null,
             spotify_id: (r.spotify_id as string | null) ?? null,
             links: r.links,
+            released: (r.released as boolean | null) ?? false,
           }),
         ]),
       )

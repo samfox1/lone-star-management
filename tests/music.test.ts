@@ -99,3 +99,14 @@ describe('trackPlatforms — SoundCloud', () => {
     ).toEqual([{ key: 'soundcloud', label: 'SoundCloud', url: 'https://soundcloud.com/x/y' }])
   })
 })
+
+describe('the manual released flag on releases', () => {
+  it('marks a hand-added album/EP (no links) as released; songs inherit', () => {
+    expect(releaseBucket(rel({ released: true }))).toBe('released')
+    const resolver = (id: string): MusicBucket => (id === 'r1' ? releaseBucket(rel({ released: true })) : 'unreleased')
+    expect(trackBucket(trk({ release_id: 'r1' }), resolver)).toBe('released')
+  })
+  it('defaults to unreleased when absent or false', () => {
+    expect(releaseBucket(rel({ released: false }))).toBe('unreleased')
+  })
+})

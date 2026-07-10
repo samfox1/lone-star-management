@@ -15,12 +15,16 @@ export type ReleaseProvenance = {
   spotify_id: string | null
   /** The DSP links jsonb array; a non-empty list means the release is on platforms. */
   links: unknown
+  /** The manual "this is released" flag — a hand-added album/EP with no links
+   *  can still be public (its songs inherit this bucket). */
+  released?: boolean | null
 }
 
-/** A release is Unreleased iff it has NO platform presence at all. */
+/** A release is Unreleased iff it has NO platform presence AND wasn't manually
+ *  marked released. */
 export function releaseBucket(r: ReleaseProvenance): MusicBucket {
   const hasLinks = Array.isArray(r.links) && r.links.length > 0
-  const onPlatform = r.source !== 'manual' || r.spotify_id != null || hasLinks
+  const onPlatform = r.source !== 'manual' || r.spotify_id != null || hasLinks || r.released === true
   return onPlatform ? 'released' : 'unreleased'
 }
 

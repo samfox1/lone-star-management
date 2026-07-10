@@ -108,7 +108,7 @@ describe('MusicBrowser toolbar', () => {
     setup({ importButton: <button type="button">DriveImport</button> })
     expect(screen.getByText('DriveImport')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add song' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add music' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add release' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Newest' })).toBeInTheDocument()
   })
@@ -116,7 +116,7 @@ describe('MusicBrowser toolbar', () => {
   it('the toolbar stays across views (same buttons on Unreleased)', () => {
     setup()
     fireEvent.click(bucketBtn('Unreleased'))
-    expect(screen.getByRole('button', { name: 'Add song' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add music' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Newest' })).toBeInTheDocument()
   })
 
