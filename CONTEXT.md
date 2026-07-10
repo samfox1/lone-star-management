@@ -50,12 +50,28 @@ decisions behind them (esp. ADR-0002).
   `spotify_id` / `apple_id` / `deezer_id`, `apple_url` / `soundcloud_url` / `provider_url`,
   `stream_url`, and the manual `released` flag). Provenance drives the Released/Unreleased
   split — it isn't shown to fans directly.
-- **Released / Unreleased buckets** — the two halves of a catalog. **Released** = has
-  platform presence (any provenance id/link/source) **OR** the stored `released` flag;
-  **Unreleased** = everything else (uploaded to Lone Star, not on a DSP). Only Released
-  music is public. A song's release membership is **widen-only** (a song is Released if
-  its own provenance OR its release is Released). One source of truth: `src/lib/music.ts`,
-  mirrored by the SQL doors. See MUSIC_RESTRUCTURE.md.
+- **Released / Unreleased buckets** — the two halves of the artist's LIBRARY (the
+  dashboard Music tab). **Released** = has platform presence (any provenance
+  id/link/source) **OR** the stored `released` flag; **Unreleased** = everything else.
+  It's an **organizing label only — it does NOT decide what's on the public site**
+  (decoupled 2026-07-10, ADR 0007). Source of truth: `src/lib/music.ts` (library
+  buckets + the release smart-link/EPK doors). See MUSIC_RESTRUCTURE.md.
+- **On-site (`visible`)** — what's actually on the public site is each item's own
+  `visible` flag (tracks, videos, merch, tour_dates, releases), gated by the public
+  doors. Decoupled from Released for tracks (ADR 0007). The visual editor is where a
+  manager toggles/places on-site items.
+
+## Site editor (ADR 0006)
+
+- **Manifest** — a site's declaration of its editable regions (`src/lib/site-editor/`):
+  **fields** (declared text/image) and **slots** (a section holding library items).
+  The one editor reads it; a site (template or custom) is editable iff it ships a
+  manifest, marks its DOM (`data-lse-*`), and includes the bridge.
+- **Edit mode** — the site rendered in an authenticated embedded frame with draft
+  data + the `data-lse-*` markers + the postMessage bridge. Never on public `/[slug]`.
+- **Library vs editor** — the Assets pages are the content **library** (asset details,
+  saved as draft); the **editor** controls what's on the site + placement + site
+  text/images. One password-gated **review-and-approve** publish for everything.
 
 ## Analytics
 
