@@ -82,7 +82,7 @@ export function ArtistNav({
                 active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
               )}
             >
-              <Icon name={t.icon} size={18} />
+              <Icon name={t.icon} size={22} />
               <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[120px] group-hover:opacity-100">
                 {t.label}
               </span>

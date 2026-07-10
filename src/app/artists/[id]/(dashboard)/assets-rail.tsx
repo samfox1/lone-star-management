@@ -13,32 +13,38 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
 ]
 
 /**
- * The Assets pages' left rail: music / photos / videos, icons stacked and
- * vertically centered in the viewport (the vertical cousin of the top nav's
- * centered icons). Rendered by each asset page next to its content.
+ * The Assets pages' left rail: music / photos / videos. Same interaction
+ * language as the top nav — icon with a label that slides out on hover — but
+ * vertical. The icon stack is FIXED-centered in the full viewport (nav bar
+ * included), and a full-height hairline runs along the rail's left edge.
+ * `position: fixed` with no left/top keeps the element's static x-position, so
+ * both the line and the stack stay in the rail's column while the page scrolls.
  */
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
   return (
-    <nav
-      aria-label="Asset types"
-      className="sticky top-0 hidden h-[calc(100vh-6rem)] flex-none flex-col items-center justify-center gap-1 pr-1 md:flex"
-    >
-      {ITEMS.map((it) => (
-        <Link
-          key={it.key}
-          href={`/artists/${artistId}/${it.seg}`}
-          title={it.label}
-          aria-label={it.label}
-          aria-current={it.key === active ? 'page' : undefined}
-          className={cx(
-            'inline-flex items-center rounded-lg p-2.5 transition-colors',
-            it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
-          )}
-        >
-          <Icon name={it.icon} size={18} />
-        </Link>
-      ))}
-    </nav>
+    <div className="relative hidden w-16 flex-none md:block">
+      <span aria-hidden className="fixed top-0 h-screen w-px bg-hairline" />
+      <nav aria-label="Asset types" className="fixed top-1/2 flex -translate-y-1/2 flex-col gap-0.5 pl-3">
+        {ITEMS.map((it) => (
+          <Link
+            key={it.key}
+            href={`/artists/${artistId}/${it.seg}`}
+            title={it.label}
+            aria-label={it.label}
+            aria-current={it.key === active ? 'page' : undefined}
+            className={cx(
+              'group inline-flex items-center rounded-lg bg-paper px-2.5 py-2.5 transition-colors',
+              it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
+            )}
+          >
+            <Icon name={it.icon} size={22} />
+            <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[120px] group-hover:opacity-100">
+              {it.label}
+            </span>
+          </Link>
+        ))}
+      </nav>
+    </div>
   )
 }
 
