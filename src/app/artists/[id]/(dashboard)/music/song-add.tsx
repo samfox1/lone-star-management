@@ -2,50 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { createClient } from '@/lib/supabase/client'
 import { mediaUrl } from '@/lib/site'
 import { buildStoragePath, contentTypeFor, friendlyUploadError, validateUpload } from '@/lib/upload'
+import { STREAMING_SERVICES, parseStreamingLinks, type StreamingUrls } from '@/lib/song-links'
 import { FileDropField, UploadError } from '../file-drop-field'
-import { Segmented } from '../segmented'
+import { resolveStreamingSongAction } from '../actions'
 import { toast } from '../toast'
-
-/** One URL row per streaming service we know how to store (the union model). */
-export const STREAMING_SERVICES = [
-  { key: 'spotify', label: 'Spotify', placeholder: 'https://open.spotify.com/track/…' },
-  { key: 'apple', label: 'Apple Music', placeholder: 'https://music.apple.com/…' },
-  { key: 'soundcloud', label: 'SoundCloud', placeholder: 'https://soundcloud.com/…' },
-  { key: 'deezer', label: 'Deezer', placeholder: 'https://www.deezer.com/track/…' },
-] as const
-
-export type StreamingUrls = Partial<Record<(typeof STREAMING_SERVICES)[number]['key'], string>>
-
-/**
- * Map pasted service URLs onto the union-model columns: Spotify/Deezer ids parse
- * out of their URLs (badges/links rebuild from ids); Apple + SoundCloud store the
- * URL itself. Unknown-shaped URLs still save to the URL column when one exists.
- */
-export function parseStreamingLinks(urls: StreamingUrls): Record<string, string> {
-  const out: Record<string, string> = {}
-  const spotify = urls.spotify?.trim()
-  if (spotify) {
-    out.stream_url = spotify
-    const id = spotify.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/)?.[1]
-    if (id) out.spotify_id = id
-  }
-  const apple = urls.apple?.trim()
-  if (apple) out.apple_url = apple
-  const soundcloud = urls.soundcloud?.trim()
-  if (soundcloud) out.soundcloud_url = soundcloud
-  const deezer = urls.deezer?.trim()
-  if (deezer) {
-    out.provider_url = deezer
-    const id = deezer.match(/deezer\.com\/(?:[a-z]{2}\/)?track\/(\d+)/)?.[1]
-    if (id) out.deezer_id = id
-  }
-  return out
-}
 
 /** "A, B feat. C" → ['A', 'B feat. C'] — comma-separated collaborators. */
 export function parseContributors(raw: string): string[] {
@@ -72,21 +38,20 @@ type Released = 'released' | 'unreleased'
 
 /**
  * THE add-song flow (the Music page's single + button). Two ways in:
- *   - **Manually** — the full song: title, contributors, cover art (optional),
- *     and the audio file itself, plus the REQUIRED released/unreleased toggle —
- *     a hand-added song can be released without any platform link (the stored
- *     `released` flag; see lib/music.ts).
- *   - **From streaming** — paste the song's URL per service (Spotify / Apple /
- *     SoundCloud / Deezer, any subset). Attaching a service means the song IS
- *     released, so the toggle locks to Released.
+ *   - **Manually** — title, contributors, optional cover art, the audio file,
+ *     and a REQUIRED released/unreleased choice: a hand-added song can be
+ *     released without any platform link (the stored `released` flag).
+ *   - **From streaming** — paste the song's URL per service; title, cover, and
+ *     contributors resolve FROM the service (never typed), and a link means
+ *     the song IS released.
  */
-export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { artistId: string; defaultReleased?: Released }) {
+export function SongAddButton({ artistId }: { artistId: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('choose')
   const [title, setTitle] = useState('')
   const [contributors, setContributors] = useState('')
-  const [released, setReleased] = useState<Released>(defaultReleased)
+  const [released, setReleased] = useState<Released | null>(null) // deliberate: no default
   const [urls, setUrls] = useState<StreamingUrls>({})
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [coverFile, setCoverFile] = useState<File | null>(null)
@@ -94,14 +59,12 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
   const [busy, setBusy] = useState(false)
 
   const hasUrls = Object.values(urls).some((u) => u?.trim())
-  // Attaching a streaming service means the song is out in the world.
-  const effectiveReleased = step === 'streaming' && hasUrls ? 'released' : released
 
   function reset() {
     setStep('choose')
     setTitle('')
     setContributors('')
-    setReleased(defaultReleased)
+    setReleased(null)
     setUrls({})
     setAudioFile(null)
     setCoverFile(null)
@@ -115,7 +78,6 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
 
   useEffect(() => {
     if (!open) return
-    setReleased(defaultReleased)
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -124,23 +86,17 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
 
   async function submit() {
     if (busy) return
-    const t = title.trim()
-    if (!t) return setError('Give the song a title.')
     setError(null)
-
-    const base: Record<string, unknown> = {
-      artist_id: artistId,
-      title: t.slice(0, 120),
-      featured_artists: parseContributors(contributors),
-      source: 'manual',
-      released: effectiveReleased === 'released',
-    }
-
     setBusy(true)
     const supabase = createClient()
     const uploaded: { bucket: string; path: string }[] = []
     try {
+      const row: Record<string, unknown> = { artist_id: artistId, source: 'manual' }
+
       if (step === 'manual') {
+        const t = title.trim()
+        if (!t) return setError('Give the song a title.')
+        if (!released) return setError('Choose released or unreleased.')
         if (!audioFile) return setError('Attach the audio file (MP3 or M4A).')
         const audioCheck = validateUpload(audioFile, AUDIO_RULES)
         if (!audioCheck.ok) return setError(audioCheck.error)
@@ -151,6 +107,10 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
           coverExt = coverCheck.ext
         }
 
+        row.title = t.slice(0, 120)
+        row.featured_artists = parseContributors(contributors)
+        row.released = released === 'released'
+
         // Upload cover (public media bucket) then audio (gated) then the row;
         // any failure removes everything already uploaded — no orphans.
         if (coverFile && coverExt) {
@@ -160,7 +120,7 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
             .upload(coverPath, coverFile, { contentType: contentTypeFor(coverExt), upsert: false })
           if (upErr) return setError(friendlyUploadError(upErr.message, { noun: 'cover', allowed: COVER_RULES.allowedExt }))
           uploaded.push({ bucket: 'media', path: coverPath })
-          base.cover_url = mediaUrl(coverPath)
+          row.cover_url = mediaUrl(coverPath)
         }
         const audioPath = buildStoragePath(artistId, 'audio', audioCheck.ext)
         const { error: audErr } = await supabase.storage
@@ -168,13 +128,20 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
           .upload(audioPath, audioFile, { contentType: contentTypeFor(audioCheck.ext), upsert: false })
         if (audErr) return setError(friendlyUploadError(audErr.message, { noun: 'song', allowed: AUDIO_RULES.allowedExt }))
         uploaded.push({ bucket: 'audio', path: audioPath })
-        base.audio_path = audioPath
+        row.audio_path = audioPath
       } else {
         if (!hasUrls) return setError('Paste at least one streaming link.')
-        Object.assign(base, parseStreamingLinks(urls), { released: true })
+        // The service already knows the song — resolve title/cover/contributors.
+        const resolved = await resolveStreamingSongAction(urls)
+        if (!resolved.ok) return setError(resolved.error)
+        row.title = resolved.song.title.slice(0, 120)
+        row.cover_url = resolved.song.cover_url
+        row.featured_artists = resolved.song.contributors
+        row.released = true // it's on a platform
+        Object.assign(row, parseStreamingLinks(urls))
       }
 
-      const { error: rowErr } = await supabase.from('tracks').insert(base)
+      const { error: rowErr } = await supabase.from('tracks').insert(row)
       if (rowErr) {
         for (const o of uploaded) await supabase.storage.from(o.bucket).remove([o.path])
         return setError(rowErr.message)
@@ -199,22 +166,31 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
     </button>
   )
 
-  const releasedToggle = (
-    <div className="flex items-center gap-3">
-      <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Status</span>
-      {step === 'streaming' && hasUrls ? (
-        <span className="font-space text-xs text-ink-muted">Released — it&apos;s on a platform</span>
-      ) : (
-        <Segmented
-          label="Released or unreleased"
-          options={[
-            { key: 'released', label: 'Released' },
-            { key: 'unreleased', label: 'Unreleased' },
-          ]}
-          value={released}
-          onChange={setReleased}
-        />
-      )}
+  // REQUIRED choice, deliberately not a toggle: neither option is preselected.
+  const releasedChoice = (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-muted">
+        Has this song been released? Released songs can appear on your public site; unreleased songs stay
+        private to the dashboard. <span className="text-accent-red">*</span>
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {(['released', 'unreleased'] as Released[]).map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setReleased(r)}
+            aria-pressed={released === r}
+            className={cx(
+              'rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition-colors',
+              released === r
+                ? 'border-ink bg-ink text-white'
+                : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
+            )}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
     </div>
   )
 
@@ -240,7 +216,8 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
-          <div className={modalCardClass}>
+          {/* font-space on the card: ALL the modal's text speaks the site's mono voice. */}
+          <div className={cx(modalCardClass, 'font-space')}>
             <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
               {step !== 'choose' && (
                 <button
@@ -268,7 +245,7 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
               </div>
             )}
 
-            {step !== 'choose' && (
+            {step === 'manual' && (
               <div className="mt-4 space-y-3">
                 <input
                   autoFocus
@@ -284,47 +261,51 @@ export function SongAddButton({ artistId, defaultReleased = 'unreleased' }: { ar
                   placeholder="Contributors (comma separated, optional)"
                   className={`${inputClass} w-full`}
                 />
+                <FileDropField
+                  accept="audio/mpeg,audio/mp4,.mp3,.m4a"
+                  label={audioFile ? audioFile.name : 'Drop the audio file or click to pick'}
+                  hint="MP3 or M4A · up to 30 MB"
+                  busy={false}
+                  onFile={setAudioFile}
+                />
+                <FileDropField
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  label={coverFile ? coverFile.name : 'Drop the cover art (optional)'}
+                  hint="JPG, PNG or WebP"
+                  busy={false}
+                  onFile={setCoverFile}
+                />
+                {releasedChoice}
+              </div>
+            )}
 
-                {step === 'manual' && (
-                  <>
-                    <FileDropField
-                      accept="audio/mpeg,audio/mp4,.mp3,.m4a"
-                      label={audioFile ? audioFile.name : 'Drop the audio file or click to pick'}
-                      hint="MP3 or M4A · up to 30 MB"
-                      busy={false}
-                      onFile={setAudioFile}
-                    />
-                    <FileDropField
-                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                      label={coverFile ? coverFile.name : 'Drop the cover art (optional)'}
-                      hint="JPG, PNG or WebP"
-                      busy={false}
-                      onFile={setCoverFile}
-                    />
-                  </>
-                )}
+            {step === 'streaming' && (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-ink-muted">
+                  Paste the song&apos;s link on each service it lives on — the title, cover art, and
+                  contributors come from the service, and the song counts as released.
+                </p>
+                <div className="space-y-2">
+                  {STREAMING_SERVICES.map((s) => (
+                    <div key={s.key} className="flex items-center gap-2">
+                      <span className="w-24 flex-none text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                        {s.label}
+                      </span>
+                      <input
+                        type="url"
+                        value={urls[s.key] ?? ''}
+                        onChange={(e) => setUrls((p) => ({ ...p, [s.key]: e.target.value }))}
+                        placeholder={s.placeholder}
+                        className={`${inputClass} min-w-0 flex-1`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                {step === 'streaming' && (
-                  <div className="space-y-2">
-                    {STREAMING_SERVICES.map((s) => (
-                      <div key={s.key} className="flex items-center gap-2">
-                        <span className="w-24 flex-none font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                          {s.label}
-                        </span>
-                        <input
-                          type="url"
-                          value={urls[s.key] ?? ''}
-                          onChange={(e) => setUrls((p) => ({ ...p, [s.key]: e.target.value }))}
-                          placeholder={s.placeholder}
-                          className={`${inputClass} min-w-0 flex-1`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {releasedToggle}
-
+            {step !== 'choose' && (
+              <div className="mt-4 space-y-3">
                 {error && <UploadError>{error}</UploadError>}
                 <div className="flex items-center justify-end gap-2 border-t border-hairline pt-4">
                   <button type="button" onClick={close} disabled={busy} className={buttonClass('ghost')}>

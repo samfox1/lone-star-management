@@ -25,19 +25,18 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
  * so its width drives the border, unlike absolute positioning).
  */
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
+  // The wrapper is the `group` AND the in-flow spacer: hovering any icon (a DOM
+  // descendant, even though the nav is fixed) widens the wrapper, which PUSHES
+  // the main content right — the panel is a drawer, not an overlay. The fixed
+  // nav animates to the matching width (wrapper + the 28px page gutter folded
+  // in), so its right border — THE vertical line — moves in step.
   return (
-    <div className="relative hidden w-12 flex-none md:block">
-      {/* bg-paper on the whole column: when a hover-expanded label widens the
-          panel, the solid background rides along and covers the content it
-          slides over (instead of the label floating on top of it). Anchored to
-          the viewport's LEFT EDGE with the page gutter folded in (28px px-7 +
-          the 48px w-12 wrapper = 76px), so the icons center in the full
-          screen-edge → line region the eye reads as the panel. */}
+    <div className="group relative hidden w-12 flex-none transition-[width] duration-200 hover:w-36 md:block">
       <nav
         aria-label="Asset types"
-        className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] min-w-[76px] flex-col items-center border-r border-hairline bg-paper"
+        className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper transition-[width] duration-200 group-hover:w-[172px]"
       >
-        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col items-center gap-0.5">
+        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-0.5 pl-[17px]">
           {ITEMS.map((it) => (
             <Link
               key={it.key}
@@ -46,12 +45,12 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
               aria-label={it.label}
               aria-current={it.key === active ? 'page' : undefined}
               className={cx(
-                'group pointer-events-auto inline-flex items-center rounded-lg bg-paper px-2.5 py-2.5 transition-colors',
+                'pointer-events-auto inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
                 it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
               )}
             >
               <Icon name={it.icon} size={22} />
-              <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[140px] group-hover:opacity-100">
+              <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[110px] group-hover:opacity-100">
                 {it.label}
               </span>
             </Link>

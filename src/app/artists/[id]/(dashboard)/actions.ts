@@ -42,6 +42,7 @@ import { createTicketmasterClient } from '@/lib/ticketmaster'
 import { createShopifyClient } from '@/lib/shopify'
 import { createDriveClient, parseDriveFolderId, type DriveFile, type DriveKind } from '@/lib/drive'
 import { importDriveFile } from '@/lib/drive-import'
+import { resolveStreamingSong, type ResolvedSong, type StreamingUrls } from '@/lib/song-links'
 import {
   syncAppleTracks,
   syncBandsintownTourDates,
@@ -940,4 +941,17 @@ export async function importDriveFileAction(
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return { ok: true }
+}
+
+/** Resolve a song's metadata (title / cover / contributors) from pasted
+ *  streaming links — the platform already knows them, so the manager never
+ *  types them. Public metadata only; see lib/song-links.ts. */
+export async function resolveStreamingSongAction(
+  urls: StreamingUrls,
+): Promise<{ ok: true; song: ResolvedSong } | { ok: false; error: string }> {
+  try {
+    return { ok: true, song: await resolveStreamingSong(urls) }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not read those links.' }
+  }
 }

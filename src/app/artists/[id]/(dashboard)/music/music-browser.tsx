@@ -233,8 +233,8 @@ export function MusicBrowser({
           <>
             {importButton}
             <RefreshButton action={refreshAction} disabled={bucket === 'unreleased'} />
-            {/* ONE + for the whole page; the modal's released toggle follows the lens. */}
-            <SongAddButton artistId={artistId} defaultReleased={bucket === 'unreleased' ? 'unreleased' : 'released'} />
+            {/* ONE + for the whole page; released/unreleased is chosen in the modal. */}
+            <SongAddButton artistId={artistId} />
           </>
         }
       />
