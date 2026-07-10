@@ -143,19 +143,27 @@ under `/artists/[id]/…`, so a non-owner 404s. The public `/[slug]` route stays
 published-only. The bridge script loads **only** in edit mode, never on the public
 site.
 
-## The rulebook + bridge (defined in Phase 0)
+## The rulebook + bridge — IMPLEMENTED (phase 0, `src/lib/site-editor/`)
 
-- **Manifest** (`lib/site-editor/manifest.ts`): per template, a list of editable
-  **fields** (key, label, type: text | image | …, target: site_content key /
-  artist column / media purpose) and **slots** (section key, accepted asset type,
-  ordering source). `TEMPLATE_FIELDS` grows into this.
-- **DOM markers** the template emits in edit mode:
+- **Manifest** (`manifest.ts`): per template, editable **fields**
+  (`ManifestField` = key, label, type `text|email|image|richtext`, target
+  `site_content` key / `artist` column / `media` purpose) and **slots**
+  (`ManifestSlot` = key, label, `accepts: LibraryAsset`). Built from
+  `TEMPLATE_FIELDS` + profile fields (name/bio/hero) + library slots. `manifestFor`
+  / `fieldByKey` / `slotByKey` accessors. Classic is fully specified; cinematic is a
+  first cut (confirmed when its DOM is instrumented).
+- **DOM markers** (`markers.ts`) the template emits in edit mode — string helpers
+  only, no DOM access:
   - `data-lse-field="hero_tagline"` — an editable atom (text/image).
   - `data-lse-slot="tracks"` — a section that accepts library items.
-  - `data-lse-item="track:<id>"` — a placed item (for select/remove/reorder).
-- **Bridge protocol** (`lib/site-editor/bridge.ts`, postMessage): frame→editor
-  `{selected, fieldKey|itemId, rect}`; editor→frame `{applyValue, highlight,
-  setDevice}`. Small, typed, versioned.
+  - `data-lse-item="track:<uuid>"` — a placed item (`itemMarker`/`parseItemMarker`).
+- **Bridge protocol** (`bridge.ts`, postMessage): `FrameMessage` (frame→editor:
+  ready/select/geometry/deselect) and `EditorMessage` (editor→frame:
+  apply-field/highlight/set-device/refresh), each versioned (`BRIDGE_VERSION`) and
+  `source`-discriminated. `frameMessage`/`editorMessage` stampers +
+  `isFrameMessage`/`isEditorMessage` guards. **Phase 2 must also check
+  `event.origin`** — the guards are a shape check, not an origin check.
+- Coverage locked by `tests/site-editor.test.ts` (pure, no DB).
 
 A **custom site is editable** the moment it (a) emits these markers, (b) includes
 the bridge script in edit mode, and (c) ships a manifest. That's the adoption
@@ -163,13 +171,13 @@ contract (Phase 5 writes the guide).
 
 ## Phases
 
-### Phase 0 — Rulebook spec + types (keystone, no UI)
+### Phase 0 — Rulebook spec + types (keystone, no UI) — DONE 2026-07-10
 
-- Write the manifest type + marker convention + bridge protocol as typed modules
-  and a short spec section in this doc. D1/D2/D3 are resolved above — encode them.
-- Grow `site-content-schema.ts` into the manifest for the first template.
-- **Verify:** types compile; a paper walkthrough maps every section to a field or slot.
-  **Size:** M. **Depends on:** nothing.
+- ✅ Manifest / marker / bridge typed modules in `src/lib/site-editor/`
+  (manifest.ts, markers.ts, bridge.ts), grown from `TEMPLATE_FIELDS`.
+- ✅ Coverage test `tests/site-editor.test.ts` (14 cases, pure): manifest covers
+  every declared site-text field, slots present, marker round-trip, bridge guards.
+- ✅ tsc + eslint clean. **Depends on:** nothing.
 
 ### Phase 0.5 — Decouple Released from the site (prerequisite data change)
 
