@@ -1,16 +1,41 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { cx } from '@/lib/cx'
+import { buttonClass, inputClass, KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { createClient } from '@/lib/supabase/client'
-import { CreateModal } from '../create-modal'
+import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
-import { FileDropField } from '../file-drop-field'
 import { addVideoAction, resolveVideoUrlAction } from '../actions'
+import { toast } from '../toast'
 
-/** Drop/pick a video file → uploads to the videos bucket + inserts an off-site
- *  (draft) `uploaded` video row. The manager then selects + publishes it like any video. */
-function VideoUpload({ artistId, onDone }: { artistId: string; onDone: () => void }) {
-  const { busy, error, progress, upload } = useStorageUpload({
+type Step = 'choose' | 'manual' | 'streaming'
+
+/**
+ * The Videos "+ Add" — the same two-way modal the Music page uses:
+ *   - **Add manually** — a title (optional, falls back to the filename) and the
+ *     video file itself (resumable direct-to-Storage; lands off-site until
+ *     published).
+ *   - **From streaming** — paste the video's link, then the title (prefilled
+ *     from the platform when it resolves, still editable).
+ */
+export function VideoAddButton({ artistId }: { artistId: string }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [step, setStep] = useState<Step>('choose')
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+
+  // writeRow runs mid-upload; a ref keeps it reading the LATEST title.
+  const titleRef = useRef('')
+  titleRef.current = title
+
+  const upload = useStorageUpload({
     bucket: 'videos',
     artistId,
     category: 'videos',
@@ -21,65 +46,200 @@ function VideoUpload({ artistId, onDone }: { artistId: string; onDone: () => voi
       maxBytes: 500 * 1024 * 1024,
       allowedMime: ['video/mp4', 'video/quicktime', 'video/webm'],
     },
-    writeRow: async (path, file) => {
-      const title = file.name.replace(/\.[^.]+$/, '').slice(0, 120) || 'Untitled video'
+    writeRow: async (path, f) => {
+      const fallback = f.name.replace(/\.[^.]+$/, '').slice(0, 120) || 'Untitled video'
       const { error: rowErr } = await createClient()
         .from('videos')
-        .insert({ artist_id: artistId, title, provider: 'uploaded', storage_path: path, source: 'manual', visible: false })
+        .insert({
+          artist_id: artistId,
+          title: titleRef.current.trim().slice(0, 120) || fallback,
+          provider: 'uploaded',
+          storage_path: path,
+          source: 'manual',
+          visible: false,
+        })
       return rowErr?.message ?? null
     },
-    onSuccess: onDone, // close the modal only after the upload fully settles
+    onSuccess: () => {
+      router.refresh()
+      close(true)
+    },
   })
-  return (
-    <FileDropField
-      accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
-      label="Drop a video or click to upload"
-      hint="MP4, MOV or WebM · up to 500 MB"
-      busy={busy}
-      progress={progress}
-      error={error}
-      onFile={upload}
-    />
-  )
-}
 
-function VideoPreview({ thumbnail, title }: { thumbnail?: string; title?: string }) {
-  return (
-    <div className="w-40">
-      <div className="flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-ink text-white/70">
-        {thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbnail} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <Icon name="videos" size={20} />
-        )}
-      </div>
-      <div className="mt-2 truncate text-sm font-semibold">{title || 'New video'}</div>
-    </div>
-  )
-}
+  function reset() {
+    setStep('choose')
+    setTitle('')
+    setUrl('')
+    setFile(null)
+    setError(null)
+  }
+  function close(force = false) {
+    if (!force && (pending || upload.busy)) return
+    setOpen(false)
+    reset()
+  }
 
-/** The Videos "Add" button: Auto (paste link → oEmbed detect) or Manual, two-pane. */
-export function VideoAddButton({ artistId }: { artistId: string }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  /** Best-effort title prefill once a link is pasted (still editable). */
+  async function prefillFromUrl() {
+    if (!url.trim() || title.trim()) return
+    const r = await resolveVideoUrlAction(url.trim())
+    if (r.ok) setTitle(r.title)
+  }
+
+  async function submit() {
+    if (pending || upload.busy) return
+    setError(null)
+    if (step === 'manual') {
+      if (!file) return setError('Attach the video file (MP4, MOV or WebM).')
+      await upload.upload(file) // closes via onSuccess; errors surface below
+      return
+    }
+    const t = title.trim()
+    if (!url.trim()) return setError('Paste the video link.')
+    if (!t) return setError('Give the video a title.')
+    setPending(true)
+    try {
+      const fd = new FormData()
+      fd.set('title', t)
+      fd.set('embed_url', url.trim())
+      const res = await addVideoAction(artistId, fd)
+      if (res && 'error' in res && res.error) return setError(res.error)
+      toast('Video added')
+      router.refresh()
+      close(true)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const tile = (s: Step, icon: 'edit' | 'bolt', label: string) => (
+    <button
+      type="button"
+      onClick={() => setStep(s)}
+      className="flex flex-col items-center gap-2.5 rounded-xl border border-hairline bg-paper px-3 py-6 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+    >
+      <Icon name={icon} size={22} />
+      <span className="text-sm font-semibold">{label}</span>
+    </button>
+  )
+
+  const busy = pending || upload.busy
+
   return (
-    <CreateModal
-      kind="Video"
-      title="Add video"
-      auto={{
-        placeholder: 'Paste a YouTube link',
-        resolve: async (url) => {
-          const r = await resolveVideoUrlAction(url)
-          if (!r.ok) return { error: r.error }
-          return { values: { title: r.title, embed_url: url, _thumbnail: r.thumbnail ?? '' } }
-        },
-      }}
-      fields={[
-        { name: 'title', placeholder: 'Title', required: true },
-        { name: 'embed_url', placeholder: 'YouTube URL', type: 'url', required: true },
-      ]}
-      preview={(v) => <VideoPreview thumbnail={v._thumbnail} title={v.title} />}
-      submit={(fd) => addVideoAction(artistId, fd)}
-      upload={(close) => <VideoUpload artistId={artistId} onDone={close} />}
-    />
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="Add video"
+        aria-label="Add video"
+        className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+      >
+        <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
+          Add
+        </span>
+        <Icon name="plus" size={14} />
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className={modalOverlayClass}
+          onClick={(e) => e.target === e.currentTarget && close()}
+        >
+          <div className={cx(modalCardClass, 'font-space')}>
+            <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
+              {step !== 'choose' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('choose')
+                    setError(null)
+                  }}
+                  aria-label="Back"
+                  className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg border border-hairline text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+                >
+                  <Icon name="chevronLeft" size={15} />
+                </button>
+              )}
+              <div className="min-w-0">
+                <KLabel>Video</KLabel>
+                <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Add video</h2>
+              </div>
+            </div>
+
+            {step === 'choose' && (
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {tile('manual', 'edit', 'Add manually')}
+                {tile('streaming', 'bolt', 'From streaming')}
+              </div>
+            )}
+
+            {step === 'manual' && (
+              <div className="mt-4 space-y-3">
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Video title (optional — the filename works too)"
+                  className={`${inputClass} w-full`}
+                />
+                <FileDropField
+                  accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
+                  label={file ? file.name : 'Drop the video file or click to pick'}
+                  hint="MP4, MOV or WebM · up to 500 MB"
+                  busy={upload.busy}
+                  progress={upload.progress}
+                  onFile={setFile}
+                />
+              </div>
+            )}
+
+            {step === 'streaming' && (
+              <div className="mt-4 space-y-3">
+                <input
+                  autoFocus
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onBlur={prefillFromUrl}
+                  placeholder="Paste the video link (YouTube)"
+                  className={`${inputClass} w-full`}
+                />
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Video title"
+                  required
+                  className={`${inputClass} w-full`}
+                />
+              </div>
+            )}
+
+            {step !== 'choose' && (
+              <div className="mt-4 space-y-3">
+                {(error || upload.error) && <UploadError>{error ?? upload.error}</UploadError>}
+                <div className="flex items-center justify-end gap-2 border-t border-hairline pt-4">
+                  <button type="button" onClick={() => close()} disabled={busy} className={buttonClass('ghost')}>
+                    Cancel
+                  </button>
+                  <button type="button" onClick={submit} disabled={busy} className={buttonClass('solid')}>
+                    {busy ? 'Adding…' : 'Add video'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }

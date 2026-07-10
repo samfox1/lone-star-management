@@ -77,14 +77,14 @@ describe('MusicBrowser lenses', () => {
     expect(screen.queryByTestId('song')).not.toBeInTheDocument()
   })
 
-  it('Unreleased hides released content and greys out Refresh', () => {
+  it('Unreleased hides released content and greys out Sync', () => {
     setup()
-    expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sync' })).not.toBeDisabled()
     fireEvent.click(bucketBtn('Unreleased'))
     expect(releaseTitles()).toEqual(['Demo EP'])
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeDisabled()
     fireEvent.click(bucketBtn('All'))
-    expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sync' })).not.toBeDisabled()
   })
 
   it('On site shows only live released items (unreleased is never on site)', () => {
@@ -104,10 +104,10 @@ describe('MusicBrowser lenses', () => {
 })
 
 describe('MusicBrowser toolbar', () => {
-  it('has the shared controls: Import slot, Refresh, ONE + button, sort', () => {
+  it('has the shared controls: Import slot, Sync, ONE + button, sort', () => {
     setup({ importButton: <button type="button">DriveImport</button> })
     expect(screen.getByText('DriveImport')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add song' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add release' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Newest' })).toBeInTheDocument()

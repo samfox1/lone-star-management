@@ -33,7 +33,7 @@ export function RefreshButton({
     })
   }
 
-  const label = pending ? 'Refreshing…' : 'Refresh'
+  const label = pending ? 'Syncing…' : 'Sync'
 
   return (
     <div className="flex items-center gap-2">
@@ -42,7 +42,7 @@ export function RefreshButton({
         type="button"
         onClick={refresh}
         disabled={pending || disabled}
-        title={disabled ? 'Refresh pulls released music from platforms' : label}
+        title={disabled ? 'Sync pulls released music from platforms' : label}
         aria-label={label}
         className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-60"
       >

@@ -42,7 +42,7 @@ export function PhotoAddButton({ artistId }: { artistId: string }) {
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className={modalCardClass}>
+          <div className={`${modalCardClass} font-space`}>
             <div className="border-b border-hairline pb-3.5">
               <KLabel>Photo</KLabel>
               <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Add photos</h2>

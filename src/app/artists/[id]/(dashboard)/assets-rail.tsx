@@ -31,7 +31,10 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
   // nav animates to the matching width (wrapper + the 28px page gutter folded
   // in), so its right border — THE vertical line — moves in step.
   return (
-    <div className="group relative hidden w-12 flex-none transition-[width] duration-200 hover:w-[92px] md:block">
+    // pointer-events-none on the wrapper: its :hover can only arrive through the
+    // pointer-events-auto icon links, so the drawer expands ONLY on icon hover —
+    // not when the mouse crosses the empty panel column.
+    <div className="group pointer-events-none relative hidden w-12 flex-none transition-[width] duration-200 hover:w-[92px] md:block">
       <nav
         aria-label="Asset types"
         className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper transition-[width] duration-200 group-hover:w-[120px]"
