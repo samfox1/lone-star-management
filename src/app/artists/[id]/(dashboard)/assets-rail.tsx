@@ -13,18 +13,21 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
 ]
 
 /**
- * The Assets pages' left rail: music / photos / videos. Same interaction
- * language as the top nav — icon with a label that slides out on hover — but
- * vertical. The icon stack is FIXED-centered in the full viewport (nav bar
- * included), and a full-height hairline runs along the rail's left edge.
- * `position: fixed` with no left/top keeps the element's static x-position, so
- * both the line and the stack stay in the rail's column while the page scrolls.
+ * The Assets pages' left side panel. Icons sit at the panel's LEFT edge with
+ * top-nav interaction language (label slides out on hover); the panel's right
+ * border is THE vertical line, so a hover-expanded label widens the panel and
+ * pushes the line right. The stack is fixed-centered in the full viewport (nav
+ * bar included): `position: fixed` with no left keeps the static x-position,
+ * and the container is pointer-events-none so only the links themselves catch
+ * the mouse while the full-height border rides along.
  */
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
   return (
-    <div className="relative hidden w-16 flex-none md:block">
-      <span aria-hidden className="fixed top-0 h-screen w-px bg-hairline" />
-      <nav aria-label="Asset types" className="fixed top-1/2 flex -translate-y-1/2 flex-col gap-0.5 pl-3">
+    <div className="relative hidden w-40 flex-none md:block">
+      <nav
+        aria-label="Asset types"
+        className="pointer-events-none fixed top-0 z-10 flex h-screen min-w-40 flex-col items-start justify-center gap-0.5 border-r border-hairline"
+      >
         {ITEMS.map((it) => (
           <Link
             key={it.key}
@@ -33,12 +36,12 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
             aria-label={it.label}
             aria-current={it.key === active ? 'page' : undefined}
             className={cx(
-              'group inline-flex items-center rounded-lg bg-paper px-2.5 py-2.5 transition-colors',
+              'group pointer-events-auto inline-flex items-center rounded-lg bg-paper px-2.5 py-2.5 transition-colors',
               it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
             )}
           >
             <Icon name={it.icon} size={22} />
-            <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[120px] group-hover:opacity-100">
+            <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[140px] group-hover:opacity-100">
               {it.label}
             </span>
           </Link>
@@ -51,7 +54,7 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
 /** Wrap an asset page's content with the rail (mobile: rail hidden, content full-width). */
 export function AssetsShell({ artistId, active, children }: { artistId: string; active: AssetKind; children: React.ReactNode }) {
   return (
-    <div className="flex gap-4">
+    <div className="flex gap-6">
       <AssetsRail artistId={artistId} active={active} />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
