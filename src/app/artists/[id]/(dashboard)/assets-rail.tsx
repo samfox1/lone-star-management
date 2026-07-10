@@ -29,10 +29,13 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
     <div className="relative hidden w-12 flex-none md:block">
       {/* bg-paper on the whole column: when a hover-expanded label widens the
           panel, the solid background rides along and covers the content it
-          slides over (instead of the label floating on top of it). */}
+          slides over (instead of the label floating on top of it). Anchored to
+          the viewport's LEFT EDGE with the page gutter folded in (28px px-7 +
+          the 48px w-12 wrapper = 76px), so the icons center in the full
+          screen-edge → line region the eye reads as the panel. */}
       <nav
         aria-label="Asset types"
-        className="pointer-events-none fixed top-[71px] z-10 flex h-[calc(100vh-71px)] min-w-12 flex-col items-center border-r border-hairline bg-paper"
+        className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] min-w-[76px] flex-col items-center border-r border-hairline bg-paper"
       >
         <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col items-center gap-0.5">
           {ITEMS.map((it) => (
