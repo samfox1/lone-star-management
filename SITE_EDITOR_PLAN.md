@@ -208,18 +208,22 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
 - ⏳ **Browser verify:** load the frame, click a heading/song, confirm the `select`
   message. Do before push. **Depends on:** Phase 0.
 
-### Phase 2 — Editor shell + inspector (text + image fields) → first usable slice
+### Phase 2 — Editor shell + inspector — SHELL + TEXT DONE 2026-07-10; image/publish pending
 
-- Replace the Site page with the full-screen editor: iframe the edit-mode route +
-  inspector + device toggle.
-- Bridge wiring: click field → inspector shows its control (text input / image
-  picker from uploads·Drive·gallery) → optimistic apply in the frame → **debounced
-  autosave to draft** (site_content upsert / artist hero / media actions).
-- **Publish** button = the existing site publish bundle, behind the password gate
-  (interim; Phase 4 swaps in the review-and-approve window).
-- **Verify:** edit a heading + swap the hero, see it live in the frame, reload
-  (draft persists), Publish, confirm on `/[slug]`. Component + action tests.
-- **Size:** L. **Depends on:** Phase 1. **Ships v1 slice A** (site text + media).
+- ✅ Editor shell at `/artists/[id]/editor` (centered "Edit site" nav tab): left
+  inspector + the site frame below the nav + device toggle. Click a region → the
+  bridge reports it → the inspector names it (`labelForTarget`).
+- ✅ **Text editing write path** (test-first): click a text region → input/textarea
+  seeded by `fieldCurrentValue` → optimistic `apply-field` into the frame +
+  **debounced save** (`saveEditorField` / `saveEditorFieldAction`, RLS-scoped,
+  cross-tenant-blocked). Debounce flushes on field-switch so a fast switch can't
+  drop an edit.
+- ⏳ **Image fields** (hero / profile photo) — inspector shows "coming next"; needs
+  the media pick/upload control + the hero-media mapping TODO (ADR-adjacent, see the
+  TODO in cinematic.tsx).
+- ⏳ **Publish** from the editor — none yet; edits are draft-only (the existing
+  Manager tools → Site → Publish still works). The review-and-approve window is Phase 4.
+- **Depends on:** Phase 1. **Ships v1 slice A** once image + a publish affordance land.
 
 ### Phase 3 — List slots: add / remove / reorder on-site items
 

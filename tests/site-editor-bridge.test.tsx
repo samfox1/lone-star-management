@@ -6,7 +6,7 @@
  * Pure DOM logic — no postMessage plumbing here.
  */
 import { describe, expect, it } from 'vitest'
-import { markedAncestor, targetOf } from '@/lib/site-editor/bridge-client'
+import { applyFieldToDom, markedAncestor, targetOf } from '@/lib/site-editor/bridge-client'
 
 describe('bridge-client — resolve a clicked element to a target', () => {
   it('resolves the NEAREST marker (an item beats its enclosing slot)', () => {
@@ -37,5 +37,24 @@ describe('bridge-client — resolve a clicked element to a target', () => {
   it('returns null for a malformed item marker', () => {
     document.body.innerHTML = `<div data-lse-item="bogus" id="b">x</div>`
     expect(targetOf(document.getElementById('b')!)).toBeNull()
+  })
+})
+
+describe('applyFieldToDom — optimistic in-frame update', () => {
+  it('sets text on a text field and src on an image field', () => {
+    document.body.innerHTML = `
+      <h2 data-lse-field="shows_heading">Shows</h2>
+      <img data-lse-field="hero_image" src="old.jpg" />`
+
+    applyFieldToDom(document, 'shows_heading', 'Concerts')
+    expect(document.querySelector('[data-lse-field="shows_heading"]')!.textContent).toBe('Concerts')
+
+    applyFieldToDom(document, 'hero_image', 'new.jpg')
+    expect(document.querySelector('[data-lse-field="hero_image"]')!.getAttribute('src')).toBe('new.jpg')
+  })
+
+  it('no-ops when the field is not present', () => {
+    document.body.innerHTML = `<p>nothing marked</p>`
+    expect(() => applyFieldToDom(document, 'missing', 'x')).not.toThrow()
   })
 })

@@ -10,6 +10,7 @@ import { TEMPLATE_FIELDS } from '@/lib/site-content-schema'
 import {
   MANIFESTS,
   fieldByKey,
+  fieldCurrentValue,
   labelForTarget,
   manifestFor,
   slotByKey,
@@ -103,6 +104,20 @@ describe('manifest — coverage & shape', () => {
     expect(labelForTarget(m, { kind: 'slot', key: 'shows' })).toBe('Shows')
     expect(labelForTarget(m, { kind: 'item', assetType: 'tour_date', id: 'x' })).toBe('Shows item')
     expect(labelForTarget(m, { kind: 'field', key: 'unknown_key' })).toBe('unknown_key') // graceful fallback
+  })
+
+  it('resolves a field current value from site_content and artist columns', () => {
+    const m = MANIFESTS.cinematic
+    const ctx = {
+      template: 'cinematic',
+      siteContent: { shows_heading: 'Gigs' },
+      artist: { name: 'Skeen', bio: 'Bio text', hero_image_url: null },
+    }
+    expect(fieldCurrentValue(fieldByKey(m, 'shows_heading')!, ctx)).toBe('Gigs') // override
+    expect(fieldCurrentValue(fieldByKey(m, 'work_heading')!, ctx)).toBe('Work') // template default
+    expect(fieldCurrentValue(fieldByKey(m, 'artist_name')!, ctx)).toBe('Skeen')
+    expect(fieldCurrentValue(fieldByKey(m, 'artist_bio')!, ctx)).toBe('Bio text')
+    expect(fieldCurrentValue(fieldByKey(m, 'hero_image')!, ctx)).toBe('') // null → ''
   })
 
   it('carries the profile fields (name / bio / hero image) on every template', () => {

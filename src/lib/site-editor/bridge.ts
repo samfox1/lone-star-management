@@ -62,16 +62,16 @@ export function isEditorMessage(x: unknown): x is EditorMessage {
   return isVersionedFrom(x, EDITOR_SOURCE)
 }
 
+// Distributive Omit — `Omit<Union, K>` collapses a union to its shared keys, which
+// would drop variant-specific props (target/rect/key/value); distribute instead.
+type Payload<T> = T extends unknown ? Omit<T, 'v' | 'source'> : never
+
 /** Stamp the current version + source onto a frame message payload. */
-export function frameMessage<T extends Omit<FrameMessage, 'v' | 'source'>>(
-  msg: T,
-): T & { v: number; source: typeof FRAME_SOURCE } {
-  return { ...msg, v: BRIDGE_VERSION, source: FRAME_SOURCE }
+export function frameMessage(msg: Payload<FrameMessage>): FrameMessage {
+  return { ...msg, v: BRIDGE_VERSION, source: FRAME_SOURCE } as FrameMessage
 }
 
 /** Stamp the current version + source onto an editor message payload. */
-export function editorMessage<T extends Omit<EditorMessage, 'v' | 'source'>>(
-  msg: T,
-): T & { v: number; source: typeof EDITOR_SOURCE } {
-  return { ...msg, v: BRIDGE_VERSION, source: EDITOR_SOURCE }
+export function editorMessage(msg: Payload<EditorMessage>): EditorMessage {
+  return { ...msg, v: BRIDGE_VERSION, source: EDITOR_SOURCE } as EditorMessage
 }

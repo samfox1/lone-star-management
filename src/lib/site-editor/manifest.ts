@@ -14,7 +14,8 @@
  * adds image/profile fields and the library SLOTS on top. No React here, so server
  * actions and tests can import it.
  */
-import { TEMPLATE_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
+import { TEMPLATE_FIELDS, fieldValue, type SiteContentField } from '@/lib/site-content-schema'
+import type { SiteContent } from '@/lib/site'
 import type { SelectTarget } from '@/lib/site-editor/bridge'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
@@ -124,6 +125,21 @@ export function fieldByKey(manifest: TemplateManifest, key: string): ManifestFie
 /** Look up one slot by key within a manifest. */
 export function slotByKey(manifest: TemplateManifest, key: string): ManifestSlot | undefined {
   return manifest.slots.find((s) => s.key === key)
+}
+
+/** The draft artist state a field value may read from. */
+export type FieldValueContext = {
+  template: string
+  siteContent: SiteContent
+  artist: { name: string; bio: string | null; hero_image_url: string | null }
+}
+
+/** A field's current draft value, for populating the inspector control. Media
+ *  fields (image/video) resolve elsewhere (the media store) — '' here. */
+export function fieldCurrentValue(field: ManifestField, ctx: FieldValueContext): string {
+  if (field.target.store === 'site_content') return fieldValue(ctx.siteContent, ctx.template, field.target.key)
+  if (field.target.store === 'artist') return ctx.artist[field.target.column] ?? ''
+  return ''
 }
 
 /** A human label for a selected region, for the editor's inspector header. Falls

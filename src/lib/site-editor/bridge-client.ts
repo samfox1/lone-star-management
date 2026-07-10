@@ -46,6 +46,16 @@ export function rectOf(el: Element): Rect {
   return { x: r.x, y: r.y, width: r.width, height: r.height }
 }
 
+/** Optimistically apply an edited field value into the frame's DOM: an image
+ *  field updates its `src`, any other (text) field updates its text. No-op if the
+ *  field isn't present. Keys are identifier-safe, so plain attribute selection. */
+export function applyFieldToDom(root: ParentNode, key: string, value: string): void {
+  const el = root.querySelector(`[${FIELD_ATTR}="${key}"]`)
+  if (!el) return
+  if (el instanceof HTMLImageElement) el.src = value
+  else el.textContent = value
+}
+
 /**
  * Wire the live frame bridge. Reports selects to `target` (default the parent
  * window), and applies editor messages onto the DOM. Returns a teardown. The
@@ -73,7 +83,10 @@ export function mountFrameBridge(options: {
 
   const onMessage = (e: MessageEvent) => {
     if (e.origin !== options.editorOrigin || !isEditorMessage(e.data)) return
-    options.onEditorMessage?.(e.data)
+    // apply-field updates the DOM here (generic frame behaviour); everything else
+    // goes to the caller.
+    if (e.data.type === 'apply-field') applyFieldToDom(document, e.data.key, e.data.value)
+    else options.onEditorMessage?.(e.data)
   }
 
   document.addEventListener('click', onClick, true)

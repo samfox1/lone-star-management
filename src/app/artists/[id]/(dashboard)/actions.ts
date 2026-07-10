@@ -27,6 +27,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
+import { saveEditorField } from '@/lib/site-editor/save'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
@@ -270,6 +271,32 @@ async function upsertSiteContentFields(
       .from('site_content')
       .upsert({ artist_id: artistId, key: field.key, value: raw }, { onConflict: 'artist_id,key' })
   }
+}
+
+/**
+ * Save one editable field from the visual editor to the DRAFT. Resolves the field's
+ * target from the artist's template manifest (see lib/site-editor) and writes it: a
+ * `site_content` key (blank clears the override → template default), or an `artist`
+ * column (name / bio / hero_image_url). Media (image/video) fields are handled by the
+ * upload flow, not here yet. Signed-in + RLS-scoped; draft-only until the next publish.
+ */
+export async function saveEditorFieldAction(
+  artistId: string,
+  fieldKey: string,
+  value: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select('template').eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+
+  const res = await saveEditorField(supabase, artistId, artist.template as string, fieldKey, value)
+  if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
+  return res
 }
 
 /**
