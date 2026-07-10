@@ -1,12 +1,14 @@
 /**
- * MUSIC RESTRUCTURE — the three public doors expose RELEASED music only
- * (20260709120000_public_music_released_only). Released/Unreleased is derived
- * from snapshot provenance, mirroring lib/music.ts: a release is Unreleased iff
- * it has no platform presence (manual + no spotify_id + empty links); a track
- * inherits its release's bucket, and a loose track is Unreleased iff it carries
- * no platform linkage. Also locks in: the album_name string-match fallback in
- * get_release is GONE (tracklist membership is release_id only), and snapshots
- * missing provenance keys (published before this change) classify as Released.
+ * MUSIC doors after the Released/site DECOUPLING (20260710170000):
+ *
+ *  - The public site gates TRACKS on their own `tracks.visible` flag (like
+ *    merch/videos), NOT on Released/Unreleased. Released is now a library-only
+ *    organizing label — an Unreleased track with visible=true is public; a
+ *    Released track with visible=false is not. `audio_path_for_play` follows the
+ *    same visible gate.
+ *  - The RELEASE doors (get_release / get_public_releases) are a separate surface
+ *    and are unchanged: still Released-gated + visible, tracklist by release_id
+ *    only (no album_name fallback).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -64,56 +66,41 @@ beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
 
-  // A RELEASED release (has a spotify_id) with one manual track inside it.
+  // ---- track fixtures: site visibility is now the per-track `visible` flag ----
+
+  // An UNRELEASED-provenance track (manual, no platform link) that is on-site
+  // (visible=true, the default) → proves Released no longer gates the site.
+  id.shown = await makeTrack('Shown Unreleased', {}, {
+    source: 'manual',
+    audio_path: `${artistA}/shown.mp3`,
+  })
+
+  // A RELEASED-provenance track (has a stream link) taken OFF-site (visible=false)
+  // → proves a Released track can be hidden.
+  id.hidden = await makeTrack('Hidden Released', { stream_url: 'https://open.spotify.com/track/hid' }, {
+    audio_path: `${artistA}/hidden.mp3`,
+    visible: false,
+  })
+
+  // ---- release fixtures: the RELEASE doors are still Released-gated ----
+
+  // A RELEASED release (has a spotify_id) with a track inside it.
   const pubAlbum = await makeRelease('Public Album', 'pub-album', { spotify_id: 'sp-album-1' })
   await makeTrack('Album Cut', {}, { release_id: pubAlbum })
 
-  // An UNRELEASED release (manual, no spotify_id, links []) with one track inside it.
-  const secretEp = await makeRelease('Secret EP', 'secret-ep')
-  await makeTrack('Secret Song', {}, { release_id: secretEp })
+  // An UNRELEASED release (manual, no spotify_id, links []).
+  await makeRelease('Secret EP', 'secret-ep')
 
-  // A platform-linked song assigned to that UNRELEASED release. Widen-only (#4):
-  // its own linkage keeps it Released — it must NOT vanish just because the album
-  // it sits in is Unreleased.
-  await makeTrack('Linked In Secret EP', { stream_url: 'https://open.spotify.com/track/lise' }, { release_id: secretEp })
-
-  // A loose UPLOADED track: manual, hosted audio, no platform linkage → Unreleased.
-  id.demo = await makeTrack('Bedroom Demo', {}, { source: 'manual', audio_path: `${artistA}/demo.mp3` })
-
-  // A loose track with a stream link → on a platform → Released.
-  await makeTrack('On Platforms', { stream_url: 'https://open.spotify.com/track/xyz' })
-
-  // A hand-added song with hosted audio and NO links, marked released by the
-  // manager (the add-song toggle) → public despite zero platform presence.
-  id.mbr = await makeTrack('Manual But Released', {}, {
-    source: 'manual',
-    audio_path: `${artistA}/mbr.mp3`,
-    released: true,
-  })
-
-  // A RELEASED but HIDDEN release (visible=false) with an audio track inside it:
-  // taken off-site, so neither its tracklist nor its audio may leak (#12).
-  const hiddenAlbum = await makeRelease('Hidden Album', 'hidden-album', {
-    spotify_id: 'sp-hidden-1',
-    visible: false,
-  })
-  id.hiddenCut = await makeTrack('Hidden Cut', {}, {
-    release_id: hiddenAlbum,
-    source: 'manual',
-    audio_path: `${artistA}/hidden.mp3`,
-  })
-
-  // Released loose track whose album_name matches the released release's TITLE but
-  // with NO release_id — under the old string-match fallback it would have appeared
-  // in the pub-album tracklist; now membership is release_id only.
+  // A loose track whose album_name matches the released release's TITLE but with
+  // NO release_id — must NOT appear in the pub-album tracklist (membership is
+  // release_id only).
   await makeTrack('Fallback Song', { stream_url: 'https://open.spotify.com/track/fb' }, { album_name: 'Public Album' })
 
   await publishContent(asA, 'release', artistA)
   await publishContent(asA, 'track', artistA)
 
-  // Backward compat: a snapshot published BEFORE provenance fields existed (no
-  // source/ids keys at all) must classify as Released — already-published tracks
-  // stay public. Synthesized directly in the publish log like a real old row.
+  // A published snapshot with no matching live track row (legacy / orphan) shows,
+  // because the visible join misses and coalesce(visible, true) keeps it.
   await svc.from('revisions').insert({
     artist_id: artistA,
     entity_type: 'track',
@@ -128,33 +115,35 @@ afterAll(async () => {
   await svc.from('revisions').delete().eq('artist_id', artistA).in('entity_type', ['track', 'release'])
 })
 
-describe('get_public_site — tracks are Released-only', () => {
-  it('shows released music: platform-linked loose tracks and tracks inside a released release', async () => {
-    const titles = (await publicSiteTracks()).map((t) => t.title)
-    expect(titles).toContain('Album Cut') // inherits the released release's bucket
-    expect(titles).toContain('On Platforms')
-    expect(titles).toContain('Fallback Song')
-    expect(titles).toContain('Manual But Released') // the manual released flag
+describe('get_public_site — tracks gate on visible, not Released', () => {
+  it('shows an UNRELEASED-provenance track when it is on-site (visible)', async () => {
+    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Shown Unreleased')
   })
 
-  it('hides unreleased music: uploaded-only loose tracks and tracks inside an unreleased release', async () => {
-    const titles = (await publicSiteTracks()).map((t) => t.title)
-    expect(titles).not.toContain('Bedroom Demo')
-    expect(titles).not.toContain('Secret Song') // inherits the unreleased release's bucket
+  it('hides a RELEASED-provenance track when it is off-site (visible=false)', async () => {
+    expect((await publicSiteTracks()).map((t) => t.title)).not.toContain('Hidden Released')
   })
 
-  it('keeps a platform-linked song visible even inside an unreleased release (widen-only, #4)', async () => {
-    const titles = (await publicSiteTracks()).map((t) => t.title)
-    expect(titles).toContain('Linked In Secret EP')
+  it('shows a visible track that lives inside a release', async () => {
+    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Album Cut')
   })
 
-  it('treats provenance-less legacy snapshots as Released (nothing already public vanishes)', async () => {
-    const titles = (await publicSiteTracks()).map((t) => t.title)
-    expect(titles).toContain('Legacy Snapshot')
+  it('shows a provenance-less legacy snapshot (no live row → coalesce visible)', async () => {
+    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Legacy Snapshot')
   })
 })
 
-describe('get_release — Unreleased excluded, album_name fallback gone', () => {
+describe('audio_path_for_play — gates on visible', () => {
+  it('serves audio for an on-site track', async () => {
+    expect(await audioPath(id.shown)).toBe(`${artistA}/shown.mp3`)
+  })
+
+  it('returns null for an off-site (visible=false) track', async () => {
+    expect(await audioPath(id.hidden)).toBeNull()
+  })
+})
+
+describe('get_release — still Released-gated, album_name fallback gone', () => {
   it('serves a released release with its release_id tracklist', async () => {
     const page = await releasePage('pub-album')
     expect(page?.title).toBe('Public Album')
@@ -171,35 +160,10 @@ describe('get_release — Unreleased excluded, album_name fallback gone', () => 
   })
 })
 
-describe('get_public_releases — Unreleased excluded', () => {
+describe('get_public_releases — still Released-gated', () => {
   it('lists the released release only', async () => {
     const titles = (await publicReleases()).map((r) => r.title)
     expect(titles).toContain('Public Album')
     expect(titles).not.toContain('Secret EP')
-  })
-})
-
-describe('audio_path_for_play — Released-only (#1)', () => {
-  it('serves audio for a released track', async () => {
-    expect(await audioPath(id.mbr)).toBe(`${artistA}/mbr.mp3`)
-  })
-
-  it('returns null for an unreleased / uploaded-only track', async () => {
-    expect(await audioPath(id.demo)).toBeNull()
-  })
-})
-
-describe('release visibility — hidden Released release does not leak (#12)', () => {
-  it('hides its tracks from get_public_site even though it is Released', async () => {
-    const titles = (await publicSiteTracks()).map((t) => t.title)
-    expect(titles).not.toContain('Hidden Cut')
-  })
-
-  it('does not list the hidden release', async () => {
-    expect((await publicReleases()).map((r) => r.title)).not.toContain('Hidden Album')
-  })
-
-  it('returns null audio for a track inside the hidden release', async () => {
-    expect(await audioPath(id.hiddenCut)).toBeNull()
   })
 })

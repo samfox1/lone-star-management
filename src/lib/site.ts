@@ -12,7 +12,6 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
-import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 
 export type SiteTrack = {
   id: string
@@ -169,44 +168,12 @@ export async function getWorkingSite(
 
   const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows] = await Promise.all([
     // Tracks mirror get_public_site: expose has_audio (never the raw audio_path)
-    // and show RELEASED music only — a track inherits its release's bucket, a
-    // loose track is classified by its own provenance (lib/music.ts, the same
-    // rule the door mirrors) — so preview matches the live site.
-    Promise.all([
-      listContent(supabase, 'track', artistId),
-      listContent(supabase, 'release', artistId),
-    ]).then(([rows, releaseRows]) => {
-      const relBucket = new Map<string, MusicBucket>(
-        releaseRows.map((r) => [
-          r.id as string,
-          releaseBucket({
-            source: (r.source as string | null) ?? null,
-            spotify_id: (r.spotify_id as string | null) ?? null,
-            links: r.links,
-            released: (r.released as boolean | null) ?? false,
-          }),
-        ]),
-      )
-      return rows
-        .filter(
-          (r) =>
-            trackBucket(
-              {
-                release_id: (r.release_id as string | null) ?? null,
-                source: (r.source as string | null) ?? null,
-                audio_path: (r.audio_path as string | null) ?? null,
-                spotify_id: (r.spotify_id as string | null) ?? null,
-                apple_id: (r.apple_id as string | null) ?? null,
-                deezer_id: (r.deezer_id as string | null) ?? null,
-                provider_url: (r.provider_url as string | null) ?? null,
-                stream_url: (r.stream_url as string | null) ?? null,
-                apple_url: (r.apple_url as string | null) ?? null,
-                soundcloud_url: (r.soundcloud_url as string | null) ?? null,
-                released: (r.released as boolean | null) ?? false,
-              },
-              (rid) => relBucket.get(rid),
-            ) === 'released',
-        )
+    // and show ON-SITE tracks only — gated by the per-track `visible` flag, the
+    // same rule the door now uses (Released is a library-only label — see
+    // 20260710170000). So preview matches the live site.
+    listContent(supabase, 'track', artistId).then((rows) =>
+      rows
+        .filter((r) => r.visible !== false)
         .map((r) => {
           const s = publicSnapshot('track', r) as Record<string, unknown>
           return {
@@ -228,8 +195,8 @@ export async function getWorkingSite(
             soundcloud_url: (s.soundcloud_url as string | null) ?? null,
             released: (s.released as boolean | null) ?? false,
           } satisfies SiteTrack
-        })
-    }),
+        }),
+    ),
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId, { onSiteOnly: true }),
     workingSection<SiteMerch>(supabase, 'merch', artistId, { onSiteOnly: true }),
     workingSection<SiteLink>(supabase, 'link', artistId),

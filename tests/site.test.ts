@@ -26,8 +26,9 @@ beforeAll(async () => {
   artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
 
-  // stream_url = platform presence: preview mirrors the live door (Released-only),
-  // so a bare manual track would be hidden from BOTH. See lib/music.ts.
+  // A draft track (default visible=true). It's hidden from the PUBLIC site only
+  // because it's unpublished (no revision) — the site now gates tracks on the
+  // `visible` flag, not on Released (see 20260710170000).
   const track = await createTrack(asA, artistA, { title: DRAFT_TITLE, stream_url: 'https://open.spotify.com/track/m4' })
   createdTrackIds.push(track.id)
 })
