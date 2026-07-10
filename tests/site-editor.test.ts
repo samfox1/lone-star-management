@@ -15,7 +15,7 @@ import {
   type LibraryAsset,
   type TemplateManifest,
 } from '@/lib/site-editor/manifest'
-import { itemMarker, parseItemMarker } from '@/lib/site-editor/markers'
+import { fieldRegion, itemMarker, itemRegion, parseItemMarker, slotRegion } from '@/lib/site-editor/markers'
 import {
   BRIDGE_VERSION,
   editorMessage,
@@ -39,6 +39,17 @@ describe('markers — data-lse-item round-trip', () => {
     expect(parseItemMarker('track:')).toBeNull() // empty id
     expect(parseItemMarker(':abc')).toBeNull() // empty type
     expect(parseItemMarker('bogus:abc')).toBeNull() // unknown asset type
+  })
+})
+
+describe('region helpers — emit marker attrs only in edit mode', () => {
+  it('a template spreads these onto a region; empty when not editable', () => {
+    expect(fieldRegion(true, 'shows_heading')).toEqual({ 'data-lse-field': 'shows_heading' })
+    expect(fieldRegion(false, 'shows_heading')).toEqual({})
+    expect(slotRegion(true, 'shows')).toEqual({ 'data-lse-slot': 'shows' })
+    expect(slotRegion(false, 'shows')).toEqual({})
+    expect(itemRegion(true, 'tour_date', 'abc-123')).toEqual({ 'data-lse-item': 'tour_date:abc-123' })
+    expect(itemRegion(false, 'tour_date', 'abc-123')).toEqual({})
   })
 })
 

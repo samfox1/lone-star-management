@@ -9,6 +9,7 @@ import { safeHref } from '@/lib/url'
 import { isRenderableVideo } from '@/lib/video-render'
 import { trackAttrs } from '@/lib/events'
 import { fieldHref, fieldValue } from '@/lib/site-content-schema'
+import { fieldRegion, itemRegion, slotRegion } from '@/lib/site-editor/markers'
 import { CinematicHero, type HeroClip } from './cinematic-hero'
 import { CinematicWork, type WorkTab } from './cinematic-work'
 import { SubscribeForm } from '@/components/subscribe-form'
@@ -41,10 +42,13 @@ function Nav({ name, sections }: { name: string; sections: { href: string; label
   )
 }
 
-function ShowRow({ show, past }: { show: SiteTourDate; past?: boolean }) {
+function ShowRow({ show, past, editable = false }: { show: SiteTourDate; past?: boolean; editable?: boolean }) {
   const ticket = safeHref(show.ticket_url)
   return (
-    <li className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-5">
+    <li
+      {...itemRegion(editable, 'tour_date', show.id)}
+      className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-5"
+    >
       <div className="flex items-baseline gap-6">
         <span className="font-display text-sm tabular-nums text-muted">{formatDate(show.date)}</span>
         <div>
@@ -78,18 +82,25 @@ function Shows({
   upcoming,
   past,
   heading,
+  editable = false,
 }: {
   upcoming: SiteTourDate[]
   past: SiteTourDate[]
   heading: string
+  editable?: boolean
 }) {
   return (
-    <section id="shows" className="mx-auto w-full max-w-4xl px-6 py-24">
-      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
+    <section {...slotRegion(editable, 'shows')} id="shows" className="mx-auto w-full max-w-4xl px-6 py-24">
+      <h2
+        {...fieldRegion(editable, 'shows_heading')}
+        className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl"
+      >
+        {heading}
+      </h2>
       {upcoming.length > 0 ? (
         <ul className="mt-10">
           {upcoming.map((s) => (
-            <ShowRow key={s.id} show={s} />
+            <ShowRow key={s.id} show={s} editable={editable} />
           ))}
         </ul>
       ) : (
@@ -110,7 +121,7 @@ function Shows({
           </h3>
           <ul className="mt-4 opacity-70">
             {past.map((s) => (
-              <ShowRow key={s.id} show={s} past />
+              <ShowRow key={s.id} show={s} past editable={editable} />
             ))}
           </ul>
         </>
@@ -124,20 +135,27 @@ function About({
   photo,
   name,
   heading,
+  editable = false,
 }: {
   bio: string | null
   photo: string | null
   name: string
   heading: string
+  editable?: boolean
 }) {
   const img = safeHref(photo)
   if (!bio && !img) return null
   return (
     <section id="about" className="mx-auto w-full max-w-4xl px-6 py-24">
-      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
+      <h2
+        {...fieldRegion(editable, 'about_heading')}
+        className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl"
+      >
+        {heading}
+      </h2>
       <div className="mt-10 grid gap-10 md:grid-cols-2">
         {bio && (
-          <div className="space-y-4 leading-relaxed text-muted">
+          <div {...fieldRegion(editable, 'artist_bio')} className="space-y-4 leading-relaxed text-muted">
             {bio.split('\n').filter(Boolean).map((p, i) => (
               <p key={i}>{p}</p>
             ))}
@@ -214,15 +232,20 @@ function Footer({
   )
 }
 
-function Videos({ videos, heading }: { videos: SiteVideo[]; heading: string }) {
+function Videos({ videos, heading, editable = false }: { videos: SiteVideo[]; heading: string; editable?: boolean }) {
   const safe = videos.filter(isRenderableVideo)
   if (safe.length === 0) return null
   return (
-    <section id="videos" className="mx-auto w-full max-w-4xl px-6 py-24">
-      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
+    <section {...slotRegion(editable, 'videos')} id="videos" className="mx-auto w-full max-w-4xl px-6 py-24">
+      <h2
+        {...fieldRegion(editable, 'videos_heading')}
+        className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl"
+      >
+        {heading}
+      </h2>
       <ul className="mt-10 grid gap-6 md:grid-cols-2">
         {safe.map((v) => (
-          <li key={v.id}>
+          <li key={v.id} {...itemRegion(editable, 'video', v.id)}>
             <div className="aspect-video w-full overflow-hidden border border-border bg-black">
               <VideoEmbed video={v} />
             </div>
@@ -234,7 +257,7 @@ function Videos({ videos, heading }: { videos: SiteVideo[]; heading: string }) {
   )
 }
 
-export function CinematicTemplate({ data }: { data: SiteData }) {
+export function CinematicTemplate({ data, editable = false }: { data: SiteData; editable?: boolean }) {
   const { artist, tour_dates, links, media, videos } = data
   const text = (key: string) => fieldValue(data.site_content, artist.template, key)
 
@@ -291,10 +314,10 @@ export function CinematicTemplate({ data }: { data: SiteData }) {
           tagline={text('hero_tagline')}
           cta={text('hero_cta')}
         />
-        <Shows upcoming={upcoming} past={past} heading={text('shows_heading')} />
+        <Shows upcoming={upcoming} past={past} heading={text('shows_heading')} editable={editable} />
         <CinematicWork tabs={tabs} heading={text('work_heading')} />
-        <Videos videos={videos} heading={text('videos_heading')} />
-        <About bio={artist.bio} photo={profilePhoto} name={artist.name} heading={text('about_heading')} />
+        <Videos videos={videos} heading={text('videos_heading')} editable={editable} />
+        <About bio={artist.bio} photo={profilePhoto} name={artist.name} heading={text('about_heading')} editable={editable} />
       </main>
       <Footer
         name={artist.name}

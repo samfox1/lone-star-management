@@ -37,3 +37,23 @@ export function parseItemMarker(value: string): { assetType: LibraryAsset; id: s
   if (!ASSET_TYPES.includes(assetType)) return null
   return { assetType, id }
 }
+
+/**
+ * Region attribute spreads for a template to emit in EDIT MODE only. A template
+ * threads its `editable` flag and spreads these onto the region element:
+ *   <h2 {...fieldRegion(editable, 'shows_heading')}>…</h2>
+ *   <section {...slotRegion(editable, 'shows')}> … {shows.map((s) =>
+ *     <div {...itemRegion(editable, 'tour_date', s.id)}> … </div>)} </section>
+ * Off edit mode they return `{}` — the public site carries no markers.
+ */
+export function fieldRegion(editable: boolean, key: string): Record<string, string> {
+  return editable ? { [FIELD_ATTR]: key } : {}
+}
+
+export function slotRegion(editable: boolean, key: string): Record<string, string> {
+  return editable ? { [SLOT_ATTR]: key } : {}
+}
+
+export function itemRegion(editable: boolean, assetType: LibraryAsset, id: string): Record<string, string> {
+  return editable ? { [ITEM_ATTR]: itemMarker(assetType, id) } : {}
+}

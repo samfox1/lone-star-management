@@ -12,7 +12,11 @@ export const TEMPLATES = [
   { value: 'cinematic', label: 'Cinematic — dark, video hero' },
 ] as const
 
-export function ArtistTemplate({ data }: { data: SiteData }) {
-  if (data.artist.template === 'cinematic') return <CinematicTemplate data={data} />
+/** `editable` turns on EDIT MODE: templates emit the `data-lse-*` markers (see
+ *  `lib/site-editor`) so the visual editor's frame can select regions. Off by
+ *  default — the public site and the read-only preview carry no markers. Only the
+ *  cinematic template is instrumented so far (classic follows in a later phase). */
+export function ArtistTemplate({ data, editable = false }: { data: SiteData; editable?: boolean }) {
+  if (data.artist.template === 'cinematic') return <CinematicTemplate data={data} editable={editable} />
   return <ArtistSite data={data} />
 }
