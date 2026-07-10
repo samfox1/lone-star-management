@@ -88,7 +88,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // source + platform ids are provenance for the doors' Released/Unreleased
     // classification (lib/music.ts mirrored in SQL). They ride the public payload;
     // all are public-safe (the ids are just platform-URL components).
-    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id'],
+    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {

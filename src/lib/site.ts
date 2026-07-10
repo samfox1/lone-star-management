@@ -44,6 +44,10 @@ export type SiteTrack = {
   spotify_id: string | null
   apple_id: string | null
   deezer_id: string | null
+  /** SoundCloud link (union model — stored, no id column). */
+  soundcloud_url: string | null
+  /** The manual "this song is released" flag (public even with no platform link). */
+  released: boolean | null
 }
 
 export type SiteTourDate = {
@@ -196,6 +200,8 @@ export async function getWorkingSite(
                 provider_url: (r.provider_url as string | null) ?? null,
                 stream_url: (r.stream_url as string | null) ?? null,
                 apple_url: (r.apple_url as string | null) ?? null,
+                soundcloud_url: (r.soundcloud_url as string | null) ?? null,
+                released: (r.released as boolean | null) ?? false,
               },
               (rid) => relBucket.get(rid),
             ) === 'released',
@@ -218,6 +224,8 @@ export async function getWorkingSite(
             spotify_id: (s.spotify_id as string | null) ?? null,
             apple_id: (s.apple_id as string | null) ?? null,
             deezer_id: (s.deezer_id as string | null) ?? null,
+            soundcloud_url: (s.soundcloud_url as string | null) ?? null,
+            released: (s.released as boolean | null) ?? false,
           } satisfies SiteTrack
         })
     }),

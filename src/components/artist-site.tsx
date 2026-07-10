@@ -68,7 +68,11 @@ export function ArtistSite({ data }: { data: SiteData }) {
           {tracks.map((track) => {
             const cover = safeHref(track.cover_url)
             // Hosted stream, else a link-out (Deezer / Apple / etc.).
-            const stream = safeHref(track.stream_url) ?? safeHref(track.provider_url) ?? safeHref(track.apple_url)
+            const stream =
+              safeHref(track.stream_url) ??
+              safeHref(track.provider_url) ??
+              safeHref(track.apple_url) ??
+              safeHref(track.soundcloud_url)
             // "feat. A, B · Album" — either half may be absent (older revisions).
             const feat = track.featured_artists ?? []
             const sub = [feat.length ? `feat. ${feat.join(', ')}` : null, track.album_name || null]

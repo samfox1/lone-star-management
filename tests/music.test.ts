@@ -43,7 +43,7 @@ describe('trackBucket (loose, no release)', () => {
   it('a platform source is released', () => {
     expect(trackBucket(trk({ source: 'spotify' }))).toBe('released')
   })
-  it.each(['spotify_id', 'apple_id', 'deezer_id', 'provider_url', 'stream_url', 'apple_url'] as const)(
+  it.each(['spotify_id', 'apple_id', 'deezer_id', 'provider_url', 'stream_url', 'apple_url', 'soundcloud_url'] as const)(
     'any platform linkage (%s) makes it released',
     (field) => {
       expect(trackBucket(trk({ [field]: 'v' }))).toBe('released')
@@ -79,5 +79,23 @@ describe('trackPlatforms (badge derivation)', () => {
   })
   it('an Apple id without a stored apple_url still badges (no link)', () => {
     expect(trackPlatforms({ ...ids, apple_id: 'ap1' })).toEqual([{ key: 'apple', label: 'Apple', url: null }])
+  })
+})
+
+describe('the manual released flag', () => {
+  it('marks a hand-added song (no links) as released', () => {
+    expect(trackBucket(trk({ audio_path: 'a1/x.mp3', released: true }))).toBe('released')
+  })
+  it('defaults to unreleased when absent or false', () => {
+    expect(trackBucket(trk({ released: false }))).toBe('unreleased')
+    expect(trackBucket(trk())).toBe('unreleased')
+  })
+})
+
+describe('trackPlatforms — SoundCloud', () => {
+  it('badges a stored soundcloud_url', () => {
+    expect(
+      trackPlatforms({ spotify_id: null, apple_id: null, deezer_id: null, apple_url: null, soundcloud_url: 'https://soundcloud.com/x/y' }),
+    ).toEqual([{ key: 'soundcloud', label: 'SoundCloud', url: 'https://soundcloud.com/x/y' }])
   })
 })

@@ -36,9 +36,15 @@ export type TrackProvenance = {
   stream_url: string | null
   /** Apple/iTunes store link from the union model — counts as platform presence. */
   apple_url: string | null
+  /** SoundCloud link (no id column to rebuild from) — counts as platform presence. */
+  soundcloud_url?: string | null
+  /** The manual "this song is released" toggle — a hand-added song with no links
+   *  can still be public. Platform linkage implies released regardless. */
+  released?: boolean | null
 }
 
-/** True iff a loose track carries any platform linkage (source or an external id/url). */
+/** True iff a loose track counts as released: any platform linkage (source or an
+ *  external id/url) OR the manual released flag. */
 function trackOnPlatform(t: TrackProvenance): boolean {
   return (
     t.source !== 'manual' ||
@@ -47,31 +53,36 @@ function trackOnPlatform(t: TrackProvenance): boolean {
     t.deezer_id != null ||
     t.provider_url != null ||
     t.stream_url != null ||
-    t.apple_url != null
+    t.apple_url != null ||
+    t.soundcloud_url != null ||
+    t.released === true
   )
 }
 
-/** The platform id columns a union-model track can carry (subset of TrackProvenance). */
+/** The platform id/link columns a union-model track can carry (subset of TrackProvenance). */
 export type TrackPlatformIds = {
   spotify_id: string | null
   apple_id: string | null
   deezer_id: string | null
   /** Apple's store link can't be rebuilt from apple_id, so it's stored. */
   apple_url: string | null
+  /** SoundCloud link — stored (no id column). */
+  soundcloud_url?: string | null
 }
 
-export type PlatformRef = { key: 'spotify' | 'apple' | 'deezer'; label: string; url: string | null }
+export type PlatformRef = { key: 'spotify' | 'apple' | 'deezer' | 'soundcloud'; label: string; url: string | null }
 
 /**
- * Which platforms a union-model track lives on — one entry per non-null id, for the
- * per-platform badges on the Music cards. Spotify/Deezer links rebuild from the id;
- * Apple's comes from the stored apple_url (null if the link was never captured).
+ * Which platforms a union-model track lives on — one entry per non-null id/link,
+ * for the per-platform badges on the Music cards. Spotify/Deezer links rebuild
+ * from the id; Apple's and SoundCloud's come from their stored URLs.
  */
 export function trackPlatforms(t: TrackPlatformIds): PlatformRef[] {
   const out: PlatformRef[] = []
   if (t.spotify_id) out.push({ key: 'spotify', label: 'Spotify', url: `https://open.spotify.com/track/${t.spotify_id}` })
   if (t.apple_id) out.push({ key: 'apple', label: 'Apple', url: t.apple_url })
   if (t.deezer_id) out.push({ key: 'deezer', label: 'Deezer', url: `https://www.deezer.com/track/${t.deezer_id}` })
+  if (t.soundcloud_url) out.push({ key: 'soundcloud', label: 'SoundCloud', url: t.soundcloud_url })
   return out
 }
 

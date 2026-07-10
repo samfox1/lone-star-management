@@ -67,6 +67,10 @@ beforeAll(async () => {
   // A loose track with a stream link → on a platform → Released.
   await makeTrack('On Platforms', { stream_url: 'https://open.spotify.com/track/xyz' })
 
+  // A hand-added song with hosted audio and NO links, marked released by the
+  // manager (the add-song toggle) → public despite zero platform presence.
+  await makeTrack('Manual But Released', {}, { source: 'manual', audio_path: `${artistA}/mbr.mp3`, released: true })
+
   // Released loose track whose album_name matches the released release's TITLE but
   // with NO release_id — under the old string-match fallback it would have appeared
   // in the pub-album tracklist; now membership is release_id only.
@@ -98,6 +102,7 @@ describe('get_public_site — tracks are Released-only', () => {
     expect(titles).toContain('Album Cut') // inherits the released release's bucket
     expect(titles).toContain('On Platforms')
     expect(titles).toContain('Fallback Song')
+    expect(titles).toContain('Manual But Released') // the manual released flag
   })
 
   it('hides unreleased music: uploaded-only loose tracks and tracks inside an unreleased release', async () => {
