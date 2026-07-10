@@ -2,6 +2,7 @@
 
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
+import { safeHref } from '@/lib/url'
 import { GridCard } from '../grid-card'
 import { deleteContentAction, setTrackReleaseAction, updateContentAction } from '../actions'
 import { SaveForm } from '../save-form'
@@ -31,11 +32,15 @@ function PlatformBadges({ track, linked = false }: { track: Track; linked?: bool
   const text = 'font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint'
   return (
     <span className="inline-flex items-center gap-2">
-      {platforms.map((p) =>
-        linked && p.url ? (
+      {platforms.map((p) => {
+        // Dashboard hrefs are manager-entered and never went through a <form>, so
+        // a javascript: URL could save clean; sanitize at render (mirrors the
+        // public site's safeHref). An unsafe/absent link falls back to plain text.
+        const href = linked ? safeHref(p.url) : undefined
+        return href ? (
           <a
             key={p.key}
-            href={p.url}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
             className={`${text} hover:text-ink-muted hover:underline`}
@@ -46,8 +51,8 @@ function PlatformBadges({ track, linked = false }: { track: Track; linked?: bool
           <span key={p.key} className={text}>
             {p.label}
           </span>
-        ),
-      )}
+        )
+      })}
     </span>
   )
 }
@@ -66,6 +71,7 @@ export function TrackCard({
   releases: ReleaseOption[]
 }) {
   const platforms = trackPlatforms(track)
+  const openSourceHref = safeHref(track.stream_url)
 
   return (
     <GridCard
@@ -120,9 +126,9 @@ export function TrackCard({
 
       <div className="mt-4 flex items-center gap-4">
         <TrackAudioUploader artistId={artistId} trackId={track.id} hasAudio={!!track.audio_path} />
-        {platforms.length === 0 && track.stream_url && (
+        {platforms.length === 0 && openSourceHref && (
           <a
-            href={track.stream_url}
+            href={openSourceHref}
             target="_blank"
             rel="noopener noreferrer"
             className="font-space text-xs text-ink-muted hover:underline"

@@ -9,6 +9,17 @@
  * entity. entity_type is the SINGULAR form the schema CHECK constraint expects.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { releaseBucket, type ReleaseProvenance } from '@/lib/music'
+
+/** The columns reconcileVisibility reads (superset: provenance only for releases). */
+type VisRow = {
+  id: string
+  visible: boolean | null
+  source?: string | null
+  spotify_id?: string | null
+  links?: unknown
+  released?: boolean | null
+}
 
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
@@ -178,14 +189,23 @@ export async function reconcileVisibility(
 ): Promise<{ shown: number; hidden: number }> {
   const table = PUBLISHABLE[type].table
   const wanted = new Set(visibleIds)
-  const { data: rows, error } = await supabase
-    .from(table)
-    .select('id, visible')
-    .eq('artist_id', artistId)
+  // Releases have a Released/Unreleased split; only Released ones are exposed by
+  // the on-site UI, so scope reconcile to them. Otherwise an Unreleased release
+  // (never in `visibleIds`) gets written visible=false on every publish — a
+  // latent trap once it's later promoted to Released.
+  const scopeToReleased = type === 'release'
+  const cols = scopeToReleased ? 'id, visible, source, spotify_id, links, released' : 'id, visible'
+  const { data, error } = await supabase.from(table).select(cols).eq('artist_id', artistId)
   if (error) throw new Error(error.message)
+  // `cols` is a runtime string, so the typed builder can't infer the row shape.
+  const rows = (data ?? []) as unknown as VisRow[]
 
-  const toShow = (rows ?? []).filter((r) => !r.visible && wanted.has(r.id as string)).map((r) => r.id)
-  const toHide = (rows ?? []).filter((r) => r.visible && !wanted.has(r.id as string)).map((r) => r.id)
+  const scoped = scopeToReleased
+    ? rows.filter((r) => releaseBucket(r as unknown as ReleaseProvenance) === 'released')
+    : rows
+
+  const toShow = scoped.filter((r) => !r.visible && wanted.has(r.id as string)).map((r) => r.id)
+  const toHide = scoped.filter((r) => r.visible && !wanted.has(r.id as string)).map((r) => r.id)
 
   if (toShow.length) {
     const { error: e } = await supabase

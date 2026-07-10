@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { buttonClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { useLockBodyScroll } from './use-lock-body-scroll'
 import { toast } from './toast'
 
 /** A delete server action, pre-bound to its (type, id, artistId), returning {error?}. */
@@ -30,6 +31,7 @@ export function CardModal({
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
+  useLockBodyScroll(open)
 
   useEffect(() => {
     if (!open) return

@@ -23,10 +23,12 @@ beforeAll(async () => {
   asA = await signInAs(SEED.managerA)
   await svc.storage.from('audio').upload(audioPath('pub'), body, { contentType: 'audio/mpeg', upsert: true })
 
-  // A published track that carries audio.
+  // A published, RELEASED track that carries audio. (The door only signs Released
+  // audio now — an uploaded-only demo is Unreleased and unsignable; this one is
+  // hand-added but marked released, so it's public and playable.)
   const { data: pub } = await svc
     .from('tracks')
-    .insert({ artist_id: artistA, title: 'AUDIO pub', source: 'manual', audio_path: audioPath('pub') })
+    .insert({ artist_id: artistA, title: 'AUDIO pub', source: 'manual', audio_path: audioPath('pub'), released: true })
     .select('id')
     .single()
   publishedTrackId = pub!.id
@@ -96,7 +98,7 @@ describe('signAudioUrl', () => {
     await svc.storage.from('audio').upload(audioPath('tomb'), body, { contentType: 'audio/mpeg', upsert: true })
     const { data: t } = await svc
       .from('tracks')
-      .insert({ artist_id: artistA, title: 'AUDIO tomb', source: 'manual', audio_path: audioPath('tomb') })
+      .insert({ artist_id: artistA, title: 'AUDIO tomb', source: 'manual', audio_path: audioPath('tomb'), released: true })
       .select('id')
       .single()
     await publishContent(asA, 'track', artistA)

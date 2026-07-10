@@ -8,6 +8,7 @@ import { publicVideoSrc } from '@/lib/video-render'
 import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
 import { deleteContentAction, renameVideoAction } from '../actions'
+import { useLockBodyScroll } from '../use-lock-body-scroll'
 import { toast } from '../toast'
 
 export type VideoItem = {
@@ -81,6 +82,7 @@ export function VideoCard({
   const [renameOpen, setRenameOpen] = useState(false)
   const [name, setName] = useState(video.title)
   const [saving, setSaving] = useState(false)
+  useLockBodyScroll(renameOpen)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const busyRef = useRef(false) // hard re-entry latch shared by delete + rename

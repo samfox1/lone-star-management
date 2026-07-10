@@ -1,7 +1,8 @@
 /**
  * music.ts — the Released vs Unreleased derivation (provenance-based, no stored status).
- * A release/track is Unreleased iff it has NO platform presence; a track in a release
- * inherits its release's bucket. This is the single source of truth mirrored by the SQL
+ * A release/track is Unreleased iff it has NO platform presence; release membership is
+ * widen-only (a song is Released if its own provenance OR its release is Released). This
+ * is the single source of truth mirrored by the SQL
  * public doors (Released-only). See MUSIC_RESTRUCTURE.md.
  */
 import { describe, expect, it } from 'vitest'
@@ -51,13 +52,18 @@ describe('trackBucket (loose, no release)', () => {
   )
 })
 
-describe('trackBucket (in a release)', () => {
-  it('inherits the release bucket from the resolver', () => {
-    const resolver = (id: string): MusicBucket => (id === 'unrel' ? 'unreleased' : 'released')
-    expect(trackBucket(trk({ release_id: 'unrel', source: 'spotify' }), resolver)).toBe('unreleased')
+describe('trackBucket (in a release) — widen-only', () => {
+  const resolver = (id: string): MusicBucket => (id === 'unrel' ? 'unreleased' : 'released')
+  it('a released release promotes an otherwise-unreleased song (album wins)', () => {
     expect(trackBucket(trk({ release_id: 'rel' }), resolver)).toBe('released')
   })
-  it('falls back to the track\'s own provenance when the release is unresolvable', () => {
+  it('a platform-linked song stays released inside an unreleased release (never demoted)', () => {
+    expect(trackBucket(trk({ release_id: 'unrel', source: 'spotify' }), resolver)).toBe('released')
+  })
+  it('a bare manual song in an unreleased release is unreleased', () => {
+    expect(trackBucket(trk({ release_id: 'unrel' }), resolver)).toBe('unreleased')
+  })
+  it("falls back to the track's own provenance when the release is unresolvable", () => {
     // release_id set but resolver returns undefined → classify by the track's own fields
     expect(trackBucket(trk({ release_id: 'gone', source: 'spotify' }), () => undefined)).toBe('released')
     expect(trackBucket(trk({ release_id: 'gone' }))).toBe('unreleased')

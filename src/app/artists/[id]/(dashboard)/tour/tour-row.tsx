@@ -62,6 +62,7 @@ export function TourRow({
           visible={tour.visible}
           onToggle={onToggleSelect}
           label={tour.venue || 'date'}
+          liveClassName="border-accent bg-accent text-white"
         />
         <button
           type="button"

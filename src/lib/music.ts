@@ -1,9 +1,11 @@
 /**
- * Released vs Unreleased — the provenance-based split of an artist's catalog. DERIVED,
- * not stored: an item is Unreleased iff it has no platform presence (uploaded to Lone
- * Star, not on Spotify/Apple/etc.); everything on a platform is Released. A track inside
- * a release inherits that release's bucket. This module is the single source of truth;
- * the SQL public doors mirror the same logic to expose Released-only. See
+ * Released vs Unreleased — the split of an artist's catalog. An item is Released iff it
+ * has platform presence (a DSP source/id/link) OR was hand-added and marked released
+ * (the stored `released` flag on tracks/releases — amended 2026-07-09, so it's platform
+ * presence OR the flag, not purely derived). Everything else is Unreleased (uploaded to
+ * Lone Star, not on Spotify/Apple/etc.). Release membership is WIDEN-ONLY: a song is
+ * Released if its own provenance OR its release is Released. This module is the single
+ * source of truth; the SQL public doors mirror it to expose Released-only. See
  * MUSIC_RESTRUCTURE.md. (Decided 2026-07-08: Unreleased is dashboard-only for now.)
  */
 
@@ -84,27 +86,29 @@ export type PlatformRef = { key: 'spotify' | 'apple' | 'deezer' | 'soundcloud'; 
 export function trackPlatforms(t: TrackPlatformIds): PlatformRef[] {
   const out: PlatformRef[] = []
   if (t.spotify_id) out.push({ key: 'spotify', label: 'Spotify', url: `https://open.spotify.com/track/${t.spotify_id}` })
-  if (t.apple_id) out.push({ key: 'apple', label: 'Apple', url: t.apple_url })
+  // Badge on the Apple URL alone (mirroring SoundCloud): an Apple-only add stores
+  // apple_url and may not yield an apple_id, but it's still on the platform.
+  if (t.apple_id || t.apple_url) out.push({ key: 'apple', label: 'Apple', url: t.apple_url })
   if (t.deezer_id) out.push({ key: 'deezer', label: 'Deezer', url: `https://www.deezer.com/track/${t.deezer_id}` })
   if (t.soundcloud_url) out.push({ key: 'soundcloud', label: 'SoundCloud', url: t.soundcloud_url })
   return out
 }
 
 /**
- * Classify a track. A track in a release inherits that release's bucket (pass
- * `releaseBucketOf`, e.g. a lookup into the artist's releases). A loose track — or one
- * whose release can't be resolved — is classified by its own provenance: Unreleased
- * unless it has platform linkage. `audio_path` alone does not make a track Released (a
- * Released track may carry an uploaded master; an uploaded demo with no platform link is
- * Unreleased).
+ * Classify a track — WIDEN-ONLY: a track is Released if it has its OWN platform
+ * linkage OR its release is Released. Two consequences, both intended:
+ *   - a song on a Released album is Released (album membership wins), even a
+ *     hand-added one marked "unreleased";
+ *   - a platform-linked song stays Released even inside an Unreleased album (it
+ *     doesn't vanish — the release only ever widens the bucket, never narrows it).
+ * A loose track — or one whose release can't be resolved — is classified by its own
+ * provenance. `audio_path` alone does not make a track Released (a Released track may
+ * carry an uploaded master; an uploaded demo with no platform link is Unreleased).
  */
 export function trackBucket(
   t: TrackProvenance,
   releaseBucketOf?: (releaseId: string) => MusicBucket | undefined,
 ): MusicBucket {
-  if (t.release_id) {
-    const inherited = releaseBucketOf?.(t.release_id)
-    if (inherited) return inherited
-  }
-  return trackOnPlatform(t) ? 'released' : 'unreleased'
+  const releaseReleased = t.release_id ? releaseBucketOf?.(t.release_id) === 'released' : false
+  return trackOnPlatform(t) || releaseReleased ? 'released' : 'unreleased'
 }

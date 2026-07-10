@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { MediaUploader } from '../media-uploader'
+import { useLockBodyScroll } from '../use-lock-body-scroll'
 
 /**
  * The Photos page's "+ Add" — same collapsed-label toolbar trigger as the other
@@ -12,6 +13,7 @@ import { MediaUploader } from '../media-uploader'
  */
 export function PhotoAddButton({ artistId }: { artistId: string }) {
   const [open, setOpen] = useState(false)
+  useLockBodyScroll(open)
 
   useEffect(() => {
     if (!open) return
@@ -42,7 +44,8 @@ export function PhotoAddButton({ artistId }: { artistId: string }) {
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className={`${modalCardClass} font-space`}>
+          {/* Narrow, matching the Music/Video add modals (just a drop field here). */}
+          <div className={`${modalCardClass} font-space !w-[440px]`}>
             <div className="border-b border-hairline pb-3.5">
               <KLabel>Photo</KLabel>
               <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Add photos</h2>

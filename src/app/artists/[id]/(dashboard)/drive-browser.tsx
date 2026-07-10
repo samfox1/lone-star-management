@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
 import { sizeLabel } from '@/lib/upload'
 import type { DriveFile, DriveKind } from '@/lib/drive'
+import { useDriveModalBusy } from './drive-import-button'
 import { toast } from './toast'
 
 export type DriveListResult =
@@ -42,6 +43,10 @@ export function DriveBrowser({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [status, setStatus] = useState<Map<string, RowStatus>>(new Map())
   const [busy, setBusy] = useState(false)
+
+  // Tell the enclosing DriveImportButton shell we're mid-import so Escape / an
+  // overlay click can't unmount us and orphan the in-flight downloads.
+  useDriveModalBusy(busy)
 
   // No synchronous setState here: `loading` starts true and flips only after the
   // fetch settles, so the mount effect stays cascade-free (react-hooks lint).

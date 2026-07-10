@@ -31,7 +31,11 @@ export function parseStreamingLinks(urls: StreamingUrls): Record<string, string>
     if (id) out.spotify_id = id
   }
   const apple = urls.apple?.trim()
-  if (apple) out.apple_url = apple
+  if (apple) {
+    out.apple_url = apple
+    const id = appleTrackId(apple)
+    if (id) out.apple_id = id
+  }
   const soundcloud = urls.soundcloud?.trim()
   if (soundcloud) out.soundcloud_url = soundcloud
   const deezer = urls.deezer?.trim()
@@ -116,12 +120,23 @@ export async function resolveStreamingSong(
   // SoundCloud — public oEmbed: title ("Title by Author") + thumbnail.
   const soundcloud = urls.soundcloud?.trim()
   if (soundcloud) {
-    const o = await getJson<{ title?: string; thumbnail_url?: string }>(
+    const o = await getJson<{ title?: string; thumbnail_url?: string; author_name?: string }>(
       fetchImpl,
       `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(soundcloud)}`,
     )
     if (o?.title) {
-      return { title: o.title.replace(/ by .+$/, ''), cover_url: o.thumbnail_url ?? null, contributors: [] }
+      // oEmbed title is "Track by Author". A greedy strip on the FIRST " by "
+      // mangles titles that themselves contain " by "; strip the exact
+      // " by <author_name>" suffix when we have it, else the LAST " by ".
+      let title = o.title
+      const suffix = o.author_name ? ` by ${o.author_name}` : null
+      if (suffix && title.endsWith(suffix)) {
+        title = title.slice(0, -suffix.length)
+      } else {
+        const at = title.lastIndexOf(' by ')
+        if (at > 0) title = title.slice(0, at)
+      }
+      return { title, cover_url: o.thumbnail_url ?? null, contributors: [] }
     }
   }
 

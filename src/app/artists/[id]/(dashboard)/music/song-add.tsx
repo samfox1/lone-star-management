@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
@@ -12,6 +12,7 @@ import { buildStoragePath, contentTypeFor, friendlyUploadError, validateUpload }
 import { STREAMING_SERVICES, parseStreamingLinks, type StreamingUrls } from '@/lib/song-links'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { resolveStreamingSongAction } from '../actions'
+import { useLockBodyScroll } from '../use-lock-body-scroll'
 import { toast } from '../toast'
 
 /** "A, B feat. C" → ['A', 'B feat. C'] — comma-separated collaborators. */
@@ -37,9 +38,13 @@ const COVER_RULES = {
 type Step = 'choose' | 'manual' | 'streaming'
 type Format = 'single' | 'ep' | 'album'
 type Released = 'released' | 'unreleased'
-type SongRow = { title: string; contributors: string; file: File | null }
+type SongRow = { id: string; title: string; contributors: string; file: File | null }
 
-const EMPTY_ROW: SongRow = { title: '', contributors: '', file: null }
+// Monotonic id for stable React keys on removable rows (index keys mis-associate
+// state when a middle row is removed). Module-scoped: a plain counter, so it's
+// never a ref accessed during render.
+let rowSeq = 0
+const newRow = (): SongRow => ({ id: `r${rowSeq++}`, title: '', contributors: '', file: null })
 
 /**
  * THE add-music flow (the Music page's single + button). Two ways in:
@@ -58,13 +63,22 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   const [step, setStep] = useState<Step>('choose')
   const [format, setFormat] = useState<Format | null>(null)
   const [releaseTitle, setReleaseTitle] = useState('')
-  const [rows, setRows] = useState<SongRow[]>([{ ...EMPTY_ROW }])
+  const [rows, setRows] = useState<SongRow[]>(() => [newRow()])
   const [released, setReleased] = useState<Released | null>(null) // deliberate: no default
   const [urls, setUrls] = useState<StreamingUrls>({})
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Mirror `busy` into a ref so close() (captured by the Escape effect) reads the
+  // LIVE value, not the open-time closure — otherwise Escape mid-upload sails
+  // past the guard and reset()s the form while writes are still in flight.
+  const busyRef = useRef(false)
+  const setBusyBoth = (v: boolean) => {
+    busyRef.current = v
+    setBusy(v)
+  }
 
+  useLockBodyScroll(open)
   const hasUrls = Object.values(urls).some((u) => u?.trim())
   const grouped = format === 'ep' || format === 'album'
 
@@ -72,14 +86,14 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     setStep('choose')
     setFormat(null)
     setReleaseTitle('')
-    setRows([{ ...EMPTY_ROW }])
+    setRows([newRow()])
     setReleased(null)
     setUrls({})
     setCoverFile(null)
     setError(null)
   }
   function close() {
-    if (busy) return
+    if (busyRef.current) return
     setOpen(false)
     reset()
   }
@@ -105,9 +119,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   }
 
   async function submit() {
-    if (busy) return
+    if (busyRef.current) return
     setError(null)
-    setBusy(true)
+    setBusyBoth(true)
     const supabase = createClient()
     const uploaded: { bucket: string; path: string }[] = []
     const createdTracks: string[] = []
@@ -231,17 +245,30 @@ export function SongAddButton({ artistId }: { artistId: string }) {
       router.refresh()
       setOpen(false)
       reset()
+    } catch (e) {
+      // A throw (uniqueSlug/storage/network reject) would otherwise skip the
+      // rollback list AND leave the user with no message — orphaned audio/cover
+      // objects and a half-created EP. Undo what we uploaded/inserted, then show
+      // a friendly error.
+      await rollback()
+      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.')
     } finally {
-      setBusy(false)
+      setBusyBoth(false)
     }
   }
+
+  // Width by step: the choice pickers (choose + single/EP/album) are narrow and
+  // tall (few tiles, no reason to sprawl); the actual add form is medium; the
+  // streaming form sits in between.
+  const isChoiceStep = step === 'choose' || (step === 'manual' && !format)
+  const cardWidth = isChoiceStep ? '!w-[440px]' : '!w-[520px]'
 
   const tile = (onClick: () => void, icon: 'edit' | 'bolt' | 'tracks' | 'releases', label: string) => (
     <button
       key={label}
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2.5 rounded-xl border border-hairline bg-paper px-3 py-6 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+      className="flex flex-col items-center gap-3 rounded-xl border border-hairline bg-paper px-3 py-10 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
     >
       <Icon name={icon} size={22} />
       <span className="text-sm font-semibold">{label}</span>
@@ -287,7 +314,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   )
 
   const songRow = (r: SongRow, i: number) => (
-    <div key={i} className="space-y-2 rounded-xl border border-hairline p-3">
+    <div key={r.id} className="space-y-2 rounded-xl border border-hairline p-3">
       {grouped && (
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Song {i + 1}</span>
@@ -347,9 +374,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
-          {/* font-space: the modal speaks the site's mono voice; wider than the
-              stock card so EP/album song rows breathe. */}
-          <div className={cx(modalCardClass, 'font-space !w-[720px]')}>
+          {/* font-space: the modal speaks the site's mono voice. Width tracks the
+              step (cardWidth) — narrow for the pickers, medium for the add form. */}
+          <div className={cx(modalCardClass, 'font-space', cardWidth)}>
             <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
               {step !== 'choose' && (
                 <button
@@ -381,9 +408,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
             {/* Manual, first question: what is this? */}
             {step === 'manual' && !format && (
               <div className="mt-4 grid grid-cols-3 gap-2.5">
-                {tile(() => setFormat('single'), 'tracks', 'Single')}
-                {tile(() => { setFormat('ep'); setRows([{ ...EMPTY_ROW }, { ...EMPTY_ROW }]) }, 'releases', 'EP')}
-                {tile(() => { setFormat('album'); setRows([{ ...EMPTY_ROW }, { ...EMPTY_ROW }]) }, 'releases', 'Album')}
+                {tile(() => { setFormat('single'); setRows([newRow()]) }, 'tracks', 'Single')}
+                {tile(() => { setFormat('ep'); setRows([newRow(), newRow()]) }, 'releases', 'EP')}
+                {tile(() => { setFormat('album'); setRows([newRow(), newRow()]) }, 'releases', 'Album')}
               </div>
             )}
 
@@ -404,7 +431,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                 {grouped && (
                   <button
                     type="button"
-                    onClick={() => setRows((prev) => [...prev, { ...EMPTY_ROW }])}
+                    onClick={() => setRows((prev) => [...prev, newRow()])}
                     className={buttonClass('ghost')}
                   >
                     + Add song

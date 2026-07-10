@@ -1,4 +1,7 @@
-@import "tailwindcss";
+/* Scope automatic content detection to src/ — otherwise Tailwind v4 scans stray
+   repo-root files (scratch docs, prototypes/) and can mint invalid utilities from
+   class-like strings in them (e.g. a literal `top-[var(...)]` in a notes file). */
+@import "tailwindcss" source("..");
 @import "../styles/effects.css";
 
 :root {

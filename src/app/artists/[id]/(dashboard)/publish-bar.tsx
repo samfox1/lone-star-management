@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { useLockBodyScroll } from './use-lock-body-scroll'
 
 /**
  * The publish control shared by every on-site content list (releases, videos, merch,
@@ -29,10 +30,21 @@ export function PublishBar({
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // close() is captured by the Escape effect (deps [open]); a ref (synced in an
+  // effect, never during render) keeps its busy check live so Escape / an overlay
+  // click can't dismiss the modal mid-publish.
+  const busyRef = useRef(false)
+  useEffect(() => {
+    busyRef.current = busy
+  }, [busy])
+  function close() {
+    if (busyRef.current) return
+    setOpen(false)
+  }
 
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
@@ -40,6 +52,7 @@ export function PublishBar({
   // The bar is ALWAYS visible; it's just greyed out (disabled) until a toggle
   // creates a pending change (or a content edit is waiting), then it lights up.
   const enabled = pendingCount > 0 || dirty
+  useLockBodyScroll(open && enabled) // the dialog only renders when open && enabled
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -88,7 +101,7 @@ export function PublishBar({
           role="dialog"
           aria-modal="true"
           className={modalOverlayClass}
-          onClick={(e) => e.target === e.currentTarget && setOpen(false)}
+          onClick={(e) => e.target === e.currentTarget && close()}
         >
           <form onSubmit={submit} className={modalCardClass}>
             <h2 className="text-lg font-bold tracking-[-0.01em]">Publish to the site</h2>
@@ -116,7 +129,7 @@ export function PublishBar({
             )}
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className={buttonClass('ghost')}>
+              <button type="button" onClick={close} disabled={busy} className={buttonClass('ghost')}>
                 Cancel
               </button>
               <button type="submit" disabled={!password || busy} className={buttonClass('solid')}>

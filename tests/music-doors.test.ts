@@ -17,6 +17,17 @@ let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
+// Track ids captured in beforeAll, for the audio-door assertions.
+const id: Record<string, string> = {}
+
+async function audioPath(trackId: string): Promise<string | null> {
+  const { data } = await anonClient().rpc('audio_path_for_play', {
+    p_slug: SEED.artistASlug,
+    p_track_id: trackId,
+  })
+  return (data as string | null) ?? null
+}
+
 type Row = { id: string }
 
 /** createContent + return the new row id (matched by unique title). */
@@ -61,15 +72,36 @@ beforeAll(async () => {
   const secretEp = await makeRelease('Secret EP', 'secret-ep')
   await makeTrack('Secret Song', {}, { release_id: secretEp })
 
+  // A platform-linked song assigned to that UNRELEASED release. Widen-only (#4):
+  // its own linkage keeps it Released — it must NOT vanish just because the album
+  // it sits in is Unreleased.
+  await makeTrack('Linked In Secret EP', { stream_url: 'https://open.spotify.com/track/lise' }, { release_id: secretEp })
+
   // A loose UPLOADED track: manual, hosted audio, no platform linkage → Unreleased.
-  await makeTrack('Bedroom Demo', {}, { source: 'manual', audio_path: `${artistA}/demo.mp3` })
+  id.demo = await makeTrack('Bedroom Demo', {}, { source: 'manual', audio_path: `${artistA}/demo.mp3` })
 
   // A loose track with a stream link → on a platform → Released.
   await makeTrack('On Platforms', { stream_url: 'https://open.spotify.com/track/xyz' })
 
   // A hand-added song with hosted audio and NO links, marked released by the
   // manager (the add-song toggle) → public despite zero platform presence.
-  await makeTrack('Manual But Released', {}, { source: 'manual', audio_path: `${artistA}/mbr.mp3`, released: true })
+  id.mbr = await makeTrack('Manual But Released', {}, {
+    source: 'manual',
+    audio_path: `${artistA}/mbr.mp3`,
+    released: true,
+  })
+
+  // A RELEASED but HIDDEN release (visible=false) with an audio track inside it:
+  // taken off-site, so neither its tracklist nor its audio may leak (#12).
+  const hiddenAlbum = await makeRelease('Hidden Album', 'hidden-album', {
+    spotify_id: 'sp-hidden-1',
+    visible: false,
+  })
+  id.hiddenCut = await makeTrack('Hidden Cut', {}, {
+    release_id: hiddenAlbum,
+    source: 'manual',
+    audio_path: `${artistA}/hidden.mp3`,
+  })
 
   // Released loose track whose album_name matches the released release's TITLE but
   // with NO release_id — under the old string-match fallback it would have appeared
@@ -111,6 +143,11 @@ describe('get_public_site — tracks are Released-only', () => {
     expect(titles).not.toContain('Secret Song') // inherits the unreleased release's bucket
   })
 
+  it('keeps a platform-linked song visible even inside an unreleased release (widen-only, #4)', async () => {
+    const titles = (await publicSiteTracks()).map((t) => t.title)
+    expect(titles).toContain('Linked In Secret EP')
+  })
+
   it('treats provenance-less legacy snapshots as Released (nothing already public vanishes)', async () => {
     const titles = (await publicSiteTracks()).map((t) => t.title)
     expect(titles).toContain('Legacy Snapshot')
@@ -139,5 +176,30 @@ describe('get_public_releases — Unreleased excluded', () => {
     const titles = (await publicReleases()).map((r) => r.title)
     expect(titles).toContain('Public Album')
     expect(titles).not.toContain('Secret EP')
+  })
+})
+
+describe('audio_path_for_play — Released-only (#1)', () => {
+  it('serves audio for a released track', async () => {
+    expect(await audioPath(id.mbr)).toBe(`${artistA}/mbr.mp3`)
+  })
+
+  it('returns null for an unreleased / uploaded-only track', async () => {
+    expect(await audioPath(id.demo)).toBeNull()
+  })
+})
+
+describe('release visibility — hidden Released release does not leak (#12)', () => {
+  it('hides its tracks from get_public_site even though it is Released', async () => {
+    const titles = (await publicSiteTracks()).map((t) => t.title)
+    expect(titles).not.toContain('Hidden Cut')
+  })
+
+  it('does not list the hidden release', async () => {
+    expect((await publicReleases()).map((r) => r.title)).not.toContain('Hidden Album')
+  })
+
+  it('returns null audio for a track inside the hidden release', async () => {
+    expect(await audioPath(id.hiddenCut)).toBeNull()
   })
 })

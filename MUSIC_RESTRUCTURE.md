@@ -6,8 +6,16 @@ is the buildable spec. Sequenced as step 4 of the roadmap (after the UI-test lay
 
 ## Decisions (locked 2026-07-08)
 
-1. **Released vs Unreleased is DERIVED from provenance** — no manual toggle, no new
-   status column.
+> **Amended 2026-07-09:** Released = **platform presence OR a stored `released` flag**.
+> Decision #1 below (pure derivation, no stored column) was reversed: a `released`
+> boolean now lives on `tracks` and `releases` so a hand-added song/album with no DSP
+> link can still be made public. Platform presence still implies Released regardless of
+> the flag, and release membership is **widen-only** (a song is Released if its own
+> provenance OR its release is Released). See `src/lib/music.ts`.
+
+1. ~~**Released vs Unreleased is DERIVED from provenance** — no manual toggle, no new
+   status column.~~ *(reversed — see the amendment above; a stored `released` flag was
+   added 2026-07-09.)*
 2. **Unreleased can be grouped** — an unreleased "release" (e.g. a demo EP) uses the
    same release + tracklist structure the Released side does.
 3. **Unreleased is dashboard-only for now** — it does NOT appear on the public artist

@@ -21,6 +21,7 @@ export function SelectToggle({
   onToggle,
   label,
   className,
+  liveClassName = 'border-ink bg-ink text-white',
 }: {
   selected: boolean
   /** Whether the item is currently live on the public site. */
@@ -29,6 +30,9 @@ export function SelectToggle({
   /** Item name, for the accessible label / tooltip. */
   label: string
   className?: string
+  /** Override for the checked+live look (default INK). Tour passes the blue accent
+   *  so its check reads blue whether the date is live or a pending add. */
+  liveClassName?: string
 }) {
   const state = selected
     ? visible
@@ -58,7 +62,7 @@ export function SelectToggle({
       }}
       className={cx(
         'inline-flex h-5 w-5 flex-none items-center justify-center rounded-[5px] border shadow-sm transition-colors',
-        state === 'live' && 'border-ink bg-ink text-white',
+        state === 'live' && liveClassName,
         state === 'pending-add' && 'border-accent bg-accent text-white',
         state === 'pending-drop' && 'border-accent-red bg-paper text-accent-red',
         state === 'off' && 'border-hairline bg-paper text-transparent hover:border-ink-faint',

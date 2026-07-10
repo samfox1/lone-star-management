@@ -23,9 +23,13 @@ credentials or network, and must never overwrite a manager's hand edits.
   partial-tolerant — a bad upstream row is reported in the result (`failed`,
   `errors`), never a half-written silent state — but an RLS/permission denial
   (Postgres `42501`) is fatal (preserves tenant isolation).
-- Per the user decision: an artist picks **one** track-catalog source (Spotify
-  *or* Apple), so there is no cross-source merge / ISRC dedup. Deezer/SoundCloud
-  are metadata/link-out only (their APIs can't back a playable player).
+- ~~Per the user decision: an artist picks **one** track-catalog source (Spotify
+  *or* Apple), so there is no cross-source merge / ISRC dedup.~~
+  **Superseded 2026-07-09:** the union model landed — a track carries per-platform
+  ids/links (`spotify_id`, `apple_id`/`apple_url`, `deezer_id`, `soundcloud_url`)
+  from several services at once, so there IS a merge (keyed by the track row, not
+  by ISRC). See `src/lib/music.ts` `trackPlatforms` and the Released/Unreleased
+  derivation (a candidate ADR-0006 if this needs its own record).
 
 ## Consequences
 

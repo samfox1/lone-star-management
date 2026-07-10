@@ -22,6 +22,7 @@ describe('parseStreamingLinks', () => {
       stream_url: 'https://open.spotify.com/track/AbC123?si=x',
       spotify_id: 'AbC123',
       apple_url: 'https://music.apple.com/us/album/song/1?i=2',
+      apple_id: '2',
       soundcloud_url: 'https://soundcloud.com/artist/song',
       provider_url: 'https://www.deezer.com/en/track/9876',
       deezer_id: '9876',

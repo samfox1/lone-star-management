@@ -80,8 +80,8 @@ function sorted(releases: Release[], sort: Sort): Release[] {
 /**
  * The ONE Music surface: every release and song, filtered by two segmented
  * controls — release state (All / Released / Unreleased) and site visibility
- * (All / On site / Off site) — with a shared toolbar (Refresh · + Song ·
- * + Release · sort) in the same place for every view. Refresh greys out on
+ * (All / On site / Off site) — with a shared toolbar (Refresh · Add Music ·
+ * sort) in the same place for every view. Refresh greys out on
  * Unreleased (platform pulls only ever produce Released music). Unreleased
  * items are never public, so the site filter treats them as off-site; loose
  * RELEASED songs are public, so they count as on-site. The password-gated

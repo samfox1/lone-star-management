@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
 import { addVideoAction, resolveVideoUrlAction } from '../actions'
+import { useLockBodyScroll } from '../use-lock-body-scroll'
 import { toast } from '../toast'
 
 type Step = 'choose' | 'manual' | 'streaming'
@@ -30,10 +31,14 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  useLockBodyScroll(open)
 
-  // writeRow runs mid-upload; a ref keeps it reading the LATEST title.
+  // writeRow runs mid-upload; a ref keeps it reading the LATEST title. close() is
+  // captured by the Escape effect (deps [open]); a busy ref lets it read the LIVE
+  // value so an Escape mid-upload can't sail past the guard. Both are synced in
+  // effects below (never assigned during render).
   const titleRef = useRef('')
-  titleRef.current = title
+  const busyRef = useRef(false)
 
   const upload = useStorageUpload({
     bucket: 'videos',
@@ -74,7 +79,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
     setError(null)
   }
   function close(force = false) {
-    if (!force && (pending || upload.busy)) return
+    if (!force && busyRef.current) return
     setOpen(false)
     reset()
   }
@@ -132,6 +137,14 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
   )
 
   const busy = pending || upload.busy
+  // Width matches the Music modal: narrow for the choose picker, medium for a form.
+  const cardWidth = step === 'choose' ? '!w-[440px]' : '!w-[520px]'
+  useEffect(() => {
+    titleRef.current = title
+  }, [title])
+  useEffect(() => {
+    busyRef.current = busy
+  }, [busy])
 
   return (
     <>
@@ -155,7 +168,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
-          <div className={cx(modalCardClass, 'font-space')}>
+          <div className={cx(modalCardClass, 'font-space', cardWidth)}>
             <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
               {step !== 'choose' && (
                 <button

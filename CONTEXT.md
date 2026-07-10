@@ -39,6 +39,24 @@ decisions behind them (esp. ADR-0002).
   published state into its output shape (`get_public_site`, `get_release`,
   `get_public_releases`, `audio_path_for_play`).
 
+## Music & assets
+
+- **Song** — the UI/conversation word for a `tracks` row. Code and DB identifiers keep
+  `track`; user-facing copy and these docs say **song**.
+- **Assets** — the umbrella for a manager's uploadable/importable media surfaces (Music,
+  Videos, Photos/Images, Media). They share the add-modal, Drive-import, and
+  storage-upload primitives under `src/app/artists/[id]/(dashboard)/`.
+- **Provenance** — the columns that record where a song/release came from (`source`,
+  `spotify_id` / `apple_id` / `deezer_id`, `apple_url` / `soundcloud_url` / `provider_url`,
+  `stream_url`, and the manual `released` flag). Provenance drives the Released/Unreleased
+  split — it isn't shown to fans directly.
+- **Released / Unreleased buckets** — the two halves of a catalog. **Released** = has
+  platform presence (any provenance id/link/source) **OR** the stored `released` flag;
+  **Unreleased** = everything else (uploaded to Lone Star, not on a DSP). Only Released
+  music is public. A song's release membership is **widen-only** (a song is Released if
+  its own provenance OR its release is Released). One source of truth: `src/lib/music.ts`,
+  mirrored by the SQL doors. See MUSIC_RESTRUCTURE.md.
+
 ## Analytics
 
 - **On-site event** — a fan interaction recorded from the PUBLIC site only (never the

@@ -1,15 +1,15 @@
 ---
 last_full_scan: 2026-07-08T00:00:00Z
 last_full_scan_commit: 9f6728b
-last_migration_seen: 20260708160000
-last_incremental_update: 2026-07-09T00:00:00Z
+last_migration_seen: 20260710160000
+last_incremental_update: 2026-07-10T00:00:00Z
 generated_by: /steaksauce
 ---
 
 # steaksauce — Live DB ↔ Codebase Map
 
 **Generated:** 2026-07-08 · **Last full scan:** commit `9f6728b` (FULL_REVIEW / re-baseline)
-**Migrations seen:** `20260623162707` … `20260708160000` (49 files in `supabase/migrations/`)
+**Migrations seen:** `20260623162707` … `20260710160000` (56 files in `supabase/migrations/`)
 **Live schema:** 17 tables · 2 views · 21 functions · 3 storage buckets · RLS on every base table
 
 > Structure only — this file documents the *shape* of the database, never row data.
@@ -42,11 +42,12 @@ generated_by: /steaksauce
 - [subscriber_counts_by_artist](#view-subscriber_counts_by_artist) — `book/page.tsx` (the Book)
 - [manager_subscribers](#view-manager_subscribers) — admin cross-manager tool (no caller yet)
 
-### Functions / RPCs (21)
+### Functions / RPCs (22)
 Public doors (SECURITY DEFINER, anon-reachable): `get_public_site`, `get_release`, `get_public_releases`, `audio_path_for_play`, `record_event`, `subscribe`, `submit_application`.
-Manager RPCs: `connect_shopify`, `disconnect_shopify`, `shopify_credentials`, `switch_catalog_source`.
+Manager RPCs: `connect_shopify`, `disconnect_shopify`, `shopify_credentials`. (`switch_catalog_source` was DROPPED — `20260708161000`.)
 Analytics: `analytics_summary`, `analytics_daily`, `analytics_by_entity`, `analytics_entity_daily`.
 Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `published_revisions`, `set_updated_at` (trigger fn), `rls_auto_enable` (event-trigger fn, fired by event trigger `ensure_rls`).
+Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of `lib/music.ts`): `music_release_is_released(jsonb)`, `music_track_on_platform(jsonb)` — added `20260709120000`, amended `20260710130000`/`140000` to include the stored `released` flag.
 
 ### Storage Buckets (3)
 - [media](#bucket-media) — public bucket; 500 MB cap + MIME allowlist; `media-uploader.tsx`
@@ -54,10 +55,10 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 - [videos](#bucket-videos) — public bucket; 500 MB cap + MIME allowlist; `video-add.tsx`, `storage-gc.ts`
 
 ### Inconsistencies flagged
-- **Re-baselined this run.** The prior file stopped at `20260706133000`; 14 later migrations, the `videos` bucket, 2 analytics RPCs, and the `visible` / `entity_*` / release / video columns are now folded in.
+- **Incremental update 2026-07-10** — folded in migrations `20260709120000` … `20260710160000` (Released-only doors, the stored `released` flag on tracks/releases, `soundcloud_url`, Drive `drive_folder_id`/`drive_file_id` + 3 partial-unique indexes, widen-only membership, audio door + visibility gating). No drift dialog needed — all additive/redefinition.
 - **`rls_auto_enable` / `ensure_rls`** — live-only (no migration). Exact def now captured (see Functions); a faithful migration can be added when desired.
-- **`tracks.visible` / `links.visible`** — added `20260708150000` but NOT yet gated in `get_public_site` or wired to UI. Prepared ahead of the Music restructure (same pattern as `tour_coords`).
-- **Dual tracklist membership** — `tracks.release_id` FK (authoritative) + `album_name` fallback still in `get_release()`.
+- **`tracks.visible` / `links.visible`** — added `20260708150000` but STILL dormant: the Music restructure chose provenance-derived Released/Unreleased buckets over per-song visibility, so these columns are unused/ungated. (Releases DO gate on `releases.visible`.) See TODO.md.
+- **Tracklist membership** is now `tracks.release_id` FK ONLY — the `album_name` string-match fallback in `get_release()` was REMOVED (`20260709120000`). `album_name` remains a display/legacy column.
 - **`analytics_summary` anon-executable** via the PUBLIC default (never revoked); it is SECURITY INVOKER so anon sees no rows under RLS. Consider an explicit `revoke ... from public`.
 - **`subscribe()` has no `rpc()` caller in this repo** — invoked from the external `skeen-website` (confirmed). `src/app/[slug]/actions.ts` calls it for the on-site popup.
 
@@ -149,10 +150,11 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 | ticketmaster_attraction_id | text        | YES  | —                 |       |
 | apple_artist_id            | text        | YES  | —                 |       |
 | youtube_channel_id         | text        | YES  | —                 |       |
+| drive_folder_id            | text        | YES  | —                 | link-shared Google Drive folder id for copy-import — added `20260710120000` |
 
 - **The tenant.** RLS: `artists_select` / `artists_update`: `is_admin() OR is_manager_of(id)`; insert/delete admin-only.
 - **Indexes:** PK; `artists_slug_key (slug)` UNIQUE.
-- **Referenced (src):** `_data.ts` (`requireArtist`), `roster-data.ts` (`ownedArtists`), `(dashboard)/actions.ts` (id saves, template, catalog — the `saveArtistField` helper updates one id column), `lib/site.ts`, `lib/content.ts`. The integration-id columns back the `INTEGRATIONS` registry (`isConnected`).
+- **Referenced (src):** `_data.ts` (`requireArtist`), `roster-data.ts` (`ownedArtists`), `(dashboard)/actions.ts` (id saves, template, catalog, `saveDriveFolderAction` — the `saveArtistField` helper updates one id column), `lib/site.ts`, `lib/content.ts`, `lib/drive.ts`. The integration-id columns back the `INTEGRATIONS` registry (`isConnected`).
 
 ### Table: integrations {#table-integrations}
 
@@ -196,10 +198,11 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 | storage_path | text        | NO   | —                 | path in the `media` bucket |
 | sort_order   | int         | NO   | 0                 |       |
 | created_at   | timestamptz | NO   | now()             |       |
+| drive_file_id | text       | YES  | —                 | Google Drive source id for a copy-import — added `20260710120000` |
 
 - **RLS:** `media_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
-- **Indexes:** PK; `media_artist_idx (artist_id, purpose, sort_order)`.
-- **Publishable** (`PUBLISHABLE.media`, bespoke uploader — ADR-0003). No `updated_at` (live table; delete unpublishes immediately). **Referenced (src):** `media-uploader.tsx`, `site/page.tsx`, `lib/site.ts`, `(dashboard)/actions.ts` (`deleteMediaAction`). Shares its name with the `media` storage bucket. `gallery_image` purpose is defined but unused (no UI).
+- **Indexes:** PK; `media_artist_idx (artist_id, purpose, sort_order)`; `media_drive_file_uniq (artist_id, drive_file_id) WHERE drive_file_id IS NOT NULL` (partial unique).
+- **Publishable** (`PUBLISHABLE.media`, bespoke uploader — ADR-0003). No `updated_at` (live table; delete unpublishes immediately). **Referenced (src):** `media-uploader.tsx`, `site/page.tsx`, `lib/site.ts`, `(dashboard)/actions.ts` (`deleteMediaAction`). Shares its name with the `media` storage bucket. `gallery_image` purpose now backs the **Photos page** gallery block (moved off the Site page).
 
 ### Table: merch {#table-merch}
 
@@ -248,10 +251,11 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 | release_type | text        | NO   | 'single'          | CHECK: album/single/ep/featured |
 | visible      | boolean     | NO   | true              | live on-site gate (20260706180000) |
 | spotify_id   | text        | YES  | —                 | UNIQUE(artist_id, spotify_id) WHERE not null |
+| released     | boolean     | NO   | false             | manual "is released" flag — added `20260710140000` (Released iff platform presence OR this; songs inherit widen-only) |
 
 - **RLS:** `releases_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
 - **Indexes:** PK; `releases_artist_id_slug_key (artist_id, slug)` UNIQUE; `releases_artist_idx (artist_id, sort_order)`; `releases_artist_spotify_idx (artist_id, spotify_id)` UNIQUE partial (`WHERE spotify_id IS NOT NULL`).
-- **Referenced (src):** `(dashboard)/actions.ts` (release + `links` jsonb + `release_type` editor), `lib/sync.ts` (Spotify import). Public smart-link via `get_release()` / `get_public_releases()`.
+- **Referenced (src):** `(dashboard)/actions.ts` (release + `links` jsonb + `release_type` editor), `lib/sync.ts` (Spotify import), `lib/music.ts` (`releaseBucket`). Public smart-link via `get_release()` / `get_public_releases()` (Released + `visible` only).
 
 ### Table: revisions {#table-revisions}
 
@@ -341,15 +345,18 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 | apple_id         | text        | YES  | —                 |       |
 | apple_url        | text        | YES  | —                 | Apple/iTunes store link — added `20260708160000` (can't rebuild from id) |
 | featured_artists | text[]      | NO   | '{}'              | Spotify collaborators (primary excluded) |
-| album_name       | text        | YES  | —                 | Spotify album/EP/single title (legacy tracklist fallback) |
+| album_name       | text        | YES  | —                 | Spotify album/EP/single title (legacy display; no longer a tracklist fallback) |
 | duration_ms      | int         | YES  | —                 | added `20260708160000` — cross-platform merge match key + display |
 | release_id       | uuid        | YES  | —                 | FK → releases(id) SET NULL (authoritative tracklist membership) |
 | visible          | boolean     | NO   | true              | ⚠ prepped `20260708150000`, NOT yet gated / wired |
+| released         | boolean     | NO   | false             | manual "is released" flag — added `20260710130000` (public iff platform presence OR this) |
+| soundcloud_url   | text        | YES  | —                 | SoundCloud link — added `20260710130000` (no id col to rebuild from) |
+| drive_file_id    | text        | YES  | —                 | Google Drive source id for a copy-import — added `20260710120000` |
 
 - **RLS:** `tracks_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
-- **Indexes:** PK; `tracks_release_idx (release_id)`.
-- **Referenced (src):** `track-audio-uploader.tsx` (audio_path), `(dashboard)/actions.ts` (`setTrackReleaseAction`), `lib/sync.ts`, `lib/tracks.ts`; editor via generic CRUD (`CRUD.track`). `release_id` (`20260706170000`) is the authoritative membership; `album_name` remains a fallback in `get_release()`. `visible` is prepped for the **Music restructure** (released/unreleased), not yet in `VISIBLE_ENTITIES` or the public door.
-- **Union / multi-platform merge (`20260708160000`, `lib/sync.ts syncTracks`):** a track is a UNION row — one song carries every platform's id/link, and "which platforms is it on" is derived from which of `spotify_id`/`apple_id`/`deezer_id` is set. A pull refreshes the row bearing that platform's id, or STAMPS the platform onto the same song imported from another platform (matched by `normalizeTitle` + `duration_ms` ±3s), or inserts new — never duplicating or switching sources. Links: Spotify → `stream_url`, Apple → `apple_url`, Deezer → `provider_url` (or rebuilt from id). `apple_url` is threaded to the public site (snapshot + `SiteTrack` + the `artist-site.tsx` link chain, 2026-07-09). The public doors expose RELEASED music only (`20260709120000`: `music_release_is_released` / `music_track_on_platform` mirror `lib/music.ts`; `get_release`'s album_name fallback removed). The old MusicKit-token Apple client is gone — catalog reads use the free iTunes Search API (no credentials).
+- **Indexes:** PK; `tracks_release_idx (release_id)`; `tracks_drive_file_uniq (artist_id, drive_file_id) WHERE drive_file_id IS NOT NULL` (partial unique — dedupes Drive imports).
+- **Referenced (src):** `track-audio-uploader.tsx` (audio_path), `(dashboard)/actions.ts` (`setTrackReleaseAction`), `lib/sync.ts`, `lib/tracks.ts`; editor via generic CRUD (`CRUD.track`). `release_id` (`20260706170000`) is the authoritative and ONLY membership (the `album_name` fallback in `get_release()` was removed `20260709120000`). `released` (`20260710130000`) is the manual public flag; `visible` stays dormant — the restructure used derived buckets, not per-song visibility.
+- **Union / multi-platform merge (`20260708160000`, `lib/sync.ts syncTracks`):** a track is a UNION row — one song carries every platform's id/link, and "which platforms is it on" is derived from which of `spotify_id`/`apple_id`/`deezer_id` is set. A pull refreshes the row bearing that platform's id, or STAMPS the platform onto the same song imported from another platform (matched by `normalizeTitle` + `duration_ms` ±3s), or inserts new — never duplicating or switching sources. Links: Spotify → `stream_url`, Apple → `apple_url`, Deezer → `provider_url` (or rebuilt from id). `apple_url` is threaded to the public site (snapshot + `SiteTrack` + the `artist-site.tsx` link chain, 2026-07-09). The public doors expose RELEASED music only (`20260709120000`: `music_release_is_released` / `music_track_on_platform` mirror `lib/music.ts`; `get_release`'s album_name fallback removed). **Amended 2026-07-09/10:** classification is now platform presence OR the stored `released` flag (`20260710130000`/`140000`); `audio_path_for_play` + the `get_public_site` tracks branch are gated Released **and** on the release's `visible` (`20260710150000`); release membership is **widen-only** (`20260710160000` — a linked song stays public even inside an Unreleased release). The old MusicKit-token Apple client is gone — catalog reads use the free iTunes Search API (no credentials).
 
 ### Table: videos {#table-videos}
 
@@ -370,9 +377,10 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 | youtube_views    | bigint      | YES  | —                 | cached global view count |
 | youtube_views_at | timestamptz | YES  | —                 | when the count was cached |
 | storage_path     | text        | YES  | —                 | path in the `videos` bucket (provider='uploaded') |
+| drive_file_id    | text        | YES  | —                 | Google Drive source id for a copy-import — added `20260710120000` |
 
 - **RLS:** `videos_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
-- **Indexes:** PK; `videos_artist_idx (artist_id, sort_order)`.
+- **Indexes:** PK; `videos_artist_idx (artist_id, sort_order)`; `videos_drive_file_uniq (artist_id, drive_file_id) WHERE drive_file_id IS NOT NULL` (partial unique).
 - **CHECK `videos_embed_or_storage`:** at least one of `embed_url` / `storage_path` is set. Uploaded videos carry `storage_path` + `provider='uploaded'`; embedded carry `embed_url`. Adds run through `embedInfo` / the upload flow (bespoke, not generic CRUD) + `reconcileVisibility`. **Referenced (src):** `video-add.tsx`, `(dashboard)/actions.ts` (rename/delete), `lib/storage-gc.ts` (orphan cleanup). `get_public_site` gates videos on `visible`. Migrations `20260625180000_videos.sql`, `20260708120000_video_upload.sql`.
 
 ---
@@ -413,10 +421,10 @@ Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `publ
 Grouped; all in `public`. `sd` = SECURITY DEFINER. All 8 anon doors below are executable by `anon`, `authenticated`, and `service_role`.
 
 **Public doors (sd, anon-reachable):**
-- `get_public_site(p_slug text) → jsonb` — full published site (gates videos/merch/tour_dates on live `visible`). ← `lib/site.ts`. ~11 create-or-replace across migrations; live def in `20260707200000_analytics_review_hardening.sql`.
-- `get_release(p_artist_slug, p_release_slug) → jsonb` — one release smart-link + tracklist (by `release_id`, `album_name` fallback). ← `[slug]/r/[release]/page.tsx`.
-- `get_public_releases(p_slug) → jsonb` — release list for the EPK. ← `[slug]/epk/page.tsx`.
-- `audio_path_for_play(p_slug, p_track_id) → text` — gated audio path → signed URL. ← `lib/audio.ts`.
+- `get_public_site(p_slug text) → jsonb` — full published site. Gates videos/merch/tour_dates on live `visible`; the **tracks** branch shows Released-only (widen-only) AND drops tracks of a hidden release. ← `lib/site.ts`. Live def in `20260710160000_track_bucket_widen_only.sql`.
+- `get_release(p_artist_slug, p_release_slug) → jsonb` — one Released release smart-link + tracklist (membership by `release_id` ONLY; album_name fallback removed). Unreleased → null. ← `[slug]/r/[release]/page.tsx`. Live def `20260709120000`.
+- `get_public_releases(p_slug) → jsonb` — Released + `visible` release list for the EPK. ← `[slug]/epk/page.tsx`. Live def `20260709120000`.
+- `audio_path_for_play(p_slug, p_track_id) → text` — published audio path → signed URL, but ONLY for a Released track whose release (if any) is `visible`; else null. ← `lib/audio.ts`. Live def `20260710160000`.
 - `record_event(p_slug, p_type, p_target, p_entity_id, p_entity_type) → void` (v) — analytics ingest; `type`/`entity_type` allowlisted. ← `components/site-analytics.tsx`. ⚠ no per-IP/slug rate limit (TODO).
 - `subscribe(p_slug, p_email) → void` (v) — subscriber ingest, dedup on `(artist_id, lower(email))`, 15/min/artist. ← `[slug]/actions.ts` + skeen-website.
 - `submit_application(p_name, p_email, p_artist_name?, p_link?, p_notes?) → void` (v) — public /apply. ← `apply/actions.ts`.

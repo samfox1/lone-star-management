@@ -50,6 +50,10 @@ const URL_FIELDS = new Set([
   'cover_url',
   'image_url',
   'hero_image_url',
+  // Union-model per-platform listen links (manager-entered on the Music cards).
+  'apple_url',
+  'soundcloud_url',
+  'provider_url',
 ])
 
 /** True if `field` holds a URL we must validate before persisting. */

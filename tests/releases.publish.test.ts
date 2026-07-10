@@ -36,11 +36,13 @@ afterEach(async () => {
   await svc.from('releases').delete().eq('artist_id', artistB)
 })
 
-/** Insert a release for artistA and return its id. */
+/** Insert a RELEASED release for artistA and return its id. Reconcile only scopes
+ *  to Released releases (Unreleased ones are dashboard-only and never in the
+ *  on-site selection), so the visibility fixtures are released by default. */
 async function seedRelease(over: Record<string, unknown> = {}): Promise<string> {
   const { data, error } = await svc
     .from('releases')
-    .insert({ artist_id: artistA, title: 'R', slug: 'r', ...over })
+    .insert({ artist_id: artistA, title: 'R', slug: 'r', released: true, ...over })
     .select('id')
     .single()
   if (error) throw new Error(error.message)
@@ -69,6 +71,17 @@ describe('reconcileReleaseVisibility', () => {
     await seedRelease({ slug: 'b', visible: false })
     const res = await reconcileReleaseVisibility(asA, artistA, [a])
     expect(res).toEqual({ shown: 0, hidden: 0 })
+  })
+
+  it('never touches an Unreleased release (dashboard-only; not in the on-site selection)', async () => {
+    // A Released release that IS on-site but not in the selection would be hidden;
+    // an Unreleased one (manual, no platform presence) must be left alone so it
+    // isn't written visible=false — a latent trap once promoted. (#11)
+    const unreleased = await seedRelease({ slug: 'unrel', visible: true, released: false })
+    const res = await reconcileReleaseVisibility(asA, artistA, []) // select nothing
+    expect(res).toEqual({ shown: 0, hidden: 0 })
+    const { data } = await svc.from('releases').select('visible').eq('id', unreleased).single()
+    expect(data!.visible).toBe(true) // untouched
   })
 
   it("CRITICAL: cannot flip another tenant's releases visible", async () => {

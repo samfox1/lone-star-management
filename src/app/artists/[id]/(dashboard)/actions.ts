@@ -925,6 +925,10 @@ export async function importDriveFileAction(
   kind: DriveKind,
   fileId: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  // The client-supplied fileId is interpolated into the Drive API URL before the
+  // parents check runs (drive.ts getFileMeta), so pin it to the Drive id charset
+  // — same guarantee parseDriveFolderId gives folder ids.
+  if (!/^[A-Za-z0-9_-]+$/.test(fileId)) return { ok: false, error: 'Invalid Drive file id.' }
   const folder = await driveFolderFor(artistId)
   if ('error' in folder) return { ok: false, error: folder.error }
   const supabase = await createClient()
@@ -949,6 +953,14 @@ export async function importDriveFileAction(
 export async function resolveStreamingSongAction(
   urls: StreamingUrls,
 ): Promise<{ ok: true; song: ResolvedSong } | { ok: false; error: string }> {
+  // Signed-in only, so it isn't an open fetch proxy (mirrors resolveVideoUrlAction
+  // / scrapeMerchUrlAction).
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
   try {
     return { ok: true, song: await resolveStreamingSong(urls) }
   } catch (e) {

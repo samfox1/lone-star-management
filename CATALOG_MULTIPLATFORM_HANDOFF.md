@@ -38,6 +38,11 @@ on "one source."
 **No `released` column** — I dropped it to honor your **decision #1** (Released/Unreleased is
 derived from provenance). We agree here.
 
+> **Amended 2026-07-09:** this was reversed. A stored `released` boolean now lives on
+> `tracks` and `releases` (migrations `20260710130000` / `20260710140000`) so a
+> hand-added song/album with no DSP link can still be public. Classification is now
+> **platform presence OR the flag**; see `src/lib/music.ts` and MUSIC_RESTRUCTURE.md.
+
 ## Where my work touches yours — please account for these
 
 1. **Union rows have multiple ids.** After merge, one row can hold `spotify_id` AND

@@ -23,8 +23,12 @@ Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
          def is on hand in steaksauce.md.
    - [x] Add `visible` columns to `tracks` + `links` (migration
          `20260708150000_tracks_links_visibility.sql`, pushed + verified). Additive,
-         non-breaking, default true; NOT yet gated in get_public_site — the UI +
-         publish-curation wiring lands with the Music restructure (step 4).
+         non-breaking, default true; NOT yet gated in get_public_site.
+         - [ ] **DORMANT — its own open TODO now.** The Music restructure chose
+               *derivation* (Released/Unreleased buckets, `src/lib/music.ts`) over
+               per-song visibility, so `tracks.visible` / `links.visible` are still
+               unused and ungated. Decide: wire them as a per-item on-site toggle,
+               or drop the columns. (Releases DO gate on `releases.visible`.)
 3. **Thin UI test layer** — SUBSTANTIALLY DONE 2026-07-08. Harness: React Testing
    Library + jsdom, opted in per-file via `// @vitest-environment jsdom` (the
    DB-backed suite stays on the `node` env); server actions mocked as plain async
@@ -86,8 +90,9 @@ Public-folder-link model: the manager pastes a link-shared folder URL in
 Integrations → Files; the dashboard browses it (names/sizes/thumbnails stream
 from Drive, zero storage cost) and **copy-imports** selected files server-side
 into our buckets so they behave exactly like uploads. Audio → Unreleased songs
-(gated `audio` bucket), videos → uploaded/off-site rows (`videos`), images → a
-new Gallery images block on the Site page (`media`, `gallery_image`). Dedupe via
+(gated `audio` bucket), videos → uploaded/off-site rows (`videos`), images → the
+Photos page's gallery block (`media`, `gallery_image`) — moved off the Site page.
+Dedupe via
 `drive_file_id` (partial unique, migration `20260710120000`, pushed). Caps:
 audio 30 MB / images 25 MB / video 100 MB (bigger videos → the direct uploader).
 - [ ] Sam: create the API key (see "New to-dos") — until then the Drive card
@@ -149,8 +154,9 @@ audio 30 MB / images 25 MB / video 100 MB (bigger videos → the direct uploader
 - [x] Dashboard upload UI (MediaPanel): managers upload/delete hero videos and a
       profile photo, direct-to-Storage (RLS scopes writes to their folder).
 - [x] profile_photo wired into the public About (falls back to hero_image_url).
-- [ ] (Later) gallery_image purpose is in the schema but unused; add a gallery
-      section + uploader when a template needs it.
+- [x] gallery_image now has a home: the **Photos page** (moved off the Site page)
+      holds the gallery block + uploader / Drive import. (Public gallery section is
+      still a later item — gallery images are dashboard-only today.)
 
 ## Gated audio (Phase 3) — deferred follow-ups (from the security review)
 

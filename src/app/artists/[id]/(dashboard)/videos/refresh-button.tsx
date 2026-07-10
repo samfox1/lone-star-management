@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { buttonClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
+import { useLockBodyScroll } from '../use-lock-body-scroll'
 
 /**
  * Videos-page "Refresh" (import): a toolbar icon that first asks to confirm, then
@@ -16,6 +17,7 @@ export function RefreshButton({ action }: { action: () => Promise<{ ok: boolean;
   const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  useLockBodyScroll(open)
 
   useEffect(() => {
     if (!open) return
