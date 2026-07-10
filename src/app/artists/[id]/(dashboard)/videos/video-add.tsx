@@ -178,8 +178,8 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
 
             {step === 'choose' && (
               <div className="mt-4 grid grid-cols-2 gap-2.5">
-                {tile('manual', 'edit', 'Add manually')}
-                {tile('streaming', 'bolt', 'From streaming')}
+                {tile('manual', 'edit', 'Add Manually')}
+                {tile('streaming', 'bolt', 'Upload from Streaming Service')}
               </div>
             )}
 

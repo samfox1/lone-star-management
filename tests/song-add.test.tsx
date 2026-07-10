@@ -63,15 +63,15 @@ function openModal() {
 }
 
 describe('SongAddButton', () => {
-  it('offers Add manually and From streaming', () => {
+  it('offers Add Manually and Upload from Streaming Service', () => {
     const dialog = openModal()
-    expect(within(dialog).getByText('Add manually')).toBeInTheDocument()
-    expect(within(dialog).getByText('From streaming')).toBeInTheDocument()
+    expect(within(dialog).getByText('Add Manually')).toBeInTheDocument()
+    expect(within(dialog).getByText('Upload from Streaming Service')).toBeInTheDocument()
   })
 
   it('streaming: URLs only — metadata resolves from the service, released automatically', async () => {
     const dialog = openModal()
-    fireEvent.click(within(dialog).getByText('From streaming'))
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
 
     // Nothing to type but links: no title/contributors inputs on this path.
     expect(within(dialog).queryByPlaceholderText('Song title')).not.toBeInTheDocument()
@@ -99,7 +99,7 @@ describe('SongAddButton', () => {
 
   it('manual: released/unreleased is REQUIRED — no default, submit blocks until chosen', async () => {
     const dialog = openModal()
-    fireEvent.click(within(dialog).getByText('Add manually'))
+    fireEvent.click(within(dialog).getByText('Add Manually'))
     // The requirement is explained and marked.
     expect(within(dialog).getByText(/Has this song been released\?/)).toBeInTheDocument()
     expect(within(dialog).getByText('*')).toBeInTheDocument()
