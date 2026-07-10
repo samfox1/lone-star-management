@@ -85,7 +85,7 @@ export function PublishBar({
           }
           className={
             enabled
-              ? 'inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-black'
+              ? 'inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover'
               : 'inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-hairline bg-surface px-5 py-3 font-space text-sm font-semibold text-ink-faint shadow-sm'
           }
         >
