@@ -25,7 +25,7 @@ function siteData(): SiteData {
       slug: 'demo',
       name: 'Demo Artist',
       bio: 'Line one',
-      hero_image_url: null,
+      hero_image_url: 'https://img/hero.jpg',
       template: 'cinematic',
       spotify_artist_id: null,
     },
@@ -58,6 +58,10 @@ describe('cinematic template — edit-mode markers', () => {
     expect(container.querySelector('[data-lse-slot="videos"]')).not.toBeNull()
     expect(container.querySelector('[data-lse-field="videos_heading"]')).not.toBeNull()
     expect(container.querySelector(`[data-lse-item="video:${VIDEO_ID}"]`)).not.toBeNull()
+
+    // About profile photo (image field) + Footer booking heading (text field).
+    expect(container.querySelector('[data-lse-field="profile_photo"]')).not.toBeNull()
+    expect(container.querySelector('[data-lse-field="bookings_heading"]')).not.toBeNull()
   })
 
   it('emits NO markers when not editable (the public site)', () => {

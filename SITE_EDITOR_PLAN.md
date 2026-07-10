@@ -195,15 +195,18 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   visible=false Released track is off the site; a visible=true Unreleased track is on.
   **Size:** M–L. **Depends on:** nothing (can start immediately, even before Phase 0).
 
-### Phase 1 — Instrument one template + edit-mode frame
+### Phase 1 — Instrument one template + edit-mode frame — CODE DONE 2026-07-10 (browser-test pending)
 
-- Emit `data-lse-*` markers from the first template (recommend the one a real
-  artist runs), driven by the manifest, **only in edit mode**.
-- Add the edit-mode render route (draft `SiteData` + markers + bridge script);
-  reuse `getWorkingSite`. Keep `/preview` as-is or fold it in.
-- **Verify:** load the frame, click a tagged region, see the correct
-  `{fieldKey|itemId}` postMessage in the console. No editor UI yet.
-- **Size:** M. **Depends on:** Phase 0.
+- ✅ `markers.ts` region helpers + `bridge-client.ts` (frame side: resolve click →
+  nearest marked region, `mountFrameBridge` → `select` postMessage, origin-checked,
+  preventDefault on marked clicks).
+- ✅ **cinematic** instrumented (Shows/Videos/About emit slot + field + item markers
+  via an `editable` flag threaded through `ArtistTemplate`). Classic follows later.
+- ✅ `/artists/[id]/edit-frame` — draft `SiteData` + `editable` + the bridge;
+  RLS-scoped like `/preview`, never on the public site.
+- ✅ Tests test-first (region helpers, click→target, marker emission); 527 green.
+- ⏳ **Browser verify:** load the frame, click a heading/song, confirm the `select`
+  message. Do before push. **Depends on:** Phase 0.
 
 ### Phase 2 — Editor shell + inspector (text + image fields) → first usable slice
 

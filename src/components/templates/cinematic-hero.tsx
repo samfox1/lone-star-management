@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { fieldRegion } from '@/lib/site-editor/markers'
 
 export type HeroClip = { url: string }
 
@@ -23,12 +24,14 @@ export function CinematicHero({
   poster,
   tagline,
   cta,
+  editable = false,
 }: {
   name: string
   clips: HeroClip[]
   poster: string | null
   tagline: string
   cta: string
+  editable?: boolean
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [index, setIndex] = useState(0)
@@ -71,6 +74,7 @@ export function CinematicHero({
         <video
           ref={videoRef}
           key={clip.url}
+          {...fieldRegion(editable, 'hero_video')}
           className="absolute inset-0 h-full w-full object-cover"
           autoPlay
           muted={muted}
@@ -83,9 +87,14 @@ export function CinematicHero({
         </video>
       ) : poster ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt={name} className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={poster}
+          alt={name}
+          {...fieldRegion(editable, 'hero_image')}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-800 to-black" />
+        <div {...fieldRegion(editable, 'hero_image')} className="absolute inset-0 bg-gradient-to-b from-zinc-800 to-black" />
       )}
 
       <div className="fx-flash" aria-hidden />
@@ -94,15 +103,17 @@ export function CinematicHero({
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
         <h1
           data-text={name}
+          {...fieldRegion(editable, 'artist_name')}
           className="fx-glitch font-display text-7xl font-black uppercase tracking-tight sm:text-8xl md:text-9xl"
         >
           {name}
         </h1>
-        <p className="mt-4 max-w-md text-sm uppercase tracking-[0.3em] text-muted">
+        <p {...fieldRegion(editable, 'hero_tagline')} className="mt-4 max-w-md text-sm uppercase tracking-[0.3em] text-muted">
           {tagline}
         </p>
         <a
           href="#shows"
+          {...fieldRegion(editable, 'hero_cta')}
           className="mt-10 border border-white/30 px-8 py-3 text-xs font-semibold uppercase tracking-widest transition hover:border-flash-1 hover:text-flash-1"
         >
           {cta}

@@ -30,6 +30,7 @@ const TABS: Tab[] = [
     match: ['music', 'tracks', 'releases', 'videos', 'images'],
     dirtySegs: ['music', 'videos'],
   },
+  { label: 'Edit site', seg: 'editor', icon: 'edit', match: ['editor'], dirtySegs: [] },
   { label: 'Tour', seg: 'tour', icon: 'tour', match: ['tour'], dirtySegs: ['tour'] },
   { label: 'Merch', seg: 'merch', icon: 'merch', match: ['merch'], dirtySegs: ['merch'] },
   {

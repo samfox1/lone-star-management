@@ -162,7 +162,10 @@ function About({
           </div>
         )}
         {img && (
-          <div className="aspect-[3/4] w-full overflow-hidden border border-border bg-black">
+          <div
+            {...fieldRegion(editable, 'profile_photo')}
+            className="aspect-[3/4] w-full overflow-hidden border border-border bg-black"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={img} alt={name} className="h-full w-full object-cover" />
           </div>
@@ -179,6 +182,7 @@ function Footer({
   heading,
   inquiry,
   email,
+  editable = false,
 }: {
   name: string
   slug: string
@@ -186,6 +190,7 @@ function Footer({
   heading: string
   inquiry: string
   email?: string
+  editable?: boolean
 }) {
   const mailtoLink = links.find((l) => l.url.toLowerCase().startsWith('mailto:'))
   const socials = links.filter((l) => l !== mailtoLink)
@@ -194,12 +199,17 @@ function Footer({
   const bookingLabel = (email ?? mailtoLink?.url)?.replace(/^mailto:/i, '')
   return (
     <footer id="contact" className="mt-auto border-t border-border px-6 py-16 text-center">
-      <h2 className="font-display text-3xl font-black uppercase tracking-tight">{heading}</h2>
+      <h2 {...fieldRegion(editable, 'bookings_heading')} className="font-display text-3xl font-black uppercase tracking-tight">
+        {heading}
+      </h2>
       {bookingHref && (
         <>
-          <p className="mt-4 text-muted">{inquiry}</p>
+          <p {...fieldRegion(editable, 'booking_inquiry_copy')} className="mt-4 text-muted">
+            {inquiry}
+          </p>
           <a
             href={bookingHref}
+            {...fieldRegion(editable, 'booking_email')}
             {...trackAttrs('link_click', { label: 'booking' })}
             className="mt-6 inline-block font-display text-lg font-bold transition hover:text-flash-1"
           >
@@ -307,12 +317,17 @@ export function CinematicTemplate({ data, editable = false }: { data: SiteData; 
     <div className="theme-cinematic flex min-h-screen flex-col">
       <Nav name={artist.name} sections={sections} />
       <main className="flex flex-1 flex-col">
+        {/* TODO(site-editor phase 2 write path): the hero poster is `profilePhoto`
+            (profile_photo ?? hero_image_url) but the hero image is marked
+            `hero_image` — so editing hero_image won't move the hero when a
+            profile_photo exists. Resolve the hero-media field targeting then. */}
         <CinematicHero
           name={artist.name}
           clips={clips}
           poster={profilePhoto}
           tagline={text('hero_tagline')}
           cta={text('hero_cta')}
+          editable={editable}
         />
         <Shows upcoming={upcoming} past={past} heading={text('shows_heading')} editable={editable} />
         <CinematicWork tabs={tabs} heading={text('work_heading')} />
@@ -326,6 +341,7 @@ export function CinematicTemplate({ data, editable = false }: { data: SiteData; 
         heading={text('bookings_heading')}
         inquiry={text('booking_inquiry_copy')}
         email={fieldHref(data.site_content, artist.template, 'booking_email')}
+        editable={editable}
       />
     </div>
   )

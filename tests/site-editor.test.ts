@@ -10,6 +10,7 @@ import { TEMPLATE_FIELDS } from '@/lib/site-content-schema'
 import {
   MANIFESTS,
   fieldByKey,
+  labelForTarget,
   manifestFor,
   slotByKey,
   type LibraryAsset,
@@ -94,6 +95,14 @@ describe('manifest — coverage & shape', () => {
   it('classic covers the core library sections', () => {
     const slotKeys = MANIFESTS.classic.slots.map((s) => s.key)
     expect(slotKeys).toEqual(expect.arrayContaining(['tracks', 'videos', 'tour_dates', 'merch', 'links']))
+  })
+
+  it('labels a selected target for the inspector', () => {
+    const m = MANIFESTS.cinematic
+    expect(labelForTarget(m, { kind: 'field', key: 'shows_heading' })).toBe('Shows heading')
+    expect(labelForTarget(m, { kind: 'slot', key: 'shows' })).toBe('Shows')
+    expect(labelForTarget(m, { kind: 'item', assetType: 'tour_date', id: 'x' })).toBe('Shows item')
+    expect(labelForTarget(m, { kind: 'field', key: 'unknown_key' })).toBe('unknown_key') // graceful fallback
   })
 
   it('carries the profile fields (name / bio / hero image) on every template', () => {

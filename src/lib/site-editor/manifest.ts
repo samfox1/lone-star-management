@@ -15,6 +15,7 @@
  * actions and tests can import it.
  */
 import { TEMPLATE_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
+import type { SelectTarget } from '@/lib/site-editor/bridge'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -123,4 +124,13 @@ export function fieldByKey(manifest: TemplateManifest, key: string): ManifestFie
 /** Look up one slot by key within a manifest. */
 export function slotByKey(manifest: TemplateManifest, key: string): ManifestSlot | undefined {
   return manifest.slots.find((s) => s.key === key)
+}
+
+/** A human label for a selected region, for the editor's inspector header. Falls
+ *  back to the raw key/type when the manifest doesn't declare it. */
+export function labelForTarget(manifest: TemplateManifest, target: SelectTarget): string {
+  if (target.kind === 'field') return fieldByKey(manifest, target.key)?.label ?? target.key
+  if (target.kind === 'slot') return slotByKey(manifest, target.key)?.label ?? target.key
+  const slot = manifest.slots.find((s) => s.accepts === target.assetType)
+  return slot ? `${slot.label} item` : `${target.assetType} item`
 }

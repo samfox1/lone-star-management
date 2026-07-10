@@ -23,6 +23,14 @@ export default async function EditFramePage({ params }: { params: Promise<{ id: 
 
   return (
     <>
+      {/* Edit-mode affordance: outline the editable regions on hover so the frame
+          is visibly interactive before the Phase 2 editor draws its own overlay.
+          Only on this route — the public site never sees it. */}
+      <style>{`
+        [data-lse-field],[data-lse-slot],[data-lse-item]{cursor:pointer}
+        [data-lse-field]:hover,[data-lse-item]:hover{outline:2px solid #2563eb;outline-offset:2px;border-radius:2px}
+        [data-lse-slot]:hover{outline:2px dashed rgba(37,99,235,.5);outline-offset:6px}
+      `}</style>
       <ArtistTemplate data={site} editable />
       <EditFrameBridge />
     </>
