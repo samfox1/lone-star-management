@@ -26,12 +26,15 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
  */
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
   return (
-    <div className="relative hidden w-16 flex-none md:block">
+    <div className="relative hidden w-12 flex-none md:block">
+      {/* bg-paper on the whole column: when a hover-expanded label widens the
+          panel, the solid background rides along and covers the content it
+          slides over (instead of the label floating on top of it). */}
       <nav
         aria-label="Asset types"
-        className="pointer-events-none fixed top-[71px] z-10 flex h-[calc(100vh-71px)] min-w-16 flex-col items-start border-r border-hairline"
+        className="pointer-events-none fixed top-[71px] z-10 flex h-[calc(100vh-71px)] min-w-12 flex-col items-center border-r border-hairline bg-paper"
       >
-        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-0.5 pl-1">
+        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col items-center gap-0.5">
           {ITEMS.map((it) => (
             <Link
               key={it.key}
