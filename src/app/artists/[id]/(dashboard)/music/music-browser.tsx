@@ -15,7 +15,6 @@ import { publishReleasesAction } from '../actions'
 import { ReleaseCard, type Release } from '../releases/release-card'
 import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 import { RefreshButton } from './refresh-button'
-import { ReleaseAddButton } from './release-add'
 import { SongAddButton } from './song-add'
 
 /** Group key for unreleased songs that aren't on any release. */
@@ -234,8 +233,8 @@ export function MusicBrowser({
           <>
             {importButton}
             <RefreshButton action={refreshAction} disabled={bucket === 'unreleased'} />
-            <SongAddButton artistId={artistId} />
-            <ReleaseAddButton artistId={artistId} />
+            {/* ONE + for the whole page; the modal's released toggle follows the lens. */}
+            <SongAddButton artistId={artistId} defaultReleased={bucket === 'unreleased' ? 'unreleased' : 'released'} />
           </>
         }
       />

@@ -16,21 +16,21 @@ type Tab = {
   dirtySegs: string[]
 }
 
-// Consolidated artist nav: 6 tabs. Music folds Tracks + Releases; Manager tools
-// folds Site, Links, Press kit, Subscribers, Integrations, Settings and the
-// publish/edit actions. A filled dot marks a tab with unpublished edits in any
-// segment it owns (see dirtyBySeg in sections.ts).
+// Consolidated artist nav: 5 tabs. Assets folds Music (tracks + releases),
+// Photos, and Videos behind one folder — its pages carry a left rail for the
+// three kinds. Manager tools folds Site, Links, Press kit, Subscribers,
+// Integrations, Settings and the publish/edit actions. A filled dot marks a
+// tab with unpublished edits in any segment it owns (see dirtyBySeg).
 const TABS: Tab[] = [
   { label: 'Analytics', seg: '', icon: 'analytics', match: [''], dirtySegs: [] },
   {
-    label: 'Music',
+    label: 'Assets',
     seg: 'music',
-    icon: 'tracks',
-    match: ['music', 'tracks', 'releases'],
-    dirtySegs: ['music'],
+    icon: 'folder',
+    match: ['music', 'tracks', 'releases', 'videos', 'images'],
+    dirtySegs: ['music', 'videos'],
   },
   { label: 'Tour', seg: 'tour', icon: 'tour', match: ['tour'], dirtySegs: ['tour'] },
-  { label: 'Videos', seg: 'videos', icon: 'videos', match: ['videos'], dirtySegs: ['videos'] },
   { label: 'Merch', seg: 'merch', icon: 'merch', match: ['merch'], dirtySegs: ['merch'] },
   {
     label: 'Manager tools',

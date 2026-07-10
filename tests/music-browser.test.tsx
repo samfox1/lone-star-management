@@ -104,12 +104,12 @@ describe('MusicBrowser lenses', () => {
 })
 
 describe('MusicBrowser toolbar', () => {
-  it('has the shared controls: Import slot, Refresh, + Song, + Release, sort', () => {
+  it('has the shared controls: Import slot, Refresh, ONE + button, sort', () => {
     setup({ importButton: <button type="button">DriveImport</button> })
     expect(screen.getByText('DriveImport')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add song' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add release' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add release' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Newest' })).toBeInTheDocument()
   })
 
@@ -117,7 +117,6 @@ describe('MusicBrowser toolbar', () => {
     setup()
     fireEvent.click(bucketBtn('Unreleased'))
     expect(screen.getByRole('button', { name: 'Add song' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add release' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Newest' })).toBeInTheDocument()
   })
 

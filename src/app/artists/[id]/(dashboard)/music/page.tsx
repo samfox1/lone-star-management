@@ -5,6 +5,7 @@ import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction, refreshSpotifyAction } from '../actions'
+import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
 import { type Track, type ReleaseOption } from '../tracks/track-card'
@@ -58,6 +59,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       apple_id: (row.apple_id as string | null) ?? null,
       deezer_id: (row.deezer_id as string | null) ?? null,
       apple_url: (row.apple_url as string | null) ?? null,
+      soundcloud_url: (row.soundcloud_url as string | null) ?? null,
       created_at: (row.created_at as string | null) ?? '',
     }
     const bucket = trackBucket(
@@ -71,6 +73,8 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
         provider_url: (row.provider_url as string | null) ?? null,
         stream_url: t.stream_url,
         apple_url: t.apple_url,
+        soundcloud_url: t.soundcloud_url ?? null,
+        released: (row.released as boolean | null) ?? false,
       },
       (rid) => relBucket.get(rid),
     )
@@ -139,6 +143,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   }))
 
   return (
+    <AssetsShell artistId={id} active="music">
     <MusicBrowser
       releases={releases}
       unreleasedReleases={unreleasedReleases}
@@ -161,5 +166,6 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
         ) : undefined
       }
     />
+    </AssetsShell>
   )
 }

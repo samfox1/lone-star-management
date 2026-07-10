@@ -37,8 +37,18 @@ export type IconName =
   | 'more'
   | 'share'
   | 'trash'
+  | 'folder'
+  | 'photo'
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
+  photo: (
+    <>
+      <rect x="3.5" y="5" width="17" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="M4.5 17.5l4.5-4.5 3 3 3.5-3.5 4 4" />
+    </>
+  ),
   roster: (
     <>
       <circle cx="9" cy="8" r="3.2" />

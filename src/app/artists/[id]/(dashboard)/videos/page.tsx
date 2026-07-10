@@ -3,6 +3,7 @@ import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction, refreshYouTubeAction } from '../actions'
+import { AssetsShell } from '../assets-rail'
 import { VideosBrowser } from './videos-browser'
 import { VideoAddButton } from './video-add'
 import { RefreshButton } from './refresh-button'
@@ -31,6 +32,7 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
   ])
 
   return (
+    <AssetsShell artistId={id} active="videos">
     <VideosBrowser
       artistId={id}
       videos={rows.map((row) => {
@@ -65,5 +67,6 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
         </>
       }
     />
+    </AssetsShell>
   )
 }

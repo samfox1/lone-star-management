@@ -8,6 +8,7 @@ import { CardGrid } from '../card-grid'
 import { PublishBar } from '../publish-bar'
 import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
+import { Segmented } from '../segmented'
 import { OriginSection, groupByOrigin } from '../origin'
 import { useOnSiteSelection } from '../use-on-site-selection'
 import { publishEntityAction } from '../actions'
@@ -72,16 +73,22 @@ export function VideosBrowser({
     <div className="space-y-6 pb-24">
       <FilterBar
         leading={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <KLabel>
               {inKind.length} {inKind.length === 1 ? KIND_NOUN[kind].one : KIND_NOUN[kind].many}
             </KLabel>
+            <Segmented
+              label="Videos or Shorts"
+              options={(['videos', 'shorts'] as Kind[]).map((k) => ({ key: k, label: KIND_LABEL[k] }))}
+              value={kind}
+              onChange={setKind}
+            />
             <OnSiteFilter value={site} onChange={setSite} />
           </div>
         }
-        chips={(['videos', 'shorts'] as Kind[]).map((k) => ({ key: k, label: KIND_LABEL[k] }))}
-        active={kind}
-        onChip={(k) => setKind(k as Kind)}
+        chips={[]}
+        active=""
+        onChip={() => {}}
         sortOptions={[
           { key: 'added', label: 'Added' },
           { key: 'az', label: 'A–Z' },
