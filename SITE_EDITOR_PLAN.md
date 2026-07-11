@@ -208,22 +208,29 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
 - ⏳ **Browser verify:** load the frame, click a heading/song, confirm the `select`
   message. Do before push. **Depends on:** Phase 0.
 
-### Phase 2 — Editor shell + inspector — SHELL + TEXT DONE 2026-07-10; image/publish pending
+### Phase 2 — Editor shell + inspector — CHROME + PANEL STRUCTURE DONE 2026-07-11; data-wiring/publish pending
 
-- ✅ Editor shell at `/artists/[id]/editor` (centered "Edit site" nav tab): left
-  inspector + the site frame below the nav + device toggle. Click a region → the
-  bridge reports it → the inspector names it (`labelForTarget`).
-- ✅ **Text editing write path** (test-first): click a text region → input/textarea
-  seeded by `fieldCurrentValue` → optimistic `apply-field` into the frame +
-  **debounced save** (`saveEditorField` / `saveEditorFieldAction`, RLS-scoped,
-  cross-tenant-blocked). Debounce flushes on field-switch so a fast switch can't
-  drop an edit.
-- ⏳ **Image fields** (hero / profile photo) — inspector shows "coming next"; needs
-  the media pick/upload control + the hero-media mapping TODO (ADR-adjacent, see the
-  TODO in cinematic.tsx).
-- ⏳ **Publish** from the editor — none yet; edits are draft-only (the existing
-  Manager tools → Site → Publish still works). The review-and-approve window is Phase 4.
-- **Depends on:** Phase 1. **Ships v1 slice A** once image + a publish affordance land.
+- ✅ Editor shell at `/artists/[id]/editor` (centered "Edit site" nav tab): the
+  approved chrome — left inspector + the site frame below the nav, with the device
+  select / save status / Publish floating in the gap above the centered window (no
+  toolbar bar). Design locked via `/design-variations-html`.
+- ✅ **Inspector panel structure** (`editor-inspector.tsx`, test-first, jsdom): two
+  states — BROWSE (component-type list: Images/Text/Links/Videos/Music/Merch, real
+  `Icon`s) and EDITING (the browse list collapses to a bottom switcher strip; tools
+  above). The photo-collection tools render the accordion (Photos grid w/ drag-grip +
+  remove + Add, Sizing = collection slider + per-image segmented, Layout = display +
+  columns stepper). Design synthesized from the panel `/design-variations` round
+  (V4 accordion + V3 grid/columns + V2 slider + V1 no-line rows).
+- ⏳ **Wire the tools to real data** — the panel currently runs against placeholder
+  collection data; next: real photo collections + drag-reorder / add / remove /
+  sizing persistence, and reconnect text editing through the panel. The earlier
+  text write path (`saveEditorField` / `saveEditorFieldAction`, RLS-scoped,
+  cross-tenant-blocked) stays in `lib/site-editor/save.ts` + `actions.ts` for reuse.
+- ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
+  hero-media mapping TODO (see the TODO in cinematic.tsx).
+- ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the
+  existing Manager tools → Site → Publish still works). Review-and-approve = Phase 4.
+- **Depends on:** Phase 1. **Ships v1 slice A** once the tools + a publish affordance land.
 
 ### Phase 3 — List slots: add / remove / reorder on-site items
 

@@ -39,6 +39,9 @@ export type IconName =
   | 'trash'
   | 'folder'
   | 'photo'
+  | 'text'
+  | 'grip'
+  | 'minus'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
@@ -188,6 +191,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   trash: <path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13" />,
+  text: <path d="M5 6h14M5 10h14M5 14h9M5 18h6" />,
+  minus: <path d="M5 12h14" />,
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none" />
+    </>
+  ),
 }
 
 export function Icon({
