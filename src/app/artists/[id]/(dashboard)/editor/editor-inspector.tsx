@@ -1,23 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { cx } from '@/lib/cx'
+import { mediaUrl } from '@/lib/site'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { deleteMediaAction } from '../actions'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
  * Two states: BROWSE (a breathable list of the site's component types) and EDITING
  * (the tools for the selected component, with the browse list collapsed to an icon
- * strip at the bottom). This lands the panel's structure + navigation; the tools
- * render against placeholder collection data and are wired to real photo-collection
- * data + saves in the next step.
+ * strip at the bottom).
+ *
+ * Wiring status: the Images tools read the artist's real `gallery_image` media and
+ * remove is wired to `deleteMediaAction`. Reorder + sizing (no schema yet) and the
+ * other component types still render against placeholder affordances — next step.
  */
+
+export type GalleryPhoto = { id: string; storage_path: string }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
 
 const COMPONENTS: Component[] = [
-  { kind: 'images', icon: 'photo', label: 'Images', caption: '3 collections · 24 photos' },
+  { kind: 'images', icon: 'photo', label: 'Images', caption: 'Photo gallery' },
   { kind: 'text', icon: 'text', label: 'Text', caption: '8 text blocks' },
   { kind: 'links', icon: 'links', label: 'Links', caption: '5 links' },
   { kind: 'videos', icon: 'videos', label: 'Videos', caption: '6 videos' },
@@ -25,34 +32,46 @@ const COMPONENTS: Component[] = [
   { kind: 'merch', icon: 'merch', label: 'Merch', caption: '4 products' },
 ]
 
-// Placeholder collection — real data lands with the wiring step.
-const PHOTOS = [
-  { id: 'p1', name: 'backstage-03.jpg', bg: 'linear-gradient(135deg,#3a3a3f,#0f0f12)' },
-  { id: 'p2', name: 'soundcheck.jpg', bg: 'linear-gradient(135deg,#5b4636,#171008)' },
-  { id: 'p3', name: 'crowd-01.jpg', bg: 'linear-gradient(135deg,#2f3d4a,#0c1116)' },
-  { id: 'p4', name: 'neon-gate.jpg', bg: 'linear-gradient(135deg,#4a2f3d,#160a10)' },
-  { id: 'p5', name: 'tour-van.jpg', bg: 'linear-gradient(135deg,#33413a,#0a120d)' },
-  { id: 'p6', name: 'encore.jpg', bg: 'linear-gradient(135deg,#45414d,#121016)' },
-]
-
 const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
 
-export function EditorInspector() {
+function photoCount(n: number) {
+  return `${n} ${n === 1 ? 'photo' : 'photos'}`
+}
+
+export function EditorInspector({ artistId, photos: initial }: { artistId: string; photos: GalleryPhoto[] }) {
   const [active, setActive] = useState<Component | null>(null)
+  const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
+  const [, startTransition] = useTransition()
+
+  function removePhoto(p: GalleryPhoto) {
+    const prev = photos
+    setPhotos((list) => list.filter((x) => x.id !== p.id)) // optimistic
+    startTransition(async () => {
+      const res = await deleteMediaAction(p.id, p.storage_path, artistId)
+      if (res?.error) setPhotos(prev) // revert on failure
+    })
+  }
 
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
-        <EditingView component={active} onBack={() => setActive(null)} onSwitch={setActive} />
+        <EditingView
+          component={active}
+          photos={photos}
+          artistId={artistId}
+          onRemove={removePhoto}
+          onBack={() => setActive(null)}
+          onSwitch={setActive}
+        />
       ) : (
-        <BrowseView onOpen={setActive} />
+        <BrowseView imageCount={photos.length} onOpen={setActive} />
       )}
     </aside>
   )
 }
 
 /* ── Browse: the component-type list ─────────────────────────────────────────── */
-function BrowseView({ onOpen }: { onOpen: (c: Component) => void }) {
+function BrowseView({ imageCount, onOpen }: { imageCount: number; onOpen: (c: Component) => void }) {
   return (
     <>
       <div className="px-5 pb-3.5 pt-5">
@@ -72,7 +91,9 @@ function BrowseView({ onOpen }: { onOpen: (c: Component) => void }) {
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium">{c.label}</span>
-              <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">{c.caption}</span>
+              <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
+                {c.kind === 'images' ? photoCount(imageCount) : c.caption}
+              </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
           </button>
@@ -85,13 +106,20 @@ function BrowseView({ onOpen }: { onOpen: (c: Component) => void }) {
 /* ── Editing: tools for the selected component ───────────────────────────────── */
 function EditingView({
   component,
+  photos,
+  artistId,
+  onRemove,
   onBack,
   onSwitch,
 }: {
   component: Component
+  photos: GalleryPhoto[]
+  artistId: string
+  onRemove: (p: GalleryPhoto) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
+  const isImages = component.kind === 'images'
   return (
     <>
       <button
@@ -108,18 +136,14 @@ function EditingView({
           <Icon name={component.icon} size={20} />
         </span>
         <span className="flex flex-col gap-0.5">
-          <span className="text-base font-semibold">
-            {component.kind === 'images' ? 'Live Shots' : component.label}
-          </span>
-          <span className={EYEBROW}>
-            {component.kind === 'images' ? '12 photos · Grid' : component.caption}
-          </span>
+          <span className="text-base font-semibold">{isImages ? 'Gallery' : component.label}</span>
+          <span className={EYEBROW}>{isImages ? photoCount(photos.length) : component.caption}</span>
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {component.kind === 'images' ? (
-          <PhotoTools />
+        {isImages ? (
+          <PhotoTools photos={photos} artistId={artistId} onRemove={onRemove} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -152,7 +176,15 @@ function EditingView({
 }
 
 /* ── Photo-collection tools (accordion) ──────────────────────────────────────── */
-function PhotoTools() {
+function PhotoTools({
+  photos,
+  artistId,
+  onRemove,
+}: {
+  photos: GalleryPhoto[]
+  artistId: string
+  onRemove: (p: GalleryPhoto) => void
+}) {
   const [open, setOpen] = useState({ photos: true, sizing: true, layout: true })
   const [perImage, setPerImage] = useState<'S' | 'M' | 'L'>('M')
   const [display, setDisplay] = useState<'Grid' | 'Rows' | 'Masonry'>('Grid')
@@ -162,30 +194,33 @@ function PhotoTools() {
 
   return (
     <>
-      <Section title="Photos" open={open.photos} onToggle={() => toggle('photos')} extra={<Pill>{PHOTOS.length}</Pill>}>
+      <Section title="Photos" open={open.photos} onToggle={() => toggle('photos')} extra={<Pill>{photos.length}</Pill>}>
         <div className="grid grid-cols-2 gap-2.5">
-          {PHOTOS.map((p) => (
+          {photos.map((p, i) => (
+            // Reorder (drag grip) is a placeholder until sort_order writes are wired.
             <div key={p.id} className="group relative overflow-hidden rounded-lg">
-              <div className="aspect-[4/3] w-full rounded-lg" style={{ background: p.bg }} />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={mediaUrl(p.storage_path)} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />
               <span className="absolute left-1.5 top-1.5 hidden cursor-grab rounded-md bg-black/35 p-0.5 text-white group-hover:flex">
                 <Icon name="grip" size={16} />
               </span>
               <button
                 type="button"
-                aria-label={`Remove ${p.name}`}
+                aria-label={`Remove photo ${i + 1}`}
+                onClick={() => onRemove(p)}
                 className="absolute right-1.5 top-1.5 hidden rounded-md bg-black/35 p-1 text-white hover:bg-accent-red group-hover:flex"
               >
                 <Icon name="trash" size={14} />
               </button>
             </div>
           ))}
-          <button
-            type="button"
+          <Link
+            href={`/artists/${artistId}/images`}
             className="flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline text-ink-muted hover:border-accent hover:text-accent"
           >
             <Icon name="plus" size={18} />
             <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add photos</span>
-          </button>
+          </Link>
         </div>
       </Section>
 
@@ -207,7 +242,7 @@ function PhotoTools() {
 
         <div className={cx(EYEBROW, 'mb-2 mt-4')}>Selected image</div>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-[52px] flex-none rounded-md" style={{ background: PHOTOS[0].bg }} />
+          <div className="h-10 w-[52px] flex-none rounded-md bg-track" />
           <Segmented options={['S', 'M', 'L']} value={perImage} onChange={setPerImage} />
         </div>
       </Section>

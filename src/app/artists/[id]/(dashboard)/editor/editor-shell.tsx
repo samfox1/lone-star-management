@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { buttonClass } from '@/components/ui/ui'
-import { EditorInspector } from './editor-inspector'
+import { EditorInspector, type GalleryPhoto } from './editor-inspector'
 
 /**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
@@ -12,14 +12,14 @@ import { EditorInspector } from './editor-inspector'
  * controls — device, save status, Publish — float in the gap above the centered
  * window (no toolbar bar). Publish + the tool→data wiring land next.
  */
-export function EditorShell({ artistId }: { artistId: string }) {
+export function EditorShell({ artistId, photos }: { artistId: string; photos: GalleryPhoto[] }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
 
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
-      <EditorInspector />
+      <EditorInspector artistId={artistId} photos={photos} />
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface p-3">
         <div className="flex h-full w-full flex-col gap-2.5">

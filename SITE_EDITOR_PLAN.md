@@ -221,11 +221,15 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   remove + Add, Sizing = collection slider + per-image segmented, Layout = display +
   columns stepper). Design synthesized from the panel `/design-variations` round
   (V4 accordion + V3 grid/columns + V2 slider + V1 no-line rows).
-- ⏳ **Wire the tools to real data** — the panel currently runs against placeholder
-  collection data; next: real photo collections + drag-reorder / add / remove /
-  sizing persistence, and reconnect text editing through the panel. The earlier
-  text write path (`saveEditorField` / `saveEditorFieldAction`, RLS-scoped,
-  cross-tenant-blocked) stays in `lib/site-editor/save.ts` + `actions.ts` for reuse.
+- 🔶 **Wire the tools to real data — Images slice DONE 2026-07-11.** `editor/page.tsx`
+  fetches the artist's real `gallery_image` media → the panel's Images shows the real
+  photo count + thumbnails (`mediaUrl`), and **remove** is wired to `deleteMediaAction`
+  (optimistic, reverts on error). "Add photos" links to the Assets → Photos uploader.
+  Still ⏳: **drag-reorder** (needs a `sort_order` write action) and **sizing** (no
+  schema — collection/per-image size + display/columns are visual-only for now), plus
+  the other component types (Text/Links/Videos/Music/Merch) and reconnecting the text
+  write path (`saveEditorField` / `saveEditorFieldAction`, kept in
+  `lib/site-editor/save.ts` + `actions.ts`) through the panel.
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
 - ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the

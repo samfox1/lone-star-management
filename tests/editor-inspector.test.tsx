@@ -1,47 +1,80 @@
 // @vitest-environment jsdom
 /**
  * The visual editor's left inspector (phase 2 panel). Covers the two-state
- * navigation and the photo-collection tools' structure — Browse lists the
- * component types; opening Images shows the collection tools (grid, size slider,
- * accordions, switcher strip); Back returns; accordions collapse.
+ * navigation and the wired Images tools: Browse lists the component types with the
+ * real photo count; opening Images shows the collection tools (real thumbnails,
+ * add link, remove wired to deleteMediaAction, size slider, accordions, switcher
+ * strip); Back returns; accordions collapse.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { EditorInspector } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+import { deleteMediaAction } from '@/app/artists/[id]/(dashboard)/actions'
 
-afterEach(cleanup)
+vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
+  deleteMediaAction: vi.fn(async () => ({})),
+}))
+const deleteMock = vi.mocked(deleteMediaAction)
+
+const PHOTOS: GalleryPhoto[] = [
+  { id: 'm1', storage_path: 'artist-1/gallery/a.jpg' },
+  { id: 'm2', storage_path: 'artist-1/gallery/b.jpg' },
+  { id: 'm3', storage_path: 'artist-1/gallery/c.jpg' },
+]
+
+function renderInspector(photos: GalleryPhoto[] = PHOTOS) {
+  return render(<EditorInspector artistId="artist-1" photos={photos} />)
+}
+
+afterEach(() => {
+  cleanup()
+  deleteMock.mockClear()
+})
 
 describe('EditorInspector — browse state', () => {
-  it('lists every component type', () => {
-    render(<EditorInspector />)
+  it('lists every component type and the real photo count', () => {
+    renderInspector()
     for (const label of ['Images', 'Text', 'Links', 'Videos', 'Music', 'Merch']) {
       expect(screen.getByRole('button', { name: new RegExp(label) })).toBeTruthy()
     }
+    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('3 photos')
   })
 
   it('does not show editing tools until a component is opened', () => {
-    render(<EditorInspector />)
-    expect(screen.queryByText('Live Shots')).toBeNull()
+    renderInspector()
+    expect(screen.queryByText('Gallery')).toBeNull()
     expect(screen.queryByLabelText('Collection size')).toBeNull()
   })
 })
 
 describe('EditorInspector — opening Images', () => {
-  function openImages() {
-    render(<EditorInspector />)
+  function openImages(photos?: GalleryPhoto[]) {
+    renderInspector(photos)
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
-  it('opens the photo-collection editing view', () => {
+  it('opens the gallery editing view with the real photo count', () => {
     openImages()
-    expect(screen.getByText('Live Shots')).toBeTruthy()
-    expect(screen.getByText('12 photos · Grid')).toBeTruthy()
+    expect(screen.getByText('Gallery')).toBeTruthy()
+    expect(screen.getByText('3 photos')).toBeTruthy()
   })
 
-  it('shows the reorderable photo grid with add + remove affordances', () => {
+  it('renders real thumbnails + an add-photos link', () => {
     openImages()
-    expect(screen.getByRole('button', { name: 'Remove backstage-03.jpg' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Add photos/ })).toBeTruthy()
+    const imgs = document.querySelectorAll('aside img')
+    expect(imgs.length).toBe(3)
+    expect((imgs[0] as HTMLImageElement).src).toContain('artist-1/gallery/a.jpg')
+    const add = screen.getByRole('link', { name: /Add photos/ })
+    expect(add.getAttribute('href')).toBe('/artists/artist-1/images')
+  })
+
+  it('removes a photo optimistically and calls deleteMediaAction', () => {
+    openImages()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    expect(deleteMock).toHaveBeenCalledWith('m1', 'artist-1/gallery/a.jpg', 'artist-1')
+    // optimistic: one thumbnail gone, header count updated
+    expect(document.querySelectorAll('aside img').length).toBe(2)
+    expect(screen.getByText('2 photos')).toBeTruthy()
   })
 
   it('shows the size slider and layout controls', () => {
@@ -60,7 +93,7 @@ describe('EditorInspector — opening Images', () => {
   it('returns to browse via Back', () => {
     openImages()
     fireEvent.click(screen.getByRole('button', { name: /All components/ }))
-    expect(screen.queryByText('Live Shots')).toBeNull()
+    expect(screen.queryByText('Gallery')).toBeNull()
     expect(screen.getByRole('button', { name: /Images/ })).toBeTruthy()
   })
 
@@ -68,7 +101,6 @@ describe('EditorInspector — opening Images', () => {
     openImages()
     const strip = screen.getByRole('button', { name: 'Images' })
     expect(strip.getAttribute('aria-current')).toBe('true')
-    // the other types are reachable from the strip too
     expect(within(document.body).getByRole('button', { name: 'Videos' })).toBeTruthy()
   })
 })
