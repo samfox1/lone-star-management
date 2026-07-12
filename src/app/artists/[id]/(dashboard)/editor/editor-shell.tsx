@@ -7,6 +7,7 @@ import { editorMessage } from '@/lib/site-editor/bridge'
 import {
   EditorInspector,
   type EditorLink,
+  type EditorMerch,
   type EditorTextField,
   type EditorVideo,
   type GalleryPhoto,
@@ -25,12 +26,14 @@ export function EditorShell({
   textFields,
   links,
   videos,
+  merch,
 }: {
   artistId: string
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
   videos: EditorVideo[]
+  merch: EditorMerch[]
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -52,6 +55,7 @@ export function EditorShell({
         textFields={textFields}
         links={links}
         videos={videos}
+        merch={merch}
         onApplyField={applyField}
       />
 

@@ -37,6 +37,7 @@ export type EditorTextField = {
 }
 export type EditorLink = { id: string; label: string; url: string }
 export type EditorVideo = { id: string; title: string; provider: string | null; poster: string | null }
+export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
@@ -64,6 +65,9 @@ function linkLabel(n: number) {
 function videoLabel(n: number) {
   return `${n} ${n === 1 ? 'video' : 'videos'}`
 }
+function merchLabel(n: number) {
+  return `${n} ${n === 1 ? 'product' : 'products'}`
+}
 
 export function EditorInspector({
   artistId,
@@ -71,6 +75,7 @@ export function EditorInspector({
   textFields = [],
   links: initialLinks = [],
   videos: initialVideos = [],
+  merch: initialMerch = [],
   onApplyField,
 }: {
   artistId: string
@@ -78,12 +83,14 @@ export function EditorInspector({
   textFields?: EditorTextField[]
   links?: EditorLink[]
   videos?: EditorVideo[]
+  merch?: EditorMerch[]
   onApplyField?: (key: string, value: string) => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
   const [links, setLinks] = useState<EditorLink[]>(initialLinks)
   const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
+  const [merch, setMerch] = useState<EditorMerch[]>(initialMerch)
   const [, startTransition] = useTransition()
 
   function removePhoto(p: GalleryPhoto) {
@@ -143,6 +150,15 @@ export function EditorInspector({
     })
   }
 
+  function removeMerch(m: EditorMerch) {
+    const prev = merch
+    setMerch((list) => list.filter((x) => x.id !== m.id)) // optimistic
+    startTransition(async () => {
+      const res = await deleteContentAction('merch', m.id, artistId)
+      if (res?.error) setMerch(prev)
+    })
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
@@ -152,6 +168,7 @@ export function EditorInspector({
           textFields={textFields}
           links={links}
           videos={videos}
+          merch={merch}
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
@@ -159,6 +176,7 @@ export function EditorInspector({
           onReorderLink={reorderLinks}
           onRemoveVideo={removeVideo}
           onReorderVideo={reorderVideos}
+          onRemoveMerch={removeMerch}
           onApplyField={onApplyField}
           onBack={() => setActive(null)}
           onSwitch={setActive}
@@ -169,6 +187,7 @@ export function EditorInspector({
           textCount={textFields.length}
           linkCount={links.length}
           videoCount={videos.length}
+          merchCount={merch.length}
           onOpen={setActive}
         />
       )}
@@ -182,12 +201,14 @@ function BrowseView({
   textCount,
   linkCount,
   videoCount,
+  merchCount,
   onOpen,
 }: {
   imageCount: number
   textCount: number
   linkCount: number
   videoCount: number
+  merchCount: number
   onOpen: (c: Component) => void
 }) {
   return (
@@ -218,7 +239,9 @@ function BrowseView({
                       ? linkLabel(linkCount)
                       : c.kind === 'videos'
                         ? videoLabel(videoCount)
-                        : c.caption}
+                        : c.kind === 'merch'
+                          ? merchLabel(merchCount)
+                          : c.caption}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -236,6 +259,7 @@ function EditingView({
   textFields,
   links,
   videos,
+  merch,
   artistId,
   onRemove,
   onReorder,
@@ -243,6 +267,7 @@ function EditingView({
   onReorderLink,
   onRemoveVideo,
   onReorderVideo,
+  onRemoveMerch,
   onApplyField,
   onBack,
   onSwitch,
@@ -252,6 +277,7 @@ function EditingView({
   textFields: EditorTextField[]
   links: EditorLink[]
   videos: EditorVideo[]
+  merch: EditorMerch[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
@@ -259,6 +285,7 @@ function EditingView({
   onReorderLink: (from: number, to: number) => void
   onRemoveVideo: (v: EditorVideo) => void
   onReorderVideo: (from: number, to: number) => void
+  onRemoveMerch: (m: EditorMerch) => void
   onApplyField?: (key: string, value: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
@@ -267,6 +294,7 @@ function EditingView({
   const isText = component.kind === 'text'
   const isLinks = component.kind === 'links'
   const isVideos = component.kind === 'videos'
+  const isMerch = component.kind === 'merch'
   return (
     <>
       <button
@@ -293,7 +321,9 @@ function EditingView({
                   ? linkLabel(links.length)
                   : isVideos
                     ? videoLabel(videos.length)
-                    : component.caption}
+                    : isMerch
+                      ? merchLabel(merch.length)
+                      : component.caption}
           </span>
         </span>
       </div>
@@ -307,6 +337,8 @@ function EditingView({
           <LinkTools links={links} artistId={artistId} onRemove={onRemoveLink} onReorder={onReorderLink} />
         ) : isVideos ? (
           <VideoTools videos={videos} artistId={artistId} onRemove={onRemoveVideo} onReorder={onReorderVideo} />
+        ) : isMerch ? (
+          <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -808,6 +840,150 @@ function VideoTools({
       >
         <Icon name="plus" size={16} />
         <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add video</span>
+      </Link>
+
+      {status !== 'idle' && (
+        <div
+          className={cx(
+            'font-space text-[10px] uppercase tracking-[0.08em]',
+            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
+          )}
+        >
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Merch tools: edit title / price / url, remove (no reorder — no sort_order) ─ */
+function MerchTools({
+  merch,
+  artistId,
+  onRemove,
+}: {
+  merch: EditorMerch[]
+  artistId: string
+  onRemove: (m: EditorMerch) => void
+}) {
+  type Fields = { title: string; price: string; url: string }
+  const [values, setValues] = useState<Record<string, Fields>>(() =>
+    Object.fromEntries(merch.map((m) => [m.id, { title: m.title, price: m.price, url: m.url }])),
+  )
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const pending = useRef<Set<string>>(new Set())
+  const valuesRef = useRef(values)
+  useEffect(() => {
+    valuesRef.current = values
+  }, [values])
+
+  const persist = useCallback(
+    (id: string, v: Fields) => {
+      pending.current.delete(id)
+      const fd = new FormData()
+      fd.set('title', v.title)
+      fd.set('price', v.price)
+      fd.set('url', v.url)
+      setStatus('saving')
+      updateContentAction('merch', id, artistId, fd).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+    },
+    [artistId],
+  )
+
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingSet = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingSet.forEach((id) => {
+        const v = valuesRef.current[id]
+        if (!v) return
+        const fd = new FormData()
+        fd.set('title', v.title)
+        fd.set('price', v.price)
+        fd.set('url', v.url)
+        void updateContentAction('merch', id, artistId, fd)
+      })
+    }
+  }, [artistId])
+
+  function edit(id: string, patch: Partial<Fields>) {
+    setValues((v) => {
+      const next = { ...v, [id]: { ...v[id], ...patch } }
+      pending.current.add(id)
+      const existing = timers.current.get(id)
+      if (existing) clearTimeout(existing)
+      timers.current.set(
+        id,
+        setTimeout(() => {
+          timers.current.delete(id)
+          persist(id, next[id])
+        }, 500),
+      )
+      return next
+    })
+  }
+
+  const control =
+    'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
+
+  return (
+    <div className="space-y-2.5 px-5 py-4">
+      {merch.map((m, i) => (
+        <div key={m.id} className="flex items-start gap-2.5 rounded-lg border border-hairline p-2.5">
+          <span className="flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-md bg-track text-ink-faint">
+            {m.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={m.image_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Icon name="merch" size={18} />
+            )}
+          </span>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <input
+              aria-label={`Product ${i + 1} name`}
+              value={values[m.id]?.title ?? ''}
+              onChange={(e) => edit(m.id, { title: e.target.value })}
+              placeholder="Item name"
+              className={control}
+            />
+            <div className="flex gap-1.5">
+              <input
+                aria-label={`Product ${i + 1} price`}
+                value={values[m.id]?.price ?? ''}
+                onChange={(e) => edit(m.id, { price: e.target.value })}
+                placeholder="Price"
+                inputMode="decimal"
+                className={cx(control, 'w-20 flex-none')}
+              />
+              <input
+                aria-label={`Product ${i + 1} URL`}
+                type="url"
+                value={values[m.id]?.url ?? ''}
+                onChange={(e) => edit(m.id, { url: e.target.value })}
+                placeholder="https://…"
+                className={cx(control, 'min-w-0 flex-1 font-space text-xs text-ink-muted')}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label={`Remove product ${i + 1}`}
+            onClick={() => onRemove(m)}
+            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      ))}
+
+      <Link
+        href={`/artists/${artistId}/merch`}
+        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
+      >
+        <Icon name="plus" size={16} />
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add product</span>
       </Link>
 
       {status !== 'idle' && (

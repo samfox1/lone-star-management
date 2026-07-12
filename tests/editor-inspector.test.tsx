@@ -20,6 +20,7 @@ import {
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type {
   EditorLink,
+  EditorMerch,
   EditorTextField,
   EditorVideo,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
@@ -65,12 +66,18 @@ const VIDEOS: EditorVideo[] = [
   { id: 'v3', title: 'Tour recap', provider: 'uploaded', poster: null },
 ]
 
+const MERCH: EditorMerch[] = [
+  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg' },
+  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null },
+]
+
 function renderInspector(
   photos: GalleryPhoto[] = PHOTOS,
   opts: {
     textFields?: EditorTextField[]
     links?: EditorLink[]
     videos?: EditorVideo[]
+    merch?: EditorMerch[]
     onApplyField?: (k: string, v: string) => void
   } = {},
 ) {
@@ -81,6 +88,7 @@ function renderInspector(
       textFields={opts.textFields ?? []}
       links={opts.links ?? []}
       videos={opts.videos ?? []}
+      merch={opts.merch ?? []}
       onApplyField={opts.onApplyField}
     />,
   )
@@ -307,5 +315,49 @@ describe('EditorInspector — Videos component', () => {
     fireEvent.dragStart(rows[0])
     fireEvent.drop(rows[2])
     expect(reorderContentMock).toHaveBeenCalledWith('video', 'artist-1', ['v2', 'v3', 'v1'])
+  })
+})
+
+describe('EditorInspector — Merch component', () => {
+  function openMerch() {
+    renderInspector([], { merch: MERCH })
+    fireEvent.click(screen.getByRole('button', { name: /Merch/ }))
+  }
+
+  it('shows the real product count in browse', () => {
+    renderInspector([], { merch: MERCH })
+    expect(screen.getByRole('button', { name: /Merch/ }).textContent).toContain('2 products')
+  })
+
+  it('lists products with editable name/price/url + an add-product out', () => {
+    openMerch()
+    expect((screen.getByLabelText('Product 1 name') as HTMLInputElement).value).toBe('Tour Tee')
+    expect((screen.getByLabelText('Product 1 price') as HTMLInputElement).value).toBe('30')
+    expect((screen.getByLabelText('Product 1 URL') as HTMLInputElement).value).toBe('https://shop/x')
+    expect(screen.getByRole('link', { name: /Add product/ }).getAttribute('href')).toBe('/artists/artist-1/merch')
+  })
+
+  it('edits a product with a debounced content save (title/price/url together)', () => {
+    vi.useFakeTimers()
+    try {
+      openMerch()
+      fireEvent.change(screen.getByLabelText('Product 1 price'), { target: { value: '35' } })
+      expect(updateContentMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+      expect([type, id, artistId]).toEqual(['merch', 'p1', 'artist-1'])
+      expect((fd as FormData).get('title')).toBe('Tour Tee')
+      expect((fd as FormData).get('price')).toBe('35')
+      expect((fd as FormData).get('url')).toBe('https://shop/x')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('removes a product via deleteContentAction', () => {
+    openMerch()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove product 1' }))
+    expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
+    expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
   })
 })

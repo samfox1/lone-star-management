@@ -248,8 +248,15 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   (`reorderContentAction 'video'`), and remove (`deleteContentAction 'video'`, which
   GCs the uploaded object); "Add video" routes to the Videos page. Covered in
   `editor-inspector.test.tsx`.
+  **Merch component DONE 2026-07-11:** `editor/page.tsx` feeds the artist's merch
+  (`listContent`); the Merch editing view lists each product with its image + editable
+  name / price / url (debounced `updateContentAction`, flushes on unmount) and remove
+  (`deleteContentAction 'merch'`); "Add product" routes to the Merch page. No
+  drag-reorder — merch has no `sort_order` column (orders by created_at). Covered in
+  `editor-inspector.test.tsx`.
   Still ⏳: **sizing** (no schema — collection/per-image size + display/columns are
-  visual-only for now) and the other component types (Music/Merch).
+  visual-only for now) and **Music** (tracks — has the released/unreleased split +
+  album/EP grouping, so more nuance than the other types).
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
 - ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the

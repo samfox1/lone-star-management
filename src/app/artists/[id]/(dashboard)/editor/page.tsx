@@ -4,7 +4,7 @@ import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import type { SiteContent } from '@/lib/site'
 import { requireArtist } from '../_data'
 import { EditorShell } from './editor-shell'
-import type { EditorLink, EditorTextField, EditorVideo } from './editor-inspector'
+import type { EditorLink, EditorMerch, EditorTextField, EditorVideo } from './editor-inspector'
 
 /** YouTube poster thumbnail from an embed URL (mirrors the Videos page helper). */
 function youtubePoster(url: string, provider: string): string | null {
@@ -69,9 +69,10 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     storage_path: m.storage_path as string,
   }))
 
-  const [linkRows, videoRows] = await Promise.all([
+  const [linkRows, videoRows, merchRows] = await Promise.all([
     listContent(supabase, 'link', id),
     listContent(supabase, 'video', id),
+    listContent(supabase, 'merch', id),
   ])
   const links: EditorLink[] = linkRows.map((r) => ({
     id: r.id,
@@ -87,6 +88,13 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       poster: youtubePoster(String(r.embed_url ?? ''), provider),
     }
   })
+  const merch: EditorMerch[] = merchRows.map((r) => ({
+    id: r.id,
+    title: (r.title as string | null) ?? '',
+    price: r.price == null ? '' : String(r.price),
+    url: (r.url as string | null) ?? '',
+    image_url: (r.image_url as string | null) ?? null,
+  }))
 
   return (
     <EditorShell
@@ -95,6 +103,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       textFields={textFields}
       links={links}
       videos={videos}
+      merch={merch}
     />
   )
 }
