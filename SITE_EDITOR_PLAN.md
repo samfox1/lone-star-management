@@ -230,10 +230,14 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   (`lib/site-editor/gallery.ts`, writes each row's `sort_order` = index, RLS-scoped,
   cross-tenant-blocked; `editor/page.tsx` now orders by `sort_order`). Pure
   `reorderList` + the DB write path are covered by `site-editor-gallery.test.ts`.
+  **Text component DONE 2026-07-11:** `editor/page.tsx` feeds the manifest's text/email
+  fields + current values (`fieldCurrentValue`) into the panel; the Text editing view is
+  a form of those fields that edits with an optimistic live-preview paint into the frame
+  (`onApplyField` → bridge `apply-field`) + a per-field debounced save via
+  `saveEditorFieldAction` (flushes pending on unmount). Covered in
+  `editor-inspector.test.tsx`.
   Still ⏳: **sizing** (no schema — collection/per-image size + display/columns are
-  visual-only for now), the other component types (Text/Links/Videos/Music/Merch), and
-  reconnecting the text write path (`saveEditorField` / `saveEditorFieldAction`, kept in
-  `lib/site-editor/save.ts` + `actions.ts`) through the panel.
+  visual-only for now) and the other component types (Links/Videos/Music/Merch).
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
 - ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the

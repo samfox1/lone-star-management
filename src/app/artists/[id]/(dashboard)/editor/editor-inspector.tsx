@@ -1,12 +1,12 @@
 'use client'
 
-import { useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
 import { reorderList } from '@/lib/site-editor/gallery'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { deleteMediaAction, reorderGalleryAction } from '../actions'
+import { deleteMediaAction, reorderGalleryAction, saveEditorFieldAction } from '../actions'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -20,13 +20,20 @@ import { deleteMediaAction, reorderGalleryAction } from '../actions'
  */
 
 export type GalleryPhoto = { id: string; storage_path: string }
+export type EditorTextField = {
+  key: string
+  label: string
+  type: 'text' | 'email'
+  value: string
+  multiline: boolean
+}
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
 
 const COMPONENTS: Component[] = [
   { kind: 'images', icon: 'photo', label: 'Images', caption: 'Photo gallery' },
-  { kind: 'text', icon: 'text', label: 'Text', caption: '8 text blocks' },
+  { kind: 'text', icon: 'text', label: 'Text', caption: 'Headings & copy' },
   { kind: 'links', icon: 'links', label: 'Links', caption: '5 links' },
   { kind: 'videos', icon: 'videos', label: 'Videos', caption: '6 videos' },
   { kind: 'music', icon: 'tracks', label: 'Music', caption: '1 album · 9 songs' },
@@ -38,8 +45,21 @@ const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] te
 function photoCount(n: number) {
   return `${n} ${n === 1 ? 'photo' : 'photos'}`
 }
+function fieldCount(n: number) {
+  return `${n} ${n === 1 ? 'field' : 'fields'}`
+}
 
-export function EditorInspector({ artistId, photos: initial }: { artistId: string; photos: GalleryPhoto[] }) {
+export function EditorInspector({
+  artistId,
+  photos: initial,
+  textFields = [],
+  onApplyField,
+}: {
+  artistId: string
+  photos: GalleryPhoto[]
+  textFields?: EditorTextField[]
+  onApplyField?: (key: string, value: string) => void
+}) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
   const [, startTransition] = useTransition()
@@ -69,21 +89,31 @@ export function EditorInspector({ artistId, photos: initial }: { artistId: strin
         <EditingView
           component={active}
           photos={photos}
+          textFields={textFields}
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
+          onApplyField={onApplyField}
           onBack={() => setActive(null)}
           onSwitch={setActive}
         />
       ) : (
-        <BrowseView imageCount={photos.length} onOpen={setActive} />
+        <BrowseView imageCount={photos.length} textCount={textFields.length} onOpen={setActive} />
       )}
     </aside>
   )
 }
 
 /* ── Browse: the component-type list ─────────────────────────────────────────── */
-function BrowseView({ imageCount, onOpen }: { imageCount: number; onOpen: (c: Component) => void }) {
+function BrowseView({
+  imageCount,
+  textCount,
+  onOpen,
+}: {
+  imageCount: number
+  textCount: number
+  onOpen: (c: Component) => void
+}) {
   return (
     <>
       <div className="px-5 pb-3.5 pt-5">
@@ -104,7 +134,11 @@ function BrowseView({ imageCount, onOpen }: { imageCount: number; onOpen: (c: Co
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium">{c.label}</span>
               <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
-                {c.kind === 'images' ? photoCount(imageCount) : c.caption}
+                {c.kind === 'images'
+                  ? photoCount(imageCount)
+                  : c.kind === 'text'
+                    ? fieldCount(textCount)
+                    : c.caption}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -119,21 +153,26 @@ function BrowseView({ imageCount, onOpen }: { imageCount: number; onOpen: (c: Co
 function EditingView({
   component,
   photos,
+  textFields,
   artistId,
   onRemove,
   onReorder,
+  onApplyField,
   onBack,
   onSwitch,
 }: {
   component: Component
   photos: GalleryPhoto[]
+  textFields: EditorTextField[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
+  onApplyField?: (key: string, value: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
   const isImages = component.kind === 'images'
+  const isText = component.kind === 'text'
   return (
     <>
       <button
@@ -151,13 +190,17 @@ function EditingView({
         </span>
         <span className="flex flex-col gap-0.5">
           <span className="text-base font-semibold">{isImages ? 'Gallery' : component.label}</span>
-          <span className={EYEBROW}>{isImages ? photoCount(photos.length) : component.caption}</span>
+          <span className={EYEBROW}>
+            {isImages ? photoCount(photos.length) : isText ? fieldCount(textFields.length) : component.caption}
+          </span>
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {isImages ? (
           <PhotoTools photos={photos} artistId={artistId} onRemove={onRemove} onReorder={onReorder} />
+        ) : isText ? (
+          <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -299,6 +342,97 @@ function PhotoTools({
         </div>
       </Section>
     </>
+  )
+}
+
+/* ── Text tools: edit the site's headings, taglines, bio, booking copy ───────── */
+function TextTools({
+  textFields,
+  artistId,
+  onApplyField,
+}: {
+  textFields: EditorTextField[]
+  artistId: string
+  onApplyField?: (key: string, value: string) => void
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(textFields.map((f) => [f.key, f.value])),
+  )
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const pending = useRef<Map<string, string>>(new Map())
+
+  const persist = useCallback(
+    (key: string, value: string) => {
+      pending.current.delete(key)
+      setStatus('saving')
+      saveEditorFieldAction(artistId, key, value).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+    },
+    [artistId],
+  )
+
+  // Flush any still-pending edits on unmount so a fast tab-away can't drop one.
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingMap = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingMap.forEach((value, key) => {
+        void saveEditorFieldAction(artistId, key, value)
+      })
+    }
+  }, [artistId])
+
+  function edit(field: EditorTextField, value: string) {
+    setValues((v) => ({ ...v, [field.key]: value }))
+    onApplyField?.(field.key, value) // optimistic live-preview paint
+    pending.current.set(field.key, value)
+    const existing = timers.current.get(field.key)
+    if (existing) clearTimeout(existing)
+    timers.current.set(
+      field.key,
+      setTimeout(() => {
+        timers.current.delete(field.key)
+        persist(field.key, value)
+      }, 500),
+    )
+  }
+
+  const control =
+    'w-full rounded-lg border border-hairline px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
+
+  return (
+    <div className="space-y-4 px-5 py-4">
+      {textFields.map((f) => (
+        <label key={f.key} className="block">
+          <span className={cx(EYEBROW, 'mb-1.5 block')}>{f.label}</span>
+          {f.multiline ? (
+            <textarea
+              value={values[f.key] ?? ''}
+              onChange={(e) => edit(f, e.target.value)}
+              className={cx(control, 'min-h-20 resize-y leading-relaxed')}
+            />
+          ) : (
+            <input
+              type={f.type === 'email' ? 'email' : 'text'}
+              value={values[f.key] ?? ''}
+              onChange={(e) => edit(f, e.target.value)}
+              className={control}
+            />
+          )}
+        </label>
+      ))}
+      {status !== 'idle' && (
+        <div
+          className={cx(
+            'font-space text-[10px] uppercase tracking-[0.08em]',
+            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
+          )}
+        >
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </div>
+      )}
+    </div>
   )
 }
 

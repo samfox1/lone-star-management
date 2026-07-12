@@ -9,14 +9,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
-import { deleteMediaAction, reorderGalleryAction } from '@/app/artists/[id]/(dashboard)/actions'
+import {
+  deleteMediaAction,
+  reorderGalleryAction,
+  saveEditorFieldAction,
+} from '@/app/artists/[id]/(dashboard)/actions'
+import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
   reorderGalleryAction: vi.fn(async () => ({})),
+  saveEditorFieldAction: vi.fn(async () => ({})),
 }))
 const deleteMock = vi.mocked(deleteMediaAction)
 const reorderMock = vi.mocked(reorderGalleryAction)
+const saveMock = vi.mocked(saveEditorFieldAction)
 
 const PHOTOS: GalleryPhoto[] = [
   { id: 'm1', storage_path: 'artist-1/gallery/a.jpg' },
@@ -24,14 +31,31 @@ const PHOTOS: GalleryPhoto[] = [
   { id: 'm3', storage_path: 'artist-1/gallery/c.jpg' },
 ]
 
-function renderInspector(photos: GalleryPhoto[] = PHOTOS) {
-  return render(<EditorInspector artistId="artist-1" photos={photos} />)
+const TEXT_FIELDS: EditorTextField[] = [
+  { key: 'artist_name', label: 'Artist name', type: 'text', value: 'Skeen', multiline: false },
+  { key: 'hero_tagline', label: 'Hero tagline', type: 'text', value: 'DJ & Producer', multiline: false },
+  { key: 'artist_bio', label: 'Bio', type: 'text', value: 'Line one', multiline: true },
+]
+
+function renderInspector(
+  photos: GalleryPhoto[] = PHOTOS,
+  opts: { textFields?: EditorTextField[]; onApplyField?: (k: string, v: string) => void } = {},
+) {
+  return render(
+    <EditorInspector
+      artistId="artist-1"
+      photos={photos}
+      textFields={opts.textFields ?? []}
+      onApplyField={opts.onApplyField}
+    />,
+  )
 }
 
 afterEach(() => {
   cleanup()
   deleteMock.mockClear()
   reorderMock.mockClear()
+  saveMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -117,5 +141,34 @@ describe('EditorInspector — opening Images', () => {
     const strip = screen.getByRole('button', { name: 'Images' })
     expect(strip.getAttribute('aria-current')).toBe('true')
     expect(within(document.body).getByRole('button', { name: 'Videos' })).toBeTruthy()
+  })
+})
+
+describe('EditorInspector — Text component', () => {
+  it('lists text fields with the real count', () => {
+    renderInspector([], { textFields: TEXT_FIELDS })
+    expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
+  })
+
+  it('edits a field: optimistic live-preview immediately, debounced save', () => {
+    vi.useFakeTimers()
+    try {
+      const onApply = vi.fn()
+      renderInspector([], { textFields: TEXT_FIELDS, onApplyField: onApply })
+      fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+
+      const tagline = screen.getByLabelText('Hero tagline') as HTMLInputElement
+      expect(tagline.value).toBe('DJ & Producer')
+
+      fireEvent.change(tagline, { target: { value: 'Live Act' } })
+      // optimistic paint fires immediately; the save is debounced
+      expect(onApply).toHaveBeenCalledWith('hero_tagline', 'Live Act')
+      expect(saveMock).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(500)
+      expect(saveMock).toHaveBeenCalledWith('artist-1', 'hero_tagline', 'Live Act')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
