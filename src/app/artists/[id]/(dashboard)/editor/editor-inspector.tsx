@@ -38,6 +38,7 @@ export type EditorTextField = {
 export type EditorLink = { id: string; label: string; url: string }
 export type EditorVideo = { id: string; title: string; provider: string | null; poster: string | null }
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null }
+export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
@@ -68,6 +69,9 @@ function videoLabel(n: number) {
 function merchLabel(n: number) {
   return `${n} ${n === 1 ? 'product' : 'products'}`
 }
+function songLabel(n: number) {
+  return `${n} ${n === 1 ? 'song' : 'songs'}`
+}
 
 export function EditorInspector({
   artistId,
@@ -76,6 +80,7 @@ export function EditorInspector({
   links: initialLinks = [],
   videos: initialVideos = [],
   merch: initialMerch = [],
+  songs: initialSongs = [],
   onApplyField,
 }: {
   artistId: string
@@ -84,6 +89,7 @@ export function EditorInspector({
   links?: EditorLink[]
   videos?: EditorVideo[]
   merch?: EditorMerch[]
+  songs?: EditorSong[]
   onApplyField?: (key: string, value: string) => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
@@ -91,6 +97,7 @@ export function EditorInspector({
   const [links, setLinks] = useState<EditorLink[]>(initialLinks)
   const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
   const [merch, setMerch] = useState<EditorMerch[]>(initialMerch)
+  const [songs, setSongs] = useState<EditorSong[]>(initialSongs)
   const [, startTransition] = useTransition()
 
   function removePhoto(p: GalleryPhoto) {
@@ -159,6 +166,25 @@ export function EditorInspector({
     })
   }
 
+  function removeSong(s: EditorSong) {
+    const prev = songs
+    setSongs((list) => list.filter((x) => x.id !== s.id)) // optimistic
+    startTransition(async () => {
+      const res = await deleteContentAction('track', s.id, artistId)
+      if (res?.error) setSongs(prev)
+    })
+  }
+
+  function reorderSongs(from: number, to: number) {
+    const prev = songs
+    const next = reorderList(songs, from, to)
+    setSongs(next) // optimistic
+    startTransition(async () => {
+      const res = await reorderContentAction('track', artistId, next.map((s) => s.id))
+      if (res?.error) setSongs(prev)
+    })
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
@@ -169,6 +195,7 @@ export function EditorInspector({
           links={links}
           videos={videos}
           merch={merch}
+          songs={songs}
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
@@ -177,6 +204,8 @@ export function EditorInspector({
           onRemoveVideo={removeVideo}
           onReorderVideo={reorderVideos}
           onRemoveMerch={removeMerch}
+          onRemoveSong={removeSong}
+          onReorderSong={reorderSongs}
           onApplyField={onApplyField}
           onBack={() => setActive(null)}
           onSwitch={setActive}
@@ -188,6 +217,7 @@ export function EditorInspector({
           linkCount={links.length}
           videoCount={videos.length}
           merchCount={merch.length}
+          songCount={songs.length}
           onOpen={setActive}
         />
       )}
@@ -202,6 +232,7 @@ function BrowseView({
   linkCount,
   videoCount,
   merchCount,
+  songCount,
   onOpen,
 }: {
   imageCount: number
@@ -209,6 +240,7 @@ function BrowseView({
   linkCount: number
   videoCount: number
   merchCount: number
+  songCount: number
   onOpen: (c: Component) => void
 }) {
   return (
@@ -241,7 +273,9 @@ function BrowseView({
                         ? videoLabel(videoCount)
                         : c.kind === 'merch'
                           ? merchLabel(merchCount)
-                          : c.caption}
+                          : c.kind === 'music'
+                            ? songLabel(songCount)
+                            : c.caption}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -260,6 +294,7 @@ function EditingView({
   links,
   videos,
   merch,
+  songs,
   artistId,
   onRemove,
   onReorder,
@@ -268,6 +303,8 @@ function EditingView({
   onRemoveVideo,
   onReorderVideo,
   onRemoveMerch,
+  onRemoveSong,
+  onReorderSong,
   onApplyField,
   onBack,
   onSwitch,
@@ -278,6 +315,7 @@ function EditingView({
   links: EditorLink[]
   videos: EditorVideo[]
   merch: EditorMerch[]
+  songs: EditorSong[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
@@ -286,6 +324,8 @@ function EditingView({
   onRemoveVideo: (v: EditorVideo) => void
   onReorderVideo: (from: number, to: number) => void
   onRemoveMerch: (m: EditorMerch) => void
+  onRemoveSong: (s: EditorSong) => void
+  onReorderSong: (from: number, to: number) => void
   onApplyField?: (key: string, value: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
@@ -295,6 +335,7 @@ function EditingView({
   const isLinks = component.kind === 'links'
   const isVideos = component.kind === 'videos'
   const isMerch = component.kind === 'merch'
+  const isMusic = component.kind === 'music'
   return (
     <>
       <button
@@ -323,7 +364,9 @@ function EditingView({
                     ? videoLabel(videos.length)
                     : isMerch
                       ? merchLabel(merch.length)
-                      : component.caption}
+                      : isMusic
+                        ? songLabel(songs.length)
+                        : component.caption}
           </span>
         </span>
       </div>
@@ -339,6 +382,8 @@ function EditingView({
           <VideoTools videos={videos} artistId={artistId} onRemove={onRemoveVideo} onReorder={onReorderVideo} />
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
+        ) : isMusic ? (
+          <MusicTools songs={songs} artistId={artistId} onRemove={onRemoveSong} onReorder={onReorderSong} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -984,6 +1029,152 @@ function MerchTools({
       >
         <Icon name="plus" size={16} />
         <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add product</span>
+      </Link>
+
+      {status !== 'idle' && (
+        <div
+          className={cx(
+            'font-space text-[10px] uppercase tracking-[0.08em]',
+            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
+          )}
+        >
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Music tools: edit song title / reorder / remove, with a Released tag ─────── */
+function MusicTools({
+  songs,
+  artistId,
+  onRemove,
+  onReorder,
+}: {
+  songs: EditorSong[]
+  artistId: string
+  onRemove: (s: EditorSong) => void
+  onReorder: (from: number, to: number) => void
+}) {
+  const [titles, setTitles] = useState<Record<string, string>>(() =>
+    Object.fromEntries(songs.map((s) => [s.id, s.title])),
+  )
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const pending = useRef<Map<string, string>>(new Map())
+  const dragFrom = useRef<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
+
+  const persist = useCallback(
+    (id: string, title: string) => {
+      pending.current.delete(id)
+      const fd = new FormData()
+      fd.set('title', title)
+      setStatus('saving')
+      updateContentAction('track', id, artistId, fd).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+    },
+    [artistId],
+  )
+
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingMap = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingMap.forEach((title, id) => {
+        const fd = new FormData()
+        fd.set('title', title)
+        void updateContentAction('track', id, artistId, fd)
+      })
+    }
+  }, [artistId])
+
+  function edit(id: string, title: string) {
+    setTitles((t) => ({ ...t, [id]: title }))
+    pending.current.set(id, title)
+    const existing = timers.current.get(id)
+    if (existing) clearTimeout(existing)
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id)
+        persist(id, title)
+      }, 500),
+    )
+  }
+
+  function drop(to: number) {
+    const from = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (from !== null && from !== to) onReorder(from, to)
+  }
+
+  return (
+    <div className="space-y-2.5 px-5 py-4">
+      {songs.map((s, i) => (
+        <div
+          key={s.id}
+          draggable
+          onDragStart={() => (dragFrom.current = i)}
+          onDragEnter={() => setDragOver(i)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => drop(i)}
+          onDragEnd={() => {
+            dragFrom.current = null
+            setDragOver(null)
+          }}
+          className={cx(
+            'flex items-center gap-2.5 rounded-lg border border-hairline p-2',
+            dragOver === i && 'ring-2 ring-accent',
+          )}
+        >
+          <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
+            <Icon name="grip" size={16} />
+          </span>
+          <span className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-md bg-track text-ink-faint">
+            {s.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={s.cover_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Icon name="tracks" size={18} />
+            )}
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <input
+              aria-label={`Song ${i + 1} title`}
+              value={titles[s.id] ?? ''}
+              onChange={(e) => edit(s.id, e.target.value)}
+              placeholder="Title"
+              className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+            />
+            <span
+              className={cx(
+                'w-fit rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.1em]',
+                s.released ? 'bg-accent-soft text-accent' : 'bg-track text-ink-faint',
+              )}
+            >
+              {s.released ? 'Released' : 'Unreleased'}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label={`Remove song ${i + 1}`}
+            onClick={() => onRemove(s)}
+            className="flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      ))}
+
+      <Link
+        href={`/artists/${artistId}/music`}
+        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
+      >
+        <Icon name="plus" size={16} />
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add song</span>
       </Link>
 
       {status !== 'idle' && (

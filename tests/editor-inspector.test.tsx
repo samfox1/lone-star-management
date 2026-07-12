@@ -21,6 +21,7 @@ import {
 import type {
   EditorLink,
   EditorMerch,
+  EditorSong,
   EditorTextField,
   EditorVideo,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
@@ -71,6 +72,12 @@ const MERCH: EditorMerch[] = [
   { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null },
 ]
 
+const SONGS: EditorSong[] = [
+  { id: 's1', title: 'Opener', cover_url: 'https://img/cover.jpg', released: true },
+  { id: 's2', title: 'Demo take', cover_url: null, released: false },
+  { id: 's3', title: 'Closer', cover_url: null, released: true },
+]
+
 function renderInspector(
   photos: GalleryPhoto[] = PHOTOS,
   opts: {
@@ -78,6 +85,7 @@ function renderInspector(
     links?: EditorLink[]
     videos?: EditorVideo[]
     merch?: EditorMerch[]
+    songs?: EditorSong[]
     onApplyField?: (k: string, v: string) => void
   } = {},
 ) {
@@ -89,6 +97,7 @@ function renderInspector(
       links={opts.links ?? []}
       videos={opts.videos ?? []}
       merch={opts.merch ?? []}
+      songs={opts.songs ?? []}
       onApplyField={opts.onApplyField}
     />,
   )
@@ -359,5 +368,55 @@ describe('EditorInspector — Merch component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove product 1' }))
     expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
     expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
+  })
+})
+
+describe('EditorInspector — Music component', () => {
+  function openMusic() {
+    renderInspector([], { songs: SONGS })
+    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+  }
+
+  it('shows the real song count in browse', () => {
+    renderInspector([], { songs: SONGS })
+    expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('3 songs')
+  })
+
+  it('lists songs with editable titles, a Released/Unreleased tag, and an add-song out', () => {
+    openMusic()
+    expect((screen.getByLabelText('Song 1 title') as HTMLInputElement).value).toBe('Opener')
+    // s1 released, s2 unreleased
+    expect(screen.getAllByText('Released').length).toBe(2)
+    expect(screen.getByText('Unreleased')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Add song/ }).getAttribute('href')).toBe('/artists/artist-1/music')
+  })
+
+  it('renames a song with a debounced content save', () => {
+    vi.useFakeTimers()
+    try {
+      openMusic()
+      fireEvent.change(screen.getByLabelText('Song 2 title'), { target: { value: 'Demo v2' } })
+      expect(updateContentMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+      expect([type, id, artistId]).toEqual(['track', 's2', 'artist-1'])
+      expect((fd as FormData).get('title')).toBe('Demo v2')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('removes a song via deleteContentAction', () => {
+    openMusic()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove song 1' }))
+    expect(deleteContentMock).toHaveBeenCalledWith('track', 's1', 'artist-1')
+  })
+
+  it('reorders songs via drag and persists the new order', () => {
+    openMusic()
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    fireEvent.dragStart(rows[0])
+    fireEvent.drop(rows[2])
+    expect(reorderContentMock).toHaveBeenCalledWith('track', 'artist-1', ['s2', 's3', 's1'])
   })
 })

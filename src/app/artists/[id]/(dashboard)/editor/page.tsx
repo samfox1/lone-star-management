@@ -1,10 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
+import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import type { SiteContent } from '@/lib/site'
 import { requireArtist } from '../_data'
 import { EditorShell } from './editor-shell'
-import type { EditorLink, EditorMerch, EditorTextField, EditorVideo } from './editor-inspector'
+import type {
+  EditorLink,
+  EditorMerch,
+  EditorSong,
+  EditorTextField,
+  EditorVideo,
+} from './editor-inspector'
 
 /** YouTube poster thumbnail from an embed URL (mirrors the Videos page helper). */
 function youtubePoster(url: string, provider: string): string | null {
@@ -69,10 +76,12 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     storage_path: m.storage_path as string,
   }))
 
-  const [linkRows, videoRows, merchRows] = await Promise.all([
+  const [linkRows, videoRows, merchRows, releaseRows, trackRows] = await Promise.all([
     listContent(supabase, 'link', id),
     listContent(supabase, 'video', id),
     listContent(supabase, 'merch', id),
+    listContent(supabase, 'release', id),
+    listContent(supabase, 'track', id),
   ])
   const links: EditorLink[] = linkRows.map((r) => ({
     id: r.id,
@@ -96,6 +105,44 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     image_url: (r.image_url as string | null) ?? null,
   }))
 
+  // Classify each release once; songs inherit the bucket through their release_id
+  // (mirrors the Music page's derivation, lib/music.ts).
+  const relBucket = new Map<string, MusicBucket>(
+    releaseRows.map((r) => [
+      r.id,
+      releaseBucket({
+        source: (r.source as string | null) ?? null,
+        spotify_id: (r.spotify_id as string | null) ?? null,
+        links: r.links,
+        released: (r.released as boolean | null) ?? false,
+      }),
+    ]),
+  )
+  const songs: EditorSong[] = trackRows.map((r) => {
+    const bucket = trackBucket(
+      {
+        release_id: (r.release_id as string | null) ?? null,
+        source: (r.source as string | null) ?? null,
+        audio_path: (r.audio_path as string | null) ?? null,
+        spotify_id: (r.spotify_id as string | null) ?? null,
+        apple_id: (r.apple_id as string | null) ?? null,
+        deezer_id: (r.deezer_id as string | null) ?? null,
+        provider_url: (r.provider_url as string | null) ?? null,
+        stream_url: (r.stream_url as string | null) ?? null,
+        apple_url: (r.apple_url as string | null) ?? null,
+        soundcloud_url: (r.soundcloud_url as string | null) ?? null,
+        released: (r.released as boolean | null) ?? false,
+      },
+      (rid) => relBucket.get(rid),
+    )
+    return {
+      id: r.id,
+      title: (r.title as string | null) ?? '',
+      cover_url: (r.cover_url as string | null) ?? null,
+      released: bucket === 'released',
+    }
+  })
+
   return (
     <EditorShell
       artistId={id}
@@ -104,6 +151,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       links={links}
       videos={videos}
       merch={merch}
+      songs={songs}
     />
   )
 }

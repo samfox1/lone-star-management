@@ -8,6 +8,7 @@ import {
   EditorInspector,
   type EditorLink,
   type EditorMerch,
+  type EditorSong,
   type EditorTextField,
   type EditorVideo,
   type GalleryPhoto,
@@ -27,6 +28,7 @@ export function EditorShell({
   links,
   videos,
   merch,
+  songs,
 }: {
   artistId: string
   photos: GalleryPhoto[]
@@ -34,6 +36,7 @@ export function EditorShell({
   links: EditorLink[]
   videos: EditorVideo[]
   merch: EditorMerch[]
+  songs: EditorSong[]
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -56,6 +59,7 @@ export function EditorShell({
         links={links}
         videos={videos}
         merch={merch}
+        songs={songs}
         onApplyField={applyField}
       />
 

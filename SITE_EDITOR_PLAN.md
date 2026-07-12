@@ -254,9 +254,15 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   (`deleteContentAction 'merch'`); "Add product" routes to the Merch page. No
   drag-reorder — merch has no `sort_order` column (orders by created_at). Covered in
   `editor-inspector.test.tsx`.
+  **Music component DONE 2026-07-11:** `editor/page.tsx` feeds the artist's songs
+  (`listContent 'track'`) with a per-song `released` bucket derived exactly like the
+  Music page (`releaseBucket`/`trackBucket`); the Music editing view lists each song
+  with its cover + editable title (debounced `updateContentAction 'track'`), a
+  Released/Unreleased tag, drag-reorder (`reorderContentAction 'track'`), and remove
+  (`deleteContentAction 'track'`); "Add song" routes to the Music page. Covered in
+  `editor-inspector.test.tsx`. **All six component types are now wired.**
   Still ⏳: **sizing** (no schema — collection/per-image size + display/columns are
-  visual-only for now) and **Music** (tracks — has the released/unreleased split +
-  album/EP grouping, so more nuance than the other types).
+  visual-only for now). Album/EP grouping in the panel is a later enhancement.
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
 - ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the
