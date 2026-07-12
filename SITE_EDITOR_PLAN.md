@@ -242,8 +242,14 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   (`reorderContentAction` — a new generic that loops the draft-aware `updateContent`),
   and remove (`deleteContentAction`); "Add link" routes to the Links page. Covered in
   `editor-inspector.test.tsx`.
+  **Videos component DONE 2026-07-11:** `editor/page.tsx` feeds the artist's videos
+  (`listContent`, with a derived YouTube poster); the Videos editing view lists each
+  with a thumbnail + editable title (debounced `renameVideoAction`), drag-reorder
+  (`reorderContentAction 'video'`), and remove (`deleteContentAction 'video'`, which
+  GCs the uploaded object); "Add video" routes to the Videos page. Covered in
+  `editor-inspector.test.tsx`.
   Still ⏳: **sizing** (no schema — collection/per-image size + display/columns are
-  visual-only for now) and the other component types (Videos/Music/Merch).
+  visual-only for now) and the other component types (Music/Merch).
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
 - ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the

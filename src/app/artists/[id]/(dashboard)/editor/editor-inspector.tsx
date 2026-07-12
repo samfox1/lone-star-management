@@ -9,6 +9,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import {
   deleteContentAction,
   deleteMediaAction,
+  renameVideoAction,
   reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
@@ -35,6 +36,7 @@ export type EditorTextField = {
   multiline: boolean
 }
 export type EditorLink = { id: string; label: string; url: string }
+export type EditorVideo = { id: string; title: string; provider: string | null; poster: string | null }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
@@ -59,23 +61,29 @@ function fieldCount(n: number) {
 function linkLabel(n: number) {
   return `${n} ${n === 1 ? 'link' : 'links'}`
 }
+function videoLabel(n: number) {
+  return `${n} ${n === 1 ? 'video' : 'videos'}`
+}
 
 export function EditorInspector({
   artistId,
   photos: initial,
   textFields = [],
   links: initialLinks = [],
+  videos: initialVideos = [],
   onApplyField,
 }: {
   artistId: string
   photos: GalleryPhoto[]
   textFields?: EditorTextField[]
   links?: EditorLink[]
+  videos?: EditorVideo[]
   onApplyField?: (key: string, value: string) => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
   const [links, setLinks] = useState<EditorLink[]>(initialLinks)
+  const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
   const [, startTransition] = useTransition()
 
   function removePhoto(p: GalleryPhoto) {
@@ -116,6 +124,25 @@ export function EditorInspector({
     })
   }
 
+  function removeVideo(v: EditorVideo) {
+    const prev = videos
+    setVideos((list) => list.filter((x) => x.id !== v.id)) // optimistic
+    startTransition(async () => {
+      const res = await deleteContentAction('video', v.id, artistId)
+      if (res?.error) setVideos(prev)
+    })
+  }
+
+  function reorderVideos(from: number, to: number) {
+    const prev = videos
+    const next = reorderList(videos, from, to)
+    setVideos(next) // optimistic
+    startTransition(async () => {
+      const res = await reorderContentAction('video', artistId, next.map((v) => v.id))
+      if (res?.error) setVideos(prev)
+    })
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
@@ -124,11 +151,14 @@ export function EditorInspector({
           photos={photos}
           textFields={textFields}
           links={links}
+          videos={videos}
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
+          onRemoveVideo={removeVideo}
+          onReorderVideo={reorderVideos}
           onApplyField={onApplyField}
           onBack={() => setActive(null)}
           onSwitch={setActive}
@@ -138,6 +168,7 @@ export function EditorInspector({
           imageCount={photos.length}
           textCount={textFields.length}
           linkCount={links.length}
+          videoCount={videos.length}
           onOpen={setActive}
         />
       )}
@@ -150,11 +181,13 @@ function BrowseView({
   imageCount,
   textCount,
   linkCount,
+  videoCount,
   onOpen,
 }: {
   imageCount: number
   textCount: number
   linkCount: number
+  videoCount: number
   onOpen: (c: Component) => void
 }) {
   return (
@@ -183,7 +216,9 @@ function BrowseView({
                     ? fieldCount(textCount)
                     : c.kind === 'links'
                       ? linkLabel(linkCount)
-                      : c.caption}
+                      : c.kind === 'videos'
+                        ? videoLabel(videoCount)
+                        : c.caption}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -200,11 +235,14 @@ function EditingView({
   photos,
   textFields,
   links,
+  videos,
   artistId,
   onRemove,
   onReorder,
   onRemoveLink,
   onReorderLink,
+  onRemoveVideo,
+  onReorderVideo,
   onApplyField,
   onBack,
   onSwitch,
@@ -213,11 +251,14 @@ function EditingView({
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
+  videos: EditorVideo[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (from: number, to: number) => void
+  onRemoveVideo: (v: EditorVideo) => void
+  onReorderVideo: (from: number, to: number) => void
   onApplyField?: (key: string, value: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
@@ -225,6 +266,7 @@ function EditingView({
   const isImages = component.kind === 'images'
   const isText = component.kind === 'text'
   const isLinks = component.kind === 'links'
+  const isVideos = component.kind === 'videos'
   return (
     <>
       <button
@@ -249,7 +291,9 @@ function EditingView({
                 ? fieldCount(textFields.length)
                 : isLinks
                   ? linkLabel(links.length)
-                  : component.caption}
+                  : isVideos
+                    ? videoLabel(videos.length)
+                    : component.caption}
           </span>
         </span>
       </div>
@@ -261,6 +305,8 @@ function EditingView({
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
         ) : isLinks ? (
           <LinkTools links={links} artistId={artistId} onRemove={onRemoveLink} onReorder={onReorderLink} />
+        ) : isVideos ? (
+          <VideoTools videos={videos} artistId={artistId} onRemove={onRemoveVideo} onReorder={onReorderVideo} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -630,6 +676,138 @@ function LinkTools({
       >
         <Icon name="plus" size={16} />
         <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add link</span>
+      </Link>
+
+      {status !== 'idle' && (
+        <div
+          className={cx(
+            'font-space text-[10px] uppercase tracking-[0.08em]',
+            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
+          )}
+        >
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Video tools: edit title / reorder / remove the site's videos ────────────── */
+function VideoTools({
+  videos,
+  artistId,
+  onRemove,
+  onReorder,
+}: {
+  videos: EditorVideo[]
+  artistId: string
+  onRemove: (v: EditorVideo) => void
+  onReorder: (from: number, to: number) => void
+}) {
+  const [titles, setTitles] = useState<Record<string, string>>(() =>
+    Object.fromEntries(videos.map((v) => [v.id, v.title])),
+  )
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const pending = useRef<Map<string, string>>(new Map())
+  const dragFrom = useRef<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
+
+  const persist = useCallback(
+    (id: string, title: string) => {
+      pending.current.delete(id)
+      setStatus('saving')
+      renameVideoAction(id, artistId, title).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+    },
+    [artistId],
+  )
+
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingMap = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingMap.forEach((title, id) => {
+        void renameVideoAction(id, artistId, title)
+      })
+    }
+  }, [artistId])
+
+  function edit(id: string, title: string) {
+    setTitles((t) => ({ ...t, [id]: title }))
+    pending.current.set(id, title)
+    const existing = timers.current.get(id)
+    if (existing) clearTimeout(existing)
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id)
+        persist(id, title)
+      }, 500),
+    )
+  }
+
+  function drop(to: number) {
+    const from = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (from !== null && from !== to) onReorder(from, to)
+  }
+
+  return (
+    <div className="space-y-2.5 px-5 py-4">
+      {videos.map((v, i) => (
+        <div
+          key={v.id}
+          draggable
+          onDragStart={() => (dragFrom.current = i)}
+          onDragEnter={() => setDragOver(i)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => drop(i)}
+          onDragEnd={() => {
+            dragFrom.current = null
+            setDragOver(null)
+          }}
+          className={cx(
+            'flex items-center gap-2.5 rounded-lg border border-hairline p-2',
+            dragOver === i && 'ring-2 ring-accent',
+          )}
+        >
+          <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
+            <Icon name="grip" size={16} />
+          </span>
+          <span className="flex h-11 w-16 flex-none items-center justify-center overflow-hidden rounded-md bg-track text-ink-faint">
+            {v.poster ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={v.poster} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Icon name="videos" size={18} />
+            )}
+          </span>
+          <input
+            aria-label={`Video ${i + 1} title`}
+            value={titles[v.id] ?? ''}
+            onChange={(e) => edit(v.id, e.target.value)}
+            placeholder="Title"
+            className="min-w-0 flex-1 rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+          />
+          <button
+            type="button"
+            aria-label={`Remove video ${i + 1}`}
+            onClick={() => onRemove(v)}
+            className="flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      ))}
+
+      <Link
+        href={`/artists/${artistId}/videos`}
+        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
+      >
+        <Icon name="plus" size={16} />
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add video</span>
       </Link>
 
       {status !== 'idle' && (

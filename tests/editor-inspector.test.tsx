@@ -12,12 +12,17 @@ import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboar
 import {
   deleteContentAction,
   deleteMediaAction,
+  renameVideoAction,
   reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
   updateContentAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
-import type { EditorLink, EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+import type {
+  EditorLink,
+  EditorTextField,
+  EditorVideo,
+} from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
@@ -26,6 +31,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
   reorderContentAction: vi.fn(async () => ({})),
+  renameVideoAction: vi.fn(async () => ({})),
 }))
 const deleteMock = vi.mocked(deleteMediaAction)
 const reorderMock = vi.mocked(reorderGalleryAction)
@@ -33,6 +39,7 @@ const saveMock = vi.mocked(saveEditorFieldAction)
 const updateContentMock = vi.mocked(updateContentAction)
 const deleteContentMock = vi.mocked(deleteContentAction)
 const reorderContentMock = vi.mocked(reorderContentAction)
+const renameVideoMock = vi.mocked(renameVideoAction)
 
 const PHOTOS: GalleryPhoto[] = [
   { id: 'm1', storage_path: 'artist-1/gallery/a.jpg' },
@@ -52,11 +59,18 @@ const LINKS: EditorLink[] = [
   { id: 'l3', label: 'Bandcamp', url: 'https://x.bandcamp.com' },
 ]
 
+const VIDEOS: EditorVideo[] = [
+  { id: 'v1', title: 'Live at the Mohawk', provider: 'youtube', poster: 'https://i.ytimg.com/vi/aaa/hqdefault.jpg' },
+  { id: 'v2', title: 'Studio session', provider: 'youtube', poster: null },
+  { id: 'v3', title: 'Tour recap', provider: 'uploaded', poster: null },
+]
+
 function renderInspector(
   photos: GalleryPhoto[] = PHOTOS,
   opts: {
     textFields?: EditorTextField[]
     links?: EditorLink[]
+    videos?: EditorVideo[]
     onApplyField?: (k: string, v: string) => void
   } = {},
 ) {
@@ -66,6 +80,7 @@ function renderInspector(
       photos={photos}
       textFields={opts.textFields ?? []}
       links={opts.links ?? []}
+      videos={opts.videos ?? []}
       onApplyField={opts.onApplyField}
     />,
   )
@@ -79,6 +94,7 @@ afterEach(() => {
   updateContentMock.mockClear()
   deleteContentMock.mockClear()
   reorderContentMock.mockClear()
+  renameVideoMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -245,5 +261,51 @@ describe('EditorInspector — Links component', () => {
     fireEvent.dragStart(rows[0])
     fireEvent.drop(rows[2])
     expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l3', 'l1'])
+  })
+})
+
+describe('EditorInspector — Videos component', () => {
+  function openVideos() {
+    renderInspector([], { videos: VIDEOS })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+  }
+
+  it('shows the real video count in browse', () => {
+    renderInspector([], { videos: VIDEOS })
+    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('3 videos')
+  })
+
+  it('lists videos with editable titles, a poster, and an add-video out', () => {
+    openVideos()
+    expect((screen.getByLabelText('Video 1 title') as HTMLInputElement).value).toBe('Live at the Mohawk')
+    expect(document.querySelector('aside img')).toBeTruthy() // the youtube poster
+    expect(screen.getByRole('link', { name: /Add video/ }).getAttribute('href')).toBe('/artists/artist-1/videos')
+  })
+
+  it('renames a video with a debounced save', () => {
+    vi.useFakeTimers()
+    try {
+      openVideos()
+      fireEvent.change(screen.getByLabelText('Video 2 title'), { target: { value: 'Studio cut' } })
+      expect(renameVideoMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(renameVideoMock).toHaveBeenCalledWith('v2', 'artist-1', 'Studio cut')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('removes a video via deleteContentAction', () => {
+    openVideos()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove video 1' }))
+    expect(deleteContentMock).toHaveBeenCalledWith('video', 'v1', 'artist-1')
+  })
+
+  it('reorders videos via drag and persists the new order', () => {
+    openVideos()
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    fireEvent.dragStart(rows[0])
+    fireEvent.drop(rows[2])
+    expect(reorderContentMock).toHaveBeenCalledWith('video', 'artist-1', ['v2', 'v3', 'v1'])
   })
 })

@@ -4,7 +4,13 @@ import { useCallback, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { buttonClass } from '@/components/ui/ui'
 import { editorMessage } from '@/lib/site-editor/bridge'
-import { EditorInspector, type EditorLink, type EditorTextField, type GalleryPhoto } from './editor-inspector'
+import {
+  EditorInspector,
+  type EditorLink,
+  type EditorTextField,
+  type EditorVideo,
+  type GalleryPhoto,
+} from './editor-inspector'
 
 /**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
@@ -18,11 +24,13 @@ export function EditorShell({
   photos,
   textFields,
   links,
+  videos,
 }: {
   artistId: string
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
+  videos: EditorVideo[]
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -43,6 +51,7 @@ export function EditorShell({
         photos={photos}
         textFields={textFields}
         links={links}
+        videos={videos}
         onApplyField={applyField}
       />
 

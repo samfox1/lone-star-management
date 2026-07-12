@@ -4,7 +4,14 @@ import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import type { SiteContent } from '@/lib/site'
 import { requireArtist } from '../_data'
 import { EditorShell } from './editor-shell'
-import type { EditorLink, EditorTextField } from './editor-inspector'
+import type { EditorLink, EditorTextField, EditorVideo } from './editor-inspector'
+
+/** YouTube poster thumbnail from an embed URL (mirrors the Videos page helper). */
+function youtubePoster(url: string, provider: string): string | null {
+  if (provider !== 'youtube') return null
+  const m = url.match(/(?:embed\/|v=|youtu\.be\/)([\w-]{11})/)
+  return m ? `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg` : null
+}
 
 /**
  * Visual editor page — a dashboard section (centered "Edit site" nav tab). Renders
@@ -62,12 +69,32 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     storage_path: m.storage_path as string,
   }))
 
-  const linkRows = await listContent(supabase, 'link', id)
+  const [linkRows, videoRows] = await Promise.all([
+    listContent(supabase, 'link', id),
+    listContent(supabase, 'video', id),
+  ])
   const links: EditorLink[] = linkRows.map((r) => ({
     id: r.id,
     label: (r.label as string | null) ?? '',
     url: (r.url as string | null) ?? '',
   }))
+  const videos: EditorVideo[] = videoRows.map((r) => {
+    const provider = String(r.provider ?? '')
+    return {
+      id: r.id,
+      title: (r.title as string | null) ?? '',
+      provider: provider || null,
+      poster: youtubePoster(String(r.embed_url ?? ''), provider),
+    }
+  })
 
-  return <EditorShell artistId={id} photos={photos} textFields={textFields} links={links} />
+  return (
+    <EditorShell
+      artistId={id}
+      photos={photos}
+      textFields={textFields}
+      links={links}
+      videos={videos}
+    />
+  )
 }
