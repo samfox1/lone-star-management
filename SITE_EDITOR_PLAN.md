@@ -225,10 +225,14 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   fetches the artist's real `gallery_image` media → the panel's Images shows the real
   photo count + thumbnails (`mediaUrl`), and **remove** is wired to `deleteMediaAction`
   (optimistic, reverts on error). "Add photos" links to the Assets → Photos uploader.
-  Still ⏳: **drag-reorder** (needs a `sort_order` write action) and **sizing** (no
-  schema — collection/per-image size + display/columns are visual-only for now), plus
-  the other component types (Text/Links/Videos/Music/Merch) and reconnecting the text
-  write path (`saveEditorField` / `saveEditorFieldAction`, kept in
+  **Drag-reorder DONE 2026-07-11:** thumbnails are draggable; drop reorders
+  optimistically and persists via `reorderGalleryAction` → `reorderGallery`
+  (`lib/site-editor/gallery.ts`, writes each row's `sort_order` = index, RLS-scoped,
+  cross-tenant-blocked; `editor/page.tsx` now orders by `sort_order`). Pure
+  `reorderList` + the DB write path are covered by `site-editor-gallery.test.ts`.
+  Still ⏳: **sizing** (no schema — collection/per-image size + display/columns are
+  visual-only for now), the other component types (Text/Links/Videos/Music/Merch), and
+  reconnecting the text write path (`saveEditorField` / `saveEditorFieldAction`, kept in
   `lib/site-editor/save.ts` + `actions.ts`) through the panel.
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).

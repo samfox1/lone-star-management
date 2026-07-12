@@ -18,7 +18,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     .select('id, storage_path')
     .eq('artist_id', id)
     .eq('purpose', 'gallery_image')
-    .order('created_at', { ascending: false })
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
 
   const photos = (rows ?? []).map((m) => ({
     id: m.id as string,

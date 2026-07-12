@@ -9,12 +9,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
-import { deleteMediaAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { deleteMediaAction, reorderGalleryAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
+  reorderGalleryAction: vi.fn(async () => ({})),
 }))
 const deleteMock = vi.mocked(deleteMediaAction)
+const reorderMock = vi.mocked(reorderGalleryAction)
 
 const PHOTOS: GalleryPhoto[] = [
   { id: 'm1', storage_path: 'artist-1/gallery/a.jpg' },
@@ -29,6 +31,7 @@ function renderInspector(photos: GalleryPhoto[] = PHOTOS) {
 afterEach(() => {
   cleanup()
   deleteMock.mockClear()
+  reorderMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -75,6 +78,18 @@ describe('EditorInspector — opening Images', () => {
     // optimistic: one thumbnail gone, header count updated
     expect(document.querySelectorAll('aside img').length).toBe(2)
     expect(screen.getByText('2 photos')).toBeTruthy()
+  })
+
+  it('reorders via drag and persists the new order', () => {
+    openImages()
+    const tiles = document.querySelectorAll('aside div[draggable="true"]')
+    expect(tiles.length).toBe(3)
+    fireEvent.dragStart(tiles[0]) // pick up the first photo (m1)
+    fireEvent.drop(tiles[2]) // drop on the third slot
+    // optimistic order + persisted with the new id order
+    expect(reorderMock).toHaveBeenCalledWith('artist-1', ['m2', 'm3', 'm1'])
+    const imgs = document.querySelectorAll('aside img')
+    expect((imgs[2] as HTMLImageElement).src).toContain('artist-1/gallery/a.jpg')
   })
 
   it('shows the size slider and layout controls', () => {

@@ -12,6 +12,7 @@ import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
+import { reorderGallery } from '@/lib/site-editor/gallery'
 import {
   type CrudEntity,
   type GenericEntity,
@@ -318,6 +319,21 @@ export async function deleteMediaAction(
   // Media is a live table (no publish/revision deferral), so the row delete unpublishes
   // it immediately — safe to remove the object now instead of orphaning it.
   if (storagePath) await supabase.storage.from('media').remove([storagePath])
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
+ * Persist a new gallery order from the visual editor: `orderedIds` is the media ids
+ * in their new order; each row's `sort_order` becomes its index. RLS-scoped.
+ */
+export async function reorderGalleryAction(
+  artistId: string,
+  orderedIds: string[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const res = await reorderGallery(supabase, artistId, orderedIds)
+  if (!res.ok) return { error: res.error }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

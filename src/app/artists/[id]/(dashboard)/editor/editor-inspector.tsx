@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
+import { reorderList } from '@/lib/site-editor/gallery'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { deleteMediaAction } from '../actions'
+import { deleteMediaAction, reorderGalleryAction } from '../actions'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -52,6 +53,16 @@ export function EditorInspector({ artistId, photos: initial }: { artistId: strin
     })
   }
 
+  function reorderPhotos(from: number, to: number) {
+    const prev = photos
+    const next = reorderList(photos, from, to)
+    setPhotos(next) // optimistic
+    startTransition(async () => {
+      const res = await reorderGalleryAction(artistId, next.map((p) => p.id))
+      if (res?.error) setPhotos(prev) // revert on failure
+    })
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
@@ -60,6 +71,7 @@ export function EditorInspector({ artistId, photos: initial }: { artistId: strin
           photos={photos}
           artistId={artistId}
           onRemove={removePhoto}
+          onReorder={reorderPhotos}
           onBack={() => setActive(null)}
           onSwitch={setActive}
         />
@@ -109,6 +121,7 @@ function EditingView({
   photos,
   artistId,
   onRemove,
+  onReorder,
   onBack,
   onSwitch,
 }: {
@@ -116,6 +129,7 @@ function EditingView({
   photos: GalleryPhoto[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
+  onReorder: (from: number, to: number) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
@@ -143,7 +157,7 @@ function EditingView({
 
       <div className="flex-1 overflow-y-auto">
         {isImages ? (
-          <PhotoTools photos={photos} artistId={artistId} onRemove={onRemove} />
+          <PhotoTools photos={photos} artistId={artistId} onRemove={onRemove} onReorder={onReorder} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -180,25 +194,50 @@ function PhotoTools({
   photos,
   artistId,
   onRemove,
+  onReorder,
 }: {
   photos: GalleryPhoto[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
+  onReorder: (from: number, to: number) => void
 }) {
   const [open, setOpen] = useState({ photos: true, sizing: true, layout: true })
   const [perImage, setPerImage] = useState<'S' | 'M' | 'L'>('M')
   const [display, setDisplay] = useState<'Grid' | 'Rows' | 'Masonry'>('Grid')
   const [columns, setColumns] = useState(2)
   const [size, setSize] = useState(55)
+  const dragFrom = useRef<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
   const toggle = (k: keyof typeof open) => setOpen((o) => ({ ...o, [k]: !o[k] }))
+
+  function drop(to: number) {
+    const from = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (from !== null && from !== to) onReorder(from, to)
+  }
 
   return (
     <>
       <Section title="Photos" open={open.photos} onToggle={() => toggle('photos')} extra={<Pill>{photos.length}</Pill>}>
         <div className="grid grid-cols-2 gap-2.5">
           {photos.map((p, i) => (
-            // Reorder (drag grip) is a placeholder until sort_order writes are wired.
-            <div key={p.id} className="group relative overflow-hidden rounded-lg">
+            <div
+              key={p.id}
+              draggable
+              onDragStart={() => (dragFrom.current = i)}
+              onDragEnter={() => setDragOver(i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => drop(i)}
+              onDragEnd={() => {
+                dragFrom.current = null
+                setDragOver(null)
+              }}
+              className={cx(
+                'group relative overflow-hidden rounded-lg',
+                dragOver === i && 'ring-2 ring-accent',
+              )}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={mediaUrl(p.storage_path)} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />
               <span className="absolute left-1.5 top-1.5 hidden cursor-grab rounded-md bg-black/35 p-0.5 text-white group-hover:flex">
