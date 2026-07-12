@@ -236,8 +236,14 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   (`onApplyField` → bridge `apply-field`) + a per-field debounced save via
   `saveEditorFieldAction` (flushes pending on unmount). Covered in
   `editor-inspector.test.tsx`.
+  **Links component DONE 2026-07-11:** `editor/page.tsx` feeds the artist's links
+  (`listContent`); the Links editing view lists each link with editable label + url
+  (per-row debounced `updateContentAction`, flushes on unmount), drag-reorder
+  (`reorderContentAction` — a new generic that loops the draft-aware `updateContent`),
+  and remove (`deleteContentAction`); "Add link" routes to the Links page. Covered in
+  `editor-inspector.test.tsx`.
   Still ⏳: **sizing** (no schema — collection/per-image size + display/columns are
-  visual-only for now) and the other component types (Links/Videos/Music/Merch).
+  visual-only for now) and the other component types (Videos/Music/Merch).
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
 - ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the

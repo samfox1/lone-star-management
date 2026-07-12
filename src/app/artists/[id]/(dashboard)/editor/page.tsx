@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { listContent } from '@/lib/content'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import type { SiteContent } from '@/lib/site'
 import { requireArtist } from '../_data'
 import { EditorShell } from './editor-shell'
-import type { EditorTextField } from './editor-inspector'
+import type { EditorLink, EditorTextField } from './editor-inspector'
 
 /**
  * Visual editor page — a dashboard section (centered "Edit site" nav tab). Renders
@@ -61,5 +62,12 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     storage_path: m.storage_path as string,
   }))
 
-  return <EditorShell artistId={id} photos={photos} textFields={textFields} />
+  const linkRows = await listContent(supabase, 'link', id)
+  const links: EditorLink[] = linkRows.map((r) => ({
+    id: r.id,
+    label: (r.label as string | null) ?? '',
+    url: (r.url as string | null) ?? '',
+  }))
+
+  return <EditorShell artistId={id} photos={photos} textFields={textFields} links={links} />
 }

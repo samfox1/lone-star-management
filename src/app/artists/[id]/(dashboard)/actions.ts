@@ -339,6 +339,28 @@ export async function reorderGalleryAction(
 }
 
 /**
+ * Persist a new order for a CRUD content type (links/videos/…) from the visual editor:
+ * each row's `sort_order` becomes its index via the draft-aware `updateContent`.
+ * RLS scopes every write to the caller's tenant.
+ */
+export async function reorderContentAction(
+  type: CrudEntity,
+  artistId: string,
+  orderedIds: string[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  try {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await updateContent(supabase, type, orderedIds[i], { sort_order: i })
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Reorder failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
  * Add a video by URL: validate + normalize to a safe embed via embedInfo (only
  * YouTube/SoundCloud), derive the provider, then create the draft video. An
  * unrecognized URL is rejected.

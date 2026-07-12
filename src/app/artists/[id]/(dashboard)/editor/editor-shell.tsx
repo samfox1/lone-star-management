@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { buttonClass } from '@/components/ui/ui'
 import { editorMessage } from '@/lib/site-editor/bridge'
-import { EditorInspector, type EditorTextField, type GalleryPhoto } from './editor-inspector'
+import { EditorInspector, type EditorLink, type EditorTextField, type GalleryPhoto } from './editor-inspector'
 
 /**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
@@ -17,10 +17,12 @@ export function EditorShell({
   artistId,
   photos,
   textFields,
+  links,
 }: {
   artistId: string
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
+  links: EditorLink[]
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -36,7 +38,13 @@ export function EditorShell({
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
-      <EditorInspector artistId={artistId} photos={photos} textFields={textFields} onApplyField={applyField} />
+      <EditorInspector
+        artistId={artistId}
+        photos={photos}
+        textFields={textFields}
+        links={links}
+        onApplyField={applyField}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface p-3">
         <div className="flex h-full w-full flex-col gap-2.5">

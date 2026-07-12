@@ -10,20 +10,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
+  deleteContentAction,
   deleteMediaAction,
+  reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
+  updateContentAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
-import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+import type { EditorLink, EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
   reorderGalleryAction: vi.fn(async () => ({})),
   saveEditorFieldAction: vi.fn(async () => ({})),
+  updateContentAction: vi.fn(async () => ({})),
+  deleteContentAction: vi.fn(async () => ({})),
+  reorderContentAction: vi.fn(async () => ({})),
 }))
 const deleteMock = vi.mocked(deleteMediaAction)
 const reorderMock = vi.mocked(reorderGalleryAction)
 const saveMock = vi.mocked(saveEditorFieldAction)
+const updateContentMock = vi.mocked(updateContentAction)
+const deleteContentMock = vi.mocked(deleteContentAction)
+const reorderContentMock = vi.mocked(reorderContentAction)
 
 const PHOTOS: GalleryPhoto[] = [
   { id: 'm1', storage_path: 'artist-1/gallery/a.jpg' },
@@ -37,15 +46,26 @@ const TEXT_FIELDS: EditorTextField[] = [
   { key: 'artist_bio', label: 'Bio', type: 'text', value: 'Line one', multiline: true },
 ]
 
+const LINKS: EditorLink[] = [
+  { id: 'l1', label: 'Spotify', url: 'https://open.spotify.com/x' },
+  { id: 'l2', label: 'Instagram', url: 'https://instagram.com/x' },
+  { id: 'l3', label: 'Bandcamp', url: 'https://x.bandcamp.com' },
+]
+
 function renderInspector(
   photos: GalleryPhoto[] = PHOTOS,
-  opts: { textFields?: EditorTextField[]; onApplyField?: (k: string, v: string) => void } = {},
+  opts: {
+    textFields?: EditorTextField[]
+    links?: EditorLink[]
+    onApplyField?: (k: string, v: string) => void
+  } = {},
 ) {
   return render(
     <EditorInspector
       artistId="artist-1"
       photos={photos}
       textFields={opts.textFields ?? []}
+      links={opts.links ?? []}
       onApplyField={opts.onApplyField}
     />,
   )
@@ -56,6 +76,9 @@ afterEach(() => {
   deleteMock.mockClear()
   reorderMock.mockClear()
   saveMock.mockClear()
+  updateContentMock.mockClear()
+  deleteContentMock.mockClear()
+  reorderContentMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -170,5 +193,57 @@ describe('EditorInspector — Text component', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('EditorInspector — Links component', () => {
+  function openLinks() {
+    renderInspector([], { links: LINKS })
+    fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+  }
+
+  it('shows the real link count in browse', () => {
+    renderInspector([], { links: LINKS })
+    expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('3 links')
+  })
+
+  it('lists links with editable label + url and an add-link out', () => {
+    openLinks()
+    expect((screen.getByLabelText('Link 1 label') as HTMLInputElement).value).toBe('Spotify')
+    expect((screen.getByLabelText('Link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
+    expect(screen.getByRole('link', { name: /Add link/ }).getAttribute('href')).toBe('/artists/artist-1/links')
+  })
+
+  it('edits a link label with a debounced content save', () => {
+    vi.useFakeTimers()
+    try {
+      openLinks()
+      fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Listen' } })
+      expect(updateContentMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(updateContentMock).toHaveBeenCalledTimes(1)
+      const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+      expect([type, id, artistId]).toEqual(['link', 'l1', 'artist-1'])
+      expect((fd as FormData).get('label')).toBe('Listen')
+      expect((fd as FormData).get('url')).toBe('https://open.spotify.com/x')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('removes a link optimistically via deleteContentAction', () => {
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link 1' }))
+    expect(deleteContentMock).toHaveBeenCalledWith('link', 'l1', 'artist-1')
+    expect(screen.queryByDisplayValue('Spotify')).toBeNull()
+  })
+
+  it('reorders links via drag and persists the new order', () => {
+    openLinks()
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    expect(rows.length).toBe(3)
+    fireEvent.dragStart(rows[0])
+    fireEvent.drop(rows[2])
+    expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l3', 'l1'])
   })
 })

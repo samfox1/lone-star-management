@@ -6,7 +6,14 @@ import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
 import { reorderList } from '@/lib/site-editor/gallery'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { deleteMediaAction, reorderGalleryAction, saveEditorFieldAction } from '../actions'
+import {
+  deleteContentAction,
+  deleteMediaAction,
+  reorderContentAction,
+  reorderGalleryAction,
+  saveEditorFieldAction,
+  updateContentAction,
+} from '../actions'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -27,6 +34,7 @@ export type EditorTextField = {
   value: string
   multiline: boolean
 }
+export type EditorLink = { id: string; label: string; url: string }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
@@ -34,7 +42,7 @@ type Component = { kind: Kind; icon: IconName; label: string; caption: string }
 const COMPONENTS: Component[] = [
   { kind: 'images', icon: 'photo', label: 'Images', caption: 'Photo gallery' },
   { kind: 'text', icon: 'text', label: 'Text', caption: 'Headings & copy' },
-  { kind: 'links', icon: 'links', label: 'Links', caption: '5 links' },
+  { kind: 'links', icon: 'links', label: 'Links', caption: 'Outbound links' },
   { kind: 'videos', icon: 'videos', label: 'Videos', caption: '6 videos' },
   { kind: 'music', icon: 'tracks', label: 'Music', caption: '1 album · 9 songs' },
   { kind: 'merch', icon: 'merch', label: 'Merch', caption: '4 products' },
@@ -48,20 +56,26 @@ function photoCount(n: number) {
 function fieldCount(n: number) {
   return `${n} ${n === 1 ? 'field' : 'fields'}`
 }
+function linkLabel(n: number) {
+  return `${n} ${n === 1 ? 'link' : 'links'}`
+}
 
 export function EditorInspector({
   artistId,
   photos: initial,
   textFields = [],
+  links: initialLinks = [],
   onApplyField,
 }: {
   artistId: string
   photos: GalleryPhoto[]
   textFields?: EditorTextField[]
+  links?: EditorLink[]
   onApplyField?: (key: string, value: string) => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
+  const [links, setLinks] = useState<EditorLink[]>(initialLinks)
   const [, startTransition] = useTransition()
 
   function removePhoto(p: GalleryPhoto) {
@@ -83,6 +97,25 @@ export function EditorInspector({
     })
   }
 
+  function removeLink(l: EditorLink) {
+    const prev = links
+    setLinks((list) => list.filter((x) => x.id !== l.id)) // optimistic
+    startTransition(async () => {
+      const res = await deleteContentAction('link', l.id, artistId)
+      if (res?.error) setLinks(prev)
+    })
+  }
+
+  function reorderLinks(from: number, to: number) {
+    const prev = links
+    const next = reorderList(links, from, to)
+    setLinks(next) // optimistic
+    startTransition(async () => {
+      const res = await reorderContentAction('link', artistId, next.map((l) => l.id))
+      if (res?.error) setLinks(prev)
+    })
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
@@ -90,15 +123,23 @@ export function EditorInspector({
           component={active}
           photos={photos}
           textFields={textFields}
+          links={links}
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
+          onRemoveLink={removeLink}
+          onReorderLink={reorderLinks}
           onApplyField={onApplyField}
           onBack={() => setActive(null)}
           onSwitch={setActive}
         />
       ) : (
-        <BrowseView imageCount={photos.length} textCount={textFields.length} onOpen={setActive} />
+        <BrowseView
+          imageCount={photos.length}
+          textCount={textFields.length}
+          linkCount={links.length}
+          onOpen={setActive}
+        />
       )}
     </aside>
   )
@@ -108,10 +149,12 @@ export function EditorInspector({
 function BrowseView({
   imageCount,
   textCount,
+  linkCount,
   onOpen,
 }: {
   imageCount: number
   textCount: number
+  linkCount: number
   onOpen: (c: Component) => void
 }) {
   return (
@@ -138,7 +181,9 @@ function BrowseView({
                   ? photoCount(imageCount)
                   : c.kind === 'text'
                     ? fieldCount(textCount)
-                    : c.caption}
+                    : c.kind === 'links'
+                      ? linkLabel(linkCount)
+                      : c.caption}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -154,9 +199,12 @@ function EditingView({
   component,
   photos,
   textFields,
+  links,
   artistId,
   onRemove,
   onReorder,
+  onRemoveLink,
+  onReorderLink,
   onApplyField,
   onBack,
   onSwitch,
@@ -164,15 +212,19 @@ function EditingView({
   component: Component
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
+  links: EditorLink[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
+  onRemoveLink: (l: EditorLink) => void
+  onReorderLink: (from: number, to: number) => void
   onApplyField?: (key: string, value: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
   const isImages = component.kind === 'images'
   const isText = component.kind === 'text'
+  const isLinks = component.kind === 'links'
   return (
     <>
       <button
@@ -191,7 +243,13 @@ function EditingView({
         <span className="flex flex-col gap-0.5">
           <span className="text-base font-semibold">{isImages ? 'Gallery' : component.label}</span>
           <span className={EYEBROW}>
-            {isImages ? photoCount(photos.length) : isText ? fieldCount(textFields.length) : component.caption}
+            {isImages
+              ? photoCount(photos.length)
+              : isText
+                ? fieldCount(textFields.length)
+                : isLinks
+                  ? linkLabel(links.length)
+                  : component.caption}
           </span>
         </span>
       </div>
@@ -201,6 +259,8 @@ function EditingView({
           <PhotoTools photos={photos} artistId={artistId} onRemove={onRemove} onReorder={onReorder} />
         ) : isText ? (
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
+        ) : isLinks ? (
+          <LinkTools links={links} artistId={artistId} onRemove={onRemoveLink} onReorder={onReorderLink} />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -422,6 +482,156 @@ function TextTools({
           )}
         </label>
       ))}
+      {status !== 'idle' && (
+        <div
+          className={cx(
+            'font-space text-[10px] uppercase tracking-[0.08em]',
+            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
+          )}
+        >
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Link tools: edit / reorder / remove the site's outbound links ───────────── */
+function LinkTools({
+  links,
+  artistId,
+  onRemove,
+  onReorder,
+}: {
+  links: EditorLink[]
+  artistId: string
+  onRemove: (l: EditorLink) => void
+  onReorder: (from: number, to: number) => void
+}) {
+  const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
+    Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
+  )
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const pending = useRef<Set<string>>(new Set())
+  const dragFrom = useRef<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
+  // Latest values, so the unmount flush reads current text (synced off-render).
+  const valuesRef = useRef(values)
+  useEffect(() => {
+    valuesRef.current = values
+  }, [values])
+
+  const persist = useCallback(
+    (id: string, v: { label: string; url: string }) => {
+      pending.current.delete(id)
+      const fd = new FormData()
+      fd.set('label', v.label)
+      fd.set('url', v.url)
+      setStatus('saving')
+      updateContentAction('link', id, artistId, fd).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+    },
+    [artistId],
+  )
+
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingSet = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingSet.forEach((id) => {
+        const v = valuesRef.current[id]
+        if (!v) return
+        const fd = new FormData()
+        fd.set('label', v.label)
+        fd.set('url', v.url)
+        void updateContentAction('link', id, artistId, fd)
+      })
+    }
+  }, [artistId])
+
+  function edit(id: string, patch: Partial<{ label: string; url: string }>) {
+    setValues((v) => {
+      const next = { ...v, [id]: { ...v[id], ...patch } }
+      pending.current.add(id)
+      const existing = timers.current.get(id)
+      if (existing) clearTimeout(existing)
+      timers.current.set(
+        id,
+        setTimeout(() => {
+          timers.current.delete(id)
+          persist(id, next[id])
+        }, 500),
+      )
+      return next
+    })
+  }
+
+  function drop(to: number) {
+    const from = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (from !== null && from !== to) onReorder(from, to)
+  }
+
+  return (
+    <div className="space-y-2.5 px-5 py-4">
+      {links.map((l, i) => (
+        <div
+          key={l.id}
+          draggable
+          onDragStart={() => (dragFrom.current = i)}
+          onDragEnter={() => setDragOver(i)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => drop(i)}
+          onDragEnd={() => {
+            dragFrom.current = null
+            setDragOver(null)
+          }}
+          className={cx(
+            'flex items-start gap-2 rounded-lg border border-hairline p-2.5',
+            dragOver === i && 'ring-2 ring-accent',
+          )}
+        >
+          <span className="mt-1.5 flex-none cursor-grab text-ink-faint" aria-hidden>
+            <Icon name="grip" size={16} />
+          </span>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <input
+              aria-label={`Link ${i + 1} label`}
+              value={values[l.id]?.label ?? ''}
+              onChange={(e) => edit(l.id, { label: e.target.value })}
+              placeholder="Label"
+              className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+            />
+            <input
+              aria-label={`Link ${i + 1} URL`}
+              type="url"
+              value={values[l.id]?.url ?? ''}
+              onChange={(e) => edit(l.id, { url: e.target.value })}
+              placeholder="https://…"
+              className="w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint"
+            />
+          </div>
+          <button
+            type="button"
+            aria-label={`Remove link ${i + 1}`}
+            onClick={() => onRemove(l)}
+            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      ))}
+
+      <Link
+        href={`/artists/${artistId}/links`}
+        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
+      >
+        <Icon name="plus" size={16} />
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add link</span>
+      </Link>
+
       {status !== 'idle' && (
         <div
           className={cx(
