@@ -133,7 +133,10 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   },
   media: {
     table: 'media',
-    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at'],
+    // `visible` rides the snapshot so the public door (get_public_site) gates gallery
+    // photos on their PUBLISHED on-site selection, and toggling presence is a diffable,
+    // publishable change like any other edit.
+    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'visible'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the

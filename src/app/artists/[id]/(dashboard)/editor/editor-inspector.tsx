@@ -14,6 +14,7 @@ import {
   reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
+  setOnSiteAction,
   updateContentAction,
 } from '../actions'
 
@@ -28,7 +29,7 @@ import {
  * other component types still render against placeholder affordances — next step.
  */
 
-export type GalleryPhoto = { id: string; storage_path: string }
+export type GalleryPhoto = { id: string; storage_path: string; onSite: boolean }
 export type EditorTextField = {
   key: string
   label: string
@@ -39,7 +40,7 @@ export type EditorTextField = {
 export type EditorLink = { id: string; label: string; url: string }
 export type EditorVideo = { id: string; title: string; provider: string | null; poster: string | null }
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null }
-export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean }
+export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
@@ -103,6 +104,27 @@ function songLabel(n: number) {
   return `${n} ${n === 1 ? 'song' : 'songs'}`
 }
 
+/** Per-item "on the site" toggle (writes the `visible` flag). Being in the library never
+ *  implies on-site — the manager selects each item on. */
+function OnSiteToggle({ on, onToggle, className }: { on: boolean; onToggle: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      aria-label={on ? 'On the site — click to take off' : 'Off the site — click to add'}
+      className={cx(
+        'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] transition-colors',
+        on ? 'bg-accent text-white' : 'border border-hairline bg-paper text-ink-faint hover:text-ink',
+        className,
+      )}
+    >
+      <Icon name="check" size={11} className={on ? undefined : 'opacity-40'} />
+      {on ? 'On site' : 'Off'}
+    </button>
+  )
+}
+
 export function EditorInspector({
   artistId,
   photos: initial,
@@ -155,9 +177,29 @@ export function EditorInspector({
   }
 
   // The uploader already wrote the media row (and router.refresh'd); append it to the
-  // grid so it shows without waiting on a prop re-sync. New uploads sort last.
-  function addPhoto(m: GalleryPhoto) {
-    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))
+  // grid so it shows without waiting on a prop re-sync. New uploads are OFF the site
+  // (visible defaults false) until selected, and sort last.
+  function addPhoto(m: { id: string; storage_path: string }) {
+    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false }]))
+  }
+
+  // Toggle whether a photo / song is on the public site (the `visible` flag). Optimistic;
+  // reverts the single item on failure. Not a list-structure change, so no publish/guard.
+  function togglePhotoOnSite(p: GalleryPhoto) {
+    const next = !p.onSite
+    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: next } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('photo', p.id, artistId, next)
+      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: !next } : x)))
+    })
+  }
+  function toggleSongOnSite(s: EditorSong) {
+    const next = !s.onSite
+    setSongs((list) => list.map((x) => (x.id === s.id ? { ...x, onSite: next } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('track', s.id, artistId, next)
+      if (res?.error) setSongs((list) => list.map((x) => (x.id === s.id ? { ...x, onSite: !next } : x)))
+    })
   }
 
   function removeLink(l: EditorLink) {
@@ -248,6 +290,8 @@ export function EditorInspector({
           onRemove={removePhoto}
           onReorder={reorderPhotos}
           onAddPhoto={addPhoto}
+          onTogglePhotoOnSite={togglePhotoOnSite}
+          onToggleSongOnSite={toggleSongOnSite}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
           onRemoveVideo={removeVideo}
@@ -348,6 +392,8 @@ function EditingView({
   onRemove,
   onReorder,
   onAddPhoto,
+  onTogglePhotoOnSite,
+  onToggleSongOnSite,
   onRemoveLink,
   onReorderLink,
   onRemoveVideo,
@@ -369,7 +415,9 @@ function EditingView({
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
-  onAddPhoto: (m: GalleryPhoto) => void
+  onAddPhoto: (m: { id: string; storage_path: string }) => void
+  onTogglePhotoOnSite: (p: GalleryPhoto) => void
+  onToggleSongOnSite: (s: EditorSong) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (from: number, to: number) => void
   onRemoveVideo: (v: EditorVideo) => void
@@ -430,6 +478,7 @@ function EditingView({
             onRemove={onRemove}
             onReorder={onReorder}
             onAdd={onAddPhoto}
+            onToggleOnSite={onTogglePhotoOnSite}
           />
         ) : isText ? (
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
@@ -440,7 +489,13 @@ function EditingView({
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
         ) : isMusic ? (
-          <MusicTools songs={songs} artistId={artistId} onRemove={onRemoveSong} onReorder={onReorderSong} />
+          <MusicTools
+            songs={songs}
+            artistId={artistId}
+            onRemove={onRemoveSong}
+            onReorder={onReorderSong}
+            onToggleOnSite={onToggleSongOnSite}
+          />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
             Editing tools for {component.label} are coming next.
@@ -479,12 +534,14 @@ function PhotoTools({
   onRemove,
   onReorder,
   onAdd,
+  onToggleOnSite,
 }: {
   photos: GalleryPhoto[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
-  onAdd: (m: GalleryPhoto) => void
+  onAdd: (m: { id: string; storage_path: string }) => void
+  onToggleOnSite: (p: GalleryPhoto) => void
 }) {
   const [open, setOpen] = useState({ photos: true, sizing: true, layout: true })
   const [perImage, setPerImage] = useState<'S' | 'M' | 'L'>('M')
@@ -524,7 +581,11 @@ function PhotoTools({
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={mediaUrl(p.storage_path)} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />
+              <img
+                src={mediaUrl(p.storage_path)}
+                alt=""
+                className={cx('aspect-[4/3] w-full rounded-lg object-cover', !p.onSite && 'opacity-45')}
+              />
               <span className="absolute left-1.5 top-1.5 hidden cursor-grab rounded-md bg-black/35 p-0.5 text-white group-hover:flex">
                 <Icon name="grip" size={16} />
               </span>
@@ -536,6 +597,7 @@ function PhotoTools({
               >
                 <Icon name="trash" size={14} />
               </button>
+              <OnSiteToggle on={p.onSite} onToggle={() => onToggleOnSite(p)} className="absolute bottom-1.5 left-1.5" />
             </div>
           ))}
         </div>
@@ -1169,11 +1231,13 @@ function MusicTools({
   artistId,
   onRemove,
   onReorder,
+  onToggleOnSite,
 }: {
   songs: EditorSong[]
   artistId: string
   onRemove: (s: EditorSong) => void
   onReorder: (from: number, to: number) => void
+  onToggleOnSite: (s: EditorSong) => void
 }) {
   const [titles, setTitles] = useState<Record<string, string>>(() =>
     Object.fromEntries(songs.map((s) => [s.id, s.title])),
@@ -1286,14 +1350,17 @@ function MusicTools({
                 invalid.has(s.id) && INVALID_RING,
               )}
             />
-            <span
-              className={cx(
-                'w-fit rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.1em]',
-                s.released ? 'bg-accent-soft text-accent' : 'bg-track text-ink-faint',
-              )}
-            >
-              {s.released ? 'Released' : 'Unreleased'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={cx(
+                  'w-fit rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.1em]',
+                  s.released ? 'bg-accent-soft text-accent' : 'bg-track text-ink-faint',
+                )}
+              >
+                {s.released ? 'Released' : 'Unreleased'}
+              </span>
+              <OnSiteToggle on={s.onSite} onToggle={() => onToggleOnSite(s)} />
+            </div>
           </div>
           <button
             type="button"

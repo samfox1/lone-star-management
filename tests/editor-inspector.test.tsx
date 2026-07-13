@@ -16,6 +16,7 @@ import {
   reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
+  setOnSiteAction,
   updateContentAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type {
@@ -34,6 +35,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteContentAction: vi.fn(async () => ({})),
   reorderContentAction: vi.fn(async () => ({})),
   renameVideoAction: vi.fn(async () => ({})),
+  setOnSiteAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
@@ -50,11 +52,12 @@ const updateContentMock = vi.mocked(updateContentAction)
 const deleteContentMock = vi.mocked(deleteContentAction)
 const reorderContentMock = vi.mocked(reorderContentAction)
 const renameVideoMock = vi.mocked(renameVideoAction)
+const setOnSiteMock = vi.mocked(setOnSiteAction)
 
 const PHOTOS: GalleryPhoto[] = [
-  { id: 'm1', storage_path: 'artist-1/gallery/a.jpg' },
-  { id: 'm2', storage_path: 'artist-1/gallery/b.jpg' },
-  { id: 'm3', storage_path: 'artist-1/gallery/c.jpg' },
+  { id: 'm1', storage_path: 'artist-1/gallery/a.jpg', onSite: false },
+  { id: 'm2', storage_path: 'artist-1/gallery/b.jpg', onSite: true },
+  { id: 'm3', storage_path: 'artist-1/gallery/c.jpg', onSite: false },
 ]
 
 const TEXT_FIELDS: EditorTextField[] = [
@@ -81,9 +84,9 @@ const MERCH: EditorMerch[] = [
 ]
 
 const SONGS: EditorSong[] = [
-  { id: 's1', title: 'Opener', cover_url: 'https://img/cover.jpg', released: true },
-  { id: 's2', title: 'Demo take', cover_url: null, released: false },
-  { id: 's3', title: 'Closer', cover_url: null, released: true },
+  { id: 's1', title: 'Opener', cover_url: 'https://img/cover.jpg', released: true, onSite: false },
+  { id: 's2', title: 'Demo take', cover_url: null, released: false, onSite: false },
+  { id: 's3', title: 'Closer', cover_url: null, released: true, onSite: true },
 ]
 
 function renderInspector(
@@ -120,6 +123,7 @@ afterEach(() => {
   deleteContentMock.mockClear()
   reorderContentMock.mockClear()
   renameVideoMock.mockClear()
+  setOnSiteMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -191,12 +195,19 @@ describe('EditorInspector — opening Images', () => {
     await Promise.resolve()
   })
 
-  it('adds an uploaded photo to the grid optimistically', () => {
+  it('adds an uploaded photo to the grid optimistically (off-site by default)', () => {
     openImages()
     expect(document.querySelectorAll('aside img').length).toBe(3)
     fireEvent.click(screen.getByRole('button', { name: 'mock-upload' }))
     expect(document.querySelectorAll('aside img').length).toBe(4)
     expect(screen.getByText('4 photos')).toBeTruthy()
+  })
+
+  it('toggles a photo on-site (writes visible via setOnSiteAction)', () => {
+    openImages()
+    // m1 starts off-site → its toggle offers to add it
+    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
+    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', true)
   })
 
   it('shows the size slider and layout controls', () => {
@@ -463,6 +474,13 @@ describe('EditorInspector — Music component', () => {
     openMusic()
     fireEvent.click(screen.getByRole('button', { name: 'Remove song 1' }))
     expect(deleteContentMock).toHaveBeenCalledWith('track', 's1', 'artist-1')
+  })
+
+  it('toggles a song on-site (writes visible via setOnSiteAction)', () => {
+    openMusic()
+    // s1 starts off-site → its toggle offers to add it
+    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
+    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's1', 'artist-1', true)
   })
 
   it('does NOT save a blank song title and flags it invalid', () => {

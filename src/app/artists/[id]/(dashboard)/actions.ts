@@ -357,6 +357,26 @@ export async function deleteMediaAction(
 }
 
 /**
+ * Toggle whether one asset is ON THE SITE (presence) from the visual editor — writes the
+ * `visible` flag. An asset is on the public site only when selected AND published; being
+ * in the library (Assets) never implies on-site. RLS scopes the write to the caller's
+ * tenant. `kind` maps to the owning table.
+ */
+const ON_SITE_TABLE = { photo: 'media', track: 'tracks', video: 'videos', merch: 'merch', link: 'links' } as const
+export async function setOnSiteAction(
+  kind: keyof typeof ON_SITE_TABLE,
+  id: string,
+  artistId: string,
+  visible: boolean,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.from(ON_SITE_TABLE[kind]).update({ visible }).eq('id', id).eq('artist_id', artistId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
  * Persist a new gallery order from the visual editor: `orderedIds` is the media ids
  * in their new order; each row's `sort_order` becomes its index. RLS-scoped.
  */
