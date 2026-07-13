@@ -100,7 +100,8 @@ No cancellation/ordering of in-flight saves; an older keystroke's save can land 
 newer one and overwrite it. **Fix:** ignore stale responses (per-field sequence token)
 or cancel superseded requests.
 
-## 7. 🟡 LOW — The chrome "Saved" chip is a hardcoded lie
+## 7. ✅ FIXED (2026-07-13) 🟡 LOW — The chrome "Saved" chip is a hardcoded lie
+**Fix:** removed the hardcoded chip from the floating controls; the real per-field status lives in each tool.
 `editor-shell.tsx:85-87` · findings #17, #18 (CONFIRMED)
 
 The prominent green-dot "Saved" in the floating controls is hardcoded and never reflects

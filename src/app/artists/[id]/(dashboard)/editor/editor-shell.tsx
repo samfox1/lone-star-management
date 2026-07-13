@@ -82,10 +82,8 @@ export function EditorShell({
 
             <span className="flex-1" />
 
-            <span className="inline-flex items-center gap-2 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              Saved
-            </span>
+            {/* No global save chip here — the real per-field status ('Saving…/Saved/Failed')
+                lives in each inspector tool; a hardcoded chip would just lie. */}
             <EditorPublish artistId={artistId} />
           </div>
 
