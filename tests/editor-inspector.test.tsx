@@ -172,6 +172,18 @@ describe('EditorInspector — opening Images', () => {
     expect((imgs[2] as HTMLImageElement).src).toContain('artist-1/gallery/a.jpg')
   })
 
+  it('ignores a second remove while one is in flight (no concurrent-op clobber)', async () => {
+    let release: () => void = () => {}
+    deleteMock.mockImplementationOnce(() => new Promise((r) => (release = () => r({}))))
+    openImages()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    // first delete is pending → a second remove must be ignored until it settles
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    expect(deleteMock).toHaveBeenCalledTimes(1)
+    release()
+    await Promise.resolve()
+  })
+
   it('shows the size slider and layout controls', () => {
     openImages()
     expect(screen.getByLabelText('Collection size')).toBeTruthy()

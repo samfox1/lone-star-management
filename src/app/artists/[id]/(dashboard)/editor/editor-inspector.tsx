@@ -98,9 +98,13 @@ export function EditorInspector({
   const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
   const [merch, setMerch] = useState<EditorMerch[]>(initialMerch)
   const [songs, setSongs] = useState<EditorSong[]>(initialSongs)
-  const [, startTransition] = useTransition()
+  // One in-flight list mutation at a time: overlapping optimistic ops would each
+  // capture a whole-array `prev`, and a later failure would revert to a snapshot that
+  // predates a concurrent success — resurrecting a removed row / dropping a good change.
+  const [isPending, startTransition] = useTransition()
 
   function removePhoto(p: GalleryPhoto) {
+    if (isPending) return
     const prev = photos
     setPhotos((list) => list.filter((x) => x.id !== p.id)) // optimistic
     startTransition(async () => {
@@ -110,6 +114,7 @@ export function EditorInspector({
   }
 
   function reorderPhotos(from: number, to: number) {
+    if (isPending) return
     const prev = photos
     const next = reorderList(photos, from, to)
     setPhotos(next) // optimistic
@@ -120,6 +125,7 @@ export function EditorInspector({
   }
 
   function removeLink(l: EditorLink) {
+    if (isPending) return
     const prev = links
     setLinks((list) => list.filter((x) => x.id !== l.id)) // optimistic
     startTransition(async () => {
@@ -129,6 +135,7 @@ export function EditorInspector({
   }
 
   function reorderLinks(from: number, to: number) {
+    if (isPending) return
     const prev = links
     const next = reorderList(links, from, to)
     setLinks(next) // optimistic
@@ -139,6 +146,7 @@ export function EditorInspector({
   }
 
   function removeVideo(v: EditorVideo) {
+    if (isPending) return
     const prev = videos
     setVideos((list) => list.filter((x) => x.id !== v.id)) // optimistic
     startTransition(async () => {
@@ -148,6 +156,7 @@ export function EditorInspector({
   }
 
   function reorderVideos(from: number, to: number) {
+    if (isPending) return
     const prev = videos
     const next = reorderList(videos, from, to)
     setVideos(next) // optimistic
@@ -158,6 +167,7 @@ export function EditorInspector({
   }
 
   function removeMerch(m: EditorMerch) {
+    if (isPending) return
     const prev = merch
     setMerch((list) => list.filter((x) => x.id !== m.id)) // optimistic
     startTransition(async () => {
@@ -167,6 +177,7 @@ export function EditorInspector({
   }
 
   function removeSong(s: EditorSong) {
+    if (isPending) return
     const prev = songs
     setSongs((list) => list.filter((x) => x.id !== s.id)) // optimistic
     startTransition(async () => {
@@ -176,6 +187,7 @@ export function EditorInspector({
   }
 
   function reorderSongs(from: number, to: number) {
+    if (isPending) return
     const prev = songs
     const next = reorderList(songs, from, to)
     setSongs(next) // optimistic

@@ -31,8 +31,14 @@ until republish"); the code on line 353 and the inline comment on 351-352 contra
   to a publish-time GC of orphaned media (as videos already do via `gcVideoObjects`).
   Confirm a media GC exists or add one, else objects leak.
 
-## 2. 🔴 HIGH — Optimistic revert clobbers concurrent in-flight ops
+## 2. ✅ FIXED (2026-07-13) 🔴 HIGH — Optimistic revert clobbers concurrent in-flight ops
 `editor-inspector.tsx:104-186` · findings #2, #10 (CONFIRMED)
+**Fix:** a one-at-a-time concurrency guard (`if (isPending) return` on all nine
+remove/reorder handlers, using `useTransition`'s `isPending`). No two ops can be in
+flight, so each single-op `prev` revert is accurate — the clobber is impossible. Test:
+"ignores a second remove while one is in flight" in `editor-inspector.test.tsx`. (A full
+`useOptimistic` server-reconcile is a larger optional follow-up — see #4.)
+
 
 Every remove/reorder handler captures `prev = <whole array>` and, on error,
 `setState(prev)` — a full-list snapshot restore. Two ops in flight (remove buttons stay
@@ -53,8 +59,15 @@ old order → persisted order corrupted, no rollback.
 - **Fix:** batch the renumber in one statement/RPC (transactional), or at minimum
   re-fetch/repair on partial failure.
 
-## 4. 🟠 MEDIUM — Inspector state seeded once from props, never re-synced
+## 4. 🟡 MITIGATED (2026-07-13) 🟠 MEDIUM — Inspector state seeded once from props, never re-synced
 `editor-inspector.tsx:96-100` + each `*Tools` value map · findings #9, #15 (CONFIRMED)
+**Status:** the *dangerous* interaction (a failed op reverting to a snapshot that
+predates a concurrent success) is gone with #2's guard, and after a successful op the
+local state already equals the persisted truth, so no drift. Residual gap: an *external*
+change (another tab/session) isn't reconciled while mounted. Complete fix = base the
+lists on `useOptimistic(serverProp)` so every settled action re-reads server truth;
+deferred as an optional follow-up (bigger refactor, browser-verify needed).
+
 
 All lists + field values are `useState(initial)` seeded once. After any action's
 `revalidatePath`, the fresh server data is **ignored while the editor stays mounted**,
