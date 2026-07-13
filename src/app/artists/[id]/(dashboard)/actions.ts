@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
-import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
+import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
 import {
   type CrudEntity,
@@ -186,6 +186,7 @@ export async function publishAction(artistId: string) {
   } = await supabase.auth.getUser()
   await publishAll(supabase, artistId, user?.id)
   await gcVideoObjects(supabase, artistId) // publishAll includes videos → collect orphans
+  await gcMediaObjects(supabase, artistId) // …and gallery media
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
@@ -212,6 +213,7 @@ export async function publishAllGatedAction(
   try {
     await publishAll(supabase, artistId, gate.userId)
     await gcVideoObjects(supabase, artistId)
+    await gcMediaObjects(supabase, artistId)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
   }
@@ -249,6 +251,7 @@ export async function publishSiteAction(artistId: string) {
   await publishContent(supabase, 'site_content', artistId, user?.id)
   // Profile LAST (the live-gate invariant — see publishAll).
   await publishProfile(supabase, artistId, user?.id)
+  await gcMediaObjects(supabase, artistId) // deleted-photo revisions are now tombstoned → sweep orphans
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
@@ -333,12 +336,12 @@ export async function saveEditorFieldAction(
 }
 
 /**
- * Remove a media asset from the working set (a DRAFT deletion). We delete only
- * the registry row, NOT the Storage object: the published site still references
- * it until the manager republishes (deleting is a draft change like any other).
- * Once the next publish tombstones the reference, the object is orphaned —
- * TODO: garbage-collect orphaned objects (e.g. during the publish tombstone
- * step) so they don't accumulate.
+ * Remove a media asset from the working set (a DRAFT deletion). We delete only the
+ * registry row; the Storage object is destroyed ONLY if the media was never published
+ * (`gcDeletedMediaObject`). A published photo is served on the live site from its
+ * revision SNAPSHOT until the next publish tombstones it, so its object must survive
+ * until then — deleting it eagerly would 404 the live site and lose the file
+ * irrecoverably. The next publish's `gcMediaObjects` sweeps the orphan.
  */
 export async function deleteMediaAction(
   mediaId: string,
@@ -348,9 +351,7 @@ export async function deleteMediaAction(
   const supabase = await createClient()
   const { error } = await supabase.from('media').delete().eq('id', mediaId)
   if (error) return { error: error.message }
-  // Media is a live table (no publish/revision deferral), so the row delete unpublishes
-  // it immediately — safe to remove the object now instead of orphaning it.
-  if (storagePath) await supabase.storage.from('media').remove([storagePath])
+  await gcDeletedMediaObject(supabase, mediaId, storagePath)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

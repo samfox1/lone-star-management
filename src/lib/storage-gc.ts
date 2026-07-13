@@ -68,6 +68,62 @@ export async function gcDeletedVideoObject(
 }
 
 /**
+ * Remove a gallery image's object at DELETE time — but ONLY if the media was never
+ * published (no revision references it). Media is served on the public site from its
+ * revision SNAPSHOT (get_public_site reads `storage_path` out of published_revisions),
+ * so a published photo's object MUST survive until its tombstone is published, or the
+ * live site 404s and the file is unrecoverable. The next publish's gcMediaObjects is
+ * the backstop for those. Mirrors gcDeletedVideoObject. Best-effort.
+ */
+export async function gcDeletedMediaObject(
+  client: SupabaseClient,
+  mediaId: string,
+  storagePath: string | null,
+): Promise<void> {
+  if (!storagePath) return
+  try {
+    const { count } = await client
+      .from('revisions')
+      .select('id', { count: 'exact', head: true })
+      .eq('entity_type', 'media')
+      .eq('entity_id', mediaId)
+    if (!count) await client.storage.from('media').remove([storagePath])
+  } catch {
+    // best-effort; the next publish's gcMediaObjects is the backstop
+  }
+}
+
+/**
+ * Remove orphaned gallery objects from the `media` bucket for one artist. Call AFTER
+ * publishing media (once a deleted photo's revision is tombstoned, its object is a true
+ * orphan). Sweeps the `{artistId}/gallery` folder — the editor's gallery domain — and
+ * keeps anything still referenced by a media row. Best-effort: never fails the publish.
+ */
+export async function gcMediaObjects(
+  client: SupabaseClient,
+  artistId: string,
+  minAgeMs: number = GC_MIN_AGE_MS,
+): Promise<void> {
+  try {
+    const { data: rows } = await client.from('media').select('storage_path').eq('artist_id', artistId)
+    const referenced = new Set<string>()
+    for (const r of rows ?? []) if (r.storage_path) referenced.add(r.storage_path as string)
+
+    const prefix = `${artistId}/gallery`
+    const { data: objs } = await client.storage.from('media').list(prefix, { limit: 1000 })
+    const listed = (objs ?? []).map((o) => ({
+      path: `${prefix}/${o.name}`,
+      createdAt: (o as { created_at?: string | null }).created_at,
+    }))
+
+    const toRemove = collectablePaths(listed, referenced, Date.now(), minAgeMs)
+    if (toRemove.length) await client.storage.from('media').remove(toRemove)
+  } catch {
+    // swallow — GC is opportunistic cleanup, not part of the publish contract
+  }
+}
+
+/**
  * Remove orphaned objects from the `videos` bucket for one artist. Call AFTER
  * publishContent('video'). Best-effort: a GC failure must never fail the publish.
  */
