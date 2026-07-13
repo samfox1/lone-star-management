@@ -53,6 +53,9 @@ const COMPONENTS: Component[] = [
 ]
 
 const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
+// Red ring for a field whose value the server would reject (a blank required field, a
+// bad price) — gating the save so the panel can't claim "Saved" on a dropped write.
+const INVALID_RING = 'border-accent-red focus:border-accent-red'
 
 function photoCount(n: number) {
   return `${n} ${n === 1 ? 'photo' : 'photos'}`
@@ -647,6 +650,7 @@ function LinkTools({
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const pending = useRef<Set<string>>(new Set())
   const dragFrom = useRef<number | null>(null)
@@ -686,20 +690,30 @@ function LinkTools({
   }, [artistId])
 
   function edit(id: string, patch: Partial<{ label: string; url: string }>) {
-    setValues((v) => {
-      const next = { ...v, [id]: { ...v[id], ...patch } }
-      pending.current.add(id)
-      const existing = timers.current.get(id)
-      if (existing) clearTimeout(existing)
-      timers.current.set(
-        id,
-        setTimeout(() => {
-          timers.current.delete(id)
-          persist(id, next[id])
-        }, 500),
-      )
-      return next
+    const row = { ...(values[id] ?? { label: '', url: '' }), ...patch }
+    setValues((v) => ({ ...v, [id]: { ...v[id], ...patch } }))
+    const ok = row.label.trim() !== '' && row.url.trim() !== '' // both required — a blank one is dropped
+    setInvalid((s) => {
+      const n = new Set(s)
+      if (ok) n.delete(id)
+      else n.add(id)
+      return n
     })
+    const existing = timers.current.get(id)
+    if (existing) clearTimeout(existing)
+    timers.current.delete(id)
+    if (!ok) {
+      pending.current.delete(id)
+      return
+    }
+    pending.current.add(id)
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id)
+        persist(id, row)
+      }, 500),
+    )
   }
 
   function drop(to: number) {
@@ -734,18 +748,26 @@ function LinkTools({
           <div className="min-w-0 flex-1 space-y-1.5">
             <input
               aria-label={`Link ${i + 1} label`}
+              aria-invalid={(invalid.has(l.id) && !values[l.id]?.label.trim()) || undefined}
               value={values[l.id]?.label ?? ''}
               onChange={(e) => edit(l.id, { label: e.target.value })}
               placeholder="Label"
-              className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+              className={cx(
+                'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint',
+                invalid.has(l.id) && !values[l.id]?.label.trim() && INVALID_RING,
+              )}
             />
             <input
               aria-label={`Link ${i + 1} URL`}
+              aria-invalid={(invalid.has(l.id) && !values[l.id]?.url.trim()) || undefined}
               type="url"
               value={values[l.id]?.url ?? ''}
               onChange={(e) => edit(l.id, { url: e.target.value })}
               placeholder="https://…"
-              className="w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint"
+              className={cx(
+                'w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint',
+                invalid.has(l.id) && !values[l.id]?.url.trim() && INVALID_RING,
+              )}
             />
           </div>
           <button
@@ -928,12 +950,19 @@ function MerchTools({
     Object.fromEntries(merch.map((m) => [m.id, { title: m.title, price: m.price, url: m.url }])),
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const pending = useRef<Set<string>>(new Set())
   const valuesRef = useRef(values)
   useEffect(() => {
     valuesRef.current = values
   }, [values])
+
+  // Title is required; price must be blank or a number — else the write is dropped server-side.
+  const badFields = (v: Fields) => ({
+    title: v.title.trim() === '',
+    price: v.price.trim() !== '' && Number.isNaN(Number(v.price)),
+  })
 
   const persist = useCallback(
     (id: string, v: Fields) => {
@@ -966,20 +995,31 @@ function MerchTools({
   }, [artistId])
 
   function edit(id: string, patch: Partial<Fields>) {
-    setValues((v) => {
-      const next = { ...v, [id]: { ...v[id], ...patch } }
-      pending.current.add(id)
-      const existing = timers.current.get(id)
-      if (existing) clearTimeout(existing)
-      timers.current.set(
-        id,
-        setTimeout(() => {
-          timers.current.delete(id)
-          persist(id, next[id])
-        }, 500),
-      )
-      return next
+    const row: Fields = { ...(values[id] ?? { title: '', price: '', url: '' }), ...patch }
+    setValues((v) => ({ ...v, [id]: { ...v[id], ...patch } }))
+    const bad = badFields(row)
+    const ok = !bad.title && !bad.price
+    setInvalid((s) => {
+      const n = new Set(s)
+      if (ok) n.delete(id)
+      else n.add(id)
+      return n
     })
+    const existing = timers.current.get(id)
+    if (existing) clearTimeout(existing)
+    timers.current.delete(id)
+    if (!ok) {
+      pending.current.delete(id)
+      return
+    }
+    pending.current.add(id)
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id)
+        persist(id, row)
+      }, 500),
+    )
   }
 
   const control =
@@ -1000,19 +1040,30 @@ function MerchTools({
           <div className="min-w-0 flex-1 space-y-1.5">
             <input
               aria-label={`Product ${i + 1} name`}
+              aria-invalid={(invalid.has(m.id) && !values[m.id]?.title.trim()) || undefined}
               value={values[m.id]?.title ?? ''}
               onChange={(e) => edit(m.id, { title: e.target.value })}
               placeholder="Item name"
-              className={control}
+              className={cx(control, invalid.has(m.id) && !values[m.id]?.title.trim() && INVALID_RING)}
             />
             <div className="flex gap-1.5">
               <input
                 aria-label={`Product ${i + 1} price`}
+                aria-invalid={
+                  (invalid.has(m.id) && badFields(values[m.id] ?? { title: '', price: '', url: '' }).price) ||
+                  undefined
+                }
                 value={values[m.id]?.price ?? ''}
                 onChange={(e) => edit(m.id, { price: e.target.value })}
                 placeholder="Price"
                 inputMode="decimal"
-                className={cx(control, 'w-20 flex-none')}
+                className={cx(
+                  control,
+                  'w-20 flex-none',
+                  invalid.has(m.id) &&
+                    badFields(values[m.id] ?? { title: '', price: '', url: '' }).price &&
+                    INVALID_RING,
+                )}
               />
               <input
                 aria-label={`Product ${i + 1} URL`}
@@ -1073,6 +1124,7 @@ function MusicTools({
     Object.fromEntries(songs.map((s) => [s.id, s.title])),
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const pending = useRef<Map<string, string>>(new Map())
   const dragFrom = useRef<number | null>(null)
@@ -1104,9 +1156,21 @@ function MusicTools({
 
   function edit(id: string, title: string) {
     setTitles((t) => ({ ...t, [id]: title }))
-    pending.current.set(id, title)
+    const ok = title.trim() !== '' // title is required — a blank one is dropped server-side
+    setInvalid((s) => {
+      const n = new Set(s)
+      if (ok) n.delete(id)
+      else n.add(id)
+      return n
+    })
     const existing = timers.current.get(id)
     if (existing) clearTimeout(existing)
+    timers.current.delete(id)
+    if (!ok) {
+      pending.current.delete(id) // don't save (or flush on unmount) an invalid value
+      return
+    }
+    pending.current.set(id, title)
     timers.current.set(
       id,
       setTimeout(() => {
@@ -1156,10 +1220,14 @@ function MusicTools({
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <input
               aria-label={`Song ${i + 1} title`}
+              aria-invalid={invalid.has(s.id) || undefined}
               value={titles[s.id] ?? ''}
               onChange={(e) => edit(s.id, e.target.value)}
               placeholder="Title"
-              className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+              className={cx(
+                'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint',
+                invalid.has(s.id) && INVALID_RING,
+              )}
             />
             <span
               className={cx(

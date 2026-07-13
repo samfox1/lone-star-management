@@ -76,8 +76,15 @@ so drift (from #2/#3, or another tab) never heals. Underlies several issues abov
 - **Fix:** re-sync on prop change (effect or a `key`), or treat server data as the
   source of truth after each mutation.
 
-## 5. 🟠 MEDIUM — Silent "Saved" on saves the server actually drops
+## 5. ✅ FIXED (2026-07-13) 🟠 MEDIUM — Silent "Saved" on saves the server actually drops
 `actions.ts:137` (extractUpdate) + `editor-inspector.tsx:931` · findings #11, #12 (CONFIRMED)
+**Fix:** client-side validation gates the debounced save in the affected tools — Links
+(label + url required), Music (title required), Merch (title required + price must be
+blank or numeric). An invalid field no longer schedules a save (and is dropped from the
+unmount flush), gets `aria-invalid` + a red ring, so the panel can't report "Saved" on a
+write the server would drop. (Video already server-validated its title.) Tests: three
+"does NOT save … flags it invalid" cases in `editor-inspector.test.tsx`.
+
 
 - Clearing a **required** field (e.g. a link/song title) → `updateContent` no-ops the
   empty value, but the panel still shows "Saved" and keeps the blank value.

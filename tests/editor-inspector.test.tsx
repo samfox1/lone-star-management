@@ -259,6 +259,19 @@ describe('EditorInspector — Links component', () => {
     expect(screen.getByRole('link', { name: /Add link/ }).getAttribute('href')).toBe('/artists/artist-1/links')
   })
 
+  it('does NOT save a blank required field and flags it invalid (no false "Saved")', () => {
+    vi.useFakeTimers()
+    try {
+      openLinks()
+      fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: '' } })
+      vi.advanceTimersByTime(500)
+      expect(updateContentMock).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Link 1 label').getAttribute('aria-invalid')).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('edits a link label with a debounced content save', () => {
     vi.useFakeTimers()
     try {
@@ -381,6 +394,19 @@ describe('EditorInspector — Merch component', () => {
     expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
     expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
   })
+
+  it('does NOT save a non-numeric price and flags it invalid', () => {
+    vi.useFakeTimers()
+    try {
+      openMerch()
+      fireEvent.change(screen.getByLabelText('Product 1 price'), { target: { value: 'abc' } })
+      vi.advanceTimersByTime(500)
+      expect(updateContentMock).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Product 1 price').getAttribute('aria-invalid')).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('EditorInspector — Music component', () => {
@@ -422,6 +448,19 @@ describe('EditorInspector — Music component', () => {
     openMusic()
     fireEvent.click(screen.getByRole('button', { name: 'Remove song 1' }))
     expect(deleteContentMock).toHaveBeenCalledWith('track', 's1', 'artist-1')
+  })
+
+  it('does NOT save a blank song title and flags it invalid', () => {
+    vi.useFakeTimers()
+    try {
+      openMusic()
+      fireEvent.change(screen.getByLabelText('Song 1 title'), { target: { value: '' } })
+      vi.advanceTimersByTime(500)
+      expect(updateContentMock).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Song 1 title').getAttribute('aria-invalid')).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reorders songs via drag and persists the new order', () => {
