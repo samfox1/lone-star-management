@@ -372,23 +372,21 @@ export async function reorderGalleryAction(
 }
 
 /**
- * Persist a new order for a CRUD content type (links/videos/…) from the visual editor:
- * each row's `sort_order` becomes its index via the draft-aware `updateContent`.
- * RLS scopes every write to the caller's tenant.
+ * Persist a new order for a CRUD content type (links/videos/songs) from the visual
+ * editor: each row's `sort_order` becomes its index, ATOMICALLY via the `reorder_rows`
+ * RPC (one statement, all-or-nothing). RLS scopes every write to the caller's tenant.
  */
+const REORDER_TABLE: Partial<Record<CrudEntity, string>> = { link: 'links', video: 'videos', track: 'tracks' }
 export async function reorderContentAction(
   type: CrudEntity,
   artistId: string,
   orderedIds: string[],
 ): Promise<{ error?: string }> {
+  const table = REORDER_TABLE[type]
+  if (!table) return { error: `Cannot reorder ${type}.` }
   const supabase = await createClient()
-  try {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await updateContent(supabase, type, orderedIds[i], { sort_order: i })
-    }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Reorder failed.' }
-  }
+  const { error } = await supabase.rpc('reorder_rows', { p_table: table, p_artist: artistId, p_ids: orderedIds })
+  if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

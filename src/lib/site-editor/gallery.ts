@@ -20,19 +20,17 @@ export function reorderList<T>(list: T[], from: number, to: number): T[] {
 }
 
 /** Persist gallery order: set each media row's `sort_order` to its index in
- *  `orderedIds`. RLS-scoped; the `artist_id` filter is a belt-and-suspenders guard. */
+ *  `orderedIds`, ATOMICALLY (one `reorder_rows` RPC = one statement/transaction, so a
+ *  partial failure can't half-renumber the table). RLS-scoped (SECURITY INVOKER). */
 export async function reorderGallery(
   supabase: SupabaseClient,
   artistId: string,
   orderedIds: string[],
 ): Promise<{ ok: boolean; error?: string }> {
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase
-      .from('media')
-      .update({ sort_order: i })
-      .eq('id', orderedIds[i])
-      .eq('artist_id', artistId)
-    if (error) return { ok: false, error: error.message }
-  }
-  return { ok: true }
+  const { error } = await supabase.rpc('reorder_rows', {
+    p_table: 'media',
+    p_artist: artistId,
+    p_ids: orderedIds,
+  })
+  return error ? { ok: false, error: error.message } : { ok: true }
 }

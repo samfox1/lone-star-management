@@ -49,7 +49,8 @@ and the panel is permanently out of sync (state is seeded once from props, see #
 - **Fix:** revert with a functional/targeted updater (re-insert only the failed item),
   or disable the control while its op is pending, and/or reconcile from server truth.
 
-## 3. 🔴 HIGH — Reorder persistence is a non-atomic per-row loop
+## 3. ✅ FIXED (2026-07-13) 🔴 HIGH — Reorder persistence is a non-atomic per-row loop
+**Fix:** new `reorder_rows(p_table, p_artist, p_ids)` RPC (migration `20260713120000`) does the whole renumber in ONE statement (atomic). SECURITY INVOKER → RLS still scopes to the owner; table whitelist + artist_id filter as guards. `reorderGallery` + `reorderContentAction` now call it. Verified via `site-editor-gallery.test.ts` (DB + cross-tenant).
 `gallery.ts:20-33` (and `reorderContentAction`) · finding #3 (CONFIRMED)
 
 `reorderGallery`/`reorderContentAction` write `sort_order = i` row-by-row. A mid-loop
