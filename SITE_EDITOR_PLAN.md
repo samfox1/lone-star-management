@@ -265,8 +265,14 @@ The whole "on-site" model depends on this (D1). Do it before the editor touches 
   visual-only for now). Album/EP grouping in the panel is a later enhancement.
 - ⏳ **Image fields** (hero / profile photo) — media pick/upload control + the
   hero-media mapping TODO (see the TODO in cinematic.tsx).
-- ⏳ **Publish** from the editor — button present but inert; edits are draft-only (the
-  existing Manager tools → Site → Publish still works). Review-and-approve = Phase 4.
+- 🔶 **Publish** from the editor — DONE (review window) 2026-07-12: the floating Publish
+  button opens the **review-and-approve window** (`editor-publish.tsx`) — a per-section
+  summary of everything changed since the last publish (`getUnpublishedDiffAction` →
+  `diffUnpublished`) + a **password confirm** that publishes it all
+  (`publishAllGatedAction` = `verifyPasswordGate` + `publishAll`, profile last). Empty
+  state + wrong-password error handled. Covered in `editor-publish.test.tsx`. ⏳ Still:
+  **selective per-change toggles** (Phase 4 D2) — needs per-item diff + selective
+  publish plumbing (diff is per-section counts; `publishAll` is per-type all-or-nothing).
 - **Depends on:** Phase 1. **Ships v1 slice A** once the tools + a publish affordance land.
 
 ### Phase 3 — List slots: add / remove / reorder on-site items

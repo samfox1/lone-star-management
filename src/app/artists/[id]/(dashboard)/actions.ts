@@ -17,9 +17,11 @@ import {
   type CrudEntity,
   type GenericEntity,
   type PublishableEntity,
+  type UnpublishedDiff,
   CRUD,
   createContent,
   deleteContent,
+  diffUnpublished,
   publishAll,
   publishContent,
   publishProfile,
@@ -185,6 +187,36 @@ export async function publishAction(artistId: string) {
   await publishAll(supabase, artistId, user?.id)
   await gcVideoObjects(supabase, artistId) // publishAll includes videos → collect orphans
   revalidatePath(`/artists/${artistId}`, 'layout')
+}
+
+/** The visual editor's review window: what has changed since the last publish, per
+ *  section (counts). RLS scopes the read to the caller's tenant. */
+export async function getUnpublishedDiffAction(artistId: string): Promise<UnpublishedDiff> {
+  const supabase = await createClient()
+  return diffUnpublished(supabase, artistId)
+}
+
+/**
+ * Publish EVERYTHING pending from the visual editor — PASSWORD-GATED. Verifies the
+ * manager's password, then snapshots all content + the profile (`publishAll`, which
+ * orders the profile last for the live-gate invariant) and GCs orphaned video
+ * objects. Returns an error string instead of throwing so the client shows it inline.
+ */
+export async function publishAllGatedAction(
+  artistId: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+  try {
+    await publishAll(supabase, artistId, gate.userId)
+    await gcVideoObjects(supabase, artistId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
 }
 
 /** Publish ONE content/media section (per-section Publish button). Returns an

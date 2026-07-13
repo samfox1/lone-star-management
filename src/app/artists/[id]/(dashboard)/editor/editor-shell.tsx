@@ -2,8 +2,8 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
-import { buttonClass } from '@/components/ui/ui'
 import { editorMessage } from '@/lib/site-editor/bridge'
+import { EditorPublish } from './editor-publish'
 import {
   EditorInspector,
   type EditorLink,
@@ -86,9 +86,7 @@ export function EditorShell({
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
               Saved
             </span>
-            <button type="button" className={buttonClass('accent')} title="Publishing lands next">
-              Publish
-            </button>
+            <EditorPublish artistId={artistId} />
           </div>
 
           <iframe
