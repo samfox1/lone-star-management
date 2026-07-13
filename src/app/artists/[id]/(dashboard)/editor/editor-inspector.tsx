@@ -57,6 +57,32 @@ const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] te
 // bad price) — gating the save so the panel can't claim "Saved" on a dropped write.
 const INVALID_RING = 'border-accent-red focus:border-accent-red'
 
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+/**
+ * Run a field's save SERIALIZED per id (chained onto that field's previous save, so an
+ * older keystroke's write can't land after a newer one — review #6), and reflect the
+ * result honestly across concurrent fields via an `errored` set, so one field's failure
+ * isn't masked by another field's later success (review #8).
+ */
+export function runSerialized(
+  saving: { current: Map<string, Promise<unknown>> },
+  errored: { current: Set<string> },
+  setStatus: (s: SaveStatus) => void,
+  id: string,
+  action: () => Promise<{ error?: string } | void>,
+): void {
+  // Fire immediately when this field has no save in flight; only CHAIN behind a prior
+  // one (so overlapping saves of the same field can't land out of order).
+  const prev = saving.current.get(id)
+  const settled = Promise.resolve(prev ? prev.then(() => action()) : action())
+  saving.current.set(id, settled.catch(() => {}))
+  void settled.then((res) => {
+    if (res && (res as { error?: string }).error) errored.current.add(id)
+    else errored.current.delete(id)
+    setStatus(errored.current.size ? 'error' : 'saved')
+  })
+}
+
 function photoCount(n: number) {
   return `${n} ${n === 1 ? 'photo' : 'photos'}`
 }
@@ -558,13 +584,15 @@ function TextTools({
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Map<string, string>>(new Map())
 
   const persist = useCallback(
     (key: string, value: string) => {
       pending.current.delete(key)
       setStatus('saving')
-      saveEditorFieldAction(artistId, key, value).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+      runSerialized(saving, errored, setStatus, key, () => saveEditorFieldAction(artistId, key, value))
     },
     [artistId],
   )
@@ -652,6 +680,8 @@ function LinkTools({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Set<string>>(new Set())
   const dragFrom = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
@@ -668,7 +698,7 @@ function LinkTools({
       fd.set('label', v.label)
       fd.set('url', v.url)
       setStatus('saving')
-      updateContentAction('link', id, artistId, fd).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+      runSerialized(saving, errored, setStatus, id, () => updateContentAction('link', id, artistId, fd))
     },
     [artistId],
   )
@@ -820,6 +850,8 @@ function VideoTools({
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Map<string, string>>(new Map())
   const dragFrom = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
@@ -828,7 +860,7 @@ function VideoTools({
     (id: string, title: string) => {
       pending.current.delete(id)
       setStatus('saving')
-      renameVideoAction(id, artistId, title).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+      runSerialized(saving, errored, setStatus, id, () => renameVideoAction(id, artistId, title))
     },
     [artistId],
   )
@@ -952,6 +984,8 @@ function MerchTools({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Set<string>>(new Set())
   const valuesRef = useRef(values)
   useEffect(() => {
@@ -972,7 +1006,7 @@ function MerchTools({
       fd.set('price', v.price)
       fd.set('url', v.url)
       setStatus('saving')
-      updateContentAction('merch', id, artistId, fd).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+      runSerialized(saving, errored, setStatus, id, () => updateContentAction('merch', id, artistId, fd))
     },
     [artistId],
   )
@@ -1126,6 +1160,8 @@ function MusicTools({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Map<string, string>>(new Map())
   const dragFrom = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
@@ -1136,7 +1172,7 @@ function MusicTools({
       const fd = new FormData()
       fd.set('title', title)
       setStatus('saving')
-      updateContentAction('track', id, artistId, fd).then((res) => setStatus(res?.error ? 'error' : 'saved'))
+      runSerialized(saving, errored, setStatus, id, () => updateContentAction('track', id, artistId, fd))
     },
     [artistId],
   )

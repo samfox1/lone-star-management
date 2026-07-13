@@ -94,7 +94,8 @@ write the server would drop. (Video already server-validated its title.) Tests: 
 Both diverge the panel from the DB with a success indicator. **Fix:** validate in the
 tool (block empty required / bad price) and surface the real result.
 
-## 6. 🟠 MEDIUM — Debounced saves aren't sequenced (lost update)
+## 6. ✅ FIXED (2026-07-13) 🟠 MEDIUM — Debounced saves aren't sequenced (lost update)
+**Fix:** `runSerialized` chains each field's save behind its previous one, so an older keystroke's write can't land after a newer. Unit-tested in `editor-field-saver.test.ts`.
 `editor-inspector.tsx:552` · finding #16 (PLAUSIBLE)
 
 No cancellation/ordering of in-flight saves; an older keystroke's save can land after a
@@ -109,7 +110,8 @@ The prominent green-dot "Saved" in the floating controls is hardcoded and never 
 real state (in-flight/failed). **Fix:** wire it to real save status, or remove it and
 rely on the per-tool status.
 
-## 8. 🟡 LOW — Panel-wide `status` flag clobbered by concurrent field saves
+## 8. ✅ FIXED (2026-07-13) 🟡 LOW — Panel-wide `status` flag clobbered by concurrent field saves
+**Fix:** `runSerialized` tracks an `errored` set of field ids; the tool status stays "Failed" while any field is errored, so one field's failure is not masked by another's later success. Unit-tested.
 `editor-inspector.tsx:637` · finding #21 (CONFIRMED)
 
 One `status` per tool; concurrent field saves overwrite each other's status (a failure

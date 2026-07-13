@@ -1,0 +1,48 @@
+/**
+ * runSerialized — the inspector tools' per-field save runner (review #6 + #8). Saves for
+ * the SAME field are chained so an older write can't land after a newer one; an `errored`
+ * set makes a field's failure survive another field's later success (no masked error).
+ */
+import { describe, expect, it } from 'vitest'
+import { runSerialized } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+
+const tick = () => new Promise((r) => setTimeout(r, 0))
+
+describe('runSerialized', () => {
+  it('does not mask a field error with another field’s later success (#8)', async () => {
+    const saving = { current: new Map<string, Promise<unknown>>() }
+    const errored = { current: new Set<string>() }
+    const statuses: string[] = []
+    const setStatus = (s: string) => statuses.push(s)
+
+    runSerialized(saving, errored, setStatus, 'A', async () => ({ error: 'boom' }))
+    await tick()
+    expect(statuses.at(-1)).toBe('error')
+
+    runSerialized(saving, errored, setStatus, 'B', async () => ({})) // other field succeeds
+    await tick()
+    expect(statuses.at(-1)).toBe('error') // A's failure is NOT masked
+
+    runSerialized(saving, errored, setStatus, 'A', async () => ({})) // A now saves
+    await tick()
+    expect(statuses.at(-1)).toBe('saved') // cleared
+  })
+
+  it('chains a second save for the same field behind the first (#6)', async () => {
+    const saving = { current: new Map<string, Promise<unknown>>() }
+    const errored = { current: new Set<string>() }
+    const order: string[] = []
+    let release1: () => void = () => {}
+
+    runSerialized(saving, errored, () => {}, 'A', () => new Promise<void>((r) => (release1 = () => (order.push('a1'), r()))))
+    runSerialized(saving, errored, () => {}, 'A', async () => {
+      order.push('a2')
+    })
+
+    await tick()
+    expect(order).toEqual([]) // a2 must wait for a1 to settle
+    release1()
+    await tick()
+    expect(order).toEqual(['a1', 'a2']) // in order
+  })
+})
