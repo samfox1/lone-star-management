@@ -6,6 +6,7 @@ import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
 import { reorderList } from '@/lib/site-editor/gallery'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { MediaUploader } from '../media-uploader'
 import {
   deleteContentAction,
   deleteMediaAction,
@@ -153,6 +154,12 @@ export function EditorInspector({
     })
   }
 
+  // The uploader already wrote the media row (and router.refresh'd); append it to the
+  // grid so it shows without waiting on a prop re-sync. New uploads sort last.
+  function addPhoto(m: GalleryPhoto) {
+    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))
+  }
+
   function removeLink(l: EditorLink) {
     if (isPending) return
     const prev = links
@@ -240,6 +247,7 @@ export function EditorInspector({
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
+          onAddPhoto={addPhoto}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
           onRemoveVideo={removeVideo}
@@ -339,6 +347,7 @@ function EditingView({
   artistId,
   onRemove,
   onReorder,
+  onAddPhoto,
   onRemoveLink,
   onReorderLink,
   onRemoveVideo,
@@ -360,6 +369,7 @@ function EditingView({
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
+  onAddPhoto: (m: GalleryPhoto) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (from: number, to: number) => void
   onRemoveVideo: (v: EditorVideo) => void
@@ -414,7 +424,13 @@ function EditingView({
 
       <div className="flex-1 overflow-y-auto">
         {isImages ? (
-          <PhotoTools photos={photos} artistId={artistId} onRemove={onRemove} onReorder={onReorder} />
+          <PhotoTools
+            photos={photos}
+            artistId={artistId}
+            onRemove={onRemove}
+            onReorder={onReorder}
+            onAdd={onAddPhoto}
+          />
         ) : isText ? (
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
         ) : isLinks ? (
@@ -462,11 +478,13 @@ function PhotoTools({
   artistId,
   onRemove,
   onReorder,
+  onAdd,
 }: {
   photos: GalleryPhoto[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
+  onAdd: (m: GalleryPhoto) => void
 }) {
   const [open, setOpen] = useState({ photos: true, sizing: true, layout: true })
   const [perImage, setPerImage] = useState<'S' | 'M' | 'L'>('M')
@@ -520,13 +538,16 @@ function PhotoTools({
               </button>
             </div>
           ))}
-          <Link
-            href={`/artists/${artistId}/images`}
-            className="flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline text-ink-muted hover:border-accent hover:text-accent"
-          >
-            <Icon name="plus" size={18} />
-            <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add photos</span>
-          </Link>
+        </div>
+        <div className="mt-2.5">
+          <MediaUploader
+            artistId={artistId}
+            purpose="gallery_image"
+            folder="gallery"
+            accept="image/*"
+            label="Drop images or click to upload"
+            onUploaded={onAdd}
+          />
         </div>
       </Section>
 

@@ -35,6 +35,14 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   reorderContentAction: vi.fn(async () => ({})),
   renameVideoAction: vi.fn(async () => ({})),
 }))
+vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
+  MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
+    <button type="button" onClick={() => onUploaded?.({ id: 'new1', storage_path: 'artist-1/gallery/new.jpg' })}>
+      mock-upload
+    </button>
+  ),
+}))
+
 const deleteMock = vi.mocked(deleteMediaAction)
 const reorderMock = vi.mocked(reorderGalleryAction)
 const saveMock = vi.mocked(saveEditorFieldAction)
@@ -142,13 +150,12 @@ describe('EditorInspector — opening Images', () => {
     expect(screen.getByText('3 photos')).toBeTruthy()
   })
 
-  it('renders real thumbnails + an add-photos link', () => {
+  it('renders real thumbnails + an in-editor uploader', () => {
     openImages()
     const imgs = document.querySelectorAll('aside img')
     expect(imgs.length).toBe(3)
     expect((imgs[0] as HTMLImageElement).src).toContain('artist-1/gallery/a.jpg')
-    const add = screen.getByRole('link', { name: /Add photos/ })
-    expect(add.getAttribute('href')).toBe('/artists/artist-1/images')
+    expect(screen.getByRole('button', { name: 'mock-upload' })).toBeTruthy()
   })
 
   it('removes a photo optimistically and calls deleteMediaAction', () => {
@@ -182,6 +189,14 @@ describe('EditorInspector — opening Images', () => {
     expect(deleteMock).toHaveBeenCalledTimes(1)
     release()
     await Promise.resolve()
+  })
+
+  it('adds an uploaded photo to the grid optimistically', () => {
+    openImages()
+    expect(document.querySelectorAll('aside img').length).toBe(3)
+    fireEvent.click(screen.getByRole('button', { name: 'mock-upload' }))
+    expect(document.querySelectorAll('aside img').length).toBe(4)
+    expect(screen.getByText('4 photos')).toBeTruthy()
   })
 
   it('shows the size slider and layout controls', () => {
