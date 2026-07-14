@@ -31,7 +31,7 @@ export default async function MerchPage({ params }: { params: Promise<{ id: stri
         url: (row.url as string | null) ?? null,
         image_url: (row.image_url as string | null) ?? null,
         source: (row.source as string | null) ?? null,
-        visible: (row.visible as boolean | null) ?? true,
+        on_site: (row.on_site as boolean | null) ?? true,
         stat: metricValue(counts, 'merch', [row.id as string]),
       }))}
       trailing={

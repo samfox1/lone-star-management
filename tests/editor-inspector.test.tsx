@@ -203,7 +203,7 @@ describe('EditorInspector — opening Images', () => {
     expect(screen.getByText('4 photos')).toBeTruthy()
   })
 
-  it('toggles a photo on-site (writes visible via setOnSiteAction)', () => {
+  it('toggles a photo on-site (writes on_site via setOnSiteAction)', () => {
     openImages()
     // m1 starts off-site → its toggle offers to add it
     fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
@@ -476,7 +476,7 @@ describe('EditorInspector — Music component', () => {
     expect(deleteContentMock).toHaveBeenCalledWith('track', 's1', 'artist-1')
   })
 
-  it('toggles a song on-site (writes visible via setOnSiteAction)', () => {
+  it('toggles a song on-site (writes on_site via setOnSiteAction)', () => {
     openMusic()
     // s1 starts off-site → its toggle offers to add it
     fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])

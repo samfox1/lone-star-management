@@ -17,7 +17,7 @@ export type MerchItem = {
   image_url: string | null
   source: string | null
   /** Whether the item is currently live on the public site. */
-  visible: boolean
+  on_site: boolean
   /** 30-day buy-clicks (from analytics_by_entity). */
   stat?: number
 }
@@ -56,7 +56,7 @@ export function MerchCard({
       deleteNoun="Product"
       selected={selected}
       onToggleSelect={onToggleSelect}
-      visible={item.visible}
+      onSite={item.on_site}
       selectLabel={item.title}
       tile={
         <>

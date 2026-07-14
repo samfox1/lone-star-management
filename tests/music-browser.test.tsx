@@ -29,7 +29,7 @@ afterEach(cleanup)
 
 const release = (over: Partial<Release>): Release => ({
   id: 'r', title: 'R', slug: 'r', cover_url: null, release_date: '2026-01-01',
-  release_type: 'single', links: [], visible: true, songs: [], ...over,
+  release_type: 'single', links: [], on_site: true, songs: [], ...over,
 })
 
 const song = (over: Partial<UnreleasedSong>): UnreleasedSong => ({
@@ -41,7 +41,7 @@ const song = (over: Partial<UnreleasedSong>): UnreleasedSong => ({
 function setup(over: Partial<Parameters<typeof MusicBrowser>[0]> = {}) {
   render(
     <MusicBrowser
-      releases={[release({ id: 'r1', title: 'Public Single' }), release({ id: 'r2', title: 'Hidden Single', visible: false })]}
+      releases={[release({ id: 'r1', title: 'Public Single' }), release({ id: 'r2', title: 'Hidden Single', on_site: false })]}
       unreleasedReleases={[release({ id: 'u1', title: 'Demo EP', release_type: 'ep' })]}
       looseReleased={[]}
       unreleasedSongs={[song({ id: 's1', title: 'Bedroom Demo' })]}

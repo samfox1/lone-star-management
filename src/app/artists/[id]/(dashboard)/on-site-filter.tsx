@@ -12,8 +12,8 @@ const OPTS: { key: SiteFilter; label: string }[] = [
 
 /**
  * The primary lens on a content page: show everything, only what's live on the public
- * site (`visible`), or only off-site drafts. A prominent segmented control (ink active)
- * next to the count. Filtering is by the LIVE truth (`visible`), so a pending
+ * site (`on_site`), or only off-site drafts. A prominent segmented control (ink active)
+ * next to the count. Filtering is by the LIVE truth (`on_site`), so a pending
  * selection doesn't move a card between tabs until it's published.
  */
 export function OnSiteFilter({ value, onChange }: { value: SiteFilter; onChange: (v: SiteFilter) => void }) {
@@ -41,11 +41,11 @@ export function OnSiteFilter({ value, onChange }: { value: SiteFilter; onChange:
   )
 }
 
-/** Keep only the items matching the site filter (`visible` is the live truth).
+/** Keep only the items matching the site filter (`on_site` is the live truth).
  *  `Boolean(...)` normalizes a stray null so an item never vanishes from both tabs. */
-export function filterBySite<T extends { visible: boolean }>(items: T[], f: SiteFilter): T[] {
+export function filterBySite<T extends { on_site: boolean }>(items: T[], f: SiteFilter): T[] {
   if (f === 'all') return items
-  return items.filter((i) => Boolean(i.visible) === (f === 'on'))
+  return items.filter((i) => Boolean(i.on_site) === (f === 'on'))
 }
 
 /** The empty-state title for a filtered content page. The off/on copy is identical

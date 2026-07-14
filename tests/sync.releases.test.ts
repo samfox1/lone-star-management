@@ -2,9 +2,9 @@
  * MILESTONE 6 — Spotify RELEASE sync, test-first (real DB).
  *
  * Companion to sync.test.ts (tracks). Releases are the umbrella tracks belong to.
- * Conflict policy: import new releases HIDDEN (visible=false) for the manager to
+ * Conflict policy: import new releases OFF-SITE (on_site=false) for the manager to
  * toggle on, refresh spotify-owned metadata on re-import, but NEVER clobber
- * manager-owned fields (visible / slug / links). Tracks link to their release by
+ * manager-owned fields (on_site / slug / links). Tracks link to their release by
  * member Spotify id, only where still unassigned (a manual assignment wins).
  * Writes are RLS-scoped to the caller's artist.
  */
@@ -53,7 +53,7 @@ describe('syncSpotifyReleases', () => {
 
     const { data } = await svc
       .from('releases')
-      .select('title, slug, cover_url, release_date, release_type, links, visible, source, spotify_id')
+      .select('title, slug, cover_url, release_date, release_type, links, on_site, source, spotify_id')
       .eq('artist_id', artistA)
       .single()
 
@@ -63,14 +63,14 @@ describe('syncSpotifyReleases', () => {
       cover_url: 'https://img/cover.jpg',
       release_date: '2024-05-01',
       release_type: 'album',
-      visible: false, // imported hidden — manager toggles it on
+      on_site: false, // imported hidden — manager toggles it on
       source: 'spotify',
       spotify_id: 'sp-alb',
     })
     expect(data!.links).toEqual([{ label: 'Spotify', url: 'https://open.spotify.com/album/sp-alb' }])
   })
 
-  it('refreshes spotify metadata on re-import but never touches manager-owned visible/slug/links', async () => {
+  it('refreshes spotify metadata on re-import but never touches manager-owned on_site/slug/links', async () => {
     // A previously-imported release the manager has since curated: toggled ON,
     // renamed the slug, and added a DSP link.
     await svc.from('releases').insert({
@@ -79,7 +79,7 @@ describe('syncSpotifyReleases', () => {
       slug: 'my-custom-slug',
       release_type: 'single',
       links: [{ label: 'Apple Music', url: 'https://music.apple.com/x' }],
-      visible: true,
+      on_site: true,
       source: 'spotify',
       spotify_id: 'sp-alb',
     })
@@ -93,7 +93,7 @@ describe('syncSpotifyReleases', () => {
 
     const { data } = await svc
       .from('releases')
-      .select('title, slug, cover_url, release_type, links, visible')
+      .select('title, slug, cover_url, release_type, links, on_site')
       .eq('artist_id', artistA)
       .single()
 
@@ -104,7 +104,7 @@ describe('syncSpotifyReleases', () => {
       cover_url: 'https://img/new.jpg',
     })
     // …but manager-owned fields untouched.
-    expect(data).toMatchObject({ slug: 'my-custom-slug', visible: true })
+    expect(data).toMatchObject({ slug: 'my-custom-slug', on_site: true })
     expect(data!.links).toEqual([{ label: 'Apple Music', url: 'https://music.apple.com/x' }])
   })
 

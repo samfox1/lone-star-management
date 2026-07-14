@@ -61,7 +61,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
           provider: 'uploaded',
           storage_path: path,
           source: 'manual',
-          visible: false,
+          on_site: false,
         })
       return rowErr?.message ?? null
     },

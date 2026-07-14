@@ -31,7 +31,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
         city: (row.city as string | null) ?? null,
         ticket_url: (row.ticket_url as string | null) ?? null,
         source: (row.source as string | null) ?? null,
-        visible: (row.visible as boolean | null) ?? true,
+        on_site: (row.on_site as boolean | null) ?? true,
         stat: metricValue(counts, 'tour_date', [row.id as string]),
       }))}
       trailing={

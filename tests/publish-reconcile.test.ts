@@ -33,7 +33,7 @@ afterAll(async () => {
 describe('publish reconcile (tombstone)', () => {
   it('CRITICAL: a deleted + re-published entity drops off the live site', async () => {
     const title = 'RECON track to delete'
-    // stream_url = platform presence, so the track is Released (public-door visible).
+    // stream_url = platform presence, so the track is Released (shown by the public door).
     const track = await createContent(asA, 'track', artistA, { title, stream_url: 'https://open.spotify.com/track/rec' })
 
     await publishContent(asA, 'track', artistA)

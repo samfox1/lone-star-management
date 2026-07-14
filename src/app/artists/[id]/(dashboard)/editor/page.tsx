@@ -38,7 +38,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
       .from('media')
-      .select('id, storage_path, visible')
+      .select('id, storage_path, on_site')
       .eq('artist_id', id)
       .eq('purpose', 'gallery_image')
       .order('sort_order', { ascending: true })
@@ -74,7 +74,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const photos = (mediaRows ?? []).map((m) => ({
     id: m.id as string,
     storage_path: m.storage_path as string,
-    onSite: (m.visible as boolean | null) ?? false,
+    onSite: (m.on_site as boolean | null) ?? false,
   }))
 
   const [linkRows, videoRows, merchRows, releaseRows, trackRows] = await Promise.all([
@@ -141,7 +141,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       title: (r.title as string | null) ?? '',
       cover_url: (r.cover_url as string | null) ?? null,
       released: bucket === 'released',
-      onSite: (r.visible as boolean | null) ?? false,
+      onSite: (r.on_site as boolean | null) ?? false,
     }
   })
 

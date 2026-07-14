@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, deleteContent, diffUnpublished, publishContent, reconcileVisibility } from '@/lib/content'
+import { createContent, deleteContent, diffUnpublished, publishContent, reconcileOnSite } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -28,7 +28,7 @@ async function publicVideos(): Promise<Record<string, unknown>[]> {
 }
 
 describe('video content type — draft → publish → public', () => {
-  it('CRITICAL: a created video is off-site until published AND toggled visible', async () => {
+  it('CRITICAL: a created video is off-site until published AND toggled on-site', async () => {
     const made = await createContent(asA, 'video', artistA, {
       title: 'VID one',
       provider: 'youtube',
@@ -36,12 +36,12 @@ describe('video content type — draft → publish → public', () => {
     })
 
     expect((await publicVideos()).some((v) => v.title === 'VID one')).toBe(false) // draft
-    // Snapshot alone isn't enough: new videos land visible=false, so the public
+    // Snapshot alone isn't enough: new videos land on_site=false, so the public
     // door still hides it (the two gates — published content + the live toggle).
     await publishContent(asA, 'video', artistA)
     expect((await publicVideos()).some((v) => v.title === 'VID one')).toBe(false) // still off-site
     // Toggle it on-site (what the password-gated publish does) → live.
-    await reconcileVisibility(asA, 'video', artistA, [made.id])
+    await reconcileOnSite(asA, 'video', artistA, [made.id])
     expect((await publicVideos()).some((v) => v.title === 'VID one')).toBe(true) // live
   })
 

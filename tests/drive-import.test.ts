@@ -81,9 +81,9 @@ describe('importDriveFile', () => {
     const drive = fakeDrive({ id: 'df-video-1', name: 'Tour Recap.mp4', mimeType: 'video/mp4' })
     expect(await imp('video', 'df-video-1', drive)).toEqual({ ok: true })
     const { data: row } = await svc
-      .from('videos').select('title, provider, visible, storage_path')
+      .from('videos').select('title, provider, on_site, storage_path')
       .eq('artist_id', artistA).eq('drive_file_id', 'df-video-1').single()
-    expect(row).toMatchObject({ title: 'Tour Recap', provider: 'uploaded', visible: false })
+    expect(row).toMatchObject({ title: 'Tour Recap', provider: 'uploaded', on_site: false })
   })
 
   it('image: gallery_image media row in the public media bucket', async () => {

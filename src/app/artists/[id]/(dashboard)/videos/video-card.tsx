@@ -23,7 +23,7 @@ export type VideoItem = {
   /** True for a YouTube Short (shown in the Shorts tab, not the default Videos tab). */
   is_short: boolean
   /** Whether the video is currently live on the public site. */
-  visible: boolean
+  on_site: boolean
   /** Global YouTube view count (cached on sync); null if unknown. */
   youtube_views?: number | null
   /** 30-day clicks from the artist's own site (video_click), from analytics_by_entity. */
@@ -164,7 +164,7 @@ export function VideoCard({
   return (
     <div className="relative">
       <div className="absolute left-2 top-2 z-10">
-        <SelectToggle selected={selected} visible={video.visible} onToggle={onToggleSelect} label={video.title} />
+        <SelectToggle selected={selected} onSite={video.on_site} onToggle={onToggleSelect} label={video.title} />
       </div>
 
       <div ref={menuRef} className="absolute right-2 top-2 z-20">

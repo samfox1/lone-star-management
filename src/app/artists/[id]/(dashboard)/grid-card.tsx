@@ -26,7 +26,7 @@ export function GridCard({
   children,
   selected,
   onToggleSelect,
-  visible,
+  onSite,
   selectLabel,
 }: {
   tile: ReactNode
@@ -38,7 +38,7 @@ export function GridCard({
   selected?: boolean
   onToggleSelect?: () => void
   /** Whether the item is currently live on the public site (drives the badge). */
-  visible?: boolean
+  onSite?: boolean
   /** Accessible name for the checkbox, e.g. the item title. */
   selectLabel?: string
 }) {
@@ -51,7 +51,7 @@ export function GridCard({
           <div className="absolute left-2 top-2 z-10">
             <SelectToggle
               selected={!!selected}
-              visible={!!visible}
+              onSite={!!onSite}
               onToggle={onToggleSelect}
               label={selectLabel ?? 'item'}
             />

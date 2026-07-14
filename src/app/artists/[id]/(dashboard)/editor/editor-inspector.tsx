@@ -104,7 +104,7 @@ function songLabel(n: number) {
   return `${n} ${n === 1 ? 'song' : 'songs'}`
 }
 
-/** Per-item "on the site" toggle (writes the `visible` flag). Being in the library never
+/** Per-item "on the site" toggle (writes the `on_site` flag). Being in the library never
  *  implies on-site — the manager selects each item on. */
 function OnSiteToggle({ on, onToggle, className }: { on: boolean; onToggle: () => void; className?: string }) {
   return (
@@ -178,12 +178,12 @@ export function EditorInspector({
 
   // The uploader already wrote the media row (and router.refresh'd); append it to the
   // grid so it shows without waiting on a prop re-sync. New uploads are OFF the site
-  // (visible defaults false) until selected, and sort last.
+  // (on_site defaults false) until selected, and sort last.
   function addPhoto(m: { id: string; storage_path: string }) {
     setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false }]))
   }
 
-  // Toggle whether a photo / song is on the public site (the `visible` flag). Optimistic;
+  // Toggle whether a photo / song is on the public site (the `on_site` flag). Optimistic;
   // reverts the single item on failure. Not a list-structure change, so no publish/guard.
   function togglePhotoOnSite(p: GalleryPhoto) {
     const next = !p.onSite
