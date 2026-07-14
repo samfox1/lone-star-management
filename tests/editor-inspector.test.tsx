@@ -67,9 +67,10 @@ const TEXT_FIELDS: EditorTextField[] = [
 ]
 
 const LINKS: EditorLink[] = [
-  { id: 'l1', label: 'Spotify', url: 'https://open.spotify.com/x' },
-  { id: 'l2', label: 'Instagram', url: 'https://instagram.com/x' },
-  { id: 'l3', label: 'Bandcamp', url: 'https://x.bandcamp.com' },
+  { id: 'l1', label: 'Spotify', url: 'https://open.spotify.com/x', onSite: true },
+  { id: 'l2', label: 'Instagram', url: 'https://instagram.com/x', onSite: true },
+  // Off-site, to prove the toggle reflects state rather than always reading "On site".
+  { id: 'l3', label: 'Bandcamp', url: 'https://x.bandcamp.com', onSite: false },
 ]
 
 const VIDEOS: EditorVideo[] = [
@@ -283,6 +284,20 @@ describe('EditorInspector — Links component', () => {
     expect((screen.getByLabelText('Link 1 label') as HTMLInputElement).value).toBe('Spotify')
     expect((screen.getByLabelText('Link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
     expect(screen.getByRole('link', { name: /Add link/ }).getAttribute('href')).toBe('/artists/artist-1/links')
+  })
+
+  it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
+    openLinks()
+    // l1 is on-site → its toggle offers to take it off.
+    fireEvent.click(screen.getAllByRole('button', { name: /On the site/ })[0])
+    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l1', 'artist-1', false)
+  })
+
+  it('puts an off-site link back ON the site', () => {
+    openLinks()
+    // l3 is the only off-site link, so it owns the only "Off the site" toggle.
+    fireEvent.click(screen.getByRole('button', { name: /Off the site/ }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l3', 'artist-1', true)
   })
 
   it('does NOT save a blank required field and flags it invalid (no false "Saved")', () => {

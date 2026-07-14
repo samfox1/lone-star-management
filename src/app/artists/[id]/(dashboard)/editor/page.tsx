@@ -88,6 +88,10 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     id: r.id,
     label: (r.label as string | null) ?? '',
     url: (r.url as string | null) ?? '',
+    // Links default on_site=true (20260708150000), so an existing link stays on the
+    // site until the manager deliberately takes it off — unlike a photo, which is
+    // off until selected.
+    onSite: (r.on_site as boolean | null) ?? true,
   }))
   const videos: EditorVideo[] = videoRows.map((r) => {
     const provider = String(r.provider ?? '')
