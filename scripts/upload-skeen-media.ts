@@ -6,6 +6,7 @@
  *
  *   npx tsx scripts/upload-skeen-media.ts
  */
+import './_node-compat' // MUST be first: polyfills WebSocket for createClient on Node < 22
 import { readFile } from 'node:fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'

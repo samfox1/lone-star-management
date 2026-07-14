@@ -10,6 +10,7 @@
  * The service-role key bypasses RLS — this script is one of the only two places
  * that is allowed to (migrations/seeding being the other).
  */
+import './_node-compat' // MUST be first: polyfills WebSocket for createClient on Node < 22
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
 import { publishProfile } from '../src/lib/content'

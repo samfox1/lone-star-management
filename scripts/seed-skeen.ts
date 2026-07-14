@@ -6,6 +6,7 @@
  * Content is placeholder (example.com links, picsum images) — edit it in the
  * dashboard. Run with Node 22:  npx tsx scripts/seed-skeen.ts
  */
+import './_node-compat' // MUST be first: polyfills WebSocket for createClient on Node < 22
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
 

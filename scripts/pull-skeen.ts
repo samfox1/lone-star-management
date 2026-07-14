@@ -5,6 +5,7 @@
  *
  *   npx tsx scripts/pull-skeen.ts
  */
+import './_node-compat' // MUST be first: polyfills WebSocket for createClient on Node < 22
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
 import { createSpotifyClient } from '../src/lib/spotify'

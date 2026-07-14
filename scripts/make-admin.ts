@@ -14,6 +14,7 @@
  *
  * Reads NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from .env.local.
  */
+import './_node-compat' // MUST be first: polyfills WebSocket for createClient on Node < 22
 import { randomBytes } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'

@@ -21,18 +21,11 @@
  *
  * Reads NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from .env.local.
  */
+import './_node-compat' // MUST be first: polyfills WebSocket for createClient on Node < 22
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
-import { WebSocket } from 'ws'
 
 config({ path: '.env.local' })
-
-// Node < 22 has no global WebSocket, which @supabase/realtime-js requires at
-// SupabaseClient construction — even though this script never opens a realtime
-// connection. Same polyfill vitest.setup.ts uses. Harmless on Node 22+.
-if (!globalThis.WebSocket) {
-  globalThis.WebSocket = WebSocket as unknown as typeof globalThis.WebSocket
-}
 
 const [slug, target] = process.argv.slice(2)
 
