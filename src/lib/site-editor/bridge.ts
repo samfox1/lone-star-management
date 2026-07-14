@@ -15,7 +15,7 @@
  * check, not an origin check).
  */
 import type { LibraryAsset, TemplateManifest } from '@/lib/site-editor/manifest'
-import type { SiteData } from '@/lib/site'
+import type { PublicSitePayload } from '@/lib/site'
 
 /** Bump when the message shape changes incompatibly; both sides pin to it. */
 export const BRIDGE_VERSION = 2
@@ -42,13 +42,19 @@ export type FrameMessage =
   | { v: number; source: typeof FRAME_SOURCE; type: 'geometry'; target: SelectTarget; rect: Rect }
   | { v: number; source: typeof FRAME_SOURCE; type: 'deselect' }
 
-/** editor → frame. `init-data` hands the frame its draft SiteData so a custom site
- *  in edit mode renders the draft without its own DB access (D-C); `apply-style`
- *  previews a class-string change optimistically before the debounced save. */
+/** editor → frame. `init-data` hands the frame its draft so a custom site in edit
+ *  mode renders it without its own DB access (D-C); `apply-style` previews a
+ *  class-string change optimistically before the debounced save.
+ *
+ *  `init-data` carries the WIRE shape (`PublicSitePayload` — what get_public_site
+ *  returns), NOT `SiteData`. A custom site resolves media paths against its own
+ *  Supabase URL, so it needs the raw `path`; `SiteData` has already replaced that
+ *  with a lone-star-built `url` and would blank every image. Only custom sites
+ *  consume this — the built-in `/edit-frame` reads its own draft server-side. */
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
-  | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: SiteData }
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: PublicSitePayload }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'highlight'; target: SelectTarget | null }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'set-device'; device: 'desktop' | 'mobile' }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'refresh' }

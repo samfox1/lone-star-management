@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
-import { editorMessage } from '@/lib/site-editor/bridge'
+import type { PublicSitePayload } from '@/lib/site'
+import { editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
 import { EditorPublish } from './editor-publish'
 import {
   EditorInspector,
@@ -17,12 +18,26 @@ import {
 /**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
  * dashboard nav: the LEFT inspector (component browser + tools) and the artist's
- * real site in an embedded frame (the edit-mode `/edit-frame` route). The frame's
- * controls — device, save status, Publish — float in the gap above the centered
- * window (no toolbar bar). Publish + the tool→data wiring land next.
+ * real site in an embedded frame. The frame's controls — device, save status,
+ * Publish — float in the gap above the centered window (no toolbar bar).
+ *
+ * TWO FRAME KINDS (SITE_STYLING_PLAN.md S4):
+ *  - built-in template → same-origin `/artists/[id]/edit-frame`, which fetches its
+ *    own draft server-side under RLS. No data is posted to it.
+ *  - custom site (`site_kind='custom'`) → the artist's own `custom_site_url/edit`,
+ *    CROSS-ORIGIN. It has no access to our DB, so we hand it the draft over the
+ *    bridge (`init-data`) once it announces `ready` (D-C). `ready` is the trigger,
+ *    not the iframe's `load`: load can fire before the frame's bridge has mounted,
+ *    and the message would be dropped.
+ *
+ * Origin discipline: every postMessage targets the FRAME's origin (never `*`), and
+ * every inbound message is checked against it before we trust the payload — the
+ * bridge's source/version guards are a shape check, not an origin check.
  */
 export function EditorShell({
   artistId,
+  customSiteUrl,
+  draft,
   photos,
   textFields,
   links,
@@ -31,6 +46,11 @@ export function EditorShell({
   songs,
 }: {
   artistId: string
+  /** The artist's external site origin when `site_kind='custom'`, else null. */
+  customSiteUrl?: string | null
+  /** The draft to inject into a custom frame, in the wire shape. Null for a
+   *  built-in template, which reads its own draft server-side. */
+  draft?: PublicSitePayload | null
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
@@ -41,13 +61,38 @@ export function EditorShell({
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
 
+  const frameSrc = customSiteUrl ? `${customSiteUrl.replace(/\/$/, '')}/edit` : `/artists/${artistId}/edit-frame`
+
+  // Resolved lazily: this is a client component but still SSRs, and `window` only
+  // exists in the browser. Every caller below runs client-side.
+  const targetOrigin = useCallback(
+    () => (customSiteUrl ? new URL(customSiteUrl).origin : window.location.origin),
+    [customSiteUrl],
+  )
+
   // Optimistically paint a text edit into the live preview frame (bridge apply-field).
-  const applyField = useCallback((key: string, value: string) => {
-    frameRef.current?.contentWindow?.postMessage(
-      editorMessage({ type: 'apply-field', key, value }),
-      window.location.origin,
-    )
-  }, [])
+  const applyField = useCallback(
+    (key: string, value: string) => {
+      frameRef.current?.contentWindow?.postMessage(
+        editorMessage({ type: 'apply-field', key, value }),
+        targetOrigin(),
+      )
+    },
+    [targetOrigin],
+  )
+
+  // Hand a custom frame its draft as soon as it says `ready`. The built-in frame
+  // never needs this (it has DB access), so there's nothing to send without a draft.
+  useEffect(() => {
+    if (!draft) return
+    const origin = targetOrigin()
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== origin || !isFrameMessage(e.data) || e.data.type !== 'ready') return
+      frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [draft, targetOrigin])
 
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
@@ -89,7 +134,7 @@ export function EditorShell({
 
           <iframe
             ref={frameRef}
-            src={`/artists/${artistId}/edit-frame`}
+            src={frameSrc}
             title="Site editor"
             className={cx(
               'min-h-0 flex-1 rounded-xl border border-hairline bg-paper shadow-sm',

@@ -127,6 +127,22 @@ export type SiteData = {
   styles: SiteStyles
 }
 
+/**
+ * The WIRE shape — exactly what `get_public_site` returns, before this module
+ * resolves media paths to URLs. This is the contract a CUSTOM site speaks: it
+ * receives the draft over the bridge's `init-data` and maps the payload itself
+ * (skeen's `mapSite`), resolving `path` against ITS OWN Supabase URL.
+ *
+ * The only divergence from `SiteData` is media: `SiteData.media` carries a
+ * resolved `url` (built with lone-star's NEXT_PUBLIC_SUPABASE_URL, for rendering
+ * a built-in template), while the wire carries the raw `path`. Posting `SiteData`
+ * to a custom site would hand it `path: undefined` and silently blank every hero
+ * clip and gallery image — so the bridge carries THIS type, not `SiteData`.
+ */
+export type PublicSitePayload = Omit<SiteData, 'media'> & {
+  media: { purpose: SiteMedia['purpose']; path: string }[]
+}
+
 /** Map the rpc's media ({purpose, path}) to public URLs. */
 function toSiteMedia(raw: { purpose: SiteMedia['purpose']; path: string }[]): SiteMedia[] {
   return (raw ?? []).map((m) => ({ purpose: m.purpose, url: mediaUrl(m.path) }))
@@ -158,14 +174,19 @@ async function workingSection<T>(
 }
 
 /**
- * Working (unpublished) site for an artist, assembled from live rows through
- * the SAME public-safe projection as a published snapshot, so preview matches
- * the public site exactly. RLS scopes the read, so a non-owner gets null.
+ * Working (unpublished) site for an artist in the WIRE shape (media as raw
+ * `path`), assembled from live rows through the SAME public-safe projection as a
+ * published snapshot, so preview matches the public site exactly. RLS scopes the
+ * read, so a non-owner gets null.
+ *
+ * This is the single builder: `getWorkingSite` wraps it and resolves media URLs
+ * for lone-star's own rendering; the editor posts this shape verbatim to a custom
+ * site over `init-data`. One code path, so the two can't drift.
  */
-export async function getWorkingSite(
+export async function getWorkingSitePayload(
   supabase: SupabaseClient,
   artistId: string,
-): Promise<SiteData | null> {
+): Promise<PublicSitePayload | null> {
   const { data: artist } = await supabase
     .from('artists')
     .select('id, slug, name, bio, hero_image_url, template, spotify_artist_id')
@@ -210,7 +231,7 @@ export async function getWorkingSite(
     workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
-      .select('purpose, storage_path, sort_order')
+      .select('purpose, storage_path, sort_order, on_site')
       .eq('artist_id', artistId)
       .order('sort_order')
       .order('created_at') // secondary key — matches get_public_site's media order
@@ -227,12 +248,14 @@ export async function getWorkingSite(
       .then(({ data }) => data ?? []),
   ])
 
-  const media = toSiteMedia(
-    (mediaRows as { purpose: SiteMedia['purpose']; storage_path: string }[]).map((m) => ({
-      purpose: m.purpose,
-      path: m.storage_path,
-    })),
-  )
+  // Mirror get_public_site's media gate EXACTLY: the on-site flag applies to
+  // gallery_image only — hero_video / profile_photo are not per-item curated and
+  // must never be filtered, or a site loses its hero. Without this the preview
+  // showed off-site gallery photos the live site hides (the parity test's fixture
+  // used a profile_photo, which the gate ignores, so the drift went uncaught).
+  const media = (mediaRows as { purpose: SiteMedia['purpose']; storage_path: string; on_site: boolean | null }[])
+    .filter((m) => m.purpose !== 'gallery_image' || m.on_site !== false)
+    .map((m) => ({ purpose: m.purpose, path: m.storage_path }))
 
   // Same key→value shape get_public_site's jsonb_object_agg produces, so preview
   // matches the public site. Null values (cleared overrides) are dropped.
@@ -251,4 +274,18 @@ export async function getWorkingSite(
   )
 
   return { artist, tracks, tour_dates, merch, links, videos, media, site_content, styles }
+}
+
+/**
+ * Working (unpublished) site for lone-star's OWN rendering (preview + the
+ * built-in edit-frame): the wire payload with media paths resolved to public
+ * URLs. A custom site must NOT use this — it needs the raw paths so it can
+ * resolve them against its own Supabase URL (see `getWorkingSitePayload`).
+ */
+export async function getWorkingSite(
+  supabase: SupabaseClient,
+  artistId: string,
+): Promise<SiteData | null> {
+  const payload = await getWorkingSitePayload(supabase, artistId)
+  return payload && { ...payload, media: toSiteMedia(payload.media) }
 }

@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
-import type { SiteContent } from '@/lib/site'
+import { getWorkingSitePayload, type SiteContent } from '@/lib/site'
+import { isCustom } from '@/lib/custom-site'
 import { requireArtist } from '../_data'
 import { EditorShell } from './editor-shell'
 import type {
@@ -48,6 +49,14 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const siteContent = Object.fromEntries(
     ((contentRows ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? '']),
   ) as SiteContent
+
+  // A custom-site artist's frame is their own external /edit route, which has no
+  // DB access — so fetch the draft here (RLS-scoped) and let the shell hand it
+  // over the bridge. A built-in template's frame reads its own draft server-side,
+  // so we don't pay for this. Wire shape (media paths, not URLs): the custom site
+  // resolves them against ITS OWN Supabase URL.
+  const customSiteUrl = isCustom(artist) ? (artist.custom_site_url as string) : null
+  const draft = customSiteUrl ? await getWorkingSitePayload(supabase, id) : null
 
   const ctx = {
     template: artist.template,
@@ -152,6 +161,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   return (
     <EditorShell
       artistId={id}
+      customSiteUrl={customSiteUrl}
+      draft={draft}
       photos={photos}
       textFields={textFields}
       links={links}

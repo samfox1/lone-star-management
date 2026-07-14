@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publishAll, publishProfile } from '@/lib/content'
-import { getPublishedSite, getWorkingSite } from '@/lib/site'
+import { getPublishedSite, getWorkingSite, getWorkingSitePayload } from '@/lib/site'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -58,6 +58,51 @@ describe('preview == live after a full publish', () => {
     // The SQL jsonb_object_agg and the JS Object.fromEntries fold must agree.
     expect(working!.site_content).toEqual(published!.site_content)
     expect(published!.site_content.tracks_heading).toBe('PARITY heading')
+  })
+
+  it('CRITICAL: an OFF-SITE gallery photo is absent from BOTH preview and live', async () => {
+    // The gate applies to gallery_image ONLY, so the profile_photo above can't
+    // catch drift here: get_public_site hides an off-site gallery photo, and
+    // getWorkingSite must drop it too or /preview lies about what's on the site.
+    await asA.from('media').insert([
+      { artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/on.jpg`, on_site: true },
+      { artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/off.jpg`, on_site: false },
+    ])
+    await publishAll(asA, artistA)
+
+    const published = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const working = await getWorkingSite(asA, artistA)
+
+    const shows = (site: { media: { url: string }[] } | null, name: string) =>
+      (site?.media ?? []).some((m) => m.url.includes(name))
+
+    expect(shows(published, 'gallery/on.jpg')).toBe(true)
+    expect(shows(published, 'gallery/off.jpg')).toBe(false) // the door gates it
+    expect(shows(working, 'gallery/on.jpg')).toBe(true)
+    expect(shows(working, 'gallery/off.jpg')).toBe(false) // preview must agree
+    expect(working!.media).toEqual(published!.media)
+  })
+
+  it('the custom-site draft payload carries media PATHS, and applies the same gate', async () => {
+    // getWorkingSitePayload is what the editor posts to a custom site over
+    // init-data. It must emit raw paths (skeen resolves them against its own
+    // Supabase URL) and must apply the gallery gate exactly like getWorkingSite —
+    // they share one builder precisely so they can't drift.
+    await asA.from('media').insert([
+      { artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/p-on.jpg`, on_site: true },
+      { artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/p-off.jpg`, on_site: false },
+    ])
+
+    const payload = await getWorkingSitePayload(asA, artistA)
+    const paths = (payload?.media ?? []).map((m) => m.path)
+
+    expect(paths).toContain(`${artistA}/gallery/p-on.jpg`)
+    expect(paths).not.toContain(`${artistA}/gallery/p-off.jpg`)
+    // Raw path, not a lone-star-built URL — the whole point of the wire shape.
+    for (const m of payload?.media ?? []) {
+      expect(m).not.toHaveProperty('url')
+      expect(m.path.startsWith('http')).toBe(false)
+    }
   })
 
   it('GUARDRAIL: every content section matches working↔published (snapshot ↔ door drift)', async () => {
