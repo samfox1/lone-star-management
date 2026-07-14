@@ -7,15 +7,23 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/** The external URL a custom-site artist redirects to / is embedded from, or null
- *  when the artist uses a built-in template. */
+/**
+ * The external URL a custom-site artist redirects to / is embedded from, or null
+ * when the artist uses a built-in template.
+ *
+ * Goes through the `public_custom_site` DOOR, not a table read: `/[slug]` is a
+ * PUBLIC route on the anon client, and `artists_select` RLS
+ * (`is_admin() OR is_manager_of(id)`) hides the row from a visitor — a direct read
+ * returned null for everyone and the redirect silently never fired
+ * (20260714170000). The door is SECURITY DEFINER and returns only the redirect
+ * target, so anon never sees the rest of the artists row.
+ *
+ * A MANAGER-side caller that already holds the row (e.g. `requireArtist`) should
+ * use `isCustom(row)` directly instead of paying for this round-trip.
+ */
 export async function customSiteUrl(supabase: SupabaseClient, slug: string): Promise<string | null> {
-  const { data } = await supabase
-    .from('artists')
-    .select('site_kind, custom_site_url')
-    .eq('slug', slug)
-    .maybeSingle<{ site_kind: string; custom_site_url: string | null }>()
-  return isCustom(data) ? (data!.custom_site_url as string) : null
+  const { data } = await supabase.rpc('public_custom_site', { p_slug: slug })
+  return (data as string | null) ?? null
 }
 
 /** Whether a `{ site_kind, custom_site_url }` row is a usable custom site. */

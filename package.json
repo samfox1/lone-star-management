@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "db:push": "supabase db push",
     "db:seed": "tsx scripts/seed.ts",
-    "make:admin": "tsx scripts/make-admin.ts"
+    "make:admin": "tsx scripts/make-admin.ts",
+    "site:custom": "tsx scripts/set-custom-site.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
