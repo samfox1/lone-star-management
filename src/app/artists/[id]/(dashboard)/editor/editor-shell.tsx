@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cx } from '@/lib/cx'
 import type { PublicSitePayload } from '@/lib/site'
 import { editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
+import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import { EditorPublish } from './editor-publish'
 import {
   EditorInspector,
@@ -58,8 +58,26 @@ export function EditorShell({
   merch: EditorMerch[]
   songs: EditorSong[]
 }) {
-  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [device, setDevice] = useState<Device>('desktop')
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [panel, setPanel] = useState({ w: 0, h: 0 })
+
+  // Measure the frame panel so the canvas can be scaled to fit it. The panel
+  // resizes with the window (and would with a collapsible inspector), so observe
+  // rather than measure once.
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setPanel({ w: width, h: height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const view = fitViewport(device, panel.w, panel.h)
 
   const frameSrc = customSiteUrl ? `${customSiteUrl.replace(/\/$/, '')}/edit` : `/artists/${artistId}/edit-frame`
 
@@ -118,12 +136,18 @@ export function EditorShell({
             <select
               id="editor-device"
               value={device}
-              onChange={(e) => setDevice(e.target.value as 'desktop' | 'mobile')}
+              onChange={(e) => setDevice(e.target.value as Device)}
               className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink-faint"
             >
               <option value="desktop">Desktop</option>
               <option value="mobile">Mobile</option>
             </select>
+
+            {/* The canvas is a real 1440px desktop window drawn smaller, so say so —
+                otherwise a zoomed-out site reads as "the text is broken". */}
+            <span className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
+              {view.width}px · {zoomLabel(view.scale)}
+            </span>
 
             <span className="flex-1" />
 
@@ -132,15 +156,33 @@ export function EditorShell({
             <EditorPublish artistId={artistId} />
           </div>
 
-          <iframe
-            ref={frameRef}
-            src={frameSrc}
-            title="Site editor"
-            className={cx(
-              'min-h-0 flex-1 rounded-xl border border-hairline bg-paper shadow-sm',
-              device === 'mobile' ? 'mx-auto w-[390px]' : 'w-full',
-            )}
-          />
+          {/* The frame renders at a TRUE desktop width and is scaled down to fit,
+              rather than being squeezed into the panel's ~900px — which would trip
+              the site's tablet breakpoints and show a layout no desktop visitor
+              gets. `overflow-hidden` clips the scaled canvas; the outer box is
+              sized to the RENDERED dimensions so layout stays honest.
+              NOTE for the selection overlay (still to come): the frame reports
+              rects in its own 1440-space, so multiply them by `view.scale` before
+              drawing over the top. */}
+          <div ref={panelRef} className="flex min-h-0 flex-1 justify-center">
+            <div
+              className="relative overflow-hidden rounded-xl border border-hairline bg-paper shadow-sm"
+              style={{ width: view.renderedWidth || '100%', height: view.renderedHeight || '100%' }}
+            >
+              <iframe
+                ref={frameRef}
+                src={frameSrc}
+                title="Site editor"
+                className="absolute left-0 top-0 border-0"
+                style={{
+                  width: view.width,
+                  height: view.height,
+                  transform: `scale(${view.scale})`,
+                  transformOrigin: 'top left',
+                }}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
