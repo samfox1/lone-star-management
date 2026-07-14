@@ -24,11 +24,20 @@ Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
    - [x] Add `visible` columns to `tracks` + `links` (migration
          `20260708150000_tracks_links_visibility.sql`, pushed + verified). Additive,
          non-breaking, default true; NOT yet gated in get_public_site.
-         - [ ] **DORMANT — its own open TODO now.** The Music restructure chose
-               *derivation* (Released/Unreleased buckets, `src/lib/music.ts`) over
-               per-song visibility, so `tracks.visible` / `links.visible` are still
-               unused and ungated. Decide: wire them as a per-item on-site toggle,
-               or drop the columns. (Releases DO gate on `releases.visible`.)
+         - [x] **RESOLVED 2026-07-14 — both wired, neither dropped.**
+               `tracks.visible` was woken by `20260710170000` (Released became a
+               library-only label; the site gates each song on its own flag). This
+               note claiming tracks is "unused and ungated" was stale from then on.
+               `links` really was inert on BOTH ends until `20260714160000`: the
+               door had no filter AND nothing wrote the flag (the editor only ever
+               called `setOnSiteAction` for photos + songs). Now gated, with a
+               per-link toggle in the editor inspector.
+               Both follow the LIVE-toggle model (not publish-reconcile), so they
+               stay out of `ON_SITE_ENTITIES`.
+         - [x] The flag itself was renamed `visible` → `on_site` across all 7
+               tables in `20260714150000`, matching the language the UI and code
+               already used. See [[music-released-unreleased]] for the sibling
+               Released/Unreleased split, which is a SEPARATE axis.
 3. **Thin UI test layer** — SUBSTANTIALLY DONE 2026-07-08. Harness: React Testing
    Library + jsdom, opted in per-file via `// @vitest-environment jsdom` (the
    DB-backed suite stays on the `node` env); server actions mocked as plain async
@@ -100,12 +109,60 @@ audio 30 MB / images 25 MB / video 100 MB (bigger videos → the direct uploader
 - [ ] Later: a public gallery section (gallery images are dashboard-only today);
       raise the video cap by streaming the server-side copy instead of buffering.
 
-## Analytics — record_event rate limit (review follow-up)
-- [ ] The anon `record_event` door has no per-IP/per-slug rate limit. entity_type is now
-      allowlisted (`20260707200000`) so junk can't accrete, and forgery only inflates an
-      artist's OWN vanity counts (never cross-tenant) — but a flood can still bloat
-      `analytics_events` (DoS). Add a per-slug burst cap like the subscribe door
-      (`20260706150000_subscribe_rate_limit.sql`), ideally shared with the audio play route.
+## Storage — taking an asset off-site does NOT revoke its URL (open, 2026-07-14)
+
+Sam confirmed some uploads are unreleased / sensitive, so writing this down properly.
+**Verified against the live project on 2026-07-14, not inferred from the policy SQL.**
+
+What is NOT a problem (checked, don't re-litigate):
+- **Enumeration is already closed.** Both buckets scope storage SELECT to the owning
+  manager (`media manager read`, added by `20260708120000` step 4, which dropped the old
+  blanket `media public read`; `videos` never had an anon select policy). An anon
+  `.list()` on `media` and `videos` returns `[]` at the root, the artist folder, AND the
+  exact subfolder holding a known object. Nobody can browse an artist's assets.
+- Storage paths are `{artist_id}/…/<uuid>`, so URLs aren't guessable.
+- `on_site` correctly hides the ROW from `get_public_site` — the site stops linking it.
+
+What IS the problem:
+- Both buckets are `public = true`, so `/object/public/…` **bypasses RLS entirely**.
+  Verified: an anon HEAD on a real object returns **200**. So `on_site` gates *discovery*,
+  never *access*. Once a URL has been public — the item was on-site, so the URL was in the
+  page source, and may now be cached, shared, scraped, or CDN-held — taking it off-site
+  does not take it down. The manager sees it vanish from the site and reasonably assumes
+  it's gone. It isn't. (Same shape as the `get_release` bug fixed in `20260714130000`,
+  one layer lower.)
+- An asset that was NEVER on-site is protected only by an unguessable UUID path. That's
+  "anyone with the link", not "private" — fine for a draft photo, NOT fine for unreleased
+  audio/video if the URL ever escapes.
+
+- [ ] Decide the fix. Options, cheapest first:
+      1. **Split buckets** — keep `media`/`videos` public for genuinely-public assets, add
+         a private `drafts` bucket, and move an asset on publish/unpublish. Cheap, no
+         render change for live content, but moving objects on toggle is fiddly.
+      2. **Private buckets + signed URLs** — flip `public = false`, serve via
+         `createSignedUrl` with a TTL. Correct and complete, but touches how
+         **skeen-website** renders every image/video (it builds public URLs directly —
+         `mediaPublicUrl` in `lib/mapSite.ts`), so both repos ship together. ISR(60s)
+         caching + URL expiry need thought.
+      3. **Accept it** — document that off-site ≠ private, and never upload anything
+         genuinely sensitive. Free, but the manager UI currently implies otherwise.
+- [ ] Whichever way: the UI should stop implying "off site" means "taken down".
+
+## Analytics — record_event rate limit — DONE (2026-07-14)
+- [x] Per-artist burst cap on the anon `record_event` door (`20260714140000`): 120
+      events/artist/minute, dropped SILENTLY (fire-and-forget telemetry from a fan's
+      page — an exception would surface there, unlike the subscribe form).
+      Deliberately NOT the subscribe door's 15/min: subscribe caps signups, which are
+      rare, while this fires on every view and click, so 15/min would delete real
+      analytics from any artist having a good day. 120/min = 2/sec sustained, far
+      above real traffic at this scale.
+- [x] `analytics_summary`: revoked the implicit PUBLIC execute grant (same migration).
+      Hygiene only — it's SECURITY INVOKER, so RLS already returned anon zero rows.
+- [ ] **STILL OPEN: per-IP limiting belongs at the EDGE.** A DB function cannot see the
+      client IP, so the cap above bounds storage growth but does not target abuse — and
+      during a flood the attacker fills the window and the artist's REAL events drop
+      alongside the junk. Do this in the Next.js route (and share it with the audio play
+      route) if analytics abuse ever becomes real.
 
 ## Storage GC — DONE (2026-07-08)
 - [x] Video objects GC'd at PUBLISH (`gcVideoObjects` in publishEntityAction): after

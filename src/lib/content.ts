@@ -99,6 +99,12 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // source + platform ids are provenance for the doors' Released/Unreleased
     // classification (lib/music.ts mirrored in SQL). They ride the public payload;
     // all are public-safe (the ids are just platform-URL components).
+    //
+    // `album_name` is LEGACY, DISPLAY-ONLY. It once decided release membership by
+    // string-matching a release title; `release_id` has been authoritative since
+    // 20260706170000, and 20260709120000 removed the last string-match fallback
+    // from get_release. It is kept ONLY because skeen-website still reads it as a
+    // subtitle/title fallback (lib/mapSite.ts). Never key logic off it.
     snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released'],
     orderBy: ['sort_order', 'created_at'],
   },
