@@ -1,8 +1,9 @@
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { ArtistTemplate } from '@/components/artist-template'
 import { SiteAnalytics } from '@/components/site-analytics'
 import { createClient } from '@/lib/supabase/server'
 import { getPublishedSite } from '@/lib/site'
+import { customSiteUrl } from '@/lib/custom-site'
 import { siteMetadata } from '@/lib/seo'
 
 // The public artist site. Unauthenticated; served through the public read path
@@ -15,6 +16,10 @@ export default async function PublicArtistPage({
 }) {
   const { slug } = await params
   const supabase = await createClient()
+  // A custom-site artist is hosted elsewhere (e.g. skeen on Vercel); the canonical
+  // URL is that site, so 308-redirect there instead of rendering a template.
+  const custom = await customSiteUrl(supabase, slug)
+  if (custom) permanentRedirect(custom)
   const site = await getPublishedSite(supabase, slug)
   if (!site) notFound()
 
