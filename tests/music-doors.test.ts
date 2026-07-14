@@ -6,9 +6,15 @@
  *    organizing label — an Unreleased track with visible=true is public; a
  *    Released track with visible=false is not. `audio_path_for_play` follows the
  *    same visible gate.
- *  - The RELEASE doors (get_release / get_public_releases) are a separate surface
- *    and are unchanged: still Released-gated + visible, tracklist by release_id
+ *  - The RELEASE doors (get_release / get_public_releases) are a separate surface:
+ *    Released-gated AND visible-gated — both must pass — tracklist by release_id
  *    only (no album_name fallback).
+ *
+ * The visible gate on get_release is asserted here because it was silently lost
+ * once already: 20260709120000 rewrote the function and dropped the join, so an
+ * off-site release kept serving its smart-link page while correctly vanishing
+ * from the discography list. This header claimed "+ visible" the whole time —
+ * nothing tested it. Restored in 20260714130000; the assertion is the guard.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -91,6 +97,12 @@ beforeAll(async () => {
   // An UNRELEASED release (manual, no spotify_id, links []).
   await makeRelease('Secret EP', 'secret-ep')
 
+  // A RELEASED release the manager took OFF-site (visible=false). Released and
+  // on-site are independent gates: this one passes the provenance check but must
+  // still vanish from BOTH release doors — the discography list AND its own
+  // smart-link page. (20260709120000 dropped the page's gate; see below.)
+  await makeRelease('Pulled Album', 'pulled-album', { spotify_id: 'sp-album-2', visible: false })
+
   // A loose track whose album_name matches the released release's TITLE but with
   // NO release_id — must NOT appear in the pub-album tracklist (membership is
   // release_id only).
@@ -143,7 +155,7 @@ describe('audio_path_for_play — gates on visible', () => {
   })
 })
 
-describe('get_release — still Released-gated, album_name fallback gone', () => {
+describe('get_release — Released-gated AND on-site-gated, album_name fallback gone', () => {
   it('serves a released release with its release_id tracklist', async () => {
     const page = await releasePage('pub-album')
     expect(page?.title).toBe('Public Album')
@@ -158,6 +170,10 @@ describe('get_release — still Released-gated, album_name fallback gone', () =>
   it('returns null for an unreleased release', async () => {
     expect(await releasePage('secret-ep')).toBeNull()
   })
+
+  it('returns null for a RELEASED release taken off-site (visible=false)', async () => {
+    expect(await releasePage('pulled-album')).toBeNull()
+  })
 })
 
 describe('get_public_releases — still Released-gated', () => {
@@ -165,5 +181,9 @@ describe('get_public_releases — still Released-gated', () => {
     const titles = (await publicReleases()).map((r) => r.title)
     expect(titles).toContain('Public Album')
     expect(titles).not.toContain('Secret EP')
+  })
+
+  it('omits a released release taken off-site', async () => {
+    expect((await publicReleases()).map((r) => r.title)).not.toContain('Pulled Album')
   })
 })
