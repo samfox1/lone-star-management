@@ -30,7 +30,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
-import { saveEditorField } from '@/lib/site-editor/save'
+import { saveEditorField, saveEditorStyle } from '@/lib/site-editor/save'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
@@ -331,6 +331,27 @@ export async function saveEditorFieldAction(
   if (!artist) return { ok: false, error: 'Artist not found.' }
 
   const res = await saveEditorField(supabase, artistId, artist.template as string, fieldKey, value)
+  if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
+  return res
+}
+
+/** Save one region's class-name override to the draft. Mirrors saveEditorFieldAction:
+ *  auth + owner gate (the RLS-scoped .single() 404s a non-owner), then revalidate. */
+export async function saveEditorStyleAction(
+  artistId: string,
+  regionKey: string,
+  className: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+
+  const res = await saveEditorStyle(supabase, artistId, regionKey, className)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
 }

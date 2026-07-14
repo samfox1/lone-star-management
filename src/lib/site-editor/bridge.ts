@@ -14,10 +14,11 @@
  * MUST also check `event.origin` — the `source`/version guards below are a shape
  * check, not an origin check).
  */
-import type { LibraryAsset } from '@/lib/site-editor/manifest'
+import type { LibraryAsset, TemplateManifest } from '@/lib/site-editor/manifest'
+import type { SiteData } from '@/lib/site'
 
 /** Bump when the message shape changes incompatibly; both sides pin to it. */
-export const BRIDGE_VERSION = 1
+export const BRIDGE_VERSION = 2
 
 export const FRAME_SOURCE = 'lse-frame'
 export const EDITOR_SOURCE = 'lse-editor'
@@ -25,22 +26,29 @@ export const EDITOR_SOURCE = 'lse-editor'
 /** A region's on-screen box, for drawing the editor's selection overlay. */
 export type Rect = { x: number; y: number; width: number; height: number }
 
-/** What the user selected in the frame (maps to a manifest field / slot / item). */
+/** What the user selected in the frame (maps to a manifest field / slot / item /
+ *  style region). */
 export type SelectTarget =
   | { kind: 'field'; key: string }
   | { kind: 'slot'; key: string }
   | { kind: 'item'; assetType: LibraryAsset; id: string }
+  | { kind: 'style'; key: string }
 
-/** frame → editor. */
+/** frame → editor. A custom site carries its own edit-list (manifest) on `ready`,
+ *  so the editor never hardcodes a custom site's regions (SITE_STYLING_PLAN.md D-D). */
 export type FrameMessage =
-  | { v: number; source: typeof FRAME_SOURCE; type: 'ready' }
+  | { v: number; source: typeof FRAME_SOURCE; type: 'ready'; manifest?: TemplateManifest }
   | { v: number; source: typeof FRAME_SOURCE; type: 'select'; target: SelectTarget; rect: Rect }
   | { v: number; source: typeof FRAME_SOURCE; type: 'geometry'; target: SelectTarget; rect: Rect }
   | { v: number; source: typeof FRAME_SOURCE; type: 'deselect' }
 
-/** editor → frame. */
+/** editor → frame. `init-data` hands the frame its draft SiteData so a custom site
+ *  in edit mode renders the draft without its own DB access (D-C); `apply-style`
+ *  previews a class-string change optimistically before the debounced save. */
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: SiteData }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'highlight'; target: SelectTarget | null }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'set-device'; device: 'desktop' | 'mobile' }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'refresh' }

@@ -52,3 +52,59 @@ export async function saveEditorField(
 
   return { ok: false, error: 'Image editing is coming soon.' }
 }
+
+/**
+ * Clean the class-name TEXT a manager typed for a region. Returns the cleaned
+ * string, or null if it holds characters that don't belong in a class attribute
+ * (reject — don't silently mangle). '' (empty/whitespace) is valid: it clears the
+ * override so the region falls back to its base classes.
+ */
+export function cleanClassText(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (trimmed === '') return ''
+  if (trimmed.length > 500) return null
+  // Tailwind-safe: letters/digits/space + the punctuation utilities use, including
+  // arbitrary values `text-[clamp(3rem,12vw,11rem)]` and variants `hover:` `sm:` `!`.
+  if (!/^[A-Za-z0-9 _:/.,%#!\[\]()@-]+$/.test(trimmed)) return null
+  return trimmed
+}
+
+/** A region key is a manifest style-region key ('hero_wordmark') or a per-item key
+ *  '<slot>:<id>' (D-E) — item ids are UUIDs, so hyphens are allowed after the colon. */
+function isRegionKey(key: string): boolean {
+  return key.length <= 200 && /^[A-Za-z0-9_]+(?::[A-Za-z0-9-]+)?$/.test(key)
+}
+
+/**
+ * Write one region's class override to the DRAFT. Pure over an injected Supabase
+ * client (RLS scopes the write); the `saveEditorStyleAction` wrapper adds auth +
+ * revalidation. Blank clears the row → the region falls back to its base classes.
+ *
+ * Deliberately does NOT check manifest membership: a custom site's edit-list is
+ * posted at runtime (D-D), so we validate the KEY SHAPE and clean the class text
+ * instead of resolving against a local manifest.
+ */
+export async function saveEditorStyle(
+  supabase: SupabaseClient,
+  artistId: string,
+  regionKey: string,
+  className: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isRegionKey(regionKey)) return { ok: false, error: 'Unknown region.' }
+  const clean = cleanClassText(className)
+  if (clean === null) return { ok: false, error: 'That has characters that are not allowed in a class name.' }
+  if (clean === '') {
+    const { error } = await supabase
+      .from('site_styles')
+      .delete()
+      .eq('artist_id', artistId)
+      .eq('region_key', regionKey)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  const { error } = await supabase
+    .from('site_styles')
+    .upsert({ artist_id: artistId, region_key: regionKey, class_names: clean }, { onConflict: 'artist_id,region_key' })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}

@@ -6,7 +6,7 @@
  * Pure DOM logic — no postMessage plumbing here.
  */
 import { describe, expect, it } from 'vitest'
-import { applyFieldToDom, markedAncestor, targetOf } from '@/lib/site-editor/bridge-client'
+import { applyFieldToDom, applyStyleToDom, markedAncestor, targetOf } from '@/lib/site-editor/bridge-client'
 
 describe('bridge-client — resolve a clicked element to a target', () => {
   it('resolves the NEAREST marker (an item beats its enclosing slot)', () => {
@@ -56,5 +56,32 @@ describe('applyFieldToDom — optimistic in-frame update', () => {
   it('no-ops when the field is not present', () => {
     document.body.innerHTML = `<p>nothing marked</p>`
     expect(() => applyFieldToDom(document, 'missing', 'x')).not.toThrow()
+  })
+})
+
+describe('style regions — resolve + optimistic restyle', () => {
+  it('resolves a style-only region to a style target (lowest precedence)', () => {
+    document.body.innerHTML = `<h1 data-lse-style="hero_wordmark" id="h">SKEEN</h1>`
+    expect(targetOf(document.getElementById('h')!)).toEqual({ kind: 'style', key: 'hero_wordmark' })
+  })
+
+  it('a field wins over style on the same element (content selects on click)', () => {
+    document.body.innerHTML = `<h1 data-lse-field="artist_name" data-lse-style="hero_wordmark" id="h">SKEEN</h1>`
+    expect(targetOf(document.getElementById('h')!)).toEqual({ kind: 'field', key: 'artist_name' })
+  })
+
+  it('applyStyleToDom REPLACES the region class string (incl. a per-item key)', () => {
+    document.body.innerHTML = `
+      <h1 data-lse-style="hero_wordmark" class="font-glitch text-9xl">SKEEN</h1>
+      <div data-lse-style="videos:abc-123" class="border"></div>`
+    applyStyleToDom(document, 'hero_wordmark', 'font-momo uppercase')
+    expect(document.querySelector('[data-lse-style="hero_wordmark"]')!.getAttribute('class')).toBe('font-momo uppercase')
+    applyStyleToDom(document, 'videos:abc-123', 'rounded')
+    expect(document.querySelector('[data-lse-style="videos:abc-123"]')!.getAttribute('class')).toBe('rounded')
+  })
+
+  it('no-ops when the style region is not present', () => {
+    document.body.innerHTML = `<p>nothing marked</p>`
+    expect(() => applyStyleToDom(document, 'missing', 'x')).not.toThrow()
   })
 })

@@ -8,7 +8,7 @@
  * jsdom); `mountFrameBridge` wires the live listeners and is exercised in the
  * browser. No React here.
  */
-import { FIELD_ATTR, ITEM_ATTR, SLOT_ATTR, parseItemMarker } from '@/lib/site-editor/markers'
+import { FIELD_ATTR, ITEM_ATTR, SLOT_ATTR, STYLE_ATTR, parseItemMarker } from '@/lib/site-editor/markers'
 import {
   type EditorMessage,
   type Rect,
@@ -17,7 +17,7 @@ import {
   isEditorMessage,
 } from '@/lib/site-editor/bridge'
 
-const MARKED = `[${FIELD_ATTR}],[${SLOT_ATTR}],[${ITEM_ATTR}]`
+const MARKED = `[${FIELD_ATTR}],[${SLOT_ATTR}],[${ITEM_ATTR}],[${STYLE_ATTR}]`
 
 /** The nearest ancestor (or self) carrying any `data-lse-*` marker, or null. An
  *  inner item wins over its enclosing slot because `closest` walks up. */
@@ -25,8 +25,10 @@ export function markedAncestor(el: Element): Element | null {
   return el.closest(MARKED)
 }
 
-/** The SelectTarget a marked element represents (field > item > slot), or null if
- *  its marker is malformed. */
+/** The SelectTarget a marked element represents (field > item > slot > style), or
+ *  null if its marker is malformed. Style is lowest so an element that is BOTH a
+ *  content field and re-styleable selects its content on click; its style is reached
+ *  from the inspector (which reads the element's `data-lse-style` alongside). */
 export function targetOf(marked: Element): SelectTarget | null {
   const field = marked.getAttribute(FIELD_ATTR)
   if (field) return { kind: 'field', key: field }
@@ -37,6 +39,8 @@ export function targetOf(marked: Element): SelectTarget | null {
   }
   const slot = marked.getAttribute(SLOT_ATTR)
   if (slot) return { kind: 'slot', key: slot }
+  const style = marked.getAttribute(STYLE_ATTR)
+  if (style) return { kind: 'style', key: style }
   return null
 }
 
@@ -54,6 +58,16 @@ export function applyFieldToDom(root: ParentNode, key: string, value: string): v
   if (!el) return
   if (el instanceof HTMLImageElement) el.src = value
   else el.textContent = value
+}
+
+/** Optimistically apply an edited class string onto the styled region. REPLACE
+ *  semantics (D-B): the stored string is the region's full class set, so we swap
+ *  the element's `class` wholesale. No-op if the region isn't present. Region keys
+ *  A ':' in a per-item key is fine inside a quoted attribute selector. */
+export function applyStyleToDom(root: ParentNode, key: string, className: string): void {
+  const el = root.querySelector(`[${STYLE_ATTR}="${key}"]`)
+  if (!el) return
+  el.setAttribute('class', className)
 }
 
 /**
@@ -86,6 +100,7 @@ export function mountFrameBridge(options: {
     // apply-field updates the DOM here (generic frame behaviour); everything else
     // goes to the caller.
     if (e.data.type === 'apply-field') applyFieldToDom(document, e.data.key, e.data.value)
+    else if (e.data.type === 'apply-style') applyStyleToDom(document, e.data.key, e.data.className)
     else options.onEditorMessage?.(e.data)
   }
 

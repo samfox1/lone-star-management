@@ -14,10 +14,11 @@ import {
   labelForTarget,
   manifestFor,
   slotByKey,
+  styleByKey,
   type LibraryAsset,
   type TemplateManifest,
 } from '@/lib/site-editor/manifest'
-import { fieldRegion, itemMarker, itemRegion, parseItemMarker, slotRegion } from '@/lib/site-editor/markers'
+import { fieldRegion, itemMarker, itemRegion, parseItemMarker, slotRegion, styleRegion } from '@/lib/site-editor/markers'
 import {
   BRIDGE_VERSION,
   editorMessage,
@@ -52,6 +53,33 @@ describe('region helpers — emit marker attrs only in edit mode', () => {
     expect(slotRegion(false, 'shows')).toEqual({})
     expect(itemRegion(true, 'tour_date', 'abc-123')).toEqual({ 'data-lse-item': 'tour_date:abc-123' })
     expect(itemRegion(false, 'tour_date', 'abc-123')).toEqual({})
+    expect(styleRegion(true, 'hero_wordmark')).toEqual({ 'data-lse-style': 'hero_wordmark' })
+    expect(styleRegion(false, 'hero_wordmark')).toEqual({})
+  })
+})
+
+describe('manifest — style regions', () => {
+  // A hand-built manifest with a style region (built-in templates ship styles: []).
+  const styled: TemplateManifest = {
+    template: 'custom-skeen',
+    fields: [],
+    slots: [],
+    styles: [{ key: 'hero_wordmark', label: 'Hero wordmark', base: 'font-glitch text-9xl' }],
+  }
+
+  it('looks up a style region by key', () => {
+    expect(styleByKey(styled, 'hero_wordmark')?.label).toBe('Hero wordmark')
+    expect(styleByKey(styled, 'nope')).toBeUndefined()
+  })
+
+  it('labels a style target for the inspector, with graceful fallback', () => {
+    expect(labelForTarget(styled, { kind: 'style', key: 'hero_wordmark' })).toBe('Hero wordmark')
+    expect(labelForTarget(styled, { kind: 'style', key: 'unknown' })).toBe('unknown')
+  })
+
+  it('built-in templates ship an (empty) styles list', () => {
+    expect(MANIFESTS.classic.styles).toEqual([])
+    expect(MANIFESTS.cinematic.styles).toEqual([])
   })
 })
 
@@ -140,6 +168,14 @@ describe('bridge — versioned, source-discriminated guards', () => {
     const msg = editorMessage({ type: 'set-device', device: 'mobile' })
     expect(isEditorMessage(msg)).toBe(true)
     expect(isFrameMessage(msg)).toBe(false)
+  })
+
+  it('is at version 2 and carries the style + data-injection messages', () => {
+    expect(BRIDGE_VERSION).toBe(2)
+    const style = editorMessage({ type: 'apply-style', key: 'hero_wordmark', className: 'font-momo' })
+    expect(isEditorMessage(style)).toBe(true)
+    const select = frameMessage({ type: 'select', target: { kind: 'style', key: 'hero_wordmark' }, rect: { x: 0, y: 0, width: 1, height: 1 } })
+    expect(isFrameMessage(select)).toBe(true)
   })
 
   it('rejects wrong version, wrong source, and non-objects', () => {

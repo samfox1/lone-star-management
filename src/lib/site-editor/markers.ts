@@ -18,6 +18,7 @@ import type { LibraryAsset } from '@/lib/site-editor/manifest'
 export const FIELD_ATTR = 'data-lse-field'
 export const SLOT_ATTR = 'data-lse-slot'
 export const ITEM_ATTR = 'data-lse-item'
+export const STYLE_ATTR = 'data-lse-style'
 
 /** Build a `data-lse-item` value. Asset ids are UUIDs (no colon), and the asset
  *  type has no colon, so the first colon is an unambiguous separator. */
@@ -56,4 +57,14 @@ export function slotRegion(editable: boolean, key: string): Record<string, strin
 
 export function itemRegion(editable: boolean, assetType: LibraryAsset, id: string): Record<string, string> {
   return editable ? { [ITEM_ATTR]: itemMarker(assetType, id) } : {}
+}
+
+/**
+ * Region spread for a re-styleable element (its CSS classes are editable) in EDIT
+ * MODE only:  <h1 {...styleRegion(editable, 'hero_wordmark')}>…</h1>. The key is a
+ * manifest style-region key (section) or a per-item key '<slot>:<id>'. Off edit
+ * mode returns {} — the public site carries no markers.
+ */
+export function styleRegion(editable: boolean, key: string): Record<string, string> {
+  return editable ? { [STYLE_ATTR]: key } : {}
 }

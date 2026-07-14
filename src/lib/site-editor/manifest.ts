@@ -53,12 +53,22 @@ export type ManifestSlot = {
   accepts: LibraryAsset
 }
 
+/** A re-styleable region — one `data-lse-style="<key>"` element whose CSS class
+ *  string is editable. `base` is the region's default classes (what the inspector
+ *  seeds the field with; a stored override REPLACES it — SITE_STYLING_PLAN.md D-B). */
+export type ManifestStyleRegion = {
+  key: string
+  label: string
+  base?: string
+}
+
 /** One site's full editable surface. `template` is the built-in template name or a
  *  custom site's declared id. */
 export type TemplateManifest = {
   template: string
   fields: ManifestField[]
   slots: ManifestSlot[]
+  styles: ManifestStyleRegion[]
 }
 
 /** Lift the per-template site-text schema into manifest fields (site_content targets). */
@@ -95,6 +105,8 @@ export const MANIFESTS: Record<string, TemplateManifest> = {
       { key: 'merch', label: 'Merch', accepts: 'merch' },
       { key: 'links', label: 'Links', accepts: 'link' },
     ],
+    // Built-in template DOM isn't style-tagged yet; custom sites declare their own.
+    styles: [],
   },
   cinematic: {
     template: 'cinematic',
@@ -109,6 +121,7 @@ export const MANIFESTS: Record<string, TemplateManifest> = {
       { key: 'work', label: 'Work', accepts: 'track' },
       { key: 'videos', label: 'Videos', accepts: 'video' },
     ],
+    styles: [],
   },
 }
 
@@ -125,6 +138,11 @@ export function fieldByKey(manifest: TemplateManifest, key: string): ManifestFie
 /** Look up one slot by key within a manifest. */
 export function slotByKey(manifest: TemplateManifest, key: string): ManifestSlot | undefined {
   return manifest.slots.find((s) => s.key === key)
+}
+
+/** Look up one style region by key within a manifest. */
+export function styleByKey(manifest: TemplateManifest, key: string): ManifestStyleRegion | undefined {
+  return manifest.styles.find((s) => s.key === key)
 }
 
 /** The draft artist state a field value may read from. */
@@ -147,6 +165,7 @@ export function fieldCurrentValue(field: ManifestField, ctx: FieldValueContext):
 export function labelForTarget(manifest: TemplateManifest, target: SelectTarget): string {
   if (target.kind === 'field') return fieldByKey(manifest, target.key)?.label ?? target.key
   if (target.kind === 'slot') return slotByKey(manifest, target.key)?.label ?? target.key
+  if (target.kind === 'style') return styleByKey(manifest, target.key)?.label ?? target.key
   const slot = manifest.slots.find((s) => s.accepts === target.assetType)
   return slot ? `${slot.label} item` : `${target.assetType} item`
 }
