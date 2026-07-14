@@ -26,6 +26,7 @@ function site(artist: Partial<SiteData['artist']> = {}): SiteData {
     videos: [],
     media: [],
     site_content: {},
+    styles: {},
   }
 }
 

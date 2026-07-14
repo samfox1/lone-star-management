@@ -23,6 +23,7 @@ function diff(over: Partial<Record<keyof UnpublishedDiff, SectionDiff>>): Unpubl
   const base: UnpublishedDiff = {
     profile: empty,
     site_content: empty,
+    site_styles: empty,
     media: empty,
     track: empty,
     release: empty,

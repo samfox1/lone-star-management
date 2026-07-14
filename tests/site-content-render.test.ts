@@ -21,6 +21,7 @@ function makeData(site_content: Record<string, string>): SiteData {
     videos: [],
     media: [],
     site_content,
+    styles: {},
   }
 }
 

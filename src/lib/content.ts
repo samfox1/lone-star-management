@@ -41,7 +41,7 @@ export const VISIBLE_ENTITIES: readonly VisibleEntity[] = ['release', 'video', '
  *  Media + site_content are published here but have no generic CRUD form (each
  *  has its own bespoke editor). The artist PROFILE is published separately as a
  *  singleton (publishProfile). */
-export type PublishableEntity = CrudEntity | 'media' | 'site_content'
+export type PublishableEntity = CrudEntity | 'media' | 'site_content' | 'site_styles'
 
 /** Fan-visible artist-profile columns that publish together as one snapshot.
  *  Deliberately excludes config/secret columns (shopify_domain, bandsintown_name)
@@ -145,6 +145,14 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     table: 'site_content',
     snapshot: ['id', 'key', 'value'],
     orderBy: ['key'],
+  },
+  // Per-region editable class names (SITE_STYLING_PLAN.md). Same key/value model as
+  // site_content: entity_id = row id, snapshot carries {region_key, class_names};
+  // get_public_site folds these into a {region_key: class_names} object.
+  site_styles: {
+    table: 'site_styles',
+    snapshot: ['id', 'region_key', 'class_names'],
+    orderBy: ['region_key'],
   },
 }
 

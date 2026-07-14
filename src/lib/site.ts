@@ -96,6 +96,12 @@ export type SiteMedia = {
  *  keys fall back to the template default (see lib/site-content-schema). */
 export type SiteContent = Record<string, string>
 
+/** Per-region class-name overrides as region_key → class string (published or
+ *  working). Section regions use a plain key (e.g. 'hero_wordmark'); per-item
+ *  regions use '<slot>:<itemId>'. Absent/empty keys fall back to the region's
+ *  base classes (see SITE_STYLING_PLAN.md). */
+export type SiteStyles = Record<string, string>
+
 /** Public URL for an object in the `media` storage bucket. */
 export function mediaUrl(path: string): string {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`
@@ -118,6 +124,7 @@ export type SiteData = {
   videos: SiteVideo[]
   media: SiteMedia[]
   site_content: SiteContent
+  styles: SiteStyles
 }
 
 /** Map the rpc's media ({purpose, path}) to public URLs. */
@@ -166,7 +173,7 @@ export async function getWorkingSite(
     .single()
   if (!artist) return null
 
-  const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows] = await Promise.all([
+  const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows] = await Promise.all([
     // Tracks mirror get_public_site: expose has_audio (never the raw audio_path)
     // and show ON-SITE tracks only — gated by the per-track `visible` flag, the
     // same rule the door now uses (Released is a library-only label — see
@@ -213,6 +220,11 @@ export async function getWorkingSite(
       .select('key, value')
       .eq('artist_id', artistId)
       .then(({ data }) => data ?? []),
+    supabase
+      .from('site_styles')
+      .select('region_key, class_names')
+      .eq('artist_id', artistId)
+      .then(({ data }) => data ?? []),
   ])
 
   const media = toSiteMedia(
@@ -230,5 +242,13 @@ export async function getWorkingSite(
       .map((r) => [r.key, r.value as string]),
   )
 
-  return { artist, tracks, tour_dates, merch, links, videos, media, site_content }
+  // Same region_key→class_names shape get_public_site's jsonb_object_agg produces
+  // (empty/cleared class strings are dropped), so preview matches the public site.
+  const styles = Object.fromEntries(
+    (styleRows as { region_key: string; class_names: string | null }[])
+      .filter((r) => r.class_names != null && r.class_names !== '')
+      .map((r) => [r.region_key, r.class_names as string]),
+  )
+
+  return { artist, tracks, tour_dates, merch, links, videos, media, site_content, styles }
 }
