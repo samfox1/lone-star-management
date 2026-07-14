@@ -4,6 +4,19 @@ _Companion to `SITE_EDITOR_PLAN.md` and ADR-0006. This plan closes the gap ADR-0
 deliberately left open ("No layout / structure / styling editing in v1") and wires the
 Vercel **skeen-website** repo in as the first editable **custom site**._
 
+## Plain-language glossary
+
+Friendly names (Sam's, 2026-07-14) for the editor concepts. The code still uses the
+original names for now; these are how we talk about them.
+
+- **edit-list** (code: _manifest_) — the list of what's editable on a site: each region's
+  key + what kind it is (text, image, style). The editor reads it to know what it may touch.
+- **edit-tag** (code: _marker_, `data-lse-*`) — a name tag stamped on each editable element
+  in edit mode, so clicking it tells the editor which region it is.
+- **edit-bridge** (code: _bridge_) — the message channel between the editor page and the
+  site running inside it (an iframe), so the two separate pages can talk.
+
+
 ## Goal
 
 No hardcoded per-artist template. Every content section (image, text, video, embedded
