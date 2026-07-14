@@ -19,7 +19,7 @@ export type TourDate = {
   ticket_url: string | null
   source: string | null
   /** Whether the date is currently live on the public site. */
-  visible: boolean
+  on_site: boolean
   /** 30-day ticket-clicks (from analytics_by_entity). */
   stat?: number
 }
@@ -59,7 +59,7 @@ export function TourRow({
       <div className="flex items-center gap-5 border-b border-hairline py-5 last:border-0">
         <SelectToggle
           selected={selected}
-          visible={tour.visible}
+          onSite={tour.on_site}
           onToggle={onToggleSelect}
           label={tour.venue || 'date'}
           liveClassName="border-accent bg-accent text-white"

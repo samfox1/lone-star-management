@@ -25,8 +25,8 @@ import {
   publishAll,
   publishContent,
   publishProfile,
-  reconcileVisibility,
-  type VisibleEntity,
+  reconcileOnSite,
+  type OnSiteEntity,
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
@@ -379,7 +379,7 @@ export async function deleteMediaAction(
 
 /**
  * Toggle whether one asset is ON THE SITE (presence) from the visual editor — writes the
- * `visible` flag. An asset is on the public site only when selected AND published; being
+ * `on_site` flag. An asset is on the public site only when selected AND published; being
  * in the library (Assets) never implies on-site. RLS scopes the write to the caller's
  * tenant. `kind` maps to the owning table.
  */
@@ -388,10 +388,10 @@ export async function setOnSiteAction(
   kind: keyof typeof ON_SITE_TABLE,
   id: string,
   artistId: string,
-  visible: boolean,
+  onSite: boolean,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const { error } = await supabase.from(ON_SITE_TABLE[kind]).update({ visible }).eq('id', id).eq('artist_id', artistId)
+  const { error } = await supabase.from(ON_SITE_TABLE[kind]).update({ on_site: onSite }).eq('id', id).eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -638,9 +638,9 @@ async function verifyPasswordGate(
 }
 
 /**
- * Publish the artist's releases to their public site — PASSWORD-GATED. `visibleIds`
+ * Publish the artist's releases to their public site — PASSWORD-GATED. `onSiteIds`
  * is the full set of releases that should be live; every other release is taken
- * off the site. Flow: verify the password, reconcile each release's `visible` flag
+ * off the site. Flow: verify the password, reconcile each release's `on_site` flag
  * to the selection (RLS-scoped), then snapshot release + track content so
  * newly-live releases and their tracklists render on the site. (Tracks piggyback on
  * the release publish — they belong to a release — so this stays release-specific.)
@@ -648,7 +648,7 @@ async function verifyPasswordGate(
  */
 export async function publishReleasesAction(
   artistId: string,
-  visibleIds: string[],
+  onSiteIds: string[],
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
@@ -656,7 +656,7 @@ export async function publishReleasesAction(
   if ('error' in gate) return { ok: false, error: gate.error }
 
   try {
-    await reconcileVisibility(supabase, 'release', artistId, visibleIds)
+    await reconcileOnSite(supabase, 'release', artistId, onSiteIds)
     await publishContent(supabase, 'release', artistId, gate.userId)
     await publishContent(supabase, 'track', artistId, gate.userId)
   } catch (e) {
@@ -668,15 +668,15 @@ export async function publishReleasesAction(
 }
 
 /**
- * Publish one visible-gated content type (video / merch / tour_date) to the public
+ * Publish one on-site-gated content type (video / merch / tour_date) to the public
  * site — PASSWORD-GATED, same flow as publishReleasesAction: verify the password,
- * reconcile `visible` to the selection, snapshot the type's content. `visibleIds` is
+ * reconcile `on_site` to the selection, snapshot the type's content. `onSiteIds` is
  * the desired on-site set; everything else is taken off the site.
  */
 export async function publishEntityAction(
-  type: VisibleEntity,
+  type: OnSiteEntity,
   artistId: string,
-  visibleIds: string[],
+  onSiteIds: string[],
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
@@ -684,7 +684,7 @@ export async function publishEntityAction(
   if ('error' in gate) return { ok: false, error: gate.error }
 
   try {
-    await reconcileVisibility(supabase, type, artistId, visibleIds)
+    await reconcileOnSite(supabase, type, artistId, onSiteIds)
     await publishContent(supabase, type, artistId, gate.userId)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
@@ -803,7 +803,7 @@ async function pullSpotify(artistId: string): Promise<{ ok: boolean; error?: str
     await syncSpotifyTracks(supabase, artistId, tracks)
     await syncSpotifyReleases(supabase, artistId, releases)
     // Snapshot a release revision so each imported release has a smart-link ready;
-    // `visible` (false on import) still gates public exposure until a password publish.
+    // `on_site` (false on import) still gates public exposure until a password publish.
     await publishContent(supabase, 'release', artistId, user?.id)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Refresh failed.' }

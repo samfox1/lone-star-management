@@ -103,7 +103,7 @@ export async function importDriveFile(
         return { artist_id: args.artistId, title, source: 'manual', audio_path: storagePath, drive_file_id: args.fileId }
       case 'video':
         // Same row VideoUpload writes: uploaded provider, off-site until published.
-        return { artist_id: args.artistId, title, provider: 'uploaded', storage_path: storagePath, source: 'manual', visible: false, drive_file_id: args.fileId }
+        return { artist_id: args.artistId, title, provider: 'uploaded', storage_path: storagePath, source: 'manual', on_site: false, drive_file_id: args.fileId }
       case 'image':
         return { artist_id: args.artistId, purpose: 'gallery_image', storage_path: storagePath, drive_file_id: args.fileId }
     }

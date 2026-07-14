@@ -38,7 +38,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
       .from('media')
-      .select('id, storage_path, visible')
+      .select('id, storage_path, on_site')
       .eq('artist_id', id)
       .eq('purpose', 'gallery_image')
       .order('sort_order', { ascending: true })
@@ -74,7 +74,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const photos = (mediaRows ?? []).map((m) => ({
     id: m.id as string,
     storage_path: m.storage_path as string,
-    onSite: (m.visible as boolean | null) ?? false,
+    onSite: (m.on_site as boolean | null) ?? false,
   }))
 
   const [linkRows, videoRows, merchRows, releaseRows, trackRows] = await Promise.all([
@@ -88,6 +88,10 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     id: r.id,
     label: (r.label as string | null) ?? '',
     url: (r.url as string | null) ?? '',
+    // Links default on_site=true (20260708150000), so an existing link stays on the
+    // site until the manager deliberately takes it off — unlike a photo, which is
+    // off until selected.
+    onSite: (r.on_site as boolean | null) ?? true,
   }))
   const videos: EditorVideo[] = videoRows.map((r) => {
     const provider = String(r.provider ?? '')
@@ -141,7 +145,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       title: (r.title as string | null) ?? '',
       cover_url: (r.cover_url as string | null) ?? null,
       released: bucket === 'released',
-      onSite: (r.visible as boolean | null) ?? false,
+      onSite: (r.on_site as boolean | null) ?? false,
     }
   })
 

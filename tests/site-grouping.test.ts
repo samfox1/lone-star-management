@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { filterBySite, siteEmptyTitle } from '@/app/artists/[id]/(dashboard)/on-site-filter'
 import { groupByOrigin } from '@/app/artists/[id]/(dashboard)/origin'
 
-const item = (id: string, visible: boolean, source: string) => ({ id, visible, source })
+const item = (id: string, on_site: boolean, source: string) => ({ id, on_site, source })
 
 describe('filterBySite', () => {
   const items = [item('a', true, 'x'), item('b', false, 'y'), item('c', true, 'z')]
@@ -15,14 +15,14 @@ describe('filterBySite', () => {
   it('all → everything', () => {
     expect(filterBySite(items, 'all')).toHaveLength(3)
   })
-  it('on → only live (visible) items', () => {
+  it('on → only live (on-site) items', () => {
     expect(filterBySite(items, 'on').map((i) => i.id)).toEqual(['a', 'c'])
   })
   it('off → only off-site (hidden) items', () => {
     expect(filterBySite(items, 'off').map((i) => i.id)).toEqual(['b'])
   })
-  it('a null visible counts as off-site, never vanishing from both tabs', () => {
-    const withNull = [{ id: 'n', visible: null as unknown as boolean, source: 'x' }]
+  it('a null on_site counts as off-site, never vanishing from both tabs', () => {
+    const withNull = [{ id: 'n', on_site: null as unknown as boolean, source: 'x' }]
     expect(filterBySite(withNull, 'off')).toHaveLength(1)
     expect(filterBySite(withNull, 'on')).toHaveLength(0)
   })

@@ -46,7 +46,7 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
           storage_path: (row.storage_path as string | null) ?? null,
           source: (row.source as string | null) ?? null,
           is_short: (row.is_short as boolean | null) ?? false,
-          visible: (row.visible as boolean | null) ?? true,
+          on_site: (row.on_site as boolean | null) ?? true,
           youtube_views: (row.youtube_views as number | null) ?? null,
           stat: metricValue(counts, 'video', [row.id as string]),
         }

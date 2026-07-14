@@ -11,10 +11,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { releaseBucket, type ReleaseProvenance } from '@/lib/music'
 
-/** The columns reconcileVisibility reads (superset: provenance only for releases). */
-type VisRow = {
+/** The columns reconcileOnSite reads (superset: provenance only for releases). */
+type OnSiteRow = {
   id: string
-  visible: boolean | null
+  on_site: boolean | null
   source?: string | null
   spotify_id?: string | null
   links?: unknown
@@ -30,12 +30,12 @@ export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'r
  *  are excluded from the generic form. */
 export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
 
-/** Content types with a live `visible` toggle: the manager curates which are on the
+/** Content types with a live `on_site` toggle: the manager curates which are on the
  *  site (a per-card select) and commits with a password-gated publish. A new/imported
- *  row lands off-site (`visible=false`); publish is the only path to `visible=true`,
- *  which also snapshots content — so `visible=true` always implies actually-live. */
-export type VisibleEntity = 'release' | 'video' | 'merch' | 'tour_date'
-export const VISIBLE_ENTITIES: readonly VisibleEntity[] = ['release', 'video', 'merch', 'tour_date']
+ *  row lands off-site (`on_site=false`); publish is the only path to `on_site=true`,
+ *  which also snapshots content — so `on_site=true` always implies actually-live. */
+export type OnSiteEntity = 'release' | 'video' | 'merch' | 'tour_date'
+export const ON_SITE_ENTITIES: readonly OnSiteEntity[] = ['release', 'video', 'merch', 'tour_date']
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
@@ -99,6 +99,12 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // source + platform ids are provenance for the doors' Released/Unreleased
     // classification (lib/music.ts mirrored in SQL). They ride the public payload;
     // all are public-safe (the ids are just platform-URL components).
+    //
+    // `album_name` is LEGACY, DISPLAY-ONLY. It once decided release membership by
+    // string-matching a release title; `release_id` has been authoritative since
+    // 20260706170000, and 20260709120000 removed the last string-match fallback
+    // from get_release. It is kept ONLY because skeen-website still reads it as a
+    // subtitle/title fallback (lib/mapSite.ts). Never key logic off it.
     snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released'],
     orderBy: ['sort_order', 'created_at'],
   },
@@ -133,10 +139,13 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   },
   media: {
     table: 'media',
-    // `visible` rides the snapshot so the public door (get_public_site) gates gallery
+    // `on_site` rides the snapshot so the public door (get_public_site) gates gallery
     // photos on their PUBLISHED on-site selection, and toggling presence is a diffable,
-    // publishable change like any other edit.
-    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'visible'],
+    // publishable change like any other edit. Media is the ONLY type that carries the
+    // flag inside the revision — every other type's door joins the live row instead.
+    // (Revisions written before 20260714150000 hold the old `visible` key; the door
+    // coalesces both. Snapshots are immutable, so history is never rewritten.)
+    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the
@@ -185,43 +194,43 @@ export async function listContent(
 }
 
 /**
- * Reconcile which of an artist's items (of a visible-gated type) are live on the
- * public site. `visibleIds` is the desired on-site set: rows in it are shown
- * (`visible=true`), all others are hidden. Only rows that actually change are
+ * Reconcile which of an artist's items (of an on-site-gated type) are live on the
+ * public site. `onSiteIds` is the desired on-site set: rows in it are shown
+ * (`on_site=true`), all others are hidden. Only rows that actually change are
  * written. RLS scopes every write to the caller's tenant, so this can't touch
  * another artist's rows. Returns how many flipped each way. (The public-facing gate
- * is this `visible` flag; see get_public_site / get_public_releases / get_release.)
+ * is this `on_site` flag; see get_public_site / get_public_releases / get_release.)
  */
-export async function reconcileVisibility(
+export async function reconcileOnSite(
   supabase: SupabaseClient,
-  type: VisibleEntity,
+  type: OnSiteEntity,
   artistId: string,
-  visibleIds: string[],
+  onSiteIds: string[],
 ): Promise<{ shown: number; hidden: number }> {
   const table = PUBLISHABLE[type].table
-  const wanted = new Set(visibleIds)
+  const wanted = new Set(onSiteIds)
   // Releases have a Released/Unreleased split; only Released ones are exposed by
   // the on-site UI, so scope reconcile to them. Otherwise an Unreleased release
-  // (never in `visibleIds`) gets written visible=false on every publish — a
+  // (never in `onSiteIds`) gets written on_site=false on every publish — a
   // latent trap once it's later promoted to Released.
   const scopeToReleased = type === 'release'
-  const cols = scopeToReleased ? 'id, visible, source, spotify_id, links, released' : 'id, visible'
+  const cols = scopeToReleased ? 'id, on_site, source, spotify_id, links, released' : 'id, on_site'
   const { data, error } = await supabase.from(table).select(cols).eq('artist_id', artistId)
   if (error) throw new Error(error.message)
   // `cols` is a runtime string, so the typed builder can't infer the row shape.
-  const rows = (data ?? []) as unknown as VisRow[]
+  const rows = (data ?? []) as unknown as OnSiteRow[]
 
   const scoped = scopeToReleased
     ? rows.filter((r) => releaseBucket(r as unknown as ReleaseProvenance) === 'released')
     : rows
 
-  const toShow = scoped.filter((r) => !r.visible && wanted.has(r.id as string)).map((r) => r.id)
-  const toHide = scoped.filter((r) => r.visible && !wanted.has(r.id as string)).map((r) => r.id)
+  const toShow = scoped.filter((r) => !r.on_site && wanted.has(r.id as string)).map((r) => r.id)
+  const toHide = scoped.filter((r) => r.on_site && !wanted.has(r.id as string)).map((r) => r.id)
 
   if (toShow.length) {
     const { error: e } = await supabase
       .from(table)
-      .update({ visible: true })
+      .update({ on_site: true })
       .in('id', toShow)
       .eq('artist_id', artistId)
     if (e) throw new Error(e.message)
@@ -229,7 +238,7 @@ export async function reconcileVisibility(
   if (toHide.length) {
     const { error: e } = await supabase
       .from(table)
-      .update({ visible: false })
+      .update({ on_site: false })
       .in('id', toHide)
       .eq('artist_id', artistId)
     if (e) throw new Error(e.message)
@@ -237,20 +246,11 @@ export async function reconcileVisibility(
   return { shown: toShow.length, hidden: toHide.length }
 }
 
-/** @deprecated Releases-specific alias kept for existing callers; use reconcileVisibility. */
-export function reconcileReleaseVisibility(
-  supabase: SupabaseClient,
-  artistId: string,
-  visibleIds: string[],
-): Promise<{ shown: number; hidden: number }> {
-  return reconcileVisibility(supabase, 'release', artistId, visibleIds)
-}
-
-/** New video/merch/tour_date rows land OFF-site (`visible=false`) so a manual add or
+/** New video/merch/tour_date rows land OFF-site (`on_site=false`) so a manual add or
  *  an import shows up as an unpublished draft the manager then selects + publishes on.
  *  (Releases keep their own path: manual adds stay live, Spotify imports set false in
  *  the sync — so `release` is intentionally not here.) */
-const INSERT_HIDDEN: readonly CrudEntity[] = ['video', 'merch', 'tour_date']
+const INSERT_OFF_SITE: readonly CrudEntity[] = ['video', 'merch', 'tour_date']
 
 export async function createContent(
   supabase: SupabaseClient,
@@ -258,10 +258,10 @@ export async function createContent(
   artistId: string,
   input: Record<string, unknown>,
 ): Promise<ContentRow> {
-  const hidden = INSERT_HIDDEN.includes(type) ? { visible: false } : {}
+  const offSite = INSERT_OFF_SITE.includes(type) ? { on_site: false } : {}
   const { data, error } = await supabase
     .from(PUBLISHABLE[type].table)
-    .insert({ ...pickFields(type, input), ...hidden, artist_id: artistId })
+    .insert({ ...pickFields(type, input), ...offSite, artist_id: artistId })
     .select('*')
     .single()
   if (error) throw new Error(error.message)

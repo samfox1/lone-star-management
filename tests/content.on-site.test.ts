@@ -1,21 +1,22 @@
 /**
- * Content visibility for videos / merch / tour dates — the Music-page publish model
- * generalized (20260707120000_content_visibility). Against the real DB as seeded
- * managers, this proves:
- *   - createContent lands new video/merch/tour_date rows OFF-site (visible=false),
+ * On-site presence for videos / merch / tour dates — the Music-page publish model
+ * generalized (20260707120000_content_visibility; the flag was renamed
+ * visible → on_site in 20260714150000). Against the real DB as seeded managers,
+ * this proves:
+ *   - createContent lands new video/merch/tour_date rows OFF-site (on_site=false),
  *     so an add is a draft the manager then selects + publishes on;
- *   - reconcileVisibility flips exactly the rows that should change, both ways, and
+ *   - reconcileOnSite flips exactly the rows that should change, both ways, and
  *     is RLS-scoped (can't touch another tenant);
- *   - the public door (get_public_site) gates each section on the live `visible`
+ *   - the public door (get_public_site) gates each section on the live `on_site`
  *     flag: a published-but-hidden item is absent until it's toggled on.
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  type VisibleEntity,
+  type OnSiteEntity,
   createContent,
   publishContent,
-  reconcileVisibility,
+  reconcileOnSite,
 } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
@@ -24,10 +25,10 @@ let artistB: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
-// One case per visible-gated content type: the section key on the public site, a
+// One case per on-site-gated content type: the section key on the public site, a
 // minimal working row, and a title/marker to find it by.
 const CASES: {
-  type: Exclude<VisibleEntity, 'release'>
+  type: Exclude<OnSiteEntity, 'release'>
   table: string
   siteKey: 'videos' | 'merch' | 'tour_dates'
   create: Record<string, unknown>
@@ -58,50 +59,50 @@ async function publicSection(siteKey: string): Promise<Record<string, unknown>[]
 }
 
 describe.each(CASES)('visibility: $type', (c) => {
-  it('createContent lands the new row off-site (visible=false)', async () => {
+  it('createContent lands the new row off-site (on_site=false)', async () => {
     const row = await createContent(asA, c.type, artistA, c.create)
-    const { data } = await svc.from(c.table).select('visible').eq('id', row.id as string).single()
-    expect(data!.visible).toBe(false)
+    const { data } = await svc.from(c.table).select('on_site').eq('id', row.id as string).single()
+    expect(data!.on_site).toBe(false)
   })
 
-  it('CRITICAL: a published row stays hidden until toggled visible', async () => {
-    const row = await createContent(asA, c.type, artistA, c.create) // visible=false
+  it('CRITICAL: a published row stays hidden until toggled on-site', async () => {
+    const row = await createContent(asA, c.type, artistA, c.create) // on_site=false
     await publishContent(asA, c.type, artistA) // snapshot exists, but still hidden
     expect((await publicSection(c.siteKey)).some((x) => JSON.stringify(x).includes(c.marker))).toBe(false)
 
-    await reconcileVisibility(asA, c.type, artistA, [row.id as string]) // toggle on
+    await reconcileOnSite(asA, c.type, artistA, [row.id as string]) // toggle on
     expect((await publicSection(c.siteKey)).some((x) => JSON.stringify(x).includes(c.marker))).toBe(true)
 
-    await reconcileVisibility(asA, c.type, artistA, []) // toggle back off
+    await reconcileOnSite(asA, c.type, artistA, []) // toggle back off
     expect((await publicSection(c.siteKey)).some((x) => JSON.stringify(x).includes(c.marker))).toBe(false)
   })
 
-  it('reconcileVisibility touches only rows that change, both directions', async () => {
+  it('reconcileOnSite touches only rows that change, both directions', async () => {
     const on = await createContent(asA, c.type, artistA, c.create)
     const off = await createContent(asA, c.type, artistA, c.create)
-    await reconcileVisibility(asA, c.type, artistA, [on.id as string]) // seed: `on` visible
+    await reconcileOnSite(asA, c.type, artistA, [on.id as string]) // seed: `on` is on-site
 
     // Desired set = keep `on`, add `off` → one flips on, nothing flips off.
-    const res = await reconcileVisibility(asA, c.type, artistA, [on.id as string, off.id as string])
+    const res = await reconcileOnSite(asA, c.type, artistA, [on.id as string, off.id as string])
     expect(res).toEqual({ shown: 1, hidden: 0 })
 
-    const { data } = await svc.from(c.table).select('id, visible').eq('artist_id', artistA)
-    const byId = Object.fromEntries((data ?? []).map((r) => [r.id, r.visible]))
+    const { data } = await svc.from(c.table).select('id, on_site').eq('artist_id', artistA)
+    const byId = Object.fromEntries((data ?? []).map((r) => [r.id, r.on_site]))
     expect(byId[on.id as string]).toBe(true)
     expect(byId[off.id as string]).toBe(true)
   })
 
-  it("CRITICAL: cannot flip another tenant's rows visible", async () => {
+  it("CRITICAL: cannot flip another tenant's rows on-site", async () => {
     const { data: bRow } = await svc
       .from(c.table)
-      .insert({ artist_id: artistB, ...c.create, visible: false })
+      .insert({ artist_id: artistB, ...c.create, on_site: false })
       .select('id')
       .single()
 
-    const res = await reconcileVisibility(asA, c.type, artistB, [bRow!.id as string])
+    const res = await reconcileOnSite(asA, c.type, artistB, [bRow!.id as string])
     expect(res).toEqual({ shown: 0, hidden: 0 }) // RLS makes A's write a no-op
 
-    const { data } = await svc.from(c.table).select('visible').eq('id', bRow!.id as string).single()
-    expect(data!.visible).toBe(false) // untouched
+    const { data } = await svc.from(c.table).select('on_site').eq('id', bRow!.id as string).single()
+    expect(data!.on_site).toBe(false) // untouched
   })
 })

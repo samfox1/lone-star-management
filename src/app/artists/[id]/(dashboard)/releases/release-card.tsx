@@ -30,7 +30,7 @@ export type Release = {
   release_type: ReleaseType
   links: ReleaseLink[]
   /** Whether the release is currently live on the public site. */
-  visible: boolean
+  on_site: boolean
   /** The release's songs (tracks grouped under it), shown in the edit modal. */
   songs: ReleaseSong[]
   /** 30-day engagement (track plays + Listen/DSP clicks), from analytics_by_entity. */
@@ -75,7 +75,7 @@ export function ReleaseCard({
           <div className="absolute left-2 top-2 z-10">
             <SelectToggle
               selected={!!selected}
-              visible={release.visible}
+              onSite={release.on_site}
               onToggle={onToggleSelect}
               label={release.title}
             />

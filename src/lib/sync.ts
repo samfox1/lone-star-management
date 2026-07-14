@@ -50,7 +50,7 @@ type SyncSpec = {
   source: string
   artistId: string
   items: ExternalItem[]
-  /** Columns set only on INSERT of a new row (not on refresh), e.g. `visible:false`
+  /** Columns set only on INSERT of a new row (not on refresh), e.g. `on_site:false`
    *  so imported items land off-site until the manager publishes them on. */
   insertDefaults?: Record<string, unknown>
 }
@@ -334,9 +334,9 @@ export function syncSpotifyTracks(
  * Sync the artist's Spotify releases (albums/EPs/singles) into `releases` and
  * link their tracks. Deduped by `spotify_id`:
  *  - existing spotify releases get their metadata refreshed (title/cover/date/
- *    type) but NEVER their `visible` toggle, slug, or DSP links — those are
+ *    type) but NEVER their `on_site` toggle, slug, or DSP links — those are
  *    manager-owned;
- *  - new releases are inserted HIDDEN (`visible=false`) with a unique slug and a
+ *  - new releases are inserted OFF-SITE (`on_site=false`) with a unique slug and a
  *    seed Spotify link, for the manager to toggle on.
  * Tracks are linked to their release by member Spotify id, but only where the
  * track isn't already assigned — so a manual assignment (or a prior link) wins.
@@ -385,7 +385,7 @@ export async function syncSpotifyReleases(
     const links = rel.spotify_url ? [{ label: 'Spotify', url: rel.spotify_url }] : []
     const { data: ins, error: iErr } = await supabase
       .from('releases')
-      .insert({ artist_id: artistId, ...meta, slug, links, visible: false, source: 'spotify', spotify_id: rel.spotify_id })
+      .insert({ artist_id: artistId, ...meta, slug, links, on_site: false, source: 'spotify', spotify_id: rel.spotify_id })
       .select('id')
       .single()
     if (iErr) throw new Error(iErr.message)
@@ -473,7 +473,7 @@ export function syncBandsintownTourDates(
       externalId: e.bandsintown_id,
       values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url, latitude: e.latitude, longitude: e.longitude },
     })),
-    insertDefaults: { visible: false },
+    insertDefaults: { on_site: false },
   })
 }
 
@@ -498,7 +498,7 @@ export function syncYouTubeVideos(
         ...(v.views != null ? { youtube_views: v.views, youtube_views_at: new Date().toISOString() } : {}),
       },
     })),
-    insertDefaults: { visible: false },
+    insertDefaults: { on_site: false },
   })
 }
 
@@ -516,7 +516,7 @@ export function syncTicketmasterTourDates(
       externalId: e.ticketmaster_id,
       values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url, latitude: e.latitude, longitude: e.longitude },
     })),
-    insertDefaults: { visible: false },
+    insertDefaults: { on_site: false },
   })
 }
 
@@ -546,6 +546,6 @@ export function syncShopifyMerch(
       externalId: p.shopify_product_id,
       values: { title: p.title, image_url: p.image_url, price: coercePrice(p.price), url: p.url },
     })),
-    insertDefaults: { visible: false },
+    insertDefaults: { on_site: false },
   })
 }

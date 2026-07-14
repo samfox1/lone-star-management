@@ -1,16 +1,16 @@
 ---
 last_full_scan: 2026-07-08T00:00:00Z
 last_full_scan_commit: 9f6728b
-last_migration_seen: 20260710160000
-last_incremental_update: 2026-07-10T00:00:00Z
+last_migration_seen: 20260714160000
+last_incremental_update: 2026-07-14T00:00:00Z
 generated_by: /steaksauce
 ---
 
 # steaksauce — Live DB ↔ Codebase Map
 
-**Generated:** 2026-07-08 · **Last full scan:** commit `9f6728b` (FULL_REVIEW / re-baseline)
-**Migrations seen:** `20260623162707` … `20260710160000` (56 files in `supabase/migrations/`)
-**Live schema:** 17 tables · 2 views · 21 functions · 3 storage buckets · RLS on every base table
+**Generated:** 2026-07-14 (INCREMENTAL) · **Last full scan:** commit `9f6728b` (2026-07-08)
+**Migrations seen:** `20260623162707` … `20260714160000` (64 files in `supabase/migrations/`)
+**Live schema:** 18 tables · 2 views · 23 functions · 3 storage buckets · RLS on every base table
 
 > Structure only — this file documents the *shape* of the database, never row data.
 > Multi-tenant model: tenant = **artist**; isolation is Postgres RLS via `is_manager_of(artist_id)` / `is_admin()` (ADR-0001). Every content table carries `artist_id → artists(id) ON DELETE CASCADE`.
@@ -19,32 +19,38 @@ generated_by: /steaksauce
 
 ## Table of Contents
 
-### Tables (17)
+### Tables (18)
 - [analytics_events](#table-analytics_events) — written via `record_event()`; read via the analytics RPCs
 - [applications](#table-applications) — admin/applications page + `submit_application()`
 - [artist_managers](#table-artist_managers) — the isolation join (who manages whom); read inside `is_manager_of()`
 - [artist_requests](#table-artist_requests) — `src/app/actions.ts`, `roster/page.tsx`
 - [artists](#table-artists) — the tenant; `_data.ts`, `actions.ts`, `content.ts`, `site.ts`, `roster-data.ts`
 - [integrations](#table-integrations) — `_data.ts` (Shopify domain); written via `connect_shopify` / `disconnect_shopify`
-- [links](#table-links) — via generic CRUD (`content.ts`, dynamic table name); `visible` prepped, not yet gated
+- [links](#table-links) — generic CRUD (`content.ts`); `on_site` gated + editor toggle since `20260714160000`
 - [media](#table-media) — `media-uploader.tsx`, `site/page.tsx`, `site.ts`; also a storage **bucket**
-- [merch](#table-merch) — via generic CRUD (`content.ts`) + `reconcileVisibility`
+- [merch](#table-merch) — via generic CRUD (`content.ts`) + `reconcileOnSite`
 - [profiles](#table-profiles) — admin/manager role; used inside `is_admin()`
 - [releases](#table-releases) — `actions.ts` (release + links + type editor), `sync.ts`
 - [revisions](#table-revisions) — the publish log; `content.ts` (publish/diff), `storage-gc.ts`, public doors
 - [site_content](#table-site_content) — `actions.ts`, `site/page.tsx`, `seo/page.tsx`, `site.ts`
+- [site_styles](#table-site_styles) — **NEW** `20260714120000`; per-region class names; `site.ts`, editor
 - [subscribers](#table-subscribers) — `book/page.tsx`, `subscribers/page.tsx`; ingest via `subscribe()`
-- [tour_dates](#table-tour_dates) — `layout.tsx` (on-tour badge); generic CRUD + `reconcileVisibility`
-- [tracks](#table-tracks) — `track-audio-uploader.tsx`; generic CRUD; `visible` prepped, not yet gated
-- [videos](#table-videos) — generic CRUD (bespoke add) + `reconcileVisibility`; uploaded + embedded
+- [tour_dates](#table-tour_dates) — `layout.tsx` (on-tour badge); generic CRUD + `reconcileOnSite`
+- [tracks](#table-tracks) — `track-audio-uploader.tsx`; generic CRUD; `on_site` gated (live toggle)
+- [videos](#table-videos) — generic CRUD (bespoke add) + `reconcileOnSite`; uploaded + embedded
+
+> **`visible` → `on_site`** (`20260714150000`): the flag was renamed on all 7 tables that carry it
+> (`releases`, `videos`, `merch`, `tour_dates`, `tracks`, `links`, `media`) to match the language the
+> UI and code already used. Pure rename — defaults/nullability/values unchanged. **No table has a
+> `visible` column any more.**
 
 ### Views (2)
 - [subscriber_counts_by_artist](#view-subscriber_counts_by_artist) — `book/page.tsx` (the Book)
 - [manager_subscribers](#view-manager_subscribers) — admin cross-manager tool (no caller yet)
 
-### Functions / RPCs (22)
+### Functions / RPCs (23)
 Public doors (SECURITY DEFINER, anon-reachable): `get_public_site`, `get_release`, `get_public_releases`, `audio_path_for_play`, `record_event`, `subscribe`, `submit_application`.
-Manager RPCs: `connect_shopify`, `disconnect_shopify`, `shopify_credentials`. (`switch_catalog_source` was DROPPED — `20260708161000`.)
+Manager RPCs: `connect_shopify`, `disconnect_shopify`, `shopify_credentials`, `reorder_rows`. (`switch_catalog_source` was DROPPED — `20260708161000`; verified absent from the live DB and from `src/` on 2026-07-14.)
 Analytics: `analytics_summary`, `analytics_daily`, `analytics_by_entity`, `analytics_entity_daily`.
 Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `published_revisions`, `set_updated_at` (trigger fn), `rls_auto_enable` (event-trigger fn, fired by event trigger `ensure_rls`).
 Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of `lib/music.ts`): `music_release_is_released(jsonb)`, `music_track_on_platform(jsonb)` — added `20260709120000`, amended `20260710130000`/`140000` to include the stored `released` flag.
@@ -55,12 +61,18 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 - [videos](#bucket-videos) — public bucket; 500 MB cap + MIME allowlist; `video-add.tsx`, `storage-gc.ts`
 
 ### Inconsistencies flagged
-- **Incremental update 2026-07-10** — folded in migrations `20260709120000` … `20260710160000` (Released-only doors, the stored `released` flag on tracks/releases, `soundcloud_url`, Drive `drive_folder_id`/`drive_file_id` + 3 partial-unique indexes, widen-only membership, audio door + visibility gating). No drift dialog needed — all additive/redefinition.
-- **`rls_auto_enable` / `ensure_rls`** — live-only (no migration). Exact def now captured (see Functions); a faithful migration can be added when desired.
-- **`tracks.visible` / `links.visible`** — added `20260708150000` but STILL dormant: the Music restructure chose provenance-derived Released/Unreleased buckets over per-song visibility, so these columns are unused/ungated. (Releases DO gate on `releases.visible`.) See TODO.md.
-- **Tracklist membership** is now `tracks.release_id` FK ONLY — the `album_name` string-match fallback in `get_release()` was REMOVED (`20260709120000`). `album_name` remains a display/legacy column.
-- **`analytics_summary` anon-executable** via the PUBLIC default (never revoked); it is SECURITY INVOKER so anon sees no rows under RLS. Consider an explicit `revoke ... from public`.
+- **Incremental update 2026-07-14** — folded in migrations `20260710170000` … `20260714160000` (tracks decoupled from Released, `reorder_rows`, gallery selection, `site_styles` + custom-site columns, the `get_release` on-site gate, analytics door hardening, the `visible`→`on_site` rename, the links gate). All 7 drift items resolved DB-is-truth; see the Drift report.
+- **`rls_auto_enable` / `ensure_rls`** — live-only, in no migration; the codebase index finds **zero** references in `src/` or `supabase/migrations/`. Deliberate: `TODO.md` records the 2026-07-08 decision NOT to capture it, because `CREATE EVENT TRIGGER` needs superuser and a failed `db push` could leave the live RLS safety net dropped. Exact def is captured under Functions if a from-scratch rebuild is ever needed. **Not a bug — don't "fix" it.**
+- **Redundant indexes on the two key/value tables** — `site_styles_artist_idx` is btree `(artist_id, region_key)`, identical to the index its `unique (artist_id, region_key)` constraint already creates (`site_styles_artist_id_region_key_key`). `site_content` has the same duplication (`site_content_artist_idx` vs `site_content_artist_id_key_key`) — `site_styles` was modeled on `site_content` and inherited it, so this is a copied pattern, not a one-off. Harmless but pure write overhead on every insert/update; drop both explicit indexes when convenient (`20260714120000:25`, `20260624180000`).
+- **Off-site ≠ private (storage).** `media` and `videos` are `public = true`, so `/object/public/…` bypasses RLS: verified 2026-07-14 that an anon HEAD on a real object returns **200** regardless of `on_site`. The flag gates *discovery* (the row leaves `get_public_site`), never *access* — taking an asset off the site does not revoke its URL. Enumeration IS closed (both buckets scope storage SELECT to the owning manager; anon `.list()` returns `[]` at every level). Sam confirmed some uploads are unreleased/sensitive → tracked in `TODO.md` with three costed options.
 - **`subscribe()` has no `rpc()` caller in this repo** — invoked from the external `skeen-website` (confirmed). `src/app/[slug]/actions.ts` calls it for the on-site popup.
+- **Verifier: clean otherwise.** All 18 tables have ≥1 codebase reference (no dead schema); every function reached by `rpc()` from `src/` exists in the live DB (no broken calls); all FKs resolve.
+
+**Resolved since the last run** (kept briefly for continuity, delete next full scan):
+- ~~`tracks.visible` / `links.visible` dormant~~ — `tracks` was wired `20260710170000`; `links` wired `20260714160000` (door gate + editor toggle). Both renamed to `on_site`.
+- ~~`analytics_summary` anon-executable via the PUBLIC default~~ — revoked `20260714140000`.
+- ~~`switch_catalog_source` listed as a live function~~ — this file contradicted itself (the ToC said DROPPED, the Functions section listed it with a `lib/catalog.ts` caller). It is gone from the DB, `src/lib/catalog.ts` does not exist, and `src/` has zero references. Entry removed.
+- **Tracklist membership** is `tracks.release_id` FK ONLY — the `album_name` string-match fallback was removed (`20260709120000`). `album_name` survives as legacy display-only, read by skeen-website as a title fallback; now annotated as such in `content.ts`.
 
 ---
 
@@ -151,8 +163,11 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | apple_artist_id            | text        | YES  | —                 |       |
 | youtube_channel_id         | text        | YES  | —                 |       |
 | drive_folder_id            | text        | YES  | —                 | link-shared Google Drive folder id for copy-import — added `20260710120000` |
+| site_kind                  | text        | NO   | 'template'        | CHECK: template/custom — added `20260714120000` |
+| custom_site_url            | text        | YES  | —                 | redirect target when site_kind='custom' — added `20260714120000` |
 
 - **The tenant.** RLS: `artists_select` / `artists_update`: `is_admin() OR is_manager_of(id)`; insert/delete admin-only.
+- **`site_kind` / `custom_site_url`** (`20260714120000`, SITE_STYLING_PLAN.md D-F): an artist's public site is either a built-in template or a fully custom site hosted elsewhere (e.g. the Vercel skeen-website), in which case `/[slug]` redirects to `custom_site_url`. These are CONFIG, not draft/publish content, so they are deliberately **not** in `ARTIST_SNAPSHOT`.
 - **Indexes:** PK; `artists_slug_key (slug)` UNIQUE.
 - **Referenced (src):** `_data.ts` (`requireArtist`), `roster-data.ts` (`ownedArtists`), `(dashboard)/actions.ts` (id saves, template, catalog, `saveDriveFolderAction` — the `saveArtistField` helper updates one id column), `lib/site.ts`, `lib/content.ts`, `lib/drive.ts`. The integration-id columns back the `INTEGRATIONS` registry (`isConnected`).
 
@@ -183,10 +198,10 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | source     | text        | NO   | 'manual'          | CHECK: manual/spotify/bandsintown/shopify |
 | created_at | timestamptz | NO   | now()             |       |
 | updated_at | timestamptz | NO   | now()             | trigger set_updated_at |
-| visible    | boolean     | NO   | true              | ⚠ prepped `20260708150000`, NOT yet gated / wired |
+| on_site    | boolean     | NO   | true              | live on-site gate (`20260714160000`); renamed from `visible` `20260714150000` |
 
 - **RLS:** `links_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
-- **Reached via** the generic CRUD layer (`content.ts`, `CRUD.link`) — dynamic table name, so no literal `from('links')`. `visible` is not yet in `VISIBLE_ENTITIES` or gated in `get_public_site`.
+- **Reached via** the generic CRUD layer (`content.ts`, `CRUD.link`) — dynamic table name, so no literal `from('links')`. `on_site` IS gated in `get_public_site` (`20260714160000`) and written by the editor's per-link toggle (`setOnSiteAction('link', …)`). Follows the TRACKS model — a LIVE toggle, so `link` is deliberately NOT in `ON_SITE_ENTITIES`/`reconcileOnSite`. Defaults **true**: a link is on the site unless taken off.
 
 ### Table: media {#table-media}
 
@@ -199,10 +214,12 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | sort_order   | int         | NO   | 0                 |       |
 | created_at   | timestamptz | NO   | now()             |       |
 | drive_file_id | text       | YES  | —                 | Google Drive source id for a copy-import — added `20260710120000` |
+| on_site      | boolean     | NO   | false             | gallery selection — added `20260713160000` (as `visible`), renamed `20260714150000` |
 
 - **RLS:** `media_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
 - **Indexes:** PK; `media_artist_idx (artist_id, purpose, sort_order)`; `media_drive_file_uniq (artist_id, drive_file_id) WHERE drive_file_id IS NOT NULL` (partial unique).
-- **Publishable** (`PUBLISHABLE.media`, bespoke uploader — ADR-0003). No `updated_at` (live table; delete unpublishes immediately). **Referenced (src):** `media-uploader.tsx`, `site/page.tsx`, `lib/site.ts`, `(dashboard)/actions.ts` (`deleteMediaAction`). Shares its name with the `media` storage bucket. `gallery_image` purpose now backs the **Photos page** gallery block (moved off the Site page).
+- **Publishable** (`PUBLISHABLE.media`, bespoke uploader — ADR-0003). No `updated_at` (live table; delete unpublishes immediately). **Referenced (src):** `media-uploader.tsx`, `site/page.tsx`, `lib/site.ts`, `(dashboard)/actions.ts` (`deleteMediaAction`/`setOnSiteAction`), `editor/page.tsx`. Shares its name with the `media` storage bucket. `gallery_image` purpose now backs the **Photos page** gallery block (moved off the Site page).
+- **`on_site` is UNIQUE among the gated types: it rides the SNAPSHOT**, not a live join (`PUBLISHABLE.media.snapshot`), so `get_public_site` gates gallery photos on their PUBLISHED selection. Defaults **false** (a new upload is off the site until selected) — the opposite of `links`. Revisions are immutable, so snapshots written before the rename still hold a `visible` key and the door coalesces both: `coalesce((data->>'on_site')::boolean, (data->>'visible')::boolean, true)`. Audited 2026-07-14: 18 media revisions live, **0** of them `gallery_image`, so the legacy arm currently carries no rows and can be dropped once every artist has published once. Pinned by `tests/media-gallery-gate.test.ts`.
 
 ### Table: merch {#table-merch}
 
@@ -218,9 +235,9 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | source             | text        | NO   | 'manual'          | CHECK: manual/spotify/bandsintown/shopify |
 | created_at         | timestamptz | NO   | now()             |       |
 | updated_at         | timestamptz | NO   | now()             | trigger set_updated_at |
-| visible            | boolean     | NO   | true              | live on-site gate (20260707120000) |
+| on_site            | boolean     | NO   | true              | live on-site gate (20260707120000; renamed `20260714150000`) |
 
-- **RLS:** `merch_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`. Reached via generic CRUD (`CRUD.merch`) + `reconcileVisibility`. `get_public_site` gates merch on `visible`.
+- **RLS:** `merch_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`. Reached via generic CRUD (`CRUD.merch`) + `reconcileOnSite`. `get_public_site` gates merch on `on_site`.
 
 ### Table: profiles {#table-profiles}
 
@@ -249,13 +266,13 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | created_at   | timestamptz | NO   | now()             |       |
 | updated_at   | timestamptz | NO   | now()             | trigger set_updated_at |
 | release_type | text        | NO   | 'single'          | CHECK: album/single/ep/featured |
-| visible      | boolean     | NO   | true              | live on-site gate (20260706180000) |
+| on_site      | boolean     | NO   | true              | live on-site gate (20260706180000; renamed `20260714150000`) |
 | spotify_id   | text        | YES  | —                 | UNIQUE(artist_id, spotify_id) WHERE not null |
 | released     | boolean     | NO   | false             | manual "is released" flag — added `20260710140000` (Released iff platform presence OR this; songs inherit widen-only) |
 
 - **RLS:** `releases_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
 - **Indexes:** PK; `releases_artist_id_slug_key (artist_id, slug)` UNIQUE; `releases_artist_idx (artist_id, sort_order)`; `releases_artist_spotify_idx (artist_id, spotify_id)` UNIQUE partial (`WHERE spotify_id IS NOT NULL`).
-- **Referenced (src):** `(dashboard)/actions.ts` (release + `links` jsonb + `release_type` editor), `lib/sync.ts` (Spotify import), `lib/music.ts` (`releaseBucket`). Public smart-link via `get_release()` / `get_public_releases()` (Released + `visible` only).
+- **Referenced (src):** `(dashboard)/actions.ts` (release + `links` jsonb + `release_type` editor), `lib/sync.ts` (Spotify import), `lib/music.ts` (`releaseBucket`). Public smart-link via `get_release()` / `get_public_releases()` (Released **and** `on_site` — both gates must pass). ⚠ `get_release` LOST its gate in `20260709120000` and served off-site releases until `20260714130000` restored it; `tests/music-doors.test.ts` now asserts it.
 
 ### Table: revisions {#table-revisions}
 
@@ -286,8 +303,26 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | updated_at | timestamptz | NO   | now()             | trigger set_updated_at |
 
 - **RLS:** `site_content_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
-- **Indexes:** PK; `site_content_artist_id_key_key (artist_id, key)` UNIQUE; `site_content_artist_idx (artist_id, key)`.
-- **Referenced (src):** `(dashboard)/actions.ts` (site text + SEO), `site/page.tsx`, `tools/seo/page.tsx`, `lib/site.ts`.
+- **Indexes:** PK; `site_content_artist_id_key_key (artist_id, key)` UNIQUE; `site_content_artist_idx (artist_id, key)` — ⚠ redundant, identical to the UNIQUE constraint's index (see Inconsistencies).
+- **Referenced (src):** `(dashboard)/actions.ts` (site text + SEO), `site/page.tsx`, `tools/seo/page.tsx`, `lib/site.ts`, `lib/site-editor/save.ts`.
+
+### Table: site_styles {#table-site_styles}
+
+| Name        | Type        | Null | Default           | Notes |
+| ----------- | ----------- | ---- | ----------------- | ----- |
+| id          | uuid        | NO   | gen_random_uuid() | PK    |
+| artist_id   | uuid        | NO   | —                 | FK → artists(id) CASCADE; UNIQUE(artist_id, region_key) |
+| region_key  | text        | NO   | —                 | UNIQUE(artist_id, region_key) |
+| class_names | text        | YES  | —                 | raw class string; null/'' → region uses base classes only |
+| created_at  | timestamptz | NO   | now()             |       |
+| updated_at  | timestamptz | NO   | now()             | trigger set_updated_at |
+
+- **NEW `20260714120000_site_styles.sql`** (SITE_STYLING_PLAN.md S0). Per-region editable class names, so a site's layout/format is data-driven instead of locked to a hardcoded template.
+- **RLS:** `site_styles_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`. Owner-only read/write — the value becomes public only once published, via `get_public_site`.
+- **Indexes:** PK; `site_styles_artist_id_region_key_key (artist_id, region_key)` UNIQUE; `site_styles_artist_idx (artist_id, region_key)` — ⚠ redundant (see Inconsistencies).
+- **Publishable** (`PUBLISHABLE.site_styles`): modeled on `site_content` — reconciled into `revisions` by row id, snapshot `{id, region_key, class_names}`. `get_public_site` folds published rows into a `styles` `{region_key: class_names}` object, skipping blank `class_names`. Also added `'site_styles'` to the `revisions_entity_type_check` CHECK.
+- **`region_key` shape:** a manifest style-region key (e.g. `hero_wordmark`), or a per-item key `'<slot>:<itemId>'` (e.g. `videos:<uuid>`) reusing the `data-lse-item` UUID convention — the first `:` is the separator.
+- **Referenced (src):** `lib/site.ts` (working-site read). Editor-side plumbing (markers/manifest/bridge + `saveEditorStyle`) is S1, in progress on `feat/site-styles-editor` at the time of this scan.
 
 ### Table: subscribers {#table-subscribers}
 
@@ -318,12 +353,12 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | updated_at      | timestamptz | NO   | now()             | trigger set_updated_at |
 | bandsintown_id  | text        | YES  | —                 |       |
 | ticketmaster_id | text        | YES  | —                 |       |
-| visible         | boolean     | NO   | true              | live on-site gate (20260707120000) |
+| on_site         | boolean     | NO   | true              | live on-site gate (20260707120000; renamed `20260714150000`) |
 | latitude        | float8      | YES  | —                 | tour-map prep; dashboard-only (not in public snapshot) |
 | longitude       | float8      | YES  | —                 | tour-map prep; dashboard-only |
 
 - **RLS:** `tour_dates_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
-- **Referenced (src):** `(dashboard)/layout.tsx` (on-tour badge). Editor via generic CRUD (`CRUD.tour_date`, required = `['date']`) + `reconcileVisibility`. `get_public_site` gates tour_dates on `visible`. Coords (`20260707140000_tour_coords.sql`) feed the not-yet-built map and ride under the Bandsintown compliance gate.
+- **Referenced (src):** `(dashboard)/layout.tsx` (on-tour badge). Editor via generic CRUD (`CRUD.tour_date`, required = `['date']`) + `reconcileOnSite`. `get_public_site` gates tour_dates on `on_site`. Coords (`20260707140000_tour_coords.sql`) feed the not-yet-built map and ride under the Bandsintown compliance gate.
 
 ### Table: tracks {#table-tracks}
 
@@ -348,15 +383,15 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | album_name       | text        | YES  | —                 | Spotify album/EP/single title (legacy display; no longer a tracklist fallback) |
 | duration_ms      | int         | YES  | —                 | added `20260708160000` — cross-platform merge match key + display |
 | release_id       | uuid        | YES  | —                 | FK → releases(id) SET NULL (authoritative tracklist membership) |
-| visible          | boolean     | NO   | true              | ⚠ prepped `20260708150000`, NOT yet gated / wired |
+| on_site          | boolean     | NO   | true              | live on-site gate (`20260710170000`); renamed from `visible` `20260714150000` |
 | released         | boolean     | NO   | false             | manual "is released" flag — added `20260710130000` (public iff platform presence OR this) |
 | soundcloud_url   | text        | YES  | —                 | SoundCloud link — added `20260710130000` (no id col to rebuild from) |
 | drive_file_id    | text        | YES  | —                 | Google Drive source id for a copy-import — added `20260710120000` |
 
 - **RLS:** `tracks_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
 - **Indexes:** PK; `tracks_release_idx (release_id)`; `tracks_drive_file_uniq (artist_id, drive_file_id) WHERE drive_file_id IS NOT NULL` (partial unique — dedupes Drive imports).
-- **Referenced (src):** `track-audio-uploader.tsx` (audio_path), `(dashboard)/actions.ts` (`setTrackReleaseAction`), `lib/sync.ts`, `lib/tracks.ts`; editor via generic CRUD (`CRUD.track`). `release_id` (`20260706170000`) is the authoritative and ONLY membership (the `album_name` fallback in `get_release()` was removed `20260709120000`). `released` (`20260710130000`) is the manual public flag; `visible` stays dormant — the restructure used derived buckets, not per-song visibility.
-- **Union / multi-platform merge (`20260708160000`, `lib/sync.ts syncTracks`):** a track is a UNION row — one song carries every platform's id/link, and "which platforms is it on" is derived from which of `spotify_id`/`apple_id`/`deezer_id` is set. A pull refreshes the row bearing that platform's id, or STAMPS the platform onto the same song imported from another platform (matched by `normalizeTitle` + `duration_ms` ±3s), or inserts new — never duplicating or switching sources. Links: Spotify → `stream_url`, Apple → `apple_url`, Deezer → `provider_url` (or rebuilt from id). `apple_url` is threaded to the public site (snapshot + `SiteTrack` + the `artist-site.tsx` link chain, 2026-07-09). The public doors expose RELEASED music only (`20260709120000`: `music_release_is_released` / `music_track_on_platform` mirror `lib/music.ts`; `get_release`'s album_name fallback removed). **Amended 2026-07-09/10:** classification is now platform presence OR the stored `released` flag (`20260710130000`/`140000`); `audio_path_for_play` + the `get_public_site` tracks branch are gated Released **and** on the release's `visible` (`20260710150000`); release membership is **widen-only** (`20260710160000` — a linked song stays public even inside an Unreleased release). The old MusicKit-token Apple client is gone — catalog reads use the free iTunes Search API (no credentials).
+- **Referenced (src):** `track-audio-uploader.tsx` (audio_path), `(dashboard)/actions.ts` (`setTrackReleaseAction`), `lib/sync.ts`, `lib/tracks.ts`; editor via generic CRUD (`CRUD.track`). `release_id` (`20260706170000`) is the authoritative and ONLY membership (the `album_name` fallback in `get_release()` was removed `20260709120000`). `released` (`20260710130000`) is the manual public flag. `on_site` is LIVE-gated (`20260710170000` woke it): the site shows a song iff its own `on_site` is true — Released is a library-only label, a SEPARATE axis. Toggled live via `setOnSiteAction('track', …)`, so `track` is NOT in `ON_SITE_ENTITIES`.
+- **Union / multi-platform merge (`20260708160000`, `lib/sync.ts syncTracks`):** a track is a UNION row — one song carries every platform's id/link, and "which platforms is it on" is derived from which of `spotify_id`/`apple_id`/`deezer_id` is set. A pull refreshes the row bearing that platform's id, or STAMPS the platform onto the same song imported from another platform (matched by `normalizeTitle` + `duration_ms` ±3s), or inserts new — never duplicating or switching sources. Links: Spotify → `stream_url`, Apple → `apple_url`, Deezer → `provider_url` (or rebuilt from id). `apple_url` is threaded to the public site (snapshot + `SiteTrack` + the `artist-site.tsx` link chain, 2026-07-09). The public doors expose RELEASED music only (`20260709120000`: `music_release_is_released` / `music_track_on_platform` mirror `lib/music.ts`; `get_release`'s album_name fallback removed). **Amended 2026-07-09/10:** classification is now platform presence OR the stored `released` flag (`20260710130000`/`140000`); `audio_path_for_play` + the `get_public_site` tracks branch were briefly gated Released **and** on the release's flag (`20260710150000`), then **`20260710170000` decoupled them entirely** — both now gate on the track's own `on_site` and ignore Released, which is a library-only label. Release membership is **widen-only** (`20260710160000` — a linked song stays public even inside an Unreleased release). The old MusicKit-token Apple client is gone — catalog reads use the free iTunes Search API (no credentials).
 
 ### Table: videos {#table-videos}
 
@@ -372,7 +407,7 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | sort_order       | int         | NO   | 0                 |       |
 | created_at       | timestamptz | NO   | now()             |       |
 | updated_at       | timestamptz | NO   | now()             | trigger set_updated_at |
-| visible          | boolean     | NO   | true              | live on-site gate (20260707120000) |
+| on_site          | boolean     | NO   | true              | live on-site gate (20260707120000; renamed `20260714150000`) |
 | is_short         | boolean     | NO   | false             | YouTube Short classification |
 | youtube_views    | bigint      | YES  | —                 | cached global view count |
 | youtube_views_at | timestamptz | YES  | —                 | when the count was cached |
@@ -381,7 +416,7 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 
 - **RLS:** `videos_rw` (ALL): `is_admin() OR is_manager_of(artist_id)`.
 - **Indexes:** PK; `videos_artist_idx (artist_id, sort_order)`; `videos_drive_file_uniq (artist_id, drive_file_id) WHERE drive_file_id IS NOT NULL` (partial unique).
-- **CHECK `videos_embed_or_storage`:** at least one of `embed_url` / `storage_path` is set. Uploaded videos carry `storage_path` + `provider='uploaded'`; embedded carry `embed_url`. Adds run through `embedInfo` / the upload flow (bespoke, not generic CRUD) + `reconcileVisibility`. **Referenced (src):** `video-add.tsx`, `(dashboard)/actions.ts` (rename/delete), `lib/storage-gc.ts` (orphan cleanup). `get_public_site` gates videos on `visible`. Migrations `20260625180000_videos.sql`, `20260708120000_video_upload.sql`.
+- **CHECK `videos_embed_or_storage`:** at least one of `embed_url` / `storage_path` is set. Uploaded videos carry `storage_path` + `provider='uploaded'`; embedded carry `embed_url`. Adds run through `embedInfo` / the upload flow (bespoke, not generic CRUD) + `reconcileOnSite`. **Referenced (src):** `video-add.tsx`, `(dashboard)/actions.ts` (rename/delete), `lib/storage-gc.ts` (orphan cleanup). `get_public_site` gates videos on `on_site`. Migrations `20260625180000_videos.sql`, `20260708120000_video_upload.sql`.
 
 ---
 
@@ -421,11 +456,11 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 Grouped; all in `public`. `sd` = SECURITY DEFINER. All 8 anon doors below are executable by `anon`, `authenticated`, and `service_role`.
 
 **Public doors (sd, anon-reachable):**
-- `get_public_site(p_slug text) → jsonb` — full published site. Gates videos/merch/tour_dates on live `visible`; the **tracks** branch shows Released-only (widen-only) AND drops tracks of a hidden release. ← `lib/site.ts`. Live def in `20260710160000_track_bucket_widen_only.sql`.
-- `get_release(p_artist_slug, p_release_slug) → jsonb` — one Released release smart-link + tracklist (membership by `release_id` ONLY; album_name fallback removed). Unreleased → null. ← `[slug]/r/[release]/page.tsx`. Live def `20260709120000`.
-- `get_public_releases(p_slug) → jsonb` — Released + `visible` release list for the EPK. ← `[slug]/epk/page.tsx`. Live def `20260709120000`.
-- `audio_path_for_play(p_slug, p_track_id) → text` — published audio path → signed URL, but ONLY for a Released track whose release (if any) is `visible`; else null. ← `lib/audio.ts`. Live def `20260710160000`.
-- `record_event(p_slug, p_type, p_target, p_entity_id, p_entity_type) → void` (v) — analytics ingest; `type`/`entity_type` allowlisted. ← `components/site-analytics.tsx`. ⚠ no per-IP/slug rate limit (TODO).
+- `get_public_site(p_slug text) → jsonb` — full published site. Live def `20260714160000_links_on_site_gate.sql`. Gates **tracks, tour_dates, merch, links, videos** on the live row's `on_site` (`LEFT JOIN + coalesce(x.on_site, true)` — the published snapshot stays authoritative until a publish tombstones it, so deleting a working row never yanks live content early). **media/gallery_image** is the exception: gated on the flag inside its own snapshot, with the pre-rename `visible` key coalesced. Tracks are NO LONGER Released-gated here (`20260710170000` decoupled the axes). Also returns `styles` (`20260714120000`) and `site_content`. ← `lib/site.ts`.
+- `get_release(p_artist_slug, p_release_slug) → jsonb` — one release smart-link + tracklist (membership by `release_id` ONLY; album_name fallback removed). Gated on Released **AND** `on_site` — both must pass; either failing → null. ← `[slug]/r/[release]/page.tsx`. Live def `20260714150000`. ⚠ **Regression history:** `20260709120000` rewrote this fn and silently dropped the `visible` join, so an off-site release kept serving its page (while correctly vanishing from `get_public_releases`) until `20260714130000` restored it as `LEFT JOIN + coalesce(r.on_site, true)`. Asserted by `tests/music-doors.test.ts`.
+- `get_public_releases(p_slug) → jsonb` — Released + `on_site` release list for the EPK. ← `[slug]/epk/page.tsx`. Live def `20260714150000`. Note: uses an INNER JOIN to `releases` (unlike every other door's LEFT JOIN + coalesce), so a published release whose working row is deleted drops immediately rather than at its tombstone. Fail-closed, so left alone.
+- `audio_path_for_play(p_slug, p_track_id) → text` — published audio path → signed URL, gated on the track's own `on_site` (`coalesce(trk.on_site, true)`); else null. ← `lib/audio.ts`. Live def `20260714150000`. **Released no longer gates this** — `20260710170000` decoupled the two axes, so the door follows the same per-track flag as the `get_public_site` tracks branch.
+- `record_event(p_slug, p_type, p_target, p_entity_id, p_entity_type) → void` (v) — analytics ingest; `type`/`entity_type` allowlisted. ← `components/site-analytics.tsx`. Live def `20260714140000`. **Burst cap: 120 events/artist/minute, dropped SILENTLY** (fire-and-forget telemetry — an exception would surface on the fan's page). Deliberately not subscribe's 15/min: this fires on every view/click. Bounds storage growth only; per-IP limiting needs the edge (a DB fn can't see the IP) and stays open in TODO.md.
 - `subscribe(p_slug, p_email) → void` (v) — subscriber ingest, dedup on `(artist_id, lower(email))`, 15/min/artist. ← `[slug]/actions.ts` + skeen-website.
 - `submit_application(p_name, p_email, p_artist_name?, p_link?, p_notes?) → void` (v) — public /apply. ← `apply/actions.ts`.
 
@@ -433,10 +468,10 @@ Grouped; all in `public`. `sd` = SECURITY DEFINER. All 8 anon doors below are ex
 - `connect_shopify(p_artist_id, p_domain, p_token) → void` — token → Vault. ← `(dashboard)/actions.ts`.
 - `disconnect_shopify(p_artist_id) → void`. ← `(dashboard)/actions.ts`.
 - `shopify_credentials(p_artist_id) → TABLE(store_domain, token)` — read-back for sync. ← `(dashboard)/actions.ts`.
-- `switch_catalog_source(p_artist_id, p_next) → void` — clears the old source's imported tracks. ← `lib/catalog.ts`.
+- `reorder_rows(p_table text, p_artist uuid, p_ids uuid[]) → void` — atomic `sort_order` reorder for a whole list in one statement (`20260713120000`). ← `(dashboard)/actions.ts` (`reorderContentAction`), `lib/site-editor/gallery.ts`.
 
 **Analytics (stable, SECURITY INVOKER):**
-- `analytics_summary(p_artist_id, p_since) → TABLE(...)` — exact group-by. ← `roster-data.ts`, `(dashboard)/page.tsx`. ⚠ anon-executable via the PUBLIC default (INVOKER ⟹ no rows for anon); consider `revoke ... from public`.
+- `analytics_summary(p_artist_id, p_since) → TABLE(...)` — exact group-by. ← `roster-data.ts`, `(dashboard)/page.tsx`. The implicit PUBLIC execute grant was revoked `20260714140000`; `authenticated` retains it. (Was always safe — INVOKER ⟹ RLS gives anon no rows — this just makes the intent explicit.)
 - `analytics_daily(p_since, p_artist_id?) → TABLE(...)` — daily series for roster sparklines. ← `roster-data.ts`.
 - `analytics_by_entity(p_artist_id, p_since) → TABLE(...)` — per-item engagement. ← `lib/analytics.ts` (`20260707160000_analytics_entity.sql`).
 - `analytics_entity_daily(p_artist_id, p_entity_ids, p_since) → TABLE(...)` — per-entity daily series. ← `entity-sparkline.tsx` (`20260707180000_analytics_entity_daily.sql`).
@@ -446,10 +481,10 @@ Grouped; all in `public`. `sd` = SECURITY DEFINER. All 8 anon doors below are ex
 - `is_manager_of(target_artist_id) → boolean` (sd) — reads `artist_managers`. The isolation primitive; used inside nearly every RLS policy.
 - `latest_revisions(p_artist_id) → TABLE(...)` — newest revision per entity incl tombstones. ← `lib/content.ts` (diffUnpublished).
 - `published_revisions(p_artist_id, p_entity_type?) → TABLE(...)` (sd) — live view (tombstones removed); the seam public doors project over (`20260626120000_published_revisions_seam.sql`).
-- `set_updated_at() → trigger` — BEFORE UPDATE on 8 tables (see Triggers).
-- `rls_auto_enable() → event_trigger` (sd, `search_path=pg_catalog`) — auto-enables RLS on new `public` tables. Fired by event trigger **`ensure_rls`** (`ddl_command_end`, tags: CREATE TABLE / CREATE TABLE AS / SELECT INTO). ⚠ **live-only, in no migration** (exact def captured this run; can be added as a `create or replace function` + `drop/create event trigger` migration). The other 6 event triggers (`pgrst_ddl_watch`, `issue_*`, `issue_graphql_placeholder`) are Supabase platform-managed — do not capture.
+- `set_updated_at() → trigger` — BEFORE UPDATE on 9 tables (see Triggers).
+- `rls_auto_enable() → event_trigger` (sd, `search_path=pg_catalog`) — auto-enables RLS on new `public` tables. Fired by event trigger **`ensure_rls`** (`ddl_command_end`, tags: CREATE TABLE / CREATE TABLE AS / SELECT INTO). ⚠ **live-only, in no migration** — and DELIBERATELY so: `CREATE EVENT TRIGGER` needs superuser, which `db push` lacks, so a capture migration would fail and could leave the live safety net dropped (decided 2026-07-08, see TODO.md; re-confirmed 2026-07-14). Belt-and-suspenders anyway — every table also calls `enable row level security` itself, and all 18 are confirmed RLS-on. The other 6 event triggers (`pgrst_ddl_watch`, `issue_*`, `issue_graphql_placeholder`) are Supabase platform-managed — do not capture.
 
-**Triggers (all BEFORE UPDATE → `set_updated_at()`):** `artist_requests`, `links`, `merch`, `releases`, `site_content`, `tour_dates`, `tracks`, `videos`. (`media`, `subscribers`, `analytics_events`, `applications`, `profiles`, `artists`, `revisions` have no `updated_at`.)
+**Triggers (all BEFORE UPDATE → `set_updated_at()`):** `artist_requests`, `links`, `merch`, `releases`, `site_content`, `site_styles`, `tour_dates`, `tracks`, `videos`. (`media`, `subscribers`, `analytics_events`, `applications`, `profiles`, `artists`, `revisions` have no `updated_at`.)
 
 ---
 
@@ -477,10 +512,38 @@ Grouped; all in `public`. `sd` = SECURITY DEFINER. All 8 anon doors below are ex
 
 ## Inconsistencies (verifier output)
 
-1. **Re-baselined (FULL_REVIEW).** Live DB is truth; the prior file (last_migration_seen `20260706133000`) missed 14 migrations. Now aligned: 17 tables · 2 views · 21 functions · 3 buckets. Every table is referenced in code (no dead-schema table); every `rpc()`-called function exists live (no broken calls); all 15 FKs resolve (14 → `artists`, 1 `tracks.release_id → releases`).
-2. **`rls_auto_enable` / `ensure_rls`** — live-only object, in no migration. Exact def captured this run. Note the event trigger is named `ensure_rls` (not `rls_auto_enable`); a capture migration must `create or replace function` then `drop event trigger if exists ensure_rls; create event trigger ensure_rls ...` (event triggers can't be `create or replace`d).
-3. **`tracks.visible` / `links.visible` prepped but unwired** (`20260708150000`). Columns exist, default true, but are NOT in `VISIBLE_ENTITIES`/`reconcileVisibility` nor gated in `get_public_site`. Deliberate — they land with the Music restructure (released/unreleased). Until then they are effectively inert (same posture `tour_coords` had before the map).
-4. **Dual tracklist membership.** `tracks.release_id` (FK, authoritative) coexists with the `album_name` string-match fallback still used by `get_release()`. Kill the fallback during the Music restructure.
-5. **`analytics_summary` anon-executable** via the PUBLIC default execute (the migration granted `authenticated` but never `revoke ... from public`). It is SECURITY INVOKER, so anon gets no rows under RLS — cosmetic, but tighten with an explicit revoke.
-6. **`gallery_image` media purpose** is defined in the CHECK but has no UI (unused). Not dead schema, but unwired.
-7. **`media` bucket is `public=true`.** Removing the anon read policy stopped enumeration only; any object is still reachable by direct public URL if the path is known. Acceptable by design (matches the pre-existing posture), not "private."
+**Verifier arithmetic (2026-07-14, INCREMENTAL):** live DB = 18 tables · 2 views · 23 functions · 3 buckets. Codebase index returned 18/23/3 — counts match, so nothing was silently capped. Every table has ≥1 code reference (no dead schema). Every function reached by `rpc()` from `src/` exists live (no broken calls). All FKs resolve. RLS is on for all 18 base tables.
+
+Open:
+
+1. **`rls_auto_enable` / `ensure_rls`** — live-only object, in no migration, zero code references. **Deliberate, do not "fix":** `CREATE EVENT TRIGGER` requires superuser, which `db push` does not have, so a capture migration would fail — and since the trigger must be dropped before recreation, a partial apply could leave the live RLS safety net GONE. Decided 2026-07-08 (TODO.md), re-confirmed 2026-07-14. It is belt-and-suspenders regardless: every table also runs `enable row level security` explicitly. Exact def is captured under Functions for a from-scratch rebuild.
+2. **Off-site ≠ private (storage).** `media` and `videos` are `public = true`, so `/object/public/…` bypasses RLS. **Verified 2026-07-14:** anon HEAD on a real object → **200**, irrespective of `on_site`. Enumeration IS closed (manager-scoped storage SELECT on both buckets; anon `.list()` → `[]` at root, artist dir, and the exact subdir). So the gate controls *discovery*, not *access*: taking an asset off the site does not revoke its URL, and an asset that was never on-site rests on an unguessable UUID path ("anyone with the link", not "private"). Sam confirmed some uploads are unreleased/sensitive → three costed options in TODO.md.
+3. **Redundant indexes on both key/value tables.** `site_content_artist_idx (artist_id, key)` duplicates `site_content_artist_id_key_key`; `site_styles_artist_idx (artist_id, region_key)` duplicates `site_styles_artist_id_region_key_key`. `site_styles` inherited the pattern by being modeled on `site_content`. Pure write overhead; drop both when convenient.
+4. **`subscribe()` has no in-repo `rpc()` caller** for the external path — invoked from `skeen-website`. `src/app/[slug]/actions.ts` calls it for the on-site popup. Not a bug; noted so a future "unused function" sweep doesn't delete it.
+
+Closed this run:
+
+5. ~~**Dual tracklist membership**~~ — the `album_name` fallback was removed from `get_release()` in `20260709120000`; `release_id` is the only membership. `album_name` is now annotated legacy display-only in `content.ts` (skeen-website reads it as a title fallback).
+6. ~~**`analytics_summary` anon-executable**~~ — PUBLIC execute revoked `20260714140000`.
+7. ~~**`gallery_image` purpose unwired**~~ — now backs the Photos page + the editor gallery, gated per-photo by the published `on_site` flag (`20260713160000`), covered by `tests/media-gallery-gate.test.ts`.
+8. ~~**`get_release` served off-site releases**~~ — the `visible` join was silently lost in the `20260709120000` rewrite; restored `20260714130000` and now asserted. See the Functions entry.
+
+---
+
+## Drift report — INCREMENTAL, 2026-07-14
+
+Scope: 8 migrations past `20260710160000` (`20260710170000` … `20260714160000`) + 99 changed files in `src/`/`supabase/` since `9f6728b`.
+
+7 drift items found; Sam resolved all as **DB is truth** (batched — 6 were changes made and verified in the same session, the 7th was a self-contradiction inside this file):
+
+| # | Item | Resolution |
+| - | ---- | ---------- |
+| 1 | `site_styles` table absent from doc | Added (new, `20260714120000`) |
+| 2 | `artists.site_kind` / `custom_site_url` absent | Added (new, `20260714120000`) |
+| 3 | `reorder_rows` absent | Added (new, `20260713120000`) |
+| 4 | Doc said `visible`; DB says `on_site` | Renamed throughout (`20260714150000`) |
+| 5 | `media.on_site` column absent | Added (`20260713160000`, renamed `20260714150000`) |
+| 6 | `get_release` / `record_event` / `analytics_summary` bodies changed | Descriptions updated |
+| 7 | `switch_catalog_source` listed as live w/ a `lib/catalog.ts` caller | **Removed** — the file contradicted itself (ToC already said DROPPED). Verified: absent from the DB (`count 0`), `src/lib/catalog.ts` does not exist, zero refs in `src/`. |
+
+No item required a DB change; this skill never writes to the database.

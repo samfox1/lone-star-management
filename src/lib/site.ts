@@ -151,9 +151,9 @@ async function workingSection<T>(
   { onSiteOnly = false }: { onSiteOnly?: boolean } = {},
 ): Promise<T[]> {
   const rows = await listContent(supabase, type, artistId)
-  // Visible-gated types (tour_date/merch/video) are hidden from the public door
-  // when visible=false; drop them here too so preview matches the live site.
-  const kept = onSiteOnly ? rows.filter((r) => r.visible !== false) : rows
+  // On-site-gated types (tour_date/merch/video) are hidden from the public door
+  // when on_site=false; drop them here too so preview matches the live site.
+  const kept = onSiteOnly ? rows.filter((r) => r.on_site !== false) : rows
   return kept.map((r) => publicSnapshot(type, r)) as T[]
 }
 
@@ -175,12 +175,12 @@ export async function getWorkingSite(
 
   const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows] = await Promise.all([
     // Tracks mirror get_public_site: expose has_audio (never the raw audio_path)
-    // and show ON-SITE tracks only — gated by the per-track `visible` flag, the
+    // and show ON-SITE tracks only — gated by the per-track `on_site` flag, the
     // same rule the door now uses (Released is a library-only label — see
     // 20260710170000). So preview matches the live site.
     listContent(supabase, 'track', artistId).then((rows) =>
       rows
-        .filter((r) => r.visible !== false)
+        .filter((r) => r.on_site !== false)
         .map((r) => {
           const s = publicSnapshot('track', r) as Record<string, unknown>
           return {

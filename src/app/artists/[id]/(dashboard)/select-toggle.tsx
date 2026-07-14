@@ -17,7 +17,7 @@ import { Icon } from '@/components/ui/icons'
  */
 export function SelectToggle({
   selected,
-  visible,
+  onSite,
   onToggle,
   label,
   className,
@@ -25,7 +25,7 @@ export function SelectToggle({
 }: {
   selected: boolean
   /** Whether the item is currently live on the public site. */
-  visible: boolean
+  onSite: boolean
   onToggle: () => void
   /** Item name, for the accessible label / tooltip. */
   label: string
@@ -35,10 +35,10 @@ export function SelectToggle({
   liveClassName?: string
 }) {
   const state = selected
-    ? visible
+    ? onSite
       ? 'live'
       : 'pending-add'
-    : visible
+    : onSite
       ? 'pending-drop'
       : 'off'
 

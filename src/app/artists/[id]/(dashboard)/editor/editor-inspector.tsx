@@ -37,7 +37,7 @@ export type EditorTextField = {
   value: string
   multiline: boolean
 }
-export type EditorLink = { id: string; label: string; url: string }
+export type EditorLink = { id: string; label: string; url: string; onSite: boolean }
 export type EditorVideo = { id: string; title: string; provider: string | null; poster: string | null }
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null }
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
@@ -104,7 +104,7 @@ function songLabel(n: number) {
   return `${n} ${n === 1 ? 'song' : 'songs'}`
 }
 
-/** Per-item "on the site" toggle (writes the `visible` flag). Being in the library never
+/** Per-item "on the site" toggle (writes the `on_site` flag). Being in the library never
  *  implies on-site — the manager selects each item on. */
 function OnSiteToggle({ on, onToggle, className }: { on: boolean; onToggle: () => void; className?: string }) {
   return (
@@ -178,12 +178,12 @@ export function EditorInspector({
 
   // The uploader already wrote the media row (and router.refresh'd); append it to the
   // grid so it shows without waiting on a prop re-sync. New uploads are OFF the site
-  // (visible defaults false) until selected, and sort last.
+  // (on_site defaults false) until selected, and sort last.
   function addPhoto(m: { id: string; storage_path: string }) {
     setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false }]))
   }
 
-  // Toggle whether a photo / song is on the public site (the `visible` flag). Optimistic;
+  // Toggle whether a photo / song is on the public site (the `on_site` flag). Optimistic;
   // reverts the single item on failure. Not a list-structure change, so no publish/guard.
   function togglePhotoOnSite(p: GalleryPhoto) {
     const next = !p.onSite
@@ -199,6 +199,14 @@ export function EditorInspector({
     startTransition(async () => {
       const res = await setOnSiteAction('track', s.id, artistId, next)
       if (res?.error) setSongs((list) => list.map((x) => (x.id === s.id ? { ...x, onSite: !next } : x)))
+    })
+  }
+  function toggleLinkOnSite(l: EditorLink) {
+    const next = !l.onSite
+    setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: next } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('link', l.id, artistId, next)
+      if (res?.error) setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: !next } : x)))
     })
   }
 
@@ -292,6 +300,7 @@ export function EditorInspector({
           onAddPhoto={addPhoto}
           onTogglePhotoOnSite={togglePhotoOnSite}
           onToggleSongOnSite={toggleSongOnSite}
+          onToggleLinkOnSite={toggleLinkOnSite}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
           onRemoveVideo={removeVideo}
@@ -394,6 +403,7 @@ function EditingView({
   onAddPhoto,
   onTogglePhotoOnSite,
   onToggleSongOnSite,
+  onToggleLinkOnSite,
   onRemoveLink,
   onReorderLink,
   onRemoveVideo,
@@ -418,6 +428,7 @@ function EditingView({
   onAddPhoto: (m: { id: string; storage_path: string }) => void
   onTogglePhotoOnSite: (p: GalleryPhoto) => void
   onToggleSongOnSite: (s: EditorSong) => void
+  onToggleLinkOnSite: (l: EditorLink) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (from: number, to: number) => void
   onRemoveVideo: (v: EditorVideo) => void
@@ -483,7 +494,13 @@ function EditingView({
         ) : isText ? (
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
         ) : isLinks ? (
-          <LinkTools links={links} artistId={artistId} onRemove={onRemoveLink} onReorder={onReorderLink} />
+          <LinkTools
+            links={links}
+            artistId={artistId}
+            onRemove={onRemoveLink}
+            onReorder={onReorderLink}
+            onToggleOnSite={onToggleLinkOnSite}
+          />
         ) : isVideos ? (
           <VideoTools videos={videos} artistId={artistId} onRemove={onRemoveVideo} onReorder={onReorderVideo} />
         ) : isMerch ? (
@@ -751,11 +768,13 @@ function LinkTools({
   artistId,
   onRemove,
   onReorder,
+  onToggleOnSite,
 }: {
   links: EditorLink[]
   artistId: string
   onRemove: (l: EditorLink) => void
   onReorder: (from: number, to: number) => void
+  onToggleOnSite: (l: EditorLink) => void
 }) {
   const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
@@ -882,6 +901,7 @@ function LinkTools({
                 invalid.has(l.id) && !values[l.id]?.url.trim() && INVALID_RING,
               )}
             />
+            <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
           </div>
           <button
             type="button"

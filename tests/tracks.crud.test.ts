@@ -89,7 +89,7 @@ describe('tracks isolation (non-owner denied)', () => {
     expect(error).not.toBeNull()
   })
 
-  it('publishing artist B as manager A is a no-op (no visible tracks)', async () => {
+  it('publishing artist B as manager A is a no-op (no on-site tracks)', async () => {
     const count = await publishTracks(asA, artistB)
     expect(count).toBe(0)
   })
@@ -97,8 +97,8 @@ describe('tracks isolation (non-owner denied)', () => {
 
 describe('publish loop (draft -> publish -> public read)', () => {
   it('CRITICAL: publishing snapshots tracks into revisions, then they appear via the public read path', async () => {
-    // A default-visible track: on the public site once published (the site gates
-    // tracks on `visible`, not Released — see 20260710170000).
+    // A default on-site track: on the public site once published (the site gates
+    // tracks on `on_site`, not Released — see 20260710170000).
     const track = await createTrack(asA, artistA, { title: PUBLISH_TITLE, stream_url: 'https://open.spotify.com/track/pub' })
     createdTrackIds.push(track.id)
 

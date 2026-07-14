@@ -5,12 +5,12 @@
  *     NOT checks, so a rejection is unambiguously the constraint);
  *   - the videos bucket is NOT anon-enumerable, but manager writes are folder-scoped;
  *   - an uploaded row's storage_path flows through the publish snapshot → get_public_site
- *     (without leaking the server-only columns) and is gated by `visible`;
+ *     (without leaking the server-only columns) and is gated by `on_site`;
  *   - performUpload removes the object when the row write fails (no orphan), end-to-end.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent, reconcileVisibility } from '@/lib/content'
+import { createContent, publishContent, reconcileOnSite } from '@/lib/content'
 import { performUpload, buildStoragePath } from '@/lib/upload'
 import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -92,7 +92,7 @@ describe('uploaded video RLS isolation', () => {
   it("CRITICAL: cannot read/update/delete another tenant's uploaded video", async () => {
     const { data: bRow } = await svc
       .from('videos')
-      .insert({ artist_id: artistB, title: 'UPL-Bsecret', provider: 'uploaded', storage_path: `${artistB}/videos/z.mp4`, visible: false })
+      .insert({ artist_id: artistB, title: 'UPL-Bsecret', provider: 'uploaded', storage_path: `${artistB}/videos/z.mp4`, on_site: false })
       .select('id')
       .single()
     const id = bRow!.id as string
@@ -108,7 +108,7 @@ describe('uploaded video RLS isolation', () => {
 })
 
 describe('publish → public site', () => {
-  it('storage_path flows into the snapshot + get_public_site, gated by visible, no secret cols', async () => {
+  it('storage_path flows into the snapshot + get_public_site, gated by on_site, no secret cols', async () => {
     const path = buildStoragePath(artistA, 'videos', 'mp4')
     await put(asA, path)
     const row = await createContent(asA, 'video', artistA, {
@@ -137,8 +137,8 @@ describe('publish → public site', () => {
       (((await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })).data as Record<string, Record<string, unknown>[]> | null)?.videos ?? [])
     const mine = (arr: Record<string, unknown>[]) => arr.find((v) => v.storage_path === path)
 
-    expect(mine(await videos())).toBeUndefined() // still hidden (visible=false)
-    await reconcileVisibility(asA, 'video', artistA, [row.id as string])
+    expect(mine(await videos())).toBeUndefined() // still hidden (on_site=false)
+    await reconcileOnSite(asA, 'video', artistA, [row.id as string])
     const shown = mine(await videos())
     expect(shown).toBeDefined()
     expect(shown!.provider).toBe('uploaded')

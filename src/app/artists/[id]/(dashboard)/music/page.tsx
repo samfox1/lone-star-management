@@ -111,7 +111,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       release_date: (row.release_date as string | null) ?? null,
       release_type: toReleaseType(row.release_type as string | null),
       links: (row.links as ReleaseLink[]) ?? [],
-      visible: (row.visible as boolean | null) ?? true,
+      on_site: (row.on_site as boolean | null) ?? true,
       songs,
       stat,
     }
