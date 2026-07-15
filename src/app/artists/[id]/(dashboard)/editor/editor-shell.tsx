@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
 import { editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
+import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import { EditorPublish } from './editor-publish'
 import {
@@ -62,6 +63,11 @@ export function EditorShell({
   const frameRef = useRef<HTMLIFrameElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState({ w: 0, h: 0 })
+  // A custom site posts its own edit-list on `ready`; a built-in template has none
+  // to send (its manifest lives here and declares no style regions yet).
+  const [frameManifest, setFrameManifest] = useState<TemplateManifest | null>(null)
+  // Region key the frame last reported a click on, so the inspector can focus it.
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
 
   // Measure the frame panel so the canvas can be scaled to fit it. The panel
   // resizes with the window (and would with a collapsible inspector), so observe
@@ -99,14 +105,36 @@ export function EditorShell({
     [targetOrigin],
   )
 
-  // Hand a custom frame its draft as soon as it says `ready`. The built-in frame
-  // never needs this (it has DB access), so there's nothing to send without a draft.
+  // Same, for a region's class string (bridge apply-style) — repaints the frame
+  // as you type, before the debounced save lands.
+  const applyStyle = useCallback(
+    (key: string, className: string) => {
+      frameRef.current?.contentWindow?.postMessage(
+        editorMessage({ type: 'apply-style', key, className }),
+        targetOrigin(),
+      )
+    },
+    [targetOrigin],
+  )
+
+  // One listener for everything the frame says. `ready` carries a CUSTOM site's
+  // own edit-list (D-D) — that's the only way the editor learns skeen's style
+  // regions, since the built-in manifests declare `styles: []`. We answer it with
+  // the draft, which a custom frame has no DB access to fetch itself.
   useEffect(() => {
-    if (!draft) return
     const origin = targetOrigin()
     const onMessage = (e: MessageEvent) => {
-      if (e.origin !== origin || !isFrameMessage(e.data) || e.data.type !== 'ready') return
-      frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
+      if (e.origin !== origin || !isFrameMessage(e.data)) return
+      const msg = e.data
+      if (msg.type === 'ready') {
+        if (msg.manifest) setFrameManifest(msg.manifest)
+        if (draft) {
+          frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
+        }
+      } else if (msg.type === 'select' && msg.target.kind === 'style') {
+        // Click a region in the site → jump the inspector to that region's input.
+        setSelectedStyle(msg.target.key)
+      }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
@@ -123,7 +151,11 @@ export function EditorShell({
         videos={videos}
         merch={merch}
         songs={songs}
+        styleRegions={frameManifest?.styles ?? []}
+        styleValues={draft?.styles ?? {}}
+        selectedStyle={selectedStyle}
         onApplyField={applyField}
+        onApplyStyle={applyStyle}
       />
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface p-3">

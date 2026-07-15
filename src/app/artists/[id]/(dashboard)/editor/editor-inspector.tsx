@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
 import { reorderList } from '@/lib/site-editor/gallery'
+import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { cleanClassText } from '@/lib/site-editor/save'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { MediaUploader } from '../media-uploader'
 import {
@@ -14,6 +16,7 @@ import {
   reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
+  saveEditorStyleAction,
   setOnSiteAction,
   updateContentAction,
 } from '../actions'
@@ -42,7 +45,7 @@ export type EditorVideo = { id: string; title: string; provider: string | null; 
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null }
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 
-type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch'
+type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch' | 'style'
 type Component = { kind: Kind; icon: IconName; label: string; caption: string }
 
 const COMPONENTS: Component[] = [
@@ -52,6 +55,7 @@ const COMPONENTS: Component[] = [
   { kind: 'videos', icon: 'videos', label: 'Videos', caption: '6 videos' },
   { kind: 'music', icon: 'tracks', label: 'Music', caption: '1 album · 9 songs' },
   { kind: 'merch', icon: 'merch', label: 'Merch', caption: '4 products' },
+  { kind: 'style', icon: 'bolt', label: 'Style', caption: 'Section styling' },
 ]
 
 const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
@@ -103,6 +107,9 @@ function merchLabel(n: number) {
 function songLabel(n: number) {
   return `${n} ${n === 1 ? 'song' : 'songs'}`
 }
+function regionLabel(n: number) {
+  return `${n} ${n === 1 ? 'region' : 'regions'}`
+}
 
 /** Per-item "on the site" toggle (writes the `on_site` flag). Being in the library never
  *  implies on-site — the manager selects each item on. */
@@ -133,7 +140,11 @@ export function EditorInspector({
   videos: initialVideos = [],
   merch: initialMerch = [],
   songs: initialSongs = [],
+  styleRegions = [],
+  styleValues = {},
+  selectedStyle = null,
   onApplyField,
+  onApplyStyle,
 }: {
   artistId: string
   photos: GalleryPhoto[]
@@ -142,7 +153,16 @@ export function EditorInspector({
   videos?: EditorVideo[]
   merch?: EditorMerch[]
   songs?: EditorSong[]
+  /** Re-styleable regions. Comes from the FRAME's edit-list at runtime for a custom
+   *  site (D-D); the built-in manifests declare none yet, so this is [] for them. */
+  styleRegions?: ManifestStyleRegion[]
+  /** Saved class overrides (region_key → class string) from the draft. Absent means
+   *  the region is still on its base classes. */
+  styleValues?: Record<string, string>
+  /** Region the frame reported a click on — jumps the panel to Style, focused there. */
+  selectedStyle?: string | null
   onApplyField?: (key: string, value: string) => void
+  onApplyStyle?: (key: string, className: string) => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
@@ -154,6 +174,23 @@ export function EditorInspector({
   // capture a whole-array `prev`, and a later failure would revert to a snapshot that
   // predates a concurrent success — resurrecting a removed row / dropping a good change.
   const [isPending, startTransition] = useTransition()
+
+  // Clicking a styled region in the site opens the Style tools on it. This is the
+  // whole point of the embedded-frame model (SITE_EDITOR_PLAN.md): click the thing,
+  // edit the thing — rather than hunting for it in a list.
+  //
+  // Adjusted DURING RENDER rather than in an effect: React re-runs this component
+  // immediately without painting the stale panel, whereas a setState inside an
+  // effect cascades an extra render (and the lint rule rightly rejects it). Same
+  // sanctioned "reset state on prop change" pattern as use-on-site-selection.
+  // Starts null, NOT at `selectedStyle`: seeding it from the prop would make the
+  // first render already "match" and the panel would never open for a selection
+  // that was present on mount.
+  const [lastSelected, setLastSelected] = useState<string | null>(null)
+  if (selectedStyle && selectedStyle !== lastSelected) {
+    setLastSelected(selectedStyle)
+    setActive(COMPONENTS.find((c) => c.kind === 'style') ?? null)
+  }
 
   function removePhoto(p: GalleryPhoto) {
     if (isPending) return
@@ -308,7 +345,11 @@ export function EditorInspector({
           onRemoveMerch={removeMerch}
           onRemoveSong={removeSong}
           onReorderSong={reorderSongs}
+          styleRegions={styleRegions}
+          styleValues={styleValues}
+          selectedStyle={selectedStyle}
           onApplyField={onApplyField}
+          onApplyStyle={onApplyStyle}
           onBack={() => setActive(null)}
           onSwitch={setActive}
         />
@@ -320,6 +361,7 @@ export function EditorInspector({
           videoCount={videos.length}
           merchCount={merch.length}
           songCount={songs.length}
+          regionCount={styleRegions.length}
           onOpen={setActive}
         />
       )}
@@ -335,6 +377,7 @@ function BrowseView({
   videoCount,
   merchCount,
   songCount,
+  regionCount,
   onOpen,
 }: {
   imageCount: number
@@ -343,6 +386,7 @@ function BrowseView({
   videoCount: number
   merchCount: number
   songCount: number
+  regionCount: number
   onOpen: (c: Component) => void
 }) {
   return (
@@ -377,7 +421,9 @@ function BrowseView({
                           ? merchLabel(merchCount)
                           : c.kind === 'music'
                             ? songLabel(songCount)
-                            : c.caption}
+                            : c.kind === 'style'
+                              ? regionLabel(regionCount)
+                              : c.caption}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -411,7 +457,11 @@ function EditingView({
   onRemoveMerch,
   onRemoveSong,
   onReorderSong,
+  styleRegions,
+  styleValues,
+  selectedStyle,
   onApplyField,
+  onApplyStyle,
   onBack,
   onSwitch,
 }: {
@@ -436,7 +486,11 @@ function EditingView({
   onRemoveMerch: (m: EditorMerch) => void
   onRemoveSong: (s: EditorSong) => void
   onReorderSong: (from: number, to: number) => void
+  styleRegions: ManifestStyleRegion[]
+  styleValues: Record<string, string>
+  selectedStyle: string | null
   onApplyField?: (key: string, value: string) => void
+  onApplyStyle?: (key: string, className: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
@@ -446,6 +500,7 @@ function EditingView({
   const isVideos = component.kind === 'videos'
   const isMerch = component.kind === 'merch'
   const isMusic = component.kind === 'music'
+  const isStyle = component.kind === 'style'
   return (
     <>
       <button
@@ -476,7 +531,9 @@ function EditingView({
                       ? merchLabel(merch.length)
                       : isMusic
                         ? songLabel(songs.length)
-                        : component.caption}
+                        : isStyle
+                          ? regionLabel(styleRegions.length)
+                          : component.caption}
           </span>
         </span>
       </div>
@@ -512,6 +569,14 @@ function EditingView({
             onRemove={onRemoveSong}
             onReorder={onReorderSong}
             onToggleOnSite={onToggleSongOnSite}
+          />
+        ) : isStyle ? (
+          <StyleTools
+            regions={styleRegions}
+            values={styleValues}
+            selected={selectedStyle}
+            artistId={artistId}
+            onApplyStyle={onApplyStyle}
           />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">
@@ -666,6 +731,149 @@ function PhotoTools({
         </div>
       </Section>
     </>
+  )
+}
+
+/* ── Style tools: per-region class strings (SITE_STYLING_PLAN.md S4) ─────────── */
+function StyleTools({
+  regions,
+  values,
+  selected,
+  artistId,
+  onApplyStyle,
+}: {
+  regions: ManifestStyleRegion[]
+  values: Record<string, string>
+  selected: string | null
+  artistId: string
+  onApplyStyle?: (key: string, className: string) => void
+}) {
+  // Seed each field with the saved override if there is one, else the region's BASE
+  // classes — so the manager edits what's actually on the element rather than
+  // guessing from an empty box. A stored string REPLACES the base (see lib/styles
+  // on the skeen side), which is why clearing the field restores the base.
+  const [text, setText] = useState<Record<string, string>>(() =>
+    Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])),
+  )
+  const [invalid, setInvalid] = useState<Set<string>>(new Set())
+  const [status, setStatus] = useState<SaveStatus>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
+  const pending = useRef<Map<string, string>>(new Map())
+  const fieldRefs = useRef<Map<string, HTMLTextAreaElement | null>>(new Map())
+
+  // The frame's edit-list arrives asynchronously (on `ready`), so regions/values can
+  // land after first render — re-seed when they do, without clobbering typing.
+  const seedKey = regions.map((r) => r.key).join(',')
+  const [seeded, setSeeded] = useState(seedKey)
+  if (seeded !== seedKey) {
+    setSeeded(seedKey)
+    setText(Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])))
+  }
+
+  // Scroll the clicked region into view + focus it (frame → editor `select`).
+  useEffect(() => {
+    if (!selected) return
+    const el = fieldRefs.current.get(selected)
+    // Optional-call: jsdom has no scrollIntoView, and an unguarded call would throw
+    // and take the focus() below with it.
+    el?.scrollIntoView?.({ block: 'center' })
+    el?.focus()
+  }, [selected])
+
+  const persist = useCallback(
+    (key: string, className: string) => {
+      pending.current.delete(key)
+      setStatus('saving')
+      runSerialized(saving, errored, setStatus, key, () => saveEditorStyleAction(artistId, key, className))
+    },
+    [artistId],
+  )
+
+  // Flush pending edits on unmount so tabbing away can't drop the last keystroke.
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingMap = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingMap.forEach((className, key) => {
+        void saveEditorStyleAction(artistId, key, className)
+      })
+    }
+  }, [artistId])
+
+  function edit(key: string, raw: string) {
+    setText((t) => ({ ...t, [key]: raw }))
+
+    // Validate with the SAME function the server uses, so the panel can't claim
+    // "Saved" on a write the action will reject. '' is valid — it clears the
+    // override; null means characters that don't belong in a class attribute.
+    const clean = cleanClassText(raw)
+    setInvalid((s) => {
+      const next = new Set(s)
+      if (clean === null) next.add(key)
+      else next.delete(key)
+      return next
+    })
+    if (clean === null) return
+
+    onApplyStyle?.(key, clean) // optimistic repaint in the frame
+    pending.current.set(key, clean)
+    const existing = timers.current.get(key)
+    if (existing) clearTimeout(existing)
+    timers.current.set(
+      key,
+      setTimeout(() => {
+        timers.current.delete(key)
+        persist(key, clean)
+      }, 500),
+    )
+  }
+
+  if (!regions.length) {
+    return (
+      <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
+        This site hasn&apos;t declared any styleable regions. A custom site sends its own
+        edit-list when the preview loads; the built-in templates don&apos;t tag regions yet.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-4 px-5 py-4">
+      <p className="text-xs leading-relaxed text-ink-muted">
+        Utility classes for each region. Clearing a box restores the site&apos;s built-in
+        styling for it.
+      </p>
+      {regions.map((r) => (
+        <label key={r.key} className="block">
+          <span className={cx(EYEBROW, 'mb-1.5 block')}>{r.label}</span>
+          <textarea
+            ref={(el) => {
+              fieldRefs.current.set(r.key, el)
+            }}
+            aria-label={`${r.label} classes`}
+            aria-invalid={invalid.has(r.key) || undefined}
+            value={text[r.key] ?? ''}
+            onChange={(e) => edit(r.key, e.target.value)}
+            spellCheck={false}
+            className={cx(
+              'min-h-16 w-full resize-y rounded-lg border border-hairline px-3 py-2 font-space text-xs leading-relaxed text-ink outline-none focus:border-ink-faint',
+              invalid.has(r.key) && INVALID_RING,
+            )}
+          />
+          {invalid.has(r.key) && (
+            <span className="mt-1 block text-[11px] text-accent-red">
+              Not saved — that has characters a class name can&apos;t contain.
+            </span>
+          )}
+        </label>
+      ))}
+      <p className={cx(EYEBROW, status === 'error' && 'text-accent-red')}>
+        {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Save failed' : ''}
+      </p>
+    </div>
   )
 }
 

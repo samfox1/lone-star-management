@@ -16,9 +16,11 @@ import {
   reorderContentAction,
   reorderGalleryAction,
   saveEditorFieldAction,
+  saveEditorStyleAction,
   setOnSiteAction,
   updateContentAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
+import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import type {
   EditorLink,
   EditorMerch,
@@ -31,6 +33,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
   reorderGalleryAction: vi.fn(async () => ({})),
   saveEditorFieldAction: vi.fn(async () => ({})),
+  saveEditorStyleAction: vi.fn(async () => ({ ok: true })),
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
   reorderContentAction: vi.fn(async () => ({})),
@@ -53,6 +56,7 @@ const deleteContentMock = vi.mocked(deleteContentAction)
 const reorderContentMock = vi.mocked(reorderContentAction)
 const renameVideoMock = vi.mocked(renameVideoAction)
 const setOnSiteMock = vi.mocked(setOnSiteAction)
+const saveStyleMock = vi.mocked(saveEditorStyleAction)
 
 const PHOTOS: GalleryPhoto[] = [
   { id: 'm1', storage_path: 'artist-1/gallery/a.jpg', onSite: false },
@@ -98,7 +102,11 @@ function renderInspector(
     videos?: EditorVideo[]
     merch?: EditorMerch[]
     songs?: EditorSong[]
+    styleRegions?: ManifestStyleRegion[]
+    styleValues?: Record<string, string>
+    selectedStyle?: string | null
     onApplyField?: (k: string, v: string) => void
+    onApplyStyle?: (k: string, c: string) => void
   } = {},
 ) {
   return render(
@@ -110,7 +118,11 @@ function renderInspector(
       videos={opts.videos ?? []}
       merch={opts.merch ?? []}
       songs={opts.songs ?? []}
+      styleRegions={opts.styleRegions ?? []}
+      styleValues={opts.styleValues ?? {}}
+      selectedStyle={opts.selectedStyle ?? null}
       onApplyField={opts.onApplyField}
+      onApplyStyle={opts.onApplyStyle}
     />,
   )
 }
@@ -125,6 +137,7 @@ afterEach(() => {
   reorderContentMock.mockClear()
   renameVideoMock.mockClear()
   setOnSiteMock.mockClear()
+  saveStyleMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -517,5 +530,115 @@ describe('EditorInspector — Music component', () => {
     fireEvent.dragStart(rows[0])
     fireEvent.drop(rows[2])
     expect(reorderContentMock).toHaveBeenCalledWith('track', 'artist-1', ['s2', 's3', 's1'])
+  })
+})
+
+/**
+ * Style tools (SITE_STYLING_PLAN.md S4). The regions are NOT hardcoded here: a
+ * custom site posts its own edit-list on `ready` (D-D), so the shell hands them in.
+ * A stored class string REPLACES the region's base classes, so the field seeds with
+ * the override when there is one and the base otherwise — clearing it restores the
+ * base.
+ */
+describe('EditorInspector — Style component', () => {
+  const REGIONS: ManifestStyleRegion[] = [
+    { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase' },
+    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
+  ]
+
+  function openStyle(opts: Parameters<typeof renderInspector>[1] = {}) {
+    renderInspector([], { styleRegions: REGIONS, ...opts })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+  }
+
+  it('lists the frame-provided regions with the real count', () => {
+    renderInspector([], { styleRegions: REGIONS })
+    expect(screen.getByRole('button', { name: /Style/ }).textContent).toContain('2 regions')
+  })
+
+  it('seeds a field with the region BASE when there is no override', () => {
+    openStyle()
+    expect((screen.getByLabelText('Hero wordmark (SKEEN) classes') as HTMLTextAreaElement).value).toBe(
+      'font-black uppercase',
+    )
+  })
+
+  it('seeds a field with the SAVED override in preference to the base', () => {
+    openStyle({ styleValues: { hero_wordmark: 'text-9xl text-red-500' } })
+    expect((screen.getByLabelText('Hero wordmark (SKEEN) classes') as HTMLTextAreaElement).value).toBe(
+      'text-9xl text-red-500',
+    )
+  })
+
+  it('repaints the frame as you type, before any save', () => {
+    const onApplyStyle = vi.fn()
+    openStyle({ onApplyStyle })
+    fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: 'bg-black' } })
+    expect(onApplyStyle).toHaveBeenCalledWith('footer', 'bg-black')
+  })
+
+  it('debounces the save, then persists the class string', () => {
+    vi.useFakeTimers()
+    try {
+      openStyle()
+      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: 'bg-black' } })
+      expect(saveStyleMock).not.toHaveBeenCalled() // not on every keystroke
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', 'bg-black')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('saves an EMPTY string (it clears the override — not a no-op)', () => {
+    vi.useFakeTimers()
+    try {
+      openStyle({ styleValues: { footer: 'bg-black' } })
+      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: '' } })
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', '')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does NOT save characters the server would reject, and flags the field', () => {
+    vi.useFakeTimers()
+    try {
+      openStyle()
+      // Validated with the same cleanClassText the action uses, so the panel can't
+      // report success for a write that will be refused.
+      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: '<script>' } })
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Footer classes').getAttribute('aria-invalid')).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('accepts Tailwind arbitrary values + variants', () => {
+    vi.useFakeTimers()
+    try {
+      openStyle()
+      const v = 'text-[clamp(3rem,12vw,11rem)] hover:text-red-500 sm:font-black'
+      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: v } })
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', v)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('explains itself when the site declares no styleable regions', () => {
+    renderInspector([], { styleRegions: [] })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    expect(screen.getByText(/hasn't declared any styleable regions/i)).toBeTruthy()
+  })
+
+  it('clicking a region in the SITE opens Style focused on it', () => {
+    // The point of the embedded-frame model: click the thing, edit the thing.
+    renderInspector([], { styleRegions: REGIONS, selectedStyle: 'footer' })
+    expect((document.activeElement as HTMLElement)?.getAttribute('aria-label')).toBe('Footer classes')
   })
 })
