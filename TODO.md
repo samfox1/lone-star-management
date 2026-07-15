@@ -109,44 +109,57 @@ audio 30 MB / images 25 MB / video 100 MB (bigger videos → the direct uploader
 - [ ] Later: a public gallery section (gallery images are dashboard-only today);
       raise the video cap by streaming the server-side copy instead of buffering.
 
-## Storage — taking an asset off-site does NOT revoke its URL (open, 2026-07-14)
+## Storage — off-site gates discovery, not access (open but NOT urgent, 2026-07-15)
 
-Sam confirmed some uploads are unreleased / sensitive, so writing this down properly.
-**Verified against the live project on 2026-07-14, not inferred from the policy SQL.**
+**Re-measured 2026-07-15. The earlier framing of this entry was wrong** — it was written
+from Sam's "some uploads can be unreleased/sensitive", which was about intent, and treated
+as if such content already existed. It doesn't. What is actually stored:
 
-What is NOT a problem (checked, don't re-litigate):
-- **Enumeration is already closed.** Both buckets scope storage SELECT to the owning
-  manager (`media manager read`, added by `20260708120000` step 4, which dropped the old
-  blanket `media public read`; `videos` never had an anon select policy). An anon
-  `.list()` on `media` and `videos` returns `[]` at the root, the artist folder, AND the
-  exact subfolder holding a known object. Nobody can browse an artist's assets.
-- Storage paths are `{artist_id}/…/<uuid>`, so URLs aren't guessable.
-- `on_site` correctly hides the ROW from `get_public_site` — the site stops linking it.
+| bucket | public | contents |
+|---|---|---|
+| `audio` | **false** | empty |
+| `videos` | true | empty — all 83 videos are YouTube embeds (`storage_path` null) |
+| `media` | true | 2 objects: skeen's `horizontal.mp4` / `vertical.mp4` hero clips |
 
-What IS the problem:
-- Both buckets are `public = true`, so `/object/public/…` **bypasses RLS entirely**.
-  Verified: an anon HEAD on a real object returns **200**. So `on_site` gates *discovery*,
-  never *access*. Once a URL has been public — the item was on-site, so the URL was in the
-  page source, and may now be cached, shared, scraped, or CDN-held — taking it off-site
-  does not take it down. The manager sees it vanish from the site and reasonably assumes
-  it's gone. It isn't. (Same shape as the `get_release` bug fixed in `20260714130000`,
-  one layer lower.)
-- An asset that was NEVER on-site is protected only by an unguessable UUID path. That's
-  "anyone with the link", not "private" — fine for a draft photo, NOT fine for unreleased
-  audio/video if the URL ever escapes.
+So **exposure today is zero**: every stored object is a hero video, the most deliberately
+public asset on the site. No track has uploaded audio.
 
-- [ ] Decide the fix. Options, cheapest first:
-      1. **Split buckets** — keep `media`/`videos` public for genuinely-public assets, add
-         a private `drafts` bucket, and move an asset on publish/unpublish. Cheap, no
-         render change for live content, but moving objects on toggle is fiddly.
-      2. **Private buckets + signed URLs** — flip `public = false`, serve via
-         `createSignedUrl` with a TTL. Correct and complete, but touches how
-         **skeen-website** renders every image/video (it builds public URLs directly —
-         `mediaPublicUrl` in `lib/mapSite.ts`), so both repos ship together. ISR(60s)
-         caching + URL expiry need thought.
-      3. **Accept it** — document that off-site ≠ private, and never upload anything
-         genuinely sensitive. Free, but the manager UI currently implies otherwise.
-- [ ] Whichever way: the UI should stop implying "off site" means "taken down".
+**The most likely sensitive asset — unreleased music — is already private by design.**
+The `audio` bucket is `public = false` and `signAudioUrl` (`src/lib/audio.ts`) is the
+pattern: `audio_path_for_play` (a SECURITY DEFINER door) authorizes and returns the path,
+then a service-role client signs THAT path — never a caller-supplied one — with a 1h TTL.
+*The door is the authorization; the service role is just the signer.* Unexercised (no
+audio uploaded yet) but built.
+
+The mechanism, for the record (verified on the live project, not inferred from policy SQL):
+- **Enumeration is closed.** Both public buckets scope storage SELECT to the owning
+  manager (`media manager read`, `20260708120000` step 4 dropped the old blanket policy;
+  `videos` never had an anon select). An anon `.list()` returns `[]` at the root, the
+  artist folder, AND the exact subfolder of a known object.
+- Paths are `{artist_id}/…`, so URLs aren't guessable.
+- **But** `public = true` means `/object/public/…` bypasses RLS: an anon HEAD on a real
+  object returns **200** regardless of `on_site`. So on-site gates *discovery* (the row
+  leaves `get_public_site`) and never *access* — taking an asset off the site does not
+  revoke its URL, and an asset that was never on-site rests on an unguessable path
+  ("anyone with the link", not "private").
+
+- [ ] **DEFERRED, deliberately** (decided 2026-07-15). Do NOT build private buckets +
+      signed URLs for `media`/`videos` yet: it protects nothing today, it ships across two
+      repos (skeen builds public URLs directly via `mediaPublicUrl` in `lib/mapSite.ts`,
+      and ISR(60s) vs URL expiry needs solving), and the design would be guesswork without
+      a real private asset to shape it.
+      **Trigger to revisit:** the first time a display asset must not leak — a draft video,
+      an unreleased cover. Copy the `audio` pattern (private bucket + a door that
+      authorizes + a service-role signer); do not invent a second scheme.
+- [ ] The manager UI still implies "off site" = "taken down". It doesn't mean that for the
+      underlying file. Worth a word in the editor when the storage story is settled.
+
+### Media GC — FIXED 2026-07-15
+`gcMediaObjects` swept only `{artist}/gallery`, so replacing a hero video or profile photo
+stranded the old object in a public bucket forever — referenced by nothing, collected by
+no one. skeen had 6 strays (~17.6MB, `video1/2/3` × mp4+webm) from one hero change; they
+were removed and the sweep now covers every folder in `MEDIA_FOLDERS`
+(gallery / hero-videos / profile). Add a `media.purpose` → add its folder there.
 
 ## Analytics — record_event rate limit — DONE (2026-07-14)
 - [x] Per-artist burst cap on the anon `record_event` door (`20260714140000`): 120

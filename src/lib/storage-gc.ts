@@ -93,11 +93,19 @@ export async function gcDeletedMediaObject(
   }
 }
 
+/** Every folder the `media` bucket stores an artist's objects under — one per
+ *  `media.purpose` (20260624140000). The GC must know ALL of them: it once swept only
+ *  `gallery`, so replacing a hero video or profile photo stranded the old object in a
+ *  PUBLIC bucket forever, referenced by nothing and collected by no one. skeen carried
+ *  6 such strays (~17.6MB) from a single hero change. Add a purpose → add it here. */
+export const MEDIA_FOLDERS = ['gallery', 'hero-videos', 'profile'] as const
+
 /**
- * Remove orphaned gallery objects from the `media` bucket for one artist. Call AFTER
- * publishing media (once a deleted photo's revision is tombstoned, its object is a true
- * orphan). Sweeps the `{artistId}/gallery` folder — the editor's gallery domain — and
- * keeps anything still referenced by a media row. Best-effort: never fails the publish.
+ * Remove orphaned objects from the `media` bucket for one artist. Call AFTER publishing
+ * media (once a deleted photo's revision is tombstoned, its object is a true orphan).
+ * Sweeps every folder in MEDIA_FOLDERS and keeps anything still referenced by a media
+ * row. Scoped to `{artistId}/…`, so it can never reach another tenant's objects.
+ * Best-effort: never fails the publish.
  */
 export async function gcMediaObjects(
   client: SupabaseClient,
@@ -109,12 +117,20 @@ export async function gcMediaObjects(
     const referenced = new Set<string>()
     for (const r of rows ?? []) if (r.storage_path) referenced.add(r.storage_path as string)
 
-    const prefix = `${artistId}/gallery`
-    const { data: objs } = await client.storage.from('media').list(prefix, { limit: 1000 })
-    const listed = (objs ?? []).map((o) => ({
-      path: `${prefix}/${o.name}`,
-      createdAt: (o as { created_at?: string | null }).created_at,
-    }))
+    // One round-trip per folder, CONCURRENTLY: they're independent, and this runs
+    // inside publish. Sweeping them in series made publish ~3x slower on the network
+    // and pushed the publishAll tests past their timeout.
+    const perFolder = await Promise.all(
+      MEDIA_FOLDERS.map(async (folder) => {
+        const prefix = `${artistId}/${folder}`
+        const { data: objs } = await client.storage.from('media').list(prefix, { limit: 1000 })
+        return (objs ?? []).map((o) => ({
+          path: `${prefix}/${o.name}`,
+          createdAt: (o as { created_at?: string | null }).created_at,
+        }))
+      }),
+    )
+    const listed = perFolder.flat()
 
     const toRemove = collectablePaths(listed, referenced, Date.now(), minAgeMs)
     if (toRemove.length) await client.storage.from('media').remove(toRemove)

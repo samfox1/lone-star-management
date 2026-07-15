@@ -10,8 +10,15 @@ import { describe, expect, it } from 'vitest'
 import { gcDeletedMediaObject, gcMediaObjects } from '@/lib/storage-gc'
 
 type ListObj = { name: string; created_at: string | null }
-function fake(opts: { revCount?: number; mediaRows?: { storage_path: string }[]; listObjs?: ListObj[] } = {}) {
-  const { revCount = 0, mediaRows = [], listObjs = [] } = opts
+function fake(
+  opts: {
+    revCount?: number
+    mediaRows?: { storage_path: string }[]
+    /** Objects per folder prefix. A prefix with no entry lists empty, like the real bucket. */
+    byPrefix?: Record<string, ListObj[]>
+  } = {},
+) {
+  const { revCount = 0, mediaRows = [], byPrefix = {} } = opts
   const removed: string[] = []
   const listedPrefixes: string[] = []
   const thenable = (result: unknown): Record<string, unknown> => {
@@ -38,7 +45,7 @@ function fake(opts: { revCount?: number; mediaRows?: { storage_path: string }[];
           },
           list: (prefix: string) => {
             listedPrefixes.push(prefix)
-            return Promise.resolve({ data: listObjs })
+            return Promise.resolve({ data: byPrefix[prefix] ?? [] })
           },
         }
       },
@@ -70,14 +77,16 @@ describe('gcDeletedMediaObject', () => {
   })
 })
 
-describe('gcMediaObjects (publish-time sweep of the gallery folder)', () => {
+describe('gcMediaObjects (publish-time sweep of the media folders)', () => {
   it('removes old unreferenced objects, keeps referenced ones', async () => {
     const { client, removed, listedPrefixes } = fake({
       mediaRows: [{ storage_path: 'artist-1/gallery/keep.jpg' }],
-      listObjs: [
-        { name: 'keep.jpg', created_at: OLD },
-        { name: 'orphan.jpg', created_at: OLD },
-      ],
+      byPrefix: {
+        'artist-1/gallery': [
+          { name: 'keep.jpg', created_at: OLD },
+          { name: 'orphan.jpg', created_at: OLD },
+        ],
+      },
     })
     await gcMediaObjects(client, 'artist-1')
     expect(listedPrefixes).toContain('artist-1/gallery')
@@ -87,9 +96,50 @@ describe('gcMediaObjects (publish-time sweep of the gallery folder)', () => {
   it('leaves a just-uploaded (fresh) unreferenced object alone (age gate)', async () => {
     const { client, removed } = fake({
       mediaRows: [],
-      listObjs: [{ name: 'fresh.jpg', created_at: new Date().toISOString() }],
+      byPrefix: { 'artist-1/gallery': [{ name: 'fresh.jpg', created_at: new Date().toISOString() }] },
     })
     await gcMediaObjects(client, 'artist-1')
+    expect(removed).toEqual([])
+  })
+  it("CRITICAL: sweeps hero-videos too — a replaced hero used to strand its old object forever", async () => {
+    // Found 2026-07-15: the sweep only ever listed `{artist}/gallery`, so swapping a
+    // hero left the old clip in a PUBLIC bucket, referenced by nothing and collected
+    // by no one. skeen had 6 such strays (~17.6MB) from one hero change.
+    const { client, removed, listedPrefixes } = fake({
+      mediaRows: [{ storage_path: 'artist-1/hero-videos/current.mp4' }],
+      byPrefix: {
+        'artist-1/hero-videos': [
+          { name: 'current.mp4', created_at: OLD },
+          { name: 'old.mp4', created_at: OLD },
+        ],
+      },
+    })
+    await gcMediaObjects(client, 'artist-1')
+    expect(listedPrefixes).toContain('artist-1/hero-videos')
+    expect(removed).toEqual(['artist-1/hero-videos/old.mp4'])
+  })
+
+  it('sweeps profile too, and keeps the referenced photo', async () => {
+    const { client, removed } = fake({
+      mediaRows: [{ storage_path: 'artist-1/profile/me.jpg' }],
+      byPrefix: {
+        'artist-1/profile': [
+          { name: 'me.jpg', created_at: OLD },
+          { name: 'stale.jpg', created_at: OLD },
+        ],
+      },
+    })
+    await gcMediaObjects(client, 'artist-1')
+    expect(removed).toEqual(['artist-1/profile/stale.jpg'])
+  })
+
+  it('never touches another artist\'s folders', async () => {
+    const { client, removed, listedPrefixes } = fake({
+      mediaRows: [],
+      byPrefix: { 'artist-2/gallery': [{ name: 'theirs.jpg', created_at: OLD }] },
+    })
+    await gcMediaObjects(client, 'artist-1')
+    expect(listedPrefixes.every((p) => p.startsWith('artist-1/'))).toBe(true)
     expect(removed).toEqual([])
   })
 })

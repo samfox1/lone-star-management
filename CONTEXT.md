@@ -70,8 +70,11 @@ decisions behind them (esp. ADR-0002).
     so the gallery gate reads the *published* selection. It also defaults **false** (a
     new upload is off the site until chosen), where every other type defaults true.
   - **On-site gates discovery, not access.** Taking an asset off the site removes the
-    row from the public doors; it does NOT revoke the storage URL (`media`/`videos`
-    are public buckets). Off-site ≠ private — see TODO.md.
+    row from the public doors; it does NOT revoke the storage URL (`media`/`videos` are
+    public buckets, so `/object/public/…` bypasses RLS). Off-site ≠ private. Nothing
+    sensitive is stored there today — every object is a hero clip — and the one bucket
+    meant for content that must not leak, `audio`, is already private and served through
+    a door + a service-role signer (`signAudioUrl`). See TODO.md before changing this.
 
 ## Site editor (ADR 0006, ADR 0008)
 
