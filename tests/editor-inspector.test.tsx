@@ -78,14 +78,14 @@ const LINKS: EditorLink[] = [
 ]
 
 const VIDEOS: EditorVideo[] = [
-  { id: 'v1', title: 'Live at the Mohawk', provider: 'youtube', poster: 'https://i.ytimg.com/vi/aaa/hqdefault.jpg' },
-  { id: 'v2', title: 'Studio session', provider: 'youtube', poster: null },
-  { id: 'v3', title: 'Tour recap', provider: 'uploaded', poster: null },
+  { id: 'v1', title: 'Live at the Mohawk', poster: 'https://i.ytimg.com/vi/aaa/hqdefault.jpg', onSite: false },
+  { id: 'v2', title: 'Studio session', poster: null, onSite: true },
+  { id: 'v3', title: 'Tour recap', poster: null, onSite: false },
 ]
 
 const MERCH: EditorMerch[] = [
-  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg' },
-  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null },
+  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: false },
+  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: false },
 ]
 
 const SONGS: EditorSong[] = [
@@ -146,7 +146,7 @@ describe('EditorInspector — browse state', () => {
     for (const label of ['Images', 'Text', 'Links', 'Videos', 'Music', 'Merch']) {
       expect(screen.getByRole('button', { name: new RegExp(label) })).toBeTruthy()
     }
-    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('3 photos')
+    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('1 of 3 on site')
   })
 
   it('does not show editing tools until a component is opened', () => {
@@ -165,7 +165,7 @@ describe('EditorInspector — opening Images', () => {
   it('opens the gallery editing view with the real photo count', () => {
     openImages()
     expect(screen.getByText('Gallery')).toBeTruthy()
-    expect(screen.getByText('3 photos')).toBeTruthy()
+    expect(screen.getByText('1 of 3 on site')).toBeTruthy()
   })
 
   it('renders real thumbnails + an in-editor uploader', () => {
@@ -182,7 +182,7 @@ describe('EditorInspector — opening Images', () => {
     expect(deleteMock).toHaveBeenCalledWith('m1', 'artist-1/gallery/a.jpg', 'artist-1')
     // optimistic: one thumbnail gone, header count updated
     expect(document.querySelectorAll('aside img').length).toBe(2)
-    expect(screen.getByText('2 photos')).toBeTruthy()
+    expect(screen.getByText('1 of 2 on site')).toBeTruthy()
   })
 
   it('reorders via drag and persists the new order', () => {
@@ -214,7 +214,7 @@ describe('EditorInspector — opening Images', () => {
     expect(document.querySelectorAll('aside img').length).toBe(3)
     fireEvent.click(screen.getByRole('button', { name: 'mock-upload' }))
     expect(document.querySelectorAll('aside img').length).toBe(4)
-    expect(screen.getByText('4 photos')).toBeTruthy()
+    expect(screen.getByText('1 of 4 on site')).toBeTruthy()
   })
 
   it('toggles a photo on-site (writes on_site via setOnSiteAction)', () => {
@@ -289,7 +289,7 @@ describe('EditorInspector — Links component', () => {
 
   it('shows the real link count in browse', () => {
     renderInspector([], { links: LINKS })
-    expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('3 links')
+    expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('2 of 3 on site')
   })
 
   it('lists links with editable label + url and an add-link out', () => {
@@ -368,7 +368,7 @@ describe('EditorInspector — Videos component', () => {
 
   it('shows the real video count in browse', () => {
     renderInspector([], { videos: VIDEOS })
-    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('3 videos')
+    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('1 of 3 on site')
   })
 
   it('lists videos with editable titles, a poster, and an add-video out', () => {
@@ -414,7 +414,7 @@ describe('EditorInspector — Merch component', () => {
 
   it('shows the real product count in browse', () => {
     renderInspector([], { merch: MERCH })
-    expect(screen.getByRole('button', { name: /Merch/ }).textContent).toContain('2 products')
+    expect(screen.getByRole('button', { name: /Merch/ }).textContent).toContain('0 of 2 on site')
   })
 
   it('lists products with editable name/price/url + an add-product out', () => {
@@ -471,7 +471,7 @@ describe('EditorInspector — Music component', () => {
 
   it('shows the real song count in browse', () => {
     renderInspector([], { songs: SONGS })
-    expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('3 songs')
+    expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('1 of 3 on site')
   })
 
   it('lists songs with editable titles, a Released/Unreleased tag, and an add-song out', () => {
@@ -640,5 +640,55 @@ describe('EditorInspector — Style component', () => {
     // The point of the embedded-frame model: click the thing, edit the thing.
     renderInspector([], { styleRegions: REGIONS, selectedStyle: 'footer' })
     expect((document.activeElement as HTMLElement)?.getAttribute('aria-label')).toBe('Footer classes')
+  })
+})
+
+/**
+ * The editor's job is what's on the SITE (ADR 0006), so its counts must be on-site
+ * counts. They used to be LIBRARY counts, which lied: skeen's YouTube sync imports
+ * every video off-site (`insertDefaults: on_site:false`), so the panel read
+ * "83 videos" while the public site served ZERO of them. Songs and links looked fine
+ * only by luck — they happened to be 19/19 and 8/8, so library == on-site.
+ */
+describe('EditorInspector — counts tell the truth about what is on the site', () => {
+  it("REGRESSION: a synced library with NOTHING on-site does not read as '83 videos'", () => {
+    const offSite: EditorVideo[] = Array.from({ length: 83 }, (_, i) => ({
+      id: `v${i}`,
+      title: `DAY ${i}`,
+      poster: null,
+      onSite: false,
+    }))
+    renderInspector([], { videos: offSite })
+    const label = screen.getByRole('button', { name: /Videos/ }).textContent ?? ''
+    expect(label).toContain('0 of 83 on site')
+    expect(label).not.toContain('83 videos') // the exact lie
+  })
+
+  it('says "N of M on site", not the library total', () => {
+    const videos: EditorVideo[] = [
+      { id: 'a', title: 'A', poster: null, onSite: true },
+      { id: 'b', title: 'B', poster: null, onSite: false },
+      { id: 'c', title: 'C', poster: null, onSite: true },
+    ]
+    renderInspector([], { videos })
+    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('2 of 3 on site')
+  })
+
+  it('an empty library reads plainly, not "0 of 0 on site"', () => {
+    renderInspector([], { videos: [] })
+    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('0 videos')
+  })
+
+  it('kinds with NO on-site concept keep a plain count (text, style)', () => {
+    // A text field or a style region is not something you put "on the site" — it's
+    // part of a section that's already there.
+    renderInspector([], { textFields: TEXT_FIELDS, styleRegions: [] })
+    expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
+  })
+
+  it('shows per-video on-site state in the panel, so a list of 83 is not ambiguous', () => {
+    renderInspector([], { videos: [{ id: 'v', title: 'Only', poster: null, onSite: false }] })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    expect(screen.getByText('Off')).toBeTruthy()
   })
 })

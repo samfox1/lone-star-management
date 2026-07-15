@@ -41,8 +41,8 @@ export type EditorTextField = {
   multiline: boolean
 }
 export type EditorLink = { id: string; label: string; url: string; onSite: boolean }
-export type EditorVideo = { id: string; title: string; provider: string | null; poster: string | null }
-export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null }
+export type EditorVideo = { id: string; title: string; poster: string | null; onSite: boolean }
+export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null; onSite: boolean }
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch' | 'style'
@@ -58,23 +58,39 @@ const COMPONENTS: Component[] = [
   { kind: 'style', icon: 'bolt', label: 'Style' },
 ]
 
-/** Each component's subtitle: its live count. One table, keyed by Kind, replacing a
- *  per-kind pluralizer plus the same 7-arm ternary written out in BOTH the browse
- *  list and the editing header — so an 8th Kind is one entry here, not four edits.
+/** What a component counts. `onSite` is null for kinds that have no on-site concept
+ *  (text fields, style regions); otherwise it's how many are actually ON THE SITE. */
+export type KindCount = { total: number; onSite: number | null }
+
+/** The noun each component counts. One table keyed by Kind, replacing a per-kind
+ *  pluralizer plus the same 7-arm ternary written out in BOTH the browse list and the
+ *  editing header — so an 8th Kind is one entry here, not four edits. `Record<Kind, …>`
+ *  is the point: TypeScript refuses a new Kind without one. */
+const COUNT_NOUN: Record<Kind, string> = {
+  images: 'photo',
+  text: 'field',
+  links: 'link',
+  videos: 'video',
+  music: 'song',
+  merch: 'product',
+  style: 'region',
+}
+
+/**
+ * The subtitle under each component. For anything with an on-site concept this reads
+ * "N of M on site" — NOT the library total.
  *
- *  `Record<Kind, …>` is the point: TypeScript now REFUSES a new Kind without a
- *  count. The chains this replaces both ended in a `Component.caption` fallback that
- *  could never run (the arms were already exhaustive), so its values had rotted into
- *  fiction — '6 videos', '1 album · 9 songs', '4 products' — hardcoded numbers that
- *  outlived the mock phase and would have been rendered as fact if ever reached. */
-const COUNT_LABEL: Record<Kind, (n: number) => string> = {
-  images: (n) => plural(n, 'photo'),
-  text: (n) => plural(n, 'field'),
-  links: (n) => plural(n, 'link'),
-  videos: (n) => plural(n, 'video'),
-  music: (n) => plural(n, 'song'),
-  merch: (n) => plural(n, 'product'),
-  style: (n) => plural(n, 'region'),
+ * The library total alone actively lied: the editor's job is what's on the SITE
+ * (ADR 0006), but Videos showed "83 videos" while the public site served ZERO of them
+ * — every one imported off-site by the YouTube sync (`insertDefaults: on_site:false`).
+ * It read as "83 videos are on your site". Songs and links looked right only by luck:
+ * they happen to be 19/19 and 8/8.
+ */
+export function countLabel(kind: Kind, c: KindCount): string {
+  const noun = COUNT_NOUN[kind]
+  if (c.total === 0) return plural(0, noun) // "0 photos" beats "0 of 0 on site"
+  if (c.onSite === null) return plural(c.total, noun) // no on-site concept
+  return `${c.onSite} of ${c.total} on site`
 }
 
 /** `2 photos` / `1 photo`. Every noun the inspector counts pluralizes with +s. */
@@ -131,6 +147,25 @@ function OnSiteToggle({ on, onToggle, className }: { on: boolean; onToggle: () =
       <Icon name="check" size={11} className={on ? undefined : 'opacity-40'} />
       {on ? 'On site' : 'Off'}
     </button>
+  )
+}
+
+/** Read-only "is this on the site" marker for the publish-reconciled kinds
+ *  (video / merch). Deliberately NOT a button: `reconcileOnSite` sets on_site=false
+ *  for anything absent from the Assets page's selection, so a toggle here would be
+ *  silently reverted by the next publish. Shows the truth; the control stays where
+ *  the publish gate is. (Phase 2 moves videos to the live-toggle model, and this
+ *  becomes an OnSiteToggle.) */
+function OnSiteBadge({ on }: { on: boolean }) {
+  return (
+    <span
+      className={cx(
+        'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em]',
+        on ? 'bg-accent-soft text-accent' : 'bg-track text-ink-faint',
+      )}
+    >
+      {on ? 'On site' : 'Off'}
+    </span>
   )
 }
 
@@ -323,15 +358,17 @@ export function EditorInspector({
   }
 
   // One count per Kind, derived once and shared by both views — they used to each
-  // reach into a different set of arrays through their own ternary chain.
-  const counts: Record<Kind, number> = {
-    images: photos.length,
-    text: textFields.length,
-    links: links.length,
-    videos: videos.length,
-    music: songs.length,
-    merch: merch.length,
-    style: styleRegions.length,
+  // reach into a different set of arrays through their own ternary chain. `onSite`
+  // is what the site actually serves; null means the kind has no on-site concept.
+  const onSite = <T,>(xs: T[], f: (x: T) => boolean) => xs.filter(f).length
+  const counts: Record<Kind, KindCount> = {
+    images: { total: photos.length, onSite: onSite(photos, (p) => p.onSite) },
+    text: { total: textFields.length, onSite: null },
+    links: { total: links.length, onSite: onSite(links, (l) => l.onSite) },
+    videos: { total: videos.length, onSite: onSite(videos, (v) => v.onSite) },
+    music: { total: songs.length, onSite: onSite(songs, (x) => x.onSite) },
+    merch: { total: merch.length, onSite: onSite(merch, (m) => m.onSite) },
+    style: { total: styleRegions.length, onSite: null },
   }
 
   return (
@@ -380,7 +417,7 @@ function BrowseView({
   counts,
   onOpen,
 }: {
-  counts: Record<Kind, number>
+  counts: Record<Kind, KindCount>
   onOpen: (c: Component) => void
 }) {
   return (
@@ -403,7 +440,7 @@ function BrowseView({
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium">{c.label}</span>
               <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
-                {COUNT_LABEL[c.kind](counts[c.kind])}
+                {countLabel(c.kind, counts[c.kind])}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -447,7 +484,7 @@ function EditingView({
   onSwitch,
 }: {
   component: Component
-  counts: Record<Kind, number>
+  counts: Record<Kind, KindCount>
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
@@ -500,7 +537,7 @@ function EditingView({
         </span>
         <span className="flex flex-col gap-0.5">
           <span className="text-base font-semibold">{isImages ? 'Gallery' : component.label}</span>
-          <span className={EYEBROW}>{COUNT_LABEL[component.kind](counts[component.kind])}</span>
+          <span className={EYEBROW}>{countLabel(component.kind, counts[component.kind])}</span>
         </span>
       </div>
 
@@ -1204,13 +1241,16 @@ function VideoTools({
               <Icon name="videos" size={18} />
             )}
           </span>
-          <input
-            aria-label={`Video ${i + 1} title`}
-            value={titles[v.id] ?? ''}
-            onChange={(e) => edit(v.id, e.target.value)}
-            placeholder="Title"
-            className="min-w-0 flex-1 rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
-          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <input
+              aria-label={`Video ${i + 1} title`}
+              value={titles[v.id] ?? ''}
+              onChange={(e) => edit(v.id, e.target.value)}
+              placeholder="Title"
+              className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+            />
+            <OnSiteBadge on={v.onSite} />
+          </div>
           <button
             type="button"
             aria-label={`Remove video ${i + 1}`}

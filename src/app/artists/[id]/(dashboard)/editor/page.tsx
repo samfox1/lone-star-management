@@ -107,8 +107,11 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     return {
       id: r.id,
       title: (r.title as string | null) ?? '',
-      provider: provider || null,
       poster: youtubePoster(String(r.embed_url ?? ''), provider),
+      // The YouTube sync imports videos OFF-site (`insertDefaults: on_site:false`),
+      // so a synced channel lands in the library and waits to be chosen. The panel
+      // has to show that, or it reads as "all 83 are on your site".
+      onSite: (r.on_site as boolean | null) ?? false,
     }
   })
   const merch: EditorMerch[] = merchRows.map((r) => ({
@@ -117,6 +120,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     price: r.price == null ? '' : String(r.price),
     url: (r.url as string | null) ?? '',
     image_url: (r.image_url as string | null) ?? null,
+    // Like videos: a new/imported product lands off-site (INSERT_OFF_SITE) and is
+    // chosen + published on the Merch page.
+    onSite: (r.on_site as boolean | null) ?? false,
   }))
 
   // Classify each release once; songs inherit the bucket through their release_id
