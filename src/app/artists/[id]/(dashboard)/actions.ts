@@ -382,8 +382,14 @@ export async function deleteMediaAction(
  * `on_site` flag. An asset is on the public site only when selected AND published; being
  * in the library (Assets) never implies on-site. RLS scopes the write to the caller's
  * tenant. `kind` maps to the owning table.
+ *
+ * LIVE-TOGGLE types only. This is one of TWO on-site write paths and they are not
+ * interchangeable: photo / track / link are toggled live from the editor, while
+ * release / video / merch / tour_date are reconciled from a selection at publish
+ * (`ON_SITE_ENTITIES` + `reconcileOnSite`). `video` and `merch` keys once sat here
+ * with no caller — the two paths overlapping in one map is how that went unnoticed.
  */
-const ON_SITE_TABLE = { photo: 'media', track: 'tracks', video: 'videos', merch: 'merch', link: 'links' } as const
+const ON_SITE_TABLE = { photo: 'media', track: 'tracks', link: 'links' } as const
 export async function setOnSiteAction(
   kind: keyof typeof ON_SITE_TABLE,
   id: string,

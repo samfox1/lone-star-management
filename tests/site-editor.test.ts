@@ -11,14 +11,11 @@ import {
   MANIFESTS,
   fieldByKey,
   fieldCurrentValue,
-  labelForTarget,
   manifestFor,
-  slotByKey,
-  styleByKey,
   type LibraryAsset,
   type TemplateManifest,
 } from '@/lib/site-editor/manifest'
-import { fieldRegion, itemMarker, itemRegion, parseItemMarker, slotRegion, styleRegion } from '@/lib/site-editor/markers'
+import { fieldRegion, itemMarker, itemRegion, parseItemMarker, slotRegion } from '@/lib/site-editor/markers'
 import {
   BRIDGE_VERSION,
   editorMessage,
@@ -53,31 +50,15 @@ describe('region helpers — emit marker attrs only in edit mode', () => {
     expect(slotRegion(false, 'shows')).toEqual({})
     expect(itemRegion(true, 'tour_date', 'abc-123')).toEqual({ 'data-lse-item': 'tour_date:abc-123' })
     expect(itemRegion(false, 'tour_date', 'abc-123')).toEqual({})
-    expect(styleRegion(true, 'hero_wordmark')).toEqual({ 'data-lse-style': 'hero_wordmark' })
-    expect(styleRegion(false, 'hero_wordmark')).toEqual({})
   })
 })
 
 describe('manifest — style regions', () => {
-  // A hand-built manifest with a style region (built-in templates ship styles: []).
-  const styled: TemplateManifest = {
-    template: 'custom-skeen',
-    fields: [],
-    slots: [],
-    styles: [{ key: 'hero_wordmark', label: 'Hero wordmark', base: 'font-glitch text-9xl' }],
-  }
-
-  it('looks up a style region by key', () => {
-    expect(styleByKey(styled, 'hero_wordmark')?.label).toBe('Hero wordmark')
-    expect(styleByKey(styled, 'nope')).toBeUndefined()
-  })
-
-  it('labels a style target for the inspector, with graceful fallback', () => {
-    expect(labelForTarget(styled, { kind: 'style', key: 'hero_wordmark' })).toBe('Hero wordmark')
-    expect(labelForTarget(styled, { kind: 'style', key: 'unknown' })).toBe('unknown')
-  })
-
   it('built-in templates ship an (empty) styles list', () => {
+    // Nothing in the built-in DOM is style-tagged yet, so the editor's Style panel
+    // shows its empty state for them. A CUSTOM site's regions never come from here —
+    // it posts its own edit-list on `ready` (SITE_STYLING_PLAN.md D-D), which is why
+    // the manifest-side style lookups had no production caller and were removed.
     expect(MANIFESTS.classic.styles).toEqual([])
     expect(MANIFESTS.cinematic.styles).toEqual([])
   })
@@ -115,7 +96,6 @@ describe('manifest — coverage & shape', () => {
         }
         for (const s of manifest.slots) {
           expect(ASSET_TYPES, `${template} slot ${s.key}`).toContain(s.accepts)
-          expect(slotByKey(manifest, s.key)).toBe(s)
         }
       })
     })
@@ -124,14 +104,6 @@ describe('manifest — coverage & shape', () => {
   it('classic covers the core library sections', () => {
     const slotKeys = MANIFESTS.classic.slots.map((s) => s.key)
     expect(slotKeys).toEqual(expect.arrayContaining(['tracks', 'videos', 'tour_dates', 'merch', 'links']))
-  })
-
-  it('labels a selected target for the inspector', () => {
-    const m = MANIFESTS.cinematic
-    expect(labelForTarget(m, { kind: 'field', key: 'shows_heading' })).toBe('Shows heading')
-    expect(labelForTarget(m, { kind: 'slot', key: 'shows' })).toBe('Shows')
-    expect(labelForTarget(m, { kind: 'item', assetType: 'tour_date', id: 'x' })).toBe('Shows item')
-    expect(labelForTarget(m, { kind: 'field', key: 'unknown_key' })).toBe('unknown_key') // graceful fallback
   })
 
   it('resolves a field current value from site_content and artist columns', () => {
@@ -165,9 +137,9 @@ describe('bridge — versioned, source-discriminated guards', () => {
   })
 
   it('stamps and recognises an editor message', () => {
-    const msg = editorMessage({ type: 'set-device', device: 'mobile' })
+    const msg = editorMessage({ type: 'apply-field', key: 'hero_tagline', value: 'hi' })
     expect(isEditorMessage(msg)).toBe(true)
-    expect(isFrameMessage(msg)).toBe(false)
+    expect(isFrameMessage(msg)).toBe(false) // wrong source
   })
 
   it('is at version 2 and carries the style + data-injection messages', () => {

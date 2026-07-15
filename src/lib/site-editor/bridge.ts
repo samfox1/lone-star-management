@@ -35,11 +35,15 @@ export type SelectTarget =
   | { kind: 'style'; key: string }
 
 /** frame → editor. A custom site carries its own edit-list (manifest) on `ready`,
- *  so the editor never hardcodes a custom site's regions (SITE_STYLING_PLAN.md D-D). */
+ *  so the editor never hardcodes a custom site's regions (SITE_STYLING_PLAN.md D-D).
+ *
+ *  This union is exactly what is SENT today. A `geometry` variant (live scroll/resize
+ *  tracking) was declared here with no sender and no receiver and has been removed —
+ *  add it back with the selection overlay that needs it, since only then is its shape
+ *  knowable. `select` already carries a `rect`. */
 export type FrameMessage =
   | { v: number; source: typeof FRAME_SOURCE; type: 'ready'; manifest?: TemplateManifest }
   | { v: number; source: typeof FRAME_SOURCE; type: 'select'; target: SelectTarget; rect: Rect }
-  | { v: number; source: typeof FRAME_SOURCE; type: 'geometry'; target: SelectTarget; rect: Rect }
   | { v: number; source: typeof FRAME_SOURCE; type: 'deselect' }
 
 /** editor → frame. `init-data` hands the frame its draft so a custom site in edit
@@ -50,14 +54,20 @@ export type FrameMessage =
  *  returns), NOT `SiteData`. A custom site resolves media paths against its own
  *  Supabase URL, so it needs the raw `path`; `SiteData` has already replaced that
  *  with a lone-star-built `url` and would blank every image. Only custom sites
- *  consume this — the built-in `/edit-frame` reads its own draft server-side. */
+ *  consume this — the built-in `/edit-frame` reads its own draft server-side.
+ *
+ *  Like FrameMessage, this is exactly what is SENT today. `highlight`, `set-device`
+ *  and `refresh` were declared here with no sender and no receiver in either repo and
+ *  have been removed. Deleting them was free: skeen's own copy of this protocol
+ *  (`lib/frameBridge.ts`) names only apply-field / apply-style / init-data and routes
+ *  anything else through an open `{ type: string }` catch-all, so those three never
+ *  reached the wire and BRIDGE_VERSION does not move. `set-device` in particular
+ *  described a design the viewport-scaling frame replaced — the editor resizes the
+ *  iframe itself and the site just reflows. */
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: PublicSitePayload }
-  | { v: number; source: typeof EDITOR_SOURCE; type: 'highlight'; target: SelectTarget | null }
-  | { v: number; source: typeof EDITOR_SOURCE; type: 'set-device'; device: 'desktop' | 'mobile' }
-  | { v: number; source: typeof EDITOR_SOURCE; type: 'refresh' }
 
 function isVersionedFrom(x: unknown, source: string): x is { v: number; source: string; type: string } {
   if (typeof x !== 'object' || x === null) return false

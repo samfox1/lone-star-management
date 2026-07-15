@@ -46,17 +46,41 @@ export type EditorMerch = { id: string; title: string; price: string; url: strin
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch' | 'style'
-type Component = { kind: Kind; icon: IconName; label: string; caption: string }
+type Component = { kind: Kind; icon: IconName; label: string }
 
 const COMPONENTS: Component[] = [
-  { kind: 'images', icon: 'photo', label: 'Images', caption: 'Photo gallery' },
-  { kind: 'text', icon: 'text', label: 'Text', caption: 'Headings & copy' },
-  { kind: 'links', icon: 'links', label: 'Links', caption: 'Outbound links' },
-  { kind: 'videos', icon: 'videos', label: 'Videos', caption: '6 videos' },
-  { kind: 'music', icon: 'tracks', label: 'Music', caption: '1 album · 9 songs' },
-  { kind: 'merch', icon: 'merch', label: 'Merch', caption: '4 products' },
-  { kind: 'style', icon: 'bolt', label: 'Style', caption: 'Section styling' },
+  { kind: 'images', icon: 'photo', label: 'Images' },
+  { kind: 'text', icon: 'text', label: 'Text' },
+  { kind: 'links', icon: 'links', label: 'Links' },
+  { kind: 'videos', icon: 'videos', label: 'Videos' },
+  { kind: 'music', icon: 'tracks', label: 'Music' },
+  { kind: 'merch', icon: 'merch', label: 'Merch' },
+  { kind: 'style', icon: 'bolt', label: 'Style' },
 ]
+
+/** Each component's subtitle: its live count. One table, keyed by Kind, replacing a
+ *  per-kind pluralizer plus the same 7-arm ternary written out in BOTH the browse
+ *  list and the editing header — so an 8th Kind is one entry here, not four edits.
+ *
+ *  `Record<Kind, …>` is the point: TypeScript now REFUSES a new Kind without a
+ *  count. The chains this replaces both ended in a `Component.caption` fallback that
+ *  could never run (the arms were already exhaustive), so its values had rotted into
+ *  fiction — '6 videos', '1 album · 9 songs', '4 products' — hardcoded numbers that
+ *  outlived the mock phase and would have been rendered as fact if ever reached. */
+const COUNT_LABEL: Record<Kind, (n: number) => string> = {
+  images: (n) => plural(n, 'photo'),
+  text: (n) => plural(n, 'field'),
+  links: (n) => plural(n, 'link'),
+  videos: (n) => plural(n, 'video'),
+  music: (n) => plural(n, 'song'),
+  merch: (n) => plural(n, 'product'),
+  style: (n) => plural(n, 'region'),
+}
+
+/** `2 photos` / `1 photo`. Every noun the inspector counts pluralizes with +s. */
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`
+}
 
 const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
 // Red ring for a field whose value the server would reject (a blank required field, a
@@ -87,28 +111,6 @@ export function runSerialized(
     else errored.current.delete(id)
     setStatus(errored.current.size ? 'error' : 'saved')
   })
-}
-
-function photoCount(n: number) {
-  return `${n} ${n === 1 ? 'photo' : 'photos'}`
-}
-function fieldCount(n: number) {
-  return `${n} ${n === 1 ? 'field' : 'fields'}`
-}
-function linkLabel(n: number) {
-  return `${n} ${n === 1 ? 'link' : 'links'}`
-}
-function videoLabel(n: number) {
-  return `${n} ${n === 1 ? 'video' : 'videos'}`
-}
-function merchLabel(n: number) {
-  return `${n} ${n === 1 ? 'product' : 'products'}`
-}
-function songLabel(n: number) {
-  return `${n} ${n === 1 ? 'song' : 'songs'}`
-}
-function regionLabel(n: number) {
-  return `${n} ${n === 1 ? 'region' : 'regions'}`
 }
 
 /** Per-item "on the site" toggle (writes the `on_site` flag). Being in the library never
@@ -320,11 +322,24 @@ export function EditorInspector({
     })
   }
 
+  // One count per Kind, derived once and shared by both views — they used to each
+  // reach into a different set of arrays through their own ternary chain.
+  const counts: Record<Kind, number> = {
+    images: photos.length,
+    text: textFields.length,
+    links: links.length,
+    videos: videos.length,
+    music: songs.length,
+    merch: merch.length,
+    style: styleRegions.length,
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
       {active ? (
         <EditingView
           component={active}
+          counts={counts}
           photos={photos}
           textFields={textFields}
           links={links}
@@ -354,16 +369,7 @@ export function EditorInspector({
           onSwitch={setActive}
         />
       ) : (
-        <BrowseView
-          imageCount={photos.length}
-          textCount={textFields.length}
-          linkCount={links.length}
-          videoCount={videos.length}
-          merchCount={merch.length}
-          songCount={songs.length}
-          regionCount={styleRegions.length}
-          onOpen={setActive}
-        />
+        <BrowseView counts={counts} onOpen={setActive} />
       )}
     </aside>
   )
@@ -371,22 +377,10 @@ export function EditorInspector({
 
 /* ── Browse: the component-type list ─────────────────────────────────────────── */
 function BrowseView({
-  imageCount,
-  textCount,
-  linkCount,
-  videoCount,
-  merchCount,
-  songCount,
-  regionCount,
+  counts,
   onOpen,
 }: {
-  imageCount: number
-  textCount: number
-  linkCount: number
-  videoCount: number
-  merchCount: number
-  songCount: number
-  regionCount: number
+  counts: Record<Kind, number>
   onOpen: (c: Component) => void
 }) {
   return (
@@ -409,21 +403,7 @@ function BrowseView({
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium">{c.label}</span>
               <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
-                {c.kind === 'images'
-                  ? photoCount(imageCount)
-                  : c.kind === 'text'
-                    ? fieldCount(textCount)
-                    : c.kind === 'links'
-                      ? linkLabel(linkCount)
-                      : c.kind === 'videos'
-                        ? videoLabel(videoCount)
-                        : c.kind === 'merch'
-                          ? merchLabel(merchCount)
-                          : c.kind === 'music'
-                            ? songLabel(songCount)
-                            : c.kind === 'style'
-                              ? regionLabel(regionCount)
-                              : c.caption}
+                {COUNT_LABEL[c.kind](counts[c.kind])}
               </span>
             </span>
             <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
@@ -437,6 +417,7 @@ function BrowseView({
 /* ── Editing: tools for the selected component ───────────────────────────────── */
 function EditingView({
   component,
+  counts,
   photos,
   textFields,
   links,
@@ -466,6 +447,7 @@ function EditingView({
   onSwitch,
 }: {
   component: Component
+  counts: Record<Kind, number>
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
@@ -518,23 +500,7 @@ function EditingView({
         </span>
         <span className="flex flex-col gap-0.5">
           <span className="text-base font-semibold">{isImages ? 'Gallery' : component.label}</span>
-          <span className={EYEBROW}>
-            {isImages
-              ? photoCount(photos.length)
-              : isText
-                ? fieldCount(textFields.length)
-                : isLinks
-                  ? linkLabel(links.length)
-                  : isVideos
-                    ? videoLabel(videos.length)
-                    : isMerch
-                      ? merchLabel(merch.length)
-                      : isMusic
-                        ? songLabel(songs.length)
-                        : isStyle
-                          ? regionLabel(styleRegions.length)
-                          : component.caption}
-          </span>
+          <span className={EYEBROW}>{COUNT_LABEL[component.kind](counts[component.kind])}</span>
         </span>
       </div>
 

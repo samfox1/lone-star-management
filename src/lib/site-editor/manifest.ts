@@ -16,7 +16,6 @@
  */
 import { TEMPLATE_FIELDS, fieldValue, type SiteContentField } from '@/lib/site-content-schema'
 import type { SiteContent } from '@/lib/site'
-import type { SelectTarget } from '@/lib/site-editor/bridge'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -135,16 +134,6 @@ export function fieldByKey(manifest: TemplateManifest, key: string): ManifestFie
   return manifest.fields.find((f) => f.key === key)
 }
 
-/** Look up one slot by key within a manifest. */
-export function slotByKey(manifest: TemplateManifest, key: string): ManifestSlot | undefined {
-  return manifest.slots.find((s) => s.key === key)
-}
-
-/** Look up one style region by key within a manifest. */
-export function styleByKey(manifest: TemplateManifest, key: string): ManifestStyleRegion | undefined {
-  return manifest.styles.find((s) => s.key === key)
-}
-
 /** The draft artist state a field value may read from. */
 export type FieldValueContext = {
   template: string
@@ -160,12 +149,3 @@ export function fieldCurrentValue(field: ManifestField, ctx: FieldValueContext):
   return ''
 }
 
-/** A human label for a selected region, for the editor's inspector header. Falls
- *  back to the raw key/type when the manifest doesn't declare it. */
-export function labelForTarget(manifest: TemplateManifest, target: SelectTarget): string {
-  if (target.kind === 'field') return fieldByKey(manifest, target.key)?.label ?? target.key
-  if (target.kind === 'slot') return slotByKey(manifest, target.key)?.label ?? target.key
-  if (target.kind === 'style') return styleByKey(manifest, target.key)?.label ?? target.key
-  const slot = manifest.slots.find((s) => s.accepts === target.assetType)
-  return slot ? `${slot.label} item` : `${target.assetType} item`
-}
