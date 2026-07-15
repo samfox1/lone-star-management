@@ -2,6 +2,11 @@
 
 Status: Accepted (shipped 2026-07-10, migration `20260710170000`)
 
+> **Naming note (2026-07-15):** this record says `visible` throughout because that is
+> what the flag was called when the decision was made. It was renamed to **`on_site`**
+> on all 7 tables in `20260714150000` — the decision is unchanged, only the column's
+> name. Read `visible` as `on_site` below; no table has a `visible` column now.
+
 ## Context
 
 The 2026-07-08/09 music restructure made Released vs Unreleased a derived bucket
@@ -40,6 +45,10 @@ left no per-track on/off control, which the editor's placement model requires.
 - Release and track site-visibility are now **independent** — hiding a release no
   longer auto-hides its tracks on the flat public tracks list; each is toggled on
   its own.
-- `links.visible` remains dormant (no UI to set it yet) — a follow-up.
+- ~~`links.visible` remains dormant (no UI to set it yet) — a follow-up.~~
+  **Resolved 2026-07-14** (`20260714160000`): `links.on_site` is gated in
+  `get_public_site` and written by a per-link toggle in the editor inspector. It
+  follows the tracks model — a LIVE toggle, so `link` stays out of
+  `ON_SITE_ENTITIES`. It had been inert on *both* ends: no door filter and no writer.
 - A later phase may unify release/track placement (ADR 0006's editor), at which
   point the release doors' Released gate is revisited.

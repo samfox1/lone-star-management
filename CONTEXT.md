@@ -56,17 +56,46 @@ decisions behind them (esp. ADR-0002).
   It's an **organizing label only — it does NOT decide what's on the public site**
   (decoupled 2026-07-10, ADR 0007). Source of truth: `src/lib/music.ts` (library
   buckets + the release smart-link/EPK doors). See MUSIC_RESTRUCTURE.md.
-- **On-site (`visible`)** — what's actually on the public site is each item's own
-  `visible` flag (tracks, videos, merch, tour_dates, releases), gated by the public
-  doors. Decoupled from Released for tracks (ADR 0007). The visual editor is where a
-  manager toggles/places on-site items.
+- **On-site (`on_site`)** — what's actually on the public site is each item's own
+  `on_site` flag, gated by the public doors. It lives on all **7** content tables:
+  tracks, videos, merch, tour_dates, releases, links, media. Decoupled from Released
+  for tracks (ADR 0007). The visual editor is where a manager toggles/places on-site
+  items. (Renamed from `visible` in `20260714150000` — the column now matches the
+  word the UI and code already used. No table has a `visible` column.)
+  - Two write paths, not interchangeable. **Live toggle** — photo / song / link flip
+    instantly (`setOnSiteAction`). **Publish-reconcile** — release / video / merch /
+    tour_date are reconciled from a selection at publish (`ON_SITE_ENTITIES` +
+    `reconcileOnSite`, `src/lib/content.ts`).
+  - `media` is the one type whose flag rides the **snapshot** rather than a live join,
+    so the gallery gate reads the *published* selection. It also defaults **false** (a
+    new upload is off the site until chosen), where every other type defaults true.
+  - **On-site gates discovery, not access.** Taking an asset off the site removes the
+    row from the public doors; it does NOT revoke the storage URL (`media`/`videos`
+    are public buckets). Off-site ≠ private — see TODO.md.
 
-## Site editor (ADR 0006)
+## Site editor (ADR 0006, ADR 0008)
 
 - **Manifest** — a site's declaration of its editable regions (`src/lib/site-editor/`):
-  **fields** (declared text/image) and **slots** (a section holding library items).
-  The one editor reads it; a site (template or custom) is editable iff it ships a
-  manifest, marks its DOM (`data-lse-*`), and includes the bridge.
+  **fields** (declared text/image), **slots** (a section holding library items), and
+  **style regions**. The one editor reads it; a site (template or custom) is editable
+  iff it ships a manifest, marks its DOM (`data-lse-*`), and includes the bridge.
+- **Style region** — a named part of a site whose CSS classes a manager can edit
+  (`data-lse-style`, ADR 0008). Section-level (`hero_wordmark`) or per-item
+  (`<slot>:<itemId>`, e.g. `videos:<uuid>`). Each declares a **base** class string;
+  a saved override **REPLACES** the base, and clearing the override restores it.
+  Stored per artist in `site_styles`, published like any other content.
+- **Custom site** — an artist whose public site is hosted elsewhere
+  (`artists.site_kind='custom'` + `custom_site_url`; skeen on Vercel). Its `/[slug]`
+  redirects to that URL, and the editor embeds `custom_site_url/edit` instead of the
+  built-in frame. These are **config, not content** — never in `ARTIST_SNAPSHOT`,
+  never in `get_public_site`.
+- **Edit-list** — a custom site's own manifest, posted to the editor at runtime in the
+  `ready` message rather than being declared in this repo (ADR 0008 / D-D). The editor
+  never hardcodes a custom site's regions.
+- **Wire shape (`PublicSitePayload`)** — exactly what `get_public_site` returns, media
+  carried as raw `path`. This is what the editor posts to a custom frame over
+  `init-data`, NOT `SiteData` (which has already resolved media to lone-star-built
+  URLs). A custom site resolves paths against its own Supabase URL.
 - **Edit mode** — the site rendered in an authenticated embedded frame with draft
   data + the `data-lse-*` markers + the postMessage bridge. Never on public `/[slug]`.
 - **Library vs editor** — the Assets pages are the content **library** (asset details,

@@ -20,7 +20,12 @@ We're building it. Constraints:
 
 - **Content updater, not a builder.** The only editable things are a fixed set:
   declared text, images, embedded music, and library **slots** (tracks / videos /
-  photos / merch / tour / links). No layout / structure / styling editing in v1.
+  photos / merch / tour / links). ~~No layout / structure / styling editing in v1.~~
+  **Styling clause superseded 2026-07-15 by ADR 0008:** a manager can now edit the
+  raw class string of a **declared style region** (`data-lse-style`), per-section and
+  per-item, stored in `site_styles`. Still not a builder — no adding, removing, or
+  reordering structure; only regions the site itself declares. Layout/structure
+  editing remains out.
 - **A shared editable-regions rulebook** (`src/lib/site-editor/`). Every site —
   template or custom — declares a **manifest** (`manifest.ts`): editable **fields**
   (text/image → a `site_content` key, an artist column, or a `media` purpose) and
@@ -49,7 +54,8 @@ We're building it. Constraints:
 - The manifest is the single home for "what's editable" — adding an editable field
   is a manifest entry + a marker in the template.
 - Per-item site placement needs a uniform on-site flag; tracks moved off the
-  Released derivation onto `visible` for exactly this (ADR 0007).
+  Released derivation onto `visible` for exactly this (ADR 0007). (That flag was
+  renamed `on_site` in `20260714150000` — same decision, new column name.)
 - The review-and-approve publish requires **selective, per-entity** publish
   granularity — a departure from the whole-type reconcile in ADR 0002, built in a
   later phase (see `SITE_EDITOR_PLAN.md` phase 4).
