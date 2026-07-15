@@ -1,11 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
-import { editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
-import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import { EditorPublish } from './editor-publish'
+import { useFrameBridge } from './use-frame-bridge'
 import {
   EditorInspector,
   type EditorLink,
@@ -60,14 +59,18 @@ export function EditorShell({
   songs: EditorSong[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
-  const frameRef = useRef<HTMLIFrameElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState({ w: 0, h: 0 })
-  // A custom site posts its own edit-list on `ready`; a built-in template has none
-  // to send (its manifest lives here and declares no style regions yet).
-  const [frameManifest, setFrameManifest] = useState<TemplateManifest | null>(null)
-  // Region key the frame last reported a click on, so the inspector can focus it.
-  const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
+
+  // Everything about talking to the frame — origin discipline, the ready→init-data
+  // handshake, select routing — lives behind this hook, where it's testable.
+  // Destructured, not held as an object: the react-hooks/refs rule rejects reaching
+  // through a member expression for a ref during render.
+  const { frameRef, src: frameSrc, applyField, applyStyle, manifest, selectedStyle } = useFrameBridge({
+    artistId,
+    customSiteUrl,
+    draft,
+  })
 
   // Measure the frame panel so the canvas can be scaled to fit it. The panel
   // resizes with the window (and would with a collapsible inspector), so observe
@@ -85,61 +88,6 @@ export function EditorShell({
 
   const view = fitViewport(device, panel.w, panel.h)
 
-  const frameSrc = customSiteUrl ? `${customSiteUrl.replace(/\/$/, '')}/edit` : `/artists/${artistId}/edit-frame`
-
-  // Resolved lazily: this is a client component but still SSRs, and `window` only
-  // exists in the browser. Every caller below runs client-side.
-  const targetOrigin = useCallback(
-    () => (customSiteUrl ? new URL(customSiteUrl).origin : window.location.origin),
-    [customSiteUrl],
-  )
-
-  // Optimistically paint a text edit into the live preview frame (bridge apply-field).
-  const applyField = useCallback(
-    (key: string, value: string) => {
-      frameRef.current?.contentWindow?.postMessage(
-        editorMessage({ type: 'apply-field', key, value }),
-        targetOrigin(),
-      )
-    },
-    [targetOrigin],
-  )
-
-  // Same, for a region's class string (bridge apply-style) — repaints the frame
-  // as you type, before the debounced save lands.
-  const applyStyle = useCallback(
-    (key: string, className: string) => {
-      frameRef.current?.contentWindow?.postMessage(
-        editorMessage({ type: 'apply-style', key, className }),
-        targetOrigin(),
-      )
-    },
-    [targetOrigin],
-  )
-
-  // One listener for everything the frame says. `ready` carries a CUSTOM site's
-  // own edit-list (D-D) — that's the only way the editor learns skeen's style
-  // regions, since the built-in manifests declare `styles: []`. We answer it with
-  // the draft, which a custom frame has no DB access to fetch itself.
-  useEffect(() => {
-    const origin = targetOrigin()
-    const onMessage = (e: MessageEvent) => {
-      if (e.origin !== origin || !isFrameMessage(e.data)) return
-      const msg = e.data
-      if (msg.type === 'ready') {
-        if (msg.manifest) setFrameManifest(msg.manifest)
-        if (draft) {
-          frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
-        }
-      } else if (msg.type === 'select' && msg.target.kind === 'style') {
-        // Click a region in the site → jump the inspector to that region's input.
-        setSelectedStyle(msg.target.key)
-      }
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [draft, targetOrigin])
-
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
@@ -151,7 +99,7 @@ export function EditorShell({
         videos={videos}
         merch={merch}
         songs={songs}
-        styleRegions={frameManifest?.styles ?? []}
+        styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
         selectedStyle={selectedStyle}
         onApplyField={applyField}

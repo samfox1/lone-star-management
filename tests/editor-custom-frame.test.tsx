@@ -13,8 +13,11 @@
  *    inbound frame messages must be checked against it. A wrong target origin makes
  *    the browser drop the message silently — the frame just never populates.
  *
- * The DOM-level shell test lives here rather than a full render because the shell
- * embeds a cross-origin iframe jsdom won't load.
+ * Scope: the init-data PAYLOAD (what we put on the wire). The shell's side of the
+ * conversation — frameSrc, origin discipline, the ready→init-data handshake — is
+ * covered against the REAL implementation in tests/use-frame-bridge.test.tsx.
+ * A `frame src` block here once re-implemented the shell's rule and asserted
+ * against its own copy, so it passed regardless of what the shell did; it's gone.
  */
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_VERSION, EDITOR_SOURCE, FRAME_SOURCE, editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
@@ -72,25 +75,5 @@ describe('frame ready → editor responds with init-data', () => {
     // Both documents share a window message bus; without the source discriminator
     // the editor would answer its own init-data.
     expect(isFrameMessage(editorMessage({ type: 'init-data', site: draft }))).toBe(false)
-  })
-})
-
-describe('frame src', () => {
-  // Mirrors the shell's frameSrc rule; kept as a unit so the /edit contract with
-  // skeen is pinned (S3 built an /edit ROUTE — the plan's older `?lse=edit` idea
-  // was never implemented).
-  const frameSrc = (artistId: string, customSiteUrl?: string | null) =>
-    customSiteUrl ? `${customSiteUrl.replace(/\/$/, '')}/edit` : `/artists/${artistId}/edit-frame`
-
-  it('points at the built-in same-origin frame when the artist has no custom site', () => {
-    expect(frameSrc('a1', null)).toBe('/artists/a1/edit-frame')
-  })
-
-  it("points at the custom site's /edit route", () => {
-    expect(frameSrc('a1', 'https://skeen-website.vercel.app')).toBe('https://skeen-website.vercel.app/edit')
-  })
-
-  it('tolerates a trailing slash on custom_site_url (no //edit)', () => {
-    expect(frameSrc('a1', 'https://skeen-website.vercel.app/')).toBe('https://skeen-website.vercel.app/edit')
   })
 })
