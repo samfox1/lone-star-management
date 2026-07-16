@@ -1,0 +1,18 @@
+-- "Who else is performing" on a tour date: the other acts on the bill.
+--
+-- Mirrors tracks.featured_artists (20260706133000): text[] NOT NULL DEFAULT '{}', so
+-- "no support" is an empty array and never null, and readers never branch on null.
+--
+-- skeen-website has ALWAYS read this. lib/mapSite.ts maps `t.support` onto the tour
+-- row, Shows.tsx renders it as "+ Arlo, Bo Reed", and its PublicSite type declares
+-- `support?: string[] | null`. The column simply never existed on this side, so the
+-- site read undefined forever — a dangling contract, silent because the key is
+-- optional. What actually puts it on the wire is adding it to
+-- PUBLISHABLE.tour_date.snapshot (lib/content.ts): get_public_site returns each
+-- revision's `data` wholesale, so no door changes here.
+--
+-- No backfill: revisions published before this column carry no `support` key, and
+-- revisions are immutable by design (ADR 0002) so history is never rewritten. The
+-- site treats a missing key as "no support"; the value appears on a date's next
+-- publish.
+alter table public.tour_dates add column if not exists support text[] not null default '{}';

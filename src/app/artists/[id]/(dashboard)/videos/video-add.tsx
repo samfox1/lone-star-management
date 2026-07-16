@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
-import { Icon } from '@/components/ui/icons'
+import { Icon, type IconName } from '@/components/ui/icons'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
@@ -125,14 +125,15 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
     }
   }
 
-  const tile = (s: Step, icon: 'edit' | 'bolt', label: string) => (
+  const tile = (s: Step, icon: IconName, label: string, sub: string) => (
     <button
       type="button"
       onClick={() => setStep(s)}
-      className="flex flex-col items-center gap-2.5 rounded-xl border border-hairline bg-paper px-3 py-6 text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+      className="flex flex-col items-center gap-2 rounded-xl border border-hairline bg-paper px-3 py-6 text-center text-ink transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
     >
       <Icon name={icon} size={22} />
       <span className="text-sm font-semibold">{label}</span>
+      <span className="font-space text-[11px] text-ink-faint">{sub}</span>
     </button>
   )
 
@@ -191,8 +192,8 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
 
             {step === 'choose' && (
               <div className="mt-4 grid grid-cols-2 gap-2.5">
-                {tile('manual', 'edit', 'Add Manually')}
-                {tile('streaming', 'bolt', 'Upload from Streaming Service')}
+                {tile('manual', 'upload', 'Upload a file', 'MP4, MOV or WebM')}
+                {tile('streaming', 'bolt', 'Paste a link', 'YouTube URL')}
               </div>
             )}
 

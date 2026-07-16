@@ -10,7 +10,7 @@ import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
 import { Segmented } from '../segmented'
 import { OriginSection, groupByOrigin } from '../origin'
-import { useOnSiteSelection } from '../use-on-site-selection'
+import { useLiveOnSite } from '../use-live-on-site'
 import { publishEntityAction } from '../actions'
 import { VideoCard, type VideoItem } from './video-card'
 
@@ -32,30 +32,36 @@ const PROVIDER_LABEL: Record<string, string> = {
   uploaded: 'Uploaded',
 }
 const providerLabel = (p: string) => PROVIDER_LABEL[p] ?? p
-const ORIGIN_ORDER = ['youtube', 'soundcloud', 'uploaded'] as const
+// Uploaded (self-hosted) videos group first — the manager's own files sit above the
+// synced YouTube library.
+const ORIGIN_ORDER = ['uploaded', 'youtube', 'soundcloud'] as const
 
 /**
  * Videos view: normal uploads and Shorts split into two tabs (mirroring the music
  * page's release-type split). Within a tab, the On-site/Off-site toggle filters by
  * publish state and cards are grouped by provider (origin). Shorts are keyed off the
- * `is_short` flag set at import (or from a pasted /shorts/ link). Each tile carries a
- * select checkbox + live/off badge; the manager picks which are on the site and
- * commits with the password-gated PublishBar.
+ * `is_short` flag set at import (or from a pasted /shorts/ link). Each tile's checkbox
+ * is a LIVE on-site toggle (ADR 0009) — it writes immediately and the public site
+ * follows without a publish, the same control the editor gives videos. The PublishBar
+ * publishes the video CONTENT (titles, embeds), which stays password-gated.
  */
 export function VideosBrowser({
   videos,
   artistId,
+  dirty = false,
   trailing,
 }: {
   videos: VideoItem[]
   artistId: string
+  /** Unpublished content edits — what lights up the PublishBar now that presence is live. */
+  dirty?: boolean
   trailing?: ReactNode
 }) {
   const router = useRouter()
   const [kind, setKind] = useState<Kind>('videos')
   const [site, setSite] = useState<SiteFilter>('all')
   const [sort, setSort] = useState<Sort>('added')
-  const { selected, toggle, pendingCount } = useOnSiteSelection(videos)
+  const { onSite, toggle } = useLiveOnSite(videos, 'video', artistId)
 
   const inKind = videos.filter((v) => (v.is_short ? kind === 'shorts' : kind === 'videos'))
   let shown = filterBySite(inKind, site)
@@ -64,7 +70,8 @@ export function VideosBrowser({
   const groups = groupByOrigin(shown, (v) => v.provider ?? 'youtube', ORIGIN_ORDER, providerLabel)
 
   async function publish(password: string) {
-    const res = await publishEntityAction('video', artistId, [...selected], password)
+    // Snapshot only — no reconcile. The on-site set is already whatever the toggles say.
+    const res = await publishEntityAction('video', artistId, password)
     if (res.ok) router.refresh()
     return res
   }
@@ -122,8 +129,8 @@ export function VideosBrowser({
                     key={v.id}
                     video={v}
                     artistId={artistId}
-                    selected={selected.has(v.id)}
-                    onToggleSelect={() => toggle(v.id)}
+                    onSite={onSite(v.id)}
+                    onToggleOnSite={() => toggle(v.id)}
                   />
                 ))}
               </CardGrid>
@@ -132,7 +139,7 @@ export function VideosBrowser({
         </div>
       )}
 
-      <PublishBar pendingCount={pendingCount} onPublish={publish} noun="videos" />
+      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="videos" />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import {
   type EditorLink,
   type EditorMerch,
   type EditorSong,
+  type EditorTour,
   type EditorTextField,
   type EditorVideo,
   type GalleryPhoto,
@@ -44,6 +45,7 @@ export function EditorShell({
   videos,
   merch,
   songs,
+  tours,
 }: {
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
@@ -57,6 +59,7 @@ export function EditorShell({
   videos: EditorVideo[]
   merch: EditorMerch[]
   songs: EditorSong[]
+  tours: EditorTour[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
   const panelRef = useRef<HTMLDivElement>(null)
@@ -99,6 +102,7 @@ export function EditorShell({
         videos={videos}
         merch={merch}
         songs={songs}
+        tours={tours}
         styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
         selectedStyle={selectedStyle}

@@ -62,10 +62,17 @@ decisions behind them (esp. ADR-0002).
   for tracks (ADR 0007). The visual editor is where a manager toggles/places on-site
   items. (Renamed from `visible` in `20260714150000` — the column now matches the
   word the UI and code already used. No table has a `visible` column.)
-  - Two write paths, not interchangeable. **Live toggle** — photo / song / link flip
-    instantly (`setOnSiteAction`). **Publish-reconcile** — release / video / merch /
-    tour_date are reconciled from a selection at publish (`ON_SITE_ENTITIES` +
-    `reconcileOnSite`, `src/lib/content.ts`).
+  - Two write paths, and a type is on **exactly one** (ADR 0009; both declared adjacently
+    in `src/lib/content.ts`). **Live toggle** — photo / song / link / video / tour date
+    flip instantly (`LIVE_TOGGLE`, `setOnSiteAction`) and reach the site with no publish,
+    because the doors gate on the *working* row. **Publish-reconcile** — release / merch
+    are reconciled from a password-gated selection at publish (`ON_SITE_ENTITIES` +
+    `reconcileOnSite`). A type on both paths has its toggle silently reverted at the next
+    publish; `tests/on-site-paths.test.ts` guards that.
+  - A row must be **published once** before its toggle does anything: the doors serve the
+    published snapshot and gate it on the working row, so an unpublished row isn't in
+    `live` to gate. New/imported video, merch and tour_date rows land **off-site**
+    (`INSERT_OFF_SITE`) — the library is where content arrives, never where it goes live.
   - `media` is the one type whose flag rides the **snapshot** rather than a live join,
     so the gallery gate reads the *published* selection. It also defaults **false** (a
     new upload is off the site until chosen), where every other type defaults true.

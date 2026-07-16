@@ -6,9 +6,11 @@ import { useLockBodyScroll } from './use-lock-body-scroll'
 
 /**
  * The publish control shared by every on-site content list (releases, videos, merch,
- * tour): a floating button, bottom-right, that surfaces only when the on-site
- * selection differs from what's live. Opens a password prompt — publishing to the
- * public site is password-gated — and hands the entered password to `onPublish`,
+ * tour): a floating button, bottom-right. It lights up when there's something to
+ * publish — a selection⇄live delta (`pendingCount`, the reconcile browsers) OR
+ * unpublished content edits (`dirty`, the live-toggle browsers, where presence is
+ * already live and only content needs pushing). Opens a password prompt — publishing
+ * to the public site is password-gated — and hands the entered password to `onPublish`,
  * which commits the change. Shows the server's error inline (e.g. a wrong password)
  * and clears the field on success. `noun` names what's being published in the modal.
  */

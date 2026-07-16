@@ -16,9 +16,12 @@ import { reorderGallery } from '@/lib/site-editor/gallery'
 import {
   type CrudEntity,
   type GenericEntity,
+  type LiveToggleKind,
+  type LiveTogglePublishable,
   type PublishableEntity,
   type UnpublishedDiff,
-  CRUD,
+  LIVE_TOGGLE,
+  PUBLISHABLE,
   createContent,
   deleteContent,
   diffUnpublished,
@@ -35,7 +38,8 @@ import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
 import { createYouTubeClient } from '@/lib/youtube'
-import { isUrlField, safeHref } from '@/lib/url'
+import { extractFields, extractUpdate } from '@/lib/content-form'
+import { safeHref } from '@/lib/url'
 import { toReleaseType } from '@/lib/releases'
 import { slugify } from '@/lib/slug'
 import { createSpotifyClient } from '@/lib/spotify'
@@ -57,58 +61,6 @@ import {
   syncTicketmasterTourDates,
   syncYouTubeVideos,
 } from '@/lib/sync'
-
-const NUMERIC = new Set(['price', 'sort_order'])
-
-/**
- * Pull a type's editable fields out of FormData. Numbers are coerced and
- * rejected if non-finite; URL fields with a dangerous scheme are dropped so
- * they never persist (render-time safeHref is still the primary guard).
- */
-/** Coerce/validate one raw field value; undefined means "drop it". */
-function coerce(field: string, raw: string): unknown {
-  if (NUMERIC.has(field)) {
-    const n = Number(raw)
-    return Number.isFinite(n) ? n : undefined
-  }
-  if (isUrlField(field)) {
-    return safeHref(raw) !== undefined ? raw : undefined
-  }
-  return raw
-}
-
-/** Create: only fields the user actually filled (empty → use the DB default). */
-function extractFields(type: GenericEntity, formData: FormData): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const field of CRUD[type].fields) {
-    const raw = String(formData.get(field) ?? '').trim()
-    if (raw === '') continue
-    const value = coerce(field, raw)
-    if (value !== undefined) out[field] = value
-  }
-  return out
-}
-
-/**
- * Update: only fields present in the submitted form are touched (absent fields
- * are left alone). An empty optional field is set to null so a manager can clear
- * it; a required (NOT NULL) field is never nulled.
- */
-function extractUpdate(type: GenericEntity, formData: FormData): Record<string, unknown> {
-  const required = new Set(CRUD[type].required)
-  const out: Record<string, unknown> = {}
-  for (const field of CRUD[type].fields) {
-    if (!formData.has(field)) continue
-    const raw = String(formData.get(field) ?? '').trim()
-    if (raw === '') {
-      if (!required.has(field)) out[field] = null
-      continue
-    }
-    const value = coerce(field, raw)
-    if (value !== undefined) out[field] = value
-  }
-  return out
-}
 
 export async function addContentAction(
   type: GenericEntity,
@@ -378,26 +330,21 @@ export async function deleteMediaAction(
 }
 
 /**
- * Toggle whether one asset is ON THE SITE (presence) from the visual editor — writes the
- * `on_site` flag. An asset is on the public site only when selected AND published; being
- * in the library (Assets) never implies on-site. RLS scopes the write to the caller's
- * tenant. `kind` maps to the owning table.
- *
- * LIVE-TOGGLE types only. This is one of TWO on-site write paths and they are not
- * interchangeable: photo / track / link are toggled live from the editor, while
- * release / video / merch / tour_date are reconciled from a selection at publish
- * (`ON_SITE_ENTITIES` + `reconcileOnSite`). `video` and `merch` keys once sat here
- * with no caller — the two paths overlapping in one map is how that went unnoticed.
+ * Toggle whether one asset is ON THE SITE (presence) — writes the `on_site` flag, live
+ * (ADR 0009; the registry and the rules are in `LIVE_TOGGLE`, lib/content.ts). An asset
+ * is on the public site only when toggled on AND published: toggling a row that has
+ * never been published does nothing, because the doors read the published snapshot and
+ * gate it on this working row. RLS scopes the write to the caller's tenant.
  */
-const ON_SITE_TABLE = { photo: 'media', track: 'tracks', link: 'links' } as const
 export async function setOnSiteAction(
-  kind: keyof typeof ON_SITE_TABLE,
+  kind: LiveToggleKind,
   id: string,
   artistId: string,
   onSite: boolean,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const { error } = await supabase.from(ON_SITE_TABLE[kind]).update({ on_site: onSite }).eq('id', id).eq('artist_id', artistId)
+  const table = PUBLISHABLE[LIVE_TOGGLE[kind]].table
+  const { error } = await supabase.from(table).update({ on_site: onSite }).eq('id', id).eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -674,12 +621,15 @@ export async function publishReleasesAction(
 }
 
 /**
- * Publish one on-site-gated content type (video / merch / tour_date) to the public
- * site — PASSWORD-GATED, same flow as publishReleasesAction: verify the password,
- * reconcile `on_site` to the selection, snapshot the type's content. `onSiteIds` is
- * the desired on-site set; everything else is taken off the site.
+ * Publish a PUBLISH-RECONCILED type (merch; releases have their own action) to the
+ * public site — PASSWORD-GATED: verify the password, reconcile `on_site` to the
+ * selection, snapshot the type's content. `onSiteIds` is the desired on-site set;
+ * everything else is taken off the site.
+ *
+ * Only for types in ON_SITE_ENTITIES. A LIVE-TOGGLE type must use
+ * publishEntityAction instead — reconciling one would revert its toggles (ADR 0009).
  */
-export async function publishEntityAction(
+export async function publishSelectionAction(
   type: OnSiteEntity,
   artistId: string,
   onSiteIds: string[],
@@ -691,6 +641,33 @@ export async function publishEntityAction(
 
   try {
     await reconcileOnSite(supabase, type, artistId, onSiteIds)
+    await publishContent(supabase, type, artistId, gate.userId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
+/**
+ * Publish one content type to the public site — PASSWORD-GATED, snapshot only.
+ *
+ * No reconcile: for a LIVE-TOGGLE type (video / tour_date) presence is already written
+ * directly and is already live, so publishing only pushes the CONTENT — the dates
+ * themselves, the venues, the lineups. That split is the point of ADR 0009: the gate
+ * guards content reaching the site, not the arrangement of what's already published.
+ */
+export async function publishEntityAction(
+  type: LiveTogglePublishable,
+  artistId: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+
+  try {
     await publishContent(supabase, type, artistId, gate.userId)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }

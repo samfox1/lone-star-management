@@ -26,6 +26,7 @@ import type {
   EditorMerch,
   EditorSong,
   EditorTextField,
+  EditorTour,
   EditorVideo,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
@@ -102,6 +103,7 @@ function renderInspector(
     videos?: EditorVideo[]
     merch?: EditorMerch[]
     songs?: EditorSong[]
+    tours?: EditorTour[]
     styleRegions?: ManifestStyleRegion[]
     styleValues?: Record<string, string>
     selectedStyle?: string | null
@@ -118,6 +120,7 @@ function renderInspector(
       videos={opts.videos ?? []}
       merch={opts.merch ?? []}
       songs={opts.songs ?? []}
+      tours={opts.tours ?? []}
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
       selectedStyle={opts.selectedStyle ?? null}
@@ -690,5 +693,94 @@ describe('EditorInspector — counts tell the truth about what is on the site', 
     renderInspector([], { videos: [{ id: 'v', title: 'Only', poster: null, onSite: false }] })
     fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
     expect(screen.getByText('Off')).toBeTruthy()
+  })
+})
+
+/**
+ * Tour tools — where a manager picks which dates the site shows (ADR 0009).
+ *
+ * Dates are ENTERED on the Tour page; this panel only places them. The toggle is
+ * live: it writes on_site straight away rather than staging a selection for a publish,
+ * which is what makes it safe to sit alongside the Tour page's own toggle.
+ */
+const TOURS: EditorTour[] = [
+  { id: 't1', date: '2026-09-12', venue: 'Mohawk', city: 'Austin', state: 'TX', country: null, support: ['Arlo', 'Crosby, Stills & Nash'], onSite: true },
+  { id: 't2', date: '2026-10-02', venue: 'Empty Bottle', city: 'Chicago', state: 'IL', country: null, support: [], onSite: false },
+  { id: 't3', date: null, venue: 'TBA', city: null, state: null, country: null, support: [], onSite: false },
+]
+
+describe('EditorInspector — tour tools', () => {
+  const openTour = () => {
+    renderInspector([], { tours: TOURS })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+  }
+
+  it('counts dates that are ON THE SITE, not the library total', () => {
+    renderInspector([], { tours: TOURS })
+    expect(screen.getByRole('button', { name: /Tour/ }).textContent).toContain('1 of 3 on site')
+  })
+
+  it('lists each date with its venue, place and lineup', () => {
+    openTour()
+    expect(screen.getByText('Mohawk')).toBeTruthy()
+    // Place reads "City, ST" — state preferred over country for a US date.
+    expect(screen.getByText('Austin, TX')).toBeTruthy()
+    // One act with a comma in its name stays one act, all the way from the tag input.
+    expect(screen.getByText('+ Arlo, Crosby, Stills & Nash')).toBeTruthy()
+  })
+
+  it('omits the place line when there is no city, state or country', () => {
+    openTour()
+    expect(screen.queryByText(', ')).toBeNull()
+  })
+
+  it('CRITICAL: toggling a date on writes on_site LIVE, keyed to the tour kind', () => {
+    openTour()
+    // 'tour' is the EDITOR kind; it maps to the tour_dates table via LIVE_TOGGLE. If
+    // this were reconciled instead, the next publish would silently undo it.
+    // Off-site toggles, in list order: t2 then t3. OnSiteToggle is a button with
+    // aria-pressed, labelled by what a click will DO.
+    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
+    expect(setOnSiteMock).toHaveBeenCalledWith('tour', 't2', 'artist-1', true)
+  })
+
+  it('takes a date off the site', () => {
+    openTour()
+    fireEvent.click(screen.getByRole('button', { name: /On the site/ })) // only t1 is on
+    expect(setOnSiteMock).toHaveBeenCalledWith('tour', 't1', 'artist-1', false)
+  })
+
+  it('removes a date via deleteContentAction', () => {
+    openTour()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mohawk' }))
+    expect(deleteContentMock).toHaveBeenCalledWith('tour_date', 't1', 'artist-1')
+  })
+
+  it('has no drag handles: tour dates have no sort_order, the door orders by date', () => {
+    openTour()
+    expect(screen.queryByLabelText(/reorder/i)).toBeNull()
+    expect(document.querySelector('aside [draggable="true"]')).toBeNull()
+  })
+
+  it('points at the Tour page to add a date', () => {
+    openTour()
+    expect(screen.getByRole('link', { name: /Add date/ }).getAttribute('href')).toBe('/artists/artist-1/tour')
+  })
+
+  it('says where dates come from when the library is empty', () => {
+    renderInspector([], { tours: [] })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    expect(screen.getByText(/Add them on the Tour page/)).toBeTruthy()
+  })
+})
+
+describe('EditorInspector — videos are live-toggled now (ADR 0009)', () => {
+  it('CRITICAL: toggling a video writes on_site, rather than showing a read-only badge', () => {
+    // Videos used to render an OnSiteBadge precisely because reconcileOnSite would
+    // revert a toggle here. They moved to the live path, so the control is real.
+    renderInspector([], { videos: VIDEOS })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0]) // v1
+    expect(setOnSiteMock).toHaveBeenCalledWith('video', 'v1', 'artist-1', true)
   })
 })

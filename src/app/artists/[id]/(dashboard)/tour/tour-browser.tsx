@@ -8,30 +8,19 @@ import { PublishBar } from '../publish-bar'
 import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
 import { Segmented } from '../segmented'
-import { OriginSection, groupByOrigin } from '../origin'
-import { useOnSiteSelection } from '../use-on-site-selection'
+import { OriginSection } from '../origin'
+import { useLiveOnSite } from '../use-live-on-site'
 import { publishEntityAction } from '../actions'
 import { TourRow, type TourDate } from './tour-row'
-
-const SOURCE_LABEL: Record<string, string> = {
-  manual: 'Manual',
-  bandsintown: 'Bandsintown',
-  ticketmaster: 'Ticketmaster',
-  spotify: 'Spotify',
-  shopify: 'Shopify',
-}
-
-const sourceLabel = (s: string) => SOURCE_LABEL[s] ?? s
-const ORIGIN_ORDER = ['bandsintown', 'ticketmaster', 'manual'] as const
 
 type Sort = 'soonest' | 'latest'
 /** Time lens: shows still to come, shows that already happened, or everything. */
 type When = 'upcoming' | 'past' | 'all'
 
 const WHEN_OPTS: { key: When; label: string }[] = [
+  { key: 'all', label: 'All' },
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'past', label: 'Past' },
-  { key: 'all', label: 'All' },
 ]
 
 /** Today as a local YYYY-MM-DD string, comparable against a date column of the same shape. */
@@ -40,49 +29,68 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Split by date around `today`. Today's shows count as upcoming; an undated row
- *  (rare) reads as upcoming so it never hides in the default view. */
+/** A show is PAST if it's flagged an old show OR its date has passed — the same rule
+ *  the public site classifies by (mapSite.ts). Today counts as upcoming; an undated,
+ *  unflagged row reads as upcoming (a TBA date) so it never hides. */
+function isPast(t: TourDate, today: string): boolean {
+  return t.is_past || (!!t.date && t.date < today)
+}
+
 function filterByWhen(items: TourDate[], when: When, today: string): TourDate[] {
   if (when === 'all') return items
-  return items.filter((t) => {
-    const d = t.date ?? ''
-    if (!d) return when === 'upcoming'
-    return when === 'upcoming' ? d >= today : d < today
-  })
+  return items.filter((t) => (when === 'upcoming' ? !isPast(t, today) : isPast(t, today)))
 }
 
 /**
  * Tour list for the dashboard, mirroring the Music page: a grid of date cards,
- * filterable by source + sortable by date. Each card carries a select checkbox +
- * live/off badge; the manager picks which dates are on the site and commits with the
- * password-gated PublishBar. `trailing` holds the toolbar's + Add / import controls.
+ * filterable by source + sortable by date. Each row's checkbox is a LIVE on-site
+ * toggle (ADR 0009) — it writes immediately and the public site follows without a
+ * publish, the same control the editor gives tour dates. The PublishBar publishes the
+ * date CONTENT (venues, lineups), which stays password-gated. `trailing` holds the
+ * toolbar's + Add / import controls.
  */
 export function TourBrowser({
   tours,
   artistId,
+  dirty = false,
   trailing,
 }: {
   tours: TourDate[]
   artistId: string
+  /** Unpublished content edits — what lights up the PublishBar now that presence is live. */
+  dirty?: boolean
   trailing?: ReactNode
 }) {
   const router = useRouter()
+  const today = todayStr()
   const [site, setSite] = useState<SiteFilter>('all')
-  const [when, setWhen] = useState<When>('upcoming')
+  // Default to All so every date is visible at a glance; the sort below floats the
+  // upcoming ones to the top of that list.
+  const [when, setWhen] = useState<When>('all')
   const [sort, setSort] = useState<Sort>('soonest')
-  const { selected, toggle, pendingCount } = useOnSiteSelection(tours)
+  const { onSite, toggle } = useLiveOnSite(tours, 'tour', artistId)
 
-  let shown = filterByWhen(filterBySite(tours, site), when, todayStr())
+  // Date order only; the Upcoming-above-Past ordering is the SECTION split below, so no
+  // need to also sort by is_past here.
+  let shown = filterByWhen(filterBySite(tours, site), when, today)
   shown = [...shown].sort((a, b) =>
     sort === 'soonest'
       ? (a.date ?? '').localeCompare(b.date ?? '')
       : (b.date ?? '').localeCompare(a.date ?? ''),
   )
 
-  const groups = groupByOrigin(shown, (t) => t.source ?? 'manual', ORIGIN_ORDER, sourceLabel)
+  // Group by WHEN into collapsible sections (like the Videos page's type sections),
+  // Upcoming above Past. The `when` filter above already narrows to one section in the
+  // Upcoming/Past views; All shows both. Empty sections drop out. `isPast` matches the
+  // public site's rule (is_past OR the date has passed) so the preview agrees.
+  const sections = [
+    { key: 'upcoming', label: 'Upcoming', items: shown.filter((t) => !isPast(t, today)) },
+    { key: 'past', label: 'Past', items: shown.filter((t) => isPast(t, today)) },
+  ].filter((s) => s.items.length > 0)
 
   async function publish(password: string) {
-    const res = await publishEntityAction('tour_date', artistId, [...selected], password)
+    // Snapshot only — no reconcile. The on-site set is already whatever the toggles say.
+    const res = await publishEntityAction('tour_date', artistId, password)
     if (res.ok) router.refresh()
     return res
   }
@@ -92,14 +100,14 @@ export function TourBrowser({
       key={t.id}
       artistId={artistId}
       tour={t}
-      selected={selected.has(t.id)}
-      onToggleSelect={() => toggle(t.id)}
+      onSite={onSite(t.id)}
+      onToggleOnSite={() => toggle(t.id)}
     />
   )
 
   return (
-    // The filter row spans wider than the date list (max-w-4xl vs the inner
-    // max-w-2xl) so the controls have room to breathe over a narrow list.
+    // Filter row and date list share the full max-w-4xl width — a date row carries a
+    // venue, place, lineup and ticket link, so the old max-w-2xl bunched them up.
     <div className="mx-auto max-w-4xl space-y-6 pb-24">
       <FilterBar
         leading={
@@ -123,8 +131,8 @@ export function TourBrowser({
         trailing={trailing}
       />
 
-      <div className="mx-auto max-w-2xl">
-        {groups.length === 0 ? (
+      <div className="mx-auto max-w-4xl">
+        {sections.length === 0 ? (
           <EmptyState
             icon="tour"
             title={
@@ -144,22 +152,16 @@ export function TourBrowser({
           />
         ) : (
           <div className="space-y-8">
-            {groups.map((g) =>
-              // Manual is the default origin — no section header/chevron, just the
-              // rows. Synced origins (Bandsintown / Ticketmaster) keep their header.
-              g.key === 'manual' ? (
-                <div key={g.key}>{g.items.map(row)}</div>
-              ) : (
-                <OriginSection key={g.key} label={g.label} count={g.items.length}>
-                  <div>{g.items.map(row)}</div>
-                </OriginSection>
-              ),
-            )}
+            {sections.map((s) => (
+              <OriginSection key={s.key} label={s.label} count={s.items.length}>
+                <div>{s.items.map(row)}</div>
+              </OriginSection>
+            ))}
           </div>
         )}
       </div>
 
-      <PublishBar pendingCount={pendingCount} onPublish={publish} noun="tour dates" />
+      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="tour dates" />
     </div>
   )
 }

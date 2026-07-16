@@ -44,8 +44,20 @@ export type EditorLink = { id: string; label: string; url: string; onSite: boole
 export type EditorVideo = { id: string; title: string; poster: string | null; onSite: boolean }
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null; onSite: boolean }
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
+export type EditorTour = {
+  id: string
+  date: string | null
+  venue: string | null
+  city: string | null
+  /** Two-letter US state code (TX). null for out-of-country dates. */
+  state: string | null
+  country: string | null
+  /** The other acts on the bill. Never null — the column is NOT NULL DEFAULT '{}'. */
+  support: string[]
+  onSite: boolean
+}
 
-type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'merch' | 'style'
+type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'tour' | 'merch' | 'style'
 type Component = { kind: Kind; icon: IconName; label: string }
 
 const COMPONENTS: Component[] = [
@@ -54,6 +66,7 @@ const COMPONENTS: Component[] = [
   { kind: 'links', icon: 'links', label: 'Links' },
   { kind: 'videos', icon: 'videos', label: 'Videos' },
   { kind: 'music', icon: 'tracks', label: 'Music' },
+  { kind: 'tour', icon: 'tour', label: 'Tour' },
   { kind: 'merch', icon: 'merch', label: 'Merch' },
   { kind: 'style', icon: 'bolt', label: 'Style' },
 ]
@@ -72,6 +85,7 @@ const COUNT_NOUN: Record<Kind, string> = {
   links: 'link',
   videos: 'video',
   music: 'song',
+  tour: 'date',
   merch: 'product',
   style: 'region',
 }
@@ -150,24 +164,12 @@ function OnSiteToggle({ on, onToggle, className }: { on: boolean; onToggle: () =
   )
 }
 
-/** Read-only "is this on the site" marker for the publish-reconciled kinds
- *  (video / merch). Deliberately NOT a button: `reconcileOnSite` sets on_site=false
- *  for anything absent from the Assets page's selection, so a toggle here would be
- *  silently reverted by the next publish. Shows the truth; the control stays where
- *  the publish gate is. (Phase 2 moves videos to the live-toggle model, and this
- *  becomes an OnSiteToggle.) */
-function OnSiteBadge({ on }: { on: boolean }) {
-  return (
-    <span
-      className={cx(
-        'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em]',
-        on ? 'bg-accent-soft text-accent' : 'bg-track text-ink-faint',
-      )}
-    >
-      {on ? 'On site' : 'Off'}
-    </span>
-  )
-}
+/* A read-only OnSiteBadge lived here for the publish-reconciled kinds, because
+ * `reconcileOnSite` would silently revert a toggle they didn't own. Videos were its
+ * only caller, and ADR 0009 moved them to the live toggle — so it's an OnSiteToggle
+ * now, and the badge had no callers left. Merch is the last reconciled type; its
+ * panel never showed presence at all, only the header count. Giving merch a real
+ * toggle means moving it to LIVE_TOGGLE (lib/content.ts) first. */
 
 export function EditorInspector({
   artistId,
@@ -177,6 +179,7 @@ export function EditorInspector({
   videos: initialVideos = [],
   merch: initialMerch = [],
   songs: initialSongs = [],
+  tours: initialTours = [],
   styleRegions = [],
   styleValues = {},
   selectedStyle = null,
@@ -190,6 +193,8 @@ export function EditorInspector({
   videos?: EditorVideo[]
   merch?: EditorMerch[]
   songs?: EditorSong[]
+  /** The date LIBRARY, on-site or not — the editor is where they're chosen (ADR 0009). */
+  tours?: EditorTour[]
   /** Re-styleable regions. Comes from the FRAME's edit-list at runtime for a custom
    *  site (D-D); the built-in manifests declare none yet, so this is [] for them. */
   styleRegions?: ManifestStyleRegion[]
@@ -207,6 +212,7 @@ export function EditorInspector({
   const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
   const [merch, setMerch] = useState<EditorMerch[]>(initialMerch)
   const [songs, setSongs] = useState<EditorSong[]>(initialSongs)
+  const [tours, setTours] = useState<EditorTour[]>(initialTours)
   // One in-flight list mutation at a time: overlapping optimistic ops would each
   // capture a whole-array `prev`, and a later failure would revert to a snapshot that
   // predates a concurrent success — resurrecting a removed row / dropping a good change.
@@ -283,6 +289,22 @@ export function EditorInspector({
       if (res?.error) setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: !next } : x)))
     })
   }
+  function toggleVideoOnSite(v: EditorVideo) {
+    const next = !v.onSite
+    setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: next } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('video', v.id, artistId, next)
+      if (res?.error) setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: !next } : x)))
+    })
+  }
+  function toggleTourOnSite(t: EditorTour) {
+    const next = !t.onSite
+    setTours((list) => list.map((x) => (x.id === t.id ? { ...x, onSite: next } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('tour', t.id, artistId, next)
+      if (res?.error) setTours((list) => list.map((x) => (x.id === t.id ? { ...x, onSite: !next } : x)))
+    })
+  }
 
   function removeLink(l: EditorLink) {
     if (isPending) return
@@ -346,6 +368,16 @@ export function EditorInspector({
     })
   }
 
+  function removeTour(t: EditorTour) {
+    if (isPending) return
+    const prev = tours
+    setTours((list) => list.filter((x) => x.id !== t.id)) // optimistic
+    startTransition(async () => {
+      const res = await deleteContentAction('tour_date', t.id, artistId)
+      if (res?.error) setTours(prev)
+    })
+  }
+
   function reorderSongs(from: number, to: number) {
     if (isPending) return
     const prev = songs
@@ -367,6 +399,7 @@ export function EditorInspector({
     links: { total: links.length, onSite: onSite(links, (l) => l.onSite) },
     videos: { total: videos.length, onSite: onSite(videos, (v) => v.onSite) },
     music: { total: songs.length, onSite: onSite(songs, (x) => x.onSite) },
+    tour: { total: tours.length, onSite: onSite(tours, (t) => t.onSite) },
     merch: { total: merch.length, onSite: onSite(merch, (m) => m.onSite) },
     style: { total: styleRegions.length, onSite: null },
   }
@@ -383,6 +416,7 @@ export function EditorInspector({
           videos={videos}
           merch={merch}
           songs={songs}
+          tours={tours}
           artistId={artistId}
           onRemove={removePhoto}
           onReorder={reorderPhotos}
@@ -390,6 +424,9 @@ export function EditorInspector({
           onTogglePhotoOnSite={togglePhotoOnSite}
           onToggleSongOnSite={toggleSongOnSite}
           onToggleLinkOnSite={toggleLinkOnSite}
+          onToggleVideoOnSite={toggleVideoOnSite}
+          onToggleTourOnSite={toggleTourOnSite}
+          onRemoveTour={removeTour}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
           onRemoveVideo={removeVideo}
@@ -461,6 +498,7 @@ function EditingView({
   videos,
   merch,
   songs,
+  tours,
   artistId,
   onRemove,
   onReorder,
@@ -468,6 +506,9 @@ function EditingView({
   onTogglePhotoOnSite,
   onToggleSongOnSite,
   onToggleLinkOnSite,
+  onToggleVideoOnSite,
+  onToggleTourOnSite,
+  onRemoveTour,
   onRemoveLink,
   onReorderLink,
   onRemoveVideo,
@@ -491,6 +532,7 @@ function EditingView({
   videos: EditorVideo[]
   merch: EditorMerch[]
   songs: EditorSong[]
+  tours: EditorTour[]
   artistId: string
   onRemove: (p: GalleryPhoto) => void
   onReorder: (from: number, to: number) => void
@@ -498,6 +540,9 @@ function EditingView({
   onTogglePhotoOnSite: (p: GalleryPhoto) => void
   onToggleSongOnSite: (s: EditorSong) => void
   onToggleLinkOnSite: (l: EditorLink) => void
+  onToggleVideoOnSite: (v: EditorVideo) => void
+  onToggleTourOnSite: (t: EditorTour) => void
+  onRemoveTour: (t: EditorTour) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (from: number, to: number) => void
   onRemoveVideo: (v: EditorVideo) => void
@@ -519,6 +564,7 @@ function EditingView({
   const isVideos = component.kind === 'videos'
   const isMerch = component.kind === 'merch'
   const isMusic = component.kind === 'music'
+  const isTour = component.kind === 'tour'
   const isStyle = component.kind === 'style'
   return (
     <>
@@ -562,7 +608,20 @@ function EditingView({
             onToggleOnSite={onToggleLinkOnSite}
           />
         ) : isVideos ? (
-          <VideoTools videos={videos} artistId={artistId} onRemove={onRemoveVideo} onReorder={onReorderVideo} />
+          <VideoTools
+            videos={videos}
+            artistId={artistId}
+            onRemove={onRemoveVideo}
+            onReorder={onReorderVideo}
+            onToggleOnSite={onToggleVideoOnSite}
+          />
+        ) : isTour ? (
+          <TourTools
+            tours={tours}
+            artistId={artistId}
+            onRemove={onRemoveTour}
+            onToggleOnSite={onToggleTourOnSite}
+          />
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
         ) : isMusic ? (
@@ -1153,11 +1212,13 @@ function VideoTools({
   artistId,
   onRemove,
   onReorder,
+  onToggleOnSite,
 }: {
   videos: EditorVideo[]
   artistId: string
   onRemove: (v: EditorVideo) => void
   onReorder: (from: number, to: number) => void
+  onToggleOnSite: (v: EditorVideo) => void
 }) {
   const [titles, setTitles] = useState<Record<string, string>>(() =>
     Object.fromEntries(videos.map((v) => [v.id, v.title])),
@@ -1249,7 +1310,7 @@ function VideoTools({
               placeholder="Title"
               className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
             />
-            <OnSiteBadge on={v.onSite} />
+            <OnSiteToggle on={v.onSite} onToggle={() => onToggleOnSite(v)} />
           </div>
           <button
             type="button"
@@ -1280,6 +1341,92 @@ function VideoTools({
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Tour tools: pick which dates are on the site (no reorder — dates sort by date) ─ */
+
+/** "12 SEP 26" — compact and unambiguous, from a YYYY-MM-DD column. */
+function tourDateLabel(date: string | null): string {
+  if (!date) return 'No date'
+  const [y, m, d] = date.split('-').map(Number)
+  if (!y || !m || !d) return 'No date'
+  return `${d} ${MONTHS_SHORT[m - 1] ?? ''} ${String(y).slice(-2)}`
+}
+
+const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+/**
+ * The tour-date library, each with a LIVE on-site toggle (ADR 0009): this is where a
+ * manager picks which dates the site shows, and the toggle takes effect without a
+ * publish. Dates are ENTERED on the Tour page — venue, city, country, supporting acts
+ * — so there are no fields here; the editor's job is placement, not data entry.
+ *
+ * No drag handles, unlike every other list: tour dates have no `sort_order` and the
+ * public door orders them by `date`, so a manual order would be a lie.
+ *
+ * A date must be PUBLISHED once before its toggle reaches the site — the door serves
+ * the published snapshot and gates it on this flag, so an unpublished date isn't there
+ * to gate, and toggling it is a no-op on the live site until it's published from the
+ * Tour page. The empty-state copy points there; the toggle itself carries no
+ * per-row published-state indicator (the editor loads working rows, which don't know
+ * publish status), so this is a known gap, not a guardrail.
+ */
+function TourTools({
+  tours,
+  artistId,
+  onRemove,
+  onToggleOnSite,
+}: {
+  tours: EditorTour[]
+  artistId: string
+  onRemove: (t: EditorTour) => void
+  onToggleOnSite: (t: EditorTour) => void
+}) {
+  return (
+    <div className="space-y-2.5 px-5 py-4">
+      {tours.length === 0 && (
+        <p className="py-2 font-space text-[11px] leading-relaxed text-ink-faint">
+          No dates yet. Add them on the Tour page, publish, then pick them here.
+        </p>
+      )}
+
+      {tours.map((t) => (
+        <div key={t.id} className="flex items-start gap-2.5 rounded-lg border border-hairline p-2.5">
+          <span className="mt-0.5 w-[4.5rem] flex-none font-space text-[11px] font-bold uppercase tracking-[0.04em] text-ink">
+            {tourDateLabel(t.date)}
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="truncate text-sm font-medium">{t.venue || 'Untitled venue'}</span>
+            {[t.city, t.state ?? t.country].filter(Boolean).length > 0 && (
+              <span className="truncate font-space text-[11px] text-ink-muted">
+                {[t.city, t.state ?? t.country].filter(Boolean).join(', ')}
+              </span>
+            )}
+            {t.support.length > 0 && (
+              <span className="truncate font-space text-[11px] text-ink-faint">+ {t.support.join(', ')}</span>
+            )}
+            <OnSiteToggle on={t.onSite} onToggle={() => onToggleOnSite(t)} />
+          </div>
+          <button
+            type="button"
+            aria-label={`Remove ${t.venue || 'date'}`}
+            onClick={() => onRemove(t)}
+            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      ))}
+
+      <Link
+        href={`/artists/${artistId}/tour`}
+        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
+      >
+        <Icon name="plus" size={16} />
+        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add date</span>
+      </Link>
     </div>
   )
 }

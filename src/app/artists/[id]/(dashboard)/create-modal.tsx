@@ -7,6 +7,8 @@ import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } fr
 import { Icon } from '@/components/ui/icons'
 import { UploadError } from './file-drop-field'
 import { useLockBodyScroll } from './use-lock-body-scroll'
+import { TagInput, joinTags, splitTags } from './tag-input'
+import { BoolToggle } from './bool-toggle'
 import { toast } from './toast'
 
 export type AddField = {
@@ -18,6 +20,11 @@ export type AddField = {
   row?: number
   /** Width within its row: sm (fixed narrow, e.g. price), grow (fill), or full (default). */
   width?: 'sm' | 'grow' | 'full'
+  /** `tags` = chip field (TagInput); `select` = dropdown of `options`; `toggle` = a
+   *  yes/no BoolToggle whose label is the placeholder. */
+  kind?: 'text' | 'tags' | 'select' | 'toggle'
+  /** Choices for a `select` field. The placeholder is the empty first option. */
+  options?: { value: string; label: string }[]
 }
 
 /** Automatic mode: paste a URL, `resolve` returns field `values` to prefill (or an
@@ -49,6 +56,45 @@ function Fields({
         <div key={i} className={group.length > 1 ? 'flex gap-2' : ''}>
           {group.map((f, j) => {
             const width = cx(f.width === 'sm' ? 'w-24' : f.width === 'grow' ? 'min-w-0 flex-1' : 'w-full')
+            // TagInput is uncontrolled and owns its chips; mirror them into `values`
+            // as newline-joined text so add() can expand them back into one FormData
+            // entry per tag. It remounts with the modal, so it resets like the rest.
+            if (f.kind === 'tags') {
+              return (
+                <div key={f.name} className={width}>
+                  <TagInput
+                    name={f.name}
+                    placeholder={f.placeholder}
+                    onChange={(tags) => set(f.name, joinTags(tags))}
+                  />
+                </div>
+              )
+            }
+            if (f.kind === 'toggle') {
+              return (
+                <div key={f.name} className={width}>
+                  <BoolToggle name={f.name} label={f.placeholder} onChange={(c) => set(f.name, c ? 'true' : 'false')} />
+                </div>
+              )
+            }
+            if (f.kind === 'select') {
+              return (
+                <select
+                  key={f.name}
+                  value={values[f.name] ?? ''}
+                  onChange={(e) => set(f.name, e.target.value)}
+                  aria-label={f.placeholder}
+                  className={cx(inputClass, width, values[f.name] ? 'text-ink' : 'text-ink-faint')}
+                >
+                  <option value="">{f.placeholder}</option>
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value} className="text-ink">
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              )
+            }
             return (
               <input
                 key={f.name}
@@ -145,7 +191,17 @@ export function CreateModal({
     if (pending) return
     setError(null)
     const fd = new FormData()
-    for (const f of fields) fd.set(f.name, values[f.name] ?? '')
+    for (const f of fields) {
+      if (f.kind === 'tags') {
+        // One entry per tag — the same shape TagInput's hidden inputs post inside a
+        // real form (SaveForm), so the server reads both call sites identically. The
+        // leading blank keeps the field PRESENT when there are no tags.
+        fd.set(f.name, '')
+        for (const tag of splitTags(values[f.name] ?? '')) fd.append(f.name, tag)
+        continue
+      }
+      fd.set(f.name, values[f.name] ?? '')
+    }
     start(async () => {
       const res = (await submit(fd)) as { error?: string } | void
       if (res && typeof res === 'object' && 'error' in res && res.error) {

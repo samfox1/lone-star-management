@@ -109,9 +109,11 @@ describe('publishAll', () => {
     const count = await publishAll(asA, artistA)
     expect(count).toBeGreaterThanOrEqual(4)
 
-    // tour_date + merch land off-site on create (on_site=false); toggle them on so
-    // they reach the public door. (track + link have no visibility gate.)
-    await reconcileOnSite(asA, 'tour_date', artistA, [created[1].id])
+    // tour_date + merch land off-site on create (on_site=false); put them on the site
+    // so they reach the public door. (track + link have no visibility gate.) The two
+    // use different write paths — tour_date is live-toggled, merch is publish-
+    // reconciled (ADR 0009) — and both are RLS-scoped to A either way.
+    await asA.from('tour_dates').update({ on_site: true }).eq('id', created[1].id).eq('artist_id', artistA)
     await reconcileOnSite(asA, 'merch', artistA, [created[2].id])
 
     const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })

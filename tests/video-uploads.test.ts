@@ -10,7 +10,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent, reconcileOnSite } from '@/lib/content'
+import { createContent, publishContent } from '@/lib/content'
 import { performUpload, buildStoragePath } from '@/lib/upload'
 import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -138,7 +138,8 @@ describe('publish → public site', () => {
     const mine = (arr: Record<string, unknown>[]) => arr.find((v) => v.storage_path === path)
 
     expect(mine(await videos())).toBeUndefined() // still hidden (on_site=false)
-    await reconcileOnSite(asA, 'video', artistA, [row.id as string])
+    // Live toggle (ADR 0009) — what setOnSiteAction writes; the door gates on this row.
+    await asA.from('videos').update({ on_site: true }).eq('id', row.id as string).eq('artist_id', artistA)
     const shown = mine(await videos())
     expect(shown).toBeDefined()
     expect(shown!.provider).toBe('uploaded')

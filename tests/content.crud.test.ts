@@ -10,13 +10,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   type CrudEntity,
-  type OnSiteEntity,
-  ON_SITE_ENTITIES,
   createContent,
   deleteContent,
   listContent,
   publishContent,
-  reconcileOnSite,
   updateContent,
 } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -109,11 +106,12 @@ describe.each(CASES)('content type: $type', (c) => {
 
   it('CRITICAL: publishing makes it appear on the public read path under the right key', async () => {
     await publishContent(asA, c.type, artistA)
-    // Visible-gated types (tour_date/merch) land off-site on create; toggle on-site
-    // so they reach the public door (links have no visibility gate).
-    if ((ON_SITE_ENTITIES as readonly string[]).includes(c.type)) {
-      await reconcileOnSite(asA, c.type as OnSiteEntity, artistA, [id])
-    }
+    // tour_date/merch land off-site on create; put the row on the site so it reaches
+    // the public door. Writing the flag directly works for EITHER on-site write path
+    // (ADR 0009), so this test doesn't have to track which one a type uses — it once
+    // branched on ON_SITE_ENTITIES, which quietly stopped toggling tour dates the day
+    // they moved to the live toggle. Links insert on-site already; setting it is a no-op.
+    await asA.from(c.table).update({ on_site: true }).eq('id', id).eq('artist_id', artistA)
     const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
     const section = (data as Record<string, unknown[]>)[c.siteKey]
     expect(JSON.stringify(section)).toContain(c.marker)

@@ -30,12 +30,54 @@ export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'r
  *  are excluded from the generic form. */
 export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
 
-/** Content types with a live `on_site` toggle: the manager curates which are on the
- *  site (a per-card select) and commits with a password-gated publish. A new/imported
- *  row lands off-site (`on_site=false`); publish is the only path to `on_site=true`,
- *  which also snapshots content — so `on_site=true` always implies actually-live. */
-export type OnSiteEntity = 'release' | 'video' | 'merch' | 'tour_date'
-export const ON_SITE_ENTITIES: readonly OnSiteEntity[] = ['release', 'video', 'merch', 'tour_date']
+/* ── The two ON-SITE write paths (ADR 0009) ───────────────────────────────────────
+ *
+ * A row is on the public site when it is PUBLISHED and its working row has
+ * `on_site = true` — every door gates on the working row, so the flag takes effect
+ * without a publish. Two paths write that flag, and a type belongs to EXACTLY ONE:
+ *
+ *   LIVE_TOGGLE       flipped directly (the editor, and the library pages) → instant
+ *   ON_SITE_ENTITIES  reconciled from a password-gated selection at publish
+ *
+ * A type on both paths is the failure mode: `reconcileOnSite` sets `on_site = false`
+ * for everything absent from the selection, so it silently reverts the live toggle at
+ * the next publish. That is not a hypothetical — `video` and `merch` sat in the live map
+ * with no caller for weeks, unnoticed because the two are keyed in DIFFERENT
+ * vocabularies (editor kind vs entity), so an overlap doesn't read as a duplicate. They
+ * are declared adjacently here for that reason, and `tests/on-site-paths.test.ts`
+ * asserts they stay disjoint.
+ */
+
+/** Editor kinds whose `on_site` is written LIVE, mapped to the entity each one writes.
+ *  The editor's vocabulary differs from the entities' on purpose (`photo` is a `media`
+ *  row, `tour` a `tour_date`), so this map is the translation — and the reason the two
+ *  paths can't be compared by eye. Tables come from PUBLISHABLE, never hand-copied. */
+export type LiveToggleKind = 'photo' | 'track' | 'link' | 'video' | 'tour'
+export const LIVE_TOGGLE: Record<LiveToggleKind, PublishableEntity> = {
+  photo: 'media',
+  track: 'track',
+  link: 'link',
+  video: 'video',
+  tour: 'tour_date',
+}
+
+/**
+ * PUBLISH-RECONCILED types: their on-site set is chosen behind the password gate as a
+ * SELECTION, and `reconcileOnSite` makes the live set exactly that selection at publish
+ * — anything absent is taken off the site.
+ *
+ * Only release and merch: the editor cannot pick either yet, so nothing competes with
+ * the reconcile. Giving one an editor picker means MOVING it to LIVE_TOGGLE first.
+ */
+export type OnSiteEntity = 'release' | 'merch'
+export const ON_SITE_ENTITIES: readonly OnSiteEntity[] = ['release', 'merch']
+
+/** LIVE-TOGGLE types that publish their OWN content from their own page — snapshot
+ *  only, NEVER reconciled (presence is already live). `publishEntityAction` takes this,
+ *  so a reconcile type (release / merch) is a COMPILE error there and can't silently
+ *  skip `reconcileOnSite` (ADR 0009). The other live-toggle types publish elsewhere:
+ *  photo(media) via the Site publish, track with releases, link via a section publish. */
+export type LiveTogglePublishable = 'video' | 'tour_date'
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
@@ -69,7 +111,12 @@ type CrudConfig = {
 
 export const CRUD: Record<CrudEntity, CrudConfig> = {
   track: { fields: ['title', 'cover_url', 'stream_url', 'sort_order'], required: ['title'] },
-  tour_date: { fields: ['date', 'venue', 'city', 'country', 'ticket_url'], required: ['date'] },
+  // `support` (the other acts on the bill) is an ARRAY field: it posts one FormData
+  // entry per tag, so the actions read it with getAll (see ARRAY_FIELDS).
+  // Nothing is required — a date can be added before its date is known (a TBA row);
+  // `date` became nullable in 20260716120000. `required` here only governs which
+  // columns are never cleared to null on edit, so an empty list lets date be cleared.
+  tour_date: { fields: ['date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'is_past'], required: [] },
   merch: { fields: ['title', 'image_url', 'price', 'url'], required: ['title'] },
   link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
   // Manual video adds set provider + a normalized embed_url (validated by the
@@ -110,7 +157,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   },
   tour_date: {
     table: 'tour_dates',
-    snapshot: ['id', 'date', 'venue', 'city', 'country', 'ticket_url'],
+    // latitude/longitude are deliberately NOT here — coords are dashboard-only and
+    // never reach the public read path (20260707140000).
+    snapshot: ['id', 'date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'is_past'],
     orderBy: ['date'],
   },
   merch: {
@@ -246,8 +295,11 @@ export async function reconcileOnSite(
   return { shown: toShow.length, hidden: toHide.length }
 }
 
-/** New video/merch/tour_date rows land OFF-site (`on_site=false`) so a manual add or
- *  an import shows up as an unpublished draft the manager then selects + publishes on.
+/** New video/merch/tour_date rows land OFF-site (`on_site=false`): the library is
+ *  where content ARRIVES, never where it goes live. A synced Bandsintown date or one of
+ *  83 YouTube imports appearing on the site unasked is the thing this prevents. The
+ *  manager then chooses it — in the editor for video/tour_date (ADR 0009), behind the
+ *  publish gate for merch.
  *  (Releases keep their own path: manual adds stay live, Spotify imports set false in
  *  the sync — so `release` is intentionally not here.) */
 const INSERT_OFF_SITE: readonly CrudEntity[] = ['video', 'merch', 'tour_date']

@@ -2,6 +2,9 @@
 
 import { CreateModal } from '../create-modal'
 import { addContentAction } from '../actions'
+import { US_STATES } from '@/lib/us-states'
+
+const STATE_OPTIONS = US_STATES.map((s) => ({ value: s.code, label: `${s.code} · ${s.name}` }))
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
@@ -28,10 +31,14 @@ export function TourAddButton({ artistId }: { artistId: string }) {
       kind="Tour date"
       title="Add date"
       fields={[
-        { name: 'date', placeholder: 'Date', type: 'date', required: true, row: 1, width: 'grow' },
+        { name: 'date', placeholder: 'Date', type: 'date', row: 1, width: 'grow' },
         { name: 'city', placeholder: 'City', row: 1, width: 'grow' },
-        { name: 'venue', placeholder: 'Venue' },
+        { name: 'venue', placeholder: 'Venue', row: 2, width: 'grow' },
+        { name: 'state', placeholder: 'State', kind: 'select', options: STATE_OPTIONS, row: 2, width: 'sm' },
+        { name: 'country', placeholder: 'Country (outside the US)' },
         { name: 'ticket_url', placeholder: 'Tickets URL', type: 'url' },
+        { name: 'support', placeholder: 'Also performing…', kind: 'tags' },
+        { name: 'is_past', placeholder: 'This was an old show', kind: 'toggle' },
       ]}
       preview={(v) => <TourPreview date={v.date} venue={v.venue} city={v.city} />}
       submit={(fd) => addContentAction('tour_date', artistId, fd)}

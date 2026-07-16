@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, deleteContent, diffUnpublished, publishContent, reconcileOnSite } from '@/lib/content'
+import { createContent, deleteContent, diffUnpublished, publishContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -40,8 +40,8 @@ describe('video content type — draft → publish → public', () => {
     // door still hides it (the two gates — published content + the live toggle).
     await publishContent(asA, 'video', artistA)
     expect((await publicVideos()).some((v) => v.title === 'VID one')).toBe(false) // still off-site
-    // Toggle it on-site (what the password-gated publish does) → live.
-    await reconcileOnSite(asA, 'video', artistA, [made.id])
+    // Toggle it on-site (a LIVE toggle now — ADR 0009; no publish needed) → live.
+    await asA.from('videos').update({ on_site: true }).eq('id', made.id).eq('artist_id', artistA)
     expect((await publicVideos()).some((v) => v.title === 'VID one')).toBe(true) // live
   })
 

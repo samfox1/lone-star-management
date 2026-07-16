@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react'
 
 /**
- * The "which items are on the site" selection shared by every publish-gated browser
- * (releases, videos, merch, tour). Seeds the desired on-site set from what's
+ * The "which items are on the site" selection for the PUBLISH-RECONCILED browsers
+ * (releases, merch). Videos and tour moved to a live toggle (`useLiveOnSite`, ADR
+ * 0009), so this now serves only the reconcile path. Seeds the desired on-site set from what's
  * currently live (`on_site`), and re-seeds when the server's live set changes — after
  * a successful publish + refresh — by adjusting state during render, keyed on which
  * ids are actually on-site (the sanctioned "reset state on prop change" pattern).

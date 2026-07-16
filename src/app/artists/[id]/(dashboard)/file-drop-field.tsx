@@ -80,7 +80,9 @@ export function FileDropField({
             take(e.target.files?.[0])
             if (inputRef.current) inputRef.current.value = ''
           }}
-          className="hidden"
+          // sr-only, NOT `hidden` (display:none): Safari won't open the file dialog when
+          // a label wraps a display:none file input, so a click did nothing there.
+          className="sr-only"
         />
         {busy && progress != null ? (
           <span className="flex w-full max-w-[240px] flex-col items-center gap-2">

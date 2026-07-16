@@ -59,19 +59,20 @@ function videoOpenUrl(video: VideoItem): string {
 /**
  * A video as a thumbnail tile (16:9, or 9:16 for a Short). Clicking the tile opens
  * the video on YouTube in a new tab. A three-dots menu (top-right) shares the link
- * (native share sheet, or copy to clipboard) or deletes the video. A select checkbox
- * + "On site" badge (top-left) drive the password-gated publish, owned by the parent.
+ * (native share sheet, or copy to clipboard) or deletes the video. The checkbox
+ * (top-left) is a LIVE on-site toggle owned by the parent browser (ADR 0009).
  */
 export function VideoCard({
   video,
   artistId,
-  selected,
-  onToggleSelect,
+  onSite,
+  onToggleOnSite,
 }: {
   video: VideoItem
   artistId: string
-  selected: boolean
-  onToggleSelect: () => void
+  /** Live on-site state (optimistic — may lead `video.on_site` for a beat). */
+  onSite: boolean
+  onToggleOnSite: () => void
 }) {
   const badgeRaw = video.source && video.source !== 'manual' ? video.source : video.provider
   const badge = badgeRaw ? (BADGE_LABEL[badgeRaw] ?? badgeRaw) : null
@@ -164,7 +165,9 @@ export function VideoCard({
   return (
     <div className="relative">
       <div className="absolute left-2 top-2 z-10">
-        <SelectToggle selected={selected} onSite={video.on_site} onToggle={onToggleSelect} label={video.title} />
+        {/* selected === onSite under a live toggle, so this only ever reads live or
+            off — SelectToggle's pending-add/pending-drop states can't arise here. */}
+        <SelectToggle selected={onSite} onSite={onSite} onToggle={onToggleOnSite} label={video.title} />
       </div>
 
       <div ref={menuRef} className="absolute right-2 top-2 z-20">

@@ -10,7 +10,7 @@ import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
 import { OriginSection, groupByOrigin } from '../origin'
 import { useOnSiteSelection } from '../use-on-site-selection'
-import { publishEntityAction } from '../actions'
+import { publishSelectionAction } from '../actions'
 import { MerchCard, type MerchItem } from './merch-card'
 
 type Sort = 'added' | 'az' | 'price'
@@ -56,7 +56,7 @@ export function MerchBrowser({
   const groups = groupByOrigin(shown, (i) => i.source ?? 'manual', ORIGIN_ORDER, sourceLabel)
 
   async function publish(password: string) {
-    const res = await publishEntityAction('merch', artistId, [...selected], password)
+    const res = await publishSelectionAction('merch', artistId, [...selected], password)
     if (res.ok) router.refresh()
     return res
   }

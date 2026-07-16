@@ -11,6 +11,7 @@ import type {
   EditorMerch,
   EditorSong,
   EditorTextField,
+  EditorTour,
   EditorVideo,
 } from './editor-inspector'
 
@@ -86,12 +87,13 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     onSite: (m.on_site as boolean | null) ?? false,
   }))
 
-  const [linkRows, videoRows, merchRows, releaseRows, trackRows] = await Promise.all([
+  const [linkRows, videoRows, merchRows, releaseRows, trackRows, tourRows] = await Promise.all([
     listContent(supabase, 'link', id),
     listContent(supabase, 'video', id),
     listContent(supabase, 'merch', id),
     listContent(supabase, 'release', id),
     listContent(supabase, 'track', id),
+    listContent(supabase, 'tour_date', id),
   ])
   const links: EditorLink[] = linkRows.map((r) => ({
     id: r.id,
@@ -114,6 +116,20 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       onSite: (r.on_site as boolean | null) ?? false,
     }
   })
+  // Every date in the library, past ones included — the site splits upcoming from past
+  // itself, so hiding past dates here would make them unreachable. Ordered by date
+  // (PUBLISHABLE.tour_date.orderBy), the same order the public door serves.
+  const tours: EditorTour[] = tourRows.map((r) => ({
+    id: r.id,
+    date: (r.date as string | null) ?? null,
+    venue: (r.venue as string | null) ?? null,
+    city: (r.city as string | null) ?? null,
+    state: (r.state as string | null) ?? null,
+    country: (r.country as string | null) ?? null,
+    support: (r.support as string[] | null) ?? [],
+    // New/synced dates land off-site (INSERT_OFF_SITE) and are chosen here.
+    onSite: (r.on_site as boolean | null) ?? false,
+  }))
   const merch: EditorMerch[] = merchRows.map((r) => ({
     id: r.id,
     title: (r.title as string | null) ?? '',
@@ -175,6 +191,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       videos={videos}
       merch={merch}
       songs={songs}
+      tours={tours}
     />
   )
 }

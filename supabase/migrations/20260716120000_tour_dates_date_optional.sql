@@ -1,0 +1,15 @@
+-- Let a tour date be added before its date is known — a TBA / "dates announced soon"
+-- row. `date` was NOT NULL since the initial schema; nothing else on the table is
+-- required, so this is the last field blocking a partial add.
+--
+-- The dashboard was already built for this: dateBlock(null) renders "--", the editor's
+-- tourDateLabel(null) reads "No date", and the Tour filters treat an undated row as
+-- upcoming so it never hides. The public door orders by (data ->> 'date'), where a null
+-- sorts last under Postgres' default ASC NULLS LAST — no crash, it just trails the
+-- dated rows. skeen drops an undated on-site date from both its upcoming/past buckets
+-- (a null fails both date comparisons), so it simply doesn't render there yet.
+--
+-- Relaxing a constraint only; re-adding NOT NULL later would require no null dates to
+-- exist. CRUD.tour_date drops `date` from `required` to match, so a manager can now
+-- also clear a date on edit.
+alter table public.tour_dates alter column date drop not null;

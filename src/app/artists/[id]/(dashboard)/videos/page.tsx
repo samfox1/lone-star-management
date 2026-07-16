@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { listContent } from '@/lib/content'
+import { diffUnpublished, listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction, refreshYouTubeAction } from '../actions'
@@ -20,21 +20,28 @@ function youtubePoster(url: string, provider: string): string | null {
 /**
  * Videos: a 16:9 thumbnail grid with the Music-page toolbar (filter · sort · import ·
  * + Add · publish). "+ Add" opens the two-pane modal (Auto detects a pasted link).
- * New videos land off-site until selected + published.
+ * New/imported videos land off-site; the per-tile toggle puts one ON the site live,
+ * here or in the editor (ADR 0009) — a video must be published once first, since the
+ * door serves the published snapshot and gates it on the working row.
  */
 export default async function VideosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const artist = await requireArtist(id)
-  const [rows, counts] = await Promise.all([
+  // diffUnpublished is the only way to know whether there are unpublished video EDITS,
+  // now that presence is live and no longer a selection delta. It's the same query
+  // behind the nav's pending dot, so the PublishBar and the dot always agree.
+  const [rows, counts, diff] = await Promise.all([
     listContent(supabase, 'video', id),
     entityCounts(supabase, id, daysAgo(30)),
+    diffUnpublished(supabase, id),
   ])
 
   return (
     <AssetsShell artistId={id} active="videos">
     <VideosBrowser
       artistId={id}
+      dirty={diff.video.dirty}
       videos={rows.map((row) => {
         const provider = String(row.provider ?? '')
         return {
