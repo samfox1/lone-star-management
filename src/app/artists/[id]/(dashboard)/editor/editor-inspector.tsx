@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
-import type { ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { groupStyleRegions, type ManifestLinkRegion, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { cleanClassText } from '@/lib/site-editor/save'
 import {
   applyStyleValue,
@@ -14,7 +14,7 @@ import {
   type SiteStyleOptions,
   type StyleControl,
 } from '@/lib/site-editor/style-controls'
-import { safeHref } from '@/lib/url'
+import { isContactLink, safeHref } from '@/lib/url'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { GallerySlotUploader } from '../media-uploader'
@@ -175,6 +175,133 @@ const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] te
 // Red ring for a field whose value the server would reject (a blank required field, a
 // bad price) — gating the save so the panel can't claim "Saved" on a dropped write.
 const INVALID_RING = 'border-accent-red focus:border-accent-red'
+// The same signal for a BORDERLESS field (the restyled Style/Links/Text panels): those
+// have no border to redden, so the invalid state is a ring instead. Kept separate from
+// INVALID_RING so the still-bordered panels (Merch, Music, Tour) are untouched.
+const INVALID_FIELD = 'ring-1 ring-accent-red focus:ring-accent-red'
+
+/* ── Panel layout primitives (the "grid sheet" inspector) ────────────────────────────
+ * The Style / Links / Text panels share one visual language: NO bordered containers.
+ * Structure comes from grouping (a mono eyebrow + trailing rule), a leading icon per
+ * row, and whitespace — not from boxes. Fields are tinted rather than outlined.
+ *
+ * TYPE RULE: the panel is Space Mono THROUGHOUT — labels, names, values, and the text
+ * the manager types into a field (Sam, 2026-07-21). `font-space` sits on the <aside>
+ * so everything inherits it; inputs/selects/textareas restate it because form controls
+ * do not inherit font-family from an ancestor. Mono runs wider than Inter, so row text
+ * is 13px where Inter was 14px, keeping the same line count per row.
+ */
+
+/** A borderless field on the panel's white ground: tinted at rest, paper on focus. */
+const FIELD =
+  'w-full rounded-md bg-surface px-2.5 py-2 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline'
+
+/** The same field INSIDE an expanded body, which is itself tinted — so it inverts:
+ *  paper on grey, or it would vanish into its own background. */
+const FIELD_ON_TINT =
+  'w-full rounded-md bg-paper px-2.5 py-2 font-space text-[13px] text-ink outline-none ring-1 ring-hairline placeholder:font-space placeholder:text-ink-faint focus:ring-ink-faint'
+
+/** An expanded section's body. The grey ground is what separates a section from the
+ *  controls it owns — the parent row stays on white and needs no extra weight. */
+const PANEL_BODY = 'bg-surface px-5 pb-3 pt-2'
+
+/** The mono micro-cap that names a control or field. */
+const CONTROL_LABEL = 'font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-muted'
+
+/** A collapsible section header — label, optional tag, chevron. No border and no
+ *  leading icon: the section list reads as a plain outline of the page (Sam,
+ *  2026-07-21); the chevron rotating is the only open/closed signal. */
+function SectionRow({
+  label,
+  tag,
+  open,
+  onClick,
+}: {
+  label: string
+  tag?: React.ReactNode
+  open: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left hover:bg-surface-hover"
+    >
+      <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{label}</span>
+      {tag}
+      <span className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90')} aria-hidden>
+        <Icon name="chevronRight" size={16} />
+      </span>
+    </button>
+  )
+}
+
+/** One control on the sheet grid: [icon] [mono label] [control]. */
+function ControlRow({ icon, label, children }: { icon: IconName; label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[20px_1fr_auto] items-center gap-x-2.5 py-1.5">
+      <span className="justify-self-center text-ink-faint" aria-hidden>
+        <Icon name={icon} size={14} />
+      </span>
+      <span className={CONTROL_LABEL}>{label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** A labelled field on the sheet grid: [icon] [label over field]. */
+function FieldRow({ icon, label, children }: { icon: IconName; label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[20px_1fr] items-start gap-x-2.5 py-1.5">
+      <span className="mt-2 justify-self-center text-ink-faint" aria-hidden>
+        <Icon name={icon} size={14} />
+      </span>
+      <label className="block">
+        <span className={cx(CONTROL_LABEL, 'mb-1 block')}>{label}</span>
+        {children}
+      </label>
+    </div>
+  )
+}
+
+/** The mono status line every panel ends with. */
+function SaveLine({ status }: { status: SaveStatus }) {
+  if (status === 'idle') return null
+  return (
+    <p className={cx('px-5 pt-3', EYEBROW, status === 'error' && 'text-accent-red')}>
+      {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'}
+    </p>
+  )
+}
+
+/** Which icon leads a TEXT field row — matched on the field key so the panel doesn't
+ *  repeat one glyph down the whole column. */
+function textFieldIcon(key: string, type: string): IconName {
+  if (type === 'email' || key.includes('email')) return 'external'
+  const k = key.toLowerCase()
+  if (k.includes('button') || k.includes('cta')) return 'bolt'
+  if (k.includes('show') || k.includes('tour')) return 'tour'
+  if (k.includes('work') || k.includes('music') || k.includes('track')) return 'tracks'
+  if (k.includes('video')) return 'videos'
+  if (k.includes('merch')) return 'merch'
+  if (k.includes('booking') || k.includes('contact')) return 'links'
+  if (k.includes('name')) return 'roster'
+  return 'text'
+}
+
+/** Which icon leads each style control row (ids come from buildStyleControls). */
+const STYLE_CONTROL_ICON: Record<string, IconName> = {
+  font: 'text',
+  size: 'fontSize',
+  weight: 'bold',
+  textColor: 'palette',
+  bgColor: 'fill',
+  align: 'align',
+  uppercase: 'uppercase',
+  italic: 'italic',
+}
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 /**
@@ -408,8 +535,13 @@ export function EditorInspector({
     })
   }
 
-  function reorderLinks(from: number, to: number) {
+  /** Reorder by ID, not by index: the panel renders links in TWO lists (Socials and
+   *  Contact), so a row's index within its own list is not its index in `links`. */
+  function reorderLinks(fromId: string, toId: string) {
     if (isPending) return
+    const from = links.findIndex((l) => l.id === fromId)
+    const to = links.findIndex((l) => l.id === toId)
+    if (from < 0 || to < 0 || from === to) return
     const prev = links
     const next = reorderList(links, from, to)
     setLinks(next) // optimistic
@@ -443,6 +575,29 @@ export function EditorInspector({
     })
   }
 
+  /**
+   * Reorder the UNDATED shows. Dated ones are left out of the persisted list entirely:
+   * their sort_order is never consulted (date decides), and renumbering them here would
+   * quietly overwrite values for no benefit. The optimistic update rebuilds the list
+   * with the dragged row moved, keeping dated rows where the date sort put them.
+   */
+  function reorderTours(fromId: string, toId: string) {
+    if (isPending) return
+    const undated = tours.filter((t) => !t.date)
+    const from = undated.findIndex((t) => t.id === fromId)
+    const to = undated.findIndex((t) => t.id === toId)
+    if (from < 0 || to < 0 || from === to) return
+    const moved = reorderList(undated, from, to)
+    const prev = tours
+    // Splice the new undated order back into the full list, in place.
+    let next = 0
+    setTours(tours.map((t) => (t.date ? t : moved[next++])))
+    startTransition(async () => {
+      const res = await reorderContentAction('tour_date', artistId, moved.map((t) => t.id))
+      if (res?.error) setTours(prev)
+    })
+  }
+
   // One count per Kind, derived once and shared by both views — they used to each
   // reach into a different set of arrays through their own ternary chain. `onSite`
   // is what the site actually serves; null means the kind has no on-site concept.
@@ -461,7 +616,7 @@ export function EditorInspector({
   }
 
   return (
-    <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper">
+    <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {active ? (
         <EditingView
           component={active}
@@ -483,6 +638,7 @@ export function EditorInspector({
           onAssignHero={assignHero}
           onToggleTourOnSite={toggleTourOnSite}
           onRemoveTour={removeTour}
+          onReorderTour={reorderTours}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
           onRemoveMerch={removeMerch}
@@ -532,7 +688,7 @@ function BrowseView({
               <Icon name={c.icon} size={19} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-sm font-medium">{c.label}</span>
+              <span className="text-[13px] font-medium">{c.label}</span>
               <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
                 {countLabel(c.kind, counts[c.kind])}
               </span>
@@ -566,6 +722,7 @@ function EditingView({
   onAssignHero,
   onToggleTourOnSite,
   onRemoveTour,
+  onReorderTour,
   onRemoveLink,
   onReorderLink,
   onRemoveMerch,
@@ -601,8 +758,9 @@ function EditingView({
   onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
   onToggleTourOnSite: (t: EditorTour) => void
   onRemoveTour: (t: EditorTour) => void
+  onReorderTour: (fromId: string, toId: string) => void
   onRemoveLink: (l: EditorLink) => void
-  onReorderLink: (from: number, to: number) => void
+  onReorderLink: (fromId: string, toId: string) => void
   onRemoveMerch: (m: EditorMerch) => void
   styleRegions: ManifestStyleRegion[]
   styleValues: Record<string, string>
@@ -653,12 +811,30 @@ function EditingView({
           <>
             <GroupLabel>Socials</GroupLabel>
             <LinkTools
-              links={links}
+              links={links.filter((l) => !isContactLink(l.url))}
+              group="Social"
               artistId={artistId}
               onRemove={onRemoveLink}
               onReorder={onReorderLink}
               onToggleOnSite={onToggleLinkOnSite}
             />
+            {/* A booking address is a contact route, not a profile to follow, so it gets
+                its own group instead of sitting among the socials. Split by SCHEME
+                (mailto:/tel:), not by label — the link says what it is. */}
+            {links.some((l) => isContactLink(l.url)) && (
+              <>
+                <GroupLabel>Contact</GroupLabel>
+                <LinkTools
+                  links={links.filter((l) => isContactLink(l.url))}
+                  group="Contact"
+                  artistId={artistId}
+                  onRemove={onRemoveLink}
+                  onReorder={onReorderLink}
+                  onToggleOnSite={onToggleLinkOnSite}
+                  showAdd={false}
+                />
+              </>
+            )}
             <GroupLabel>Tour support</GroupLabel>
             <SupportLinkTools supportLinks={supportLinks} artistId={artistId} />
             <GroupLabel>Buttons</GroupLabel>
@@ -677,6 +853,7 @@ function EditingView({
             tours={tours}
             artistId={artistId}
             onRemove={onRemoveTour}
+            onReorder={onReorderTour}
             onToggleOnSite={onToggleTourOnSite}
           />
         ) : isMerch ? (
@@ -743,9 +920,9 @@ function PhotoThumb({ path, aspect }: { path: string; aspect: string }) {
  * Remove behave like the video slots (Remove takes a photo off the site, back to the
  * library — never deletes). Cards are 3-up. The picker footer can still upload a new
  * asset, but picking existing ones is the primary path. */
-const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string }[] = [
-  { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]' },
-  { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]' },
+const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string; cols: string }[] = [
+  { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]', cols: 'grid-cols-2' },
+  { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]', cols: 'grid-cols-3' },
 ]
 
 function PhotoTools({
@@ -770,7 +947,7 @@ function PhotoTools({
     p.orientation === group || (group === 'horizontal' && p.orientation == null)
   return (
     <div className="py-2">
-      {PHOTO_GROUPS.map(({ orientation, label, aspect }) => (
+      {PHOTO_GROUPS.map(({ orientation, label, aspect, cols }) => (
         <div key={orientation}>
           <div className="px-5 pt-3">
             <SlotGroupLabel>{label}</SlotGroupLabel>
@@ -783,7 +960,7 @@ function PhotoTools({
             labelOf={(_, i) => `${label} ${i + 1}`}
             renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect={aspect} />}
             aspect={aspect}
-            cols="grid-cols-3"
+            cols={cols}
             pickTitle={`Add a ${orientation} photo`}
             addLabel={`Add ${orientation} photo`}
             empty={
@@ -914,38 +1091,29 @@ function SiteLinkTools({
   }
 
   return (
-    <div className="space-y-4 px-5 py-4">
-      <p className="text-xs leading-relaxed text-ink-muted">
-        Set where each of the site&apos;s link buttons points. Clearing a box removes the link.
-      </p>
+    <div className="pb-2 pt-1">
       {regions.map((r) => (
-        <label key={r.key} className="block">
-          <span className={cx(EYEBROW, 'block')}>{r.label}</span>
-          {r.description && (
-            <span className="mb-1.5 mt-1 block text-[11px] leading-snug text-ink-faint">Powers: {r.description}</span>
-          )}
-          <input
-            ref={(el) => {
-              fieldRefs.current.set(r.key, el)
-            }}
-            aria-label={`${r.label} URL`}
-            aria-invalid={invalid.has(r.key) || undefined}
-            type="url"
-            value={text[r.key] ?? ''}
-            onChange={(e) => edit(r.key, e.target.value)}
-            placeholder="https://…  (blank = no link)"
-            className={cx(
-              'mt-1 w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint',
-              invalid.has(r.key) && INVALID_RING,
+        <div key={r.key} className="px-5">
+          <FieldRow icon="bolt" label={r.label}>
+            {r.description && (
+              <span className="mb-1.5 block text-[11px] leading-snug text-ink-faint">Powers: {r.description}</span>
             )}
-          />
-        </label>
+            <input
+              ref={(el) => {
+                fieldRefs.current.set(r.key, el)
+              }}
+              aria-label={`${r.label} URL`}
+              aria-invalid={invalid.has(r.key) || undefined}
+              type="url"
+              value={text[r.key] ?? ''}
+              onChange={(e) => edit(r.key, e.target.value)}
+              placeholder="https://…  (blank = no link)"
+              className={cx(FIELD, invalid.has(r.key) && INVALID_FIELD)}
+            />
+          </FieldRow>
+        </div>
       ))}
-      {status !== 'idle' && (
-        <p className={cx('font-space text-[10px] uppercase tracking-[0.08em]', status === 'error' ? 'text-accent-red' : 'text-ink-faint')}>
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
-        </p>
-      )}
+      <SaveLine status={status} />
     </div>
   )
 }
@@ -964,18 +1132,31 @@ function StyleControlRow({
 }) {
   const current = readStyleValue(control, cls)
   const aria = `${region.label} ${control.label}`
+  const icon = STYLE_CONTROL_ICON[control.id] ?? 'tools'
   if (control.kind === 'toggle') {
     return (
-      <label className="flex items-center justify-between gap-2">
-        <span className="font-ui text-xs text-ink-muted">{control.label}</span>
-        <input
-          type="checkbox"
+      <ControlRow icon={icon} label={control.label}>
+        {/* A switch, not a checkbox: it reads as on/off at a glance in a panel where
+            every other control is a value, and it matches OnSiteToggle elsewhere. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={current === 'on'}
           aria-label={aria}
-          checked={current === 'on'}
-          onChange={(e) => onChange(e.target.checked ? 'on' : '')}
-          className="h-4 w-4 accent-accent"
-        />
-      </label>
+          onClick={() => onChange(current === 'on' ? '' : 'on')}
+          className={cx(
+            'relative h-5 w-9 flex-none rounded-full transition-colors',
+            current === 'on' ? 'bg-ink' : 'bg-hairline',
+          )}
+        >
+          <span
+            className={cx(
+              'absolute top-0.5 h-4 w-4 rounded-full bg-paper shadow-sm transition-[left]',
+              current === 'on' ? 'left-[18px]' : 'left-0.5',
+            )}
+          />
+        </button>
+      </ControlRow>
     )
   }
   // Show the current value even when it's a class the site declared no option for (e.g. a
@@ -984,23 +1165,35 @@ function StyleControlRow({
     current && !control.options.some((o) => o.value === current)
       ? [{ value: current, label: current }, ...control.options]
       : control.options
+  const currentLabel = options.find((o) => o.value === current)?.label ?? options[0]?.label ?? ''
   return (
-    <label className="flex items-center justify-between gap-2">
-      <span className="font-ui text-xs text-ink-muted">{control.label}</span>
-      {/* font-ui explicitly: native <select>/<option> don't inherit the UI font. */}
-      <select
-        aria-label={aria}
-        value={current}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex-none rounded-md border border-hairline bg-paper px-2 py-1 font-ui text-xs text-ink outline-none focus:border-ink-faint"
-      >
-        {options.map((o) => (
-          <option key={o.value || 'default'} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <ControlRow icon={icon} label={control.label}>
+      {/* The <select> stays for BEHAVIOUR (native menu, keyboard, a11y, and the `.value`
+          every test drives) but is transparent and stretched over the row; the value is
+          painted beside it as ordinary DOM text. macOS Chrome renders a control's own
+          text in the system font no matter what `font-family` computes to, so the only
+          way to get Inter here is to not let the control draw it. */}
+      <span className="relative inline-flex flex-none items-center">
+        <select
+          aria-label={aria}
+          value={current}
+          onChange={(e) => onChange(e.target.value)}
+          className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0 outline-none"
+        >
+          {options.map((o) => (
+            <option key={o.value || 'default'} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span className="pointer-events-none inline-flex items-center gap-1 rounded-md px-1.5 py-1 peer-hover:bg-paper peer-focus:bg-paper peer-focus-visible:ring-1 peer-focus-visible:ring-ink-faint">
+          <span className="font-space text-[13px] text-ink">{currentLabel}</span>
+          <span className="rotate-90 text-ink-faint" aria-hidden>
+            <Icon name="chevronRight" size={13} />
+          </span>
+        </span>
+      </span>
+    </ControlRow>
   )
 }
 
@@ -1041,6 +1234,7 @@ function StyleTools({
   const rowRefs = useRef<Map<string, HTMLElement | null>>(new Map())
 
   const controls = useMemo(() => buildStyleControls(options), [options])
+  const groupedRegions = useMemo(() => groupStyleRegions(regions), [regions])
 
   // The frame's edit-list arrives asynchronously (on `ready`), so regions/values can
   // land after first render — re-seed when they do, without clobbering typing.
@@ -1121,80 +1315,59 @@ function StyleTools({
   }
 
   return (
-    <div className="px-5 py-4 font-ui">
-      <p className="mb-3 text-xs leading-relaxed text-ink-muted">
-        Pick a section and adjust how it looks — changes preview live.
-      </p>
-      <div className="space-y-2">
-        {regions.map((r) => {
-          const cls = text[r.key] ?? ''
-          const isOpen = open === r.key
-          return (
-            <div
-              key={r.key}
-              ref={(el) => {
-                rowRefs.current.set(r.key, el)
-              }}
-              className="rounded-lg border border-hairline"
-            >
-              <button
-                type="button"
-                onClick={() => setOpen(isOpen ? null : r.key)}
-                aria-expanded={isOpen}
-                className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+    <div className="py-2">
+      {/* Regions are grouped by their manifest `group` ("Hero", "Sections", …) so the
+          panel reads as a short outline of the page rather than one long list. Regions
+          with no group fall under a single unlabelled run, preserving manifest order. */}
+      {groupedRegions.map(([group, rows]) => (
+        <div key={group || '_'}>
+          {group && <GroupLabel>{group}</GroupLabel>}
+          {rows.map((r) => {
+            const cls = text[r.key] ?? ''
+            const isOpen = open === r.key
+            return (
+              <div
+                key={r.key}
+                ref={(el) => {
+                  rowRefs.current.set(r.key, el)
+                }}
               >
-                <span className="min-w-0 flex-1 truncate text-sm text-ink">{r.label}</span>
-                <span
-                  className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
-                  aria-hidden
-                >
-                  <Icon name="chevronRight" size={16} />
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="space-y-2.5 border-t border-hairline px-2.5 py-3">
-                  {controls.map((control) => (
-                    <StyleControlRow
-                      key={control.id}
-                      region={r}
-                      control={control}
-                      cls={cls}
-                      onChange={(v) => edit(r.key, applyStyleValue(cls, control, v))}
-                    />
-                  ))}
-                  <details className="pt-1">
-                    <summary className="cursor-pointer font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                      Advanced: classes
-                    </summary>
-                    <textarea
-                      aria-label={`${r.label} classes`}
-                      aria-invalid={invalid.has(r.key) || undefined}
-                      value={cls}
-                      onChange={(e) => edit(r.key, e.target.value)}
-                      spellCheck={false}
-                      className={cx(
-                        'mt-2 min-h-14 w-full resize-y rounded-md border border-hairline px-2.5 py-1.5 font-space text-[11px] leading-relaxed text-ink outline-none focus:border-ink-faint',
-                        invalid.has(r.key) && INVALID_RING,
-                      )}
-                    />
+                <SectionRow
+                  label={r.label}
+                  open={isOpen}
+                  onClick={() => setOpen(isOpen ? null : r.key)}
+                />
+                {isOpen && (
+                  <div className={PANEL_BODY}>
+                    {controls.map((control) => (
+                      <StyleControlRow
+                        key={control.id}
+                        region={r}
+                        control={control}
+                        cls={cls}
+                        onChange={(v) => edit(r.key, applyStyleValue(cls, control, v))}
+                      />
+                    ))}
+                    {/* No raw-class escape hatch: this panel is for a MANAGER, and a
+                        Tailwind class string is not something they can reason about
+                        (Sam, 2026-07-21). The controls above own every utility they
+                        understand; anything else in the region's base classes is
+                        preserved untouched by applyStyleValue, just not editable here.
+                        The validation below stays as a backstop so a bad value can
+                        never be reported as "Saved". */}
                     {invalid.has(r.key) && (
-                      <span className="mt-1 block text-[11px] text-accent-red">
-                        Not saved — that has characters a class name can&apos;t contain.
-                      </span>
+                      <p className="pt-1 text-[11px] text-accent-red">
+                        Not saved — that setting produced something the site can&apos;t use.
+                      </p>
                     )}
-                  </details>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      {status !== 'idle' && (
-        <p className={cx('mt-3', EYEBROW, status === 'error' && 'text-accent-red')}>
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'}
-        </p>
-      )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ))}
+      <SaveLine status={status} />
     </div>
   )
 }
@@ -1254,40 +1427,29 @@ function TextTools({
     )
   }
 
-  const control =
-    'w-full rounded-lg border border-hairline px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
-
   return (
-    <div className="space-y-4 px-5 py-4">
+    <div className="py-2">
       {textFields.map((f) => (
-        <label key={f.key} className="block">
-          <span className={cx(EYEBROW, 'mb-1.5 block')}>{f.label}</span>
-          {f.multiline ? (
-            <textarea
-              value={values[f.key] ?? ''}
-              onChange={(e) => edit(f, e.target.value)}
-              className={cx(control, 'min-h-20 resize-y leading-relaxed')}
-            />
-          ) : (
-            <input
-              type={f.type === 'email' ? 'email' : 'text'}
-              value={values[f.key] ?? ''}
-              onChange={(e) => edit(f, e.target.value)}
-              className={control}
-            />
-          )}
-        </label>
-      ))}
-      {status !== 'idle' && (
-        <div
-          className={cx(
-            'font-space text-[10px] uppercase tracking-[0.08em]',
-            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
-          )}
-        >
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        <div key={f.key} className="px-5">
+          <FieldRow icon={textFieldIcon(f.key, f.type)} label={f.label}>
+            {f.multiline ? (
+              <textarea
+                value={values[f.key] ?? ''}
+                onChange={(e) => edit(f, e.target.value)}
+                className={cx(FIELD, 'min-h-20 resize-y leading-relaxed')}
+              />
+            ) : (
+              <input
+                type={f.type === 'email' ? 'email' : 'text'}
+                value={values[f.key] ?? ''}
+                onChange={(e) => edit(f, e.target.value)}
+                className={FIELD}
+              />
+            )}
+          </FieldRow>
         </div>
-      )}
+      ))}
+      <SaveLine status={status} />
     </div>
   )
 }
@@ -1299,11 +1461,21 @@ function LinkTools({
   onRemove,
   onReorder,
   onToggleOnSite,
+  group,
+  showAdd = true,
 }: {
   links: EditorLink[]
   artistId: string
   onRemove: (l: EditorLink) => void
-  onReorder: (from: number, to: number) => void
+  onReorder: (fromId: string, toId: string) => void
+  /** Names this list in the accessible labels. The panel renders LinkTools TWICE
+   *  (Socials and Contact) and row labels used to be numbered per-list, so
+   *  "Link 1 label" existed twice in the DOM — ambiguous to a screen reader and to
+   *  getByLabelText. The group disambiguates them. */
+  group: string
+  /** The "Add link" footer. Off for the Contact group, which is a slice of the same
+   *  list — one add affordance per panel, not one per group. */
+  showAdd?: boolean
   onToggleOnSite: (l: EditorLink) => void
 }) {
   const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
@@ -1385,11 +1557,11 @@ function LinkTools({
     const from = dragFrom.current
     dragFrom.current = null
     setDragOver(null)
-    if (from !== null && from !== to) onReorder(from, to)
+    if (from !== null && from !== to) onReorder(links[from].id, links[to].id)
   }
 
   return (
-    <div className="space-y-2 px-5 pb-4 pt-2">
+    <div className="pb-2 pt-1">
       {links.map((l, i) => {
         const v = values[l.id] ?? { label: l.label, url: l.url }
         const isOpen = open === l.id
@@ -1408,32 +1580,25 @@ function LinkTools({
               dragFrom.current = null
               setDragOver(null)
             }}
-            className={cx(
-              'rounded-lg border border-hairline',
-              dragOver === i && 'ring-2 ring-accent',
-              rowInvalid && 'border-accent-red',
-            )}
+            className={cx(dragOver === i && 'ring-2 ring-accent', rowInvalid && 'ring-1 ring-accent-red')}
           >
             {/* Collapsed header — the whole row is a button that opens the editor below
                 it. Only the label shows (what the manager named it); an at-a-glance
-                "Off" tag flags a link that isn't on the site. */}
+                "Off" tag flags a link that isn't on the site. The grip sits INSIDE the
+                row (no border to hang it off), so drag-to-reorder stays discoverable. */}
             <button
               type="button"
               onClick={() => setOpen(isOpen ? null : l.id)}
               aria-expanded={isOpen}
-              className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+              className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left hover:bg-surface-hover"
             >
               <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
                 <Icon name="grip" size={16} />
               </span>
-              <span className={cx('min-w-0 flex-1 truncate text-sm', labelBlank ? 'text-ink-faint' : 'text-ink')}>
+              <span className={cx('min-w-0 flex-1 truncate text-[13px]', labelBlank ? 'text-ink-faint' : 'text-ink')}>
                 {v.label.trim() || 'Untitled link'}
               </span>
-              {!l.onSite && (
-                <span className="flex-none font-space text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                  Off
-                </span>
-              )}
+              {!l.onSite && <span className={cx(EYEBROW, 'flex-none')}>Off</span>}
               <span
                 className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
                 aria-hidden
@@ -1443,37 +1608,40 @@ function LinkTools({
             </button>
 
             {isOpen && (
-              <div className="space-y-2 border-t border-hairline px-2.5 py-2.5">
-                <input
-                  aria-label={`Link ${i + 1} label`}
-                  aria-invalid={(rowInvalid && labelBlank) || undefined}
-                  value={v.label}
-                  onChange={(e) => edit(l.id, { label: e.target.value })}
-                  placeholder="Label"
-                  className={cx(
-                    'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint',
-                    rowInvalid && labelBlank && INVALID_RING,
-                  )}
-                />
-                <input
-                  aria-label={`Link ${i + 1} URL`}
-                  aria-invalid={(rowInvalid && urlBlank) || undefined}
-                  type="url"
-                  value={v.url}
-                  onChange={(e) => edit(l.id, { url: e.target.value })}
-                  placeholder="https://…"
-                  className={cx(
-                    'w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint',
-                    rowInvalid && urlBlank && INVALID_RING,
-                  )}
-                />
-                <div className="flex items-center justify-between pt-0.5">
-                  <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
+              <div className={PANEL_BODY}>
+                <FieldRow icon="text" label="Label">
+                  <input
+                    aria-label={`${group} link ${i + 1} label`}
+                    aria-invalid={(rowInvalid && labelBlank) || undefined}
+                    value={v.label}
+                    onChange={(e) => edit(l.id, { label: e.target.value })}
+                    placeholder="Label"
+                    className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
+                  />
+                </FieldRow>
+                <FieldRow icon="links" label="URL">
+                  <input
+                    aria-label={`${group} link ${i + 1} URL`}
+                    aria-invalid={(rowInvalid && urlBlank) || undefined}
+                    type="url"
+                    value={v.url}
+                    onChange={(e) => edit(l.id, { url: e.target.value })}
+                    placeholder="https://…"
+                    className={cx(FIELD_ON_TINT, rowInvalid && urlBlank && INVALID_FIELD)}
+                  />
+                </FieldRow>
+                <div className="grid grid-cols-[20px_1fr_auto] items-center gap-x-2.5 pt-2">
+                  <span className="justify-self-center text-ink-faint" aria-hidden>
+                    <Icon name="site" size={14} />
+                  </span>
+                  {/* justify-self-start: the grid's 1fr column would otherwise stretch
+                      the pill across the whole row. */}
+                  <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} className="justify-self-start" />
                   <button
                     type="button"
-                    aria-label={`Remove link ${i + 1}`}
+                    aria-label={`Remove ${group.toLowerCase()} link ${i + 1}`}
                     onClick={() => onRemove(l)}
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
                   >
                     <Icon name="trash" size={15} />
                     <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Remove</span>
@@ -1485,24 +1653,17 @@ function LinkTools({
         )
       })}
 
-      <Link
-        href={`/artists/${artistId}/links`}
-        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
-      >
-        <Icon name="plus" size={16} />
-        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add link</span>
-      </Link>
-
-      {status !== 'idle' && (
-        <div
-          className={cx(
-            'font-space text-[10px] uppercase tracking-[0.08em]',
-            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
-          )}
+      {showAdd && (
+        <Link
+          href={`/artists/${artistId}/links`}
+          className="flex items-center gap-2.5 px-5 py-2.5 text-accent hover:bg-surface-hover"
         >
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
-        </div>
+          <Icon name="plus" size={16} />
+          <span className="text-[13px]">Add link</span>
+        </Link>
       )}
+
+      <SaveLine status={status} />
     </div>
   )
 }
@@ -1606,62 +1767,43 @@ function SupportLinkTools({
   }
 
   return (
-    <div className="space-y-2 px-5 pb-4 pt-2">
+    <div className="pb-2 pt-1">
       {supportLinks.map((l) => {
         const id = supportKey(l)
         const url = urls[id] ?? ''
         const isOpen = open === id
         return (
-          <div key={id} className="rounded-lg border border-hairline">
+          <div key={id}>
             {/* Collapsed: the act name (the "+ Gudfella" text) + whether it links out. */}
-            <button
-              type="button"
+            <SectionRow
+              label={l.name}
+              open={isOpen}
+              tag={<span className={cx(EYEBROW, 'flex-none')}>{url.trim() ? 'Linked' : 'No link'}</span>}
               onClick={() => setOpen(isOpen ? null : id)}
-              aria-expanded={isOpen}
-              className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
-            >
-              <span className="min-w-0 flex-1 truncate text-sm text-ink">{l.name}</span>
-              <span className="flex-none font-space text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                {url.trim() ? 'Linked' : 'No link'}
-              </span>
-              <span
-                className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
-                aria-hidden
-              >
-                <Icon name="chevronRight" size={16} />
-              </span>
-            </button>
-
+            />
             {isOpen && (
-              <div className="space-y-2 border-t border-hairline px-2.5 py-2.5">
+              <div className={PANEL_BODY}>
                 {/* Names the exact credit this link attaches to, and which show. */}
-                <p className="text-[11px] leading-relaxed text-ink-muted">
+                <p className="pb-1 text-[11px] leading-relaxed text-ink-muted">
                   Links the <span className="font-medium text-ink">“{l.name}”</span> credit on {l.show}.
                 </p>
-                <input
-                  aria-label={`Link for ${l.name} at ${l.show}`}
-                  type="url"
-                  value={url}
-                  onChange={(e) => edit(l, e.target.value)}
-                  placeholder="https://…  (blank = no link)"
-                  className="w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint"
-                />
+                <FieldRow icon="links" label="URL">
+                  <input
+                    aria-label={`Link for ${l.name} at ${l.show}`}
+                    type="url"
+                    value={url}
+                    onChange={(e) => edit(l, e.target.value)}
+                    placeholder="https://…  (blank = no link)"
+                    className={FIELD_ON_TINT}
+                  />
+                </FieldRow>
               </div>
             )}
           </div>
         )
       })}
 
-      {status !== 'idle' && (
-        <div
-          className={cx(
-            'font-space text-[10px] uppercase tracking-[0.08em]',
-            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
-          )}
-        >
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
-        </div>
-      )}
+      <SaveLine status={status} />
     </div>
   )
 }
@@ -1783,7 +1925,7 @@ function EmptySlot({ label, onClick, aspect = 'aspect-video' }: { label: string;
       onClick={onClick}
       aria-label={label}
       className={cx(
-        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-hairline px-2 text-center text-ink-muted hover:border-accent hover:text-accent',
+        'flex h-full w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-hairline px-2 text-center text-ink-muted hover:border-accent hover:text-accent',
         aspect,
       )}
     >
@@ -2168,7 +2310,7 @@ function VideoTools({
                       value={titles[v.id] ?? ''}
                       onChange={(e) => edit(v.id, e.target.value)}
                       placeholder="Title"
-                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-xs text-ink outline-none placeholder:text-ink-faint focus:border-hairline"
+                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 font-space text-xs text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-hairline"
                     />
                     <button
                       type="button"
@@ -2254,13 +2396,26 @@ function TourTools({
   tours,
   artistId,
   onRemove,
+  onReorder,
   onToggleOnSite,
 }: {
   tours: EditorTour[]
   artistId: string
   onRemove: (t: EditorTour) => void
+  /** Reorder by ID. Only undated shows participate — see `draggable` below. */
+  onReorder: (fromId: string, toId: string) => void
   onToggleOnSite: (t: EditorTour) => void
 }) {
+  const dragFrom = useRef<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
+
+  function drop(toId: string) {
+    const fromId = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (fromId && fromId !== toId) onReorder(fromId, toId)
+  }
+
   return (
     <div className="space-y-2.5 px-5 py-4">
       {tours.length === 0 && (
@@ -2269,13 +2424,38 @@ function TourTools({
         </p>
       )}
 
-      {tours.map((t) => (
-        <div key={t.id} className="flex items-start gap-2.5 rounded-lg border border-hairline p-2.5">
+      {tours.map((t) => {
+        // A DATED show sorts itself by date on the site forever, so dragging it would be
+        // a lie — the order wouldn't survive. Only undated shows, which the site can't
+        // sequence on its own, get a handle (20260723120000).
+        const canDrag = !t.date
+        return (
+        <div
+          key={t.id}
+          draggable={canDrag}
+          onDragStart={() => canDrag && (dragFrom.current = t.id)}
+          onDragEnter={() => canDrag && setDragOver(t.id)}
+          onDragOver={(e) => canDrag && e.preventDefault()}
+          onDrop={() => canDrag && drop(t.id)}
+          onDragEnd={() => {
+            dragFrom.current = null
+            setDragOver(null)
+          }}
+          className={cx(
+            'flex items-start gap-2.5 rounded-lg border border-hairline p-2.5',
+            dragOver === t.id && 'ring-2 ring-accent',
+          )}
+        >
+          {canDrag ? (
+            <span className="mt-0.5 flex-none cursor-grab text-ink-faint" aria-hidden>
+              <Icon name="grip" size={14} />
+            </span>
+          ) : null}
           <span className="mt-0.5 w-[4.5rem] flex-none font-space text-[11px] font-bold uppercase tracking-[0.04em] text-ink">
             {tourDateLabel(t.date)}
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="truncate text-sm font-medium">{t.venue || 'Untitled venue'}</span>
+            <span className="truncate text-[13px] font-medium">{t.venue || 'Untitled venue'}</span>
             {[t.city, t.state ?? t.country].filter(Boolean).length > 0 && (
               <span className="truncate font-space text-[11px] text-ink-muted">
                 {[t.city, t.state ?? t.country].filter(Boolean).join(', ')}
@@ -2295,7 +2475,8 @@ function TourTools({
             <Icon name="trash" size={15} />
           </button>
         </div>
-      ))}
+        )
+      })}
 
       <Link
         href={`/artists/${artistId}/tour`}
@@ -2398,7 +2579,7 @@ function MerchTools({
   }
 
   const control =
-    'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
+    'w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-ink-faint'
 
   return (
     <div className="space-y-2.5 px-5 py-4">

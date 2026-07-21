@@ -163,8 +163,26 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // `support` is the act NAMES (edited on the tour page); `support_urls` is the
     // per-act name→url map (edited in the editor's Links panel, 20260717140000). Both
     // ride the snapshot so skeen can zip them into linked support acts.
-    snapshot: ['id', 'date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'support_urls', 'is_past'],
-    orderBy: ['date'],
+    // `sort_order` is the tie-break for UNDATED shows only (20260723120000) — dated
+    // shows still sort by date on the site. Nulls sort last on `date`, so the undated
+    // group lands at the end and sort_order sequences it.
+    snapshot: [
+      'id',
+      'date',
+      'venue',
+      'city',
+      'state',
+      'country',
+      'ticket_url',
+      'support',
+      'support_urls',
+      'is_past',
+      'sort_order',
+    ],
+    // created_at is the final tiebreak, matching every other entity: a dated row keeps
+    // the sort_order it was backfilled with, so clearing its date could tie it against
+    // an undated row and leave the pair ordered arbitrarily.
+    orderBy: ['date', 'sort_order', 'created_at'],
   },
   merch: {
     table: 'merch',

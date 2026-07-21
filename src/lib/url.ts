@@ -60,3 +60,15 @@ const URL_FIELDS = new Set([
 export function isUrlField(field: string): boolean {
   return URL_FIELDS.has(field)
 }
+
+/**
+ * Whether a link is a CONTACT route (mailto:/tel:) rather than a profile a fan follows.
+ * The editor's Links panel groups on this so a booking address doesn't sit in "Socials"
+ * — the two are edited for different reasons even though both are just rows in `links`.
+ * Scheme-based on purpose: it reads what the link DOES, not what it was labelled.
+ */
+export function isContactLink(url: string | null | undefined): boolean {
+  if (typeof url !== 'string') return false
+  const scheme = url.trim().replace(CONTROL_AND_SPACE, '').toLowerCase()
+  return scheme.startsWith('mailto:') || scheme.startsWith('tel:')
+}

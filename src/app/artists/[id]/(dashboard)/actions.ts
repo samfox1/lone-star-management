@@ -492,7 +492,13 @@ export async function reorderGalleryAction(
  * editor: each row's `sort_order` becomes its index, ATOMICALLY via the `reorder_rows`
  * RPC (one statement, all-or-nothing). RLS scopes every write to the caller's tenant.
  */
-const REORDER_TABLE: Partial<Record<CrudEntity, string>> = { link: 'links', video: 'videos', track: 'tracks' }
+const REORDER_TABLE: Partial<Record<CrudEntity, string>> = {
+  link: 'links',
+  video: 'videos',
+  track: 'tracks',
+  // Only the UNDATED shows are draggable; dated ones still sort by date (20260723120000).
+  tour_date: 'tour_dates',
+}
 export async function reorderContentAction(
   type: CrudEntity,
   artistId: string,

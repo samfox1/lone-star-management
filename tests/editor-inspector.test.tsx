@@ -362,22 +362,22 @@ describe('EditorInspector — Links component', () => {
     openLinks()
     // Collapsed: the label shows, the inputs do not.
     expect(screen.getByRole('button', { name: /^Spotify/ })).toBeTruthy()
-    expect(screen.queryByLabelText('Link 1 URL')).toBeNull()
+    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
     // Click the row → the edit controls appear.
     expandLink(/^Spotify/)
-    expect((screen.getByLabelText('Link 1 label') as HTMLInputElement).value).toBe('Spotify')
-    expect((screen.getByLabelText('Link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
-    expect(screen.getByRole('button', { name: 'Remove link 1' })).toBeTruthy()
+    expect((screen.getByLabelText('Social link 1 label') as HTMLInputElement).value).toBe('Spotify')
+    expect((screen.getByLabelText('Social link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
+    expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
   })
 
   it('is single-open: expanding another row collapses the first', () => {
     openLinks()
     expandLink(/^Spotify/)
-    expect(screen.queryByLabelText('Link 1 URL')).not.toBeNull()
+    expect(screen.queryByLabelText('Social link 1 URL')).not.toBeNull()
     expandLink(/^Instagram/)
     // Spotify's editor is gone; Instagram's is open.
-    expect(screen.queryByLabelText('Link 1 URL')).toBeNull()
-    expect((screen.getByLabelText('Link 2 URL') as HTMLInputElement).value).toBe('https://instagram.com/x')
+    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
+    expect((screen.getByLabelText('Social link 2 URL') as HTMLInputElement).value).toBe('https://instagram.com/x')
   })
 
   it('flags an off-site link with an "Off" tag while collapsed', () => {
@@ -412,10 +412,10 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(/^Spotify/)
-      fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: '' } })
+      fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: '' } })
       vi.advanceTimersByTime(500)
       expect(updateContentMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Link 1 label').getAttribute('aria-invalid')).toBe('true')
+      expect(screen.getByLabelText('Social link 1 label').getAttribute('aria-invalid')).toBe('true')
     } finally {
       vi.useRealTimers()
     }
@@ -426,7 +426,7 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(/^Spotify/)
-      fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Listen' } })
+      fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: 'Listen' } })
       expect(updateContentMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
       expect(updateContentMock).toHaveBeenCalledTimes(1)
@@ -444,10 +444,10 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(/^Spotify/)
-      fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Listen' } })
+      fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: 'Listen' } })
       // Collapse and confirm the header shows the new label, not the old one.
       fireEvent.click(screen.getByRole('button', { name: /^Listen/ }))
-      expect(screen.queryByLabelText('Link 1 URL')).toBeNull()
+      expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
       expect(screen.queryByRole('button', { name: /^Spotify/ })).toBeNull()
     } finally {
       vi.useRealTimers()
@@ -457,7 +457,7 @@ describe('EditorInspector — Links component', () => {
   it('removes a link optimistically via deleteContentAction', () => {
     openLinks()
     expandLink(/^Spotify/)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove link 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove social link 1' }))
     expect(deleteContentMock).toHaveBeenCalledWith('link', 'l1', 'artist-1')
     expect(screen.queryByRole('button', { name: /^Spotify/ })).toBeNull()
   })
@@ -482,6 +482,52 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     openLinks()
     expect(screen.getByText('Socials')).toBeTruthy()
     expect(screen.getByText('Tour support')).toBeTruthy()
+  })
+
+  it('routes a mailto:/tel: link out of Socials into its own "Contact" group', () => {
+    const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
+    openLinks({ links: [...LINKS, booking] })
+    expect(screen.getByText('Contact')).toBeTruthy()
+    // The Contact group renders AFTER Socials, and holds only the booking row.
+    const headings = [...document.querySelectorAll('aside span')]
+      .map((s) => s.textContent)
+      .filter((t) => t === 'Socials' || t === 'Contact')
+    expect(headings).toEqual(['Socials', 'Contact'])
+    // One add affordance for the whole panel, not one per group.
+    expect(screen.getAllByRole('link', { name: /Add link/ }).length).toBe(1)
+  })
+
+  it('gives Socials and Contact rows DISTINCT accessible names', () => {
+    // Row labels are numbered per-list, and the panel renders LinkTools twice — so
+    // an unprefixed "Link 1 label" existed twice in the DOM once a booking link
+    // appeared, which is ambiguous to a screen reader and to getByLabelText.
+    const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
+    openLinks({ links: [...LINKS, booking] })
+    fireEvent.click(screen.getByRole('button', { name: /^Spotify/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Bookings/ }))
+    // Both rows are open at once; each name must resolve to exactly one element.
+    expect(screen.getByLabelText('Social link 1 label')).toBeTruthy()
+    expect(screen.getByLabelText('Contact link 1 label')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove contact link 1' })).toBeTruthy()
+  })
+
+  it('shows NO Contact group when every link is a plain profile URL', () => {
+    openLinks()
+    expect(screen.queryByText('Contact')).toBeNull()
+  })
+
+  it('reorders by ID, so a drag in one group cannot scramble the other', () => {
+    // The panel renders links in two lists; a row's index within its own list is not
+    // its index in the full array. Dragging row 0 onto row 1 of SOCIALS must move l1
+    // past l2 and leave the booking link where it is.
+    const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
+    openLinks({ links: [...LINKS, booking] })
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    expect(rows.length).toBe(4) // 3 socials + 1 contact
+    fireEvent.dragStart(rows[0])
+    fireEvent.drop(rows[1])
+    expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l1', 'l3', 'l9'])
   })
 
   it('lists each support act by name, collapsed, with its link status', () => {
@@ -888,7 +934,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     openStyle()
     expand('Hero wordmark (SKEEN)')
     expect((screen.getByLabelText('Hero wordmark (SKEEN) Boldness') as HTMLSelectElement).value).toBe('font-black')
-    expect((screen.getByLabelText('Hero wordmark (SKEEN) Uppercase') as HTMLInputElement).checked).toBe(true)
+    // The toggles are role=switch buttons (not checkboxes), so the on/off state is
+    // aria-checked — the same signal a screen reader reads.
+    expect(screen.getByLabelText('Hero wordmark (SKEEN) Uppercase').getAttribute('aria-checked')).toBe('true')
   })
 
   it('changing Boldness swaps the weight class and PRESERVES the rest, repainting live', () => {
@@ -932,19 +980,42 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.getByLabelText('Footer Background')).toBeTruthy()
   })
 
-  it('Advanced box still edits the raw classes (arbitrary values), and rejects junk', () => {
+  it('paints the chosen value as text (the native control cannot render Inter)', () => {
+    // The <select> is transparent and overlaid; the value beside it is ordinary DOM
+    // text. If that text ever stops tracking the select, the panel silently lies about
+    // what is set — so assert it moves with the value.
+    openStyle()
+    expand('Footer')
+    // The painted layer is the select's sibling — reading the wrapper instead would
+    // also pick up every <option>'s text.
+    const painted = () => (screen.getByLabelText('Footer Alignment').parentElement as HTMLElement).lastElementChild
+    expect(painted()?.textContent).toBe('Default')
+    fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'text-center' } })
+    expect(painted()?.textContent).toBe('Center')
+  })
+
+  it('never exposes the raw Tailwind classes — no Advanced box for a manager to break', () => {
+    openStyle()
+    expand('Footer')
+    expect(screen.queryByLabelText('Footer classes')).toBeNull()
+    expect(screen.queryByText(/advanced/i)).toBeNull()
+  })
+
+  it('still PRESERVES base classes the controls do not own when a control changes', () => {
+    // The escape hatch is gone, so this is the only guarantee left that a region's
+    // layout classes survive a styling change — the manager can no longer repair them
+    // by hand if a control eats one.
     vi.useFakeTimers()
     try {
       openStyle()
       expand('Footer')
-      const v = 'text-[clamp(3rem,12vw,11rem)] hover:text-red-500'
-      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: v } })
+      fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'text-center' } })
       vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', v)
-
-      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: '<script>' } })
-      vi.advanceTimersByTime(500)
-      expect(screen.getByLabelText('Footer classes').getAttribute('aria-invalid')).toBe('true')
+      const saved = saveStyleMock.mock.calls.at(-1)?.[2] as string
+      expect(saved).toContain('mt-auto')
+      expect(saved).toContain('border-t')
+      expect(saved).toContain('px-6')
+      expect(saved).toContain('text-center')
     } finally {
       vi.useRealTimers()
     }
@@ -1033,6 +1104,31 @@ describe('EditorInspector — tour tools', () => {
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
   }
 
+  it('offers a drag handle ONLY on undated shows', () => {
+    // A dated show sorts itself by date on the site forever, so a dragged position
+    // would not survive — only undated shows are reorderable (20260723120000).
+    openTour()
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    expect(rows.length).toBe(1)
+    expect(rows[0].textContent).toContain('TBA')
+  })
+
+  it('persists only the undated shows, in their new order', () => {
+    const undated: EditorTour[] = [
+      { id: 'u1', date: null, venue: 'Well Studios', city: null, state: null, country: null, support: [], onSite: true },
+      { id: 'u2', date: null, venue: 'REDLINE', city: null, state: null, country: null, support: [], onSite: true },
+    ]
+    renderInspector([], { tours: [TOURS[0], ...undated] })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    expect(rows.length).toBe(2)
+    fireEvent.dragStart(rows[0])
+    fireEvent.drop(rows[1])
+    // The DATED show (t1) is absent: its sort_order is never read, so renumbering it
+    // would overwrite a value for nothing.
+    expect(reorderContentMock).toHaveBeenCalledWith('tour_date', 'artist-1', ['u2', 'u1'])
+  })
+
   it('counts dates that are ON THE SITE, not the library total', () => {
     renderInspector([], { tours: TOURS })
     expect(screen.getByRole('button', { name: /Tour/ }).textContent).toContain('1 of 3 on site')
@@ -1074,10 +1170,16 @@ describe('EditorInspector — tour tools', () => {
     expect(deleteContentMock).toHaveBeenCalledWith('tour_date', 't1', 'artist-1')
   })
 
-  it('has no drag handles: tour dates have no sort_order, the door orders by date', () => {
+  it('never lets a DATED show be dragged — the site sorts those by date', () => {
+    // Superseded the blanket "no drag handles anywhere" rule (20260723120000 added
+    // sort_order as a tie-break for undated shows only). A dated show must still be
+    // undraggable: its position comes from its date, so a dragged one would snap back.
     openTour()
-    expect(screen.queryByLabelText(/reorder/i)).toBeNull()
-    expect(document.querySelector('aside [draggable="true"]')).toBeNull()
+    const dated = [...document.querySelectorAll('aside div[draggable]')].filter((el) =>
+      el.textContent?.includes('Mohawk'),
+    )
+    expect(dated.length).toBe(1)
+    expect(dated[0].getAttribute('draggable')).toBe('false')
   })
 
   it('points at the Tour page to add a date', () => {

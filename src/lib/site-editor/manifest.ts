@@ -60,6 +60,10 @@ export type ManifestStyleRegion = {
   key: string
   label: string
   base?: string
+  /** Optional outline heading this region sits under in the inspector ("Hero"). When a
+   *  site declares none, the editor infers groups from shared key prefixes — see
+   *  `groupStyleRegions`. Declaring it wins, so a site can name its own outline. */
+  group?: string
 }
 
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by
@@ -170,3 +174,45 @@ export function fieldCurrentValue(field: ManifestField, ctx: FieldValueContext):
   return ''
 }
 
+
+/**
+ * Group style regions into the inspector's outline. A site can declare `group` per
+ * region and that always wins. Otherwise groups are INFERRED from the key prefix
+ * before the first `_`, but only where two or more regions share it — so skeen's
+ * four `hero_*` regions become "Hero" while the one-off `*_section` keys don't each
+ * become their own heading. Leftovers collect under `fallback`.
+ *
+ * Returns `[heading, regions][]` in first-appearance order, preserving manifest order
+ * within each group. When nothing groups (every region is a singleton and none declare
+ * one), returns a single entry with an EMPTY heading — the panel then renders a plain
+ * list rather than inventing structure that isn't there.
+ */
+export function groupStyleRegions(
+  regions: ManifestStyleRegion[],
+  fallback = 'Sections',
+): [string, ManifestStyleRegion[]][] {
+  const prefixCount = new Map<string, number>()
+  for (const r of regions) {
+    if (r.group) continue
+    const p = r.key.split('_')[0]
+    if (!p) continue // a leading `_` yields an empty prefix — never a heading
+    prefixCount.set(p, (prefixCount.get(p) ?? 0) + 1)
+  }
+
+  const declared = regions.some((r) => r.group)
+  const inferred = [...prefixCount.values()].some((n) => n >= 2)
+  // Nothing to group by: one unlabelled run, in manifest order.
+  if (!declared && !inferred) return regions.length ? [['', regions]] : []
+
+  const out = new Map<string, ManifestStyleRegion[]>()
+  for (const r of regions) {
+    const prefix = r.key.split('_')[0]
+    const heading =
+      r.group ??
+      (prefix && (prefixCount.get(prefix) ?? 0) >= 2 ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : fallback)
+    const bucket = out.get(heading)
+    if (bucket) bucket.push(r)
+    else out.set(heading, [r])
+  }
+  return [...out.entries()]
+}
