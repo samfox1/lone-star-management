@@ -10,6 +10,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { releaseBucket, type ReleaseProvenance } from '@/lib/music'
+import { safeHref } from '@/lib/url'
 
 /** The columns reconcileOnSite reads (superset: provenance only for releases). */
 type OnSiteRow = {
@@ -159,7 +160,10 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     table: 'tour_dates',
     // latitude/longitude are deliberately NOT here — coords are dashboard-only and
     // never reach the public read path (20260707140000).
-    snapshot: ['id', 'date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'is_past'],
+    // `support` is the act NAMES (edited on the tour page); `support_urls` is the
+    // per-act name→url map (edited in the editor's Links panel, 20260717140000). Both
+    // ride the snapshot so skeen can zip them into linked support acts.
+    snapshot: ['id', 'date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'support_urls', 'is_past'],
     orderBy: ['date'],
   },
   merch: {
@@ -169,15 +173,20 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   },
   link: {
     table: 'links',
-    snapshot: ['id', 'label', 'url', 'sort_order'],
+    // `role` binds a link to a manifest link-region (USB / Merch button) by KEY so skeen
+    // maps it authoritatively instead of by label. It rides the snapshot (the links
+    // branch of get_public_site serves `data` wholesale, so no SQL change is needed) and
+    // is null for ordinary social links.
+    snapshot: ['id', 'label', 'url', 'sort_order', 'role'],
     orderBy: ['sort_order', 'created_at'],
   },
   video: {
     table: 'videos',
     // Allowlist: youtube_id/source stay server-side, never reach the public site.
     // is_short IS public so the site can split normal videos from Shorts; storage_path
-    // IS public so the site can play an uploaded (self-hosted) video.
-    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order'],
+    // IS public so the site can play an uploaded (self-hosted) video. site_role places
+    // a video in a named background slot (hero landscape/portrait) — see 20260716200000.
+    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order', 'site_role'],
     orderBy: ['sort_order', 'created_at'],
   },
   release: {
@@ -194,7 +203,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // flag inside the revision — every other type's door joins the live row instead.
     // (Revisions written before 20260714150000 hold the old `visible` key; the door
     // coalesces both. Snapshots are immutable, so history is never rewritten.)
-    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site'],
+    // `orientation` (horizontal/vertical, gallery photos only) rides so the site can lay
+    // each photo out by shape — get_public_site cherry-picks it into the media payload.
+    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the
@@ -343,6 +354,48 @@ export async function deleteContent(
 ): Promise<void> {
   const { error } = await supabase.from(PUBLISHABLE[type].table).delete().eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+/**
+ * Set (or clear) the outbound URL for ONE support act on a tour date. The act's name
+ * comes from `tour_dates.support` (edited on the tour page); this writes the parallel
+ * `support_urls` name→url map (20260717140000), keyed by that name — so the Links panel
+ * can link "+ Gudfella" without ever touching the name list.
+ *
+ * Read-modify-write of the whole jsonb map (a handful of acts per date; single manager),
+ * scoped to (id, artist_id) so RLS + the artist filter keep it on the caller's own row.
+ * A blank `url` DELETES the key (the act goes back to plain text). Returns the new map.
+ */
+export async function setSupportUrl(
+  supabase: SupabaseClient,
+  artistId: string,
+  tourDateId: string,
+  name: string,
+  url: string,
+): Promise<Record<string, string>> {
+  const { data, error: readErr } = await supabase
+    .from('tour_dates')
+    .select('support_urls')
+    .eq('id', tourDateId)
+    .eq('artist_id', artistId)
+    .single()
+  if (readErr) throw new Error(readErr.message)
+
+  // Validate here too, not only in the action wrapper, so the safe-URL guarantee travels
+  // WITH the write (a future direct caller can't persist a javascript:/data: URL into
+  // support_urls, which rides the snapshot to the public site). Mirrors saveEditorLink.
+  const map = { ...((data?.support_urls as Record<string, string> | null) ?? {}) }
+  const safe = url ? safeHref(url) : undefined
+  if (safe) map[name] = safe
+  else delete map[name]
+
+  const { error } = await supabase
+    .from('tour_dates')
+    .update({ support_urls: map })
+    .eq('id', tourDateId)
+    .eq('artist_id', artistId)
+  if (error) throw new Error(error.message)
+  return map
 }
 
 /**

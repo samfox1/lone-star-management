@@ -1,23 +1,35 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
-import { reorderList } from '@/lib/site-editor/gallery'
-import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
+import type { ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { cleanClassText } from '@/lib/site-editor/save'
-import { Icon, type IconName } from '@/components/ui/icons'
-import { MediaUploader } from '../media-uploader'
 import {
+  applyStyleValue,
+  buildStyleControls,
+  readStyleValue,
+  type SiteStyleOptions,
+  type StyleControl,
+} from '@/lib/site-editor/style-controls'
+import { safeHref } from '@/lib/url'
+import { Icon, type IconName } from '@/components/ui/icons'
+import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { GallerySlotUploader } from '../media-uploader'
+import { useLockBodyScroll } from '../use-lock-body-scroll'
+import {
+  assignHeroSlotAction,
   deleteContentAction,
-  deleteMediaAction,
+  placeGalleryPhotoAction,
   renameVideoAction,
   reorderContentAction,
-  reorderGalleryAction,
   saveEditorFieldAction,
+  saveEditorLinkAction,
   saveEditorStyleAction,
   setOnSiteAction,
+  setSupportUrlAction,
   updateContentAction,
 } from '../actions'
 
@@ -32,7 +44,13 @@ import {
  * other component types still render against placeholder affordances — next step.
  */
 
-export type GalleryPhoto = { id: string; storage_path: string; onSite: boolean }
+export type GalleryPhoto = {
+  id: string
+  storage_path: string
+  onSite: boolean
+  /** Which slot group the photo fills. null for legacy photos uploaded before slots. */
+  orientation: Orientation | null
+}
 export type EditorTextField = {
   key: string
   label: string
@@ -41,7 +59,46 @@ export type EditorTextField = {
   multiline: boolean
 }
 export type EditorLink = { id: string; label: string; url: string; onSite: boolean }
-export type EditorVideo = { id: string; title: string; poster: string | null; onSite: boolean }
+/**
+ * One support act on a tour date, surfaced in the Links panel's "Tour support" group so
+ * its outbound URL (`tour_dates.support_urls[name]`) can be edited where the manager
+ * manages links — separately from the act NAME, which is edited on the Tour page.
+ */
+export type EditorSupportLink = {
+  /** The tour date this act supports — the row `support_urls` is written to. */
+  tourDateId: string
+  /** The act's name (e.g. "Gudfella"): the key in support_urls AND the row label. */
+  name: string
+  /** The act's current outbound URL, '' if none. */
+  url: string
+  /** Which show this act is on (venue / city / date), for context under the name. */
+  show: string
+}
+/** A named background slot an uploaded video can fill: the two hero backgrounds plus
+ *  the bio-section background. null = a normal library/band video. */
+export type SiteVideoRole = 'hero_landscape' | 'hero_portrait' | 'bio_background'
+/** The label each background slot shows in the panel and the picker heading. */
+const SLOT_LABELS: Record<SiteVideoRole, string> = {
+  hero_landscape: 'Landscape · desktop',
+  hero_portrait: 'Portrait · mobile',
+  bio_background: 'Bio background',
+}
+export type EditorVideo = {
+  id: string
+  title: string
+  /** 'youtube' | 'soundcloud' | 'uploaded'. The band is YouTube embeds only; uploaded
+   *  videos are the pool the background slots pick from. */
+  provider: string
+  isShort: boolean
+  /** Background slot this video is placed in, or null. */
+  siteRole: SiteVideoRole | null
+  /** YouTube thumbnail (embeds). Null for uploaded videos — they use `previewUrl`. */
+  poster: string | null
+  /** Playable URL for an uploaded video, seeked to its first frame for a thumbnail
+   *  preview. Null for YouTube (which has a poster instead). */
+  previewUrl: string | null
+  onSite: boolean
+}
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null; onSite: boolean }
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 export type EditorTour = {
@@ -57,6 +114,8 @@ export type EditorTour = {
   onSite: boolean
 }
 
+// One Links panel holds every link kind as its own group: Socials + Tour support
+// (outbound links) AND the manifest-declared link buttons (USB / Merch).
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'tour' | 'merch' | 'style'
 type Component = { kind: Kind; icon: IconName; label: string }
 
@@ -176,20 +235,30 @@ export function EditorInspector({
   photos: initial,
   textFields = [],
   links: initialLinks = [],
+  supportLinks = [],
   videos: initialVideos = [],
   merch: initialMerch = [],
   songs: initialSongs = [],
   tours: initialTours = [],
   styleRegions = [],
   styleValues = {},
+  styleOptions,
   selectedStyle = null,
+  linkRegions = [],
+  linkValues = {},
+  selectedLink = null,
   onApplyField,
   onApplyStyle,
+  onApplyLink,
 }: {
   artistId: string
   photos: GalleryPhoto[]
   textFields?: EditorTextField[]
   links?: EditorLink[]
+  /** Support acts across the artist's tour dates, for the Links panel's "Tour support"
+   *  group. Read-only structurally (acts come from the tour dates); only their URLs are
+   *  edited here. */
+  supportLinks?: EditorSupportLink[]
   videos?: EditorVideo[]
   merch?: EditorMerch[]
   songs?: EditorSong[]
@@ -201,10 +270,21 @@ export function EditorInspector({
   /** Saved class overrides (region_key → class string) from the draft. Absent means
    *  the region is still on its base classes. */
   styleValues?: Record<string, string>
+  /** The site's declared colour + font palette, for the Style panel's dropdowns. */
+  styleOptions?: SiteStyleOptions
   /** Region the frame reported a click on — jumps the panel to Style, focused there. */
   selectedStyle?: string | null
+  /** Link-powered elements the site declared (USB/Merch buttons). From the FRAME's
+   *  manifest at runtime for a custom site; [] for built-in templates. */
+  linkRegions?: ManifestLinkRegion[]
+  /** Current URL for each link region, keyed by its role (from the DB). */
+  linkValues?: Record<string, string>
+  /** Link region the frame reported a click on — jumps to the Site-links panel. */
+  selectedLink?: string | null
   onApplyField?: (key: string, value: string) => void
   onApplyStyle?: (key: string, className: string) => void
+  /** Optimistically set a link's href in the frame before the debounced save. */
+  onApplyLink?: (key: string, url: string) => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
@@ -235,42 +315,36 @@ export function EditorInspector({
     setActive(COMPONENTS.find((c) => c.kind === 'style') ?? null)
   }
 
-  function removePhoto(p: GalleryPhoto) {
-    if (isPending) return
-    const prev = photos
-    setPhotos((list) => list.filter((x) => x.id !== p.id)) // optimistic
-    startTransition(async () => {
-      const res = await deleteMediaAction(p.id, p.storage_path, artistId)
-      if (res?.error) setPhotos(prev) // revert on failure
-    })
+  // Same click-the-thing behaviour for a link-powered element: selecting skeen's USB
+  // button in the frame opens the Links panel (its "Buttons" group) focused on it.
+  const [lastSelectedLink, setLastSelectedLink] = useState<string | null>(null)
+  if (selectedLink && selectedLink !== lastSelectedLink) {
+    setLastSelectedLink(selectedLink)
+    setActive(COMPONENTS.find((c) => c.kind === 'links') ?? null)
   }
 
-  function reorderPhotos(from: number, to: number) {
-    if (isPending) return
-    const prev = photos
-    const next = reorderList(photos, from, to)
-    setPhotos(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderGalleryAction(artistId, next.map((p) => p.id))
-      if (res?.error) setPhotos(prev) // revert on failure
-    })
-  }
-
-  // The uploader already wrote the media row (and router.refresh'd); append it to the
-  // grid so it shows without waiting on a prop re-sync. New uploads are OFF the site
-  // (on_site defaults false) until selected, and sort last.
-  function addPhoto(m: { id: string; storage_path: string }) {
+  // A picker upload already wrote the media row (orientation + on_site=false); append it
+  // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
+  function addPhoto(m: { id: string; storage_path: string; orientation: Orientation }) {
     setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false }]))
   }
 
-  // Toggle whether a photo / song is on the public site (the `on_site` flag). Optimistic;
-  // reverts the single item on failure. Not a list-structure change, so no publish/guard.
-  function togglePhotoOnSite(p: GalleryPhoto) {
-    const next = !p.onSite
-    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: next } : x)))
+  // Place a gallery photo into an orientation group: assign its orientation AND put it on
+  // the site (one write). This is how a plain uploaded asset gets its orientation — the
+  // manager decides it by picking the photo into Horizontal or Vertical. Optimistic.
+  function placePhoto(p: GalleryPhoto, orientation: Orientation) {
+    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, orientation, onSite: true } : x)))
     startTransition(async () => {
-      const res = await setOnSiteAction('photo', p.id, artistId, next)
-      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: !next } : x)))
+      const res = await placeGalleryPhotoAction(artistId, p.id, orientation)
+      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: p.onSite } : x)))
+    })
+  }
+  // Take a placed photo OFF the site, back into the library (never deletes). Optimistic.
+  function unplacePhoto(p: GalleryPhoto) {
+    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: false } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('photo', p.id, artistId, false)
+      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: true } : x)))
     })
   }
   function toggleSongOnSite(s: EditorSong) {
@@ -295,6 +369,24 @@ export function EditorInspector({
     startTransition(async () => {
       const res = await setOnSiteAction('video', v.id, artistId, next)
       if (res?.error) setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: !next } : x)))
+    })
+  }
+  // Place (or clear) a video in a hero slot. Optimistic so the slot fills immediately —
+  // vacate the role's current holder, then set the picked video. Mirrors assignHeroSlotAction.
+  function assignHero(role: SiteVideoRole, videoId: string | null) {
+    const prev = videos
+    setVideos((list) =>
+      list.map((x) => {
+        // Guard `x.id !== videoId`: re-picking the video ALREADY in this slot would
+        // otherwise hit the clear branch first and blank the slot until revalidation.
+        if (x.siteRole === role && x.id !== videoId) return { ...x, siteRole: null, onSite: false }
+        if (x.id === videoId) return { ...x, siteRole: role, onSite: true }
+        return x
+      }),
+    )
+    startTransition(async () => {
+      const res = await assignHeroSlotAction(artistId, role, videoId)
+      if (res?.error) setVideos(prev)
     })
   }
   function toggleTourOnSite(t: EditorTour) {
@@ -327,26 +419,9 @@ export function EditorInspector({
     })
   }
 
-  function removeVideo(v: EditorVideo) {
-    if (isPending) return
-    const prev = videos
-    setVideos((list) => list.filter((x) => x.id !== v.id)) // optimistic
-    startTransition(async () => {
-      const res = await deleteContentAction('video', v.id, artistId)
-      if (res?.error) setVideos(prev)
-    })
-  }
-
-  function reorderVideos(from: number, to: number) {
-    if (isPending) return
-    const prev = videos
-    const next = reorderList(videos, from, to)
-    setVideos(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderContentAction('video', artistId, next.map((v) => v.id))
-      if (res?.error) setVideos(prev)
-    })
-  }
+  // Videos are placed into slots from the library (VideoTools), not deleted/reordered
+  // here — deleting a video for good is a Videos-page action, and the band orders by
+  // sort_order — so the editor no longer needs removeVideo/reorderVideos.
 
   function removeMerch(m: EditorMerch) {
     if (isPending) return
@@ -355,16 +430,6 @@ export function EditorInspector({
     startTransition(async () => {
       const res = await deleteContentAction('merch', m.id, artistId)
       if (res?.error) setMerch(prev)
-    })
-  }
-
-  function removeSong(s: EditorSong) {
-    if (isPending) return
-    const prev = songs
-    setSongs((list) => list.filter((x) => x.id !== s.id)) // optimistic
-    startTransition(async () => {
-      const res = await deleteContentAction('track', s.id, artistId)
-      if (res?.error) setSongs(prev)
     })
   }
 
@@ -378,23 +443,14 @@ export function EditorInspector({
     })
   }
 
-  function reorderSongs(from: number, to: number) {
-    if (isPending) return
-    const prev = songs
-    const next = reorderList(songs, from, to)
-    setSongs(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderContentAction('track', artistId, next.map((s) => s.id))
-      if (res?.error) setSongs(prev)
-    })
-  }
-
   // One count per Kind, derived once and shared by both views — they used to each
   // reach into a different set of arrays through their own ternary chain. `onSite`
   // is what the site actually serves; null means the kind has no on-site concept.
   const onSite = <T,>(xs: T[], f: (x: T) => boolean) => xs.filter(f).length
   const counts: Record<Kind, KindCount> = {
-    images: { total: photos.length, onSite: onSite(photos, (p) => p.onSite) },
+    // Gallery photos are edited as orientation SLOTS: a photo in a slot is on the site by
+    // construction, so there's no separate on-site count to show — just the total.
+    images: { total: photos.length, onSite: null },
     text: { total: textFields.length, onSite: null },
     links: { total: links.length, onSite: onSite(links, (l) => l.onSite) },
     videos: { total: videos.length, onSite: onSite(videos, (v) => v.onSite) },
@@ -409,36 +465,37 @@ export function EditorInspector({
       {active ? (
         <EditingView
           component={active}
-          counts={counts}
           photos={photos}
           textFields={textFields}
           links={links}
+          supportLinks={supportLinks}
           videos={videos}
           merch={merch}
           songs={songs}
           tours={tours}
           artistId={artistId}
-          onRemove={removePhoto}
-          onReorder={reorderPhotos}
           onAddPhoto={addPhoto}
-          onTogglePhotoOnSite={togglePhotoOnSite}
+          onPlacePhoto={placePhoto}
+          onUnplacePhoto={unplacePhoto}
           onToggleSongOnSite={toggleSongOnSite}
           onToggleLinkOnSite={toggleLinkOnSite}
           onToggleVideoOnSite={toggleVideoOnSite}
+          onAssignHero={assignHero}
           onToggleTourOnSite={toggleTourOnSite}
           onRemoveTour={removeTour}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
-          onRemoveVideo={removeVideo}
-          onReorderVideo={reorderVideos}
           onRemoveMerch={removeMerch}
-          onRemoveSong={removeSong}
-          onReorderSong={reorderSongs}
           styleRegions={styleRegions}
           styleValues={styleValues}
+          styleOptions={styleOptions}
           selectedStyle={selectedStyle}
+          linkRegions={linkRegions}
+          linkValues={linkValues}
+          selectedLink={selectedLink}
           onApplyField={onApplyField}
           onApplyStyle={onApplyStyle}
+          onApplyLink={onApplyLink}
           onBack={() => setActive(null)}
           onSwitch={setActive}
         />
@@ -491,70 +548,72 @@ function BrowseView({
 /* ── Editing: tools for the selected component ───────────────────────────────── */
 function EditingView({
   component,
-  counts,
   photos,
   textFields,
   links,
+  supportLinks,
   videos,
   merch,
   songs,
   tours,
   artistId,
-  onRemove,
-  onReorder,
   onAddPhoto,
-  onTogglePhotoOnSite,
+  onPlacePhoto,
+  onUnplacePhoto,
   onToggleSongOnSite,
   onToggleLinkOnSite,
   onToggleVideoOnSite,
+  onAssignHero,
   onToggleTourOnSite,
   onRemoveTour,
   onRemoveLink,
   onReorderLink,
-  onRemoveVideo,
-  onReorderVideo,
   onRemoveMerch,
-  onRemoveSong,
-  onReorderSong,
   styleRegions,
   styleValues,
+  styleOptions,
   selectedStyle,
+  linkRegions,
+  linkValues,
+  selectedLink,
   onApplyField,
   onApplyStyle,
+  onApplyLink,
   onBack,
   onSwitch,
 }: {
   component: Component
-  counts: Record<Kind, KindCount>
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
+  supportLinks: EditorSupportLink[]
   videos: EditorVideo[]
   merch: EditorMerch[]
   songs: EditorSong[]
   tours: EditorTour[]
   artistId: string
-  onRemove: (p: GalleryPhoto) => void
-  onReorder: (from: number, to: number) => void
-  onAddPhoto: (m: { id: string; storage_path: string }) => void
-  onTogglePhotoOnSite: (p: GalleryPhoto) => void
+  onAddPhoto: (m: { id: string; storage_path: string; orientation: Orientation }) => void
+  onPlacePhoto: (p: GalleryPhoto, orientation: Orientation) => void
+  onUnplacePhoto: (p: GalleryPhoto) => void
   onToggleSongOnSite: (s: EditorSong) => void
   onToggleLinkOnSite: (l: EditorLink) => void
   onToggleVideoOnSite: (v: EditorVideo) => void
+  onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
   onToggleTourOnSite: (t: EditorTour) => void
   onRemoveTour: (t: EditorTour) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (from: number, to: number) => void
-  onRemoveVideo: (v: EditorVideo) => void
-  onReorderVideo: (from: number, to: number) => void
   onRemoveMerch: (m: EditorMerch) => void
-  onRemoveSong: (s: EditorSong) => void
-  onReorderSong: (from: number, to: number) => void
   styleRegions: ManifestStyleRegion[]
   styleValues: Record<string, string>
+  styleOptions?: SiteStyleOptions
   selectedStyle: string | null
+  linkRegions: ManifestLinkRegion[]
+  linkValues: Record<string, string>
+  selectedLink: string | null
   onApplyField?: (key: string, value: string) => void
   onApplyStyle?: (key: string, className: string) => void
+  onApplyLink?: (key: string, url: string) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
@@ -568,53 +627,51 @@ function EditingView({
   const isStyle = component.kind === 'style'
   return (
     <>
-      <button
-        type="button"
-        onClick={onBack}
-        className={cx('flex items-center gap-1.5 px-5 pb-2.5 pt-[15px] text-ink-muted hover:text-ink', EYEBROW)}
-      >
-        <Icon name="chevronLeft" size={15} />
-        All components
-      </button>
-
-      <div className="flex items-center gap-3 border-b border-hairline px-5 pb-4 pt-0.5">
-        <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[11px] bg-accent-soft text-accent">
-          <Icon name={component.icon} size={20} />
-        </span>
-        <span className="flex flex-col gap-0.5">
-          <span className="text-base font-semibold">{isImages ? 'Gallery' : component.label}</span>
-          <span className={EYEBROW}>{countLabel(component.kind, counts[component.kind])}</span>
+      {/* Minimal header: back on the left, the component's icon on the right. */}
+      <div className="flex items-center justify-between border-b border-hairline px-5 pb-2.5 pt-[15px]">
+        <button
+          type="button"
+          onClick={onBack}
+          className={cx('flex items-center gap-1.5 text-ink-muted hover:text-ink', EYEBROW)}
+        >
+          <Icon name="chevronLeft" size={15} />
+          All components
+        </button>
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-accent-soft text-accent">
+          <Icon name={component.icon} size={18} />
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {isImages ? (
-          <PhotoTools
-            photos={photos}
-            artistId={artistId}
-            onRemove={onRemove}
-            onReorder={onReorder}
-            onAdd={onAddPhoto}
-            onToggleOnSite={onTogglePhotoOnSite}
-          />
+          <PhotoTools photos={photos} artistId={artistId} onAdd={onAddPhoto} onPlace={onPlacePhoto} onUnplace={onUnplacePhoto} />
         ) : isText ? (
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
         ) : isLinks ? (
-          <LinkTools
-            links={links}
-            artistId={artistId}
-            onRemove={onRemoveLink}
-            onReorder={onReorderLink}
-            onToggleOnSite={onToggleLinkOnSite}
-          />
+          // One Links panel, grouped by purpose: outbound social links, tour-support
+          // links, then the site's declared link buttons (USB / Merch).
+          <>
+            <GroupLabel>Socials</GroupLabel>
+            <LinkTools
+              links={links}
+              artistId={artistId}
+              onRemove={onRemoveLink}
+              onReorder={onReorderLink}
+              onToggleOnSite={onToggleLinkOnSite}
+            />
+            <GroupLabel>Tour support</GroupLabel>
+            <SupportLinkTools supportLinks={supportLinks} artistId={artistId} />
+            <GroupLabel>Buttons</GroupLabel>
+            <SiteLinkTools
+              regions={linkRegions}
+              values={linkValues}
+              selected={selectedLink}
+              artistId={artistId}
+              onApplyLink={onApplyLink}
+            />
+          </>
         ) : isVideos ? (
-          <VideoTools
-            videos={videos}
-            artistId={artistId}
-            onRemove={onRemoveVideo}
-            onReorder={onReorderVideo}
-            onToggleOnSite={onToggleVideoOnSite}
-          />
+          <VideoTools videos={videos} artistId={artistId} onToggleOnSite={onToggleVideoOnSite} onAssignHero={onAssignHero} />
         ) : isTour ? (
           <TourTools
             tours={tours}
@@ -625,17 +682,12 @@ function EditingView({
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
         ) : isMusic ? (
-          <MusicTools
-            songs={songs}
-            artistId={artistId}
-            onRemove={onRemoveSong}
-            onReorder={onReorderSong}
-            onToggleOnSite={onToggleSongOnSite}
-          />
+          <MusicTools songs={songs} artistId={artistId} onToggleOnSite={onToggleSongOnSite} />
         ) : isStyle ? (
           <StyleTools
             regions={styleRegions}
             values={styleValues}
+            options={styleOptions}
             selected={selectedStyle}
             artistId={artistId}
             onApplyStyle={onApplyStyle}
@@ -671,151 +723,105 @@ function EditingView({
   )
 }
 
-/* ── Photo-collection tools (accordion) ──────────────────────────────────────── */
-function PhotoTools({
-  photos,
-  artistId,
-  onRemove,
-  onReorder,
-  onAdd,
-  onToggleOnSite,
-}: {
-  photos: GalleryPhoto[]
-  artistId: string
-  onRemove: (p: GalleryPhoto) => void
-  onReorder: (from: number, to: number) => void
-  onAdd: (m: { id: string; storage_path: string }) => void
-  onToggleOnSite: (p: GalleryPhoto) => void
-}) {
-  const [open, setOpen] = useState({ photos: true, sizing: true, layout: true })
-  const [perImage, setPerImage] = useState<'S' | 'M' | 'L'>('M')
-  const [display, setDisplay] = useState<'Grid' | 'Rows' | 'Masonry'>('Grid')
-  const [columns, setColumns] = useState(2)
-  const [size, setSize] = useState(55)
-  const dragFrom = useRef<number | null>(null)
-  const [dragOver, setDragOver] = useState<number | null>(null)
-  const toggle = (k: keyof typeof open) => setOpen((o) => ({ ...o, [k]: !o[k] }))
-
-  function drop(to: number) {
-    const from = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (from !== null && from !== to) onReorder(from, to)
-  }
-
+/** A 4:3 photo thumbnail box for a gallery card / picker tile. */
+/** A gallery thumbnail at its orientation's aspect (3:2 horizontal, 2:3 vertical). */
+function PhotoThumb({ path, aspect }: { path: string; aspect: string }) {
   return (
-    <>
-      <Section title="Photos" open={open.photos} onToggle={() => toggle('photos')} extra={<Pill>{photos.length}</Pill>}>
-        <div className="grid grid-cols-2 gap-2.5">
-          {photos.map((p, i) => (
-            <div
-              key={p.id}
-              draggable
-              onDragStart={() => (dragFrom.current = i)}
-              onDragEnter={() => setDragOver(i)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => drop(i)}
-              onDragEnd={() => {
-                dragFrom.current = null
-                setDragOver(null)
-              }}
-              className={cx(
-                'group relative overflow-hidden rounded-lg',
-                dragOver === i && 'ring-2 ring-accent',
-              )}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={mediaUrl(p.storage_path)}
-                alt=""
-                className={cx('aspect-[4/3] w-full rounded-lg object-cover', !p.onSite && 'opacity-45')}
-              />
-              <span className="absolute left-1.5 top-1.5 hidden cursor-grab rounded-md bg-black/35 p-0.5 text-white group-hover:flex">
-                <Icon name="grip" size={16} />
-              </span>
-              <button
-                type="button"
-                aria-label={`Remove photo ${i + 1}`}
-                onClick={() => onRemove(p)}
-                className="absolute right-1.5 top-1.5 hidden rounded-md bg-black/35 p-1 text-white hover:bg-accent-red group-hover:flex"
-              >
-                <Icon name="trash" size={14} />
-              </button>
-              <OnSiteToggle on={p.onSite} onToggle={() => onToggleOnSite(p)} className="absolute bottom-1.5 left-1.5" />
-            </div>
-          ))}
-        </div>
-        <div className="mt-2.5">
-          <MediaUploader
-            artistId={artistId}
-            purpose="gallery_image"
-            folder="gallery"
-            accept="image/*"
-            label="Drop images or click to upload"
-            onUploaded={onAdd}
-          />
-        </div>
-      </Section>
-
-      <Section title="Sizing" open={open.sizing} onToggle={() => toggle('sizing')}>
-        <div className={cx(EYEBROW, 'mb-2')}>Collection size</div>
-        <div className="flex items-center gap-3">
-          <span className="font-space text-[11px] text-ink-faint">S</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={size}
-            onChange={(e) => setSize(Number(e.target.value))}
-            aria-label="Collection size"
-            className="h-1 flex-1 accent-[#2563eb]"
-          />
-          <span className="font-space text-[11px] text-ink-faint">L</span>
-        </div>
-
-        <div className={cx(EYEBROW, 'mb-2 mt-4')}>Selected image</div>
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-[52px] flex-none rounded-md bg-track" />
-          <Segmented options={['S', 'M', 'L']} value={perImage} onChange={setPerImage} />
-        </div>
-      </Section>
-
-      <Section title="Layout" open={open.layout} onToggle={() => toggle('layout')}>
-        <div className={cx(EYEBROW, 'mb-2')}>Display</div>
-        <Segmented options={['Grid', 'Rows', 'Masonry']} value={display} onChange={setDisplay} full />
-
-        <div className={cx(EYEBROW, 'mb-2 mt-4')}>Columns</div>
-        <div className="flex items-center gap-2.5">
-          <StepBtn name="minus" label="Fewer columns" onClick={() => setColumns((n) => Math.max(1, n - 1))} />
-          <span className="min-w-5 text-center font-space text-[15px] font-bold">{columns}</span>
-          <StepBtn name="plus" label="More columns" onClick={() => setColumns((n) => Math.min(4, n + 1))} />
-          <span className="font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">across</span>
-        </div>
-      </Section>
-    </>
+    <div className={cx('w-full overflow-hidden bg-track', aspect)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={mediaUrl(path)} alt="" className="h-full w-full object-cover" />
+    </div>
   )
 }
 
-/* ── Style tools: per-region class strings (SITE_STYLING_PLAN.md S4) ─────────── */
-function StyleTools({
+/* ── Image tools: the gallery grouped by orientation, each an assets grid ────────────
+ * skeen's photo collage lays each photo out by shape, so the gallery is edited in two
+ * orientation groups (Horizontal, Vertical). Add opens the asset picker — the manager's
+ * ALREADY-UPLOADED photos, exactly like the video picker — and choosing one places it in
+ * that group, which is when its orientation is set (photos upload as plain assets). The
+ * WHOLE library shows in both pickers, so an untagged upload is never hidden. Replace /
+ * Remove behave like the video slots (Remove takes a photo off the site, back to the
+ * library — never deletes). Cards are 3-up. The picker footer can still upload a new
+ * asset, but picking existing ones is the primary path. */
+const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string }[] = [
+  { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]' },
+  { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]' },
+]
+
+function PhotoTools({
+  photos,
+  artistId,
+  onAdd,
+  onPlace,
+  onUnplace,
+}: {
+  photos: GalleryPhoto[]
+  artistId: string
+  onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
+  onPlace: (p: GalleryPhoto, orientation: Orientation) => void
+  onUnplace: (p: GalleryPhoto) => void
+}) {
+  // A photo is horizontal OR vertical by its real shape, so each group shows only its own
+  // orientation — never the same photo in both. A null-orientation photo (a legacy row,
+  // or a Drive import that was never measured) has no shape yet: it belongs to the
+  // Horizontal group so it stays visible and manageable instead of vanishing from the
+  // editor while still live on the site. Placing it there assigns a real orientation.
+  const belongs = (p: GalleryPhoto, group: Orientation) =>
+    p.orientation === group || (group === 'horizontal' && p.orientation == null)
+  return (
+    <div className="py-2">
+      {PHOTO_GROUPS.map(({ orientation, label, aspect }) => (
+        <div key={orientation}>
+          <div className="px-5 pt-3">
+            <SlotGroupLabel>{label}</SlotGroupLabel>
+          </div>
+          <MediaGrid
+            onSiteItems={photos.filter((p) => p.onSite && belongs(p, orientation))}
+            library={photos.filter((p) => !p.onSite && belongs(p, orientation))}
+            noun={`${orientation} photo`}
+            keyOf={(p) => p.id}
+            labelOf={(_, i) => `${label} ${i + 1}`}
+            renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect={aspect} />}
+            aspect={aspect}
+            cols="grid-cols-3"
+            pickTitle={`Add a ${orientation} photo`}
+            addLabel={`Add ${orientation} photo`}
+            empty={
+              <p className="py-2 text-center text-xs text-ink-muted">
+                No {orientation} photos in your library yet. Upload one below.
+              </p>
+            }
+            pickerFooter={<GallerySlotUploader artistId={artistId} orientation={orientation} onUploaded={onAdd} />}
+            onSetOnSite={(p, next) => (next ? onPlace(p, orientation) : onUnplace(p))}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ── Site-link tools: set the href for each manifest-declared link button ────────────
+ * Mirrors StyleTools (manifest-driven, Phase 2): the site declares its link-powered
+ * elements (USB / Merch buttons) in its manifest; here the manager sets each one's URL
+ * BY KEY. An unset link shows as an EMPTY, labelled row, so a missing one (e.g. USB) is
+ * visible rather than invisible. Saving writes a `links` row keyed by role and posts
+ * `apply-link` so the frame updates live. Selecting the element in the frame focuses its
+ * row. Socials are a SEPARATE panel — these are only the declared buttons. */
+function SiteLinkTools({
   regions,
   values,
   selected,
   artistId,
-  onApplyStyle,
+  onApplyLink,
 }: {
-  regions: ManifestStyleRegion[]
+  regions: ManifestLinkRegion[]
   values: Record<string, string>
   selected: string | null
   artistId: string
-  onApplyStyle?: (key: string, className: string) => void
+  onApplyLink?: (key: string, url: string) => void
 }) {
-  // Seed each field with the saved override if there is one, else the region's BASE
-  // classes — so the manager edits what's actually on the element rather than
-  // guessing from an empty box. A stored string REPLACES the base (see lib/styles
-  // on the skeen side), which is why clearing the field restores the base.
   const [text, setText] = useState<Record<string, string>>(() =>
-    Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])),
+    Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? ''])),
   )
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const [status, setStatus] = useState<SaveStatus>('idle')
@@ -823,7 +829,218 @@ function StyleTools({
   const saving = useRef<Map<string, Promise<unknown>>>(new Map())
   const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Map<string, string>>(new Map())
-  const fieldRefs = useRef<Map<string, HTMLTextAreaElement | null>>(new Map())
+  const fieldRefs = useRef<Map<string, HTMLInputElement | null>>(new Map())
+  // Manifest labels, so the unmount flush can name each row without the region list
+  // being an effect dependency (same trick as SupportLinkTools' linksRef).
+  const labelsRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    labelsRef.current = Object.fromEntries(regions.map((r) => [r.key, r.label]))
+  }, [regions])
+
+  // The frame's manifest arrives on `ready`, so regions/values can land after first
+  // render — re-seed when they do, without clobbering typing.
+  const seedKey = regions.map((r) => r.key).join(',')
+  const [seeded, setSeeded] = useState(seedKey)
+  if (seeded !== seedKey) {
+    setSeeded(seedKey)
+    setText(Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? ''])))
+  }
+
+  // Scroll the clicked link's row into view + focus it (frame → editor `select`).
+  useEffect(() => {
+    if (!selected) return
+    const el = fieldRefs.current.get(selected)
+    el?.scrollIntoView?.({ block: 'center' })
+    el?.focus()
+  }, [selected])
+
+  const persist = useCallback(
+    (key: string, url: string) => {
+      pending.current.delete(key)
+      setStatus('saving')
+      runSerialized(saving, errored, setStatus, key, () =>
+        saveEditorLinkAction(artistId, key, url, labelsRef.current[key] ?? key),
+      )
+    },
+    [artistId],
+  )
+
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingMap = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingMap.forEach((url, key) => {
+        void saveEditorLinkAction(artistId, key, url, labelsRef.current[key] ?? key)
+      })
+    }
+  }, [artistId])
+
+  function edit(key: string, raw: string) {
+    setText((t) => ({ ...t, [key]: raw }))
+    const trimmed = raw.trim()
+    // Blank clears the link (valid). A non-blank value must be a safe http(s)/relative
+    // URL — validated with the SAME safeHref the action uses, so the panel can't claim
+    // "Saved" on a write the server will reject.
+    const ok = trimmed === '' || safeHref(trimmed) !== undefined
+    setInvalid((s) => {
+      const next = new Set(s)
+      if (ok) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    if (!ok) return
+
+    onApplyLink?.(key, trimmed) // optimistic href in the frame
+    pending.current.set(key, trimmed)
+    const existing = timers.current.get(key)
+    if (existing) clearTimeout(existing)
+    timers.current.set(
+      key,
+      setTimeout(() => {
+        timers.current.delete(key)
+        persist(key, trimmed)
+      }, 500),
+    )
+  }
+
+  if (!regions.length) {
+    return (
+      <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
+        This site hasn&apos;t declared any link buttons. A custom site sends them when the
+        preview loads; the built-in templates declare none yet.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-4 px-5 py-4">
+      <p className="text-xs leading-relaxed text-ink-muted">
+        Set where each of the site&apos;s link buttons points. Clearing a box removes the link.
+      </p>
+      {regions.map((r) => (
+        <label key={r.key} className="block">
+          <span className={cx(EYEBROW, 'block')}>{r.label}</span>
+          {r.description && (
+            <span className="mb-1.5 mt-1 block text-[11px] leading-snug text-ink-faint">Powers: {r.description}</span>
+          )}
+          <input
+            ref={(el) => {
+              fieldRefs.current.set(r.key, el)
+            }}
+            aria-label={`${r.label} URL`}
+            aria-invalid={invalid.has(r.key) || undefined}
+            type="url"
+            value={text[r.key] ?? ''}
+            onChange={(e) => edit(r.key, e.target.value)}
+            placeholder="https://…  (blank = no link)"
+            className={cx(
+              'mt-1 w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint',
+              invalid.has(r.key) && INVALID_RING,
+            )}
+          />
+        </label>
+      ))}
+      {status !== 'idle' && (
+        <p className={cx('font-space text-[10px] uppercase tracking-[0.08em]', status === 'error' ? 'text-accent-red' : 'text-ink-faint')}>
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** One friendly control row (a labelled dropdown or a toggle) for a style region. */
+function StyleControlRow({
+  region,
+  control,
+  cls,
+  onChange,
+}: {
+  region: ManifestStyleRegion
+  control: StyleControl
+  cls: string
+  onChange: (value: string) => void
+}) {
+  const current = readStyleValue(control, cls)
+  const aria = `${region.label} ${control.label}`
+  if (control.kind === 'toggle') {
+    return (
+      <label className="flex items-center justify-between gap-2">
+        <span className="font-ui text-xs text-ink-muted">{control.label}</span>
+        <input
+          type="checkbox"
+          aria-label={aria}
+          checked={current === 'on'}
+          onChange={(e) => onChange(e.target.checked ? 'on' : '')}
+          className="h-4 w-4 accent-accent"
+        />
+      </label>
+    )
+  }
+  // Show the current value even when it's a class the site declared no option for (e.g. a
+  // base class), so nothing is silently dropped or mislabelled as Default.
+  const options =
+    current && !control.options.some((o) => o.value === current)
+      ? [{ value: current, label: current }, ...control.options]
+      : control.options
+  return (
+    <label className="flex items-center justify-between gap-2">
+      <span className="font-ui text-xs text-ink-muted">{control.label}</span>
+      {/* font-ui explicitly: native <select>/<option> don't inherit the UI font. */}
+      <select
+        aria-label={aria}
+        value={current}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-none rounded-md border border-hairline bg-paper px-2 py-1 font-ui text-xs text-ink outline-none focus:border-ink-faint"
+      >
+        {options.map((o) => (
+          <option key={o.value || 'default'} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/* ── Style tools: NO-CODE styling (SITE_STYLING_PLAN.md) ─────────────────────────────
+ * Each region is an accordion row; open one to get friendly controls (size, boldness,
+ * font, colour, alignment, uppercase, italic) instead of a raw class string. A control
+ * OWNS a slice of the region's Tailwind class string (lib/style-controls) — changing it
+ * swaps that utility and PRESERVES the rest. The raw string is still reachable under
+ * "Advanced" for anything the controls don't cover. Same debounced save + optimistic
+ * frame repaint as before; the underlying store (site_styles.class_names) is unchanged. */
+function StyleTools({
+  regions,
+  values,
+  options,
+  selected,
+  artistId,
+  onApplyStyle,
+}: {
+  regions: ManifestStyleRegion[]
+  values: Record<string, string>
+  options?: SiteStyleOptions
+  selected: string | null
+  artistId: string
+  onApplyStyle?: (key: string, className: string) => void
+}) {
+  // Seed each region with its saved override if there is one, else its BASE classes — so
+  // the controls read what's actually on the element. A stored string REPLACES the base.
+  const [text, setText] = useState<Record<string, string>>(() =>
+    Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])),
+  )
+  const [invalid, setInvalid] = useState<Set<string>>(new Set())
+  const [status, setStatus] = useState<SaveStatus>('idle')
+  const [open, setOpen] = useState<string | null>(null)
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
+  const pending = useRef<Map<string, string>>(new Map())
+  const rowRefs = useRef<Map<string, HTMLElement | null>>(new Map())
+
+  const controls = useMemo(() => buildStyleControls(options), [options])
 
   // The frame's edit-list arrives asynchronously (on `ready`), so regions/values can
   // land after first render — re-seed when they do, without clobbering typing.
@@ -834,15 +1051,17 @@ function StyleTools({
     setText(Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])))
   }
 
-  // Scroll the clicked region into view + focus it (frame → editor `select`).
+  // Clicking a styled region in the frame opens its accordion row (during-render reset,
+  // same sanctioned pattern as the panel switch above).
+  const [lastSel, setLastSel] = useState<string | null>(null)
+  if (selected && selected !== lastSel) {
+    setLastSel(selected)
+    setOpen(selected)
+  }
   useEffect(() => {
-    if (!selected) return
-    const el = fieldRefs.current.get(selected)
-    // Optional-call: jsdom has no scrollIntoView, and an unguarded call would throw
-    // and take the focus() below with it.
-    el?.scrollIntoView?.({ block: 'center' })
-    el?.focus()
-  }, [selected])
+    if (!open) return
+    rowRefs.current.get(open)?.scrollIntoView?.({ block: 'center' })
+  }, [open])
 
   const persist = useCallback(
     (key: string, className: string) => {
@@ -853,7 +1072,7 @@ function StyleTools({
     [artistId],
   )
 
-  // Flush pending edits on unmount so tabbing away can't drop the last keystroke.
+  // Flush pending edits on unmount so tabbing away can't drop the last change.
   useEffect(() => {
     const timersMap = timers.current
     const pendingMap = pending.current
@@ -867,10 +1086,9 @@ function StyleTools({
 
   function edit(key: string, raw: string) {
     setText((t) => ({ ...t, [key]: raw }))
-
-    // Validate with the SAME function the server uses, so the panel can't claim
-    // "Saved" on a write the action will reject. '' is valid — it clears the
-    // override; null means characters that don't belong in a class attribute.
+    // Validate with the SAME function the server uses, so the panel can't claim "Saved"
+    // on a rejected write. Controls always emit clean utilities; only the Advanced raw
+    // box can produce something invalid.
     const clean = cleanClassText(raw)
     setInvalid((s) => {
       const next = new Set(s)
@@ -896,45 +1114,87 @@ function StyleTools({
   if (!regions.length) {
     return (
       <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
-        This site hasn&apos;t declared any styleable regions. A custom site sends its own
-        edit-list when the preview loads; the built-in templates don&apos;t tag regions yet.
+        This site hasn&apos;t declared any styleable sections. A custom site sends its own
+        edit-list when the preview loads; the built-in templates don&apos;t tag sections yet.
       </p>
     )
   }
 
   return (
-    <div className="space-y-4 px-5 py-4">
-      <p className="text-xs leading-relaxed text-ink-muted">
-        Utility classes for each region. Clearing a box restores the site&apos;s built-in
-        styling for it.
+    <div className="px-5 py-4 font-ui">
+      <p className="mb-3 text-xs leading-relaxed text-ink-muted">
+        Pick a section and adjust how it looks — changes preview live.
       </p>
-      {regions.map((r) => (
-        <label key={r.key} className="block">
-          <span className={cx(EYEBROW, 'mb-1.5 block')}>{r.label}</span>
-          <textarea
-            ref={(el) => {
-              fieldRefs.current.set(r.key, el)
-            }}
-            aria-label={`${r.label} classes`}
-            aria-invalid={invalid.has(r.key) || undefined}
-            value={text[r.key] ?? ''}
-            onChange={(e) => edit(r.key, e.target.value)}
-            spellCheck={false}
-            className={cx(
-              'min-h-16 w-full resize-y rounded-lg border border-hairline px-3 py-2 font-space text-xs leading-relaxed text-ink outline-none focus:border-ink-faint',
-              invalid.has(r.key) && INVALID_RING,
-            )}
-          />
-          {invalid.has(r.key) && (
-            <span className="mt-1 block text-[11px] text-accent-red">
-              Not saved — that has characters a class name can&apos;t contain.
-            </span>
-          )}
-        </label>
-      ))}
-      <p className={cx(EYEBROW, status === 'error' && 'text-accent-red')}>
-        {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Save failed' : ''}
-      </p>
+      <div className="space-y-2">
+        {regions.map((r) => {
+          const cls = text[r.key] ?? ''
+          const isOpen = open === r.key
+          return (
+            <div
+              key={r.key}
+              ref={(el) => {
+                rowRefs.current.set(r.key, el)
+              }}
+              className="rounded-lg border border-hairline"
+            >
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : r.key)}
+                aria-expanded={isOpen}
+                className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm text-ink">{r.label}</span>
+                <span
+                  className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
+                  aria-hidden
+                >
+                  <Icon name="chevronRight" size={16} />
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="space-y-2.5 border-t border-hairline px-2.5 py-3">
+                  {controls.map((control) => (
+                    <StyleControlRow
+                      key={control.id}
+                      region={r}
+                      control={control}
+                      cls={cls}
+                      onChange={(v) => edit(r.key, applyStyleValue(cls, control, v))}
+                    />
+                  ))}
+                  <details className="pt-1">
+                    <summary className="cursor-pointer font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                      Advanced: classes
+                    </summary>
+                    <textarea
+                      aria-label={`${r.label} classes`}
+                      aria-invalid={invalid.has(r.key) || undefined}
+                      value={cls}
+                      onChange={(e) => edit(r.key, e.target.value)}
+                      spellCheck={false}
+                      className={cx(
+                        'mt-2 min-h-14 w-full resize-y rounded-md border border-hairline px-2.5 py-1.5 font-space text-[11px] leading-relaxed text-ink outline-none focus:border-ink-faint',
+                        invalid.has(r.key) && INVALID_RING,
+                      )}
+                    />
+                    {invalid.has(r.key) && (
+                      <span className="mt-1 block text-[11px] text-accent-red">
+                        Not saved — that has characters a class name can&apos;t contain.
+                      </span>
+                    )}
+                  </details>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {status !== 'idle' && (
+        <p className={cx('mt-3', EYEBROW, status === 'error' && 'text-accent-red')}>
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'}
+        </p>
+      )}
     </div>
   )
 }
@@ -1051,6 +1311,9 @@ function LinkTools({
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
+  // Which row is expanded. Rows collapse to just their label; clicking one opens the
+  // edit/remove controls below it (single-open accordion — keeps the list short).
+  const [open, setOpen] = useState<string | null>(null)
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const saving = useRef<Map<string, Promise<unknown>>>(new Map())
   const errored = useRef<Set<string>>(new Set())
@@ -1126,63 +1389,101 @@ function LinkTools({
   }
 
   return (
-    <div className="space-y-2.5 px-5 py-4">
-      {links.map((l, i) => (
-        <div
-          key={l.id}
-          draggable
-          onDragStart={() => (dragFrom.current = i)}
-          onDragEnter={() => setDragOver(i)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => drop(i)}
-          onDragEnd={() => {
-            dragFrom.current = null
-            setDragOver(null)
-          }}
-          className={cx(
-            'flex items-start gap-2 rounded-lg border border-hairline p-2.5',
-            dragOver === i && 'ring-2 ring-accent',
-          )}
-        >
-          <span className="mt-1.5 flex-none cursor-grab text-ink-faint" aria-hidden>
-            <Icon name="grip" size={16} />
-          </span>
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <input
-              aria-label={`Link ${i + 1} label`}
-              aria-invalid={(invalid.has(l.id) && !values[l.id]?.label.trim()) || undefined}
-              value={values[l.id]?.label ?? ''}
-              onChange={(e) => edit(l.id, { label: e.target.value })}
-              placeholder="Label"
-              className={cx(
-                'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint',
-                invalid.has(l.id) && !values[l.id]?.label.trim() && INVALID_RING,
-              )}
-            />
-            <input
-              aria-label={`Link ${i + 1} URL`}
-              aria-invalid={(invalid.has(l.id) && !values[l.id]?.url.trim()) || undefined}
-              type="url"
-              value={values[l.id]?.url ?? ''}
-              onChange={(e) => edit(l.id, { url: e.target.value })}
-              placeholder="https://…"
-              className={cx(
-                'w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint',
-                invalid.has(l.id) && !values[l.id]?.url.trim() && INVALID_RING,
-              )}
-            />
-            <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
-          </div>
-          <button
-            type="button"
-            aria-label={`Remove link ${i + 1}`}
-            onClick={() => onRemove(l)}
-            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+    <div className="space-y-2 px-5 pb-4 pt-2">
+      {links.map((l, i) => {
+        const v = values[l.id] ?? { label: l.label, url: l.url }
+        const isOpen = open === l.id
+        const labelBlank = !v.label.trim()
+        const urlBlank = !v.url.trim()
+        const rowInvalid = invalid.has(l.id)
+        return (
+          <div
+            key={l.id}
+            draggable
+            onDragStart={() => (dragFrom.current = i)}
+            onDragEnter={() => setDragOver(i)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => drop(i)}
+            onDragEnd={() => {
+              dragFrom.current = null
+              setDragOver(null)
+            }}
+            className={cx(
+              'rounded-lg border border-hairline',
+              dragOver === i && 'ring-2 ring-accent',
+              rowInvalid && 'border-accent-red',
+            )}
           >
-            <Icon name="trash" size={15} />
-          </button>
-        </div>
-      ))}
+            {/* Collapsed header — the whole row is a button that opens the editor below
+                it. Only the label shows (what the manager named it); an at-a-glance
+                "Off" tag flags a link that isn't on the site. */}
+            <button
+              type="button"
+              onClick={() => setOpen(isOpen ? null : l.id)}
+              aria-expanded={isOpen}
+              className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+            >
+              <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
+                <Icon name="grip" size={16} />
+              </span>
+              <span className={cx('min-w-0 flex-1 truncate text-sm', labelBlank ? 'text-ink-faint' : 'text-ink')}>
+                {v.label.trim() || 'Untitled link'}
+              </span>
+              {!l.onSite && (
+                <span className="flex-none font-space text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                  Off
+                </span>
+              )}
+              <span
+                className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
+                aria-hidden
+              >
+                <Icon name="chevronRight" size={16} />
+              </span>
+            </button>
+
+            {isOpen && (
+              <div className="space-y-2 border-t border-hairline px-2.5 py-2.5">
+                <input
+                  aria-label={`Link ${i + 1} label`}
+                  aria-invalid={(rowInvalid && labelBlank) || undefined}
+                  value={v.label}
+                  onChange={(e) => edit(l.id, { label: e.target.value })}
+                  placeholder="Label"
+                  className={cx(
+                    'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint',
+                    rowInvalid && labelBlank && INVALID_RING,
+                  )}
+                />
+                <input
+                  aria-label={`Link ${i + 1} URL`}
+                  aria-invalid={(rowInvalid && urlBlank) || undefined}
+                  type="url"
+                  value={v.url}
+                  onChange={(e) => edit(l.id, { url: e.target.value })}
+                  placeholder="https://…"
+                  className={cx(
+                    'w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint',
+                    rowInvalid && urlBlank && INVALID_RING,
+                  )}
+                />
+                <div className="flex items-center justify-between pt-0.5">
+                  <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
+                  <button
+                    type="button"
+                    aria-label={`Remove link ${i + 1}`}
+                    onClick={() => onRemove(l)}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+                  >
+                    <Icon name="trash" size={15} />
+                    <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Remove</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
 
       <Link
         href={`/artists/${artistId}/links`}
@@ -1206,30 +1507,513 @@ function LinkTools({
   )
 }
 
-/* ── Video tools: edit title / reorder / remove the site's videos ────────────── */
+/** A panel-level group heading for the Links panel ("Socials" / "Tour support"): the
+ *  mono eyebrow padded to the gutter, with a hairline rule trailing it. */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 px-5 pb-1 pt-4">
+      <span className={EYEBROW}>{children}</span>
+      <span className="h-px flex-1 bg-hairline-soft" />
+    </div>
+  )
+}
+
+/** Row identity for a support act = the two columns that key `support_urls`. A name can
+ *  repeat across dates, so the tour date is part of the key. Module-level so it never
+ *  enters an effect's dependency set. */
+const supportKey = (l: EditorSupportLink) => `${l.tourDateId}::${l.name}`
+
+/* ── Tour-support links: an outbound URL for each "+ act" across the tour dates ──────
+ * The act NAMES are edited on the Tour page (tour_dates.support); here the manager only
+ * sets each act's link (tour_dates.support_urls[name]), where they manage every other
+ * link. Debounced autosave per row, mirroring LinkTools; no add/remove/reorder — the
+ * acts come from the tour dates. */
+function SupportLinkTools({
+  supportLinks,
+  artistId,
+}: {
+  supportLinks: EditorSupportLink[]
+  artistId: string
+}) {
+  const [urls, setUrls] = useState<Record<string, string>>(() =>
+    Object.fromEntries(supportLinks.map((l) => [supportKey(l), l.url])),
+  )
+  const [open, setOpen] = useState<string | null>(null)
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
+  const errored = useRef<Set<string>>(new Set())
+  const pending = useRef<Set<string>>(new Set())
+  // Latest urls + acts, so the unmount flush reads current values without either being
+  // an effect dependency (same pattern as LinkTools' valuesRef).
+  const urlsRef = useRef(urls)
+  useEffect(() => {
+    urlsRef.current = urls
+  }, [urls])
+  const linksRef = useRef(supportLinks)
+  useEffect(() => {
+    linksRef.current = supportLinks
+  }, [supportLinks])
+
+  const persist = useCallback(
+    (l: EditorSupportLink, url: string) => {
+      pending.current.delete(supportKey(l))
+      setStatus('saving')
+      runSerialized(saving, errored, setStatus, supportKey(l), () =>
+        setSupportUrlAction(artistId, l.tourDateId, l.name, url),
+      )
+    },
+    [artistId],
+  )
+
+  useEffect(() => {
+    const timersMap = timers.current
+    const pendingSet = pending.current
+    return () => {
+      timersMap.forEach((t) => clearTimeout(t))
+      pendingSet.forEach((id) => {
+        const l = linksRef.current.find((x) => supportKey(x) === id)
+        if (l) void setSupportUrlAction(artistId, l.tourDateId, l.name, urlsRef.current[id] ?? '')
+      })
+    }
+  }, [artistId])
+
+  function edit(l: EditorSupportLink, url: string) {
+    const id = supportKey(l)
+    setUrls((u) => ({ ...u, [id]: url }))
+    const existing = timers.current.get(id)
+    if (existing) clearTimeout(existing)
+    pending.current.add(id)
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id)
+        persist(l, url)
+      }, 500),
+    )
+  }
+
+  if (supportLinks.length === 0) {
+    return (
+      <p className="px-5 pb-4 pt-1 text-xs leading-relaxed text-ink-faint">
+        Add supporting acts to your tour dates on the{' '}
+        <Link href={`/artists/${artistId}/tour`} className="text-accent hover:underline">
+          Tour page
+        </Link>{' '}
+        to give each one an outbound link here.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-2 px-5 pb-4 pt-2">
+      {supportLinks.map((l) => {
+        const id = supportKey(l)
+        const url = urls[id] ?? ''
+        const isOpen = open === id
+        return (
+          <div key={id} className="rounded-lg border border-hairline">
+            {/* Collapsed: the act name (the "+ Gudfella" text) + whether it links out. */}
+            <button
+              type="button"
+              onClick={() => setOpen(isOpen ? null : id)}
+              aria-expanded={isOpen}
+              className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm text-ink">{l.name}</span>
+              <span className="flex-none font-space text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                {url.trim() ? 'Linked' : 'No link'}
+              </span>
+              <span
+                className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
+                aria-hidden
+              >
+                <Icon name="chevronRight" size={16} />
+              </span>
+            </button>
+
+            {isOpen && (
+              <div className="space-y-2 border-t border-hairline px-2.5 py-2.5">
+                {/* Names the exact credit this link attaches to, and which show. */}
+                <p className="text-[11px] leading-relaxed text-ink-muted">
+                  Links the <span className="font-medium text-ink">“{l.name}”</span> credit on {l.show}.
+                </p>
+                <input
+                  aria-label={`Link for ${l.name} at ${l.show}`}
+                  type="url"
+                  value={url}
+                  onChange={(e) => edit(l, e.target.value)}
+                  placeholder="https://…  (blank = no link)"
+                  className="w-full rounded-md border border-hairline px-2.5 py-1.5 font-space text-xs text-ink-muted outline-none placeholder:text-ink-faint focus:border-ink-faint"
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {status !== 'idle' && (
+        <div
+          className={cx(
+            'font-space text-[10px] uppercase tracking-[0.08em]',
+            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
+          )}
+        >
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A 16:9 card thumbnail — a YouTube poster, an uploaded video's first frame, or a
+ *  fallback icon. Used by the 2-up slot grid and the picker modal. */
+function CardThumb({ poster, previewUrl }: { poster: string | null; previewUrl?: string | null }) {
+  return (
+    <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-track text-ink-faint">
+      {previewUrl ? (
+        <video src={previewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+      ) : poster ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={poster} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Icon name="videos" size={20} />
+      )}
+    </div>
+  )
+}
+
+/** A mono section heading with a hairline rule, for grouping the video slots. */
+function SlotGroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span className={EYEBROW}>{children}</span>
+      <span className="h-px flex-1 bg-hairline" />
+    </div>
+  )
+}
+
+/** Library picker as a MODAL — a large grid of candidate items to place on the site.
+ *  Opening it (an empty slot / Add tile, or a filled item's Replace) covers the site
+ *  with an overlay so the choices get real room, rather than cramming a list into the
+ *  left panel. Generic over the item type: videos, photos, and songs all reuse it via
+ *  the `renderThumb` / `labelOf` callbacks. `empty` renders when there are no
+ *  candidates (an "add first" link); `footer` sits under the grid (an uploader). */
+function LibraryPicker<T>({
+  title,
+  candidates,
+  keyOf,
+  labelOf,
+  renderThumb,
+  empty,
+  footer,
+  onPick,
+  onCancel,
+}: {
+  /** What the manager is filling, e.g. "Landscape · desktop" — shown as the heading. */
+  title: string
+  candidates: T[]
+  keyOf: (v: T) => string
+  labelOf: (v: T, i: number) => string
+  renderThumb: (v: T) => React.ReactNode
+  empty: React.ReactNode
+  footer?: React.ReactNode
+  onPick: (v: T) => void
+  onCancel: () => void
+}) {
+  useLockBodyScroll(true)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCancel()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Pick from your library: ${title}`}
+      className={modalOverlayClass}
+      onClick={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div className={cx(modalCardClass, 'no-scrollbar w-[720px] gap-4')}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className={EYEBROW}>Pick from your library</div>
+            <h2 className="mt-1 text-lg font-bold leading-tight tracking-[-0.01em]">{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Close"
+            className="flex-none rounded-md px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
+          >
+            Close
+          </button>
+        </div>
+        {candidates.length === 0 ? (
+          empty
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {candidates.map((v, i) => (
+              <button
+                key={keyOf(v)}
+                type="button"
+                onClick={() => onPick(v)}
+                className="group overflow-hidden rounded-lg border border-hairline text-left transition-colors hover:border-accent"
+              >
+                {renderThumb(v)}
+                <span className="block truncate px-2 py-1.5 text-xs group-hover:text-accent">{labelOf(v, i)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {footer}
+      </div>
+    </div>
+  )
+}
+
+/** The dashed "add / pick" tile that opens a picker. `aspect` matches the cards it
+ *  sits beside (16:9 videos, 4:3 photos, square songs). */
+function EmptySlot({ label, onClick, aspect = 'aspect-video' }: { label: string; onClick: () => void; aspect?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cx(
+        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-hairline px-2 text-center text-ink-muted hover:border-accent hover:text-accent',
+        aspect,
+      )}
+    >
+      <Icon name="plus" size={18} />
+      <span className="font-space text-[10px] font-bold uppercase leading-tight tracking-[0.08em]">{label}</span>
+    </button>
+  )
+}
+
+/** The little Replace / Remove menu a filled slot's edit button opens. Replace opens
+ *  the picker; Remove empties the slot. */
+function EditMenu({ onReplace, onRemove }: { onReplace: () => void; onRemove: () => void }) {
+  return (
+    <div data-edit-menu className="flex w-full gap-1">
+      <button
+        type="button"
+        onClick={onReplace}
+        className="flex-1 rounded-md border border-hairline px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-accent hover:text-accent"
+      >
+        Replace
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex-1 rounded-md border border-hairline px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.06em] text-accent-red hover:bg-danger-soft"
+      >
+        Remove
+      </button>
+    </div>
+  )
+}
+
+/** The dashed "add your first item" link shown in a picker with no candidates left —
+ *  points at the collection's own page (Videos / Music) to add one. */
+function AddFirstLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-6 text-ink-muted hover:border-accent hover:text-accent"
+    >
+      <Icon name="plus" size={16} />
+      <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>
+    </Link>
+  )
+}
+
+/* ── MediaGrid: an open-ended collection as on-site cards + an Add tile ───────────
+ *
+ * Images and Music aren't fixed slots like the video hero/band — they're open
+ * collections. This shows what's ON the site as a 2-up card grid (each card carries
+ * the same edit → Replace/Remove menu as the video slots), plus a trailing Add tile
+ * that opens the LibraryPicker over the rest of the library. Remove takes an item OFF
+ * the site (never deletes); Replace swaps it for another, and — like the video band —
+ * the old item only leaves once a replacement is actually chosen (closing the picker
+ * keeps it). `onSetOnSite(item, next)` is the single write both paths funnel through. */
+function MediaGrid<T>({
+  onSiteItems,
+  library,
+  noun,
+  keyOf,
+  labelOf,
+  renderThumb,
+  aspect,
+  cols = 'grid-cols-2',
+  pickTitle,
+  addLabel,
+  empty,
+  pickerFooter,
+  onSetOnSite,
+}: {
+  onSiteItems: T[]
+  /** Off-site items — the picker's candidates. */
+  library: T[]
+  /** Singular noun for aria labels, e.g. "photo" → "Edit photo 1". */
+  noun: string
+  keyOf: (v: T) => string
+  labelOf: (v: T, i: number) => string
+  renderThumb: (v: T) => React.ReactNode
+  /** Aspect of the Add tile — matches the cards' thumbnails. */
+  aspect: string
+  /** Column count for the on-site card grid (Tailwind class). Photos are 3-up; the
+   *  default 2-up suits the wider video/song cards. */
+  cols?: string
+  pickTitle: string
+  addLabel: string
+  /** Shown in the picker when the library is empty. */
+  empty: React.ReactNode
+  pickerFooter?: React.ReactNode
+  onSetOnSite: (v: T, next: boolean) => void
+}) {
+  const [picking, setPicking] = useState(false)
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [replacing, setReplacing] = useState<T | null>(null)
+
+  // A click anywhere outside an open Replace/Remove menu closes it (same pattern as
+  // the video slots; the edit button fires on click, after this mousedown).
+  useEffect(() => {
+    if (!editingKey) return
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('[data-edit-menu]')) setEditingKey(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editingKey])
+
+  return (
+    <div className="space-y-3 px-5 py-4">
+      <div className={cx('grid gap-2', cols)}>
+        {onSiteItems.map((item, i) => {
+          const k = keyOf(item)
+          return (
+            <div key={k} className="overflow-hidden rounded-lg border border-hairline">
+              {renderThumb(item)}
+              <div className="px-2 py-1.5">
+                {editingKey === k ? (
+                  <EditMenu
+                    onReplace={() => {
+                      setEditingKey(null)
+                      setReplacing(item)
+                      setPicking(true)
+                    }}
+                    onRemove={() => {
+                      setEditingKey(null)
+                      onSetOnSite(item, false)
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="min-w-0 flex-1 truncate text-xs">{labelOf(item, i)}</span>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${noun} ${i + 1}`}
+                      title="Replace or remove"
+                      onClick={() => setEditingKey(k)}
+                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                    >
+                      <Icon name="edit" size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+        <EmptySlot
+          label={addLabel}
+          aspect={aspect}
+          onClick={() => {
+            setReplacing(null)
+            setPicking(true)
+          }}
+        />
+      </div>
+
+      {picking && (
+        <LibraryPicker
+          title={pickTitle}
+          candidates={library}
+          keyOf={keyOf}
+          labelOf={labelOf}
+          renderThumb={renderThumb}
+          empty={empty}
+          footer={pickerFooter}
+          onPick={(v) => {
+            setPicking(false)
+            // Replacing: take the old one off only now that a replacement is chosen.
+            if (replacing) onSetOnSite(replacing, false)
+            setReplacing(null)
+            onSetOnSite(v, true)
+          }}
+          onCancel={() => {
+            setPicking(false)
+            setReplacing(null) // closing without picking keeps the current items
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+const BAND_SLOTS = 2 // skeen's band is designed 2-up; show at least two slots.
+
+/* ── Video tools: the site's video slots ─────────────────────────────────────────
+ *
+ * EVERY slot is filled by PICKING from the video library (added on the Videos/Assets
+ * page). Grouped by where they live on the site:
+ *  • Landing page — the hero background: a Landscape slot + a Portrait slot, each picks
+ *    an UPLOADED video (assignHeroSlotAction sets its site_role; skeen reads it).
+ *  • Videos band — the two YouTube embeds below the disco ball. Picking marks a YouTube
+ *    video on-site; the picker offers only real YouTube videos (uploads are hero-only,
+ *    Shorts aren't used). Removing a band video marks it off-site (stays in the library). */
 function VideoTools({
   videos,
   artistId,
-  onRemove,
-  onReorder,
   onToggleOnSite,
+  onAssignHero,
 }: {
   videos: EditorVideo[]
   artistId: string
-  onRemove: (v: EditorVideo) => void
-  onReorder: (from: number, to: number) => void
   onToggleOnSite: (v: EditorVideo) => void
+  onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
 }) {
   const [titles, setTitles] = useState<Record<string, string>>(() =>
     Object.fromEntries(videos.map((v) => [v.id, v.title])),
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  // Which slot's picker is open: a background role, the band, or none.
+  const [picking, setPicking] = useState<SiteVideoRole | 'band' | null>(null)
+  // Which filled slot's Replace/Remove menu is open.
+  const [editing, setEditing] = useState<{ type: 'slot'; role: SiteVideoRole } | { type: 'band'; video: EditorVideo } | null>(
+    null,
+  )
+  // The band video being REPLACED, if any. It stays on the site until a replacement is
+  // actually picked — so closing the picker without choosing leaves it in place.
+  const [replacingBand, setReplacingBand] = useState<EditorVideo | null>(null)
+  // A click anywhere outside an open Replace/Remove menu closes it (the menus tag
+  // themselves with data-edit-menu; the edit button that opens one fires on click,
+  // after this mousedown, so it never self-closes).
+  useEffect(() => {
+    if (!editing) return
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('[data-edit-menu]')) setEditing(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editing])
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const saving = useRef<Map<string, Promise<unknown>>>(new Map())
   const errored = useRef<Set<string>>(new Set())
   const pending = useRef<Map<string, string>>(new Map())
-  const dragFrom = useRef<number | null>(null)
-  const [dragOver, setDragOver] = useState<number | null>(null)
 
   const persist = useCallback(
     (id: string, title: string) => {
@@ -1265,71 +2049,164 @@ function VideoTools({
     )
   }
 
-  function drop(to: number) {
-    const from = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (from !== null && from !== to) onReorder(from, to)
+  const isYouTube = (v: EditorVideo) => v.provider === 'youtube' && !v.isShort
+  const uploaded = videos.filter((v) => v.provider === 'uploaded')
+  const bandSlots = videos.filter((v) => v.onSite && isYouTube(v))
+  const bandLibrary = videos.filter((v) => !v.onSite && isYouTube(v))
+  const addHref = `/artists/${artistId}/videos`
+
+  function assignHero(role: SiteVideoRole, videoId: string | null) {
+    setPicking(null)
+    onAssignHero(role, videoId)
   }
 
-  return (
-    <div className="space-y-2.5 px-5 py-4">
-      {videos.map((v, i) => (
-        <div
-          key={v.id}
-          draggable
-          onDragStart={() => (dragFrom.current = i)}
-          onDragEnter={() => setDragOver(i)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => drop(i)}
-          onDragEnd={() => {
-            dragFrom.current = null
-            setDragOver(null)
-          }}
-          className={cx(
-            'flex items-center gap-2.5 rounded-lg border border-hairline p-2',
-            dragOver === i && 'ring-2 ring-accent',
-          )}
-        >
-          <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
-            <Icon name="grip" size={16} />
-          </span>
-          <span className="flex h-11 w-16 flex-none items-center justify-center overflow-hidden rounded-md bg-track text-ink-faint">
-            {v.poster ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={v.poster} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <Icon name="videos" size={18} />
-            )}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <input
-              aria-label={`Video ${i + 1} title`}
-              value={titles[v.id] ?? ''}
-              onChange={(e) => edit(v.id, e.target.value)}
-              placeholder="Title"
-              className="w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
-            />
-            <OnSiteToggle on={v.onSite} onToggle={() => onToggleOnSite(v)} />
+  // A background slot as a card (preview on top, title + edit below). Clicking opens
+  // the picker modal — see the render. Reused by both hero slots and the bio slot.
+  function slotCard(role: SiteVideoRole) {
+    const label = SLOT_LABELS[role]
+    const placed = uploaded.find((v) => v.siteRole === role)
+    return (
+      <div key={role} className="space-y-1">
+        <span className="font-space text-[10px] font-medium uppercase tracking-[0.06em] text-ink-faint">{label}</span>
+        {placed ? (
+          <div className="overflow-hidden rounded-lg border border-hairline">
+            <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />
+            <div className="px-2 py-1.5">
+              {editing?.type === 'slot' && editing.role === role ? (
+                <EditMenu
+                  onReplace={() => {
+                    setEditing(null)
+                    setPicking(role)
+                  }}
+                  onRemove={() => {
+                    setEditing(null)
+                    assignHero(role, null)
+                  }}
+                />
+              ) : (
+                <div className="flex items-center gap-1">
+                  <span className="min-w-0 flex-1 truncate text-xs">{placed.title || 'Untitled video'}</span>
+                  <button
+                    type="button"
+                    aria-label={`Edit the ${label} slot`}
+                    title="Replace or remove"
+                    onClick={() => setEditing({ type: 'slot', role })}
+                    className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                  >
+                    <Icon name="edit" size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <button
-            type="button"
-            aria-label={`Remove video ${i + 1}`}
-            onClick={() => onRemove(v)}
-            className="flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
-          >
-            <Icon name="trash" size={15} />
-          </button>
-        </div>
-      ))}
+        ) : (
+          <EmptySlot label="Pick a video" onClick={() => setPicking(role)} />
+        )}
+      </div>
+    )
+  }
 
-      <Link
-        href={`/artists/${artistId}/videos`}
-        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
-      >
-        <Icon name="plus" size={16} />
-        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add video</span>
-      </Link>
+  // The open background-slot picker (any role but 'band'), and whatever video sits in it.
+  const slotRole = picking && picking !== 'band' ? picking : null
+  const slotPlaced = slotRole ? uploaded.find((v) => v.siteRole === slotRole) : undefined
+
+  return (
+    <div className="space-y-3 px-5 py-4">
+      {/* Landing page — the hero background, two slots side by side */}
+      <SlotGroupLabel>Landing page</SlotGroupLabel>
+      <div className="grid grid-cols-2 gap-2">
+        {slotCard('hero_landscape')}
+        {slotCard('hero_portrait')}
+      </div>
+
+      {/* Bio background — the clip that plays behind the bio section */}
+      <SlotGroupLabel>Bio background</SlotGroupLabel>
+      <div className="grid grid-cols-2 gap-2">{slotCard('bio_background')}</div>
+
+      {slotRole && (
+        <LibraryPicker
+          title={SLOT_LABELS[slotRole]}
+          // Only uploaded videos, and not one already in ANOTHER background slot.
+          candidates={uploaded.filter((v) => !v.siteRole || v.id === slotPlaced?.id)}
+          keyOf={(v) => v.id}
+          labelOf={(v) => v.title || 'Untitled video'}
+          renderThumb={(v) => <CardThumb poster={v.poster} previewUrl={v.previewUrl} />}
+          empty={<AddFirstLink href={addHref} label="Add a video first" />}
+          onPick={(v) => assignHero(slotRole, v.id)}
+          onCancel={() => setPicking(null)}
+        />
+      )}
+
+      {/* Videos band — two YouTube slots below the disco ball */}
+      <SlotGroupLabel>Videos band</SlotGroupLabel>
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: Math.max(BAND_SLOTS, bandSlots.length) }).map((_, i) => {
+          const v = bandSlots[i]
+          if (!v) return <EmptySlot key={`band-empty-${i}`} label="Pick a YouTube video" onClick={() => setPicking('band')} />
+          return (
+            <div key={v.id} className="overflow-hidden rounded-lg border border-hairline">
+              <CardThumb poster={v.poster} previewUrl={v.previewUrl} />
+              <div className="px-1.5 py-1">
+                {editing?.type === 'band' && editing.video.id === v.id ? (
+                  <EditMenu
+                    onReplace={() => {
+                      setEditing(null)
+                      // Don't vacate yet — mark it as the one to swap out, and only take
+                      // it off when a replacement is actually picked (see the picker).
+                      setReplacingBand(v)
+                      setPicking('band')
+                    }}
+                    onRemove={() => {
+                      setEditing(null)
+                      onToggleOnSite(v)
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      aria-label={`Slot ${i + 1} title`}
+                      value={titles[v.id] ?? ''}
+                      onChange={(e) => edit(v.id, e.target.value)}
+                      placeholder="Title"
+                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-xs text-ink outline-none placeholder:text-ink-faint focus:border-hairline"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Edit video slot ${i + 1}`}
+                      title="Replace or remove"
+                      onClick={() => setEditing({ type: 'band', video: v })}
+                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                    >
+                      <Icon name="edit" size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {picking === 'band' && (
+        <LibraryPicker
+          title={replacingBand ? 'Replace with' : 'YouTube video'}
+          candidates={bandLibrary}
+          keyOf={(v) => v.id}
+          labelOf={(v) => v.title || 'Untitled video'}
+          renderThumb={(v) => <CardThumb poster={v.poster} previewUrl={v.previewUrl} />}
+          empty={<AddFirstLink href={addHref} label="Add a video first" />}
+          onPick={(v) => {
+            setPicking(null)
+            // Replacing: take the old one off only now that a new one is chosen.
+            if (replacingBand) onToggleOnSite(replacingBand)
+            setReplacingBand(null)
+            onToggleOnSite(v)
+          }}
+          onCancel={() => {
+            setPicking(null)
+            setReplacingBand(null) // closing without picking keeps the old video
+          }}
+        />
+      )}
 
       {status !== 'idle' && (
         <div
@@ -1606,261 +2483,47 @@ function MerchTools({
   )
 }
 
-/* ── Music tools: edit song title / reorder / remove, with a Released tag ─────── */
-function MusicTools({
-  songs,
-  artistId,
-  onRemove,
-  onReorder,
-  onToggleOnSite,
-}: {
-  songs: EditorSong[]
-  artistId: string
-  onRemove: (s: EditorSong) => void
-  onReorder: (from: number, to: number) => void
-  onToggleOnSite: (s: EditorSong) => void
-}) {
-  const [titles, setTitles] = useState<Record<string, string>>(() =>
-    Object.fromEntries(songs.map((s) => [s.id, s.title])),
-  )
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [invalid, setInvalid] = useState<Set<string>>(new Set())
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Map<string, string>>(new Map())
-  const dragFrom = useRef<number | null>(null)
-  const [dragOver, setDragOver] = useState<number | null>(null)
-
-  const persist = useCallback(
-    (id: string, title: string) => {
-      pending.current.delete(id)
-      const fd = new FormData()
-      fd.set('title', title)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, id, () => updateContentAction('track', id, artistId, fd))
-    },
-    [artistId],
-  )
-
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingMap = pending.current
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingMap.forEach((title, id) => {
-        const fd = new FormData()
-        fd.set('title', title)
-        void updateContentAction('track', id, artistId, fd)
-      })
-    }
-  }, [artistId])
-
-  function edit(id: string, title: string) {
-    setTitles((t) => ({ ...t, [id]: title }))
-    const ok = title.trim() !== '' // title is required — a blank one is dropped server-side
-    setInvalid((s) => {
-      const n = new Set(s)
-      if (ok) n.delete(id)
-      else n.add(id)
-      return n
-    })
-    const existing = timers.current.get(id)
-    if (existing) clearTimeout(existing)
-    timers.current.delete(id)
-    if (!ok) {
-      pending.current.delete(id) // don't save (or flush on unmount) an invalid value
-      return
-    }
-    pending.current.set(id, title)
-    timers.current.set(
-      id,
-      setTimeout(() => {
-        timers.current.delete(id)
-        persist(id, title)
-      }, 500),
-    )
-  }
-
-  function drop(to: number) {
-    const from = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (from !== null && from !== to) onReorder(from, to)
-  }
-
+/** A square song-cover thumbnail for a music card / picker tile. */
+function SongThumb({ coverUrl }: { coverUrl: string | null }) {
   return (
-    <div className="space-y-2.5 px-5 py-4">
-      {songs.map((s, i) => (
-        <div
-          key={s.id}
-          draggable
-          onDragStart={() => (dragFrom.current = i)}
-          onDragEnter={() => setDragOver(i)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => drop(i)}
-          onDragEnd={() => {
-            dragFrom.current = null
-            setDragOver(null)
-          }}
-          className={cx(
-            'flex items-center gap-2.5 rounded-lg border border-hairline p-2',
-            dragOver === i && 'ring-2 ring-accent',
-          )}
-        >
-          <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
-            <Icon name="grip" size={16} />
-          </span>
-          <span className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-md bg-track text-ink-faint">
-            {s.cover_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={s.cover_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <Icon name="tracks" size={18} />
-            )}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <input
-              aria-label={`Song ${i + 1} title`}
-              aria-invalid={invalid.has(s.id) || undefined}
-              value={titles[s.id] ?? ''}
-              onChange={(e) => edit(s.id, e.target.value)}
-              placeholder="Title"
-              className={cx(
-                'w-full rounded-md border border-hairline px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint',
-                invalid.has(s.id) && INVALID_RING,
-              )}
-            />
-            <div className="flex items-center gap-1.5">
-              <span
-                className={cx(
-                  'w-fit rounded-full px-2 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.1em]',
-                  s.released ? 'bg-accent-soft text-accent' : 'bg-track text-ink-faint',
-                )}
-              >
-                {s.released ? 'Released' : 'Unreleased'}
-              </span>
-              <OnSiteToggle on={s.onSite} onToggle={() => onToggleOnSite(s)} />
-            </div>
-          </div>
-          <button
-            type="button"
-            aria-label={`Remove song ${i + 1}`}
-            onClick={() => onRemove(s)}
-            className="flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
-          >
-            <Icon name="trash" size={15} />
-          </button>
-        </div>
-      ))}
-
-      <Link
-        href={`/artists/${artistId}/music`}
-        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
-      >
-        <Icon name="plus" size={16} />
-        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add song</span>
-      </Link>
-
-      {status !== 'idle' && (
-        <div
-          className={cx(
-            'font-space text-[10px] uppercase tracking-[0.08em]',
-            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
-          )}
-        >
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
-        </div>
+    <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-track text-ink-faint">
+      {coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Icon name="tracks" size={22} />
       )}
     </div>
   )
 }
 
-/* ── Small building blocks ───────────────────────────────────────────────────── */
-function Section({
-  title,
-  open,
-  onToggle,
-  extra,
-  children,
+/* ── Music tools: the setlist as on-site cover cards + an Add tile (mirrors Videos).
+ * Songs are entered/renamed on the Music page; here the manager just picks which are on
+ * the site. Remove takes a song off (never deletes); Replace swaps it for another from
+ * the catalog — the old one only leaves once a replacement is chosen. */
+function MusicTools({
+  songs,
+  artistId,
+  onToggleOnSite,
 }: {
-  title: string
-  open: boolean
-  onToggle: () => void
-  extra?: React.ReactNode
-  children: React.ReactNode
+  songs: EditorSong[]
+  artistId: string
+  onToggleOnSite: (s: EditorSong) => void
 }) {
   return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between px-5 pb-2.5 pt-4"
-      >
-        <span className={EYEBROW}>{title}</span>
-        <span className="flex items-center gap-2">
-          {extra}
-          <Icon
-            name="chevronRight"
-            size={16}
-            className={cx('text-ink-faint transition-transform', open && 'rotate-90')}
-          />
-        </span>
-      </button>
-      {open && <div className="border-b border-hairline-soft px-5 pb-4 pt-0.5">{children}</div>}
-    </div>
+    <MediaGrid
+      onSiteItems={songs.filter((s) => s.onSite)}
+      library={songs.filter((s) => !s.onSite)}
+      noun="song"
+      keyOf={(s) => s.id}
+      labelOf={(s) => s.title || 'Untitled song'}
+      renderThumb={(s) => <SongThumb coverUrl={s.cover_url} />}
+      aspect="aspect-square"
+      pickTitle="Add a song"
+      addLabel="Add song"
+      empty={<AddFirstLink href={`/artists/${artistId}/music`} label="Add a song first" />}
+      onSetOnSite={(s) => onToggleOnSite(s)}
+    />
   )
 }
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full bg-track px-2 py-0.5 font-space text-[10px] font-bold text-ink-faint">
-      {children}
-    </span>
-  )
-}
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-  full,
-}: {
-  options: readonly T[]
-  value: T
-  onChange: (v: T) => void
-  full?: boolean
-}) {
-  return (
-    <div className={cx('inline-flex gap-0.5 rounded-[9px] border border-hairline p-0.5', full && 'w-full')}>
-      {options.map((o) => (
-        <button
-          key={o}
-          type="button"
-          aria-pressed={o === value}
-          onClick={() => onChange(o)}
-          className={cx(
-            'flex-1 rounded-[7px] px-3 py-1.5 text-xs font-semibold transition-colors',
-            o === value ? 'bg-ink text-white' : 'text-ink-muted hover:text-ink',
-          )}
-        >
-          {o}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function StepBtn({ name, label, onClick }: { name: IconName; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ink-muted hover:border-ink-faint hover:text-ink"
-    >
-      <Icon name={name} size={16} />
-    </button>
-  )
-}

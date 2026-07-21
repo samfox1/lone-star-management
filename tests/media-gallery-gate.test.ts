@@ -92,6 +92,27 @@ describe('get_public_site — gallery gate honours PRE-RENAME snapshots', () => 
   })
 })
 
+describe('get_public_site — gallery photos carry their orientation', () => {
+  async function galleryMedia(): Promise<{ path: string; orientation: string | null }[]> {
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const media = (data as { media?: { purpose: string; path: string; orientation: string | null }[] } | null)?.media ?? []
+    return media.filter((m) => m.purpose === 'gallery_image').map((m) => ({ path: m.path, orientation: m.orientation }))
+  }
+
+  it('emits each photo’s horizontal / vertical orientation on the payload', async () => {
+    await publishMedia({ purpose: 'gallery_image', storage_path: 'g/h.jpg', on_site: true, orientation: 'horizontal', sort_order: 1 })
+    await publishMedia({ purpose: 'gallery_image', storage_path: 'g/v.jpg', on_site: true, orientation: 'vertical', sort_order: 2 })
+    const media = await galleryMedia()
+    expect(media.find((m) => m.path === 'g/h.jpg')?.orientation).toBe('horizontal')
+    expect(media.find((m) => m.path === 'g/v.jpg')?.orientation).toBe('vertical')
+  })
+
+  it('emits null orientation for a legacy photo that never set one', async () => {
+    await publishMedia({ purpose: 'gallery_image', storage_path: 'g/legacy.jpg', on_site: true, sort_order: 1 })
+    expect((await galleryMedia()).find((m) => m.path === 'g/legacy.jpg')?.orientation).toBeNull()
+  })
+})
+
 describe('get_public_site — the gate is gallery-only', () => {
   it('never filters non-gallery media, even with on_site=false', async () => {
     // hero_video / profile_photo are not per-item curated; the flag must be

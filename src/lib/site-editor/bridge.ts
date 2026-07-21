@@ -33,6 +33,7 @@ export type SelectTarget =
   | { kind: 'slot'; key: string }
   | { kind: 'item'; assetType: LibraryAsset; id: string }
   | { kind: 'style'; key: string }
+  | { kind: 'link'; key: string }
 
 /** frame → editor. A custom site carries its own edit-list (manifest) on `ready`,
  *  so the editor never hardcodes a custom site's regions (SITE_STYLING_PLAN.md D-D).
@@ -67,6 +68,7 @@ export type FrameMessage =
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-link'; key: string; url: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: PublicSitePayload }
 
 function isVersionedFrom(x: unknown, source: string): x is { v: number; source: string; type: string } {

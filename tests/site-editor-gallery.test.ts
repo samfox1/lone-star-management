@@ -6,8 +6,24 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reorderGallery, reorderList } from '@/lib/site-editor/gallery'
+import { orientationOf, reorderGallery, reorderList } from '@/lib/site-editor/gallery'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+
+describe('orientationOf (pure)', () => {
+  it('classifies a wider-than-tall image as horizontal', () => {
+    expect(orientationOf(1600, 900)).toBe('horizontal')
+  })
+  it('classifies a taller-than-wide image as vertical', () => {
+    expect(orientationOf(900, 1600)).toBe('vertical')
+  })
+  it('counts a square as horizontal (fits a landscape slot without letterboxing)', () => {
+    expect(orientationOf(1000, 1000)).toBe('horizontal')
+  })
+  it('returns null for a degenerate size', () => {
+    expect(orientationOf(0, 500)).toBeNull()
+    expect(orientationOf(500, 0)).toBeNull()
+  })
+})
 
 describe('reorderList (pure)', () => {
   it('moves an item forward', () => {

@@ -488,16 +488,20 @@ export function syncYouTubeVideos(
     externalIdCol: 'youtube_id',
     source: 'youtube',
     artistId,
-    items: videos.map((v) => ({
-      externalId: v.youtube_id,
-      values: {
-        title: v.title,
-        provider: v.provider,
-        embed_url: v.embed_url,
-        is_short: v.is_short,
-        ...(v.views != null ? { youtube_views: v.views, youtube_views_at: new Date().toISOString() } : {}),
-      },
-    })),
+    // Skip Shorts — they aren't used on artist sites right now. The is_short column and
+    // the Videos-page Shorts tab stay, so this is easy to reintroduce later.
+    items: videos
+      .filter((v) => !v.is_short)
+      .map((v) => ({
+        externalId: v.youtube_id,
+        values: {
+          title: v.title,
+          provider: v.provider,
+          embed_url: v.embed_url,
+          is_short: v.is_short,
+          ...(v.views != null ? { youtube_views: v.views, youtube_views_at: new Date().toISOString() } : {}),
+        },
+      })),
     insertDefaults: { on_site: false },
   })
 }

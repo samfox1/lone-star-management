@@ -16,6 +16,7 @@
  */
 import { TEMPLATE_FIELDS, fieldValue, type SiteContentField } from '@/lib/site-content-schema'
 import type { SiteContent } from '@/lib/site'
+import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -61,6 +62,16 @@ export type ManifestStyleRegion = {
   base?: string
 }
 
+/** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by
+ *  KEY (not by guessing from its label). The editor maps a URL to it and the site binds
+ *  the link to the element by this key (`links.role`). `description` explains what the
+ *  link powers ("Disco-ball playlist link"), shown in the inspector. */
+export type ManifestLinkRegion = {
+  key: string
+  label: string
+  description?: string
+}
+
 /** One site's full editable surface. `template` is the built-in template name or a
  *  custom site's declared id. */
 export type TemplateManifest = {
@@ -68,6 +79,13 @@ export type TemplateManifest = {
   fields: ManifestField[]
   slots: ManifestSlot[]
   styles: ManifestStyleRegion[]
+  /** Declared link-powered elements, bound to a `links` row by key (`role`). A custom
+   *  site sends its own on `ready`; the built-in templates declare none yet. */
+  links: ManifestLinkRegion[]
+  /** The site's design palette (its own colour + font classes) for the no-code Style
+   *  panel's dropdowns. Optional — the universal controls (size/weight/align/case) work
+   *  without it; colour + font controls only appear when the site declares them. */
+  styleOptions?: SiteStyleOptions
 }
 
 /** Lift the per-template site-text schema into manifest fields (site_content targets). */
@@ -106,6 +124,8 @@ export const MANIFESTS: Record<string, TemplateManifest> = {
     ],
     // Built-in template DOM isn't style-tagged yet; custom sites declare their own.
     styles: [],
+    // Built-in templates declare no link-powered elements yet (custom sites do).
+    links: [],
   },
   cinematic: {
     template: 'cinematic',
@@ -121,6 +141,7 @@ export const MANIFESTS: Record<string, TemplateManifest> = {
       { key: 'videos', label: 'Videos', accepts: 'video' },
     ],
     styles: [],
+    links: [],
   },
 }
 

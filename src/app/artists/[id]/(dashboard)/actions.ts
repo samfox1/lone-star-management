@@ -30,10 +30,11 @@ import {
   publishProfile,
   reconcileOnSite,
   type OnSiteEntity,
+  setSupportUrl,
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
-import { saveEditorField, saveEditorStyle } from '@/lib/site-editor/save'
+import { saveEditorField, saveEditorLink, saveEditorStyle } from '@/lib/site-editor/save'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
@@ -287,6 +288,32 @@ export async function saveEditorFieldAction(
   return res
 }
 
+/**
+ * Bind a manifest link region (USB / Merch button) to a URL — Phase 2. Mirrors
+ * saveEditorStyleAction: auth + owner gate (the RLS-scoped .single() 404s a non-owner),
+ * then persist by role and revalidate. A blank URL clears the link. `label` seeds a new
+ * row's display label. The optimistic frame update (`apply-link`) is posted client-side.
+ */
+export async function saveEditorLinkAction(
+  artistId: string,
+  key: string,
+  url: string,
+  label: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+
+  const res = await saveEditorLink(supabase, artistId, key, url, label)
+  if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
+  return res
+}
+
 /** Save one region's class-name override to the draft. Mirrors saveEditorFieldAction:
  *  auth + owner gate (the RLS-scoped .single() 404s a non-owner), then revalidate. */
 export async function saveEditorStyleAction(
@@ -330,6 +357,33 @@ export async function deleteMediaAction(
 }
 
 /**
+ * Place a gallery photo into an orientation group (the editor's Images panel): set its
+ * `orientation` AND put it on the site in one write. Photos are uploaded as plain assets
+ * (orientation null, off-site) elsewhere; the editor is where the manager PICKS one into
+ * the Horizontal or Vertical collage, which is when its orientation is decided. RLS
+ * scopes the write to the caller's tenant.
+ */
+export async function placeGalleryPhotoAction(
+  artistId: string,
+  photoId: string,
+  orientation: 'horizontal' | 'vertical',
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+  const { error } = await supabase
+    .from('media')
+    .update({ orientation, on_site: true })
+    .eq('id', photoId)
+    .eq('artist_id', artistId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
  * Toggle whether one asset is ON THE SITE (presence) — writes the `on_site` flag, live
  * (ADR 0009; the registry and the rules are in `LIVE_TOGGLE`, lib/content.ts). An asset
  * is on the public site only when toggled on AND published: toggling a row that has
@@ -346,6 +400,74 @@ export async function setOnSiteAction(
   const table = PUBLISHABLE[LIVE_TOGGLE[kind]].table
   const { error } = await supabase.from(table).update({ on_site: onSite }).eq('id', id).eq('artist_id', artistId)
   if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
+ * Set (or clear) the outbound link for ONE support act on a tour date — the editor's
+ * Links panel ("Tour support" group). The act name comes from the date's `support`
+ * list; this writes the parallel `support_urls` map so "+ Gudfella" can link out
+ * without touching the name list. A blank/invalid URL clears the link. Draft until the
+ * Tour section is republished, like any content edit. RLS scopes the write.
+ */
+export async function setSupportUrlAction(
+  artistId: string,
+  tourDateId: string,
+  name: string,
+  url: string,
+): Promise<{ error?: string }> {
+  const trimmed = String(url ?? '').trim()
+  // Blank clears the link; a non-blank value must be a safe http(s)/relative URL, or the
+  // save is rejected (never silently dropped) so the panel can't claim "Saved".
+  let clean = ''
+  if (trimmed !== '') {
+    const safe = safeHref(trimmed)
+    if (!safe) return { error: 'Enter a valid URL.' }
+    clean = safe
+  }
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+  try {
+    await setSupportUrl(supabase, artistId, tourDateId, name, clean)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Save failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
+ * Place (or clear) a video in a named background SLOT — the hero landscape/portrait
+ * clips (site_role, 20260716200000). One video per slot: assigning a new one first
+ * clears whoever holds the role. A placed video is set on_site so it reaches the door
+ * (skeen's band skips uploaded videos, so it renders only as the hero); clearing takes
+ * it off. Publishing videos still pushes it live, same as the band. RLS-scoped.
+ */
+export async function assignHeroSlotAction(
+  artistId: string,
+  role: 'hero_landscape' | 'hero_portrait' | 'bio_background',
+  videoId: string | null,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  // Vacate the slot: whoever currently holds this role leaves it and the site.
+  const cleared = await supabase
+    .from('videos')
+    .update({ site_role: null, on_site: false })
+    .eq('artist_id', artistId)
+    .eq('site_role', role)
+  if (cleared.error) return { error: cleared.error.message }
+  if (videoId) {
+    const { error } = await supabase
+      .from('videos')
+      .update({ site_role: role, on_site: true })
+      .eq('id', videoId)
+      .eq('artist_id', artistId)
+    if (error) return { error: error.message }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

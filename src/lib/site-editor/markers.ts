@@ -19,6 +19,8 @@ export const FIELD_ATTR = 'data-lse-field'
 export const SLOT_ATTR = 'data-lse-slot'
 export const ITEM_ATTR = 'data-lse-item'
 export const STYLE_ATTR = 'data-lse-style'
+/** A link-powered <a> whose href the editor sets by KEY (manifest `links`). */
+export const LINK_ATTR = 'data-lse-link'
 
 /** Build a `data-lse-item` value. Asset ids are UUIDs (no colon), and the asset
  *  type has no colon, so the first colon is an unambiguous separator. */
@@ -53,6 +55,10 @@ export function fieldRegion(editable: boolean, key: string): Record<string, stri
 
 export function slotRegion(editable: boolean, key: string): Record<string, string> {
   return editable ? { [SLOT_ATTR]: key } : {}
+}
+
+export function linkRegion(editable: boolean, key: string): Record<string, string> {
+  return editable ? { [LINK_ATTR]: key } : {}
 }
 
 export function itemRegion(editable: boolean, assetType: LibraryAsset, id: string): Record<string, string> {

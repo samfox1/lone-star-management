@@ -10,6 +10,7 @@ import {
   type EditorLink,
   type EditorMerch,
   type EditorSong,
+  type EditorSupportLink,
   type EditorTour,
   type EditorTextField,
   type EditorVideo,
@@ -42,6 +43,8 @@ export function EditorShell({
   photos,
   textFields,
   links,
+  supportLinks,
+  linkValues,
   videos,
   merch,
   songs,
@@ -56,6 +59,10 @@ export function EditorShell({
   photos: GalleryPhoto[]
   textFields: EditorTextField[]
   links: EditorLink[]
+  supportLinks: EditorSupportLink[]
+  /** Current URL for each manifest link region, keyed by its role (from the DB). The
+   *  regions themselves come from the frame's manifest at runtime. */
+  linkValues: Record<string, string>
   videos: EditorVideo[]
   merch: EditorMerch[]
   songs: EditorSong[]
@@ -69,11 +76,12 @@ export function EditorShell({
   // handshake, select routing — lives behind this hook, where it's testable.
   // Destructured, not held as an object: the react-hooks/refs rule rejects reaching
   // through a member expression for a ref during render.
-  const { frameRef, src: frameSrc, applyField, applyStyle, manifest, selectedStyle } = useFrameBridge({
-    artistId,
-    customSiteUrl,
-    draft,
-  })
+  const { frameRef, src: frameSrc, applyField, applyStyle, applyLink, manifest, selectedStyle, selectedLink } =
+    useFrameBridge({
+      artistId,
+      customSiteUrl,
+      draft,
+    })
 
   // Measure the frame panel so the canvas can be scaled to fit it. The panel
   // resizes with the window (and would with a collapsible inspector), so observe
@@ -99,15 +107,21 @@ export function EditorShell({
         photos={photos}
         textFields={textFields}
         links={links}
+        supportLinks={supportLinks}
         videos={videos}
         merch={merch}
         songs={songs}
         tours={tours}
         styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
+        styleOptions={manifest?.styleOptions}
         selectedStyle={selectedStyle}
+        linkRegions={manifest?.links ?? []}
+        linkValues={linkValues}
+        selectedLink={selectedLink}
         onApplyField={applyField}
         onApplyStyle={applyStyle}
+        onApplyLink={applyLink}
       />
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface p-3">

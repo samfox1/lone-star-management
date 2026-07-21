@@ -77,6 +77,12 @@ export function VideoCard({
   const badgeRaw = video.source && video.source !== 'manual' ? video.source : video.provider
   const badge = badgeRaw ? (BADGE_LABEL[badgeRaw] ?? badgeRaw) : null
   const url = videoOpenUrl(video)
+  // Uploaded videos have no YouTube poster; preview their first frame (#t=0.1 skips a
+  // possibly-black frame 0). The videos bucket is public.
+  const uploadedPreview =
+    video.provider === 'uploaded' && video.storage_path
+      ? publicVideoSrc({ provider: 'uploaded', embed_url: null, storage_path: video.storage_path })
+      : null
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -222,14 +228,22 @@ export function VideoCard({
         <div
           className={`relative flex ${video.is_short ? 'aspect-[9/16]' : 'aspect-video'} items-center justify-center overflow-hidden rounded-xl bg-ink`}
         >
-          {video.poster && (
+          {video.poster ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={video.poster}
               alt=""
               className="h-full w-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
             />
-          )}
+          ) : uploadedPreview ? (
+            <video
+              src={`${uploadedPreview}#t=0.1`}
+              muted
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
+            />
+          ) : null}
           <span className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
             <Icon name="videos" size={18} />
           </span>

@@ -8,7 +8,7 @@
  * jsdom); `mountFrameBridge` wires the live listeners and is exercised in the
  * browser. No React here.
  */
-import { FIELD_ATTR, ITEM_ATTR, SLOT_ATTR, STYLE_ATTR, parseItemMarker } from '@/lib/site-editor/markers'
+import { FIELD_ATTR, ITEM_ATTR, LINK_ATTR, SLOT_ATTR, STYLE_ATTR, parseItemMarker } from '@/lib/site-editor/markers'
 import {
   type EditorMessage,
   type Rect,
@@ -17,7 +17,7 @@ import {
   isEditorMessage,
 } from '@/lib/site-editor/bridge'
 
-const MARKED = `[${FIELD_ATTR}],[${SLOT_ATTR}],[${ITEM_ATTR}],[${STYLE_ATTR}]`
+const MARKED = `[${FIELD_ATTR}],[${SLOT_ATTR}],[${ITEM_ATTR}],[${STYLE_ATTR}],[${LINK_ATTR}]`
 
 /** The nearest ancestor (or self) carrying any `data-lse-*` marker, or null. An
  *  inner item wins over its enclosing slot because `closest` walks up. */
@@ -25,10 +25,10 @@ export function markedAncestor(el: Element): Element | null {
   return el.closest(MARKED)
 }
 
-/** The SelectTarget a marked element represents (field > item > slot > style), or
- *  null if its marker is malformed. Style is lowest so an element that is BOTH a
- *  content field and re-styleable selects its content on click; its style is reached
- *  from the inspector (which reads the element's `data-lse-style` alongside). */
+/** The SelectTarget a marked element represents (field > item > slot > style > link),
+ *  or null if its marker is malformed. Style/link are lowest so an element that is BOTH
+ *  content and re-styleable/link-powered selects its content on click; its style/link is
+ *  reached from the inspector (which reads the element's marker alongside). */
 export function targetOf(marked: Element): SelectTarget | null {
   const field = marked.getAttribute(FIELD_ATTR)
   if (field) return { kind: 'field', key: field }
@@ -41,6 +41,8 @@ export function targetOf(marked: Element): SelectTarget | null {
   if (slot) return { kind: 'slot', key: slot }
   const style = marked.getAttribute(STYLE_ATTR)
   if (style) return { kind: 'style', key: style }
+  const link = marked.getAttribute(LINK_ATTR)
+  if (link) return { kind: 'link', key: link }
   return null
 }
 
@@ -68,6 +70,15 @@ export function applyStyleToDom(root: ParentNode, key: string, className: string
   const el = root.querySelector(`[${STYLE_ATTR}="${key}"]`)
   if (!el) return
   el.setAttribute('class', className)
+}
+
+/** Optimistically set a link-powered element's href by key. No-op if the region isn't
+ *  present. A blank url clears the href (the button falls back to inert). */
+export function applyLinkToDom(root: ParentNode, key: string, url: string): void {
+  const el = root.querySelector(`[${LINK_ATTR}="${key}"]`)
+  if (!el) return
+  if (url) el.setAttribute('href', url)
+  else el.removeAttribute('href')
 }
 
 /**
@@ -101,6 +112,7 @@ export function mountFrameBridge(options: {
     // goes to the caller.
     if (e.data.type === 'apply-field') applyFieldToDom(document, e.data.key, e.data.value)
     else if (e.data.type === 'apply-style') applyStyleToDom(document, e.data.key, e.data.className)
+    else if (e.data.type === 'apply-link') applyLinkToDom(document, e.data.key, e.data.url)
     else options.onEditorMessage?.(e.data)
   }
 

@@ -87,8 +87,10 @@ export type SiteVideo = {
   sort_order: number
 }
 
+export type MediaPurpose = 'hero_video' | 'profile_photo' | 'gallery_image' | 'bio_video'
+
 export type SiteMedia = {
-  purpose: 'hero_video' | 'profile_photo' | 'gallery_image'
+  purpose: MediaPurpose
   url: string
 }
 

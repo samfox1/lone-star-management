@@ -6,7 +6,7 @@
  * Pure DOM logic — no postMessage plumbing here.
  */
 import { describe, expect, it } from 'vitest'
-import { applyFieldToDom, applyStyleToDom, markedAncestor, targetOf } from '@/lib/site-editor/bridge-client'
+import { applyFieldToDom, applyLinkToDom, applyStyleToDom, markedAncestor, targetOf } from '@/lib/site-editor/bridge-client'
 
 describe('bridge-client — resolve a clicked element to a target', () => {
   it('resolves the NEAREST marker (an item beats its enclosing slot)', () => {
@@ -83,5 +83,30 @@ describe('style regions — resolve + optimistic restyle', () => {
   it('no-ops when the style region is not present', () => {
     document.body.innerHTML = `<p>nothing marked</p>`
     expect(() => applyStyleToDom(document, 'missing', 'x')).not.toThrow()
+  })
+})
+
+describe('link regions — resolve + optimistic href (Phase 2)', () => {
+  it('resolves a link-only element to a link target (lowest precedence)', () => {
+    document.body.innerHTML = `<a data-lse-link="usb" id="u">USB</a>`
+    expect(targetOf(document.getElementById('u')!)).toEqual({ kind: 'link', key: 'usb' })
+  })
+
+  it('a field/style wins over link on the same element (content selects on click)', () => {
+    document.body.innerHTML = `<a data-lse-link="usb" data-lse-style="usb_btn" id="u">USB</a>`
+    expect(targetOf(document.getElementById('u')!)).toEqual({ kind: 'style', key: 'usb_btn' })
+  })
+
+  it('applyLinkToDom sets the href by key, and clears it when the url is blank', () => {
+    document.body.innerHTML = `<a data-lse-link="usb" id="u">USB</a>`
+    applyLinkToDom(document, 'usb', 'https://open.spotify.com/playlist/usb')
+    expect(document.getElementById('u')!.getAttribute('href')).toBe('https://open.spotify.com/playlist/usb')
+    applyLinkToDom(document, 'usb', '')
+    expect(document.getElementById('u')!.hasAttribute('href')).toBe(false)
+  })
+
+  it('no-ops when the link region is not present', () => {
+    document.body.innerHTML = `<p>nothing marked</p>`
+    expect(() => applyLinkToDom(document, 'missing', 'x')).not.toThrow()
   })
 })

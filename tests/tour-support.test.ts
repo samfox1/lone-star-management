@@ -17,10 +17,18 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent, updateContent } from '@/lib/content'
+import { createContent, publishContent, setSupportUrl, updateContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
-type PublicTourDate = { id: string; venue: string | null; state: string | null; country: string | null; support?: string[] | null; is_past?: boolean | null }
+type PublicTourDate = {
+  id: string
+  venue: string | null
+  state: string | null
+  country: string | null
+  support?: string[] | null
+  support_urls?: Record<string, string> | null
+  is_past?: boolean | null
+}
 
 const VENUE = 'Support Test Hall'
 let artistA: string
@@ -93,6 +101,62 @@ describe('tour date support (who else is performing)', () => {
     await updateContent(asA, 'tour_date', id, { support: [] })
     await publishOnSite()
     expect((await fromPublicSite())?.support).toEqual([])
+  })
+})
+
+describe('tour date support links (per-act outbound URLs)', () => {
+  // A separate date so the lineup edits above don't interfere. Cleaned up here.
+  let linkId: string
+  beforeAll(async () => {
+    const row = await createContent(asA, 'tour_date', artistA, {
+      date: '2026-12-01',
+      venue: 'Support Link Hall',
+      city: 'Austin',
+      support: ['Gudfella', 'Arlo'],
+    })
+    linkId = row.id as string
+  })
+  afterAll(async () => {
+    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', linkId)
+    await svc.from('tour_dates').delete().eq('id', linkId)
+  })
+
+  async function linkDate(): Promise<PublicTourDate | undefined> {
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    return (data as { tour_dates: PublicTourDate[] }).tour_dates.find((d) => d.id === linkId)
+  }
+
+  it('defaults support_urls to an empty map, never null', async () => {
+    const { data } = await asA.from('tour_dates').select('support_urls').eq('id', linkId).single()
+    expect(data?.support_urls).toEqual({})
+  })
+
+  it('sets ONE act’s URL by name without touching the name list', async () => {
+    const map = await setSupportUrl(asA, artistA, linkId, 'Gudfella', 'https://gudfella.example')
+    expect(map).toEqual({ Gudfella: 'https://gudfella.example' })
+    // The names are untouched — the two columns don’t clobber each other.
+    const { data } = await asA.from('tour_dates').select('support, support_urls').eq('id', linkId).single()
+    expect(data?.support).toEqual(['Gudfella', 'Arlo'])
+    expect(data?.support_urls).toEqual({ Gudfella: 'https://gudfella.example' })
+  })
+
+  it('CRITICAL: support_urls rides the snapshot to the public door, beside the names', async () => {
+    await publishContent(asA, 'tour_date', artistA)
+    await asA.from('tour_dates').update({ on_site: true }).eq('id', linkId).eq('artist_id', artistA)
+    const live = await linkDate()
+    expect(live?.support).toEqual(['Gudfella', 'Arlo'])
+    expect(live?.support_urls).toEqual({ Gudfella: 'https://gudfella.example' })
+  })
+
+  it('clears one act’s URL (blank), leaving other acts’ links intact', async () => {
+    await setSupportUrl(asA, artistA, linkId, 'Arlo', 'https://arlo.example')
+    let map = await setSupportUrl(asA, artistA, linkId, 'Gudfella', '')
+    expect(map).toEqual({ Arlo: 'https://arlo.example' })
+    // And it publishes the cleared state.
+    await publishContent(asA, 'tour_date', artistA)
+    expect((await linkDate())?.support_urls).toEqual({ Arlo: 'https://arlo.example' })
+    map = await setSupportUrl(asA, artistA, linkId, 'Arlo', '')
+    expect(map).toEqual({})
   })
 })
 

@@ -1,0 +1,22 @@
+-- Per-support-act outbound links on a tour date.
+--
+-- `support text[]` (20260715120000) holds the act NAMES only, edited on the tour page.
+-- This adds an optional URL per act, edited SEPARATELY in the site editor's Links panel
+-- (grouped as "Tour support"), so "+ Gudfella" on skeen's tour page can become a real
+-- link out to that act.
+--
+-- Kept as a name->url MAP rather than folded into `support` on purpose: the two editors
+-- must never clobber each other. The tour page writes `support` (names) and never touches
+-- this column; the Links panel writes this column and never touches `support`. Because
+-- the generic content form only writes fields it posts, each save leaves the other alone.
+--
+-- Rides PUBLISHABLE.tour_date.snapshot to the public door: get_public_site returns each
+-- tour_date revision's `data` wholesale, so `support_urls` reaches skeen alongside
+-- `support` with NO change to that function. skeen zips the two into {name, url}.
+-- Publish-gated like every other content edit.
+--
+-- One-time: tour dates published before this will read as "edited" until republished,
+-- because their snapshot gains a `support_urls` key ({} vs absent). Harmless — a
+-- republish clears it, and the act NAMES render throughout regardless.
+alter table public.tour_dates
+  add column if not exists support_urls jsonb not null default '{}'::jsonb;

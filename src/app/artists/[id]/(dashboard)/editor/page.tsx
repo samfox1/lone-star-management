@@ -10,6 +10,7 @@ import type {
   EditorLink,
   EditorMerch,
   EditorSong,
+  EditorSupportLink,
   EditorTextField,
   EditorTour,
   EditorVideo,
@@ -40,9 +41,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
       .from('media')
-      .select('id, storage_path, on_site')
+      .select('id, purpose, storage_path, on_site, orientation')
       .eq('artist_id', id)
-      .eq('purpose', 'gallery_image')
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
   ])
@@ -81,11 +81,15 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
         }))
     : []
 
-  const photos = (mediaRows ?? []).map((m) => ({
-    id: m.id as string,
-    storage_path: m.storage_path as string,
-    onSite: (m.on_site as boolean | null) ?? false,
-  }))
+  const photos = (mediaRows ?? [])
+    .filter((m) => m.purpose === 'gallery_image')
+    .map((m) => ({
+      id: m.id as string,
+      storage_path: m.storage_path as string,
+      onSite: (m.on_site as boolean | null) ?? false,
+      orientation: (m.orientation as 'horizontal' | 'vertical' | null) ?? null,
+    }))
+
 
   const [linkRows, videoRows, merchRows, releaseRows, trackRows, tourRows] = await Promise.all([
     listContent(supabase, 'link', id),
@@ -95,21 +99,43 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     listContent(supabase, 'track', id),
     listContent(supabase, 'tour_date', id),
   ])
-  const links: EditorLink[] = linkRows.map((r) => ({
-    id: r.id,
-    label: (r.label as string | null) ?? '',
-    url: (r.url as string | null) ?? '',
-    // Links default on_site=true (20260708150000), so an existing link stays on the
-    // site until the manager deliberately takes it off — unlike a photo, which is
-    // off until selected.
-    onSite: (r.on_site as boolean | null) ?? true,
-  }))
+  // Socials = ordinary outbound links. A link bound to a manifest region (role set) is
+  // NOT a social — it powers a declared button (USB/Merch) and lives in the Site-links
+  // panel instead, so it's excluded here. (`role` only exists after 20260721... is
+  // applied; until then every row reads role=undefined and stays in Socials.)
+  const links: EditorLink[] = linkRows
+    .filter((r) => !r.role)
+    .map((r) => ({
+      id: r.id,
+      label: (r.label as string | null) ?? '',
+      url: (r.url as string | null) ?? '',
+      // Links default on_site=true (20260708150000), so an existing link stays on the
+      // site until the manager deliberately takes it off — unlike a photo, which is
+      // off until selected.
+      onSite: (r.on_site as boolean | null) ?? true,
+    }))
+  // Current URL for each manifest link region, keyed by its role. The regions
+  // themselves arrive from the frame's manifest at runtime (custom site).
+  const linkValues: Record<string, string> = Object.fromEntries(
+    linkRows.filter((r) => r.role).map((r) => [String(r.role), (r.url as string | null) ?? '']),
+  )
+  const videosBase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const videos: EditorVideo[] = videoRows.map((r) => {
     const provider = String(r.provider ?? '')
+    const storagePath = (r.storage_path as string | null) ?? null
     return {
       id: r.id,
       title: (r.title as string | null) ?? '',
+      provider,
+      // The YouTube band is EMBEDS only; Shorts aren't used on sites. The picker filters
+      // on these so only real YouTube videos are placeable.
+      isShort: (r.is_short as boolean | null) ?? false,
+      // A background slot the video is placed in (hero landscape/portrait), or null.
+      siteRole: (r.site_role as 'hero_landscape' | 'hero_portrait' | 'bio_background' | null) ?? null,
       poster: youtubePoster(String(r.embed_url ?? ''), provider),
+      // Uploaded videos preview as a first-frame thumbnail (#t=0.1 seeks past frame 0,
+      // which some browsers render black). The videos bucket is public.
+      previewUrl: storagePath ? `${videosBase}/storage/v1/object/public/videos/${storagePath}#t=0.1` : null,
       // The YouTube sync imports videos OFF-site (`insertDefaults: on_site:false`),
       // so a synced channel lands in the library and waits to be chosen. The panel
       // has to show that, or it reads as "all 83 are on your site".
@@ -130,6 +156,21 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     // New/synced dates land off-site (INSERT_OFF_SITE) and are chosen here.
     onSite: (r.on_site as boolean | null) ?? false,
   }))
+
+  // Flatten every date's support acts into per-act rows for the Links panel's "Tour
+  // support" group: the act NAME + its current URL (from the date's support_urls map) +
+  // a short label for WHICH show it's on. The name is edited on the Tour page; only the
+  // URL is set here (setSupportUrlAction → tour_dates.support_urls).
+  const supportLinks: EditorSupportLink[] = tourRows.flatMap((r) => {
+    const names = (r.support as string[] | null) ?? []
+    const urls = (r.support_urls as Record<string, string> | null) ?? {}
+    const show =
+      (r.venue as string | null) ||
+      (r.city as string | null) ||
+      (r.date as string | null) ||
+      'Untitled show'
+    return names.map((name) => ({ tourDateId: r.id, name, url: urls[name] ?? '', show }))
+  })
   const merch: EditorMerch[] = merchRows.map((r) => ({
     id: r.id,
     title: (r.title as string | null) ?? '',
@@ -188,6 +229,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       photos={photos}
       textFields={textFields}
       links={links}
+      supportLinks={supportLinks}
+      linkValues={linkValues}
       videos={videos}
       merch={merch}
       songs={songs}

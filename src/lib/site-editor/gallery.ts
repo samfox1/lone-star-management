@@ -8,6 +8,23 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * (RLS scopes every update to the caller's tenant).
  */
 
+/** A gallery photo's orientation slot. Horizontal photos display 3:2, vertical 2:3. */
+export type Orientation = 'horizontal' | 'vertical'
+
+/** How many photos fit each orientation group in the editor — matches skeen's collage
+ *  layout (3 horizontal + 3 vertical). One constant so the editor and any layout check
+ *  agree. */
+export const SLOTS_PER_ORIENTATION = 3
+
+/** Classify an image by its pixel dimensions: a square counts as horizontal (its 1:1
+ *  fits a landscape slot without portrait letterboxing). Used to WARN when a photo
+ *  dropped into a slot doesn't match that slot's orientation. Returns null for
+ *  degenerate sizes (0), where there's nothing to judge. */
+export function orientationOf(width: number, height: number): Orientation | null {
+  if (!(width > 0) || !(height > 0)) return null
+  return width >= height ? 'horizontal' : 'vertical'
+}
+
 /** Move the item at `from` to `to`, returning a new array (a copy, unchanged on a
  *  no-op or out-of-range index). */
 export function reorderList<T>(list: T[], from: number, to: number): T[] {

@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { acceptsValue, fieldsFor, SEO_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
+import { safeHref } from '@/lib/url'
 
 export async function saveEditorField(
   supabase: SupabaseClient,
@@ -105,6 +106,62 @@ export async function saveEditorStyle(
   const { error } = await supabase
     .from('site_styles')
     .upsert({ artist_id: artistId, region_key: regionKey, class_names: clean }, { onConflict: 'artist_id,region_key' })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+/** A manifest link-region key is a plain identifier ('usb', 'merch'). */
+function isLinkKey(key: string): boolean {
+  return key.length > 0 && key.length <= 200 && /^[A-Za-z0-9_-]+$/.test(key)
+}
+
+/**
+ * Bind a manifest link region to a URL (Phase 2): write the artist's `links` row whose
+ * `role` equals this key. Pure over an injected Supabase client (RLS-scoped); the
+ * `saveEditorLinkAction` wrapper adds auth + revalidation. A blank URL DELETES the row
+ * (the button falls back to inert). `label` seeds a NEW row's display label (the manifest
+ * label).
+ *
+ * Read-modify-write rather than upsert on purpose: the (artist_id, role) uniqueness is a
+ * PARTIAL index (`WHERE role IS NOT NULL`), which PostgREST's `on_conflict` can't target.
+ * Single manager, one row per role, so the RMW race is a non-issue.
+ */
+export async function saveEditorLink(
+  supabase: SupabaseClient,
+  artistId: string,
+  key: string,
+  url: string,
+  label: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isLinkKey(key)) return { ok: false, error: 'Unknown link.' }
+  const trimmed = url.trim()
+
+  if (trimmed === '') {
+    const { error } = await supabase.from('links').delete().eq('artist_id', artistId).eq('role', key)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+
+  const clean = safeHref(trimmed)
+  if (!clean) return { ok: false, error: 'That URL looks invalid.' }
+
+  const { data: existing, error: readErr } = await supabase
+    .from('links')
+    .select('id')
+    .eq('artist_id', artistId)
+    .eq('role', key)
+    .maybeSingle()
+  if (readErr) return { ok: false, error: readErr.message }
+
+  if (existing) {
+    const { error } = await supabase.from('links').update({ url: clean }).eq('id', existing.id)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+
+  const { error } = await supabase
+    .from('links')
+    .insert({ artist_id: artistId, role: key, url: clean, label: (label || key).slice(0, 200), on_site: true })
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

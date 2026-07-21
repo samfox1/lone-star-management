@@ -53,12 +53,14 @@ describe('syncYouTubeVideos', () => {
     expect(byId['yt-new']).toMatchObject({ title: 'Brand New', source: 'youtube' })
   })
 
-  it('persists is_short so the dashboard can split videos from Shorts', async () => {
-    await syncYouTubeVideos(asA, artistA, [yt('yt-vid', 'A Video', false), yt('yt-short', 'A Short', true)])
+  it('SKIPS Shorts — they are not used on artist sites, so the sync never imports them', async () => {
+    const result = await syncYouTubeVideos(asA, artistA, [yt('yt-vid', 'A Video', false), yt('yt-short', 'A Short', true)])
+    // Only the non-Short is added; the Short is filtered before the sync sees it.
+    expect(result).toMatchObject({ added: 1, failed: 0 })
     const { data } = await svc.from('videos').select('youtube_id, is_short').eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.youtube_id, r.is_short]))
     expect(byId['yt-vid']).toBe(false)
-    expect(byId['yt-short']).toBe(true)
+    expect(byId['yt-short']).toBeUndefined() // never inserted
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {

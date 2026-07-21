@@ -15,16 +15,22 @@ import {
   renameVideoAction,
   reorderContentAction,
   reorderGalleryAction,
+  placeGalleryPhotoAction,
   saveEditorFieldAction,
+  saveEditorLinkAction,
   saveEditorStyleAction,
   setOnSiteAction,
+  setSupportUrlAction,
   updateContentAction,
+  assignHeroSlotAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
-import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import type { ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import type {
   EditorLink,
   EditorMerch,
   EditorSong,
+  EditorSupportLink,
   EditorTextField,
   EditorTour,
   EditorVideo,
@@ -35,11 +41,15 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   reorderGalleryAction: vi.fn(async () => ({})),
   saveEditorFieldAction: vi.fn(async () => ({})),
   saveEditorStyleAction: vi.fn(async () => ({ ok: true })),
+  saveEditorLinkAction: vi.fn(async () => ({ ok: true })),
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
   reorderContentAction: vi.fn(async () => ({})),
   renameVideoAction: vi.fn(async () => ({})),
   setOnSiteAction: vi.fn(async () => ({})),
+  placeGalleryPhotoAction: vi.fn(async () => ({})),
+  setSupportUrlAction: vi.fn(async () => ({})),
+  assignHeroSlotAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
@@ -47,7 +57,26 @@ vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
       mock-upload
     </button>
   ),
+  // Each empty gallery slot: clicking simulates an upload of that orientation.
+  GallerySlotUploader: ({
+    orientation,
+    onUploaded,
+  }: {
+    orientation: 'horizontal' | 'vertical'
+    onUploaded?: (m: { id: string; storage_path: string; orientation: 'horizontal' | 'vertical' }) => void
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onUploaded?.({ id: `new-${orientation}`, storage_path: `artist-1/gallery/new-${orientation}.jpg`, orientation })
+      }
+    >
+      upload {orientation} photo
+    </button>
+  ),
 }))
+// The video slots call useRouter().refresh after a hero assignment; no app-router in the test.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 const deleteMock = vi.mocked(deleteMediaAction)
 const reorderMock = vi.mocked(reorderGalleryAction)
@@ -57,12 +86,19 @@ const deleteContentMock = vi.mocked(deleteContentAction)
 const reorderContentMock = vi.mocked(reorderContentAction)
 const renameVideoMock = vi.mocked(renameVideoAction)
 const setOnSiteMock = vi.mocked(setOnSiteAction)
+const placePhotoMock = vi.mocked(placeGalleryPhotoAction)
+const setSupportUrlMock = vi.mocked(setSupportUrlAction)
 const saveStyleMock = vi.mocked(saveEditorStyleAction)
+const saveLinkMock = vi.mocked(saveEditorLinkAction)
+const assignHeroMock = vi.mocked(assignHeroSlotAction)
 
 const PHOTOS: GalleryPhoto[] = [
-  { id: 'm1', storage_path: 'artist-1/gallery/a.jpg', onSite: false },
-  { id: 'm2', storage_path: 'artist-1/gallery/b.jpg', onSite: true },
-  { id: 'm3', storage_path: 'artist-1/gallery/c.jpg', onSite: false },
+  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal' },
+  // Off-site horizontal → a candidate in the Horizontal picker.
+  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal' },
+  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical' },
+  // Off-site vertical → a candidate in the Vertical picker.
+  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical' },
 ]
 
 const TEXT_FIELDS: EditorTextField[] = [
@@ -78,10 +114,16 @@ const LINKS: EditorLink[] = [
   { id: 'l3', label: 'Bandcamp', url: 'https://x.bandcamp.com', onSite: false },
 ]
 
+const SUPPORT: EditorSupportLink[] = [
+  { tourDateId: 't1', name: 'Gudfella', url: '', show: 'Mohawk' },
+  { tourDateId: 't1', name: 'Arlo', url: 'https://arlo.example', show: 'Mohawk' },
+]
+
+const yt = (v: Omit<EditorVideo, 'provider' | 'isShort' | 'siteRole' | 'previewUrl'>): EditorVideo => ({ ...v, provider: 'youtube', isShort: false, siteRole: null, previewUrl: null })
 const VIDEOS: EditorVideo[] = [
-  { id: 'v1', title: 'Live at the Mohawk', poster: 'https://i.ytimg.com/vi/aaa/hqdefault.jpg', onSite: false },
-  { id: 'v2', title: 'Studio session', poster: null, onSite: true },
-  { id: 'v3', title: 'Tour recap', poster: null, onSite: false },
+  yt({ id: 'v1', title: 'Live at the Mohawk', poster: 'https://i.ytimg.com/vi/aaa/hqdefault.jpg', onSite: false }),
+  yt({ id: 'v2', title: 'Studio session', poster: null, onSite: true }),
+  yt({ id: 'v3', title: 'Tour recap', poster: null, onSite: false }),
 ]
 
 const MERCH: EditorMerch[] = [
@@ -100,15 +142,21 @@ function renderInspector(
   opts: {
     textFields?: EditorTextField[]
     links?: EditorLink[]
+    supportLinks?: EditorSupportLink[]
     videos?: EditorVideo[]
     merch?: EditorMerch[]
     songs?: EditorSong[]
     tours?: EditorTour[]
     styleRegions?: ManifestStyleRegion[]
     styleValues?: Record<string, string>
+    styleOptions?: SiteStyleOptions
     selectedStyle?: string | null
+    linkRegions?: ManifestLinkRegion[]
+    linkValues?: Record<string, string>
+    selectedLink?: string | null
     onApplyField?: (k: string, v: string) => void
     onApplyStyle?: (k: string, c: string) => void
+    onApplyLink?: (k: string, u: string) => void
   } = {},
 ) {
   return render(
@@ -117,15 +165,21 @@ function renderInspector(
       photos={photos}
       textFields={opts.textFields ?? []}
       links={opts.links ?? []}
+      supportLinks={opts.supportLinks ?? []}
+      linkValues={opts.linkValues ?? {}}
       videos={opts.videos ?? []}
       merch={opts.merch ?? []}
       songs={opts.songs ?? []}
       tours={opts.tours ?? []}
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
+      styleOptions={opts.styleOptions}
       selectedStyle={opts.selectedStyle ?? null}
+      linkRegions={opts.linkRegions ?? []}
+      selectedLink={opts.selectedLink ?? null}
       onApplyField={opts.onApplyField}
       onApplyStyle={opts.onApplyStyle}
+      onApplyLink={opts.onApplyLink}
     />,
   )
 }
@@ -140,7 +194,11 @@ afterEach(() => {
   reorderContentMock.mockClear()
   renameVideoMock.mockClear()
   setOnSiteMock.mockClear()
+  placePhotoMock.mockClear()
+  setSupportUrlMock.mockClear()
   saveStyleMock.mockClear()
+  saveLinkMock.mockClear()
+  assignHeroMock.mockClear()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -149,7 +207,9 @@ describe('EditorInspector — browse state', () => {
     for (const label of ['Images', 'Text', 'Links', 'Videos', 'Music', 'Merch']) {
       expect(screen.getByRole('button', { name: new RegExp(label) })).toBeTruthy()
     }
-    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('1 of 3 on site')
+    // Gallery photos are orientation groups (on-site by construction), so the subtitle is
+    // just a total.
+    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('4 photos')
   })
 
   it('does not show editing tools until a component is opened', () => {
@@ -159,91 +219,89 @@ describe('EditorInspector — browse state', () => {
   })
 })
 
-describe('EditorInspector — opening Images', () => {
+describe('EditorInspector — opening Images (orientation groups + asset picker)', () => {
   function openImages(photos?: GalleryPhoto[]) {
     renderInspector(photos)
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
-  it('opens the gallery editing view with the real photo count', () => {
+  it('opens the gallery as Horizontal + Vertical groups, each with an Add tile', () => {
     openImages()
-    expect(screen.getByText('Gallery')).toBeTruthy()
-    expect(screen.getByText('1 of 3 on site')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /All components/ })).toBeTruthy()
+    expect(screen.getByText('Horizontal')).toBeTruthy()
+    expect(screen.getByText('Vertical')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add horizontal photo' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add vertical photo' })).toBeTruthy()
   })
 
-  it('renders real thumbnails + an in-editor uploader', () => {
+  it('shows only ON-SITE photos as cards (m1 horizontal, m3 vertical)', () => {
     openImages()
-    const imgs = document.querySelectorAll('aside img')
-    expect(imgs.length).toBe(3)
-    expect((imgs[0] as HTMLImageElement).src).toContain('artist-1/gallery/a.jpg')
-    expect(screen.getByRole('button', { name: 'mock-upload' })).toBeTruthy()
+    const imgs = Array.from(document.querySelectorAll('aside img')) as HTMLImageElement[]
+    expect(imgs.length).toBe(2)
+    expect(imgs.some((i) => i.src.includes('h-on.jpg'))).toBe(true)
+    expect(imgs.some((i) => i.src.includes('v-on.jpg'))).toBe(true)
   })
 
-  it('removes a photo optimistically and calls deleteMediaAction', () => {
+  it('Add opens the picker over ONLY that orientation’s off-site photos + an uploader', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
-    expect(deleteMock).toHaveBeenCalledWith('m1', 'artist-1/gallery/a.jpg', 'artist-1')
-    // optimistic: one thumbnail gone, header count updated
-    expect(document.querySelectorAll('aside img').length).toBe(2)
-    expect(screen.getByText('1 of 2 on site')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add horizontal photo' }))
+    const dialog = screen.getByRole('dialog')
+    // A photo is horizontal OR vertical: the horizontal picker shows m2 only (m4 is
+    // vertical and must not appear here). Candidates are labelled by the group.
+    expect(within(dialog).getByRole('button', { name: /Horizontal 1/ })).toBeTruthy()
+    expect(within(dialog).queryByRole('button', { name: /Horizontal 2/ })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'upload horizontal photo' })).toBeTruthy()
   })
 
-  it('reorders via drag and persists the new order', () => {
+  it('picking a library photo PLACES it (sets orientation + on the site)', () => {
     openImages()
-    const tiles = document.querySelectorAll('aside div[draggable="true"]')
-    expect(tiles.length).toBe(3)
-    fireEvent.dragStart(tiles[0]) // pick up the first photo (m1)
-    fireEvent.drop(tiles[2]) // drop on the third slot
-    // optimistic order + persisted with the new id order
-    expect(reorderMock).toHaveBeenCalledWith('artist-1', ['m2', 'm3', 'm1'])
-    const imgs = document.querySelectorAll('aside img')
-    expect((imgs[2] as HTMLImageElement).src).toContain('artist-1/gallery/a.jpg')
+    fireEvent.click(screen.getByRole('button', { name: 'Add horizontal photo' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Horizontal 1/ })) // m2
+    expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal')
   })
 
-  it('ignores a second remove while one is in flight (no concurrent-op clobber)', async () => {
-    let release: () => void = () => {}
-    deleteMock.mockImplementationOnce(() => new Promise((r) => (release = () => r({}))))
+  it('Edit → Remove takes a photo off the site (never deletes)', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
-    // first delete is pending → a second remove must be ignored until it settles
-    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
-    expect(deleteMock).toHaveBeenCalledTimes(1)
-    release()
-    await Promise.resolve()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit horizontal photo 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false)
+    expect(deleteMock).not.toHaveBeenCalled()
   })
 
-  it('adds an uploaded photo to the grid optimistically (off-site by default)', () => {
-    openImages()
-    expect(document.querySelectorAll('aside img').length).toBe(3)
-    fireEvent.click(screen.getByRole('button', { name: 'mock-upload' }))
-    expect(document.querySelectorAll('aside img').length).toBe(4)
-    expect(screen.getByText('1 of 4 on site')).toBeTruthy()
+  it('a legacy null-orientation on-site photo stays MANAGEABLE (shows in Horizontal, not vanished)', () => {
+    // Regression: an untagged photo (legacy row / Drive import) that's live on the site
+    // must not disappear from the editor. It belongs to the Horizontal group until placed.
+    renderInspector([{ id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null }])
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    const imgs = Array.from(document.querySelectorAll('aside img')) as HTMLImageElement[]
+    expect(imgs.some((i) => i.src.includes('legacy.jpg'))).toBe(true)
+    expect(screen.getByRole('button', { name: 'Edit horizontal photo 1' })).toBeTruthy()
   })
 
-  it('toggles a photo on-site (writes on_site via setOnSiteAction)', () => {
+  it('Edit → Replace swaps within the group (old off, new placed)', () => {
     openImages()
-    // m1 starts off-site → its toggle offers to add it
-    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
-    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', true)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit horizontal photo 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Horizontal 1/ })) // m2
+    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false) // old off
+    expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed
   })
 
-  it('shows the size slider and layout controls', () => {
+  it('uploading a horizontal photo adds it to the horizontal library (no placement)', () => {
     openImages()
-    expect(screen.getByLabelText('Collection size')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'More columns' })).toBeTruthy()
-  })
-
-  it('collapses a section when its header is toggled', () => {
-    openImages()
-    expect(screen.getByLabelText('Collection size')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Sizing', expanded: true }))
-    expect(screen.queryByLabelText('Collection size')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add horizontal photo' }))
+    // Only m2 to start (Horizontal 1); no second horizontal candidate yet.
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: /Horizontal 2/ })).toBeNull()
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'upload horizontal photo' }))
+    // The uploaded horizontal photo joins the horizontal library; nothing is placed.
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Horizontal 2/ })).toBeTruthy()
+    expect(placePhotoMock).not.toHaveBeenCalled()
+    expect(setOnSiteMock).not.toHaveBeenCalled()
   })
 
   it('returns to browse via Back', () => {
     openImages()
     fireEvent.click(screen.getByRole('button', { name: /All components/ }))
-    expect(screen.queryByText('Gallery')).toBeNull()
     expect(screen.getByRole('button', { name: /Images/ })).toBeTruthy()
   })
 
@@ -289,29 +347,62 @@ describe('EditorInspector — Links component', () => {
     renderInspector([], { links: LINKS })
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
   }
+  // Rows collapse to just their label; the label input etc. only mount once the row
+  // is expanded, so most assertions open the row first.
+  function expandLink(name: RegExp) {
+    fireEvent.click(screen.getByRole('button', { name }))
+  }
 
   it('shows the real link count in browse', () => {
     renderInspector([], { links: LINKS })
     expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('2 of 3 on site')
   })
 
-  it('lists links with editable label + url and an add-link out', () => {
+  it('collapses rows to just the label and expands the editor on click', () => {
     openLinks()
+    // Collapsed: the label shows, the inputs do not.
+    expect(screen.getByRole('button', { name: /^Spotify/ })).toBeTruthy()
+    expect(screen.queryByLabelText('Link 1 URL')).toBeNull()
+    // Click the row → the edit controls appear.
+    expandLink(/^Spotify/)
     expect((screen.getByLabelText('Link 1 label') as HTMLInputElement).value).toBe('Spotify')
     expect((screen.getByLabelText('Link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
+    expect(screen.getByRole('button', { name: 'Remove link 1' })).toBeTruthy()
+  })
+
+  it('is single-open: expanding another row collapses the first', () => {
+    openLinks()
+    expandLink(/^Spotify/)
+    expect(screen.queryByLabelText('Link 1 URL')).not.toBeNull()
+    expandLink(/^Instagram/)
+    // Spotify's editor is gone; Instagram's is open.
+    expect(screen.queryByLabelText('Link 1 URL')).toBeNull()
+    expect((screen.getByLabelText('Link 2 URL') as HTMLInputElement).value).toBe('https://instagram.com/x')
+  })
+
+  it('flags an off-site link with an "Off" tag while collapsed', () => {
+    openLinks()
+    // l3 (Bandcamp) is the only off-site link; its collapsed header carries the tag.
+    expect(screen.getByRole('button', { name: /^Bandcamp/ }).textContent).toContain('Off')
+    // On-site rows do not.
+    expect(screen.getByRole('button', { name: /^Spotify/ }).textContent).not.toContain('Off')
+  })
+
+  it('has an add-link out to the links page', () => {
+    openLinks()
     expect(screen.getByRole('link', { name: /Add link/ }).getAttribute('href')).toBe('/artists/artist-1/links')
   })
 
   it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
     openLinks()
-    // l1 is on-site → its toggle offers to take it off.
-    fireEvent.click(screen.getAllByRole('button', { name: /On the site/ })[0])
+    expandLink(/^Spotify/) // l1 is on-site → its toggle offers to take it off.
+    fireEvent.click(screen.getByRole('button', { name: /On the site/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l1', 'artist-1', false)
   })
 
   it('puts an off-site link back ON the site', () => {
     openLinks()
-    // l3 is the only off-site link, so it owns the only "Off the site" toggle.
+    expandLink(/^Bandcamp/) // l3 is the only off-site link.
     fireEvent.click(screen.getByRole('button', { name: /Off the site/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l3', 'artist-1', true)
   })
@@ -320,6 +411,7 @@ describe('EditorInspector — Links component', () => {
     vi.useFakeTimers()
     try {
       openLinks()
+      expandLink(/^Spotify/)
       fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: '' } })
       vi.advanceTimersByTime(500)
       expect(updateContentMock).not.toHaveBeenCalled()
@@ -333,6 +425,7 @@ describe('EditorInspector — Links component', () => {
     vi.useFakeTimers()
     try {
       openLinks()
+      expandLink(/^Spotify/)
       fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Listen' } })
       expect(updateContentMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
@@ -346,11 +439,27 @@ describe('EditorInspector — Links component', () => {
     }
   })
 
+  it('reflects an edited label on the collapsed row', () => {
+    vi.useFakeTimers()
+    try {
+      openLinks()
+      expandLink(/^Spotify/)
+      fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Listen' } })
+      // Collapse and confirm the header shows the new label, not the old one.
+      fireEvent.click(screen.getByRole('button', { name: /^Listen/ }))
+      expect(screen.queryByLabelText('Link 1 URL')).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Spotify/ })).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('removes a link optimistically via deleteContentAction', () => {
     openLinks()
+    expandLink(/^Spotify/)
     fireEvent.click(screen.getByRole('button', { name: 'Remove link 1' }))
     expect(deleteContentMock).toHaveBeenCalledWith('link', 'l1', 'artist-1')
-    expect(screen.queryByDisplayValue('Spotify')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Spotify/ })).toBeNull()
   })
 
   it('reorders links via drag and persists the new order', () => {
@@ -360,6 +469,124 @@ describe('EditorInspector — Links component', () => {
     fireEvent.dragStart(rows[0])
     fireEvent.drop(rows[2])
     expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l3', 'l1'])
+  })
+})
+
+describe('EditorInspector — Links panel groups (socials + tour support)', () => {
+  function openLinks(opts: { links?: EditorLink[]; supportLinks?: EditorSupportLink[] } = {}) {
+    renderInspector([], { links: opts.links ?? LINKS, supportLinks: opts.supportLinks ?? SUPPORT })
+    fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+  }
+
+  it('groups the panel into "Socials" and "Tour support"', () => {
+    openLinks()
+    expect(screen.getByText('Socials')).toBeTruthy()
+    expect(screen.getByText('Tour support')).toBeTruthy()
+  })
+
+  it('lists each support act by name, collapsed, with its link status', () => {
+    openLinks()
+    // Both acts show as collapsed rows; Arlo has a URL, Gudfella does not.
+    expect(screen.getByRole('button', { name: /^Gudfella/ }).textContent).toContain('No link')
+    expect(screen.getByRole('button', { name: /^Arlo/ }).textContent).toContain('Linked')
+    // Collapsed: no URL field yet.
+    expect(screen.queryByLabelText(/Link for Gudfella/)).toBeNull()
+  })
+
+  it('expands a support act to show which credit + show it links, and the URL field', () => {
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: /^Gudfella/ }))
+    // Names the credit it attaches to and the show it's on.
+    expect(screen.getByText(/Links the/).textContent).toContain('Gudfella')
+    expect(screen.getByText(/Links the/).textContent).toContain('Mohawk')
+    expect(screen.getByLabelText('Link for Gudfella at Mohawk')).toBeTruthy()
+  })
+
+  it('debounce-saves a support act URL via setSupportUrlAction (by tour date + name)', () => {
+    vi.useFakeTimers()
+    try {
+      openLinks()
+      fireEvent.click(screen.getByRole('button', { name: /^Gudfella/ }))
+      fireEvent.change(screen.getByLabelText('Link for Gudfella at Mohawk'), {
+        target: { value: 'https://gudfella.example' },
+      })
+      expect(setSupportUrlMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(setSupportUrlMock).toHaveBeenCalledWith('artist-1', 't1', 'Gudfella', 'https://gudfella.example')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows a Tour-page hint when there are no support acts', () => {
+    openLinks({ supportLinks: [] })
+    // The "Tour support" header is still there, followed by a guiding link out.
+    expect(screen.getByText('Tour support')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Tour page/ }).getAttribute('href')).toBe('/artists/artist-1/tour')
+  })
+})
+
+describe('EditorInspector — Buttons group inside the Links panel (manifest-declared)', () => {
+  const LINK_REGIONS: ManifestLinkRegion[] = [
+    { key: 'usb', label: 'USB button', description: 'Disco-ball playlist link (Videos band)' },
+    { key: 'merch', label: 'Merch button', description: 'Store link in the top nav' },
+  ]
+  function openSiteLinks(opts: { linkValues?: Record<string, string>; onApplyLink?: (k: string, u: string) => void } = {}) {
+    renderInspector([], { linkRegions: LINK_REGIONS, linkValues: opts.linkValues, onApplyLink: opts.onApplyLink })
+    // One Links panel now holds Socials + Tour support + Buttons.
+    fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+  }
+
+  it('shows the Buttons group alongside Socials + Tour support in one panel', () => {
+    openSiteLinks()
+    expect(screen.getByText('Socials')).toBeTruthy()
+    expect(screen.getByText('Tour support')).toBeTruthy()
+    expect(screen.getByText('Buttons')).toBeTruthy()
+  })
+
+  it('lists each declared button by label + what it powers, with a URL field each', () => {
+    openSiteLinks({ linkValues: { usb: 'https://open.spotify.com/playlist/usb' } })
+    expect(screen.getByText('USB button')).toBeTruthy()
+    expect(screen.getByText(/Powers: Disco-ball playlist link/)).toBeTruthy()
+    // USB has a URL; Merch is declared but UNSET → an empty, visible row (not invisible).
+    expect((screen.getByLabelText('USB button URL') as HTMLInputElement).value).toBe('https://open.spotify.com/playlist/usb')
+    expect((screen.getByLabelText('Merch button URL') as HTMLInputElement).value).toBe('')
+  })
+
+  it('debounce-saves a URL by key + optimistically updates the frame', () => {
+    vi.useFakeTimers()
+    try {
+      const onApplyLink = vi.fn()
+      openSiteLinks({ onApplyLink })
+      fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'https://open.spotify.com/playlist/x' } })
+      // Optimistic frame repaint is immediate; the save is debounced.
+      expect(onApplyLink).toHaveBeenCalledWith('usb', 'https://open.spotify.com/playlist/x')
+      expect(saveLinkMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(saveLinkMock).toHaveBeenCalledWith('artist-1', 'usb', 'https://open.spotify.com/playlist/x', 'USB button')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does NOT save an unsafe URL and flags the field invalid', () => {
+    vi.useFakeTimers()
+    try {
+      openSiteLinks()
+      fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'javascript:alert(1)' } })
+      vi.advanceTimersByTime(500)
+      expect(saveLinkMock).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('USB button URL').getAttribute('aria-invalid')).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows an empty-state under Buttons when the site declares none', () => {
+    renderInspector([], { linkRegions: [] })
+    fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+    expect(screen.getByText('Buttons')).toBeTruthy()
+    expect(screen.getByText(/hasn't declared any link buttons/)).toBeTruthy()
   })
 })
 
@@ -374,18 +601,17 @@ describe('EditorInspector — Videos component', () => {
     expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('1 of 3 on site')
   })
 
-  it('lists videos with editable titles, a poster, and an add-video out', () => {
+  it('shows the on-site videos as filled band slots with an editable title', () => {
+    // v2 is the only on-site video → the one filled slot; v1/v3 are library.
     openVideos()
-    expect((screen.getByLabelText('Video 1 title') as HTMLInputElement).value).toBe('Live at the Mohawk')
-    expect(document.querySelector('aside img')).toBeTruthy() // the youtube poster
-    expect(screen.getByRole('link', { name: /Add video/ }).getAttribute('href')).toBe('/artists/artist-1/videos')
+    expect((screen.getByLabelText('Slot 1 title') as HTMLInputElement).value).toBe('Studio session')
   })
 
-  it('renames a video with a debounced save', () => {
+  it('renames a slotted video with a debounced save', () => {
     vi.useFakeTimers()
     try {
       openVideos()
-      fireEvent.change(screen.getByLabelText('Video 2 title'), { target: { value: 'Studio cut' } })
+      fireEvent.change(screen.getByLabelText('Slot 1 title'), { target: { value: 'Studio cut' } })
       expect(renameVideoMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
       expect(renameVideoMock).toHaveBeenCalledWith('v2', 'artist-1', 'Studio cut')
@@ -394,18 +620,115 @@ describe('EditorInspector — Videos component', () => {
     }
   })
 
-  it('removes a video via deleteContentAction', () => {
+  it('band Edit → Remove marks the video off-site, never deletes it', () => {
     openVideos()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove video 1' }))
-    expect(deleteContentMock).toHaveBeenCalledWith('video', 'v1', 'artist-1')
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('video', 'v2', 'artist-1', false)
+    expect(deleteContentMock).not.toHaveBeenCalled()
   })
 
-  it('reorders videos via drag and persists the new order', () => {
+  it('band Edit → Replace opens the picker WITHOUT removing the video yet', () => {
     openVideos()
-    const rows = document.querySelectorAll('aside div[draggable="true"]')
-    fireEvent.dragStart(rows[0])
-    fireEvent.drop(rows[2])
-    expect(reorderContentMock).toHaveBeenCalledWith('video', 'artist-1', ['v2', 'v3', 'v1'])
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    // The picker opens, but v2 is NOT taken off — it only leaves when a replacement
+    // is actually chosen, so closing the picker would keep it in place.
+    expect(screen.getByText(/Pick from your library/)).toBeTruthy()
+    expect(setOnSiteMock).not.toHaveBeenCalled()
+  })
+
+  it('band Replace + cancel keeps the original video on-site', () => {
+    openVideos()
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    // Nothing removed, nothing added.
+    expect(setOnSiteMock).not.toHaveBeenCalled()
+  })
+
+  it('band Replace + pick swaps: old goes off-site, new goes on', () => {
+    openVideos()
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    fireEvent.click(screen.getByRole('button', { name: /Live at the Mohawk/ }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('video', 'v2', 'artist-1', false) // old off
+    expect(setOnSiteMock).toHaveBeenCalledWith('video', 'v1', 'artist-1', true) // new on
+  })
+
+  it('CRITICAL: places a library video into a band slot from the picker (writes on_site)', () => {
+    openVideos()
+    // v2 fills band slot 1, so slot 2 is an empty "Pick a YouTube video" tile.
+    fireEvent.click(screen.getByRole('button', { name: /Pick a YouTube video/ }))
+    // The picker offers only OFF-site YouTube library (v1, v3), not the slotted v2
+    // (exact match, so the slot's "Remove Studio session…" button doesn't count).
+    expect(screen.queryByRole('button', { name: 'Studio session' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Live at the Mohawk/ }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('video', 'v1', 'artist-1', true)
+  })
+
+  it('points at the Videos page when the band library is empty', () => {
+    renderInspector([], { videos: [yt({ id: 'v2', title: 'Studio session', poster: null, onSite: true })] })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: /Pick a YouTube video/ })[0])
+    expect(screen.getByRole('link', { name: /Add a video first/ }).getAttribute('href')).toBe('/artists/artist-1/videos')
+  })
+
+  it('shows the background slots (landscape + portrait + bio) as pickers, not uploads', () => {
+    openVideos()
+    expect(screen.getByText(/Landscape/)).toBeTruthy()
+    expect(screen.getByText(/Portrait/)).toBeTruthy()
+    expect(screen.getAllByText(/Bio background/).length).toBeGreaterThan(0)
+    // No uploaded videos in the fixture → all three background slots are empty "Pick a
+    // video" tiles, and there is NO file uploader (mock-upload) — they pick from assets.
+    expect(screen.getAllByRole('button', { name: 'Pick a video' })).toHaveLength(3)
+    expect(screen.queryByRole('button', { name: 'mock-upload' })).toBeNull()
+  })
+
+  it('CRITICAL: places an uploaded video into the hero slot (assignHeroSlotAction, not on_site)', () => {
+    const withUploaded: EditorVideo[] = [
+      ...VIDEOS,
+      { id: 'up', title: 'Landing Page (H)', provider: 'uploaded', isShort: false, siteRole: null, previewUrl: 'https://x/up.mp4#t=0.1', poster: null, onSite: false },
+    ]
+    renderInspector([], { videos: withUploaded })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pick a video' })[0]) // landscape slot
+    // The hero picker offers UPLOADED videos, not the YouTube band ones.
+    expect(screen.queryByRole('button', { name: /Live at the Mohawk/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Landing Page/ }))
+    expect(assignHeroMock).toHaveBeenCalledWith('artist-1', 'hero_landscape', 'up')
+    // OPTIMISTIC: the slot fills right away (no refresh) — the bug was it stayed empty.
+    expect(screen.getByText('Landing Page (H)')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Edit the Landscape/ })).toBeTruthy()
+  })
+
+  it('shows a placed hero video with a preview, and Edit → Remove clears the slot', () => {
+    const placed: EditorVideo[] = [
+      { id: 'up', title: 'Landing Page (H)', provider: 'uploaded', isShort: false, siteRole: 'hero_landscape', previewUrl: 'https://x/up.mp4#t=0.1', poster: null, onSite: true },
+    ]
+    const { container } = renderInspector([], { videos: placed })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    expect(screen.getByText('Landing Page (H)')).toBeTruthy()
+    // Preview thumbnail is a <video> seeked to the first frame.
+    expect(container.querySelector('video')?.getAttribute('src')).toBe('https://x/up.mp4#t=0.1')
+    // Edit opens the Replace/Remove menu; Remove clears the slot.
+    fireEvent.click(screen.getByRole('button', { name: /Edit the Landscape/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(assignHeroMock).toHaveBeenCalledWith('artist-1', 'hero_landscape', null)
+  })
+
+  it('keeps uploaded videos and Shorts out of the YouTube band', () => {
+    const mixed: EditorVideo[] = [
+      yt({ id: 'y', title: 'A YouTube video', poster: null, onSite: true }),
+      { id: 'u', title: 'Uploaded clip', provider: 'uploaded', isShort: false, siteRole: null, previewUrl: 'https://x/u.mp4#t=0.1', poster: null, onSite: true },
+      { id: 's', title: 'A Short', provider: 'youtube', isShort: true, siteRole: null, previewUrl: null, poster: null, onSite: true },
+    ]
+    renderInspector([], { videos: mixed })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    // Slot 1 filled by the YouTube video; slot 2 is an empty picker (uploaded + Short excluded).
+    expect(screen.getByLabelText('Slot 1 title')).toBeTruthy()
+    expect(screen.queryByLabelText('Slot 2 title')).toBeNull()
+    expect(screen.getByRole('button', { name: /Pick a YouTube video/ })).toBeTruthy()
   })
 })
 
@@ -477,62 +800,51 @@ describe('EditorInspector — Music component', () => {
     expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('1 of 3 on site')
   })
 
-  it('lists songs with editable titles, a Released/Unreleased tag, and an add-song out', () => {
+  it('shows only ON-SITE songs as cover cards + an Add tile', () => {
     openMusic()
-    expect((screen.getByLabelText('Song 1 title') as HTMLInputElement).value).toBe('Opener')
-    // s1 released, s2 unreleased
-    expect(screen.getAllByText('Released').length).toBe(2)
-    expect(screen.getByText('Unreleased')).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Add song/ }).getAttribute('href')).toBe('/artists/artist-1/music')
+    // s3 is the only on-site song; s1/s2 live in the picker, not the panel.
+    expect(screen.getByText('Closer')).toBeTruthy()
+    expect(screen.queryByText('Opener')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add song' })).toBeTruthy()
   })
 
-  it('renames a song with a debounced content save', () => {
-    vi.useFakeTimers()
-    try {
-      openMusic()
-      fireEvent.change(screen.getByLabelText('Song 2 title'), { target: { value: 'Demo v2' } })
-      expect(updateContentMock).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(500)
-      const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
-      expect([type, id, artistId]).toEqual(['track', 's2', 'artist-1'])
-      expect((fd as FormData).get('title')).toBe('Demo v2')
-    } finally {
-      vi.useRealTimers()
-    }
+  it('Edit → Remove takes a song off the site (never deletes)', () => {
+    openMusic()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit song 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's3', 'artist-1', false)
+    expect(deleteContentMock).not.toHaveBeenCalled()
   })
 
-  it('removes a song via deleteContentAction', () => {
+  it('Add tile opens a picker of the off-site catalog', () => {
     openMusic()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove song 1' }))
-    expect(deleteContentMock).toHaveBeenCalledWith('track', 's1', 'artist-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Add song' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: /Opener/ })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: /Demo take/ })).toBeTruthy()
   })
 
-  it('toggles a song on-site (writes on_site via setOnSiteAction)', () => {
+  it('picking a song puts it on the site', () => {
     openMusic()
-    // s1 starts off-site → its toggle offers to add it
-    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Add song' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Opener/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('track', 's1', 'artist-1', true)
   })
 
-  it('does NOT save a blank song title and flags it invalid', () => {
-    vi.useFakeTimers()
-    try {
-      openMusic()
-      fireEvent.change(screen.getByLabelText('Song 1 title'), { target: { value: '' } })
-      vi.advanceTimersByTime(500)
-      expect(updateContentMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Song 1 title').getAttribute('aria-invalid')).toBe('true')
-    } finally {
-      vi.useRealTimers()
-    }
+  it('Edit → Replace swaps a song (old off, new on)', () => {
+    openMusic()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit song 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Opener/ }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's3', 'artist-1', false) // old off
+    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's1', 'artist-1', true) // new on
   })
 
-  it('reorders songs via drag and persists the new order', () => {
-    openMusic()
-    const rows = document.querySelectorAll('aside div[draggable="true"]')
-    fireEvent.dragStart(rows[0])
-    fireEvent.drop(rows[2])
-    expect(reorderContentMock).toHaveBeenCalledWith('track', 'artist-1', ['s2', 's3', 's1'])
+  it('an empty catalog points the picker at the Music page', () => {
+    renderInspector([], { songs: [{ id: 's3', title: 'Closer', cover_url: null, released: true, onSite: true }] })
+    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add song' }))
+    expect(screen.getByRole('link', { name: /Add a song first/ }).getAttribute('href')).toBe('/artists/artist-1/music')
   })
 })
 
@@ -543,91 +855,96 @@ describe('EditorInspector — Music component', () => {
  * the override when there is one and the base otherwise — clearing it restores the
  * base.
  */
-describe('EditorInspector — Style component', () => {
+describe('EditorInspector — Style component (no-code controls)', () => {
   const REGIONS: ManifestStyleRegion[] = [
     { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase' },
     { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
   ]
+  const PALETTE: SiteStyleOptions = {
+    fonts: [{ value: 'font-momo', label: 'Momo' }],
+    textColors: [{ value: 'text-flash-1', label: 'Flash' }],
+    bgColors: [{ value: 'bg-black', label: 'Black' }],
+  }
 
   function openStyle(opts: Parameters<typeof renderInspector>[1] = {}) {
     renderInspector([], { styleRegions: REGIONS, ...opts })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
   }
+  const expand = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }))
 
   it('lists the frame-provided regions with the real count', () => {
     renderInspector([], { styleRegions: REGIONS })
     expect(screen.getByRole('button', { name: /Style/ }).textContent).toContain('2 regions')
   })
 
-  it('seeds a field with the region BASE when there is no override', () => {
+  it('is an accordion: controls appear only when a section is opened', () => {
     openStyle()
-    expect((screen.getByLabelText('Hero wordmark (SKEEN) classes') as HTMLTextAreaElement).value).toBe(
-      'font-black uppercase',
-    )
+    expect(screen.queryByLabelText('Footer Boldness')).toBeNull()
+    expand('Footer')
+    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
   })
 
-  it('seeds a field with the SAVED override in preference to the base', () => {
-    openStyle({ styleValues: { hero_wordmark: 'text-9xl text-red-500' } })
-    expect((screen.getByLabelText('Hero wordmark (SKEEN) classes') as HTMLTextAreaElement).value).toBe(
-      'text-9xl text-red-500',
-    )
+  it('reads the base classes into the controls (Black weight, Uppercase on)', () => {
+    openStyle()
+    expand('Hero wordmark (SKEEN)')
+    expect((screen.getByLabelText('Hero wordmark (SKEEN) Boldness') as HTMLSelectElement).value).toBe('font-black')
+    expect((screen.getByLabelText('Hero wordmark (SKEEN) Uppercase') as HTMLInputElement).checked).toBe(true)
   })
 
-  it('repaints the frame as you type, before any save', () => {
+  it('changing Boldness swaps the weight class and PRESERVES the rest, repainting live', () => {
     const onApplyStyle = vi.fn()
     openStyle({ onApplyStyle })
-    fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: 'bg-black' } })
-    expect(onApplyStyle).toHaveBeenCalledWith('footer', 'bg-black')
+    expand('Hero wordmark (SKEEN)')
+    fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'font-bold' } })
+    expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'uppercase font-bold')
   })
 
-  it('debounces the save, then persists the class string', () => {
+  it('a toggle clears its class when unchecked', () => {
+    const onApplyStyle = vi.fn()
+    openStyle({ onApplyStyle })
+    expand('Hero wordmark (SKEEN)')
+    fireEvent.click(screen.getByLabelText('Hero wordmark (SKEEN) Uppercase')) // uncheck
+    expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'font-black')
+  })
+
+  it('debounces the save, then persists the swapped class string', () => {
     vi.useFakeTimers()
     try {
       openStyle()
-      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: 'bg-black' } })
-      expect(saveStyleMock).not.toHaveBeenCalled() // not on every keystroke
-      vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', 'bg-black')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('saves an EMPTY string (it clears the override — not a no-op)', () => {
-    vi.useFakeTimers()
-    try {
-      openStyle({ styleValues: { footer: 'bg-black' } })
-      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: '' } })
-      vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', '')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does NOT save characters the server would reject, and flags the field', () => {
-    vi.useFakeTimers()
-    try {
-      openStyle()
-      // Validated with the same cleanClassText the action uses, so the panel can't
-      // report success for a write that will be refused.
-      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: '<script>' } })
-      vi.advanceTimersByTime(500)
+      expand('Footer')
+      fireEvent.change(screen.getByLabelText('Footer Size'), { target: { value: 'text-lg' } })
       expect(saveStyleMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Footer classes').getAttribute('aria-invalid')).toBe('true')
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', 'mt-auto border-t px-6 text-lg')
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('accepts Tailwind arbitrary values + variants', () => {
+  it('shows Font + colour controls only when the site declares a palette', () => {
+    openStyle()
+    expand('Footer')
+    expect(screen.queryByLabelText('Footer Font')).toBeNull() // no palette declared
+    cleanup()
+    openStyle({ styleOptions: PALETTE })
+    expand('Footer')
+    expect(screen.getByLabelText('Footer Font')).toBeTruthy()
+    expect(screen.getByLabelText('Footer Background')).toBeTruthy()
+  })
+
+  it('Advanced box still edits the raw classes (arbitrary values), and rejects junk', () => {
     vi.useFakeTimers()
     try {
       openStyle()
-      const v = 'text-[clamp(3rem,12vw,11rem)] hover:text-red-500 sm:font-black'
+      expand('Footer')
+      const v = 'text-[clamp(3rem,12vw,11rem)] hover:text-red-500'
       fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: v } })
       vi.advanceTimersByTime(500)
       expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', v)
+
+      fireEvent.change(screen.getByLabelText('Footer classes'), { target: { value: '<script>' } })
+      vi.advanceTimersByTime(500)
+      expect(screen.getByLabelText('Footer classes').getAttribute('aria-invalid')).toBe('true')
     } finally {
       vi.useRealTimers()
     }
@@ -636,13 +953,14 @@ describe('EditorInspector — Style component', () => {
   it('explains itself when the site declares no styleable regions', () => {
     renderInspector([], { styleRegions: [] })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    expect(screen.getByText(/hasn't declared any styleable regions/i)).toBeTruthy()
+    expect(screen.getByText(/hasn't declared any styleable sections/i)).toBeTruthy()
   })
 
-  it('clicking a region in the SITE opens Style focused on it', () => {
+  it('clicking a region in the SITE opens that section', () => {
     // The point of the embedded-frame model: click the thing, edit the thing.
     renderInspector([], { styleRegions: REGIONS, selectedStyle: 'footer' })
-    expect((document.activeElement as HTMLElement)?.getAttribute('aria-label')).toBe('Footer classes')
+    // Style panel opened AND the Footer section expanded (its controls are present).
+    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
   })
 })
 
@@ -655,12 +973,9 @@ describe('EditorInspector — Style component', () => {
  */
 describe('EditorInspector — counts tell the truth about what is on the site', () => {
   it("REGRESSION: a synced library with NOTHING on-site does not read as '83 videos'", () => {
-    const offSite: EditorVideo[] = Array.from({ length: 83 }, (_, i) => ({
-      id: `v${i}`,
-      title: `DAY ${i}`,
-      poster: null,
-      onSite: false,
-    }))
+    const offSite: EditorVideo[] = Array.from({ length: 83 }, (_, i) =>
+      yt({ id: `v${i}`, title: `DAY ${i}`, poster: null, onSite: false }),
+    )
     renderInspector([], { videos: offSite })
     const label = screen.getByRole('button', { name: /Videos/ }).textContent ?? ''
     expect(label).toContain('0 of 83 on site')
@@ -669,9 +984,9 @@ describe('EditorInspector — counts tell the truth about what is on the site', 
 
   it('says "N of M on site", not the library total', () => {
     const videos: EditorVideo[] = [
-      { id: 'a', title: 'A', poster: null, onSite: true },
-      { id: 'b', title: 'B', poster: null, onSite: false },
-      { id: 'c', title: 'C', poster: null, onSite: true },
+      yt({ id: 'a', title: 'A', poster: null, onSite: true }),
+      yt({ id: 'b', title: 'B', poster: null, onSite: false }),
+      yt({ id: 'c', title: 'C', poster: null, onSite: true }),
     ]
     renderInspector([], { videos })
     expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('2 of 3 on site')
@@ -689,10 +1004,13 @@ describe('EditorInspector — counts tell the truth about what is on the site', 
     expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
   })
 
-  it('shows per-video on-site state in the panel, so a list of 83 is not ambiguous', () => {
-    renderInspector([], { videos: [{ id: 'v', title: 'Only', poster: null, onSite: false }] })
+  it('keeps a big off-site library out of the slots, so what is ON the site is unambiguous', () => {
+    // An off-site video is NOT a filled slot — it sits in the library picker. So a
+    // channel of 83 imports never reads as "83 on your site": both band slots are empty.
+    renderInspector([], { videos: [yt({ id: 'v', title: 'Only', poster: null, onSite: false })] })
     fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
-    expect(screen.getByText('Off')).toBeTruthy()
+    expect(screen.queryByLabelText('Slot 1 title')).toBeNull() // nothing placed
+    expect(screen.getAllByRole('button', { name: /Pick a YouTube video/ })).toHaveLength(2)
   })
 })
 
@@ -774,13 +1092,3 @@ describe('EditorInspector — tour tools', () => {
   })
 })
 
-describe('EditorInspector — videos are live-toggled now (ADR 0009)', () => {
-  it('CRITICAL: toggling a video writes on_site, rather than showing a read-only badge', () => {
-    // Videos used to render an OnSiteBadge precisely because reconcileOnSite would
-    // revert a toggle here. They moved to the live path, so the control is real.
-    renderInspector([], { videos: VIDEOS })
-    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
-    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0]) // v1
-    expect(setOnSiteMock).toHaveBeenCalledWith('video', 'v1', 'artist-1', true)
-  })
-})

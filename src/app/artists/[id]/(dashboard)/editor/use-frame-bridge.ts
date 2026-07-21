@@ -52,11 +52,15 @@ export type FrameBridge = {
   applyField: (key: string, value: string) => void
   /** Optimistically repaint a region's classes in the frame, before the save. */
   applyStyle: (key: string, className: string) => void
+  /** Optimistically set a link-powered element's href in the frame, before the save. */
+  applyLink: (key: string, url: string) => void
   /** A custom site's own edit-list, received on `ready` (D-D). Null for a built-in
    *  template, which has none to send. */
   manifest: TemplateManifest | null
   /** Region key the frame last reported a click on, so the inspector can focus it. */
   selectedStyle: string | null
+  /** Link-region key the frame last reported a click on, to focus the Site-links panel. */
+  selectedLink: string | null
 }
 
 export function useFrameBridge({
@@ -71,6 +75,7 @@ export function useFrameBridge({
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [manifest, setManifest] = useState<TemplateManifest | null>(null)
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
+  const [selectedLink, setSelectedLink] = useState<string | null>(null)
 
   // Resolved lazily: `window` only exists in the browser, and every caller below
   // runs client-side.
@@ -91,6 +96,7 @@ export function useFrameBridge({
     (key: string, className: string) => post({ type: 'apply-style', key, className }),
     [post],
   )
+  const applyLink = useCallback((key: string, url: string) => post({ type: 'apply-link', key, url }), [post])
 
   // One listener for everything the frame says.
   useEffect(() => {
@@ -109,11 +115,22 @@ export function useFrameBridge({
         }
       } else if (msg.type === 'select' && msg.target.kind === 'style') {
         setSelectedStyle(msg.target.key)
+      } else if (msg.type === 'select' && msg.target.kind === 'link') {
+        setSelectedLink(msg.target.key)
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [draft, targetOrigin])
 
-  return { frameRef, src: frameSrc(artistId, customSiteUrl), applyField, applyStyle, manifest, selectedStyle }
+  return {
+    frameRef,
+    src: frameSrc(artistId, customSiteUrl),
+    applyField,
+    applyStyle,
+    applyLink,
+    manifest,
+    selectedStyle,
+    selectedLink,
+  }
 }

@@ -80,6 +80,16 @@ body {
   font-family: var(--font-body), system-ui, sans-serif;
 }
 
+/* Hide the scrollbar while keeping the element scrollable — used by the video
+   picker modal so a tall grid doesn't show a bar. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
+
 /* Toast enter — subtle rise + fade, matching the site's restrained motion. */
 @keyframes toast-in {
   from {

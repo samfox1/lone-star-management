@@ -204,6 +204,110 @@ were removed and the sweep now covers every folder in `MEDIA_FOLDERS`
       known, though it's never exposed for unpublished rows). Fine for now; revisit if
       "unpublish must hide the file" becomes a requirement (would need private+signed, like audio).
 
+## Editor links — support-act links — BUILT 2026-07-17 (skeen side pending)
+
+The editor Links panel was redesigned 2026-07-17: rows collapse to just their label
+and expand on click to reveal the label/URL edit + on-site toggle + remove (was an
+always-open stack). Then support-act links were built on top:
+
+- [x] **"+ support act" mentions are linkable.** `tour_dates.support_urls jsonb`
+      (`20260717140000`, a name→url map) sits ALONGSIDE `support text[]` (names) so the
+      two editors never clobber: the Tour page writes names, the Links panel writes the
+      map. Rides `PUBLISHABLE.tour_date.snapshot` to the public door with NO
+      get_public_site change (the door serves the revision `data` wholesale). Write path:
+      `setSupportUrl` (lib/content) ← `setSupportUrlAction` (actions). Publish-gated.
+- [x] **Links panel is grouped** (Sam's ask): "Socials" (the outbound links) and
+      "Tour support" (each support act, labeled with the show it's on, its URL editable
+      there). `SupportLinkTools` in editor-inspector.tsx; page.tsx flattens each date's
+      `support` × `support_urls` into per-act rows.
+- [ ] **skeen-website: zip names + support_urls into linked acts.** lone-star now sends
+      `support: string[]` PLUS `support_urls: {name:url}`; skeen currently passes only
+      `support` through (`lib/mapSite.ts`), so URLs don't render yet. Merge them in the
+      tour mapper into `SupportAct[]` (`{name, url?}`) — `Shows.tsx` already renders +
+      `safeHref`-gates that shape. See the handoff instructions (2026-07-17).
+- [ ] One-time after deploy: existing published tour dates show as "edited" in the diff
+      until republished (snapshot gained a `support_urls` key). Harmless; names render
+      throughout.
+
+## Editor gallery — orientation slots — BUILT 2026-07-20 (skeen side pending)
+
+Skeen's photo collage (`About.tsx`) was stuck on 6 hardcoded bundled images: the backend
+gallery was empty AND uploaded photos had no orientation, so skeen's aspect-based mosaic
+defaulted every backend photo to landscape. Now:
+
+- [x] **`media.orientation`** (`20260720120000`, nullable, CHECK horizontal/vertical) tags
+      gallery photos. get_public_site's media branch CHERRY-PICKS fields, so it was
+      redefined to emit `orientation` (unlike the pass-through branches — this one needed
+      the SQL change). Rides `PUBLISHABLE.media.snapshot`.
+- [x] **Editor Images panel = orientation groups with the asset picker**: `PhotoTools`
+      renders two `MediaGrid`s (Horizontal / Vertical) — the SAME on-site-cards + asset
+      picker + Replace/Remove UX as the video slots (Sam asked for parity, 2026-07-20).
+      Add opens the picker over the WHOLE off-site asset library (any orientation — an
+      untagged upload is never hidden); picking one PLACES it via `placeGalleryPhotoAction`
+      (sets orientation + on_site in one write, so orientation is decided at placement, not
+      upload). Remove takes it off-site (never deletes); Replace swaps. Cards are 3-up
+      (`MediaGrid` gained a `cols` prop). Fix for: 6 uploaded skeen photos were invisible
+      because the picker filtered candidates by a null orientation.
+- [ ] **skeen-website: lay the gallery out by orientation.** get_public_site now sends
+      `media[].orientation`. Update `lib/backend.ts` (add `orientation` to the media type),
+      `lib/mapSite.ts` `mapGallery` (return `{url, orientation}[]` instead of `string[]`),
+      and `components/About.tsx` (`aspectOf` reads orientation: horizontal 3:2, vertical
+      2:3, null→3:2 — the mosaic already interleaves wide/tall). Keep the bundled
+      STATIC_GALLERY fallback for an empty backend. See handoff (2026-07-20).
+- [ ] One-time after deploy: existing published gallery photos read as "edited" once
+      (snapshot gained `orientation`); republish clears it.
+
+## Editor — manifest "links" panel (Phase 2) — BUILT 2026-07-20 (migration NOT applied)
+
+Surfaces skeen's new `links` manifest category as its own inspector panel, so a URL binds
+to a link-powered element BY KEY (`role`) instead of guessing from a label. Mirrors how
+`styles` flows manifest → inspector.
+
+- [x] manifest/markers/bridge: `ManifestLinkRegion` + `TemplateManifest.links`;
+      `LINK_ATTR`/`linkRegion`; `SelectTarget {kind:'link'}` + `EditorMessage 'apply-link'`
+      (BRIDGE_VERSION stays 2); `bridge-client` resolves `data-lse-link` (lowest
+      precedence) + `applyLinkToDom`.
+- [x] editor: `use-frame-bridge` stores `selectedLink` + `applyLink`; `editor-shell`
+      threads `linkRegions`(manifest)/`linkValues`(DB, from page)/`selectedLink`/
+      `onApplyLink`; `SiteLinkTools` panel (modeled on StyleTools), empty rows for unset
+      links. Selecting the element in the frame opens it focused. Socials untouched (roled
+      rows filtered out in page.tsx).
+- [x] **MERGED into one Links tab** (Sam, 2026-07-20): dropped the separate `site_link`
+      nav entry; `SiteLinkTools` is now the "Buttons" group inside the Links panel, beside
+      Socials + Tour support. Reverses the Phase-2 brief's "two separate tabs" call.
+- [x] persistence: `saveEditorLink`/`saveEditorLinkAction` (RMW, not upsert — the
+      uniqueness is a PARTIAL index PostgREST can't target); `role` added to the link
+      snapshot (`content.ts`).
+- [ ] **APPLY THE MIGRATION** `20260721120000_links_role.sql` (`links.role` + partial
+      unique index). Sam runs it. Then **un-skip** the live block in
+      `tests/editor-link-save.test.ts` and republish so `role` reaches skeen.
+- **Deviation from the brief (verified):** get_public_site needs NO change — its `links`
+      branch serves each revision's `data` wholesale (unlike the media branch), so `role`
+      rides the moment it's in the snapshot. Migration is column + index only.
+
+## Editor Style panel — no-code controls — BUILT 2026-07-20 (skeen safelist pending)
+
+Replaced the raw Tailwind class-string textareas (nobody could read "relative z-0 bg-white
+text-black") with friendly controls. Sam's ask: select a section, get dropdowns for size,
+color, boldness, font, etc.
+
+- [x] `lib/site-editor/style-controls.ts` (pure, tested): each control OWNS a slice of the
+      class string (size = text-<scale>, weight = font-<weight>, font = font-<family>,
+      align, uppercase, italic, + palette colours) — read finds the current utility, apply
+      swaps it and PRESERVES everything else (layout/spacing/z). Distinguishes the three
+      `text-*` families (size vs colour vs align) and font weight vs family.
+- [x] StyleTools rewritten as an accordion (one section open at a time; clicking the piece
+      in the frame opens it). Friendly dropdowns/toggles; raw string still reachable under
+      "Advanced". Same debounced save + optimistic frame repaint; store unchanged
+      (site_styles.class_names). Universal controls always show; Font + Colour only when
+      the site declares a palette.
+- [x] Manifest gains optional `styleOptions` (fonts / textColors / bgColors) — the site's
+      OWN tokens, threaded manifest → editor-shell → inspector → StyleTools.
+- [ ] **skeen: (1) SAFELIST the editor vocabulary** in globals.css (Tailwind v4 only
+      compiles classes it sees, so an applied class silently no-ops otherwise), and
+      **(2) declare `styleOptions`** in its manifest (its flash-1/sky/momo/glitch tokens)
+      so the Font/Colour dropdowns show real, labelled options. See handoff (2026-07-20).
+
 ## Manager cross-artist tour calendar (later)
 - [ ] A manager-level view that aggregates EVERY client's tour dates into one
       place — list + calendar toggle, color-coded by artist — so a manager can
@@ -346,3 +450,51 @@ API docs — https://help.artists.bandsintown.com/en/articles/9186477-api-docume
 
 > Spotify (Milestone 6) has no such gate — it's standard client-credentials and
 > already wired once `SPOTIFY_CLIENT_ID/SECRET` are in `.env.local`.
+
+## Soundcharts API — LONG-TERM (researched 2026-07-16, not building now)
+
+Sam's interest, parked for later: use Soundcharts as the external analytics layer
+for the dashboard — real streaming/social/chart data per artist, to fill the
+"Analytics landing" slot that today is built only on data we own (site visits,
+catalog counts, click events). This is a pursue-later item, NOT current work.
+
+**What it gives us (per artist, one aggregated API):**
+- Streaming: listener counts, popularity, retention, geo breakdown by city/country
+- Social: follower counts + audience demographics across platforms, regional splits
+- Charts: song + album chart positions across platforms
+- Playlists: current placements + total playlist reach
+- Radio: airplay spins + aggregated counts · Short video: TikTok/Reels stats
+- "Soundcharts Score" (proprietary composite) · cross-platform IDs (match our
+  stored Spotify/Apple identities)
+
+**Technical fit is easy:** OAuth-style access token from client credentials in an
+`Authorization` header (same shape as our Spotify client-credentials integration).
+Base URL `https://customer.api.soundcharts.com`; ~5,000 calls/min; a free sandbox
+(limited dataset) + 1,000 free production calls to prototype; paid plans 500k–60M
+req/mo, ~$250/mo entry, mostly custom-quoted.
+
+**⚠️ The real blocker is licensing, not integration** (same shape as the
+Bandsintown gate above — see [[bandsintown-compliance-blocked]]). Their public-site
+ToS (soundcharts.com/en/terms) is restrictive:
+- Art. 5.1 forbids copying/modifying/distributing their data for pay without consent
+  → building product features ON their data is caught, not just displaying it.
+- Art. 5.3 bans exploitation where data is "incorporated into a service offer... to
+  third parties" → a live dashboard feature inside a paid product is exactly this.
+- Attribution alone does NOT unlock it: the credit rule lives inside a narrow
+  exception for infrequent/unaltered/unpaid one-off client sharing, which a
+  permanent dashboard feature fails on every count except the credit.
+- Downstream platform terms still bind (e.g. YouTube data carries YouTube's rules).
+
+So displaying/building on Soundcharts data requires a **commercial API agreement
+with written display+derive rights** — the normal thing their "API for labels &
+teams" customers sign, but it must be negotiated, not assumed.
+
+**Blocking step when pursued:** email their sales (contact@soundcharts.com) with the
+precise question — *"Does an API subscription grant the right to display
+Soundcharts-sourced analytics to my own users inside my SaaS product, and to build
+product features derived from that data?"* — and get the answer in writing before
+any code.
+
+**Refs:** Docs — https://developers.soundcharts.com/documentation/getting-started ·
+Artist endpoints — https://developers.soundcharts.com/documentation/reference/artist/summary ·
+Terms — https://soundcharts.com/en/terms · Pricing — https://developers.soundcharts.com/pricing
