@@ -138,9 +138,18 @@ const MERCH: EditorMerch[] = [
 ]
 
 const RELEASES: EditorProject[] = [
-  { key: 'r1', title: 'Midnight LP', cover_url: 'https://img/a.jpg', kind: 'album', trackIds: ['t1', 't2'], trackCount: 10, onSite: true },
-  { key: 'r2', title: 'Sundown EP', cover_url: 'https://img/b.jpg', kind: 'ep', trackIds: ['t3'], trackCount: 4, onSite: true },
-  { key: 'r3', title: 'One Off', cover_url: null, kind: 'single', trackIds: ['t9'], trackCount: 1, onSite: false },
+  {
+    key: 'r1', title: 'Midnight LP', cover_url: 'https://img/a.jpg', kind: 'album', onSite: true,
+    songs: [{ id: 't1', title: 'Intro' }, { id: 't2', title: 'Nightdrive' }, { id: 't3', title: 'Coda' }],
+  },
+  {
+    key: 'r2', title: 'Sundown EP', cover_url: 'https://img/b.jpg', kind: 'ep', onSite: true,
+    songs: [{ id: 't4', title: 'Dusk' }, { id: 't5', title: 'Afterglow' }],
+  },
+  {
+    key: 'r3', title: 'One Off', cover_url: null, kind: 'single', onSite: false,
+    songs: [{ id: 't9', title: 'One Off' }],
+  },
 ]
 
 function renderInspector(
@@ -864,7 +873,7 @@ describe('EditorInspector — Music panel (projects)', () => {
   it('lists one card per project, with its kind and song count — never individual songs', () => {
     openMusic()
     expect(screen.getByText('Midnight LP')).toBeTruthy()
-    expect(screen.getByText('10 songs')).toBeTruthy()
+    expect(screen.getByText('3 songs')).toBeTruthy()
     expect(screen.getByText('Album')).toBeTruthy()
     expect(screen.getByText('EP')).toBeTruthy()
     // Off-site projects still show (dimmed) — the whole catalog is arrangeable here.
@@ -875,7 +884,7 @@ describe('EditorInspector — Music panel (projects)', () => {
   it('toggling a project off flips on_site on ITS SONGS (not a release flag)', () => {
     openMusic()
     fireEvent.click(screen.getByRole('button', { name: 'Take Midnight LP off the site' }))
-    expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t1', 't2'], false)
+    expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t1', 't2', 't3'], false)
   })
 
   it('toggling an off-site project on puts its songs up', () => {
@@ -895,6 +904,20 @@ describe('EditorInspector — Music panel (projects)', () => {
       .map((s) => s.textContent)
       .filter((t) => t === 'Midnight LP' || t === 'Sundown EP' || t === 'One Off')
     expect(titles).toEqual(['Midnight LP', 'Sundown EP', 'One Off'])
+  })
+
+  it('expands a project to reveal its songs, and the toggle does NOT expand it', () => {
+    openMusic()
+    // Collapsed: the album's songs aren't shown.
+    expect(screen.queryByText('Nightdrive')).toBeNull()
+    // Clicking the card face opens its tracklist.
+    fireEvent.click(screen.getByRole('button', { name: /Midnight LP . 3 songs/ }))
+    expect(screen.getByText('Intro')).toBeTruthy()
+    expect(screen.getByText('Nightdrive')).toBeTruthy()
+    // The on/off toggle is a separate control — clicking it toggles, never collapses.
+    fireEvent.click(screen.getByRole('button', { name: 'Take Midnight LP off the site' }))
+    expect(setSongsOnSiteMock).toHaveBeenCalled()
+    expect(screen.getByText('Nightdrive')).toBeTruthy() // still open
   })
 
   it('points at the Music page when there are no projects', () => {

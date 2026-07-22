@@ -190,7 +190,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const releaseByAlbum = new Map(
     releaseRows.filter((r) => r.title).map((r) => [String(r.title), r]),
   )
-  const coverByTrack = new Map(trackRows.map((t) => [t.id as string, (t.cover_url as string | null) ?? null]))
+  const trackById = new Map(trackRows.map((t) => [t.id as string, t]))
   const releases: EditorProject[] = groupTracksIntoProjects(
     trackRows.map((t) => ({
       id: t.id as string,
@@ -205,10 +205,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   ).map((p) => ({
     key: p.key,
     title: p.title,
-    cover_url: coverByTrack.get(p.trackIds[0]) ?? null,
+    cover_url: (trackById.get(p.trackIds[0])?.cover_url as string | null) ?? null,
     kind: p.releaseType,
-    trackIds: p.trackIds,
-    trackCount: p.trackIds.length,
+    songs: p.trackIds.map((id) => ({ id, title: (trackById.get(id)?.title as string | null) ?? 'Untitled' })),
     onSite: p.anyOnSite,
   }))
 
