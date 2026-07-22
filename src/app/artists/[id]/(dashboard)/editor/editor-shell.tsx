@@ -9,7 +9,7 @@ import {
   EditorInspector,
   type EditorLink,
   type EditorMerch,
-  type EditorSong,
+  type EditorProject,
   type EditorSupportLink,
   type EditorTour,
   type EditorTextField,
@@ -47,8 +47,9 @@ export function EditorShell({
   linkValues,
   videos,
   merch,
-  songs,
+  releases,
   tours,
+  componentLabels,
 }: {
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
@@ -65,8 +66,11 @@ export function EditorShell({
   linkValues: Record<string, string>
   videos: EditorVideo[]
   merch: EditorMerch[]
-  songs: EditorSong[]
+  releases: EditorProject[]
   tours: EditorTour[]
+  /** Every site_content key/value, so a component instance can show its rename
+   *  (`polaroid_3_label`). The COMPONENTS themselves come from the frame's manifest. */
+  componentLabels: Record<string, string>
 }) {
   const [device, setDevice] = useState<Device>('desktop')
   const panelRef = useRef<HTMLDivElement>(null)
@@ -110,8 +114,12 @@ export function EditorShell({
         supportLinks={supportLinks}
         videos={videos}
         merch={merch}
-        songs={songs}
+        releases={releases}
         tours={tours}
+        components={manifest?.components ?? []}
+        // The collage exists only if the site declares somewhere to render one.
+        showGallery={(manifest?.slots ?? []).some((sl) => sl.accepts === 'image')}
+        componentLabels={componentLabels}
         styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
         styleOptions={manifest?.styleOptions}

@@ -113,6 +113,30 @@ describe('get_public_site — gallery photos carry their orientation', () => {
   })
 })
 
+describe('get_public_site — photos carry their component slot (site_role)', () => {
+  async function mediaBySiteRole(): Promise<Record<string, string>> {
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const media = (data as { media?: { path: string; site_role: string | null }[] } | null)?.media ?? []
+    return Object.fromEntries(media.filter((m) => m.site_role).map((m) => [m.site_role as string, m.path]))
+  }
+
+  it('emits the slot role a photo is placed in (a polaroid photo / handwriting)', async () => {
+    // This is what lets skeen read a placed photo back onto the right polaroid card.
+    await publishMedia({ purpose: 'gallery_image', storage_path: 'p/hand.png', on_site: true, site_role: 'polaroid_1_caption', sort_order: 1 })
+    await publishMedia({ purpose: 'gallery_image', storage_path: 'p/shot.jpg', on_site: true, site_role: 'polaroid_1_photo', sort_order: 2 })
+    const byRole = await mediaBySiteRole()
+    expect(byRole['polaroid_1_caption']).toBe('p/hand.png')
+    expect(byRole['polaroid_1_photo']).toBe('p/shot.jpg')
+  })
+
+  it('emits null site_role for an ordinary gallery photo', async () => {
+    await publishMedia({ purpose: 'gallery_image', storage_path: 'g/plain.jpg', on_site: true, sort_order: 1 })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const media = (data as { media?: { path: string; site_role: string | null }[] } | null)?.media ?? []
+    expect(media.find((m) => m.path === 'g/plain.jpg')?.site_role).toBeNull()
+  })
+})
+
 describe('get_public_site — the gate is gallery-only', () => {
   it('never filters non-gallery media, even with on_site=false', async () => {
     // hero_video / profile_photo are not per-item curated; the flag must be

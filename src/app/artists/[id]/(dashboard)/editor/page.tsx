@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
-import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
+import { groupTracksIntoProjects } from '@/lib/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import { getWorkingSitePayload, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
@@ -9,7 +9,7 @@ import { EditorShell } from './editor-shell'
 import type {
   EditorLink,
   EditorMerch,
-  EditorSong,
+  EditorProject,
   EditorSupportLink,
   EditorTextField,
   EditorTour,
@@ -41,7 +41,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
       .from('media')
-      .select('id, purpose, storage_path, on_site, orientation')
+      .select('id, purpose, storage_path, on_site, orientation, site_role')
       .eq('artist_id', id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
@@ -88,6 +88,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       storage_path: m.storage_path as string,
       onSite: (m.on_site as boolean | null) ?? false,
       orientation: (m.orientation as 'horizontal' | 'vertical' | null) ?? null,
+      siteRole: (m.site_role as string | null) ?? null,
     }))
 
 
@@ -182,44 +183,34 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     onSite: (r.on_site as boolean | null) ?? false,
   }))
 
-  // Classify each release once; songs inherit the bucket through their release_id
-  // (mirrors the Music page's derivation, lib/music.ts).
-  const relBucket = new Map<string, MusicBucket>(
-    releaseRows.map((r) => [
-      r.id,
-      releaseBucket({
-        source: (r.source as string | null) ?? null,
-        spotify_id: (r.spotify_id as string | null) ?? null,
-        links: r.links,
-        released: (r.released as boolean | null) ?? false,
-      }),
-    ]),
+  // The Music panel lists PROJECTS, not songs, newest-first: songs grouped by ALBUM NAME
+  // (groupTracksIntoProjects), an album-less song standing alone. The release row sharing
+  // the album name supplies each project's type + date. `on_site` on the songs is the
+  // only visibility gate; a project's cover is its first song's art, purely for display.
+  const releaseByAlbum = new Map(
+    releaseRows.filter((r) => r.title).map((r) => [String(r.title), r]),
   )
-  const songs: EditorSong[] = trackRows.map((r) => {
-    const bucket = trackBucket(
-      {
-        release_id: (r.release_id as string | null) ?? null,
-        source: (r.source as string | null) ?? null,
-        audio_path: (r.audio_path as string | null) ?? null,
-        spotify_id: (r.spotify_id as string | null) ?? null,
-        apple_id: (r.apple_id as string | null) ?? null,
-        deezer_id: (r.deezer_id as string | null) ?? null,
-        provider_url: (r.provider_url as string | null) ?? null,
-        stream_url: (r.stream_url as string | null) ?? null,
-        apple_url: (r.apple_url as string | null) ?? null,
-        soundcloud_url: (r.soundcloud_url as string | null) ?? null,
-        released: (r.released as boolean | null) ?? false,
-      },
-      (rid) => relBucket.get(rid),
-    )
-    return {
-      id: r.id,
-      title: (r.title as string | null) ?? '',
-      cover_url: (r.cover_url as string | null) ?? null,
-      released: bucket === 'released',
-      onSite: (r.on_site as boolean | null) ?? false,
-    }
-  })
+  const coverByTrack = new Map(trackRows.map((t) => [t.id as string, (t.cover_url as string | null) ?? null]))
+  const releases: EditorProject[] = groupTracksIntoProjects(
+    trackRows.map((t) => ({
+      id: t.id as string,
+      album_name: (t.album_name as string | null) ?? null,
+      release_type: (t.release_type as string | null) ?? null,
+      on_site: (t.on_site as boolean | null) ?? false,
+    })),
+    (name) => {
+      const r = releaseByAlbum.get(name)
+      return r ? { title: (r.title as string | null) ?? null, release_date: (r.release_date as string | null) ?? null } : undefined
+    },
+  ).map((p) => ({
+    key: p.key,
+    title: p.title,
+    cover_url: coverByTrack.get(p.trackIds[0]) ?? null,
+    kind: p.releaseType,
+    trackIds: p.trackIds,
+    trackCount: p.trackIds.length,
+    onSite: p.anyOnSite,
+  }))
 
   return (
     <EditorShell
@@ -233,8 +224,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       linkValues={linkValues}
       videos={videos}
       merch={merch}
-      songs={songs}
+      releases={releases}
       tours={tours}
+      componentLabels={siteContent}
     />
   )
 }

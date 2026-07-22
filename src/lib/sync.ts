@@ -394,7 +394,10 @@ export async function syncSpotifyReleases(
   }
 
   // Link each release's tracks by Spotify id — only unassigned ones, so a manual
-  // (or earlier) assignment is never clobbered.
+  // (or earlier) assignment is never clobbered — and stamp the release's TYPE onto them,
+  // so a Spotify album's songs read as 'album' (etc.) rather than the default 'single'.
+  // Type is a per-song tag now (20260726120000); only stamp songs still at the default,
+  // so a manual re-tag (e.g. flagging one track a remix) is never clobbered.
   for (const rel of releases) {
     const releaseId = idBySpotify.get(rel.spotify_id)
     if (!releaseId || rel.track_spotify_ids.length === 0) continue
@@ -405,6 +408,13 @@ export async function syncSpotifyReleases(
       .is('release_id', null)
       .in('spotify_id', rel.track_spotify_ids)
     if (lErr) throw new Error(lErr.message)
+    const { error: tErr } = await supabase
+      .from('tracks')
+      .update({ release_type: rel.release_type })
+      .eq('artist_id', artistId)
+      .eq('release_type', 'single')
+      .in('spotify_id', rel.track_spotify_ids)
+    if (tErr) throw new Error(tErr.message)
   }
 
   return { added, updated }

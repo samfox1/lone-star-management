@@ -223,7 +223,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // coalesces both. Snapshots are immutable, so history is never rewritten.)
     // `orientation` (horizontal/vertical, gallery photos only) rides so the site can lay
     // each photo out by shape — get_public_site cherry-picks it into the media payload.
-    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation'],
+    // `site_role` binds a photo to a component slot (`polaroid_3_photo`); null means an
+    // ordinary gallery photo. get_public_site cherry-picks it into the media payload.
+    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the

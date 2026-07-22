@@ -66,6 +66,55 @@ export type ManifestStyleRegion = {
   group?: string
 }
 
+/**
+ * A repeated multi-image COMPONENT the site renders a fixed number of (skeen's polaroid
+ * wall: 5 cards, each holding a photo and a handwriting PNG).
+ *
+ * The site owns the count — it is a fact about the layout, not something the manager
+ * adds to (Sam, 2026-07-21) — and owns the slot names. A media row is bound to one slot
+ * by `media.site_role`, whose value is `<key>_<n>_<slot.key>` (e.g. `polaroid_3_photo`),
+ * matching the field keys skeen already declares.
+ *
+ * The manager CAN rename each instance. The name is ordinary editable site text under
+ * `<key>_<n>_label`, so it publishes through site_content like every other text field
+ * and needs no storage of its own.
+ */
+export type ManifestComponent = {
+  /** Component type id, e.g. 'polaroid'. Lowercase/underscore — it becomes a site_role. */
+  key: string
+  /** Singular label for one instance, e.g. 'Polaroid'. The manager may rename each. */
+  label: string
+  /** How many the site renders. Fixed by the site; the editor shows exactly this many. */
+  count: number
+  /** The image slots every instance has, in display order. */
+  slots: ComponentSlot[]
+}
+
+/** One image drop target inside a component instance. */
+export type ComponentSlot = {
+  /** Slot id, e.g. 'photo' | 'caption'. Lowercase/underscore. */
+  key: string
+  label: string
+  /** Shown under the slot — what belongs there. */
+  hint?: string
+  /**
+   * The slot wants a transparent PNG (skeen's handwriting strip). Advisory ONLY: a JPG
+   * still uploads, with a warning (Sam, 2026-07-21), because a wrong-format image is
+   * visible and fixable while a blocked upload is a dead end mid-task.
+   */
+  prefersPng?: boolean
+}
+
+/** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
+export function componentSlotRole(component: string, n: number, slot: string): string {
+  return `${component}_${n}_${slot}`
+}
+
+/** The site_content key holding the manager's name for instance `n`. */
+export function componentLabelKey(component: string, n: number): string {
+  return `${component}_${n}_label`
+}
+
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by
  *  KEY (not by guessing from its label). The editor maps a URL to it and the site binds
  *  the link to the element by this key (`links.role`). `description` explains what the
@@ -86,6 +135,9 @@ export type TemplateManifest = {
   /** Declared link-powered elements, bound to a `links` row by key (`role`). A custom
    *  site sends its own on `ready`; the built-in templates declare none yet. */
   links: ManifestLinkRegion[]
+  /** Repeated multi-image components (the polaroid wall). Optional — a site that
+   *  declares none simply has no component section in the editor. */
+  components?: ManifestComponent[]
   /** The site's design palette (its own colour + font classes) for the no-code Style
    *  panel's dropdowns. Optional — the universal controls (size/weight/align/case) work
    *  without it; colour + font controls only appear when the site declares them. */

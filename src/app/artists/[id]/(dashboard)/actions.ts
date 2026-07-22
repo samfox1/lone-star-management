@@ -447,6 +447,84 @@ export async function setSupportUrlAction(
  * (skeen's band skips uploaded videos, so it renders only as the hero); clearing takes
  * it off. Publishing videos still pushes it live, same as the band. RLS-scoped.
  */
+/** A component slot name: `<component>_<n>_<slot>` (e.g. `polaroid_3_photo`). Mirrors the
+ *  DB CHECK on media.site_role (20260724120000), which constrains SHAPE, not the set of
+ *  names — the valid names are the site's manifest to define, not lone-star's. */
+const SITE_ROLE_RE = /^[a-z0-9_]{1,64}$/
+
+/**
+ * Place a photo into a named component slot (a polaroid's photo or handwriting PNG), or
+ * clear the slot when `mediaId` is null.
+ *
+ * Mirrors assignHeroSlotAction: VACATE first, then fill, so the partial unique index on
+ * (artist_id, site_role) can never see two rows claiming one slot. Vacating drops the
+ * old photo back to the library (site_role null, off-site) rather than deleting it — the
+ * editor never destroys an asset, it only stops using it.
+ */
+/**
+ * Put a set of songs on the site, or take them off — the editor's "project" toggle.
+ *
+ * Site visibility is a per-SONG boolean (`on_site`), NOT a property of a release
+ * (Sam, 2026-07-21). A project is just its songs grouped by album art, so toggling it
+ * sets `on_site` on exactly those song ids. `released` (public / unreleased) is a
+ * separate library label and is never touched here. The editor already knows which song
+ * ids belong to the project (it did the grouping), so the ids come in directly — no
+ * release_id, which skeen's catalog does not populate anyway.
+ */
+export async function setSongsOnSiteAction(
+  artistId: string,
+  trackIds: string[],
+  next: boolean,
+): Promise<{ error?: string }> {
+  if (trackIds.length === 0) return {}
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+
+  const { error } = await supabase
+    .from('tracks')
+    .update({ on_site: next })
+    .in('id', trackIds)
+    .eq('artist_id', artistId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+export async function assignComponentSlotAction(
+  artistId: string,
+  role: string,
+  mediaId: string | null,
+): Promise<{ error?: string }> {
+  if (!SITE_ROLE_RE.test(role)) return { error: 'That is not a valid slot.' }
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+
+  const cleared = await supabase
+    .from('media')
+    .update({ site_role: null, on_site: false })
+    .eq('artist_id', artistId)
+    .eq('site_role', role)
+  if (cleared.error) return { error: cleared.error.message }
+
+  if (mediaId) {
+    const { error } = await supabase
+      .from('media')
+      .update({ site_role: role, on_site: true })
+      .eq('id', mediaId)
+      .eq('artist_id', artistId)
+    if (error) return { error: error.message }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 export async function assignHeroSlotAction(
   artistId: string,
   role: 'hero_landscape' | 'hero_portrait' | 'bio_background',

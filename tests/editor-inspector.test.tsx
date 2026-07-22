@@ -23,13 +23,15 @@ import {
   setSupportUrlAction,
   updateContentAction,
   assignHeroSlotAction,
+  assignComponentSlotAction,
+  setSongsOnSiteAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
-import type { ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import type {
   EditorLink,
   EditorMerch,
-  EditorSong,
+  EditorProject,
   EditorSupportLink,
   EditorTextField,
   EditorTour,
@@ -50,6 +52,8 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   placeGalleryPhotoAction: vi.fn(async () => ({})),
   setSupportUrlAction: vi.fn(async () => ({})),
   assignHeroSlotAction: vi.fn(async () => ({})),
+  assignComponentSlotAction: vi.fn(async () => ({})),
+  setSongsOnSiteAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
@@ -91,14 +95,16 @@ const setSupportUrlMock = vi.mocked(setSupportUrlAction)
 const saveStyleMock = vi.mocked(saveEditorStyleAction)
 const saveLinkMock = vi.mocked(saveEditorLinkAction)
 const assignHeroMock = vi.mocked(assignHeroSlotAction)
+const assignSlotMock = vi.mocked(assignComponentSlotAction)
+const setSongsOnSiteMock = vi.mocked(setSongsOnSiteAction)
 
 const PHOTOS: GalleryPhoto[] = [
-  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal' },
+  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal', siteRole: null },
   // Off-site horizontal → a candidate in the Horizontal picker.
-  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal' },
-  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical' },
+  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal', siteRole: null },
+  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical', siteRole: null },
   // Off-site vertical → a candidate in the Vertical picker.
-  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical' },
+  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical', siteRole: null },
 ]
 
 const TEXT_FIELDS: EditorTextField[] = [
@@ -131,10 +137,10 @@ const MERCH: EditorMerch[] = [
   { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: false },
 ]
 
-const SONGS: EditorSong[] = [
-  { id: 's1', title: 'Opener', cover_url: 'https://img/cover.jpg', released: true, onSite: false },
-  { id: 's2', title: 'Demo take', cover_url: null, released: false, onSite: false },
-  { id: 's3', title: 'Closer', cover_url: null, released: true, onSite: true },
+const RELEASES: EditorProject[] = [
+  { key: 'r1', title: 'Midnight LP', cover_url: 'https://img/a.jpg', kind: 'album', trackIds: ['t1', 't2'], trackCount: 10, onSite: true },
+  { key: 'r2', title: 'Sundown EP', cover_url: 'https://img/b.jpg', kind: 'ep', trackIds: ['t3'], trackCount: 4, onSite: true },
+  { key: 'r3', title: 'One Off', cover_url: null, kind: 'single', trackIds: ['t9'], trackCount: 1, onSite: false },
 ]
 
 function renderInspector(
@@ -145,12 +151,15 @@ function renderInspector(
     supportLinks?: EditorSupportLink[]
     videos?: EditorVideo[]
     merch?: EditorMerch[]
-    songs?: EditorSong[]
+    releases?: EditorProject[]
     tours?: EditorTour[]
     styleRegions?: ManifestStyleRegion[]
     styleValues?: Record<string, string>
     styleOptions?: SiteStyleOptions
     selectedStyle?: string | null
+    components?: ManifestComponent[]
+    componentLabels?: Record<string, string>
+    showGallery?: boolean
     linkRegions?: ManifestLinkRegion[]
     linkValues?: Record<string, string>
     selectedLink?: string | null
@@ -169,8 +178,11 @@ function renderInspector(
       linkValues={opts.linkValues ?? {}}
       videos={opts.videos ?? []}
       merch={opts.merch ?? []}
-      songs={opts.songs ?? []}
+      releases={opts.releases ?? []}
       tours={opts.tours ?? []}
+      components={opts.components ?? []}
+      componentLabels={opts.componentLabels ?? {}}
+      showGallery={opts.showGallery ?? true}
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
       styleOptions={opts.styleOptions}
@@ -271,7 +283,9 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
   it('a legacy null-orientation on-site photo stays MANAGEABLE (shows in Horizontal, not vanished)', () => {
     // Regression: an untagged photo (legacy row / Drive import) that's live on the site
     // must not disappear from the editor. It belongs to the Horizontal group until placed.
-    renderInspector([{ id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null }])
+    renderInspector([
+      { id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null, siteRole: null },
+    ])
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     const imgs = Array.from(document.querySelectorAll('aside img')) as HTMLImageElement[]
     expect(imgs.some((i) => i.src.includes('legacy.jpg'))).toBe(true)
@@ -835,62 +849,58 @@ describe('EditorInspector — Merch component', () => {
   })
 })
 
-describe('EditorInspector — Music component', () => {
-  function openMusic() {
-    renderInspector([], { songs: SONGS })
+describe('EditorInspector — Music panel (projects)', () => {
+  function openMusic(releases: EditorProject[] = RELEASES) {
+    renderInspector([], { releases })
     fireEvent.click(screen.getByRole('button', { name: /Music/ }))
   }
 
-  it('shows the real song count in browse', () => {
-    renderInspector([], { songs: SONGS })
-    expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('1 of 3 on site')
+  it('counts PROJECTS on site, not songs, in browse', () => {
+    renderInspector([], { releases: RELEASES })
+    // 2 of 3 releases on site — never "14 songs".
+    expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('2 of 3 on site')
   })
 
-  it('shows only ON-SITE songs as cover cards + an Add tile', () => {
+  it('lists one card per project, with its kind and song count — never individual songs', () => {
     openMusic()
-    // s3 is the only on-site song; s1/s2 live in the picker, not the panel.
-    expect(screen.getByText('Closer')).toBeTruthy()
-    expect(screen.queryByText('Opener')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Add song' })).toBeTruthy()
+    expect(screen.getByText('Midnight LP')).toBeTruthy()
+    expect(screen.getByText('10 songs')).toBeTruthy()
+    expect(screen.getByText('Album')).toBeTruthy()
+    expect(screen.getByText('EP')).toBeTruthy()
+    // Off-site projects still show (dimmed) — the whole catalog is arrangeable here.
+    expect(screen.getByText('One Off')).toBeTruthy()
+    expect(screen.getByText('1 song')).toBeTruthy()
   })
 
-  it('Edit → Remove takes a song off the site (never deletes)', () => {
+  it('toggling a project off flips on_site on ITS SONGS (not a release flag)', () => {
     openMusic()
-    fireEvent.click(screen.getByRole('button', { name: 'Edit song 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's3', 'artist-1', false)
-    expect(deleteContentMock).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Take Midnight LP off the site' }))
+    expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t1', 't2'], false)
   })
 
-  it('Add tile opens a picker of the off-site catalog', () => {
+  it('toggling an off-site project on puts its songs up', () => {
     openMusic()
-    fireEvent.click(screen.getByRole('button', { name: 'Add song' }))
-    const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByRole('button', { name: /Opener/ })).toBeTruthy()
-    expect(within(dialog).getByRole('button', { name: /Demo take/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Put One Off on the site' }))
+    expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t9'], true)
   })
 
-  it('picking a song puts it on the site', () => {
+  it('projects are NOT draggable — order comes from release date, not the manager', () => {
     openMusic()
-    fireEvent.click(screen.getByRole('button', { name: 'Add song' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Opener/ }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's1', 'artist-1', true)
+    expect(document.querySelectorAll('aside div[draggable="true"]').length).toBe(0)
   })
 
-  it('Edit → Replace swaps a song (old off, new on)', () => {
+  it('renders projects in the order given (page sorts them newest-first)', () => {
     openMusic()
-    fireEvent.click(screen.getByRole('button', { name: 'Edit song 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Opener/ }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's3', 'artist-1', false) // old off
-    expect(setOnSiteMock).toHaveBeenCalledWith('track', 's1', 'artist-1', true) // new on
+    const titles = [...document.querySelectorAll('aside .grid span')]
+      .map((s) => s.textContent)
+      .filter((t) => t === 'Midnight LP' || t === 'Sundown EP' || t === 'One Off')
+    expect(titles).toEqual(['Midnight LP', 'Sundown EP', 'One Off'])
   })
 
-  it('an empty catalog points the picker at the Music page', () => {
-    renderInspector([], { songs: [{ id: 's3', title: 'Closer', cover_url: null, released: true, onSite: true }] })
+  it('points at the Music page when there are no projects', () => {
+    renderInspector([], { releases: [] })
     fireEvent.click(screen.getByRole('button', { name: /Music/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Add song' }))
-    expect(screen.getByRole('link', { name: /Add a song first/ }).getAttribute('href')).toBe('/artists/artist-1/music')
+    expect(screen.getByRole('link', { name: /Add music first/ }).getAttribute('href')).toBe('/artists/artist-1/music')
   })
 })
 
@@ -1194,3 +1204,166 @@ describe('EditorInspector — tour tools', () => {
   })
 })
 
+
+/* ── Component slots: the polaroid wall ─────────────────────────────────────────────
+ * The site declares the component and its count; the manager fills each slot and may
+ * rename each instance. A placed photo carries `site_role = <key>_<n>_<slot>`, exactly
+ * the field key skeen declares, and leaves the gallery collage groups. */
+describe('EditorInspector — component slots (polaroids)', () => {
+  const POLAROID: ManifestComponent = {
+    key: 'polaroid',
+    label: 'Polaroid',
+    count: 2,
+    slots: [
+      { key: 'photo', label: 'Photo', hint: 'The square photo inside the frame' },
+      { key: 'caption', label: 'Handwriting', prefersPng: true },
+    ],
+  }
+
+  const openImages = (photos: GalleryPhoto[], componentLabels: Record<string, string> = {}) => {
+    renderInspector(photos, { components: [POLAROID], componentLabels })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+  }
+
+  it('heads the section with the number of IMAGE SLOTS, not the number of cards', () => {
+    // 2 cards x 2 slots = 4 images wanted. "2 polaroids" would undercount what the
+    // manager actually has to fill.
+    openImages(PHOTOS)
+    expect(screen.getByText('4 image slots')).toBeTruthy()
+    expect(screen.queryByText(/polaroids/i)).toBeNull()
+  })
+
+  it('renders one card per declared instance, with a drop spot per slot', () => {
+    openImages(PHOTOS)
+    // count: 2 → two cards, each with both slots empty.
+    expect(screen.getByRole('button', { name: 'Polaroid 1 Photo' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Polaroid 1 Handwriting' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Polaroid 2 Photo' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Polaroid 3 Photo' })).toBeNull()
+  })
+
+  it('placing a photo writes the slot role skeen reads', () => {
+    openImages(PHOTOS)
+    fireEvent.click(screen.getByRole('button', { name: 'Polaroid 1 Photo' })) // opens the picker
+    fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
+    expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
+  })
+
+  it('a slot-held photo LEAVES the gallery groups', () => {
+    // Otherwise a handwriting PNG would show up in the photo collage.
+    const held: GalleryPhoto[] = [
+      { id: 'mp', storage_path: 'artist-1/gallery/hand.png', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_1_caption' },
+      ...PHOTOS,
+    ]
+    openImages(held)
+    // It is in its slot...
+    expect(screen.getByRole('button', { name: 'Remove Polaroid 1 Handwriting' })).toBeTruthy()
+    // ...and not offered as a horizontal gallery card (only the two real ones are).
+    expect(screen.queryByRole('button', { name: 'Edit horizontal photo 3' })).toBeNull()
+  })
+
+  it('warns (but does not block) when the handwriting slot holds a non-PNG', () => {
+    const jpg: GalleryPhoto[] = [
+      { id: 'mj', storage_path: 'artist-1/gallery/hand.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_caption' },
+    ]
+    openImages(jpg)
+    expect(screen.getByText(/transparent PNG/i)).toBeTruthy()
+    // The image is still placed — a warning, not a rejection.
+    expect(screen.getByRole('button', { name: 'Remove Polaroid 1 Handwriting' })).toBeTruthy()
+  })
+
+  it('does NOT warn when the handwriting slot holds a real PNG', () => {
+    const png: GalleryPhoto[] = [
+      { id: 'mp', storage_path: 'artist-1/gallery/hand.PNG', onSite: true, orientation: null, siteRole: 'polaroid_1_caption' },
+    ]
+    openImages(png)
+    expect(screen.queryByText(/transparent PNG/i)).toBeNull()
+  })
+
+  it('clearing a slot releases it without deleting the photo', () => {
+    const held: GalleryPhoto[] = [
+      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo' },
+    ]
+    openImages(held)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Polaroid 1 Photo' }))
+    expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', null)
+    expect(deleteMock).not.toHaveBeenCalled()
+  })
+
+  it('shows the name as TEXT until the pencil is clicked', () => {
+    openImages(PHOTOS)
+    // No live input up front — the card reads as a card, not a form.
+    expect(screen.queryByLabelText('Polaroid 1 name')).toBeNull()
+    expect(screen.getByText('Polaroid 1')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
+    expect(screen.getByLabelText('Polaroid 1 name')).toBeTruthy()
+  })
+
+  it('renaming saves on Enter, as ordinary site text', () => {
+    openImages(PHOTOS)
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 2' }))
+    const field = screen.getByLabelText('Polaroid 2 name')
+    fireEvent.change(field, { target: { value: 'Backstage' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(saveMock).toHaveBeenCalledWith('artist-1', 'polaroid_2_label', 'Backstage')
+    // Back to reading as text, showing the new name.
+    expect(screen.queryByLabelText('Polaroid 2 name')).toBeNull()
+    expect(screen.getByText('Backstage')).toBeTruthy()
+  })
+
+  it('renaming also saves when the field loses focus', () => {
+    openImages(PHOTOS)
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
+    const field = screen.getByLabelText('Polaroid 1 name')
+    fireEvent.change(field, { target: { value: 'Front row' } })
+    fireEvent.blur(field)
+    expect(saveMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_label', 'Front row')
+  })
+
+  it('Escape abandons the edit without saving', () => {
+    openImages(PHOTOS, { polaroid_1_label: 'Backstage' })
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
+    const field = screen.getByLabelText('Polaroid 1 name')
+    fireEvent.change(field, { target: { value: 'Typo' } })
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(saveMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Backstage')).toBeTruthy()
+  })
+
+  it('does not save when the name is unchanged', () => {
+    openImages(PHOTOS, { polaroid_1_label: 'Backstage' })
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
+    fireEvent.blur(screen.getByLabelText('Polaroid 1 name'))
+    expect(saveMock).not.toHaveBeenCalled()
+  })
+
+  it('shows the saved rename, falling back to the site label', () => {
+    openImages(PHOTOS, { polaroid_1_label: 'Backstage' })
+    expect(screen.getByText('Backstage')).toBeTruthy()
+    // Instance 2 has no rename: the site's default shows instead.
+    expect(screen.getByText('Polaroid 2')).toBeTruthy()
+  })
+
+  it('hides the collage groups when the site declares no image slot', () => {
+    // skeen's About wall is polaroids now — it renders no collage, so an orientation
+    // group in the editor would be a place to put work that never appears anywhere.
+    renderInspector(PHOTOS, { components: [POLAROID], showGallery: false })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    expect(screen.getByRole('button', { name: 'Rename Polaroid 1' })).toBeTruthy()
+    expect(screen.queryByText('Horizontal')).toBeNull()
+    expect(screen.queryByText('Vertical')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Add horizontal photo/i })).toBeNull()
+  })
+
+  it('says so plainly when the site declares no image slots at all', () => {
+    renderInspector(PHOTOS, { showGallery: false })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    expect(screen.getByText(/no image slots/i)).toBeTruthy()
+  })
+
+  it('offers no component section when the site declares none', () => {
+    renderInspector(PHOTOS)
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    expect(screen.queryByRole('button', { name: 'Rename Polaroid 1' })).toBeNull()
+  })
+})

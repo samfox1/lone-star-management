@@ -36,7 +36,7 @@ const COVER_RULES = {
 }
 
 type Step = 'choose' | 'manual' | 'streaming'
-type Format = 'single' | 'ep' | 'album'
+type Format = 'single' | 'ep' | 'album' | 'remix'
 type Released = 'released' | 'unreleased'
 type SongRow = { id: string; title: string; contributors: string; file: File | null }
 
@@ -66,6 +66,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   const [rows, setRows] = useState<SongRow[]>(() => [newRow()])
   const [released, setReleased] = useState<Released | null>(null) // deliberate: no default
   const [urls, setUrls] = useState<StreamingUrls>({})
+  // A streaming link (SoundCloud etc.) carries no album/type, so the manager tags it.
+  // Only single | remix — an EP/album is an upload of multiple songs, not one link.
+  const [streamingType, setStreamingType] = useState<'single' | 'remix' | null>(null)
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -85,6 +88,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   function reset() {
     setStep('choose')
     setFormat(null)
+    setStreamingType(null)
     setReleaseTitle('')
     setRows([newRow()])
     setReleased(null)
@@ -136,6 +140,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     try {
       if (step === 'streaming') {
         if (!hasUrls) return setError('Paste at least one streaming link.')
+        if (!streamingType) return setError('Is it a single or a remix?')
         const resolved = await resolveStreamingSongAction(urls)
         if (!resolved.ok) return setError(resolved.error)
         const { error: rowErr } = await supabase.from('tracks').insert({
@@ -145,6 +150,8 @@ export function SongAddButton({ artistId }: { artistId: string }) {
           cover_url: resolved.song.cover_url,
           featured_artists: resolved.song.contributors,
           released: true, // it's on a platform
+          // The service can't tell single from remix, so the manager tagged it.
+          release_type: streamingType,
           ...parseStreamingLinks(urls),
         })
         if (rowErr) return setError(rowErr.message)
@@ -229,6 +236,10 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               audio_path: audioPath,
               cover_url: coverUrl,
               release_id: releaseId,
+              release_type: format,
+              // Only a grouped record (EP/album) has an album name; a single/remix stands
+              // alone, so it groups by its own id, not a shared album.
+              album_name: grouped ? releaseTitle.trim().slice(0, 120) : null,
               released: released === 'released',
             })
             .select('id')
@@ -407,8 +418,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
 
             {/* Manual, first question: what is this? */}
             {step === 'manual' && !format && (
-              <div className="mt-4 grid grid-cols-3 gap-2.5">
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
                 {tile(() => { setFormat('single'); setRows([newRow()]) }, 'tracks', 'Single')}
+                {tile(() => { setFormat('remix'); setRows([newRow()]) }, 'tracks', 'Remix')}
                 {tile(() => { setFormat('ep'); setRows([newRow(), newRow()]) }, 'releases', 'EP')}
                 {tile(() => { setFormat('album'); setRows([newRow(), newRow()]) }, 'releases', 'Album')}
               </div>
@@ -462,6 +474,24 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                       />
                     </div>
                   ))}
+                </div>
+                {/* The service can't say single vs remix, so the manager tags it. */}
+                <div>
+                  <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                    What is it?
+                  </span>
+                  <div className="flex gap-2">
+                    {(['single', 'remix'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setStreamingType(t)}
+                        className={buttonClass(streamingType === t ? 'solid' : 'ghost')}
+                      >
+                        {t === 'single' ? 'Single' : 'Remix'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

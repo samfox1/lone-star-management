@@ -4,13 +4,14 @@
  * 20260706160000_release_type.sql. Ordered smallest→largest, with "featured" last
  * (a release the artist appears on rather than headlines).
  */
-export const RELEASE_TYPES = ['single', 'ep', 'album', 'featured'] as const
+export const RELEASE_TYPES = ['single', 'ep', 'album', 'remix', 'featured'] as const
 export type ReleaseType = (typeof RELEASE_TYPES)[number]
 
 export const RELEASE_TYPE_LABEL: Record<ReleaseType, string> = {
   single: 'Single',
   ep: 'EP',
   album: 'Album',
+  remix: 'Remix',
   featured: 'Featured',
 }
 

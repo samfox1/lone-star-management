@@ -112,3 +112,80 @@ export function trackBucket(
   const releaseReleased = t.release_id ? releaseBucketOf?.(t.release_id) === 'released' : false
   return trackOnPlatform(t) || releaseReleased ? 'released' : 'unreleased'
 }
+
+/**
+ * Group songs into PROJECTS for the editor's Music panel and the site's music grid.
+ *
+ * A project is a set of songs sharing an ALBUM NAME. That is the real signal a song
+ * carries about which release it's on — `tracks.release_id` is unpopulated in practice
+ * (Spotify sync never sets it), and album art is a weaker key (two songs can share art,
+ * one album can have variant covers). A song with NO album name (a SoundCloud add, which
+ * has no album concept) stands alone as its own one-song project keyed by its id.
+ *
+ * The release ROW that shares the album name supplies the project's type + date; a
+ * standalone song has neither, so it's a `single` with no date (sorts to the tail).
+ * `released` is a per-song LIBRARY label and is NOT consulted here — visibility is the
+ * songs' `on_site`, surfaced as `anyOnSite` for the panel's toggle.
+ */
+export type ProjectTrack = {
+  id: string
+  album_name: string | null
+  /** The song's own type tag (single/ep/album/remix/featured) — 20260726120000. */
+  release_type: string | null
+  on_site: boolean | null
+}
+export type ReleaseMeta = {
+  title: string | null
+  release_date: string | null
+}
+export type MusicProject = {
+  /** Stable key: the album name, or the lone track's id for a standalone song. */
+  key: string
+  title: string
+  /** The project's type. Its songs agree within an album; the first is representative. */
+  releaseType: string
+  releaseDate: string | null
+  trackIds: string[]
+  anyOnSite: boolean
+}
+
+export function groupTracksIntoProjects(
+  tracks: ProjectTrack[],
+  releaseByAlbumName: (name: string) => ReleaseMeta | undefined,
+): MusicProject[] {
+  type G = { key: string; album: string | null; type: string; ids: string[]; anyOnSite: boolean }
+  const groups = new Map<string, G>()
+  for (const t of tracks) {
+    const album = (t.album_name ?? '').trim() || null
+    // Album name groups; an album-less song is its own project. The two key spaces are
+    // disjoint by prefix (`album:` vs `track:`), so a standalone key can never collide
+    // with an album named, say, "track:abc".
+    const key = album ? `album:${album}` : `track:${t.id}`
+    const g = groups.get(key) ?? { key, album, type: t.release_type ?? 'single', ids: [], anyOnSite: false }
+    g.ids.push(t.id)
+    if (t.on_site ?? false) g.anyOnSite = true
+    groups.set(key, g)
+  }
+
+  return [...groups.values()]
+    .map((g) => {
+      const r = g.album ? releaseByAlbumName(g.album) : undefined
+      return {
+        key: g.key,
+        title: r?.title ?? g.album ?? 'Untitled',
+        // Type is the SONG's tag now, not the release row's. Date still comes from the
+        // release row (Spotify writes it there and songs carry none).
+        releaseType: g.type,
+        releaseDate: r?.release_date ?? null,
+        trackIds: g.ids,
+        anyOnSite: g.anyOnSite,
+      }
+    })
+    .sort((a, b) => {
+      // Newest first; a project with no date sorts last (a stable, if arbitrary, tail).
+      if (!a.releaseDate && !b.releaseDate) return 0
+      if (!a.releaseDate) return 1
+      if (!b.releaseDate) return -1
+      return b.releaseDate.localeCompare(a.releaseDate)
+    })
+}

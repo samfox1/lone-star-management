@@ -142,7 +142,15 @@ export type SiteData = {
  * clip and gallery image — so the bridge carries THIS type, not `SiteData`.
  */
 export type PublicSitePayload = Omit<SiteData, 'media'> & {
-  media: { purpose: SiteMedia['purpose']; path: string }[]
+  // orientation + site_role ride the wire so a custom site can lay out gallery photos by
+  // shape and read component-slot photos (polaroids) by role — exactly the fields
+  // get_public_site's media branch emits, so the draft preview matches the public site.
+  media: {
+    purpose: SiteMedia['purpose']
+    path: string
+    orientation?: 'horizontal' | 'vertical' | null
+    site_role?: string | null
+  }[]
 }
 
 /** Map the rpc's media ({purpose, path}) to public URLs. */
@@ -233,7 +241,7 @@ export async function getWorkingSitePayload(
     workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
-      .select('purpose, storage_path, sort_order, on_site')
+      .select('purpose, storage_path, sort_order, on_site, orientation, site_role')
       .eq('artist_id', artistId)
       .order('sort_order')
       .order('created_at') // secondary key — matches get_public_site's media order
@@ -255,9 +263,22 @@ export async function getWorkingSitePayload(
   // must never be filtered, or a site loses its hero. Without this the preview
   // showed off-site gallery photos the live site hides (the parity test's fixture
   // used a profile_photo, which the gate ignores, so the drift went uncaught).
-  const media = (mediaRows as { purpose: SiteMedia['purpose']; storage_path: string; on_site: boolean | null }[])
+  const media = (
+    mediaRows as {
+      purpose: SiteMedia['purpose']
+      storage_path: string
+      on_site: boolean | null
+      orientation?: 'horizontal' | 'vertical' | null
+      site_role?: string | null
+    }[]
+  )
     .filter((m) => m.purpose !== 'gallery_image' || m.on_site !== false)
-    .map((m) => ({ purpose: m.purpose, path: m.storage_path }))
+    .map((m) => ({
+      purpose: m.purpose,
+      path: m.storage_path,
+      orientation: m.orientation ?? null,
+      site_role: m.site_role ?? null,
+    }))
 
   // Same key→value shape get_public_site's jsonb_object_agg produces, so preview
   // matches the public site. Null values (cleared overrides) are dropped.

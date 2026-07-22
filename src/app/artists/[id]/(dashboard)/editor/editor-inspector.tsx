@@ -5,7 +5,15 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaUrl } from '@/lib/site'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
-import { groupStyleRegions, type ManifestLinkRegion, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
+import {
+  componentLabelKey,
+  componentSlotRole,
+  groupStyleRegions,
+  type ManifestComponent,
+  type ManifestLinkRegion,
+  type ManifestStyleRegion,
+} from '@/lib/site-editor/manifest'
 import { cleanClassText } from '@/lib/site-editor/save'
 import {
   applyStyleValue,
@@ -20,6 +28,8 @@ import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { GallerySlotUploader } from '../media-uploader'
 import { useLockBodyScroll } from '../use-lock-body-scroll'
 import {
+  assignComponentSlotAction,
+  setSongsOnSiteAction,
   assignHeroSlotAction,
   deleteContentAction,
   placeGalleryPhotoAction,
@@ -50,6 +60,10 @@ export type GalleryPhoto = {
   onSite: boolean
   /** Which slot group the photo fills. null for legacy photos uploaded before slots. */
   orientation: Orientation | null
+  /** The component slot this photo is placed in (`polaroid_3_photo`), or null for an
+   *  ordinary gallery photo. A photo with a role belongs to a COMPONENT and is excluded
+   *  from the gallery groups, so a handwriting PNG never joins the collage. */
+  siteRole: string | null
 }
 export type EditorTextField = {
   key: string
@@ -101,6 +115,25 @@ export type EditorVideo = {
 }
 export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null; onSite: boolean }
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
+/** One PROJECT in the Music panel — an album / EP / single, the unit the site renders.
+ *  Songs are grouped into it by album art, NOT by a release id (skeen's catalog never
+ *  populates one). A project is not an entity the manager edits; it is a view over its
+ *  songs. Site visibility is the songs' `on_site`; ordering is by release date. */
+export type EditorProject = {
+  /** Stable React key (the release row's id). NOT used to gate or link anything — a
+   *  song belongs to a project by sharing its cover, not by pointing at this. */
+  key: string
+  title: string
+  cover_url: string | null
+  /** 'album' | 'ep' | 'single' — shown as an at-a-glance tag. */
+  kind: string
+  /** The song ids in this project, so the on/off toggle can flip their `on_site`. */
+  trackIds: string[]
+  /** How many songs the project holds, for the "N songs" subline. */
+  trackCount: number
+  /** On the site iff any of its songs is on-site. */
+  onSite: boolean
+}
 export type EditorTour = {
   id: string
   date: string | null
@@ -365,8 +398,11 @@ export function EditorInspector({
   supportLinks = [],
   videos: initialVideos = [],
   merch: initialMerch = [],
-  songs: initialSongs = [],
+  releases: initialReleases = [],
   tours: initialTours = [],
+  components = [],
+  componentLabels = {},
+  showGallery = false,
   styleRegions = [],
   styleValues = {},
   styleOptions,
@@ -388,9 +424,17 @@ export function EditorInspector({
   supportLinks?: EditorSupportLink[]
   videos?: EditorVideo[]
   merch?: EditorMerch[]
-  songs?: EditorSong[]
+  releases?: EditorProject[]
   /** The date LIBRARY, on-site or not — the editor is where they're chosen (ADR 0009). */
   tours?: EditorTour[]
+  /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
+   *  edit-list at runtime; a site that declares none simply has no component section. */
+  components?: ManifestComponent[]
+  /** Current `<key>_<n>_label` values (the manager's rename per instance), from site text. */
+  componentLabels?: Record<string, string>
+  /** Does the site declare a photo collage (an image slot)? Defaults FALSE — a group is
+   *  shown because the site asked for it, never just because the editor can render one. */
+  showGallery?: boolean
   /** Re-styleable regions. Comes from the FRAME's edit-list at runtime for a custom
    *  site (D-D); the built-in manifests declare none yet, so this is [] for them. */
   styleRegions?: ManifestStyleRegion[]
@@ -418,7 +462,7 @@ export function EditorInspector({
   const [links, setLinks] = useState<EditorLink[]>(initialLinks)
   const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
   const [merch, setMerch] = useState<EditorMerch[]>(initialMerch)
-  const [songs, setSongs] = useState<EditorSong[]>(initialSongs)
+  const [releases, setReleases] = useState<EditorProject[]>(initialReleases)
   const [tours, setTours] = useState<EditorTour[]>(initialTours)
   // One in-flight list mutation at a time: overlapping optimistic ops would each
   // capture a whole-array `prev`, and a later failure would revert to a snapshot that
@@ -453,7 +497,32 @@ export function EditorInspector({
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
   function addPhoto(m: { id: string; storage_path: string; orientation: Orientation }) {
-    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false }]))
+    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null }]))
+  }
+
+  /**
+   * Put a photo in a component slot, or clear the slot when `photo` is null. Optimistic:
+   * whoever held the role is released first (so the UI can never show one image in two
+   * slots), then the new one takes it — mirroring what the action does server-side.
+   */
+  function placeInSlot(role: string, photo: GalleryPhoto | null) {
+    if (isPending) return
+    const prev = photos
+    setPhotos((list) =>
+      list.map((p) => {
+        if (p.siteRole === role) return { ...p, siteRole: null, onSite: false }
+        if (photo && p.id === photo.id) return { ...p, siteRole: role, onSite: true }
+        return p
+      }),
+    )
+    // A just-uploaded photo isn't in the list yet — add it already holding the slot.
+    if (photo && !photos.some((p) => p.id === photo.id)) {
+      setPhotos((list) => [...list, { ...photo, siteRole: role, onSite: true }])
+    }
+    startTransition(async () => {
+      const res = await assignComponentSlotAction(artistId, role, photo?.id ?? null)
+      if (res?.error) setPhotos(prev)
+    })
   }
 
   // Place a gallery photo into an orientation group: assign its orientation AND put it on
@@ -474,12 +543,14 @@ export function EditorInspector({
       if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: true } : x)))
     })
   }
-  function toggleSongOnSite(s: EditorSong) {
-    const next = !s.onSite
-    setSongs((list) => list.map((x) => (x.id === s.id ? { ...x, onSite: next } : x)))
+  // Toggle a whole project on/off the site by flipping `on_site` on its songs — the
+  // per-song flag is what the site actually gates on. `released` is untouched.
+  function toggleProjectOnSite(r: EditorProject) {
+    const next = !r.onSite
+    setReleases((list) => list.map((x) => (x.key === r.key ? { ...x, onSite: next } : x)))
     startTransition(async () => {
-      const res = await setOnSiteAction('track', s.id, artistId, next)
-      if (res?.error) setSongs((list) => list.map((x) => (x.id === s.id ? { ...x, onSite: !next } : x)))
+      const res = await setSongsOnSiteAction(artistId, r.trackIds, next)
+      if (res?.error) setReleases((list) => list.map((x) => (x.key === r.key ? { ...x, onSite: !next } : x)))
     })
   }
   function toggleLinkOnSite(l: EditorLink) {
@@ -609,7 +680,7 @@ export function EditorInspector({
     text: { total: textFields.length, onSite: null },
     links: { total: links.length, onSite: onSite(links, (l) => l.onSite) },
     videos: { total: videos.length, onSite: onSite(videos, (v) => v.onSite) },
-    music: { total: songs.length, onSite: onSite(songs, (x) => x.onSite) },
+    music: { total: releases.length, onSite: onSite(releases, (x) => x.onSite) },
     tour: { total: tours.length, onSite: onSite(tours, (t) => t.onSite) },
     merch: { total: merch.length, onSite: onSite(merch, (m) => m.onSite) },
     style: { total: styleRegions.length, onSite: null },
@@ -626,19 +697,23 @@ export function EditorInspector({
           supportLinks={supportLinks}
           videos={videos}
           merch={merch}
-          songs={songs}
+          releases={releases}
           tours={tours}
           artistId={artistId}
           onAddPhoto={addPhoto}
           onPlacePhoto={placePhoto}
           onUnplacePhoto={unplacePhoto}
-          onToggleSongOnSite={toggleSongOnSite}
+          onToggleProjectOnSite={toggleProjectOnSite}
           onToggleLinkOnSite={toggleLinkOnSite}
           onToggleVideoOnSite={toggleVideoOnSite}
           onAssignHero={assignHero}
           onToggleTourOnSite={toggleTourOnSite}
           onRemoveTour={removeTour}
           onReorderTour={reorderTours}
+          components={components}
+          componentLabels={componentLabels}
+          showGallery={showGallery}
+          onPlaceSlot={placeInSlot}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
           onRemoveMerch={removeMerch}
@@ -710,19 +785,23 @@ function EditingView({
   supportLinks,
   videos,
   merch,
-  songs,
+  releases,
   tours,
   artistId,
   onAddPhoto,
   onPlacePhoto,
   onUnplacePhoto,
-  onToggleSongOnSite,
+  onToggleProjectOnSite,
   onToggleLinkOnSite,
   onToggleVideoOnSite,
   onAssignHero,
   onToggleTourOnSite,
   onRemoveTour,
   onReorderTour,
+  components,
+  componentLabels,
+  showGallery,
+  onPlaceSlot,
   onRemoveLink,
   onReorderLink,
   onRemoveMerch,
@@ -746,19 +825,23 @@ function EditingView({
   supportLinks: EditorSupportLink[]
   videos: EditorVideo[]
   merch: EditorMerch[]
-  songs: EditorSong[]
+  releases: EditorProject[]
   tours: EditorTour[]
   artistId: string
   onAddPhoto: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   onPlacePhoto: (p: GalleryPhoto, orientation: Orientation) => void
   onUnplacePhoto: (p: GalleryPhoto) => void
-  onToggleSongOnSite: (s: EditorSong) => void
+  onToggleProjectOnSite: (r: EditorProject) => void
   onToggleLinkOnSite: (l: EditorLink) => void
   onToggleVideoOnSite: (v: EditorVideo) => void
   onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
   onToggleTourOnSite: (t: EditorTour) => void
   onRemoveTour: (t: EditorTour) => void
   onReorderTour: (fromId: string, toId: string) => void
+  components: ManifestComponent[]
+  componentLabels: Record<string, string>
+  showGallery: boolean
+  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (fromId: string, toId: string) => void
   onRemoveMerch: (m: EditorMerch) => void
@@ -802,7 +885,18 @@ function EditingView({
 
       <div className="flex-1 overflow-y-auto">
         {isImages ? (
-          <PhotoTools photos={photos} artistId={artistId} onAdd={onAddPhoto} onPlace={onPlacePhoto} onUnplace={onUnplacePhoto} />
+          <PhotoTools
+            photos={photos}
+            components={components}
+            componentLabels={componentLabels}
+            showGallery={showGallery}
+            artistId={artistId}
+            onAdd={onAddPhoto}
+            onPlace={onPlacePhoto}
+            onUnplace={onUnplacePhoto}
+            onPlaceSlot={onPlaceSlot}
+            onApplyField={onApplyField}
+          />
         ) : isText ? (
           <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
         ) : isLinks ? (
@@ -859,7 +953,7 @@ function EditingView({
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
         ) : isMusic ? (
-          <MusicTools songs={songs} artistId={artistId} onToggleOnSite={onToggleSongOnSite} />
+          <MusicTools releases={releases} artistId={artistId} onToggleOnSite={onToggleProjectOnSite} />
         ) : isStyle ? (
           <StyleTools
             regions={styleRegions}
@@ -920,6 +1014,226 @@ function PhotoThumb({ path, aspect }: { path: string; aspect: string }) {
  * Remove behave like the video slots (Remove takes a photo off the site, back to the
  * library — never deletes). Cards are 3-up. The picker footer can still upload a new
  * asset, but picking existing ones is the primary path. */
+/* ── Component slots: repeated multi-image cards (skeen's polaroid wall) ─────────────
+ * The site declares the component and how many it renders (manifest.components); the
+ * manager fills each slot and may RENAME each instance. A name is ordinary editable site
+ * text under `<key>_<n>_label`, so it saves and publishes through saveEditorFieldAction
+ * like every other text field — no storage of its own.
+ *
+ * A placed photo carries `media.site_role = <key>_<n>_<slot>`, which is exactly the field
+ * key skeen already declares, so the two can't drift (tests/component-slots.test.ts). */
+function ComponentTools({
+  components,
+  photos,
+  labels,
+  artistId,
+  onPlaceSlot,
+  onApplyField,
+}: {
+  components: ManifestComponent[]
+  photos: GalleryPhoto[]
+  /** Current `<key>_<n>_label` values from published/draft site text. */
+  labels: Record<string, string>
+  artistId: string
+  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  onApplyField?: (key: string, value: string) => void
+}) {
+  return (
+    <div className="pb-2">
+      {components.map((c) => (
+        <div key={c.key}>
+          {/* Counted in SLOTS, not components: what the manager needs to know is how
+              many images this section wants of them (5 cards × 2 each = 10), not how
+              many cards there happen to be (Sam, 2026-07-21). */}
+          <GroupLabel>{plural(c.count * c.slots.length, 'image slot')}</GroupLabel>
+          {Array.from({ length: c.count }, (_, i) => i + 1).map((n) => (
+            <ComponentCard
+              key={`${c.key}_${n}`}
+              component={c}
+              n={n}
+              photos={photos}
+              labelKey={componentLabelKey(c.key, n)}
+              labelValue={labels[componentLabelKey(c.key, n)] ?? ''}
+              artistId={artistId}
+              onPlaceSlot={onPlaceSlot}
+              onApplyField={onApplyField}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** One instance: an editable name plus one drop target per declared slot. */
+function ComponentCard({
+  component,
+  n,
+  photos,
+  labelKey,
+  labelValue,
+  artistId,
+  onPlaceSlot,
+  onApplyField,
+}: {
+  component: ManifestComponent
+  n: number
+  photos: GalleryPhoto[]
+  labelKey: string
+  labelValue: string
+  artistId: string
+  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  onApplyField?: (key: string, value: string) => void
+}) {
+  const [name, setName] = useState(labelValue)
+  const [renaming, setRenaming] = useState(false)
+  const [picking, setPicking] = useState<string | null>(null)
+
+  // Re-seed when the saved value lands after first render, without clobbering typing.
+  const [seeded, setSeeded] = useState(labelValue)
+  if (seeded !== labelValue) {
+    setSeeded(labelValue)
+    setName(labelValue)
+  }
+
+  /** Commit on an explicit finish (blur / Enter), not on every keystroke: the name is
+   *  read as text until the pencil is clicked, so there is a clear start and end to the
+   *  edit and no debounce guessing when typing stopped. */
+  function commitName() {
+    setRenaming(false)
+    if (name === labelValue) return
+    onApplyField?.(labelKey, name) // optimistic repaint in the frame
+    void saveEditorFieldAction(artistId, labelKey, name)
+  }
+
+  // The library a slot can draw from: every photo NOT already holding a slot. A photo in
+  // another slot is excluded so one image can't silently serve two cards.
+  const library = photos.filter((p) => !p.siteRole)
+  const fallbackName = `${component.label} ${n}`
+
+  return (
+    <div className="px-5 pb-4 pt-1">
+      {/* The name READS as text; the pencil turns it into a field. An always-live input
+          made five cards look like a form to fill in rather than a wall to arrange. */}
+      {renaming ? (
+        <input
+          autoFocus
+          aria-label={`${fallbackName} name`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitName()
+            if (e.key === 'Escape') {
+              setName(labelValue) // abandon the edit, keep what was saved
+              setRenaming(false)
+            }
+          }}
+          placeholder={fallbackName}
+          className={cx(FIELD, 'mb-2')}
+        />
+      ) : (
+        <div className="mb-2 flex items-center gap-1.5">
+          <span className={cx('min-w-0 flex-1 truncate text-[13px]', name ? 'text-ink' : 'text-ink-faint')}>
+            {name || fallbackName}
+          </span>
+          <button
+            type="button"
+            aria-label={`Rename ${fallbackName}`}
+            onClick={() => setRenaming(true)}
+            className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+          >
+            <Icon name="edit" size={13} />
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {component.slots.map((slot) => {
+          const role = componentSlotRole(component.key, n, slot.key)
+          const placed = photos.find((p) => p.siteRole === role) ?? null
+          const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
+          return (
+            <div key={slot.key}>
+              <span className={cx(CONTROL_LABEL, 'mb-1 block')}>{slot.label}</span>
+              {placed ? (
+                <div className="overflow-hidden rounded-lg border border-hairline">
+                  <PhotoThumb path={placed.storage_path} aspect="aspect-square" />
+                  <div className="flex items-center gap-1 px-2 py-1.5">
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-ink-muted">
+                      {placed.storage_path.split('/').pop()}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Replace ${fallbackName} ${slot.label}`}
+                      onClick={() => setPicking(role)}
+                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                    >
+                      <Icon name="edit" size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${fallbackName} ${slot.label}`}
+                      onClick={() => onPlaceSlot(role, null)}
+                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <EmptySlot
+                  label={`Add ${slot.label.toLowerCase()}`}
+                  ariaLabel={`${fallbackName} ${slot.label}`}
+                  title={slot.hint}
+                  aspect="aspect-square"
+                  onClick={() => setPicking(role)}
+                />
+              )}
+              {/* Advisory, never blocking (Sam, 2026-07-21): a JPG here renders as a white
+                  box over the card, so say so — but a wrong-format image is fixable and a
+                  blocked upload is a dead end mid-task. */}
+              {wrongFormat && (
+                <span className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-status-pending">
+                  <Icon name="alert" size={12} />
+                  Should be a transparent PNG — this one will show a solid background.
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {picking && (
+        <LibraryPicker<GalleryPhoto>
+          title="Choose an image"
+          candidates={library}
+          keyOf={(p) => p.id}
+          labelOf={(p) => p.storage_path.split('/').pop() ?? ''}
+          renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
+          empty={
+            <p className="py-2 text-center text-xs text-ink-muted">
+              No unused photos in your library. Upload one below.
+            </p>
+          }
+          footer={
+            <GallerySlotUploader
+              artistId={artistId}
+              orientation="horizontal"
+              label="Drop an image or click to upload"
+              onUploaded={(m) => onPlaceSlot(picking, { ...m, onSite: true, siteRole: picking })}
+            />
+          }
+          onPick={(p) => {
+            onPlaceSlot(picking, p)
+            setPicking(null)
+          }}
+          onCancel={() => setPicking(null)}
+        />
+      )}
+    </div>
+  )
+}
+
 const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string; cols: string }[] = [
   { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]', cols: 'grid-cols-2' },
   { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]', cols: 'grid-cols-3' },
@@ -927,27 +1241,54 @@ const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string; c
 
 function PhotoTools({
   photos,
+  components,
+  componentLabels,
+  showGallery,
   artistId,
   onAdd,
   onPlace,
   onUnplace,
+  onPlaceSlot,
+  onApplyField,
 }: {
   photos: GalleryPhoto[]
+  components: ManifestComponent[]
+  componentLabels: Record<string, string>
+  /** Whether the SITE renders a photo collage (it declares an image slot). When it does
+   *  not, the orientation groups are hidden: an editor slot with nothing behind it on the
+   *  site is a place to put work that never appears (Sam, 2026-07-21). */
+  showGallery: boolean
   artistId: string
   onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   onPlace: (p: GalleryPhoto, orientation: Orientation) => void
   onUnplace: (p: GalleryPhoto) => void
+  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  onApplyField?: (key: string, value: string) => void
 }) {
   // A photo is horizontal OR vertical by its real shape, so each group shows only its own
   // orientation — never the same photo in both. A null-orientation photo (a legacy row,
   // or a Drive import that was never measured) has no shape yet: it belongs to the
   // Horizontal group so it stays visible and manageable instead of vanishing from the
   // editor while still live on the site. Placing it there assigns a real orientation.
+  // A photo holding a component slot is NOT a gallery photo — it belongs to a polaroid
+  // card, and showing it in the collage groups would invite placing a handwriting PNG in
+  // the photo wall (20260724120000).
   const belongs = (p: GalleryPhoto, group: Orientation) =>
-    p.orientation === group || (group === 'horizontal' && p.orientation == null)
+    !p.siteRole && (p.orientation === group || (group === 'horizontal' && p.orientation == null))
   return (
     <div className="py-2">
-      {PHOTO_GROUPS.map(({ orientation, label, aspect, cols }) => (
+      {components.length > 0 && (
+        <ComponentTools
+          components={components}
+          photos={photos}
+          labels={componentLabels}
+          artistId={artistId}
+          onPlaceSlot={onPlaceSlot}
+          onApplyField={onApplyField}
+        />
+      )}
+      {showGallery &&
+        PHOTO_GROUPS.map(({ orientation, label, aspect, cols }) => (
         <div key={orientation}>
           <div className="px-5 pt-3">
             <SlotGroupLabel>{label}</SlotGroupLabel>
@@ -971,8 +1312,14 @@ function PhotoTools({
             pickerFooter={<GallerySlotUploader artistId={artistId} orientation={orientation} onUploaded={onAdd} />}
             onSetOnSite={(p, next) => (next ? onPlace(p, orientation) : onUnplace(p))}
           />
-        </div>
-      ))}
+          </div>
+        ))}
+      {!showGallery && components.length === 0 && (
+        <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
+          This site has no image slots. Photos you upload live in Assets until the site
+          declares somewhere to put them.
+        </p>
+      )}
     </div>
   )
 }
@@ -1918,14 +2265,36 @@ function LibraryPicker<T>({
 
 /** The dashed "add / pick" tile that opens a picker. `aspect` matches the cards it
  *  sits beside (16:9 videos, 4:3 photos, square songs). */
-function EmptySlot({ label, onClick, aspect = 'aspect-video' }: { label: string; onClick: () => void; aspect?: string }) {
+function EmptySlot({
+  label,
+  onClick,
+  aspect = 'aspect-video',
+  ariaLabel,
+  title,
+  stretch = false,
+}: {
+  label: string
+  onClick: () => void
+  aspect?: string
+  /** Grow to the grid row's height (the gallery grid, where a placed card is taller than
+   *  its thumbnail). OFF by default: where a cell also holds a caption or hint below the
+   *  slot, stretching fights that text for the row and it overflows into the next card. */
+  stretch?: boolean
+  /** Accessible name, when the visible label repeats across cards. Two polaroids both
+   *  showing "Add photo" would be ambiguous to a screen reader and to getByRole. */
+  ariaLabel?: string
+  /** Hover text — the site's description of the slot, kept off the card face. */
+  title?: string
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={label}
+      aria-label={ariaLabel ?? label}
+      title={title}
       className={cx(
-        'flex h-full w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-hairline px-2 text-center text-ink-muted hover:border-accent hover:text-accent',
+        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-hairline px-2 text-center text-ink-muted hover:border-accent hover:text-accent',
+        stretch && 'h-full',
         aspect,
       )}
     >
@@ -2073,6 +2442,7 @@ function MediaGrid<T>({
         <EmptySlot
           label={addLabel}
           aspect={aspect}
+          stretch
           onClick={() => {
             setReplacing(null)
             setPicking(true)
@@ -2682,29 +3052,72 @@ function SongThumb({ coverUrl }: { coverUrl: string | null }) {
  * Songs are entered/renamed on the Music page; here the manager just picks which are on
  * the site. Remove takes a song off (never deletes); Replace swaps it for another from
  * the catalog — the old one only leaves once a replacement is chosen. */
+/** Album/EP/single, shown as a short mono tag on each project cover. */
+/**
+ * The Music panel lists PROJECTS, not songs (Sam, 2026-07-21): the site renders one
+ * cover per album/EP/single, so listing every track inside an album is noise. Projects
+ * are a 3-up cover grid ordered newest-first (by release date, in page.tsx) with a
+ * per-project on/off toggle. A project's on/off flips `on_site` on its songs — the flag
+ * the site gates on — leaving `released` (the library label) alone. Songs are managed on
+ * the Music page; here the manager only chooses which projects show.
+ */
 function MusicTools({
-  songs,
+  releases,
   artistId,
   onToggleOnSite,
 }: {
-  songs: EditorSong[]
+  releases: EditorProject[]
   artistId: string
-  onToggleOnSite: (s: EditorSong) => void
+  onToggleOnSite: (r: EditorProject) => void
 }) {
+  if (releases.length === 0) {
+    return (
+      <div className="px-5 py-4">
+        <AddFirstLink href={`/artists/${artistId}/music`} label="Add music first" />
+      </div>
+    )
+  }
+
   return (
-    <MediaGrid
-      onSiteItems={songs.filter((s) => s.onSite)}
-      library={songs.filter((s) => !s.onSite)}
-      noun="song"
-      keyOf={(s) => s.id}
-      labelOf={(s) => s.title || 'Untitled song'}
-      renderThumb={(s) => <SongThumb coverUrl={s.cover_url} />}
-      aspect="aspect-square"
-      pickTitle="Add a song"
-      addLabel="Add song"
-      empty={<AddFirstLink href={`/artists/${artistId}/music`} label="Add a song first" />}
-      onSetOnSite={(s) => onToggleOnSite(s)}
-    />
+    <div className="px-5 py-4">
+      <div className="grid grid-cols-3 gap-2.5">
+        {releases.map((r) => {
+          // An off-site card dims — but the toggle must NOT, or the one control that turns
+          // it back on reads as disabled. CSS opacity composites the whole subtree, so a
+          // child can't opt back to full: the dim lives on the thumbnail/tag/text, never
+          // on the card, and the button sits outside it at full strength.
+          const dim = !r.onSite && 'opacity-55'
+          return (
+            <div key={r.key} className="overflow-hidden rounded-lg border border-hairline">
+              <div className="relative">
+                <div className={cx(dim)}>
+                  <SongThumb coverUrl={r.cover_url} />
+                  <span className="absolute left-1 top-1 rounded bg-ink/70 px-1 py-0.5 font-space text-[8px] font-bold uppercase tracking-[0.06em] text-paper">
+                    {RELEASE_TYPE_LABEL[r.kind as ReleaseType] ?? r.kind}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  aria-label={r.onSite ? `Take ${r.title || 'project'} off the site` : `Put ${r.title || 'project'} on the site`}
+                  aria-pressed={r.onSite}
+                  onClick={() => onToggleOnSite(r)}
+                  className={cx(
+                    'absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full transition-colors',
+                    r.onSite ? 'bg-accent text-white' : 'bg-paper text-ink shadow-sm hover:bg-accent hover:text-white',
+                  )}
+                >
+                  <Icon name={r.onSite ? 'check' : 'plus'} size={12} />
+                </button>
+              </div>
+              <div className={cx('px-1.5 py-1', dim)}>
+                <span className="block truncate text-[11px] text-ink">{r.title || 'Untitled'}</span>
+                <span className="block font-space text-[9px] text-ink-faint">{plural(r.trackCount, 'song')}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
+import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
 import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
 import { CardGrid } from '../card-grid'
@@ -64,10 +65,18 @@ function BucketFilter({ value, onChange }: { value: Bucket; onChange: (b: Bucket
   )
 }
 
-// Music groups by RELEASE TYPE (its natural category) — singles/EPs/albums is
-// how a manager thinks about a catalog.
-const TYPE_LABEL: Record<string, string> = { single: 'Singles', ep: 'EPs', album: 'Albums', featured: 'Featured' }
-const TYPE_ORDER = ['single', 'ep', 'album', 'featured'] as const
+// Music groups by RELEASE TYPE (its natural category) — singles/EPs/albums/remixes is
+// how a manager thinks about a catalog. Order follows RELEASE_TYPES and the label map is
+// a TOTAL Record<ReleaseType>, so adding a type without a section here is a TYPE error,
+// not a silent lowercase fallback heading (the bug this replaced).
+const TYPE_LABEL: Record<ReleaseType, string> = {
+  single: 'Singles',
+  ep: 'EPs',
+  album: 'Albums',
+  remix: 'Remixes',
+  featured: 'Featured',
+}
+const TYPE_ORDER = RELEASE_TYPES
 
 function sorted(releases: Release[], sort: Sort): Release[] {
   const copy = [...releases]
@@ -132,7 +141,7 @@ export function MusicBrowser({
   // ----- Released half (hidden when bucket === 'unreleased') ----------------
   const showReleased = bucket !== 'unreleased'
   const shownReleases = sorted(filterBySite(releases, site), sort)
-  const releaseGroups = groupByOrigin(shownReleases, (r) => r.release_type, TYPE_ORDER, (k) => TYPE_LABEL[k] ?? k)
+  const releaseGroups = groupByOrigin(shownReleases, (r) => r.release_type, TYPE_ORDER, (k) => TYPE_LABEL[k as ReleaseType] ?? k)
   // Loose released songs ARE on the public site → hidden by the Off-site lens.
   const shownLoose = site === 'off' ? [] : looseReleased
 
