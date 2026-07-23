@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
-import { mediaUrl } from '@/lib/site'
+import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { Icon } from '@/components/ui/icons'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '../use-lock-body-scroll'
@@ -30,8 +30,19 @@ import { EYEBROW } from './inspector-shared'
 export function PhotoThumb({ path, aspect }: { path: string; aspect: string }) {
   return (
     <div className={cx('w-full overflow-hidden bg-track', aspect)}>
+      {/* Load a downscaled/compressed thumbnail; fall back to the full object ONCE if
+          the transform can't handle this image (guarding the src check against a loop). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={mediaUrl(path)} alt="" className="h-full w-full object-cover" />
+      <img
+        src={mediaThumbUrl(path)}
+        alt=""
+        className="h-full w-full object-cover"
+        onError={(e) => {
+          const img = e.currentTarget
+          const full = mediaUrl(path)
+          if (img.src !== full) img.src = full
+        }}
+      />
     </div>
   )
 }

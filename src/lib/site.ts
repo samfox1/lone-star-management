@@ -109,6 +109,20 @@ export function mediaUrl(path: string): string {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`
 }
 
+/**
+ * A DOWNSCALED, compressed variant of a `media` object, via Supabase's image render
+ * endpoint (Pro plan). For editor THUMBNAILS only — the polaroid slots, gallery cards,
+ * and picker tiles display an image ~150-240px wide but were downloading the full
+ * multi-megapixel original. `resize=cover` matches the object-cover CSS; the server
+ * negotiates WebP (alpha preserved, so transparent handwriting PNGs stay transparent).
+ * The public SITE still uses `mediaUrl` (full quality) — this only shrinks previews.
+ */
+export function mediaThumbUrl(path: string, opts?: { width?: number; quality?: number }): string {
+  const { width = 480, quality = 55 } = opts ?? {}
+  const q = new URLSearchParams({ width: String(width), quality: String(quality), resize: 'cover' })
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/render/image/public/media/${path}?${q}`
+}
+
 export type SiteData = {
   artist: {
     id: string
