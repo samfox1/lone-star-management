@@ -1,11 +1,10 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { diffUnpublished } from '@/lib/content'
 import { Icon } from '@/components/ui/icons'
 import { Avatar, initials, StatusDot } from '@/components/ui/ui'
 import { ArtistNav } from './artist-tabs'
 import { dirtyBySeg } from './sections'
-import { requireArtist } from './_data'
+import { dashboardDiff, requireArtist } from './_data'
 import { Toaster } from './toast'
 
 /** Today as YYYY-MM-DD, out of render so it isn't an impure call. */
@@ -42,7 +41,7 @@ export default async function DashboardLayout({
   ] = await Promise.all([
     requireArtist(id),
     supabase.auth.getUser(),
-    diffUnpublished(supabase, id),
+    dashboardDiff(id),
     // "On tour" = has an upcoming tour date (RLS-scoped). Real signal, not a flag.
     supabase.from('tour_dates').select('id', { count: 'exact', head: true }).eq('artist_id', id).gte('date', todayIso()),
   ])

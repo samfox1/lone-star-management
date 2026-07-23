@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { diffUnpublished, type SectionDiff } from '@/lib/content'
+import { type SectionDiff } from '@/lib/content'
 import { compactNumber, formatTrend, seriesTrend, trendLineClass, trendTextClass } from '@/lib/format'
 import { cx } from '@/lib/cx'
 import { AreaChart } from '@/components/ui/charts'
 import { KLabel, StatusDot } from '@/components/ui/ui'
 import { artistDailyViews } from '@/app/roster-data'
 import { DIFF_SECTIONS } from './sections'
-import { requireArtist } from './_data'
+import { dashboardDiff, requireArtist } from './_data'
 
 function summarize(d: SectionDiff): string {
   if (!d.dirty) return 'Published'
@@ -40,7 +40,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
   // past PostgREST's 1000-row cap.
   const [, diff, { data: rows }, series] = await Promise.all([
     requireArtist(id),
-    diffUnpublished(supabase, id),
+    dashboardDiff(id),
     supabase.rpc('analytics_summary', { p_artist_id: id, p_since: thirtyDaysAgoIso() }),
     artistDailyViews(supabase, id),
   ])

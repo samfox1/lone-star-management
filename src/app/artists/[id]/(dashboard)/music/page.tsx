@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { diffUnpublished, listContent } from '@/lib/content'
+import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
-import { requireArtist } from '../_data'
+import { dashboardDiff, requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction, refreshSpotifyAction } from '../actions'
 import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
@@ -28,7 +28,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     listContent(supabase, 'release', id),
     listContent(supabase, 'track', id),
     entityCounts(supabase, id, daysAgo(30)),
-    diffUnpublished(supabase, id),
+    dashboardDiff(id),
   ])
   // Unpublished music edits (renames, links…) enable the publish pill even when
   // the on-site selection hasn't changed, so an edit can't strand as a draft.

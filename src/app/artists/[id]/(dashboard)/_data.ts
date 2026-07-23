@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { diffUnpublished } from '@/lib/content'
 
 /**
  * Load the artist for the current dashboard request, or 404. `cache()` dedupes
@@ -21,6 +22,18 @@ export const requireArtist = cache(async (id: string) => {
     .single()
   if (error || !artist) notFound()
   return artist
+})
+
+/**
+ * The unpublished-vs-published diff that powers the nav's dirty dots. `cache()`d on the
+ * artist id (its own client inside, like requireArtist) so the layout AND the page can
+ * both ask for it and the ~11-query wave runs ONCE per request instead of twice. Pass
+ * the id only — keying on a `supabase` instance would never dedupe (each createClient is
+ * a distinct object).
+ */
+export const dashboardDiff = cache(async (id: string) => {
+  const supabase = await createClient()
+  return diffUnpublished(supabase, id)
 })
 
 /** The connected Shopify store domain for an artist, or null. Cached per request. */

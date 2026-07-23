@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { diffUnpublished, listContent } from '@/lib/content'
+import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
-import { requireArtist } from '../_data'
+import { dashboardDiff, requireArtist } from '../_data'
 import { ToolbarIconLink } from '../toolbar'
 import { TourBrowser } from './tour-browser'
 import { TourAddButton } from './tour-add'
@@ -24,7 +24,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
   const [rows, counts, diff] = await Promise.all([
     listContent(supabase, 'tour_date', id),
     entityCounts(supabase, id, daysAgo(30)),
-    diffUnpublished(supabase, id),
+    dashboardDiff(id),
   ])
 
   return (
