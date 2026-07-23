@@ -13,6 +13,7 @@ import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
+import { placeInSlot } from '@/lib/site-editor/slots'
 import {
   type CrudEntity,
   type GenericEntity,
@@ -506,21 +507,8 @@ export async function assignComponentSlotAction(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Not signed in.' }
 
-  const cleared = await supabase
-    .from('media')
-    .update({ site_role: null, on_site: false })
-    .eq('artist_id', artistId)
-    .eq('site_role', role)
-  if (cleared.error) return { error: cleared.error.message }
-
-  if (mediaId) {
-    const { error } = await supabase
-      .from('media')
-      .update({ site_role: role, on_site: true })
-      .eq('id', mediaId)
-      .eq('artist_id', artistId)
-    if (error) return { error: error.message }
-  }
+  const res = await placeInSlot(supabase, 'media', artistId, role, mediaId)
+  if (res.error) return res
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }
@@ -531,21 +519,8 @@ export async function assignHeroSlotAction(
   videoId: string | null,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  // Vacate the slot: whoever currently holds this role leaves it and the site.
-  const cleared = await supabase
-    .from('videos')
-    .update({ site_role: null, on_site: false })
-    .eq('artist_id', artistId)
-    .eq('site_role', role)
-  if (cleared.error) return { error: cleared.error.message }
-  if (videoId) {
-    const { error } = await supabase
-      .from('videos')
-      .update({ site_role: role, on_site: true })
-      .eq('id', videoId)
-      .eq('artist_id', artistId)
-    if (error) return { error: error.message }
-  }
+  const res = await placeInSlot(supabase, 'videos', artistId, role, videoId)
+  if (res.error) return res
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

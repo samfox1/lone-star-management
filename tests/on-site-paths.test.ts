@@ -15,6 +15,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { LIVE_TOGGLE, ON_SITE_ENTITIES, PUBLISHABLE } from '@/lib/content'
+import type { SlotTable } from '@/lib/site-editor/slots'
 
 const liveEntities = Object.values(LIVE_TOGGLE)
 
@@ -48,6 +49,24 @@ describe('on-site write paths', () => {
     const covered = new Set<string>([...liveEntities, ...ON_SITE_ENTITIES])
     for (const gated of ['media', 'track', 'link', 'video', 'tour_date', 'merch', 'release']) {
       expect(covered.has(gated), `${gated} is on neither on-site write path`).toBe(true)
+    }
+  })
+
+  it('CRITICAL: a SLOT can only place into a live-toggle table, never a reconcile one', () => {
+    // placeInSlot writes on_site directly (a LIVE-toggle write) as it fills a slot. Its
+    // SlotTable union is what stops a slot from ever targeting a publish-reconcile table
+    // (releases/merch), where the write would be silently reverted at the next publish
+    // (ADR 0009). This asserts that union against the registry, so widening SlotTable to
+    // a reconcile table is a loud test failure, not a quiet production bug. The direct
+    // on_site writers (setSongsOnSiteAction → tracks, placeGalleryPhotoAction → media,
+    // placeInSlot → media/videos) are the ADR-0009 blind spot: they bypass setOnSiteAction,
+    // so this is the guard that keeps them on the live path.
+    const liveTables = new Set(liveEntities.map((e) => PUBLISHABLE[e].table))
+    const slotTables: SlotTable[] = ['media', 'videos']
+    const reconcileTables = ON_SITE_ENTITIES.map((e) => PUBLISHABLE[e].table)
+    for (const t of slotTables) {
+      expect(liveTables.has(t), `slot table ${t} must be a live-toggle table`).toBe(true)
+      expect(reconcileTables.includes(t), `slot table ${t} must NOT be a reconcile table`).toBe(false)
     }
   })
 })
