@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { CardModal } from '../card-modal'
@@ -64,6 +65,7 @@ export function ReleaseCard({
   onToggleSelect?: () => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const year = release.release_date?.slice(0, 4)
   const songCount = release.songs.length
 
@@ -82,7 +84,8 @@ export function ReleaseCard({
           </div>
         )}
 
-        {/* Edit — top-right of the cover (the tile click opens the same modal) */}
+        {/* Edit — top-right. The TILE now expands the tracklist (below); editing lives
+            here on the pencil, so "click the album" shows its songs. */}
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -93,7 +96,13 @@ export function ReleaseCard({
           <Icon name="edit" size={14} />
         </button>
 
-        <button type="button" onClick={() => setEditing(true)} className="block w-full text-left">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-label={`${release.title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
+          className="block w-full text-left"
+        >
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
             <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
               {RELEASE_TYPE_LABEL[release.release_type]}
@@ -105,8 +114,16 @@ export function ReleaseCard({
               <span className="h-9 w-9 rounded-full bg-ink" />
             )}
           </div>
-          <div className="mt-3 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
-            {release.title}
+          <div className="mt-3 flex items-center gap-1">
+            <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
+              {release.title}
+            </span>
+            <span
+              className={cx('flex-none text-ink-faint transition-transform', expanded && 'rotate-90')}
+              aria-hidden
+            >
+              <Icon name="chevronRight" size={16} />
+            </span>
           </div>
           <div className="mt-0.5 font-space text-[13px] text-ink-muted">
             {[year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || '—'}
@@ -114,6 +131,25 @@ export function ReleaseCard({
           <CardStat value={release.stat ?? 0} label={metricLabel('release')} />
         </button>
       </div>
+
+      {/* Inline tracklist — the songs on this release, revealed under the card. */}
+      {expanded && (
+        <div className="mt-2 rounded-xl bg-surface px-3 py-2">
+          {songCount === 0 ? (
+            <p className="py-1 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
+          ) : (
+            <ol className="space-y-0.5">
+              {release.songs.map((s, i) => (
+                <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
+                  <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">{s.title}</span>
+                  {feat(s) && <span className="flex-none truncate text-ink-faint">{feat(s)}</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
 
       <CardModal
         open={editing}

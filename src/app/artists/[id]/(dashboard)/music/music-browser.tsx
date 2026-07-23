@@ -92,14 +92,14 @@ function sorted(releases: Release[], sort: Sort): Release[] {
  * (All / On site / Off site) — with a shared toolbar (Refresh · Add Music ·
  * sort) in the same place for every view. Refresh greys out on
  * Unreleased (platform pulls only ever produce Released music). Unreleased
- * items are never public, so the site filter treats them as off-site; loose
- * RELEASED songs are public, so they count as on-site. The password-gated
+ * items are never public, so the site filter treats them as off-site; orphan
+ * released singles are public, so they count as on-site. The password-gated
  * publish pill covers on-site selection changes AND content edits (`dirty`).
  */
 export function MusicBrowser({
   releases,
   unreleasedReleases,
-  looseReleased,
+  orphanSingles,
   unreleasedSongs,
   releaseOptions,
   artistId,
@@ -112,8 +112,9 @@ export function MusicBrowser({
   releases: Release[]
   /** Unreleased releases (manual, no links) — manageable cards, no select. */
   unreleasedReleases: Release[]
-  /** Released songs on no release (rare — platform-linked loose songs). */
-  looseReleased: MusicSong[]
+  /** Released songs whose album name matches no release (SoundCloud singles/remixes).
+   *  Shown as their own cards under Singles — there is no 'loose' bucket. */
+  orphanSingles: MusicSong[]
   /** Unreleased songs, grouped under their release / LOOSE. */
   unreleasedSongs: UnreleasedSong[]
   /** Options for the per-song "assign to release" selector (ALL releases). */
@@ -142,8 +143,10 @@ export function MusicBrowser({
   const showReleased = bucket !== 'unreleased'
   const shownReleases = sorted(filterBySite(releases, site), sort)
   const releaseGroups = groupByOrigin(shownReleases, (r) => r.release_type, TYPE_ORDER, (k) => TYPE_LABEL[k as ReleaseType] ?? k)
-  // Loose released songs ARE on the public site → hidden by the Off-site lens.
-  const shownLoose = site === 'off' ? [] : looseReleased
+  // Orphan singles are public site material → shown unless the Off-site lens is on. They
+  // ride the Singles section (their per-song type is single/remix, but a release-less song
+  // reads as a single here), never a separate 'loose' pile.
+  const shownOrphans = site === 'off' ? [] : orphanSingles
 
   // ----- Unreleased half (hidden when bucket === 'released'; never on site) --
   const showUnreleased = bucket !== 'released' && site !== 'on'
@@ -165,27 +168,35 @@ export function MusicBrowser({
     </CardGrid>
   )
 
+  const hasSingleGroup = releaseGroups.some((g) => g.key === 'single')
   const releasedContent = (
     <>
-      {releaseGroups.map((g) => (
-        <OriginSection key={g.key} label={g.label} count={g.items.length}>
-          <CardGrid size="md" count={g.items.length}>
-            {g.items.map((r) => (
-              <ReleaseCard
-                key={r.id}
-                release={r}
-                artistId={artistId}
-                artistSlug={artistSlug}
-                selected={selected.has(r.id)}
-                onToggleSelect={() => toggleSelect(r.id)}
-              />
-            ))}
-          </CardGrid>
-        </OriginSection>
-      ))}
-      {shownLoose.length > 0 && (
-        <OriginSection label="Loose songs" count={shownLoose.length}>
-          {songGrid(shownLoose)}
+      {releaseGroups.map((g) => {
+        // Orphan singles ride the Singles section: release cards first, then the
+        // release-less songs below them (a second grid, so the card sizes don't mix).
+        const orphansHere = g.key === 'single' ? shownOrphans : []
+        return (
+          <OriginSection key={g.key} label={g.label} count={g.items.length + orphansHere.length}>
+            <CardGrid size="md" count={g.items.length}>
+              {g.items.map((r) => (
+                <ReleaseCard
+                  key={r.id}
+                  release={r}
+                  artistId={artistId}
+                  artistSlug={artistSlug}
+                  selected={selected.has(r.id)}
+                  onToggleSelect={() => toggleSelect(r.id)}
+                />
+              ))}
+            </CardGrid>
+            {orphansHere.length > 0 && songGrid(orphansHere)}
+          </OriginSection>
+        )
+      })}
+      {/* Orphans with no Singles release group to host them still get a Singles heading. */}
+      {shownOrphans.length > 0 && !hasSingleGroup && (
+        <OriginSection label="Singles" count={shownOrphans.length}>
+          {songGrid(shownOrphans)}
         </OriginSection>
       )}
     </>
@@ -211,7 +222,7 @@ export function MusicBrowser({
     </>
   )
 
-  const releasedShownCount = shownReleases.length + shownLoose.length
+  const releasedShownCount = shownReleases.length + shownOrphans.length
   const unreleasedShownCount = showUnreleased ? shownUnreleasedReleases.length + unreleasedSongs.length : 0
   const nothingShown = (!showReleased || releasedShownCount === 0) && (!showUnreleased || unreleasedShownCount === 0)
 

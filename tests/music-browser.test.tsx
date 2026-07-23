@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
-import { MusicBrowser, LOOSE, type UnreleasedSong } from '@/app/artists/[id]/(dashboard)/music/music-browser'
+import { MusicBrowser, LOOSE, type MusicSong, type UnreleasedSong } from '@/app/artists/[id]/(dashboard)/music/music-browser'
 import type { Release } from '@/app/artists/[id]/(dashboard)/releases/release-card'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
@@ -43,7 +43,7 @@ function setup(over: Partial<Parameters<typeof MusicBrowser>[0]> = {}) {
     <MusicBrowser
       releases={[release({ id: 'r1', title: 'Public Single' }), release({ id: 'r2', title: 'Hidden Single', on_site: false })]}
       unreleasedReleases={[release({ id: 'u1', title: 'Demo EP', release_type: 'ep' })]}
-      looseReleased={[]}
+      orphanSingles={[]}
       unreleasedSongs={[song({ id: 's1', title: 'Bedroom Demo' })]}
       releaseOptions={[]}
       artistId="a1"
@@ -100,6 +100,26 @@ describe('MusicBrowser lenses', () => {
     expect(releaseTitles()).toEqual(expect.arrayContaining(['Hidden Single', 'Demo EP']))
     expect(releaseTitles()).not.toContain('Public Single')
     expect(screen.getByTestId('song')).toBeInTheDocument()
+  })
+})
+
+describe('MusicBrowser — orphan singles (no loose bucket)', () => {
+  const orphan = (over: Partial<MusicSong>): MusicSong => ({
+    id: 'o', title: 'Bootleg', cover_url: null, stream_url: null, source: 'manual',
+    audio_path: null, release_id: null, spotify_id: null, apple_id: null,
+    deezer_id: null, apple_url: null, created_at: '2026-01-01', ...over,
+  })
+
+  it('renders an orphan single as a song, and never a "Loose" section', () => {
+    setup({ orphanSingles: [orphan({ id: 'o1', title: 'Bootleg Mix' })] })
+    expect(screen.getAllByTestId('song').some((n) => n.textContent === 'Bootleg Mix')).toBe(true)
+    expect(screen.queryByText(/loose/i)).toBeNull()
+  })
+
+  it('hides orphan singles under the Off-site lens (they are public material)', () => {
+    setup({ orphanSingles: [orphan({ id: 'o1', title: 'Bootleg Mix' })] })
+    fireEvent.click(screen.getByRole('button', { name: 'Off site' }))
+    expect(screen.queryByText('Bootleg Mix')).toBeNull()
   })
 })
 
