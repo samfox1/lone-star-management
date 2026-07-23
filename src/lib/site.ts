@@ -111,15 +111,25 @@ export function mediaUrl(path: string): string {
 
 /**
  * A DOWNSCALED, compressed variant of a `media` object, via Supabase's image render
- * endpoint (Pro plan). For editor THUMBNAILS only — the polaroid slots, gallery cards,
- * and picker tiles display an image ~150-240px wide but were downloading the full
- * multi-megapixel original. `resize=cover` matches the object-cover CSS; the server
- * negotiates WebP (alpha preserved, so transparent handwriting PNGs stay transparent).
- * The public SITE still uses `mediaUrl` (full quality) — this only shrinks previews.
+ * endpoint (Pro plan). For editor THUMBNAILS only — the slots, gallery cards, and picker
+ * tiles display an image a few hundred px wide but were downloading the full multi-
+ * megapixel original (a real gallery photo: 3744x5616, 4.4MB).
+ *
+ * `resize=contain` inside a SQUARE bounding box returns the WHOLE image scaled to fit —
+ * never cropped to a portion, never distorted (that 3744x5616 becomes ~427x640, ~20KB).
+ * NB: passing width WITHOUT height does NOT preserve aspect — it stretches the image to
+ * that width at the original height — so the box (both dims) is required. The server
+ * negotiates WebP, alpha preserved (transparent handwriting PNGs stay transparent). The
+ * public SITE still uses `mediaUrl` at full quality; this only shrinks editor previews.
  */
-export function mediaThumbUrl(path: string, opts?: { width?: number; quality?: number }): string {
-  const { width = 480, quality = 55 } = opts ?? {}
-  const q = new URLSearchParams({ width: String(width), quality: String(quality), resize: 'cover' })
+export function mediaThumbUrl(path: string, opts?: { size?: number; quality?: number }): string {
+  const { size = 640, quality = 62 } = opts ?? {}
+  const q = new URLSearchParams({
+    width: String(size),
+    height: String(size),
+    resize: 'contain',
+    quality: String(quality),
+  })
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/render/image/public/media/${path}?${q}`
 }
 

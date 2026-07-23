@@ -26,8 +26,10 @@ import { EYEBROW } from './inspector-shared'
  * Purely presentational + local UI state. No data, no server actions, no panel logic.
  */
 
-/** A gallery thumbnail at its orientation's aspect (3:2 horizontal, 2:3 vertical). */
-export function PhotoThumb({ path, aspect }: { path: string; aspect: string }) {
+/** A gallery thumbnail at its orientation's aspect (3:2 horizontal, 2:3 vertical).
+ *  `fit` defaults to `contain` — the WHOLE photo shows, letterboxed on the neutral
+ *  ground, so the manager sees the entire image rather than a cropped centre. */
+export function PhotoThumb({ path, aspect, fit = 'contain' }: { path: string; aspect: string; fit?: 'cover' | 'contain' }) {
   return (
     <div className={cx('w-full overflow-hidden bg-track', aspect)}>
       {/* Load a downscaled/compressed thumbnail; fall back to the full object ONCE if
@@ -36,7 +38,7 @@ export function PhotoThumb({ path, aspect }: { path: string; aspect: string }) {
       <img
         src={mediaThumbUrl(path)}
         alt=""
-        className="h-full w-full object-cover"
+        className={cx('h-full w-full', fit === 'cover' ? 'object-cover' : 'object-contain')}
         onError={(e) => {
           const img = e.currentTarget
           const full = mediaUrl(path)
