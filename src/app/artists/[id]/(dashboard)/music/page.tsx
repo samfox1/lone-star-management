@@ -82,26 +82,26 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     return { ...t, bucket }
   })
 
-  // Songs grouped under their release BY ALBUM NAME, not release_id — the id link is
-  // unreliable (Spotify syncs don't populate it), so a card's tracklist would otherwise
-  // be empty. A song belongs to a release when it shares the release's title.
-  const songsByAlbumName = new Map<string, ReleaseSong[]>()
+  // Songs grouped under their PARENT release (`release_id`, backfilled 20260727120000) —
+  // the same grouping law the editor's project seam uses (lib/music.ts). Not album name,
+  // not cover art.
+  const songsByRelease = new Map<string, ReleaseSong[]>()
   for (const row of trackRows) {
-    const album = (row.album_name as string | null) ?? null
-    if (!album) continue
-    const list = songsByAlbumName.get(album) ?? []
+    const rid = row.release_id as string | null
+    if (!rid) continue
+    const list = songsByRelease.get(rid) ?? []
     list.push({
       id: row.id as string,
       title: row.title as string,
       featured_artists: (row.featured_artists as string[] | null) ?? [],
       stat: metricValue(counts, 'release', [row.id as string]),
     })
-    songsByAlbumName.set(album, list)
+    songsByRelease.set(rid, list)
   }
 
   const toReleaseCard = (row: Record<string, unknown>) => {
     const rid = row.id as string
-    const songs = songsByAlbumName.get(row.title as string) ?? []
+    const songs = songsByRelease.get(rid) ?? []
     // Release engagement (30d) = plays + DSP clicks summed over the release AND
     // its songs (the metric registry owns which events count).
     const stat = metricValue(counts, 'release', [rid, ...songs.map((s) => s.id)])
@@ -126,19 +126,10 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     .filter((row) => relBucket.get(row.id as string) === 'unreleased')
     .map(toReleaseCard)
 
-  // Orphan released songs: an album name that matches no release row (or none at all) —
-  // a SoundCloud single/remix. Shown as their own single cards under Singles; there is no
-  // 'loose' bucket. (Every other released song appears inside its release's tracklist.)
-  const releaseTitles = new Set(releaseRows.map((r) => r.title as string))
-  const orphanIds = new Set(
-    trackRows
-      .filter((row) => {
-        const album = (row.album_name as string | null) ?? null
-        return !(album && releaseTitles.has(album))
-      })
-      .map((row) => row.id as string),
-  )
-  const orphanSingles = tracks.filter((t) => t.bucket === 'released' && orphanIds.has(t.id))
+  // Orphan released songs: no PARENT release (a SoundCloud single/remix that created no
+  // release row). Shown as their own single cards under Singles; there is no 'loose'
+  // bucket. Every parented released song appears inside its release's tracklist.
+  const orphanSingles = tracks.filter((t) => t.bucket === 'released' && !t.release_id)
 
   // Unreleased songs, grouped under their (unreleased) release; loose uploads last.
   const relTitle = new Map(releaseRows.map((r) => [r.id as string, r.title as string]))

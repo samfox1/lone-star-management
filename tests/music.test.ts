@@ -125,18 +125,20 @@ describe('the manual released flag on releases', () => {
  */
 import { groupTracksIntoProjects, type ProjectTrack, type ReleaseMeta } from '@/lib/music'
 
-const ptrk = (id: string, album: string | null, type = 'single', on = true): ProjectTrack => ({ id, album_name: album, release_type: type, on_site: on })
+// A ProjectTrack: (id, parent release_id | null, title, type, on_site). A null parent = standalone.
+const ptrk = (id: string, releaseId: string | null, type = 'single', on = true, title = id): ProjectTrack =>
+  ({ id, release_id: releaseId, release_type: type, title, on_site: on })
 
 describe('groupTracksIntoProjects', () => {
   const meta: Record<string, ReleaseMeta> = {
-    'Heatwaves & Horizons': { title: 'Heatwaves & Horizons', release_date: '2025-05-09' },
-    OutWest: { title: 'OutWest', release_date: '2024-01-26' },
-    'You Were There': { title: 'You Were There', release_date: '2026-02-14' },
+    relHeat: { title: 'Heatwaves & Horizons', release_date: '2025-05-09' },
+    relOut: { title: 'OutWest', release_date: '2024-01-26' },
+    relYou: { title: 'You Were There', release_date: '2026-02-14' },
   }
-  const lookup = (name: string) => meta[name]
+  const lookup = (id: string) => meta[id]
 
-  it('groups songs sharing an album name into one project', () => {
-    const p = groupTracksIntoProjects([ptrk('a', 'OutWest', 'ep'), ptrk('b', 'OutWest', 'ep'), ptrk('c', 'Heatwaves & Horizons', 'album')], lookup)
+  it('groups songs sharing a parent release into one project', () => {
+    const p = groupTracksIntoProjects([ptrk('a', 'relOut', 'ep'), ptrk('b', 'relOut', 'ep'), ptrk('c', 'relHeat', 'album')], lookup)
     const out = p.find((x) => x.title === 'OutWest')!
     expect(out.trackIds.sort()).toEqual(['a', 'b'])
     expect(out.releaseType).toBe('ep')
@@ -146,9 +148,9 @@ describe('groupTracksIntoProjects', () => {
     const p = groupTracksIntoProjects([ptrk('sc1', null), ptrk('sc2', null)], lookup)
     expect(p).toHaveLength(2)
     expect(p.map((x) => x.key).sort()).toEqual(['track:sc1', 'track:sc2'])
-    // album keys live in a disjoint `album:` namespace, so a standalone can never collide.
-    const withAlbum = groupTracksIntoProjects([ptrk('x', 'OutWest', 'ep')], lookup)
-    expect(withAlbum[0].key).toBe('album:OutWest')
+    // parent keys live in a disjoint `release:` namespace, so a standalone can never collide.
+    const withParent = groupTracksIntoProjects([ptrk('x', 'relOut', 'ep')], lookup)
+    expect(withParent[0].key).toBe('release:relOut')
     // No release row → single, no date, titled by fallback.
     expect(p[0].releaseType).toBe('single')
     expect(p[0].releaseDate).toBeNull()
@@ -156,26 +158,27 @@ describe('groupTracksIntoProjects', () => {
 
   it('orders projects newest-first, undated last', () => {
     const p = groupTracksIntoProjects(
-      [ptrk('a', 'OutWest'), ptrk('b', 'You Were There'), ptrk('c', 'Heatwaves & Horizons'), ptrk('d', null)],
+      [ptrk('a', 'relOut'), ptrk('b', 'relYou'), ptrk('c', 'relHeat'), ptrk('d', null)],
       lookup,
     )
-    expect(p.map((x) => x.title)).toEqual(['You Were There', 'Heatwaves & Horizons', 'OutWest', 'Untitled'])
+    expect(p.map((x) => x.title)).toEqual(['You Were There', 'Heatwaves & Horizons', 'OutWest', 'd'])
   })
 
   it('a project is on-site iff ANY of its songs is', () => {
-    const p = groupTracksIntoProjects([ptrk('a', 'OutWest', 'ep', false), ptrk('b', 'OutWest', 'ep', true)], lookup)
+    const p = groupTracksIntoProjects([ptrk('a', 'relOut', 'ep', false), ptrk('b', 'relOut', 'ep', true)], lookup)
     expect(p.find((x) => x.title === 'OutWest')!.anyOnSite).toBe(true)
-    const off = groupTracksIntoProjects([ptrk('a', 'OutWest', 'ep', false)], lookup)
+    const off = groupTracksIntoProjects([ptrk('a', 'relOut', 'ep', false)], lookup)
     expect(off[0].anyOnSite).toBe(false)
   })
 
-  it('treats a blank/whitespace album name as no album (standalone)', () => {
-    const p = groupTracksIntoProjects([ptrk('a', '   ')], lookup)
+  it('treats a null parent as a standalone song', () => {
+    const p = groupTracksIntoProjects([ptrk('a', null)], lookup)
     expect(p[0].key).toBe('track:a')
   })
 
   it('falls back to the album name as title when no release row matches', () => {
-    const p = groupTracksIntoProjects([ptrk('a', 'Bootleg Mix')], lookup)
+    // A parented song with an unknown release id falls back to the song's own title.
+    const p = groupTracksIntoProjects([ptrk('a', 'relUNKNOWN', 'single', true, 'Bootleg Mix')], lookup)
     expect(p[0].title).toBe('Bootleg Mix')
     expect(p[0].releaseType).toBe('single')
   })

@@ -43,6 +43,15 @@ decisions behind them (esp. ADR-0002).
 
 - **Song** — the UI/conversation word for a `tracks` row. Code and DB identifiers keep
   `track`; user-facing copy and these docs say **song**.
+- **Project** — an album / EP / single / remix as one unit: the set of songs sharing a
+  **parent release** (`tracks.release_id`, a stable FK). Membership is the parent link,
+  NOT the album name (rename-unsafe, title-collision-prone) and NOT cover art (a heuristic
+  that mis-groups variant covers). A song with no parent is a standalone single — its own
+  one-song project. This grouping law lives in ONE seam, `groupTracksIntoProjects`
+  (`src/lib/music.ts`); the editor's Music panel and the assets Music page both key on the
+  parent through it. A project's TYPE is its songs' own `release_type` tag (per-song); its
+  title + date come from the parent release row. The deployed skeen site already groups by
+  `release_id` first, so the backfilled parent (`20260727120000`) aligns it too.
 - **Assets** — the umbrella for a manager's uploadable/importable media surfaces (Music,
   Videos, Photos/Images, Media). They share the add-modal, Drive-import, and
   storage-upload primitives under `src/app/artists/[id]/(dashboard)/`.

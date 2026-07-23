@@ -183,23 +183,21 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     onSite: (r.on_site as boolean | null) ?? false,
   }))
 
-  // The Music panel lists PROJECTS, not songs, newest-first: songs grouped by ALBUM NAME
-  // (groupTracksIntoProjects), an album-less song standing alone. The release row sharing
-  // the album name supplies each project's type + date. `on_site` on the songs is the
-  // only visibility gate; a project's cover is its first song's art, purely for display.
-  const releaseByAlbum = new Map(
-    releaseRows.filter((r) => r.title).map((r) => [String(r.title), r]),
-  )
+  // The Music panel lists PROJECTS, not songs, newest-first: songs grouped by their PARENT
+  // release (groupTracksIntoProjects), a parent-less song standing alone. `on_site` on the
+  // songs is the only visibility gate; a project's cover is its first song's art.
+  const releaseById = new Map(releaseRows.map((r) => [r.id as string, r]))
   const trackById = new Map(trackRows.map((t) => [t.id as string, t]))
   const releases: EditorProject[] = groupTracksIntoProjects(
     trackRows.map((t) => ({
       id: t.id as string,
-      album_name: (t.album_name as string | null) ?? null,
+      release_id: (t.release_id as string | null) ?? null,
       release_type: (t.release_type as string | null) ?? null,
+      title: (t.title as string | null) ?? null,
       on_site: (t.on_site as boolean | null) ?? false,
     })),
-    (name) => {
-      const r = releaseByAlbum.get(name)
+    (rid) => {
+      const r = releaseById.get(rid)
       return r ? { title: (r.title as string | null) ?? null, release_date: (r.release_date as string | null) ?? null } : undefined
     },
   ).map((p) => ({
