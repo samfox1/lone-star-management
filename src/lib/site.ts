@@ -197,14 +197,16 @@ export async function getWorkingSitePayload(
   supabase: SupabaseClient,
   artistId: string,
 ): Promise<PublicSitePayload | null> {
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('id, slug, name, bio, hero_image_url, template, spotify_artist_id')
-    .eq('id', artistId)
-    .single()
-  if (!artist) return null
-
-  const [tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows] = await Promise.all([
+  // The artist row and every section are independent, so fetch them in ONE wave — the
+  // artist row used to serially gate the other eight for no reason (a full round-trip
+  // before any section query started). A missing artist just discards the rest below.
+  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows] =
+    await Promise.all([
+      supabase
+        .from('artists')
+        .select('id, slug, name, bio, hero_image_url, template, spotify_artist_id')
+        .eq('id', artistId)
+        .single(),
     // Tracks mirror get_public_site: expose has_audio (never the raw audio_path)
     // and show ON-SITE tracks only — gated by the per-track `on_site` flag, the
     // same rule the door now uses (Released is a library-only label — see
@@ -257,6 +259,7 @@ export async function getWorkingSitePayload(
       .eq('artist_id', artistId)
       .then(({ data }) => data ?? []),
   ])
+  if (!artist) return null
 
   // Mirror get_public_site's media gate EXACTLY: the on-site flag applies to
   // gallery_image only — hero_video / profile_photo are not per-item curated and

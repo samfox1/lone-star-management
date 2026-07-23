@@ -39,6 +39,15 @@ function isProtected(path: string): boolean {
 }
 
 export async function updateSession(request: NextRequest) {
+  // Public paths — artist sites at /[slug], /login, /api — carry no dashboard session
+  // to refresh or gate, so skip the auth round-trip entirely. Otherwise EVERY public
+  // artist-site view (and every RSC fetch) pays a getUser() hop to the auth server for
+  // nothing. The manager's session still refreshes the moment they hit any protected
+  // route below (the whole authed surface is in isProtected), well within token life.
+  if (!isProtected(request.nextUrl.pathname)) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -68,7 +77,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user && isProtected(request.nextUrl.pathname)) {
+  if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     const redirectResponse = NextResponse.redirect(url)
