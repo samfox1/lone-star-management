@@ -4,7 +4,7 @@
  * set makes a field's failure survive another field's later success (no masked error).
  */
 import { describe, expect, it } from 'vitest'
-import { runSerialized } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+import { runSerialized } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
