@@ -14,9 +14,12 @@ import { MerchAddButton } from './merch-add'
 export default async function MerchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  await requireArtist(id)
-  const shopifyDomain = await getShopifyDomain(id)
-  const [rows, counts] = await Promise.all([
+  // Gate, Shopify domain, product rows, and 30-day counts are all independent — one
+  // parallel wave instead of gate → domain → content serially. requireArtist stays
+  // cache()d, so the layout's parallel call to it is deduped.
+  const [, shopifyDomain, rows, counts] = await Promise.all([
+    requireArtist(id),
+    getShopifyDomain(id),
     listContent(supabase, 'merch', id),
     entityCounts(supabase, id, daysAgo(30)),
   ])

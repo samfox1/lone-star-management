@@ -34,19 +34,18 @@ const KPIS = [
 export default async function OverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  await requireArtist(id)
-  const diff = await diffUnpublished(supabase, id)
-
-  // Last-30-day insights: exact SQL group-by (RLS scopes to the owner), so the
-  // counts don't silently undercount past PostgREST's 1000-row cap.
-  const { data: rows } = await supabase.rpc('analytics_summary', {
-    p_artist_id: id,
-    p_since: thirtyDaysAgoIso(),
-  })
+  // Four independent round-trips — the ownership gate, the dirty-nav diff, the 30-day
+  // analytics summary, and the daily-views series — as ONE parallel wave, not a
+  // waterfall. The counts group-by is exact SQL (RLS-scoped), so it never undercounts
+  // past PostgREST's 1000-row cap.
+  const [, diff, { data: rows }, series] = await Promise.all([
+    requireArtist(id),
+    diffUnpublished(supabase, id),
+    supabase.rpc('analytics_summary', { p_artist_id: id, p_since: thirtyDaysAgoIso() }),
+    artistDailyViews(supabase, id),
+  ])
   const counts: Record<string, number> = {}
   for (const r of (rows ?? []) as { type: string; count: number }[]) counts[r.type] = Number(r.count)
-
-  const series = await artistDailyViews(supabase, id)
   const trend = formatTrend(seriesTrend(series))
 
   return (

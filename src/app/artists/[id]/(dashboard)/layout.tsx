@@ -29,19 +29,24 @@ export default async function DashboardLayout({
 }) {
   const { id } = await params
   const supabase = await createClient()
-  const artist = await requireArtist(id)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const diff = await diffUnpublished(supabase, id)
+  // These four are independent network round-trips to the hosted DB/auth. Run them
+  // as ONE parallel wave instead of a serial waterfall — the shell paints after the
+  // slowest, not the sum. requireArtist stays cache()d so each page's own call is deduped.
+  const [
+    artist,
+    {
+      data: { user },
+    },
+    diff,
+    { count },
+  ] = await Promise.all([
+    requireArtist(id),
+    supabase.auth.getUser(),
+    diffUnpublished(supabase, id),
+    // "On tour" = has an upcoming tour date (RLS-scoped). Real signal, not a flag.
+    supabase.from('tour_dates').select('id', { count: 'exact', head: true }).eq('artist_id', id).gte('date', todayIso()),
+  ])
   const dirty = dirtyBySeg(diff)
-
-  // "On tour" = has an upcoming tour date (RLS-scoped). Real signal, not a flag.
-  const { count } = await supabase
-    .from('tour_dates')
-    .select('id', { count: 'exact', head: true })
-    .eq('artist_id', id)
-    .gte('date', todayIso())
   const onTour = (count ?? 0) > 0
 
   return (

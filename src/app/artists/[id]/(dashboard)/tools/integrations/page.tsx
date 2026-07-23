@@ -17,8 +17,8 @@ import { connectShopifyAction, disconnectShopifyAction, syncShopifyAction } from
  */
 export default async function IntegrationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const artist = await requireArtist(id)
-  const shopifyDomain = await getShopifyDomain(id)
+  // Both are independent round-trips — run them together, not gate-then-domain.
+  const [artist, shopifyDomain] = await Promise.all([requireArtist(id), getShopifyDomain(id)])
 
   return (
     <div className="space-y-10">

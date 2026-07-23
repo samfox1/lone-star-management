@@ -36,7 +36,28 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const manifest = manifestFor(artist.template) ?? null
 
   const supabase = await createClient()
-  const [{ data: profile }, { data: contentRows }, { data: mediaRows }] = await Promise.all([
+  // A custom-site artist's frame is their own external /edit route, which has no DB
+  // access — so we fetch the draft here (RLS-scoped) and hand it over the bridge (wire
+  // shape: media paths, not URLs — the custom site resolves them against its own
+  // Supabase URL). A built-in template's frame reads its own draft server-side, so it
+  // stays null and we don't pay for it.
+  const customSiteUrl = isCustom(artist) ? (artist.custom_site_url as string) : null
+
+  // ONE parallel wave: profile + site_content + media, every section's working rows,
+  // and (custom sites only) the draft payload. All independent — so they run together
+  // rather than in three serial waves of round-trips against the hosted DB.
+  const [
+    { data: profile },
+    { data: contentRows },
+    { data: mediaRows },
+    linkRows,
+    videoRows,
+    merchRows,
+    releaseRows,
+    trackRows,
+    tourRows,
+    draft,
+  ] = await Promise.all([
     supabase.from('artists').select('bio, hero_image_url').eq('id', id).single(),
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
@@ -45,19 +66,18 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       .eq('artist_id', id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
+    listContent(supabase, 'link', id),
+    listContent(supabase, 'video', id),
+    listContent(supabase, 'merch', id),
+    listContent(supabase, 'release', id),
+    listContent(supabase, 'track', id),
+    listContent(supabase, 'tour_date', id),
+    customSiteUrl ? getWorkingSitePayload(supabase, id) : Promise.resolve(null),
   ])
 
   const siteContent = Object.fromEntries(
     ((contentRows ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? '']),
   ) as SiteContent
-
-  // A custom-site artist's frame is their own external /edit route, which has no
-  // DB access — so fetch the draft here (RLS-scoped) and let the shell hand it
-  // over the bridge. A built-in template's frame reads its own draft server-side,
-  // so we don't pay for this. Wire shape (media paths, not URLs): the custom site
-  // resolves them against ITS OWN Supabase URL.
-  const customSiteUrl = isCustom(artist) ? (artist.custom_site_url as string) : null
-  const draft = customSiteUrl ? await getWorkingSitePayload(supabase, id) : null
 
   const ctx = {
     template: artist.template,
@@ -92,14 +112,6 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     }))
 
 
-  const [linkRows, videoRows, merchRows, releaseRows, trackRows, tourRows] = await Promise.all([
-    listContent(supabase, 'link', id),
-    listContent(supabase, 'video', id),
-    listContent(supabase, 'merch', id),
-    listContent(supabase, 'release', id),
-    listContent(supabase, 'track', id),
-    listContent(supabase, 'tour_date', id),
-  ])
   // Socials = ordinary outbound links. A link bound to a manifest region (role set) is
   // NOT a social — it powers a declared button (USB/Merch) and lives in the Site-links
   // panel instead, so it's excluded here. (`role` only exists after 20260721... is
