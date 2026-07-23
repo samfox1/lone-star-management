@@ -80,96 +80,38 @@ import {
  * other component types still render against placeholder affordances — next step.
  */
 
-export type GalleryPhoto = {
-  id: string
-  storage_path: string
-  onSite: boolean
-  /** Which slot group the photo fills. null for legacy photos uploaded before slots. */
-  orientation: Orientation | null
-  /** The component slot this photo is placed in (`polaroid_3_photo`), or null for an
-   *  ordinary gallery photo. A photo with a role belongs to a COMPONENT and is excluded
-   *  from the gallery groups, so a handwriting PNG never joins the collage. */
-  siteRole: string | null
+// The panel data view-models live in ./inspector-types; re-exported here so page.tsx,
+// editor-shell.tsx, and the tests keep importing them from './editor-inspector'.
+import type {
+  GalleryPhoto,
+  EditorTextField,
+  EditorLink,
+  EditorSupportLink,
+  SiteVideoRole,
+  EditorVideo,
+  EditorMerch,
+  EditorSong,
+  EditorProject,
+  EditorTour,
+} from './inspector-types'
+export type {
+  GalleryPhoto,
+  EditorTextField,
+  EditorLink,
+  EditorSupportLink,
+  SiteVideoRole,
+  EditorVideo,
+  EditorMerch,
+  EditorSong,
+  EditorProject,
+  EditorTour,
 }
-export type EditorTextField = {
-  key: string
-  label: string
-  type: 'text' | 'email'
-  value: string
-  multiline: boolean
-}
-export type EditorLink = { id: string; label: string; url: string; onSite: boolean }
-/**
- * One support act on a tour date, surfaced in the Links panel's "Tour support" group so
- * its outbound URL (`tour_dates.support_urls[name]`) can be edited where the manager
- * manages links — separately from the act NAME, which is edited on the Tour page.
- */
-export type EditorSupportLink = {
-  /** The tour date this act supports — the row `support_urls` is written to. */
-  tourDateId: string
-  /** The act's name (e.g. "Gudfella"): the key in support_urls AND the row label. */
-  name: string
-  /** The act's current outbound URL, '' if none. */
-  url: string
-  /** Which show this act is on (venue / city / date), for context under the name. */
-  show: string
-}
-/** A named background slot an uploaded video can fill: the two hero backgrounds plus
- *  the bio-section background. null = a normal library/band video. */
-export type SiteVideoRole = 'hero_landscape' | 'hero_portrait' | 'bio_background'
+
 /** The label each background slot shows in the panel and the picker heading. */
 const SLOT_LABELS: Record<SiteVideoRole, string> = {
   hero_landscape: 'Landscape · desktop',
   hero_portrait: 'Portrait · mobile',
   bio_background: 'Bio background',
-}
-export type EditorVideo = {
-  id: string
-  title: string
-  /** 'youtube' | 'soundcloud' | 'uploaded'. The band is YouTube embeds only; uploaded
-   *  videos are the pool the background slots pick from. */
-  provider: string
-  isShort: boolean
-  /** Background slot this video is placed in, or null. */
-  siteRole: SiteVideoRole | null
-  /** YouTube thumbnail (embeds). Null for uploaded videos — they use `previewUrl`. */
-  poster: string | null
-  /** Playable URL for an uploaded video, seeked to its first frame for a thumbnail
-   *  preview. Null for YouTube (which has a poster instead). */
-  previewUrl: string | null
-  onSite: boolean
-}
-export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null; onSite: boolean }
-export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
-/** One PROJECT in the Music panel — an album / EP / single, the unit the site renders.
- *  Songs are grouped into it by album art, NOT by a release id (skeen's catalog never
- *  populates one). A project is not an entity the manager edits; it is a view over its
- *  songs. Site visibility is the songs' `on_site`; ordering is by release date. */
-export type EditorProject = {
-  /** Stable React key. NOT used to gate or link anything — a song belongs to a project
-   *  by sharing an album name, not by pointing at this. */
-  key: string
-  title: string
-  cover_url: string | null
-  /** 'album' | 'ep' | 'single' | 'remix' | 'featured' — shown as an at-a-glance tag. */
-  kind: string
-  /** The songs in this project (id + title), in order — for the tracklist an album card
-   *  expands to show, and for the on/off toggle (which flips on_site on these ids). */
-  songs: { id: string; title: string }[]
-  /** On the site iff any of its songs is on-site. */
-  onSite: boolean
-}
-export type EditorTour = {
-  id: string
-  date: string | null
-  venue: string | null
-  city: string | null
-  /** Two-letter US state code (TX). null for out-of-country dates. */
-  state: string | null
-  country: string | null
-  /** The other acts on the bill. Never null — the column is NOT NULL DEFAULT '{}'. */
-  support: string[]
-  onSite: boolean
 }
 
 // One Links panel holds every link kind as its own group: Socials + Tour support
