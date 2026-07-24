@@ -98,6 +98,12 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       title: row.title as string,
       featured_artists: (row.featured_artists as string[] | null) ?? [],
       stat: metricValue(counts, 'release', [row.id as string]),
+      stream_url: (row.stream_url as string | null) ?? null,
+      spotify_id: (row.spotify_id as string | null) ?? null,
+      apple_id: (row.apple_id as string | null) ?? null,
+      deezer_id: (row.deezer_id as string | null) ?? null,
+      apple_url: (row.apple_url as string | null) ?? null,
+      soundcloud_url: (row.soundcloud_url as string | null) ?? null,
     })
     songsByRelease.set(rid, list)
   }

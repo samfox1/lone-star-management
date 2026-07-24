@@ -6,6 +6,8 @@ import { buttonClass, inputClass } from '@/components/ui/ui'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
+import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
+import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
 import { SaveForm } from '../save-form'
 import { toast } from '../toast'
@@ -18,10 +20,20 @@ import {
   deleteContentAction,
   removeReleaseLinkAction,
   setReleaseTypeAction,
+  updateContentAction,
 } from '../actions'
 
 export type ReleaseLink = { label: string; url: string }
-export type ReleaseSong = { id: string; title: string; featured_artists: string[]; stat?: number }
+/** A song in a release's tracklist. Carries the union-model platform fields so the
+ *  tracklist can show which platforms it's on and edit its primary Listen link. */
+export type ReleaseSong = TrackPlatformIds & {
+  id: string
+  title: string
+  featured_artists: string[]
+  stat?: number
+  /** Primary Listen link (paste a Spotify / SoundCloud / … URL). Editable per song. */
+  stream_url: string | null
+}
 export type Release = {
   id: string
   title: string
@@ -66,6 +78,8 @@ export function ReleaseCard({
 }) {
   const [editing, setEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  // The tracklist song whose links modal is open (click a song to add/edit its link).
+  const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
   const year = release.release_date?.slice(0, 4)
   const songCount = release.songs.length
   // Only EPs and albums reveal a tracklist (Sam, 2026-07-24) — a single IS its song.
@@ -144,7 +158,15 @@ export function ReleaseCard({
               {release.songs.map((s, i) => (
                 <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
                   <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink">{s.title}</span>
+                  {/* Click a song to add/edit its streaming link. */}
+                  <button
+                    type="button"
+                    onClick={() => setLinkSong(s)}
+                    title="Add or edit links"
+                    className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
+                  >
+                    {s.title}
+                  </button>
                   {/* Cap the feat. so a long "feat. A, B" can't starve the title to nothing. */}
                   {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
                 </li>
@@ -257,6 +279,51 @@ export function ReleaseCard({
             Add link
           </button>
         </SaveForm>
+      </CardModal>
+
+      {/* Per-song links: click a song in the tracklist to add/edit its streaming link. */}
+      <CardModal open={linkSong !== null} onClose={() => setLinkSong(null)}>
+        {linkSong && (
+          <>
+            <h3 className="text-lg font-bold tracking-[-0.01em]">{linkSong.title}</h3>
+            {trackPlatforms(linkSong).length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                {trackPlatforms(linkSong).map((p) => {
+                  const href = safeHref(p.url ?? '')
+                  const cls = 'font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint'
+                  return href ? (
+                    <a key={p.key} href={href} target="_blank" rel="noopener noreferrer" className={cx(cls, 'hover:text-ink-muted hover:underline')}>
+                      {p.label} ↗
+                    </a>
+                  ) : (
+                    <span key={p.key} className={cls}>
+                      {p.label}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+            {/* One primary Listen link per song (paste any platform URL). Setting it also
+                marks the song Released by derivation — same as every other listen link. */}
+            <SaveForm
+              action={updateContentAction.bind(null, 'track', linkSong.id, artistId)}
+              savedMessage="Link saved"
+              className="mt-4 flex items-center gap-2"
+            >
+              <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Link</span>
+              <input
+                name="stream_url"
+                type="url"
+                defaultValue={linkSong.stream_url ?? ''}
+                placeholder="https://open.spotify.com/…  ·  soundcloud.com/…"
+                className={`${inputClass} min-w-0 flex-1`}
+              />
+              <button type="submit" className={buttonClass('ghost')}>
+                Save
+              </button>
+            </SaveForm>
+          </>
+        )}
       </CardModal>
     </div>
   )
