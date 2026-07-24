@@ -156,13 +156,15 @@ function ComponentCard({
         </div>
       )}
       <div className="grid grid-cols-2 gap-1.5">
-        {component.slots.map((slot) => {
+        {component.slots.map((slot, si) => {
           const role = componentSlotRole(component.key, n, slot.key)
           const placed = photos.find((p) => p.siteRole === role) ?? null
           const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
           return (
             <div key={slot.key}>
-              <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>{slot.label}</span>
+              {/* Generic "Slot N" (Sam, 2026-07-24) — the real slot name ("Handwriting") is
+                  too long for a half-card and overflowed; it lives on in the aria-labels. */}
+              <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>Slot {si + 1}</span>
               {placed ? (
                 <>
                   {/* The thumbnail IS the slot; Replace/Remove live in a hover overlay so it
@@ -202,9 +204,9 @@ function ComponentCard({
                 </>
               ) : (
                 <EmptySlot
-                  label={`Add ${slot.label.toLowerCase()}`}
+                  label="Add"
                   ariaLabel={`${fallbackName} ${slot.label}`}
-                  title={slot.hint}
+                  title={slot.hint ?? slot.label}
                   aspect="aspect-square"
                   onClick={() => setPicking(role)}
                 />
