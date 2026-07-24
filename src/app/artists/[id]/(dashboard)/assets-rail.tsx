@@ -18,23 +18,24 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
 /**
  * The Assets pages' left side panel — a touch narrower than the top nav bar is
  * tall. Icons sit at the panel's left edge with top-nav interaction language
- * (label slides out on hover); the panel's right border is THE vertical line,
- * so a hover-expanded label widens the panel and pushes the line right. The
- * line starts BELOW the header; the icon stack still centers on the full
- * viewport (mt = 50vh − header, then translate −50% — margins keep it in-flow
- * so its width drives the border, unlike absolute positioning).
+ * (label slides out on hover). The panel is an OVERLAY: on hover the fixed nav
+ * expands OVER the content's left gutter, and the in-flow spacer stays a constant
+ * width so the main grid never re-lays-out. (It used to animate the spacer's width,
+ * which shrank the flex sibling every frame — a heavy image/video grid reflowing on
+ * each hover was the lag.) The fixed nav's right border is THE vertical line; it
+ * moves on hover while the content beneath it does not. The line starts BELOW the
+ * header; the icon stack centers on the full viewport (mt = 50vh − header, −50%).
  */
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
-  // The wrapper is the `group` AND the in-flow spacer: hovering any icon (a DOM
-  // descendant, even though the nav is fixed) widens the wrapper, which PUSHES
-  // the main content right — the panel is a drawer, not an overlay. The fixed
-  // nav animates to the matching width (wrapper + the 28px page gutter folded
-  // in), so its right border — THE vertical line — moves in step.
+  // The wrapper is the `group` AND the in-flow spacer, at a CONSTANT width: hovering
+  // any icon (a pointer-events-auto descendant of the fixed nav) triggers the group,
+  // expanding the fixed nav over the content — the spacer never resizes, so nothing
+  // in the main window reflows.
   return (
     // pointer-events-none on the wrapper: its :hover can only arrive through the
-    // pointer-events-auto icon links, so the drawer expands ONLY on icon hover —
+    // pointer-events-auto icon links, so the panel expands ONLY on icon hover —
     // not when the mouse crosses the empty panel column.
-    <div className="group pointer-events-none relative hidden w-12 flex-none transition-[width] duration-200 hover:w-[92px] md:block">
+    <div className="group pointer-events-none relative hidden w-12 flex-none md:block">
       <nav
         aria-label="Asset types"
         className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper transition-[width] duration-200 group-hover:w-[120px]"
