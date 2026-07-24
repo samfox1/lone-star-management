@@ -73,8 +73,9 @@ export function ReleaseCard({
   const showList = expandable && expanded
 
   return (
-    // When open, break out to the full row and lay the tile + tracklist side by side.
-    <div className={cx(showList && 'col-span-full')}>
+    // A fixed-width tile that grows ONLY by the tracklist's width when open (never the
+    // cover) — so opening an EP/album never resizes the cover or reflows the row.
+    <div className={cx('flex-none', showList ? 'w-auto' : 'w-48')}>
       <div className={showList ? 'flex items-start gap-4' : undefined}>
         {/* The cover tile — unchanged; only pinned to its size once open so the songs get
             room beside it rather than shrinking the cover. */}
@@ -139,7 +140,7 @@ export function ReleaseCard({
           (songCount === 0 ? (
             <p className="flex-1 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
           ) : (
-            <ol className="no-scrollbar max-h-48 min-w-0 max-w-md flex-1 space-y-0.5 overflow-y-auto pr-1">
+            <ol className="no-scrollbar max-h-48 w-80 min-w-0 flex-none space-y-0.5 overflow-y-auto pr-1">
               {release.songs.map((s, i) => (
                 <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
                   <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
