@@ -1,6 +1,8 @@
 import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { diffUnpublished } from '@/lib/content'
 
 /**
@@ -25,16 +27,25 @@ export const requireArtist = cache(async (id: string) => {
 })
 
 /**
- * The unpublished-vs-published diff that powers the nav's dirty dots. `cache()`d on the
- * artist id (its own client inside, like requireArtist) so the layout AND the page can
- * both ask for it and the ~11-query wave runs ONCE per request instead of twice. Pass
- * the id only — keying on a `supabase` instance would never dedupe (each createClient is
- * a distinct object).
+ * The unpublished-vs-published diff that powers the nav's dirty dots. This is the ~11
+ * concurrent-query op that dominates the dashboard's parallel read wave (every other
+ * read is one query; on a pooled connection this one is the bottleneck), so it's the
+ * one worth a SERVER cache.
+ *
+ * `unstable_cache` caches the result per artist id across requests for 30s. It runs
+ * OUTSIDE the request (can't read the session cookie), so it uses the service-role
+ * client — SAFE because `requireArtist` (RLS, uncached) gates ownership on the live
+ * path before this ever renders; a non-owner 404s and never sees the value. Keyed on
+ * the id argument, so each artist caches separately. Time-based only, NO write-time
+ * invalidation: the dots are cosmetic, so being up to 30s stale after a publish is
+ * fine, and it keeps every content mutation off the invalidation hook. Content lists
+ * (listContent) are deliberately NOT cached, so what the manager edits is always fresh.
  */
-export const dashboardDiff = cache(async (id: string) => {
-  const supabase = await createClient()
-  return diffUnpublished(supabase, id)
-})
+export const dashboardDiff = unstable_cache(
+  (id: string) => diffUnpublished(createAdminClient(), id),
+  ['dashboard-diff'],
+  { revalidate: 30 },
+)
 
 /** The connected Shopify store domain for an artist, or null. Cached per request. */
 export const getShopifyDomain = cache(async (id: string): Promise<string | null> => {
