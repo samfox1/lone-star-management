@@ -17,11 +17,12 @@ import { TourAddButton } from './tour-add'
 export default async function TourPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  await requireArtist(id)
+  // requireArtist folded into the wave (still the RLS ownership gate — a non-owner 404s).
   // diffUnpublished is the only way to know whether there are unpublished date EDITS,
   // now that presence is live and no longer a selection delta. It's the same query
   // behind the nav's pending dot, so the PublishBar and the dot always agree.
-  const [rows, counts, diff] = await Promise.all([
+  const [, rows, counts, diff] = await Promise.all([
+    requireArtist(id),
     listContent(supabase, 'tour_date', id),
     entityCounts(supabase, id, daysAgo(30)),
     dashboardDiff(id),

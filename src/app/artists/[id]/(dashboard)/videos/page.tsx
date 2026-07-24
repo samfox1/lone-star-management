@@ -27,11 +27,12 @@ function youtubePoster(url: string, provider: string): string | null {
 export default async function VideosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const artist = await requireArtist(id)
+  // requireArtist folded into the wave (still the RLS ownership gate — a non-owner 404s).
   // diffUnpublished is the only way to know whether there are unpublished video EDITS,
   // now that presence is live and no longer a selection delta. It's the same query
   // behind the nav's pending dot, so the PublishBar and the dot always agree.
-  const [rows, counts, diff] = await Promise.all([
+  const [artist, rows, counts, diff] = await Promise.all([
+    requireArtist(id),
     listContent(supabase, 'video', id),
     entityCounts(supabase, id, daysAgo(30)),
     dashboardDiff(id),

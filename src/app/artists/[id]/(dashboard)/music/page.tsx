@@ -23,8 +23,11 @@ import { MusicBrowser, LOOSE, type UnreleasedSong } from './music-browser'
 export default async function MusicPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const artist = await requireArtist(id)
-  const [releaseRows, trackRows, counts, diff] = await Promise.all([
+  // requireArtist folded INTO the wave (not a serial gate before it): it's cache()d and
+  // RLS-scoped, so it still gates ownership — a non-owner's notFound() rejects the whole
+  // Promise.all and 404s before anything renders.
+  const [artist, releaseRows, trackRows, counts, diff] = await Promise.all([
+    requireArtist(id),
     listContent(supabase, 'release', id),
     listContent(supabase, 'track', id),
     entityCounts(supabase, id, daysAgo(30)),
