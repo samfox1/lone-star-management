@@ -50,19 +50,23 @@ function ComponentTools({
               many images this section wants of them (5 cards × 2 each = 10), not how
               many cards there happen to be (Sam, 2026-07-21). */}
           <GroupLabel>{plural(c.count * c.slots.length, 'image slot')}</GroupLabel>
-          {Array.from({ length: c.count }, (_, i) => i + 1).map((n) => (
-            <ComponentCard
-              key={`${c.key}_${n}`}
-              component={c}
-              n={n}
-              photos={photos}
-              labelKey={componentLabelKey(c.key, n)}
-              labelValue={labels[componentLabelKey(c.key, n)] ?? ''}
-              artistId={artistId}
-              onPlaceSlot={onPlaceSlot}
-              onApplyField={onApplyField}
-            />
-          ))}
+          {/* Two compact cards per row (Sam, 2026-07-24): each instance is its own boxed
+              container so the wall reads as an arrangeable grid, not one tall column. */}
+          <div className="grid grid-cols-2 gap-2.5 px-5 pt-1">
+            {Array.from({ length: c.count }, (_, i) => i + 1).map((n) => (
+              <ComponentCard
+                key={`${c.key}_${n}`}
+                component={c}
+                n={n}
+                photos={photos}
+                labelKey={componentLabelKey(c.key, n)}
+                labelValue={labels[componentLabelKey(c.key, n)] ?? ''}
+                artistId={artistId}
+                onPlaceSlot={onPlaceSlot}
+                onApplyField={onApplyField}
+              />
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -116,9 +120,9 @@ function ComponentCard({
   const fallbackName = `${component.label} ${n}`
 
   return (
-    <div className="px-5 pb-4 pt-1">
-      {/* The name READS as text; the pencil turns it into a field. An always-live input
-          made five cards look like a form to fill in rather than a wall to arrange. */}
+    <div className="rounded-xl border border-hairline p-2">
+      {/* The name READS as text; the pencil turns it into a field, so the cards read as a
+          wall to arrange rather than a form to fill. */}
       {renaming ? (
         <input
           autoFocus
@@ -134,56 +138,68 @@ function ComponentCard({
             }
           }}
           placeholder={fallbackName}
-          className={cx(FIELD, 'mb-2')}
+          className={cx(FIELD, 'mb-1.5 px-2 py-1 text-[12px]')}
         />
       ) : (
-        <div className="mb-2 flex items-center gap-1.5">
-          <span className={cx('min-w-0 flex-1 truncate text-[13px]', name ? 'text-ink' : 'text-ink-faint')}>
+        <div className="mb-1.5 flex items-center gap-1">
+          <span className={cx('min-w-0 flex-1 truncate text-[12px]', name ? 'text-ink' : 'text-ink-faint')}>
             {name || fallbackName}
           </span>
           <button
             type="button"
             aria-label={`Rename ${fallbackName}`}
             onClick={() => setRenaming(true)}
-            className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+            className="flex-none rounded p-0.5 text-ink-faint hover:bg-surface hover:text-ink"
           >
-            <Icon name="edit" size={13} />
+            <Icon name="edit" size={12} />
           </button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         {component.slots.map((slot) => {
           const role = componentSlotRole(component.key, n, slot.key)
           const placed = photos.find((p) => p.siteRole === role) ?? null
           const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
           return (
             <div key={slot.key}>
-              <span className={cx(CONTROL_LABEL, 'mb-1 block')}>{slot.label}</span>
+              <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>{slot.label}</span>
               {placed ? (
-                <div className="overflow-hidden rounded-lg border border-hairline">
-                  <PhotoThumb path={placed.storage_path} aspect="aspect-square" />
-                  <div className="flex items-center gap-1 px-2 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-ink-muted">
-                      {placed.storage_path.split('/').pop()}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Replace ${fallbackName} ${slot.label}`}
-                      onClick={() => setPicking(role)}
-                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
-                    >
-                      <Icon name="edit" size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${fallbackName} ${slot.label}`}
-                      onClick={() => onPlaceSlot(role, null)}
-                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
-                    >
-                      <Icon name="trash" size={13} />
-                    </button>
+                <>
+                  {/* The thumbnail IS the slot; Replace/Remove live in a hover overlay so it
+                      stays small enough to fit two cards per row. */}
+                  <div
+                    className="group/slot relative overflow-hidden rounded-md border border-hairline"
+                    title={placed.storage_path.split('/').pop()}
+                  >
+                    <PhotoThumb path={placed.storage_path} aspect="aspect-square" />
+                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/50 py-0.5 opacity-0 transition-opacity group-hover/slot:opacity-100">
+                      <button
+                        type="button"
+                        aria-label={`Replace ${fallbackName} ${slot.label}`}
+                        onClick={() => setPicking(role)}
+                        className="rounded p-0.5 text-white/85 hover:text-white"
+                      >
+                        <Icon name="edit" size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${fallbackName} ${slot.label}`}
+                        onClick={() => onPlaceSlot(role, null)}
+                        className="rounded p-0.5 text-white/85 hover:text-accent-red"
+                      >
+                        <Icon name="trash" size={12} />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                  {/* Advisory, never blocking (Sam, 2026-07-21): a JPG in a PNG slot renders
+                      as a solid box on the site, so flag it — fixable, not a dead end. */}
+                  {wrongFormat && (
+                    <span className="mt-0.5 flex items-start gap-1 text-[10px] leading-tight text-status-pending">
+                      <Icon name="alert" size={11} />
+                      Needs a transparent PNG.
+                    </span>
+                  )}
+                </>
               ) : (
                 <EmptySlot
                   label={`Add ${slot.label.toLowerCase()}`}
@@ -192,15 +208,6 @@ function ComponentCard({
                   aspect="aspect-square"
                   onClick={() => setPicking(role)}
                 />
-              )}
-              {/* Advisory, never blocking (Sam, 2026-07-21): a JPG here renders as a white
-                  box over the card, so say so — but a wrong-format image is fixable and a
-                  blocked upload is a dead end mid-task. */}
-              {wrongFormat && (
-                <span className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-status-pending">
-                  <Icon name="alert" size={12} />
-                  Should be a transparent PNG — this one will show a solid background.
-                </span>
               )}
             </div>
           )
