@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { KLabel } from '@/components/ui/ui'
-import { mediaUrl } from '@/lib/site'
+import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { FilterBar } from '../filter-bar'
 import { CardGrid } from '../card-grid'
 import { EmptyState } from '../empty-state'
@@ -63,8 +63,19 @@ export function PhotosBrowser({
         <CardGrid size="md" count={shown.length}>
           {shown.map((m) => (
             <div key={m.id} className="group relative overflow-hidden rounded-2xl border border-hairline">
+              {/* Downscaled thumbnail (the grid cell is ~200px, not 4MP); fall back to the
+                  full object ONCE if the transform can't handle this image. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={mediaUrl(m.storage_path)} alt="" className="aspect-square w-full object-cover" />
+              <img
+                src={mediaThumbUrl(m.storage_path)}
+                alt=""
+                className="aspect-square w-full object-cover"
+                onError={(e) => {
+                  const img = e.currentTarget
+                  const full = mediaUrl(m.storage_path)
+                  if (img.src !== full) img.src = full
+                }}
+              />
               <span className="absolute right-1.5 top-1.5 rounded-md bg-white/90 opacity-0 transition-opacity group-hover:opacity-100">
                 <MediaDeleteButton
                   mediaId={m.id}
