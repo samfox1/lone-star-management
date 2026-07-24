@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { buttonClass, inputClass } from '@/components/ui/ui'
+import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { CardModal } from '../card-modal'
@@ -64,71 +65,91 @@ export function ReleaseCard({
   onToggleSelect?: () => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const year = release.release_date?.slice(0, 4)
   const songCount = release.songs.length
+  // Only EPs and albums reveal a tracklist (Sam, 2026-07-24) — a single IS its song.
+  const expandable = release.release_type === 'ep' || release.release_type === 'album'
+  const showList = expandable && expanded
 
   return (
-    <div>
-      {/* Cover on the LEFT, tracklist to its RIGHT (Sam, 2026-07-24) — a scrollable column
-          capped at the cover's height, so every song is reachable inline. */}
-      <div className="group flex gap-3 rounded-2xl border border-hairline p-2.5">
-        <div className="relative w-24 flex-none">
+    // When open, break out to the full row and lay the tile + tracklist side by side.
+    <div className={cx(showList && 'col-span-full')}>
+      <div className={showList ? 'flex items-start gap-4' : undefined}>
+        {/* The cover tile — unchanged; only pinned to its size once open so the songs get
+            room beside it rather than shrinking the cover. */}
+        <div className={cx('group relative', showList && 'w-48 flex-none')}>
+          {/* On-site select — top-left, doesn't open the modal */}
           {onToggleSelect && (
-            <div className="absolute left-1.5 top-1.5 z-10">
+            <div className="absolute left-2 top-2 z-10">
               <SelectToggle selected={!!selected} onSite={release.on_site} onToggle={onToggleSelect} label={release.title} />
             </div>
           )}
-          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-surface">
-            <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 font-space text-[8px] font-bold uppercase tracking-[0.08em] text-white">
-              {RELEASE_TYPE_LABEL[release.release_type]}
-            </span>
-            {release.cover_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span className="h-8 w-8 rounded-full bg-ink" />
-            )}
-          </div>
+
+          {/* Edit — top-right pencil. */}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            title="Edit release"
+            aria-label={`Edit ${release.title}`}
+            className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-ink-muted shadow-sm transition-colors hover:text-ink"
+          >
+            <Icon name="edit" size={14} />
+          </button>
+
+          {/* Clicking an EP/album reveals its songs; a single just opens the editor. */}
+          <button
+            type="button"
+            onClick={() => (expandable ? setExpanded((v) => !v) : setEditing(true))}
+            aria-expanded={expandable ? expanded : undefined}
+            aria-label={`${release.title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
+            className="block w-full text-left"
+          >
+            <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
+              <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
+                {RELEASE_TYPE_LABEL[release.release_type]}
+              </span>
+              {release.cover_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="h-9 w-9 rounded-full bg-ink" />
+              )}
+            </div>
+            <div className="mt-3 flex items-center gap-1">
+              <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
+                {release.title}
+              </span>
+              {expandable && (
+                <span className={cx('flex-none text-ink-faint transition-transform', expanded && 'rotate-90')} aria-hidden>
+                  <Icon name="chevronRight" size={16} />
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 font-space text-[13px] text-ink-muted">
+              {[year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || '—'}
+            </div>
+            <CardStat value={release.stat ?? 0} label={metricLabel('release')} />
+          </button>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-start gap-1">
-            <div className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-bold tracking-[-0.01em]">{release.title}</span>
-              <span className="mt-0.5 block font-space text-[12px] text-ink-muted">
-                {[year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || '—'}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              title="Edit release"
-              aria-label={`Edit ${release.title}`}
-              className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-            >
-              <Icon name="edit" size={14} />
-            </button>
-          </div>
-
-          {songCount > 1 && (
-            <ol className="no-scrollbar mt-1.5 max-h-24 space-y-0.5 overflow-y-auto pr-1">
+        {/* Songs to the RIGHT of the cover — borderless, detached (a gap, no shared box),
+            scrollable, capped at the cover's height. */}
+        {showList &&
+          (songCount === 0 ? (
+            <p className="flex-1 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
+          ) : (
+            <ol className="no-scrollbar max-h-48 min-w-0 max-w-md flex-1 space-y-0.5 overflow-y-auto pr-1">
               {release.songs.map((s, i) => (
-                <li key={s.id} className="flex items-baseline gap-2 font-space text-[13px] leading-snug">
-                  <span className="w-4 flex-none text-right text-ink-faint">{i + 1}</span>
+                <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
+                  <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-ink">{s.title}</span>
-                  {/* Cap the feat. at ~42% and let it truncate, so a long "feat. A, B" can
-                      never starve the title's flex-1 down to nothing (it did — the titles
-                      vanished behind the collaborators). The song name always wins. */}
-                  {feat(s) && <span className="max-w-[42%] flex-none truncate text-ink-faint">{feat(s)}</span>}
+                  {/* Cap the feat. so a long "feat. A, B" can't starve the title to nothing. */}
+                  {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
                 </li>
               ))}
             </ol>
-          )}
-
-          <div className="mt-1.5">
-            <CardStat value={release.stat ?? 0} label={metricLabel('release')} />
-          </div>
-        </div>
+          ))}
       </div>
 
       <CardModal

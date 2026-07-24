@@ -177,8 +177,7 @@ export function MusicBrowser({
         const orphansHere = g.key === 'single' ? shownOrphans : []
         return (
           <OriginSection key={g.key} label={g.label} count={g.items.length + orphansHere.length}>
-            {/* Releases are horizontal (cover + tracklist), so 1-up on narrow, 2-up wide. */}
-            <div className="grid gap-2.5 lg:grid-cols-2">
+            <CardGrid size="md" count={g.items.length}>
               {g.items.map((r) => (
                 <ReleaseCard
                   key={r.id}
@@ -189,7 +188,7 @@ export function MusicBrowser({
                   onToggleSelect={() => toggleSelect(r.id)}
                 />
               ))}
-            </div>
+            </CardGrid>
             {orphansHere.length > 0 && songGrid(orphansHere)}
           </OriginSection>
         )
@@ -206,11 +205,11 @@ export function MusicBrowser({
   const unreleasedContent = (
     <>
       {shownUnreleasedReleases.length > 0 && (
-        <div className="grid gap-2.5 lg:grid-cols-2">
+        <CardGrid size="md" count={shownUnreleasedReleases.length}>
           {shownUnreleasedReleases.map((r) => (
             <ReleaseCard key={r.id} release={r} artistId={artistId} artistSlug={artistSlug} />
           ))}
-        </div>
+        </CardGrid>
       )}
       {songGroups.length === 1 && songGroups[0].key === LOOSE
         ? // Only loose uploads — skip the group chrome.
