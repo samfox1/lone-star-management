@@ -900,28 +900,24 @@ describe('EditorInspector — Music panel (projects)', () => {
 
   it('renders projects in the order given (page sorts them newest-first)', () => {
     openMusic()
-    const titles = [...document.querySelectorAll('aside span')]
+    const titles = [...document.querySelectorAll('aside .grid span')]
       .map((s) => s.textContent)
       .filter((t) => t === 'Midnight LP' || t === 'Sundown EP' || t === 'One Off')
     expect(titles).toEqual(['Midnight LP', 'Sundown EP', 'One Off'])
   })
 
-  it('shows an album/EP tracklist inline (no expand); the toggle leaves it visible', () => {
+  it('expands a project to reveal its songs, and the toggle does NOT expand it', () => {
     openMusic()
-    // Every multi-song project's songs are visible at once — to the right of the cover.
+    // Collapsed: the album's songs aren't shown.
+    expect(screen.queryByText('Nightdrive')).toBeNull()
+    // Clicking the card face opens its tracklist.
+    fireEvent.click(screen.getByRole('button', { name: /Midnight LP . 3 songs/ }))
     expect(screen.getByText('Intro')).toBeTruthy()
     expect(screen.getByText('Nightdrive')).toBeTruthy()
-    expect(screen.getByText('Dusk')).toBeTruthy() // the EP's songs too
-    // The on/off toggle is a separate control — toggling it never hides the songs.
+    // The on/off toggle is a separate control — clicking it toggles, never collapses.
     fireEvent.click(screen.getByRole('button', { name: 'Take Midnight LP off the site' }))
     expect(setSongsOnSiteMock).toHaveBeenCalled()
-    expect(screen.getByText('Nightdrive')).toBeTruthy()
-  })
-
-  it('a single shows no tracklist — its one song would just echo the title', () => {
-    openMusic()
-    // "One Off" is a single (title === its one song), so it appears exactly once.
-    expect(screen.getAllByText('One Off')).toHaveLength(1)
+    expect(screen.getByText('Nightdrive')).toBeTruthy() // still open
   })
 
   it('points at the Music page when there are no projects', () => {
