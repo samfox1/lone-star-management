@@ -16,48 +16,36 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
 // (py-3.5 + the 42px nav row + border). Keep in sync with layout.tsx.
 
 /**
- * The Assets pages' left side panel — a touch narrower than the top nav bar is
- * tall. Icons sit at the panel's left edge with top-nav interaction language
- * (label slides out on hover). The panel is an OVERLAY: on hover the fixed nav
- * expands OVER the content's left gutter, and the in-flow spacer stays a constant
- * width so the main grid never re-lays-out. (It used to animate the spacer's width,
- * which shrank the flex sibling every frame — a heavy image/video grid reflowing on
- * each hover was the lag.) The fixed nav's right border is THE vertical line; it
- * moves on hover while the content beneath it does not. The line starts BELOW the
- * header; the icon stack centers on the full viewport (mt = 50vh − header, −50%).
+ * The Assets pages' left side panel: a FIXED-WIDTH icon rail with each label stacked
+ * UNDER its icon, always visible. Nothing changes width on hover, so the panel never
+ * pushes or reflows the main grid (the old slide-the-label-out-on-hover drawer widened
+ * the panel every frame — a heavy image/video grid re-laying-out was the hover lag).
+ * The panel is a fixed spacer with the nav position:fixed inside it, spanning the
+ * viewport height so the icon stack can center on the viewport middle (mt = 50vh −
+ * header, then −50%); the nav's right border is THE vertical line.
  */
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
-  // The wrapper is the `group` AND the in-flow spacer, at a CONSTANT width: hovering
-  // any icon (a pointer-events-auto descendant of the fixed nav) triggers the group,
-  // expanding the fixed nav over the content — the spacer never resizes, so nothing
-  // in the main window reflows.
   return (
-    // pointer-events-none on the wrapper: its :hover can only arrive through the
-    // pointer-events-auto icon links, so the panel expands ONLY on icon hover —
-    // not when the mouse crosses the empty panel column.
-    <div className="group pointer-events-none relative hidden w-12 flex-none md:block">
+    // The spacer holds the layout column; the nav (fixed) sits exactly inside it, both
+    // a constant 76px — wide enough for the stacked label, so nothing ever resizes.
+    <div className="hidden w-[76px] flex-none md:block">
       <nav
         aria-label="Asset types"
-        className="pointer-events-none fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper transition-[width] duration-200 group-hover:w-[120px]"
+        className="fixed left-0 top-[71px] flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper"
       >
-        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-0.5 pl-[17px]">
+        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-1 px-2">
           {ITEMS.map((it) => (
             <Link
               key={it.key}
               href={`/artists/${artistId}/${it.seg}`}
-              aria-label={it.label}
               aria-current={it.key === active ? 'page' : undefined}
               className={cx(
-                // group/item: only THIS link's hover reveals its label; the outer
-                // group still widens the drawer for any icon hover.
-                'group/item pointer-events-auto inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
+                'flex flex-col items-center gap-1 rounded-lg py-2.5 transition-colors',
                 it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
               )}
             >
               <Icon name={it.icon} size={22} />
-              <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs tracking-[0.02em] opacity-0 transition-all duration-200 group-hover/item:ml-2 group-hover/item:max-w-[110px] group-hover/item:opacity-100">
-                {it.label}
-              </span>
+              <span className="font-space text-[10px] tracking-[0.02em]">{it.label}</span>
             </Link>
           ))}
         </div>
