@@ -169,16 +169,6 @@ export function MusicBrowser({
 
   // Orphan singles ride the Singles section next to the release cards, so they match them:
   // same 192px cover, title only (no platform-badge subtitle).
-  const orphanGrid = (items: MusicSong[]) => (
-    <div className="flex flex-wrap gap-x-5 gap-y-8">
-      {items.map((t) => (
-        <div key={t.id} className="w-48">
-          <TrackCard artistId={artistId} track={t} releases={releaseOptions} hideBadges />
-        </div>
-      ))}
-    </div>
-  )
-
   // Each type's section holds BOTH its releases AND its release-less orphan tracks, so an
   // orphan remix (a SoundCloud remix with no release row) lands under Remixes, not Singles.
   const releasedContent = (
@@ -189,23 +179,26 @@ export function MusicBrowser({
         if (rels.length + orphs.length === 0) return null
         return (
           <OriginSection key={type} label={TYPE_LABEL[type as ReleaseType]} count={rels.length + orphs.length}>
-            {rels.length > 0 && (
-              // Fixed-width tiles that wrap: an expanded EP/album grows only by its tracklist
-              // (to the right), never resizing the cover, and the neighbours reflow around it.
-              <div className="flex flex-wrap gap-x-5 gap-y-8">
-                {rels.map((r) => (
-                  <ReleaseCard
-                    key={r.id}
-                    release={r}
-                    artistId={artistId}
-                    artistSlug={artistSlug}
-                    selected={selected.has(r.id)}
-                    onToggleSelect={() => toggleSelect(r.id)}
-                  />
-                ))}
-              </div>
-            )}
-            {orphs.length > 0 && orphanGrid(orphs)}
+            {/* Releases and orphan tracks of this type share ONE wrapping row (both 192px),
+                so a remix release and an orphan remix sit side by side, not stacked. An
+                expanded EP/album grows only by its tracklist; the neighbours reflow. */}
+            <div className="flex flex-wrap gap-x-5 gap-y-8">
+              {rels.map((r) => (
+                <ReleaseCard
+                  key={r.id}
+                  release={r}
+                  artistId={artistId}
+                  artistSlug={artistSlug}
+                  selected={selected.has(r.id)}
+                  onToggleSelect={() => toggleSelect(r.id)}
+                />
+              ))}
+              {orphs.map((t) => (
+                <div key={t.id} className="w-48 flex-none">
+                  <TrackCard artistId={artistId} track={t} releases={releaseOptions} hideBadges />
+                </div>
+              ))}
+            </div>
           </OriginSection>
         )
       })}
