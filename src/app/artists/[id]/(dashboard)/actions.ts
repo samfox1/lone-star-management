@@ -876,33 +876,32 @@ export async function setTrackReleaseAction(
   return {}
 }
 
-/** Append a DSP link to a release (url sanitized; RLS scopes to the owner). */
-export async function addReleaseLinkAction(
+/**
+ * Set (or clear) a release's DSP link for one platform `label`. This is the whole
+ * link lifecycle in one call: an empty url REMOVES that platform's link, a non-empty
+ * url REPLACES it (or adds it) — so the editor's per-platform slots just save what's
+ * typed and drop what's cleared, with no separate add/remove buttons. RLS scopes to
+ * the owner; the url is sanitized.
+ */
+export async function setReleaseLinkAction(
   releaseId: string,
   artistId: string,
+  label: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const label = String(formData.get('label') ?? '').trim()
-  const url = safeHref(String(formData.get('url') ?? '').trim())
-  if (!label || !url) return { error: 'Add a platform name and a valid URL.' }
+  const trimmedLabel = label.trim()
+  if (!trimmedLabel) return { error: 'Missing platform.' }
+  const raw = String(formData.get('url') ?? '').trim()
   const supabase = await createClient()
   const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
-  const links = [...((rel?.links as ReleaseLink[]) ?? []), { label, url }]
-  const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
-  if (error) return { error: error.message }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
-}
-
-/** Remove the DSP link at `index` from a release. */
-export async function removeReleaseLinkAction(
-  releaseId: string,
-  index: number,
-  artistId: string,
-): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
-  const links = ((rel?.links as ReleaseLink[]) ?? []).filter((_, i) => i !== index)
+  // Drop any existing entry for this platform, then re-add it when a url is present.
+  const others = ((rel?.links as ReleaseLink[]) ?? []).filter((l) => l.label !== trimmedLabel)
+  let links = others
+  if (raw) {
+    const url = safeHref(raw)
+    if (!url) return { error: 'Enter a valid URL.' }
+    links = [...others, { label: trimmedLabel, url }]
+  }
   const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')

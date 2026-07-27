@@ -1,15 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { type IconType } from 'react-icons'
 import { SiApplemusic, SiDeezer, SiSoundcloud, SiSpotify } from 'react-icons/si'
 import { buttonClass } from '@/components/ui/ui'
-import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type TrackPlatformIds } from '@/lib/music'
-import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
 import { SaveForm } from '../save-form'
 import { toast } from '../toast'
@@ -18,9 +16,8 @@ import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { EntitySparkline } from '../entity-sparkline'
 import {
-  addReleaseLinkAction,
   deleteContentAction,
-  removeReleaseLinkAction,
+  setReleaseLinkAction,
   setReleaseTypeAction,
   updateContentAction,
 } from '../actions'
@@ -97,17 +94,86 @@ export function ReleaseCard({
   onToggleSelect?: () => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   // The tracklist song whose links modal is open (click a song to add/edit its link).
   const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
   const year = release.release_date?.slice(0, 4)
   const songCount = release.songs.length
-  // Only EPs and albums open a tracklist (Sam, 2026-07-24) — a single IS its song.
+  // Only EPs and albums have a tracklist (Sam, 2026-07-24) — a single IS its song, so its
+  // modal drops the tracklist and lets the cover/details fill the space instead.
   const expandable = release.release_type === 'ep' || release.release_type === 'album'
   // Singles read as just the year (no song count — a single is one track); EPs/albums keep
   // the count. No year → no meta line at all (never a "—" placeholder).
   const meta = expandable
     ? [year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
     : (year ?? '')
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
+  // Share the public release page — native sheet where available, clipboard otherwise.
+  async function share() {
+    setMenuOpen(false)
+    if (typeof window === 'undefined') return
+    const url = `${window.location.origin}/${artistSlug}/r/${release.slug}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: release.title, url })
+        return
+      } catch {
+        // cancelled or unsupported — fall through to copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      toast('Link copied')
+    } catch {
+      toast("Couldn't copy the link.", 'error')
+    }
+  }
+
+  async function del() {
+    setMenuOpen(false)
+    const res = await deleteContentAction('release', release.id, artistId)
+    if (res?.error) toast(res.error, 'error')
+    else toast('Release deleted')
+  }
+
+  // A release link slot saves on blur: type a url and it's stored, clear it and it's
+  // dropped — no add/remove buttons. Skips the write when nothing changed.
+  async function saveReleaseLink(label: string, input: HTMLInputElement) {
+    const val = input.value.trim()
+    const current = release.links.find((l) => l.label === label)?.url ?? ''
+    if (val === current) return
+    const fd = new FormData()
+    fd.set('url', val)
+    const res = await setReleaseLinkAction(release.id, artistId, label, fd)
+    if (res?.error) toast(res.error, 'error')
+    else toast(val ? `${label} saved` : `${label} removed`)
+  }
+
+  // Same save-on-blur for a song's own platform link (track column).
+  async function saveSongLink(songId: string, field: string, current: string, input: HTMLInputElement) {
+    const val = input.value.trim()
+    if (val === current) return
+    const fd = new FormData()
+    fd.set(field, val)
+    const res = await updateContentAction('track', songId, artistId, fd)
+    if (res?.error) toast(res.error, 'error')
+    else toast(val ? 'Link saved' : 'Link removed')
+  }
 
   return (
     // A plain fixed-width tile — the tracklist lives in a modal now, so the card never grows
@@ -121,16 +187,53 @@ export function ReleaseCard({
           </div>
         )}
 
-        {/* Edit — top-right pencil. */}
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          title="Edit release"
-          aria-label={`Edit ${release.title}`}
-          className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-ink-muted shadow-sm transition-colors hover:text-ink"
-        >
-          <Icon name="edit" size={14} />
-        </button>
+        {/* Top-right 3-dots: Edit / Share / Delete. */}
+        <div ref={menuRef} className="absolute right-2 top-2 z-20">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={`${release.title} options`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-ink-muted shadow-sm transition-colors hover:text-ink"
+          >
+            <Icon name="more" size={16} />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-8 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setEditing(true)
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+              >
+                <Icon name="edit" size={15} /> Edit
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={share}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+              >
+                <Icon name="share" size={15} /> Share
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={del}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
+              >
+                <Icon name="trash" size={15} /> Delete
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Every release opens the one wide editor modal (cover + tracklist on the left,
             analytics + links on the right). */}
@@ -170,39 +273,62 @@ export function ReleaseCard({
       <CardModal
         open={editing}
         // Escape/click-outside closes ONE layer: while a song's link modal is open it guards
-        // this one, so Escape dismisses the link modal and leaves the editor.
+        // this one, so Escape dismisses the link modal and leaves the editor. Delete lives in
+        // the card's 3-dots menu now, so the footer is just Done.
         onClose={() => !linkSong && setEditing(false)}
-        deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
-        deleteLabel="Delete release"
-        deleteNoun="Release"
         wide
       >
         {/* Two columns, font-space throughout: LEFT is the release itself (cover, details,
             tracklist); RIGHT is its performance + streaming links. Sized to fit — no scroll. */}
         <div className="grid grid-cols-2 gap-8 font-space">
-          {/* LEFT — cover, details, tracklist */}
+          {/* LEFT — the release itself. Singles have no tracklist, so the cover goes big and
+              fills the column; EPs/albums keep a compact cover beside a scrollable tracklist. */}
           <div className="flex min-w-0 flex-col gap-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-24 w-24 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
-                {release.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="h-9 w-9 rounded-full bg-ink" />
-                )}
+            {expandable ? (
+              <div className="flex items-start gap-4">
+                <div className="flex h-24 w-24 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
+                  {release.cover_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="h-9 w-9 rounded-full bg-ink" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
+                  {meta && <div className="mt-1 text-[12px] text-ink-muted">{meta}</div>}
+                  <Link
+                    href={`/${artistSlug}/r/${release.slug}`}
+                    className="mt-1.5 flex items-center gap-1 truncate text-xs text-ink-muted hover:text-ink"
+                  >
+                    <Icon name="external" size={12} className="flex-none" />
+                    <span className="truncate">/{artistSlug}/r/{release.slug}</span>
+                  </Link>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
-                {meta && <div className="mt-1 text-[12px] text-ink-muted">{meta}</div>}
-                <Link
-                  href={`/${artistSlug}/r/${release.slug}`}
-                  className="mt-1.5 flex items-center gap-1 truncate text-xs text-ink-muted hover:text-ink"
-                >
-                  <Icon name="external" size={12} className="flex-none" />
-                  <span className="truncate">/{artistSlug}/r/{release.slug}</span>
-                </Link>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl bg-surface">
+                  {release.cover_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="h-16 w-16 rounded-full bg-ink" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xl font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
+                  {meta && <div className="mt-1 text-[13px] text-ink-muted">{meta}</div>}
+                  <Link
+                    href={`/${artistSlug}/r/${release.slug}`}
+                    className="mt-1.5 flex items-center gap-1 truncate text-xs text-ink-muted hover:text-ink"
+                  >
+                    <Icon name="external" size={12} className="flex-none" />
+                    <span className="truncate">/{artistSlug}/r/{release.slug}</span>
+                  </Link>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Type */}
             <div className="flex items-center gap-2.5">
@@ -229,8 +355,8 @@ export function ReleaseCard({
               </SaveForm>
             </div>
 
-            {/* Tracklist — click a song to edit its per-platform links */}
-            {songCount > 0 && (
+            {/* Tracklist — EPs/albums only; click a song to edit its per-platform links */}
+            {expandable && songCount > 0 && (
               <div>
                 <div className="flex items-center gap-2">
                   <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
@@ -275,64 +401,29 @@ export function ReleaseCard({
                 <Icon name="links" size={15} className="flex-none text-ink-faint" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Streaming links</span>
               </div>
+              {/* One input per platform — paste a link and it saves on blur, clear it and it's
+                  removed. No add/remove buttons. The icon lights up when a link is set. */}
               <div className="space-y-2.5">
                 {STREAMING_PLATFORMS.map((p) => {
-                  const idx = release.links.findIndex((l) => l.label === p.label)
-                  const link = idx >= 0 ? release.links[idx] : null
+                  const link = release.links.find((l) => l.label === p.label) ?? null
                   return (
                     <div key={p.label} className="flex items-center gap-3">
                       <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-surface">
                         <p.Icon size={18} className={link ? p.color : 'text-ink-faint'} />
                       </span>
-                      {link ? (
-                        <>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink">{p.label}</div>
-                            <a
-                              href={safeHref(link.url) ?? '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block truncate text-[11px] text-ink-faint hover:text-ink-muted"
-                            >
-                              {link.url}
-                            </a>
-                          </div>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${p.label}`}
-                            onClick={async () => {
-                              const res = await removeReleaseLinkAction(release.id, idx, artistId)
-                              if (res?.error) toast(res.error, 'error')
-                              else toast(`${p.label} removed`)
-                            }}
-                            className="flex-none rounded-lg p-2 text-ink-faint transition-colors hover:bg-danger-soft hover:text-accent-red"
-                          >
-                            <Icon name="trash" size={15} />
-                          </button>
-                        </>
-                      ) : (
-                        <SaveForm
-                          action={addReleaseLinkAction.bind(null, release.id, artistId)}
-                          savedMessage={`${p.label} added`}
-                          className="flex min-w-0 flex-1 items-center gap-2"
-                        >
-                          <input type="hidden" name="label" value={p.label} />
-                          <input
-                            name="url"
-                            type="url"
-                            required
-                            placeholder={p.placeholder}
-                            className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
-                          />
-                          <button
-                            type="submit"
-                            aria-label={`Add ${p.label}`}
-                            className="flex-none rounded-lg bg-ink p-2 text-white transition-colors hover:bg-ink/85"
-                          >
-                            <Icon name="plus" size={15} />
-                          </button>
-                        </SaveForm>
-                      )}
+                      <input
+                        // Remount when the saved url changes so the uncontrolled default resyncs.
+                        key={link?.url ?? ''}
+                        defaultValue={link?.url ?? ''}
+                        type="url"
+                        placeholder={p.placeholder}
+                        aria-label={`${p.label} link`}
+                        onBlur={(e) => saveReleaseLink(p.label, e.currentTarget)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur()
+                        }}
+                        className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
+                      />
                     </div>
                   )
                 })}
@@ -349,15 +440,11 @@ export function ReleaseCard({
             <h3 className="text-lg font-bold tracking-[-0.01em]">{linkSong.title}</h3>
             {feat(linkSong) && <div className="mt-0.5 text-[12px] text-ink-faint">{feat(linkSong)}</div>}
 
-            {/* One slot per platform, same visual language as the release modal. Setting any
-                marks the song Released by derivation; Save writes all three at once. */}
-            <SaveForm
-              action={updateContentAction.bind(null, 'track', linkSong.id, artistId)}
-              savedMessage="Links saved"
-              className="mt-5 space-y-3"
-            >
+            {/* One slot per platform. Each saves on blur — paste a link and it's stored, clear
+                it and it's removed. Setting any marks the song Released by derivation. */}
+            <div className="mt-5 space-y-3">
               {SONG_PLATFORMS.map((p) => {
-                const value = linkSong[p.field]
+                const value = linkSong[p.field] ?? ''
                 return (
                   <div key={p.field} className="flex items-center gap-3">
                     <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-surface">
@@ -368,20 +455,21 @@ export function ReleaseCard({
                         {p.label}
                       </span>
                       <input
-                        name={p.field}
+                        key={value}
                         type="url"
-                        defaultValue={value ?? ''}
+                        defaultValue={value}
                         placeholder={p.placeholder}
+                        onBlur={(e) => saveSongLink(linkSong.id, p.field, value, e.currentTarget)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur()
+                        }}
                         className="w-full rounded-lg bg-surface px-3 py-2 font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
                       />
                     </label>
                   </div>
                 )
               })}
-              <button type="submit" className={cx(buttonClass('solid'), 'mt-1 w-full justify-center')}>
-                Save links
-              </button>
-            </SaveForm>
+            </div>
           </div>
         )}
       </CardModal>
