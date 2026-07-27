@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField } from './file-drop-field'
 import { useStorageUpload } from './use-storage-upload'
@@ -28,9 +29,10 @@ function fmtTime(s: number): string {
 
 /**
  * A small modal for the drop zone, so uploading never resizes the modal it's opened from.
- * It sits on top of another CardModal, so its Escape handler runs in the CAPTURE phase and
- * stops immediate propagation — that way Escape closes THIS modal only, not the parent
- * (whose keydown listener is on document in the bubble phase).
+ * It's PORTALED to document.body (not nested in the parent modal's DOM), so it can't affect
+ * the parent's layout at all. It sits on top of another CardModal, so its Escape handler runs
+ * in the CAPTURE phase and stops immediate propagation — Escape closes THIS modal only, not
+ * the parent (whose keydown listener is on document in the bubble phase).
  */
 function AudioUploadModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -45,16 +47,27 @@ function AudioUploadModal({ open, onClose, children }: { open: boolean; onClose:
     return () => document.removeEventListener('keydown', onKey, true)
   }, [open, onClose])
 
-  if (!open) return null
-  return (
+  if (!open || typeof document === 'undefined') return null
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={cx(modalCardClass, 'font-space')}>{children}</div>
-    </div>
+      <div className={cx(modalCardClass, 'relative font-space')}>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 text-ink-faint transition-colors hover:text-ink"
+        >
+          <Icon name="plus" size={18} className="rotate-45" />
+        </button>
+        {children}
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -174,10 +187,9 @@ export function TrackAudio({
         )}
       </div>
 
-      {/* The plus opens the drop zone in its OWN modal, so the player never resizes. */}
+      {/* The plus opens the drop zone in its OWN portaled modal, so the player never resizes. */}
       <AudioUploadModal open={uploadOpen && !hasAudio} onClose={() => setUploadOpen(false)}>
         <h3 className="text-lg font-bold tracking-[-0.01em]">Add audio</h3>
-        <p className="mt-1 text-[12px] text-ink-muted">Upload this song&apos;s audio file (MP3 or M4A).</p>
         <div className="mt-4">
           <FileDropField
             accept="audio/mpeg,audio/mp4,.mp3,.m4a"
@@ -187,11 +199,6 @@ export function TrackAudio({
             error={error}
             onFile={upload}
           />
-        </div>
-        <div className="mt-5 flex justify-end">
-          <button type="button" onClick={() => setUploadOpen(false)} className={buttonClass('ghost')}>
-            Cancel
-          </button>
         </div>
       </AudioUploadModal>
     </div>
