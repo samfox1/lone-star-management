@@ -227,30 +227,58 @@ export function ReleaseCard({
   }
 
   // Title + release date. Read-only overview by default; editable once "Edit" is chosen.
-  const detailsBlock = editMode ? (
-    <div className="space-y-2">
-      <input
-        value={titleDraft}
-        onChange={(e) => setTitleDraft(e.target.value)}
-        placeholder="Release title"
-        aria-label="Release title"
-        className="w-full rounded-lg bg-surface px-3 py-2 text-lg font-bold text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
-      />
-      <label className="flex items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Released</span>
+  // titleCls lets a single (big cover) carry a bigger title than an album's compact header.
+  const renderDetails = (titleCls: string) =>
+    editMode ? (
+      <div className="space-y-2">
         <input
-          type="date"
-          value={dateDraft}
-          onChange={(e) => setDateDraft(e.target.value)}
-          aria-label="Release date"
-          className="rounded-lg bg-surface px-2.5 py-1.5 font-space text-[12px] text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          placeholder="Release title"
+          aria-label="Release title"
+          className={cx(
+            'w-full rounded-lg bg-surface px-3 py-2 font-bold text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline',
+            titleCls,
+          )}
         />
-      </label>
-    </div>
-  ) : (
-    <div>
-      <h3 className="text-lg font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
-      {meta && <div className="mt-1 text-[12px] text-ink-muted">{meta}</div>}
+        <label className="flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Released</span>
+          <input
+            type="date"
+            value={dateDraft}
+            onChange={(e) => setDateDraft(e.target.value)}
+            aria-label="Release date"
+            className="rounded-lg bg-surface px-2.5 py-1.5 font-space text-[12px] text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
+          />
+        </label>
+      </div>
+    ) : (
+      <div>
+        <h3 className={cx('font-bold leading-tight tracking-[-0.01em]', titleCls)}>{release.title}</h3>
+        {meta && <div className="mt-1 text-[13px] text-ink-muted">{meta}</div>}
+      </div>
+    )
+
+  // Type pills — always live in the modal (single ⇄ remix ⇄ album …), one tap applies.
+  const typeControl = (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+      {RELEASE_TYPES.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => applyType(t)}
+          aria-pressed={t === release.release_type}
+          className={cx(
+            'rounded-lg px-3 py-1.5 font-space text-[12px] font-semibold transition-colors',
+            t === release.release_type
+              ? 'bg-ink text-white'
+              : 'border border-hairline text-ink-muted hover:text-ink',
+          )}
+        >
+          {RELEASE_TYPE_LABEL[t]}
+        </button>
+      ))}
     </div>
   )
 
@@ -319,58 +347,57 @@ export function ReleaseCard({
           </div>
         }
       >
-        <div className="font-space">
-          {/* Top bar — the 3-dots menu (Edit / Share / Delete) sits on the modal itself. */}
-          <div className="mb-5 flex items-center justify-end">
-            <div ref={menuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label={`${release.title} options`}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+        <div className="relative font-space">
+          {/* 3-dots (Edit / Share / Delete) floats in the top-right corner — no dedicated row. */}
+          <div ref={menuRef} className="absolute right-0 top-0 z-20">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label={`${release.title} options`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <Icon name="more" size={18} />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
               >
-                <Icon name="more" size={18} />
-              </button>
-              {menuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={enterEdit}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={enterEdit}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-                  >
-                    <Icon name="edit" size={15} /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={share}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-                  >
-                    <Icon name="share" size={15} /> Share
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={del}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
-                  >
-                    <Icon name="trash" size={15} /> Delete
-                  </button>
-                </div>
-              )}
-            </div>
+                  <Icon name="edit" size={15} /> Edit
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={share}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+                >
+                  <Icon name="share" size={15} /> Share
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={del}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
+                >
+                  <Icon name="trash" size={15} /> Delete
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-8">
-            {/* LEFT — the release itself. Singles have no tracklist, so the cover is a modest
-                square with title/details beneath; EPs/albums pair a small cover with a
-                scrollable tracklist. */}
+          {/* pt-7 leaves a slim top band for the floating 3-dots so it never sits on the
+              sparkline — small, not a full row. */}
+          <div className="grid grid-cols-2 gap-8 pt-7">
+            {/* LEFT — the release itself. Singles show a big cover + big title (no tracklist);
+                EPs/albums pair a compact cover with a scrollable tracklist. */}
             <div className="flex min-w-0 flex-col gap-6">
               {expandable ? (
                 <div className="flex items-start gap-4">
@@ -382,58 +409,27 @@ export function ReleaseCard({
                       <span className="h-9 w-9 rounded-full bg-ink" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">{detailsBlock}</div>
+                  <div className="min-w-0 flex-1">{renderDetails('text-lg')}</div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  <div className="flex h-44 w-44 flex-none items-center justify-center overflow-hidden rounded-2xl bg-surface">
+                  <div className="flex h-64 w-64 max-w-full flex-none items-center justify-center overflow-hidden rounded-2xl bg-surface">
                     {release.cover_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="h-12 w-12 rounded-full bg-ink" />
+                      <span className="h-16 w-16 rounded-full bg-ink" />
                     )}
                   </div>
-                  {detailsBlock}
+                  {renderDetails('text-2xl')}
                 </div>
               )}
 
-              {/* Type — a value in overview, pills once editing (one tap applies). */}
-              <div className="flex items-center gap-2.5">
-                <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-                {editMode ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {RELEASE_TYPES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => applyType(t)}
-                        aria-pressed={t === release.release_type}
-                        className={cx(
-                          'rounded-lg px-3 py-1 font-space text-[12px] font-semibold transition-colors',
-                          t === release.release_type
-                            ? 'bg-ink text-white'
-                            : 'border border-hairline text-ink-muted hover:text-ink',
-                        )}
-                      >
-                        {RELEASE_TYPE_LABEL[t]}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-[13px] text-ink">{RELEASE_TYPE_LABEL[release.release_type]}</span>
-                )}
-              </div>
+              {typeControl}
 
               {/* Tracklist — EPs/albums only; click a song to edit its per-platform links */}
-            {expandable && songCount > 0 && (
-              <div>
-                <div className="flex items-center gap-2">
-                  <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Tracklist</span>
-                </div>
-                <ol className="mt-3 max-h-[280px] space-y-0.5 overflow-auto">
+              {expandable && songCount > 0 && (
+                <ol className="max-h-[280px] space-y-0.5 overflow-auto">
                   {release.songs.map((s, i) => (
                     <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
                       <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
@@ -449,31 +445,20 @@ export function ReleaseCard({
                     </li>
                   ))}
                 </ol>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* RIGHT — analytics + streaming links */}
-          <div className="flex min-w-0 flex-col gap-6">
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <Icon name="analytics" size={15} className="flex-none text-ink-faint" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Performance</span>
-              </div>
+            {/* RIGHT — performance sparkline + streaming link inputs. No section labels: the
+                sparkline carries its own "Listens · 30d" and each input has its platform icon. */}
+            <div className="flex min-w-0 flex-col gap-6">
               <EntitySparkline
                 artistId={artistId}
                 entityIds={[release.id, ...release.songs.map((s) => s.id)]}
                 label="Listens · 30d"
               />
-            </div>
 
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <Icon name="links" size={15} className="flex-none text-ink-faint" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Streaming links</span>
-              </div>
               {/* One input per platform — paste a link and it saves on blur, clear it and it's
-                  removed. No add/remove buttons. The icon lights up when a link is set. */}
+                  removed. The icon lights up when a link is set. */}
               <div className="space-y-2.5">
                 {STREAMING_PLATFORMS.map((p) => {
                   const link = release.links.find((l) => l.label === p.label) ?? null
@@ -500,7 +485,6 @@ export function ReleaseCard({
                 })}
               </div>
             </div>
-          </div>
           </div>
         </div>
       </CardModal>
