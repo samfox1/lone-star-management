@@ -150,7 +150,9 @@ export function ReleaseCard({
       {/* Tracklist modal (Sam, 2026-07-27): opening it never disturbs the grid, and a
           far-left album's songs can't fall off-screen. Click a song to edit its links. */}
       {expandable && (
-        <CardModal open={tracksOpen} onClose={() => setTracksOpen(false)}>
+        // Escape/click-outside closes ONE layer: while a song's link modal is open it
+        // guards this one, so Escape dismisses the link modal and leaves the tracklist.
+        <CardModal open={tracksOpen} onClose={() => !linkSong && setTracksOpen(false)}>
           <div className="flex items-start gap-4">
             <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
               {release.cover_url ? (
@@ -174,25 +176,22 @@ export function ReleaseCard({
           {songCount === 0 ? (
             <p className="mt-2 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
           ) : (
-            <>
-              <ol className="mt-2 max-h-[50vh] space-y-0.5 overflow-auto">
-                {release.songs.map((s, i) => (
-                  <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
-                    <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => setLinkSong(s)}
-                      title="Add or edit links"
-                      className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
-                    >
-                      {s.title}
-                    </button>
-                    {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-2 font-space text-[11px] text-ink-faint">Click a song to add or edit its links.</p>
-            </>
+            <ol className="mt-2 max-h-[50vh] space-y-0.5 overflow-auto">
+              {release.songs.map((s, i) => (
+                <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
+                  <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => setLinkSong(s)}
+                    title="Add or edit links"
+                    className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
+                  >
+                    {s.title}
+                  </button>
+                  {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
+                </li>
+              ))}
+            </ol>
           )}
         </CardModal>
       )}
