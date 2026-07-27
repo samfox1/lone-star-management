@@ -23,6 +23,8 @@ export type Track = TrackPlatformIds & {
   source: string | null
   audio_path: string | null
   release_id: string | null
+  /** Optional own release date (orphan singles); album songs show the album's year instead. */
+  release_date: string | null
 }
 
 /**
@@ -51,7 +53,9 @@ export function TrackCard({
   const [editOpen, setEditOpen] = useState(false)
   const [titleDraft, setTitleDraft] = useState(track.title)
   const [releaseDraft, setReleaseDraft] = useState(track.release_id ?? '')
+  const [releaseDateDraft, setReleaseDateDraft] = useState(track.release_date?.slice(0, 10) ?? '')
   const platforms = trackPlatforms(track)
+  const year = track.release_date?.slice(0, 4)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -83,10 +87,12 @@ export function TrackCard({
     setMenuOpen(false)
     setTitleDraft(track.title)
     setReleaseDraft(track.release_id ?? '')
+    setReleaseDateDraft(track.release_date?.slice(0, 10) ?? '')
     setEditOpen(true)
   }
 
-  // Save the editable details (title + which release it belongs to), then close the editor.
+  // Save the editable details (title, release date, which release it belongs to), then
+  // close the editor.
   async function saveDetails() {
     const t = titleDraft.trim()
     if (!t) {
@@ -94,9 +100,10 @@ export function TrackCard({
       return
     }
     let saved = false
-    if (t !== track.title) {
+    if (t !== track.title || releaseDateDraft !== (track.release_date?.slice(0, 10) ?? '')) {
       const fd = new FormData()
       fd.set('title', t)
+      fd.set('release_date', releaseDateDraft)
       const res = await updateContentAction('track', track.id, artistId, fd)
       if (res?.error) {
         toast(res.error, 'error')
@@ -203,8 +210,9 @@ export function TrackCard({
                   )}
                 </div>
               </div>
+              {year && <div className="text-[13px] text-ink-muted">{year}</div>}
 
-              {/* Audio: a player when the track has uploaded audio, plus add/replace. */}
+              {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
               <div className="mt-auto">
                 <TrackAudio artistId={artistId} trackId={track.id} audioPath={track.audio_path} />
               </div>
@@ -307,6 +315,15 @@ export function TrackCard({
               onChange={(e) => setTitleDraft(e.target.value)}
               placeholder="Song title"
               className="w-full rounded-lg bg-surface px-3 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release date</span>
+            <input
+              type="date"
+              value={releaseDateDraft}
+              onChange={(e) => setReleaseDateDraft(e.target.value)}
+              className="block rounded-lg bg-surface px-2.5 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
             />
           </label>
           {releases.length > 0 && (

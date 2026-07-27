@@ -459,15 +459,17 @@ export function ReleaseCard({
                   <h3 className="min-w-0 flex-1 text-2xl font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
                   {kebabMenu}
                 </div>
-                {/* Audio for the single's underlying track (a single IS one song). */}
+                {year && <div className="text-[13px] text-ink-muted">{year}</div>}
+                {/* Audio for the single's underlying track (a single IS one song), at the bottom. */}
                 {release.songs[0] && (
-                  <TrackAudio
-                    artistId={artistId}
-                    trackId={release.songs[0].id}
-                    audioPath={release.songs[0].audio_path}
-                  />
+                  <div className="mt-auto">
+                    <TrackAudio
+                      artistId={artistId}
+                      trackId={release.songs[0].id}
+                      audioPath={release.songs[0].audio_path}
+                    />
+                  </div>
                 )}
-                {year && <div className="mt-auto text-[13px] text-ink-muted">{year}</div>}
               </div>
             )}
 
@@ -595,8 +597,10 @@ export function ReleaseCard({
                   <h3 className="text-2xl font-bold leading-tight tracking-[-0.01em]">{linkSong.title}</h3>
                   {feat(linkSong) && <div className="mt-1 text-[13px] text-ink-muted">{feat(linkSong)}</div>}
                 </div>
-                <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
-                {year && <div className="mt-auto text-[13px] text-ink-muted">{year}</div>}
+                {year && <div className="text-[13px] text-ink-muted">{year}</div>}
+                <div className="mt-auto">
+                  <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
+                </div>
               </div>
 
               {/* RIGHT — the song's own performance + per-platform links (save on blur). */}

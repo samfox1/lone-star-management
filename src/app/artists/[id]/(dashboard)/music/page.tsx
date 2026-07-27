@@ -65,6 +65,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       apple_url: (row.apple_url as string | null) ?? null,
       soundcloud_url: (row.soundcloud_url as string | null) ?? null,
       deezer_url: (row.deezer_url as string | null) ?? null,
+      release_date: (row.release_date as string | null) ?? null,
       created_at: (row.created_at as string | null) ?? '',
       // Its own category tag — so an orphan remix lands in Remixes, not Singles.
       release_type: toReleaseType(row.release_type as string | null),

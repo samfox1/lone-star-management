@@ -114,7 +114,7 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   // soundcloud_url + apple_url are manually editable too (union model), so a manager can
   // attach a SoundCloud/Apple link to a song the sync didn't carry one for.
   track: {
-    fields: ['title', 'cover_url', 'stream_url', 'soundcloud_url', 'apple_url', 'deezer_url', 'sort_order'],
+    fields: ['title', 'cover_url', 'stream_url', 'soundcloud_url', 'apple_url', 'deezer_url', 'release_date', 'sort_order'],
     required: ['title'],
   },
   // `support` (the other acts on the bill) is an ARRAY field: it posts one FormData
