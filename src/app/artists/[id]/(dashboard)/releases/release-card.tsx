@@ -507,13 +507,23 @@ export function ReleaseCard({
                 })}
               </div>
 
-              {/* Save lives here (not a bottom row) so the left tracklist can run full-height.
-                  mt-auto pins it to the bottom of the taller column. */}
-              <div className="mt-auto flex justify-end pt-2">
+              {/* Close + Save live here (not a bottom row) so the left tracklist can run
+                  full-height. mt-auto pins them to the bottom of the taller column. */}
+              <div className="mt-auto flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditMode(false)
+                    setEditing(false)
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
+                >
+                  Close
+                </button>
                 <button
                   type="button"
                   onClick={saveAndClose}
-                  className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
+                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
                 >
                   Save
                 </button>
