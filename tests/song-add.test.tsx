@@ -83,7 +83,7 @@ describe('SongAddButton', () => {
     expect(within(dialog).getByText('Album')).toBeInTheDocument()
   })
 
-  it('streaming: URLs only — metadata resolves from the service, released automatically', async () => {
+  it('streaming: URLs resolve into a review step pre-filled from the service, then add', async () => {
     const dialog = openModal()
     fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
     expect(within(dialog).queryByPlaceholderText('Song title')).not.toBeInTheDocument()
@@ -91,6 +91,12 @@ describe('SongAddButton', () => {
     fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
       target: { value: 'https://open.spotify.com/track/ZZ9' },
     })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Single' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+
+    // Review step: pre-filled with what the service resolved.
+    const title = await within(dialog).findByPlaceholderText('Song title')
+    expect(title).toHaveValue('Resolved Title')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(1))
@@ -100,8 +106,29 @@ describe('SongAddButton', () => {
       title: 'Resolved Title',
       released: true,
       spotify_id: 'ZZ9',
+      release_type: 'single',
     })
     expect(uploads).toHaveLength(0)
+  })
+
+  it('streaming: when the service resolves nothing, the review lets the manager fill it in', async () => {
+    vi.mocked(resolveStreamingSongAction).mockResolvedValueOnce({ ok: false as const, error: 'no metadata' })
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
+    fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
+      target: { value: 'https://open.spotify.com/track/QQ1' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remix' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+
+    // Nothing detected → blank title the manager completes before adding.
+    const title = await within(dialog).findByPlaceholderText('Song title')
+    expect(title).toHaveValue('')
+    fireEvent.change(title, { target: { value: 'Hand Typed' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(inserted).toHaveLength(1))
+    expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Hand Typed', release_type: 'remix', released: true })
   })
 
   it('single: one song, required released choice blocks until picked', async () => {

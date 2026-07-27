@@ -35,7 +35,7 @@ const COVER_RULES = {
   allowedMime: ['image/jpeg', 'image/png', 'image/webp'],
 }
 
-type Step = 'choose' | 'manual' | 'streaming'
+type Step = 'choose' | 'manual' | 'streaming' | 'streaming-review'
 type Format = 'single' | 'ep' | 'album' | 'remix'
 type Released = 'released' | 'unreleased'
 type SongRow = { id: string; title: string; contributors: string; file: File | null }
@@ -70,6 +70,12 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   // Only single | remix — an EP/album is an upload of multiple songs, not one link.
   const [streamingType, setStreamingType] = useState<'single' | 'remix' | null>(null)
   const [coverFile, setCoverFile] = useState<File | null>(null)
+  // The streaming REVIEW step: what the service resolved (or blanks it couldn't), which the
+  // manager confirms/fills before the row is written. reviewCoverUrl is the detected cover;
+  // coverFile overrides it (or supplies one when nothing was detected).
+  const [reviewTitle, setReviewTitle] = useState('')
+  const [reviewContributors, setReviewContributors] = useState('')
+  const [reviewCoverUrl, setReviewCoverUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // Mirror `busy` into a ref so close() (captured by the Escape effect) reads the
@@ -94,6 +100,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     setReleased(null)
     setUrls({})
     setCoverFile(null)
+    setReviewTitle('')
+    setReviewContributors('')
+    setReviewCoverUrl(null)
     setError(null)
   }
   function close() {
@@ -122,6 +131,32 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     return slug
   }
 
+  /** Streaming: resolve what the service can, then go to the review step so the manager
+   *  completes anything it couldn't detect (title, cover, contributors) before saving. */
+  async function startReview() {
+    if (busyRef.current) return
+    setError(null)
+    if (!hasUrls) return setError('Paste at least one streaming link.')
+    if (!streamingType) return setError('Is it a single or a remix?')
+    setBusyBoth(true)
+    try {
+      const resolved = await resolveStreamingSongAction(urls)
+      if (resolved.ok) {
+        setReviewTitle(resolved.song.title.slice(0, 120))
+        setReviewContributors(resolved.song.contributors.join(', '))
+        setReviewCoverUrl(resolved.song.cover_url)
+      } else {
+        // Couldn't detect anything — go to review empty so the manager fills it in by hand.
+        setReviewTitle('')
+        setReviewContributors('')
+        setReviewCoverUrl(null)
+      }
+      setStep('streaming-review')
+    } finally {
+      setBusyBoth(false)
+    }
+  }
+
   async function submit() {
     if (busyRef.current) return
     setError(null)
@@ -138,23 +173,36 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     }
 
     try {
-      if (step === 'streaming') {
-        if (!hasUrls) return setError('Paste at least one streaming link.')
-        if (!streamingType) return setError('Is it a single or a remix?')
-        const resolved = await resolveStreamingSongAction(urls)
-        if (!resolved.ok) return setError(resolved.error)
+      if (step === 'streaming-review') {
+        if (!reviewTitle.trim()) return setError('Give the song a title.')
+        // An uploaded cover overrides the detected one; either (or neither) may be present.
+        let coverUrl = reviewCoverUrl
+        if (coverFile) {
+          const coverCheck = validateUpload(coverFile, COVER_RULES)
+          if (!coverCheck.ok) return setError(coverCheck.error)
+          const coverPath = buildStoragePath(artistId, 'covers', coverCheck.ext)
+          const { error: upErr } = await supabase.storage
+            .from('media')
+            .upload(coverPath, coverFile, { contentType: contentTypeFor(coverCheck.ext), upsert: false })
+          if (upErr) return setError(friendlyUploadError(upErr.message, { noun: 'cover', allowed: COVER_RULES.allowedExt }))
+          uploaded.push({ bucket: 'media', path: coverPath })
+          coverUrl = mediaUrl(coverPath)
+        }
         const { error: rowErr } = await supabase.from('tracks').insert({
           artist_id: artistId,
           source: 'manual',
-          title: resolved.song.title.slice(0, 120),
-          cover_url: resolved.song.cover_url,
-          featured_artists: resolved.song.contributors,
+          title: reviewTitle.trim().slice(0, 120),
+          cover_url: coverUrl,
+          featured_artists: parseContributors(reviewContributors),
           released: true, // it's on a platform
           // The service can't tell single from remix, so the manager tagged it.
           release_type: streamingType,
           ...parseStreamingLinks(urls),
         })
-        if (rowErr) return setError(rowErr.message)
+        if (rowErr) {
+          await rollback()
+          return setError(rowErr.message)
+        }
       } else {
         // ----- manual: single OR a grouped record (EP/album) -----------------
         if (!format) return setError('Pick single, EP, or album.')
@@ -394,6 +442,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                   type="button"
                   onClick={() => {
                     if (step === 'manual' && format) setFormat(null)
+                    else if (step === 'streaming-review') setStep('streaming')
                     else setStep('choose')
                     setError(null)
                   }}
@@ -496,6 +545,57 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               </div>
             )}
 
+            {step === 'streaming-review' && (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-ink-muted">
+                  Here&apos;s what we pulled from the link. Fill in anything it couldn&apos;t detect before adding.
+                </p>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">Title</span>
+                  <input
+                    value={reviewTitle}
+                    onChange={(e) => setReviewTitle(e.target.value)}
+                    placeholder="Song title"
+                    className={`${inputClass} w-full`}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                    Contributors
+                  </span>
+                  <input
+                    value={reviewContributors}
+                    onChange={(e) => setReviewContributors(e.target.value)}
+                    placeholder="Comma-separated (optional)"
+                    className={`${inputClass} w-full`}
+                  />
+                </label>
+                <div>
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">Cover</span>
+                  {reviewCoverUrl && !coverFile ? (
+                    <div className="flex items-center gap-2.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={reviewCoverUrl} alt="" className="h-12 w-12 flex-none rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setReviewCoverUrl(null)}
+                        className="text-xs text-ink-muted hover:text-ink hover:underline"
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+                      className="text-xs text-ink-muted file:mr-2 file:rounded-md file:border file:border-hairline file:bg-paper file:px-2 file:py-1 file:text-ink-muted"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {step !== 'choose' && (step !== 'manual' || format) && (
               <div className="mt-4 space-y-3">
                 {error && <UploadError>{error}</UploadError>}
@@ -503,8 +603,14 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                   <button type="button" onClick={close} disabled={busy} className={buttonClass('ghost')}>
                     Cancel
                   </button>
-                  <button type="button" onClick={submit} disabled={busy} className={buttonClass('solid')}>
-                    {busy ? 'Adding…' : 'Add'}
+                  {/* Streaming resolves into a review step first; everything else adds directly. */}
+                  <button
+                    type="button"
+                    onClick={step === 'streaming' ? startReview : submit}
+                    disabled={busy}
+                    className={buttonClass('solid')}
+                  >
+                    {busy ? (step === 'streaming' ? 'Checking…' : 'Adding…') : step === 'streaming' ? 'Continue' : 'Add'}
                   </button>
                 </div>
               </div>
