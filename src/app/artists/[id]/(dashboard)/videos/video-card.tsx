@@ -1,14 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { type IconType } from 'react-icons'
+import { SiSoundcloud, SiYoutube } from 'react-icons/si'
+import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { metricLabel } from '@/lib/analytics'
 import { publicVideoSrc } from '@/lib/video-render'
+import { CardModal } from '../card-modal'
+import { EntitySparkline } from '../entity-sparkline'
 import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
 import { deleteContentAction, renameVideoAction } from '../actions'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
 import { toast } from '../toast'
 
 export type VideoItem = {
@@ -58,9 +61,10 @@ function videoOpenUrl(video: VideoItem): string {
 
 /**
  * A video as a thumbnail tile (16:9, or 9:16 for a Short). Clicking the tile opens
- * the video on YouTube in a new tab. A three-dots menu (top-right) shares the link
- * (native share sheet, or copy to clipboard) or deletes the video. The checkbox
- * (top-left) is a LIVE on-site toggle owned by the parent browser (ADR 0009).
+ * the same single-style detail modal the music cards use — the video plays on the
+ * left with a 3-dots (Edit / Share / Delete), its 30-day performance on the right —
+ * with a separate rename modal behind "Edit". The checkbox (top-left) is a LIVE
+ * on-site toggle owned by the parent browser (ADR 0009).
  */
 export function VideoCard({
   video,
@@ -77,22 +81,25 @@ export function VideoCard({
   const badgeRaw = video.source && video.source !== 'manual' ? video.source : video.provider
   const badge = badgeRaw ? (BADGE_LABEL[badgeRaw] ?? badgeRaw) : null
   const url = videoOpenUrl(video)
-  // Uploaded videos have no YouTube poster; preview their first frame (#t=0.1 skips a
-  // possibly-black frame 0). The videos bucket is public.
-  const uploadedPreview =
+  // Brand mark for the link row (same shape as the music streaming-link rows).
+  const brand: { Icon: IconType; color: string } =
+    video.provider === 'youtube'
+      ? { Icon: SiYoutube, color: 'text-[#FF0000]' }
+      : video.provider === 'soundcloud'
+        ? { Icon: SiSoundcloud, color: 'text-[#FF5500]' }
+        : { Icon: SiYoutube, color: 'text-ink-faint' }
+  const uploadedSrc =
     video.provider === 'uploaded' && video.storage_path
       ? publicVideoSrc({ provider: 'uploaded', embed_url: null, storage_path: video.storage_path })
       : null
 
   const [menuOpen, setMenuOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [name, setName] = useState(video.title)
-  const [saving, setSaving] = useState(false)
-  useLockBodyScroll(renameOpen)
   const menuRef = useRef<HTMLDivElement>(null)
-
   const busyRef = useRef(false) // hard re-entry latch shared by delete + rename
+
   async function del() {
     if (busyRef.current) return
     busyRef.current = true
@@ -100,7 +107,10 @@ export function VideoCard({
     try {
       const res = await deleteContentAction('video', video.id, artistId)
       if (res?.error) toast(res.error, 'error')
-      else toast('Video deleted')
+      else {
+        toast('Video deleted')
+        setDetailOpen(false)
+      }
     } catch {
       toast("Couldn't delete that video.", 'error')
     } finally {
@@ -111,7 +121,6 @@ export function VideoCard({
   async function saveRename() {
     if (busyRef.current || !name.trim()) return
     busyRef.current = true
-    setSaving(true)
     try {
       const res = await renameVideoAction(video.id, artistId, name)
       if (res.error) {
@@ -124,7 +133,6 @@ export function VideoCard({
       toast("Couldn't rename that video.", 'error')
     } finally {
       busyRef.current = false
-      setSaving(false)
     }
   }
 
@@ -142,13 +150,6 @@ export function VideoCard({
     }
   }, [menuOpen])
 
-  useEffect(() => {
-    if (!renameOpen) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setRenameOpen(false)
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [renameOpen])
-
   async function share() {
     setMenuOpen(false)
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -161,12 +162,63 @@ export function VideoCard({
     }
     try {
       await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      toast('Link copied')
     } catch {
-      // clipboard blocked — nothing more we can do silently
+      toast("Couldn't copy the link.", 'error')
     }
   }
+
+  const aspect = video.is_short ? 'aspect-[9/16]' : 'aspect-video'
+
+  const kebabMenu = (
+    <div ref={menuRef} className="relative flex-none">
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label={`${video.title} options`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+      >
+        <Icon name="more" size={18} />
+      </button>
+      {menuOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false)
+              setName(video.title)
+              setRenameOpen(true)
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+          >
+            <Icon name="edit" size={15} /> Rename
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={share}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+          >
+            <Icon name="share" size={15} /> Share
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={del}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
+          >
+            <Icon name="trash" size={15} /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="relative">
@@ -176,58 +228,8 @@ export function VideoCard({
         <SelectToggle selected={onSite} onSite={onSite} onToggle={onToggleOnSite} label={video.title} />
       </div>
 
-      <div ref={menuRef} className="absolute right-2 top-2 z-20">
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Video options"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65"
-        >
-          <Icon name="more" size={16} />
-        </button>
-        {menuOpen && (
-          <div
-            role="menu"
-            className="absolute right-0 top-8 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={share}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-            >
-              <Icon name="share" size={15} /> Share
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false)
-                setName(video.title)
-                setRenameOpen(true)
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-            >
-              <Icon name="edit" size={15} /> Rename
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={del}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
-            >
-              <Icon name="trash" size={15} /> Delete
-            </button>
-          </div>
-        )}
-      </div>
-
-      <a href={url} target="_blank" rel="noopener noreferrer" className="group block">
-        <div
-          className={`relative flex ${video.is_short ? 'aspect-[9/16]' : 'aspect-video'} items-center justify-center overflow-hidden rounded-xl bg-ink`}
-        >
+      <button type="button" onClick={() => setDetailOpen(true)} className="group block w-full text-left">
+        <div className={cx('relative flex items-center justify-center overflow-hidden rounded-xl bg-ink', aspect)}>
           {video.poster ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -235,9 +237,9 @@ export function VideoCard({
               alt=""
               className="h-full w-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
             />
-          ) : uploadedPreview ? (
+          ) : uploadedSrc ? (
             <video
-              src={`${uploadedPreview}#t=0.1`}
+              src={`${uploadedSrc}#t=0.1`}
               muted
               playsInline
               preload="metadata"
@@ -247,11 +249,6 @@ export function VideoCard({
           <span className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
             <Icon name="videos" size={18} />
           </span>
-          {copied && (
-            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-2 py-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-white">
-              Link copied
-            </span>
-          )}
         </div>
         <div className="mt-2.5 truncate text-sm font-semibold group-hover:text-accent">{video.title}</div>
         <div className="mt-0.5 flex items-center gap-2 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">
@@ -263,37 +260,138 @@ export function VideoCard({
           {badge && <span>{badge}</span>}
         </div>
         <CardStat value={video.stat ?? 0} label={metricLabel('video')} />
-      </a>
+      </button>
 
-      {renameOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className={modalOverlayClass}
-          onClick={(e) => e.target === e.currentTarget && setRenameOpen(false)}
-        >
-          <div className={modalCardClass}>
-            <KLabel>Video</KLabel>
-            <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Rename</h2>
+      {/* Detail modal — same single-style layout as the music cards. */}
+      <CardModal
+        open={detailOpen}
+        onClose={() => !renameOpen && setDetailOpen(false)}
+        wide
+        footer={null}
+      >
+        <div className="font-space">
+          <div className="grid grid-cols-2 gap-8">
+            {/* LEFT — the player + title + 3-dots. */}
+            <div className="flex min-w-0 flex-col gap-4">
+              <div
+                className={cx(
+                  'relative flex items-center justify-center overflow-hidden rounded-2xl bg-ink',
+                  video.is_short ? 'mx-auto w-full max-w-[260px] aspect-[9/16]' : 'aspect-video',
+                )}
+              >
+                {uploadedSrc ? (
+                  <video src={uploadedSrc} controls playsInline className="h-full w-full" />
+                ) : video.embed_url ? (
+                  <iframe
+                    src={video.embed_url}
+                    title={video.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="h-full w-full"
+                  />
+                ) : video.poster ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={video.poster} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Icon name="videos" size={28} className="text-white/70" />
+                )}
+              </div>
+              {/* Smaller than the music title — YouTube titles run long. */}
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="min-w-0 flex-1 text-base font-bold leading-snug tracking-[-0.01em]">{video.title}</h3>
+                {kebabMenu}
+              </div>
+            </div>
+
+            {/* RIGHT — 30-day performance + the link row (same setup as the music link slots),
+                with Close/Save pinned to the bottom. */}
+            <div className="flex min-w-0 flex-col gap-6">
+              <EntitySparkline artistId={artistId} entityIds={[video.id]} label="Clicks · 30d" />
+
+              {/* Link row: brand icon · url · ↗ open — mirrors the streaming-link rows. */}
+              <div className="flex items-center gap-3">
+                <brand.Icon size={22} className={cx('flex-none', brand.color)} />
+                <span className="min-w-0 flex-1 truncate rounded-lg bg-surface px-3 py-2 font-space text-[12px] text-ink">
+                  {url}
+                </span>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open the video in a new tab"
+                  title="Open video"
+                  className="flex-none text-ink-muted transition-colors hover:text-ink"
+                >
+                  <Icon name="external" size={16} />
+                </a>
+              </div>
+
+              {video.youtube_views != null && (
+                <div className="font-space text-[11px] text-ink-faint">
+                  <span className="font-bold text-ink-muted">{compact(video.youtube_views)}</span> views
+                </div>
+              )}
+
+              <div className="mt-auto flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDetailOpen(false)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailOpen(false)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardModal>
+
+      {/* Rename — a separate modal opened from the detail modal's 3-dots "Rename". */}
+      <CardModal
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setRenameOpen(false)}
+              className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveRename}
+              disabled={!name.trim()}
+              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover disabled:opacity-50"
+            >
+              Save
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-5 font-space">
+          <h3 className="text-lg font-bold tracking-[-0.01em]">Rename video</h3>
+          <label className="block space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Title</span>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveRename()}
               placeholder="Video title"
-              className={`${inputClass} mt-4 w-full`}
+              className="w-full rounded-lg bg-surface px-3 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
             />
-            <div className="mt-5 flex justify-end gap-2 border-t border-hairline pt-4">
-              <button type="button" onClick={() => setRenameOpen(false)} className={buttonClass('ghost')}>
-                Cancel
-              </button>
-              <button type="button" onClick={saveRename} disabled={saving || !name.trim()} className={buttonClass('solid')}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
+          </label>
         </div>
-      )}
+      </CardModal>
     </div>
   )
 }
