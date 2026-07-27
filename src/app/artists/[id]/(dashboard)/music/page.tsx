@@ -8,9 +8,9 @@ import { importDriveFileAction, listDriveFilesAction, refreshSpotifyAction } fro
 import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
-import { type Track, type ReleaseOption } from '../tracks/track-card'
+import { type ReleaseOption } from '../tracks/track-card'
 import { type ReleaseLink, type ReleaseSong } from '../releases/release-card'
-import { MusicBrowser, LOOSE, type UnreleasedSong } from './music-browser'
+import { MusicBrowser, LOOSE, type MusicSong, type UnreleasedSong } from './music-browser'
 
 /**
  * The Music tab — ONE surface for the artist's whole catalog, classified by
@@ -51,7 +51,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   )
 
   const tracks = trackRows.map((row) => {
-    const t: Track & { created_at: string } = {
+    const t: MusicSong = {
       id: row.id as string,
       title: row.title as string,
       cover_url: (row.cover_url as string | null) ?? null,
@@ -65,6 +65,8 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       apple_url: (row.apple_url as string | null) ?? null,
       soundcloud_url: (row.soundcloud_url as string | null) ?? null,
       created_at: (row.created_at as string | null) ?? '',
+      // Its own category tag — so an orphan remix lands in Remixes, not Singles.
+      release_type: toReleaseType(row.release_type as string | null),
     }
     const bucket = trackBucket(
       {

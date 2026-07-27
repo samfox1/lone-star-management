@@ -21,7 +21,7 @@ import { SongAddButton } from './song-add'
 /** Group key for unreleased songs that aren't on any release. */
 export const LOOSE = 'loose'
 
-export type MusicSong = Track & { created_at: string }
+export type MusicSong = Track & { created_at: string; release_type: ReleaseType }
 
 export type UnreleasedSong = Track & {
   /** Release id when the song sits inside an UNRELEASED release, else LOOSE. */
@@ -142,7 +142,6 @@ export function MusicBrowser({
   // ----- Released half (hidden when bucket === 'unreleased') ----------------
   const showReleased = bucket !== 'unreleased'
   const shownReleases = sorted(filterBySite(releases, site), sort)
-  const releaseGroups = groupByOrigin(shownReleases, (r) => r.release_type, TYPE_ORDER, (k) => TYPE_LABEL[k as ReleaseType] ?? k)
   // Orphan singles are public site material → shown unless the Off-site lens is on. They
   // ride the Singles section (their per-song type is single/remix, but a release-less song
   // reads as a single here), never a separate 'loose' pile.
@@ -180,39 +179,36 @@ export function MusicBrowser({
     </div>
   )
 
-  const hasSingleGroup = releaseGroups.some((g) => g.key === 'single')
+  // Each type's section holds BOTH its releases AND its release-less orphan tracks, so an
+  // orphan remix (a SoundCloud remix with no release row) lands under Remixes, not Singles.
   const releasedContent = (
     <>
-      {releaseGroups.map((g) => {
-        // Orphan singles ride the Singles section: release cards first, then the
-        // release-less songs below them (a second grid, so the card sizes don't mix).
-        const orphansHere = g.key === 'single' ? shownOrphans : []
+      {TYPE_ORDER.map((type) => {
+        const rels = shownReleases.filter((r) => r.release_type === type)
+        const orphs = shownOrphans.filter((o) => o.release_type === type)
+        if (rels.length + orphs.length === 0) return null
         return (
-          <OriginSection key={g.key} label={g.label} count={g.items.length + orphansHere.length}>
-            {/* Fixed-width tiles that wrap: an expanded EP/album grows only by its tracklist
-                (to the right), never resizing the cover, and the neighbours reflow around it. */}
-            <div className="flex flex-wrap gap-x-5 gap-y-8">
-              {g.items.map((r) => (
-                <ReleaseCard
-                  key={r.id}
-                  release={r}
-                  artistId={artistId}
-                  artistSlug={artistSlug}
-                  selected={selected.has(r.id)}
-                  onToggleSelect={() => toggleSelect(r.id)}
-                />
-              ))}
-            </div>
-            {orphansHere.length > 0 && orphanGrid(orphansHere)}
+          <OriginSection key={type} label={TYPE_LABEL[type as ReleaseType]} count={rels.length + orphs.length}>
+            {rels.length > 0 && (
+              // Fixed-width tiles that wrap: an expanded EP/album grows only by its tracklist
+              // (to the right), never resizing the cover, and the neighbours reflow around it.
+              <div className="flex flex-wrap gap-x-5 gap-y-8">
+                {rels.map((r) => (
+                  <ReleaseCard
+                    key={r.id}
+                    release={r}
+                    artistId={artistId}
+                    artistSlug={artistSlug}
+                    selected={selected.has(r.id)}
+                    onToggleSelect={() => toggleSelect(r.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {orphs.length > 0 && orphanGrid(orphs)}
           </OriginSection>
         )
       })}
-      {/* Orphans with no Singles release group to host them still get a Singles heading. */}
-      {shownOrphans.length > 0 && !hasSingleGroup && (
-        <OriginSection label="Singles" count={shownOrphans.length}>
-          {orphanGrid(shownOrphans)}
-        </OriginSection>
-      )}
     </>
   )
 

@@ -107,7 +107,7 @@ describe('MusicBrowser — orphan singles (no loose bucket)', () => {
   const orphan = (over: Partial<MusicSong>): MusicSong => ({
     id: 'o', title: 'Bootleg', cover_url: null, stream_url: null, source: 'manual',
     audio_path: null, release_id: null, spotify_id: null, apple_id: null,
-    deezer_id: null, apple_url: null, created_at: '2026-01-01', ...over,
+    deezer_id: null, apple_url: null, created_at: '2026-01-01', release_type: 'single', ...over,
   })
 
   it('renders an orphan single as a song, and never a "Loose" section', () => {
