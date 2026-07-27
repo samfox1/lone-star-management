@@ -10,7 +10,12 @@ import { EntitySparkline } from '../entity-sparkline'
 import { TrackAudio } from '../track-audio'
 import { toast } from '../toast'
 import { SONG_PLATFORMS } from '../releases/release-card'
-import { deleteContentAction, setTrackReleaseAction, updateContentAction } from '../actions'
+import {
+  deleteContentAction,
+  setTrackParentReleaseAction,
+  setTrackReleaseAction,
+  updateContentAction,
+} from '../actions'
 
 /** A release the track can be assigned to (id + title, for the selector). */
 export type ReleaseOption = { id: string; title: string }
@@ -23,6 +28,8 @@ export type Track = TrackPlatformIds & {
   source: string | null
   audio_path: string | null
   release_id: string | null
+  /** "Also appears on" — a bigger EP/album this track is part of, beyond its own home. */
+  parent_release_id: string | null
   /** Optional own release date (orphan singles); album songs show the album's year instead. */
   release_date: string | null
 }
@@ -53,6 +60,7 @@ export function TrackCard({
   const [editOpen, setEditOpen] = useState(false)
   const [titleDraft, setTitleDraft] = useState(track.title)
   const [releaseDraft, setReleaseDraft] = useState(track.release_id ?? '')
+  const [parentDraft, setParentDraft] = useState(track.parent_release_id ?? '')
   const [releaseDateDraft, setReleaseDateDraft] = useState(track.release_date?.slice(0, 10) ?? '')
   const platforms = trackPlatforms(track)
   const year = track.release_date?.slice(0, 4)
@@ -87,12 +95,13 @@ export function TrackCard({
     setMenuOpen(false)
     setTitleDraft(track.title)
     setReleaseDraft(track.release_id ?? '')
+    setParentDraft(track.parent_release_id ?? '')
     setReleaseDateDraft(track.release_date?.slice(0, 10) ?? '')
     setEditOpen(true)
   }
 
-  // Save the editable details (title, release date, which release it belongs to), then
-  // close the editor.
+  // Save the editable details (title, release date, home release, and "also appears on"
+  // project), then close the editor.
   async function saveDetails() {
     const t = titleDraft.trim()
     if (!t) {
@@ -115,6 +124,16 @@ export function TrackCard({
       const fd = new FormData()
       fd.set('release_id', releaseDraft)
       const res = await setTrackReleaseAction(track.id, artistId, fd)
+      if (res?.error) {
+        toast(res.error, 'error')
+        return
+      }
+      saved = true
+    }
+    if (parentDraft !== (track.parent_release_id ?? '')) {
+      const fd = new FormData()
+      fd.set('parent_release_id', parentDraft)
+      const res = await setTrackParentReleaseAction(track.id, artistId, fd)
       if (res?.error) {
         toast(res.error, 'error')
         return
@@ -327,21 +346,42 @@ export function TrackCard({
             />
           </label>
           {releases.length > 0 && (
-            <label className="block space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release</span>
-              <select
-                value={releaseDraft}
-                onChange={(e) => setReleaseDraft(e.target.value)}
-                className="block w-full rounded-lg border border-hairline bg-paper px-2.5 py-2 font-space text-sm text-ink outline-none focus:border-ink-faint"
-              >
-                <option value="">— None —</option>
-                {releases.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <>
+              <label className="block space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release</span>
+                <select
+                  value={releaseDraft}
+                  onChange={(e) => setReleaseDraft(e.target.value)}
+                  className="block w-full rounded-lg border border-hairline bg-paper px-2.5 py-2 font-space text-sm text-ink outline-none focus:border-ink-faint"
+                >
+                  <option value="">— None (standalone single) —</option>
+                  {releases.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {/* "Also appears on": a bigger EP/album this song is part of beyond its home
+                  release, so it shows in that project's tracklist too. Can't be its home. */}
+              <label className="block space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Also appears on</span>
+                <select
+                  value={parentDraft}
+                  onChange={(e) => setParentDraft(e.target.value)}
+                  className="block w-full rounded-lg border border-hairline bg-paper px-2.5 py-2 font-space text-sm text-ink outline-none focus:border-ink-faint"
+                >
+                  <option value="">— None —</option>
+                  {releases
+                    .filter((r) => r.id !== releaseDraft)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </>
           )}
         </div>
       </CardModal>

@@ -877,6 +877,25 @@ export async function setTrackReleaseAction(
 }
 
 /**
+ * Set a track's "also appears on" project (`parent_release_id`) — the bigger EP/album a
+ * standalone single is also part of. Separate from `release_id` (the track's own home), so a
+ * single can live on its own AND show in the album's tracklist. Empty clears it. RLS scopes
+ * the write to the owner.
+ */
+export async function setTrackParentReleaseAction(
+  trackId: string,
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const parent_release_id = String(formData.get('parent_release_id') ?? '').trim() || null
+  const supabase = await createClient()
+  const { error } = await supabase.from('tracks').update({ parent_release_id }).eq('id', trackId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
  * Set (or clear) a release's DSP link for one platform `label`. This is the whole
  * link lifecycle in one call: an empty url REMOVES that platform's link, a non-empty
  * url REPLACES it (or adds it) — so the editor's per-platform slots just save what's

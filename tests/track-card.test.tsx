@@ -38,8 +38,9 @@ afterEach(() => {
 
 const track = (over: Partial<Track> = {}): Track => ({
   id: 't1', title: 'Demo', cover_url: null, stream_url: null, source: 'manual',
-  audio_path: null, release_id: null, release_date: null, spotify_id: null, apple_id: null,
-  deezer_id: null, apple_url: null, soundcloud_url: null, deezer_url: null, ...over,
+  audio_path: null, release_id: null, parent_release_id: null, release_date: null,
+  spotify_id: null, apple_id: null, deezer_id: null, apple_url: null,
+  soundcloud_url: null, deezer_url: null, ...over,
 })
 
 function openModal(t: Track = track()) {

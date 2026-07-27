@@ -59,6 +59,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       source: (row.source as string | null) ?? null,
       audio_path: (row.audio_path as string | null) ?? null,
       release_id: (row.release_id as string | null) ?? null,
+      parent_release_id: (row.parent_release_id as string | null) ?? null,
       spotify_id: (row.spotify_id as string | null) ?? null,
       apple_id: (row.apple_id as string | null) ?? null,
       deezer_id: (row.deezer_id as string | null) ?? null,
@@ -90,15 +91,12 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     return { ...t, bucket }
   })
 
-  // Songs grouped under their PARENT release (`release_id`, backfilled 20260727120000) —
-  // the same grouping law the editor's project seam uses (lib/music.ts). Not album name,
-  // not cover art.
+  // Songs grouped under their home release (`release_id`) AND any `parent_release_id` — so a
+  // single that also appears on a bigger EP/album (its parent) shows in that project's
+  // tracklist too, while still living standalone as its own single. Not album name, not cover.
   const songsByRelease = new Map<string, ReleaseSong[]>()
   for (const row of trackRows) {
-    const rid = row.release_id as string | null
-    if (!rid) continue
-    const list = songsByRelease.get(rid) ?? []
-    list.push({
+    const song: ReleaseSong = {
       id: row.id as string,
       title: row.title as string,
       featured_artists: (row.featured_artists as string[] | null) ?? [],
@@ -111,8 +109,13 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       soundcloud_url: (row.soundcloud_url as string | null) ?? null,
       deezer_url: (row.deezer_url as string | null) ?? null,
       audio_path: (row.audio_path as string | null) ?? null,
-    })
-    songsByRelease.set(rid, list)
+    }
+    for (const key of [row.release_id as string | null, row.parent_release_id as string | null]) {
+      if (!key) continue
+      const list = songsByRelease.get(key) ?? []
+      list.push(song)
+      songsByRelease.set(key, list)
+    }
   }
 
   const toReleaseCard = (row: Record<string, unknown>) => {
