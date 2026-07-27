@@ -168,6 +168,18 @@ export function MusicBrowser({
     </CardGrid>
   )
 
+  // Orphan singles ride the Singles section next to the release cards, so they match them:
+  // same 192px cover, title only (no platform-badge subtitle).
+  const orphanGrid = (items: MusicSong[]) => (
+    <div className="flex flex-wrap gap-x-5 gap-y-8">
+      {items.map((t) => (
+        <div key={t.id} className="w-48">
+          <TrackCard artistId={artistId} track={t} releases={releaseOptions} hideBadges />
+        </div>
+      ))}
+    </div>
+  )
+
   const hasSingleGroup = releaseGroups.some((g) => g.key === 'single')
   const releasedContent = (
     <>
@@ -191,14 +203,14 @@ export function MusicBrowser({
                 />
               ))}
             </div>
-            {orphansHere.length > 0 && songGrid(orphansHere)}
+            {orphansHere.length > 0 && orphanGrid(orphansHere)}
           </OriginSection>
         )
       })}
       {/* Orphans with no Singles release group to host them still get a Singles heading. */}
       {shownOrphans.length > 0 && !hasSingleGroup && (
         <OriginSection label="Singles" count={shownOrphans.length}>
-          {songGrid(shownOrphans)}
+          {orphanGrid(shownOrphans)}
         </OriginSection>
       )}
     </>

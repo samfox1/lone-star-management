@@ -65,10 +65,14 @@ export function TrackCard({
   track,
   artistId,
   releases,
+  hideBadges = false,
 }: {
   track: Track
   artistId: string
   releases: ReleaseOption[]
+  /** Hide the platform-badge subtitle (orphan singles in the Singles grid read as a
+   *  plain single card — title only — to match the release cards beside them). */
+  hideBadges?: boolean
 }) {
   const platforms = trackPlatforms(track)
   const openSourceHref = safeHref(track.stream_url)
@@ -89,7 +93,7 @@ export function TrackCard({
             )}
           </div>
           <div className="mt-2.5 truncate text-sm font-semibold group-hover:text-accent">{track.title}</div>
-          {platforms.length > 0 && (
+          {!hideBadges && platforms.length > 0 && (
             <div className="mt-0.5">
               <PlatformBadges track={track} />
             </div>
