@@ -697,8 +697,6 @@ export async function refreshYouTubeAction(artistId: string): Promise<{ ok: bool
   return pullYouTube(artistId)
 }
 
-type ReleaseLink = { label: string; url: string }
-
 /** Create a release (draft). DSP links are added separately. */
 export async function addReleaseAction(artistId: string, formData: FormData) {
   const title = String(formData.get('title') ?? '').trim()
@@ -740,7 +738,12 @@ export async function setReleaseTypeAction(
 ): Promise<{ error?: string }> {
   const release_type = toReleaseType(String(formData.get('release_type') ?? ''))
   const supabase = await createClient()
-  const { error } = await supabase.from('releases').update({ release_type }).eq('id', releaseId)
+  // Lock it so a later Spotify Sync (which re-derives type and has no EP/remix) can't revert
+  // this deliberate choice.
+  const { error } = await supabase
+    .from('releases')
+    .update({ release_type, release_type_locked: true })
+    .eq('id', releaseId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -917,17 +920,20 @@ export async function setReleaseLinkAction(
   const trimmedLabel = label.trim()
   if (!trimmedLabel) return { error: 'Missing platform.' }
   const raw = String(formData.get('url') ?? '').trim()
-  const supabase = await createClient()
-  const { data: rel } = await supabase.from('releases').select('links').eq('id', releaseId).single()
-  // Drop any existing entry for this platform, then re-add it when a url is present.
-  const others = ((rel?.links as ReleaseLink[]) ?? []).filter((l) => l.label !== trimmedLabel)
-  let links = others
+  let url = ''
   if (raw) {
-    const url = safeHref(raw)
-    if (!url) return { error: 'Enter a valid URL.' }
-    links = [...others, { label: trimmedLabel, url }]
+    const safe = safeHref(raw)
+    if (!safe) return { error: 'Enter a valid URL.' }
+    url = safe
   }
-  const { error } = await supabase.from('releases').update({ links }).eq('id', releaseId)
+  const supabase = await createClient()
+  // Atomic filter-and-append in one UPDATE (the DB function reads the row's CURRENT links),
+  // so two quick blurs on different slots can't clobber each other. An empty url clears it.
+  const { error } = await supabase.rpc('set_release_link', {
+    p_release_id: releaseId,
+    p_label: trimmedLabel,
+    p_url: url,
+  })
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}

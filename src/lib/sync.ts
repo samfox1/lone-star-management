@@ -349,14 +349,21 @@ export async function syncSpotifyReleases(
 ): Promise<{ added: number; updated: number }> {
   const { data: existing, error } = await supabase
     .from('releases')
-    .select('id, slug, spotify_id')
+    .select('id, slug, spotify_id, release_type_locked')
     .eq('artist_id', artistId)
   if (error) throw new Error(error.message)
-  const rows = (existing ?? []) as { id: string; slug: string; spotify_id: string | null }[]
+  const rows = (existing ?? []) as {
+    id: string
+    slug: string
+    spotify_id: string | null
+    release_type_locked: boolean | null
+  }[]
   const idBySpotify = new Map<string, string>()
+  const lockedById = new Map<string, boolean>()
   const slugs = new Set<string>()
   for (const r of rows) {
     if (r.spotify_id) idBySpotify.set(r.spotify_id, r.id)
+    lockedById.set(r.id, !!r.release_type_locked)
     slugs.add(r.slug)
   }
 
@@ -364,13 +371,14 @@ export async function syncSpotifyReleases(
   let updated = 0
 
   for (const rel of releases) {
-    const meta = {
+    const existingId = idBySpotify.get(rel.spotify_id)
+    // A locked release keeps its manager-set type (Sync still refreshes title/cover/date).
+    const meta: Record<string, unknown> = {
       title: rel.title,
       cover_url: rel.cover_url,
       release_date: rel.release_date,
-      release_type: rel.release_type,
     }
-    const existingId = idBySpotify.get(rel.spotify_id)
+    if (!(existingId && lockedById.get(existingId))) meta.release_type = rel.release_type
     if (existingId) {
       const { error: uErr } = await supabase.from('releases').update(meta).eq('id', existingId)
       if (uErr) throw new Error(uErr.message)
