@@ -238,8 +238,8 @@ export function MusicBrowser({
               {releases.length + unreleasedReleases.length}{' '}
               {releases.length + unreleasedReleases.length === 1 ? 'release' : 'releases'}
             </KLabel>
-            <BucketFilter value={bucket} onChange={setBucket} />
             <OnSiteFilter value={site} onChange={setSite} />
+            <BucketFilter value={bucket} onChange={setBucket} />
           </div>
         }
         chips={[]}
