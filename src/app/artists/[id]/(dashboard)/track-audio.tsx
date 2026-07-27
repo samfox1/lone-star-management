@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField } from './file-drop-field'
 import { useStorageUpload } from './use-storage-upload'
@@ -23,6 +24,38 @@ function fmtTime(s: number): string {
   const m = Math.floor(s / 60)
   const sec = Math.floor(s % 60)
   return `${m}:${sec.toString().padStart(2, '0')}`
+}
+
+/**
+ * A small modal for the drop zone, so uploading never resizes the modal it's opened from.
+ * It sits on top of another CardModal, so its Escape handler runs in the CAPTURE phase and
+ * stops immediate propagation — that way Escape closes THIS modal only, not the parent
+ * (whose keydown listener is on document in the bubble phase).
+ */
+function AudioUploadModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation()
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [open, onClose])
+
+  if (!open) return null
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className={modalOverlayClass}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className={cx(modalCardClass, 'font-space')}>{children}</div>
+    </div>
+  )
 }
 
 /**
@@ -141,18 +174,26 @@ export function TrackAudio({
         )}
       </div>
 
-      {/* Reveal the drop zone from the plus. Replacing audio for a song that already has it
-          is a rarer path, kept in the 3-dots-free flow: re-open by removing then re-adding. */}
-      {uploadOpen && !hasAudio && (
-        <FileDropField
-          accept="audio/mpeg,audio/mp4,.mp3,.m4a"
-          label="Drop an audio file, or click to upload"
-          busy={busy}
-          progress={progress}
-          error={error}
-          onFile={upload}
-        />
-      )}
+      {/* The plus opens the drop zone in its OWN modal, so the player never resizes. */}
+      <AudioUploadModal open={uploadOpen && !hasAudio} onClose={() => setUploadOpen(false)}>
+        <h3 className="text-lg font-bold tracking-[-0.01em]">Add audio</h3>
+        <p className="mt-1 text-[12px] text-ink-muted">Upload this song&apos;s audio file (MP3 or M4A).</p>
+        <div className="mt-4">
+          <FileDropField
+            accept="audio/mpeg,audio/mp4,.mp3,.m4a"
+            label="Drop an audio file, or click to upload"
+            busy={busy}
+            progress={progress}
+            error={error}
+            onFile={upload}
+          />
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button type="button" onClick={() => setUploadOpen(false)} className={buttonClass('ghost')}>
+            Cancel
+          </button>
+        </div>
+      </AudioUploadModal>
     </div>
   )
 }
