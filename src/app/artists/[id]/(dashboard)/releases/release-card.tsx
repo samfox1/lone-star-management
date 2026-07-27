@@ -172,11 +172,10 @@ export function ReleaseCard({
             </div>
           </div>
 
-          <div className="mt-5 font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Tracklist</div>
           {songCount === 0 ? (
-            <p className="mt-2 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
+            <p className="mt-4 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
           ) : (
-            <ol className="mt-2 max-h-[50vh] space-y-0.5 overflow-auto">
+            <ol className="mt-4 max-h-[50vh] space-y-0.5 overflow-auto">
               {release.songs.map((s, i) => (
                 <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
                   <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
