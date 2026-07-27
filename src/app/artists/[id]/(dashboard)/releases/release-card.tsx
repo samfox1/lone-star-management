@@ -100,6 +100,7 @@ export function ReleaseCard({
   const [editMode, setEditMode] = useState(false)
   const [titleDraft, setTitleDraft] = useState(release.title)
   const [dateDraft, setDateDraft] = useState(release.release_date?.slice(0, 10) ?? '')
+  const [typeDraft, setTypeDraft] = useState<ReleaseType>(release.release_type)
   // The tracklist song whose links modal is open (click a song to add/edit its link).
   const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
   const year = release.release_date?.slice(0, 4)
@@ -163,21 +164,13 @@ export function ReleaseCard({
     setMenuOpen(false)
     setTitleDraft(release.title)
     setDateDraft(release.release_date?.slice(0, 10) ?? '')
+    setTypeDraft(release.release_type)
     setEditMode(true)
   }
 
-  // Immediately apply a release-type pill (no separate Save — one tap sets it).
-  async function applyType(type: ReleaseType) {
-    if (type === release.release_type) return
-    const fd = new FormData()
-    fd.set('release_type', type)
-    const res = await setReleaseTypeAction(release.id, artistId, fd)
-    if (res?.error) toast(res.error, 'error')
-    else toast('Type updated')
-  }
-
-  // The footer Save: commit any detail edits (title/date), then close. Nothing to save
-  // in overview mode → it just closes. Links + type already save on their own.
+  // The Save button: commit any detail edits (title, date, type) as a batch — nothing is
+  // written until this is pressed. Overview mode has no drafts, so it just closes. (Streaming
+  // links are separate; they still save on blur.)
   async function saveAndClose() {
     if (editMode) {
       const t = titleDraft.trim()
@@ -185,8 +178,9 @@ export function ReleaseCard({
         toast('Give the release a title.', 'error')
         return
       }
-      const changed = t !== release.title || dateDraft !== (release.release_date?.slice(0, 10) ?? '')
-      if (changed) {
+      let saved = false
+      const detailsChanged = t !== release.title || dateDraft !== (release.release_date?.slice(0, 10) ?? '')
+      if (detailsChanged) {
         const fd = new FormData()
         fd.set('title', t)
         fd.set('release_date', dateDraft)
@@ -195,8 +189,19 @@ export function ReleaseCard({
           toast(res.error, 'error')
           return
         }
-        toast('Saved')
+        saved = true
       }
+      if (typeDraft !== release.release_type) {
+        const fd = new FormData()
+        fd.set('release_type', typeDraft)
+        const res = await setReleaseTypeAction(release.id, artistId, fd)
+        if (res?.error) {
+          toast(res.error, 'error')
+          return
+        }
+        saved = true
+      }
+      if (saved) toast('Saved')
     }
     setEditMode(false)
     setEditing(false)
@@ -262,50 +267,44 @@ export function ReleaseCard({
   // Type control, constrained to conversions that make sense: a multi-track release only
   // switches EP ⇄ Album (never down to a single); a single is a remix or not (a toggle);
   // a featured release just shows its label.
-  const isRemix = release.release_type === 'remix'
-  const typePill = (t: ReleaseType) => (
-    <button
-      key={t}
-      type="button"
-      onClick={() => applyType(t)}
-      aria-pressed={t === release.release_type}
-      className={cx(
-        'rounded-lg px-3 py-1.5 font-space text-[12px] font-semibold transition-colors',
-        t === release.release_type ? 'bg-ink text-white' : 'border border-hairline text-ink-muted hover:text-ink',
-      )}
-    >
-      {RELEASE_TYPE_LABEL[t]}
-    </button>
-  )
-  const typeControl = expandable ? (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-      {(['ep', 'album'] as const).map(typePill)}
-    </div>
-  ) : release.release_type === 'single' || release.release_type === 'remix' ? (
-    <label className="flex items-center gap-3">
-      <span className="text-[13px] text-ink-muted">Is this a remix of another track?</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={isRemix}
-        onClick={() => applyType(isRemix ? 'single' : 'remix')}
-        className={cx('relative h-6 w-11 flex-none rounded-full transition-colors', isRemix ? 'bg-ink' : 'bg-ink/15')}
-      >
-        <span
-          className={cx(
-            'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
-            isRemix && 'translate-x-5',
-          )}
-        />
-      </button>
-    </label>
-  ) : (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-      <span className="text-[13px] text-ink">{RELEASE_TYPE_LABEL[release.release_type]}</span>
-    </div>
-  )
+  // Type is a value in overview and only changes in edit mode — and even then only on Save
+  // (it tracks a draft). The choice is constrained: EP ⇄ Album for multi-track, Single ⇄
+  // Remix for a single. `null` (e.g. Featured) shows the label with no toggle.
+  const typeOptions: readonly [ReleaseType, ReleaseType] | null = expandable
+    ? ['ep', 'album']
+    : release.release_type === 'single' || release.release_type === 'remix'
+      ? ['single', 'remix']
+      : null
+  const typeControl =
+    editMode && typeOptions ? (
+      // Segmented two-option toggle, same shape as the released/unreleased choice.
+      <div className="space-y-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+        <div className="grid max-w-[240px] grid-cols-2 gap-2">
+          {typeOptions.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTypeDraft(t)}
+              aria-pressed={typeDraft === t}
+              className={cx(
+                'rounded-lg border px-3 py-2 font-space text-xs font-semibold transition-colors',
+                typeDraft === t
+                  ? 'border-ink bg-ink text-white'
+                  : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
+              )}
+            >
+              {RELEASE_TYPE_LABEL[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : (
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+        <span className="text-[13px] text-ink">{RELEASE_TYPE_LABEL[release.release_type]}</span>
+      </div>
+    )
 
   // The 3-dots menu (Edit / Share / Delete). Lives beside the title in the modal's left column.
   const kebabMenu = (
