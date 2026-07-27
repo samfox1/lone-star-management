@@ -555,42 +555,89 @@ export function ReleaseCard({
         {detailsEditForm}
       </CardModal>
 
-      {/* Per-song links: click a song in the tracklist to add/edit its streaming link. */}
-      <CardModal open={linkSong !== null} onClose={() => setLinkSong(null)}>
+      {/* Click a tracklist song → it opens exactly like a single (a song on an album IS one),
+          borrowing the album cover + year, with its own listens and per-platform links. */}
+      <CardModal open={linkSong !== null} onClose={() => setLinkSong(null)} wide footer={null}>
         {linkSong && (
           <div className="font-space">
-            <h3 className="text-lg font-bold tracking-[-0.01em]">{linkSong.title}</h3>
-            {feat(linkSong) && <div className="mt-0.5 text-[12px] text-ink-faint">{feat(linkSong)}</div>}
+            <div className="grid grid-cols-2 gap-8">
+              {/* LEFT — album art + song title (shown as a single), year pinned to the bottom. */}
+              <div className="flex min-w-0 flex-col gap-4">
+                <div className="flex aspect-square w-full max-w-[360px] items-center justify-center overflow-hidden rounded-2xl bg-surface">
+                  {release.cover_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="h-16 w-16 rounded-full bg-ink" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-2xl font-bold leading-tight tracking-[-0.01em]">{linkSong.title}</h3>
+                  {feat(linkSong) && <div className="mt-1 text-[13px] text-ink-muted">{feat(linkSong)}</div>}
+                </div>
+                {year && <div className="mt-auto text-[13px] text-ink-muted">{year}</div>}
+              </div>
 
-            {/* One slot per platform. Each saves on blur — paste a link and it's stored, clear
-                it and it's removed. Setting any marks the song Released by derivation. */}
-            <div className="mt-5 space-y-3">
-              {SONG_PLATFORMS.map((p) => {
-                const value = linkSong[p.field] ?? ''
-                return (
-                  <div key={p.field} className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-surface">
-                      <p.Icon size={18} className={value ? p.color : 'text-ink-faint'} />
-                    </span>
-                    <label className="min-w-0 flex-1">
-                      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-muted">
-                        {p.label}
-                      </span>
-                      <input
-                        key={value}
-                        type="url"
-                        defaultValue={value}
-                        placeholder={p.placeholder}
-                        onBlur={(e) => saveSongLink(linkSong.id, p.field, value, e.currentTarget)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.currentTarget.blur()
-                        }}
-                        className="w-full rounded-lg bg-surface px-3 py-2 font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
-                      />
-                    </label>
-                  </div>
-                )
-              })}
+              {/* RIGHT — the song's own performance + per-platform links (save on blur). */}
+              <div className="flex min-w-0 flex-col gap-6">
+                <EntitySparkline artistId={artistId} entityIds={[linkSong.id]} label="Listens · 30d" />
+
+                <div className="space-y-2.5">
+                  {SONG_PLATFORMS.map((p) => {
+                    const value = linkSong[p.field] ?? ''
+                    return (
+                      <div key={p.field} className="flex items-center gap-3">
+                        <p.Icon size={22} className={cx('flex-none', value ? p.color : 'text-ink-faint')} />
+                        <input
+                          key={value}
+                          type="url"
+                          defaultValue={value}
+                          placeholder={p.placeholder}
+                          aria-label={`${p.label} link`}
+                          onBlur={(e) => saveSongLink(linkSong.id, p.field, value, e.currentTarget)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur()
+                          }}
+                          className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
+                        />
+                        {value ? (
+                          <a
+                            href={value}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Open ${p.label} link in a new tab`}
+                            title="Open link to check it works"
+                            className="flex-none text-ink-muted transition-colors hover:text-ink"
+                          >
+                            <Icon name="external" size={16} />
+                          </a>
+                        ) : (
+                          <span aria-hidden className="flex-none text-ink-faint/40">
+                            <Icon name="external" size={16} />
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-auto flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setLinkSong(null)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkSong(null)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
