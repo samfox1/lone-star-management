@@ -461,7 +461,7 @@ export function ReleaseCard({
               />
 
               {/* One input per platform — paste a link and it saves on blur, clear it and it's
-                  removed. The icon lights up when a link is set. */}
+                  removed. The icon lights up when a link is set; the ↗ opens it to check it works. */}
               <div className="space-y-2.5">
                 {STREAMING_PLATFORMS.map((p) => {
                   const link = release.links.find((l) => l.label === p.label) ?? null
@@ -483,6 +483,27 @@ export function ReleaseCard({
                         }}
                         className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
                       />
+                      {/* Open the saved link in a new tab to confirm it works. Faint + inert
+                          until a link is set, so the rows stay aligned either way. */}
+                      {link ? (
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${p.label} link in a new tab`}
+                          title="Open link to check it works"
+                          className="flex h-10 w-10 flex-none items-center justify-center rounded-xl text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+                        >
+                          <Icon name="external" size={16} />
+                        </a>
+                      ) : (
+                        <span
+                          aria-hidden
+                          className="flex h-10 w-10 flex-none items-center justify-center text-ink-faint/40"
+                        >
+                          <Icon name="external" size={16} />
+                        </span>
+                      )}
                     </div>
                   )
                 })}
