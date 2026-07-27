@@ -19,7 +19,7 @@ export default async function ImagesPage({ params }: { params: Promise<{ id: str
   const artist = await requireArtist(id)
   const { data: rows } = await supabase
     .from('media')
-    .select('id, storage_path, created_at')
+    .select('id, storage_path, created_at, on_site')
     .eq('artist_id', id)
     .eq('purpose', 'gallery_image')
     .order('created_at', { ascending: false })
@@ -28,6 +28,7 @@ export default async function ImagesPage({ params }: { params: Promise<{ id: str
     id: m.id as string,
     storage_path: m.storage_path as string,
     created_at: (m.created_at as string | null) ?? '',
+    on_site: (m.on_site as boolean | null) ?? false,
   }))
 
   return (
