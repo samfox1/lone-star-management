@@ -91,10 +91,9 @@ describe('SongAddButton', () => {
     fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
       target: { value: 'https://open.spotify.com/track/ZZ9' },
     })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Single' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
 
-    // Review step: pre-filled with what the service resolved.
+    // Review step: pre-filled with what the service resolved; remix guessed from the title.
     const title = await within(dialog).findByPlaceholderText('Song title')
     expect(title).toHaveValue('Resolved Title')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
@@ -106,9 +105,27 @@ describe('SongAddButton', () => {
       title: 'Resolved Title',
       released: true,
       spotify_id: 'ZZ9',
-      release_type: 'single',
+      release_type: 'single', // no "remix" in the title → guessed single
     })
     expect(uploads).toHaveLength(0)
+  })
+
+  it('streaming: guesses "remix" from the resolved title, no toggle needed', async () => {
+    vi.mocked(resolveStreamingSongAction).mockResolvedValueOnce({
+      ok: true as const,
+      song: { title: 'Cool Song [Skeen Remix]', cover_url: null, contributors: [] },
+    })
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
+    fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
+      target: { value: 'https://open.spotify.com/track/RM1' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    await within(dialog).findByPlaceholderText('Song title')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(inserted).toHaveLength(1))
+    expect(inserted[0]).toMatchObject({ title: 'Cool Song [Skeen Remix]', release_type: 'remix' })
   })
 
   it('streaming: when the service resolves nothing, the review lets the manager fill it in', async () => {
@@ -118,13 +135,13 @@ describe('SongAddButton', () => {
     fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
       target: { value: 'https://open.spotify.com/track/QQ1' },
     })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Remix' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
 
-    // Nothing detected → blank title the manager completes before adding.
+    // Nothing detected → blank title the manager completes, then confirms the remix toggle.
     const title = await within(dialog).findByPlaceholderText('Song title')
     expect(title).toHaveValue('')
     fireEvent.change(title, { target: { value: 'Hand Typed' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, a remix' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(1))

@@ -137,20 +137,16 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     if (busyRef.current) return
     setError(null)
     if (!hasUrls) return setError('Paste at least one streaming link.')
-    if (!streamingType) return setError('Is it a single or a remix?')
     setBusyBoth(true)
     try {
       const resolved = await resolveStreamingSongAction(urls)
-      if (resolved.ok) {
-        setReviewTitle(resolved.song.title.slice(0, 120))
-        setReviewContributors(resolved.song.contributors.join(', '))
-        setReviewCoverUrl(resolved.song.cover_url)
-      } else {
-        // Couldn't detect anything — go to review empty so the manager fills it in by hand.
-        setReviewTitle('')
-        setReviewContributors('')
-        setReviewCoverUrl(null)
-      }
+      const title = resolved.ok ? resolved.song.title.slice(0, 120) : ''
+      setReviewTitle(title)
+      setReviewContributors(resolved.ok ? resolved.song.contributors.join(', ') : '')
+      setReviewCoverUrl(resolved.ok ? resolved.song.cover_url : null)
+      // Best-guess the remix flag from the title ("… [remix]", "… Remix") — the manager
+      // confirms it on the review step, so a wrong guess is one click to fix.
+      setStreamingType(/\bremix\b/i.test(title) ? 'remix' : 'single')
       setStep('streaming-review')
     } finally {
       setBusyBoth(false)
@@ -524,24 +520,6 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     </div>
                   ))}
                 </div>
-                {/* The service can't say single vs remix, so the manager tags it. */}
-                <div>
-                  <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                    What is it?
-                  </span>
-                  <div className="flex gap-2">
-                    {(['single', 'remix'] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setStreamingType(t)}
-                        className={buttonClass(streamingType === t ? 'solid' : 'ghost')}
-                      >
-                        {t === 'single' ? 'Single' : 'Remix'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
 
@@ -592,6 +570,24 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                       className="text-xs text-ink-muted file:mr-2 file:rounded-md file:border file:border-hairline file:bg-paper file:px-2 file:py-1 file:text-ink-muted"
                     />
                   )}
+                </div>
+                {/* Required: the manager confirms the machine's remix guess (from the title). */}
+                <div>
+                  <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                    Is this a remix?
+                  </span>
+                  <div className="flex gap-2">
+                    {(['single', 'remix'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setStreamingType(t)}
+                        className={buttonClass(streamingType === t ? 'solid' : 'ghost')}
+                      >
+                        {t === 'remix' ? 'Yes, a remix' : 'No, original'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
