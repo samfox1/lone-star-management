@@ -8,6 +8,7 @@ import { modalOverlayClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField } from './file-drop-field'
 import { useStorageUpload } from './use-storage-upload'
+import { toast } from './toast'
 
 const PlayIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" aria-hidden="true">
@@ -114,15 +115,21 @@ export function TrackAudio({
     createClient()
       .storage.from('audio')
       .createSignedUrl(audioPath, 3600)
-      .then(({ data }) => {
-        if (alive) setUrl(data?.signedUrl ?? null)
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) toast("Couldn't load this audio file.", 'error')
+        setUrl(data?.signedUrl ?? null)
       })
     return () => {
       alive = false
     }
   }, [audioPath])
 
-  const hasAudio = !!url
+  // A file EXISTS whenever the track has an audio_path. `url` is only the resolved signed
+  // URL — so we gate play/plus and the uploader on the FILE (never offer to overwrite an
+  // existing file via the plus), and gate actual playback/scrub on the URL being ready.
+  const hasFile = !!audioPath
+  const canPlay = !!url
   const frac = duration ? current / duration : 0
 
   function toggle() {
@@ -140,12 +147,13 @@ export function TrackAudio({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface px-3 py-2">
-        {hasAudio ? (
+        {hasFile ? (
           <button
             type="button"
             onClick={toggle}
+            disabled={!canPlay}
             aria-label={playing ? 'Pause' : 'Play'}
-            className="flex-none text-ink transition-opacity hover:opacity-70"
+            className="flex-none text-ink transition-opacity enabled:hover:opacity-70 disabled:opacity-40"
           >
             {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
@@ -166,11 +174,11 @@ export function TrackAudio({
           max={1000}
           value={Math.round(frac * 1000)}
           onChange={seek}
-          disabled={!hasAudio}
+          disabled={!canPlay}
           aria-label="Seek"
-          className={cx('h-1 flex-1 accent-ink', hasAudio ? 'cursor-pointer' : 'cursor-default opacity-40')}
+          className={cx('h-1 flex-1 accent-ink', canPlay ? 'cursor-pointer' : 'cursor-default opacity-40')}
         />
-        <span className={cx('flex-none font-space text-[11px] tabular-nums', hasAudio ? 'text-ink-faint' : 'text-ink-faint/50')}>
+        <span className={cx('flex-none font-space text-[11px] tabular-nums', canPlay ? 'text-ink-faint' : 'text-ink-faint/50')}>
           {fmtTime(current)} / {fmtTime(duration)}
         </span>
         {url && (
@@ -188,8 +196,9 @@ export function TrackAudio({
         )}
       </div>
 
-      {/* The plus opens the drop zone in its OWN portaled modal, so the player never resizes. */}
-      <AudioUploadModal open={uploadOpen && !hasAudio} onClose={() => setUploadOpen(false)}>
+      {/* The plus opens the drop zone in its OWN portaled modal, so the player never resizes.
+          Gated on hasFile so it can never open for a track that already has audio. */}
+      <AudioUploadModal open={uploadOpen && !hasFile} onClose={() => setUploadOpen(false)}>
         <h3 className="text-lg font-bold tracking-[-0.01em]">Add audio</h3>
         <div className="mt-4">
           <FileDropField

@@ -110,7 +110,10 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       deezer_url: (row.deezer_url as string | null) ?? null,
       audio_path: (row.audio_path as string | null) ?? null,
     }
-    for (const key of [row.release_id as string | null, row.parent_release_id as string | null]) {
+    // Dedup the keys: if a row's home and parent are the same release (shouldn't happen,
+    // but the union UI could produce it), never file the song twice under one release —
+    // that would double-render the tracklist row and double-count its listens.
+    for (const key of new Set([row.release_id as string | null, row.parent_release_id as string | null])) {
       if (!key) continue
       const list = songsByRelease.get(key) ?? []
       list.push(song)

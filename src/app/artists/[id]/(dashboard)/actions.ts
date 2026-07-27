@@ -887,8 +887,14 @@ export async function setTrackParentReleaseAction(
   artistId: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const parent_release_id = String(formData.get('parent_release_id') ?? '').trim() || null
+  let parent_release_id = String(formData.get('parent_release_id') ?? '').trim() || null
   const supabase = await createClient()
+  // A song can't "also appear on" its own home release — that would file it twice under one
+  // release (double tracklist row + double-counted listens). Clear the parent in that case.
+  if (parent_release_id) {
+    const { data: t } = await supabase.from('tracks').select('release_id').eq('id', trackId).single()
+    if ((t?.release_id ?? null) === parent_release_id) parent_release_id = null
+  }
   const { error } = await supabase.from('tracks').update({ parent_release_id }).eq('id', trackId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')

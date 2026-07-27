@@ -357,7 +357,12 @@ export function TrackCard({
                 <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release</span>
                 <select
                   value={releaseDraft}
-                  onChange={(e) => setReleaseDraft(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setReleaseDraft(v)
+                    // A song can't "also appear on" its own home — clear a now-equal parent.
+                    if (v && v === parentDraft) setParentDraft('')
+                  }}
                   className="block w-full rounded-lg border border-hairline bg-paper px-2.5 py-2 font-space text-sm text-ink outline-none focus:border-ink-faint"
                 >
                   <option value="">— None (standalone single) —</option>
