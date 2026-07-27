@@ -53,6 +53,7 @@ const URL_FIELDS = new Set([
   // Union-model per-platform listen links (manager-entered on the Music cards).
   'apple_url',
   'soundcloud_url',
+  'deezer_url',
   'provider_url',
 ])
 

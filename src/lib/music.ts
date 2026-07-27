@@ -44,6 +44,8 @@ export type TrackProvenance = {
   apple_url: string | null
   /** SoundCloud link (no id column to rebuild from) — counts as platform presence. */
   soundcloud_url?: string | null
+  /** Manager-entered Deezer link — a stored URL (the synced deezer_id is a separate id). */
+  deezer_url?: string | null
   /** The manual "this song is released" toggle — a hand-added song with no links
    *  can still be public. Platform linkage implies released regardless. */
   released?: boolean | null
@@ -61,6 +63,7 @@ function trackOnPlatform(t: TrackProvenance): boolean {
     t.stream_url != null ||
     t.apple_url != null ||
     t.soundcloud_url != null ||
+    t.deezer_url != null ||
     t.released === true
   )
 }
@@ -74,6 +77,8 @@ export type TrackPlatformIds = {
   apple_url: string | null
   /** SoundCloud link — stored (no id column). */
   soundcloud_url?: string | null
+  /** Manager-entered Deezer link — stored; preferred over rebuilding from deezer_id. */
+  deezer_url?: string | null
 }
 
 export type PlatformRef = { key: 'spotify' | 'apple' | 'deezer' | 'soundcloud'; label: string; url: string | null }
@@ -89,7 +94,12 @@ export function trackPlatforms(t: TrackPlatformIds): PlatformRef[] {
   // Badge on the Apple URL alone (mirroring SoundCloud): an Apple-only add stores
   // apple_url and may not yield an apple_id, but it's still on the platform.
   if (t.apple_id || t.apple_url) out.push({ key: 'apple', label: 'Apple', url: t.apple_url })
-  if (t.deezer_id) out.push({ key: 'deezer', label: 'Deezer', url: `https://www.deezer.com/track/${t.deezer_id}` })
+  if (t.deezer_url || t.deezer_id)
+    out.push({
+      key: 'deezer',
+      label: 'Deezer',
+      url: t.deezer_url ?? (t.deezer_id ? `https://www.deezer.com/track/${t.deezer_id}` : null),
+    })
   if (t.soundcloud_url) out.push({ key: 'soundcloud', label: 'SoundCloud', url: t.soundcloud_url })
   return out
 }

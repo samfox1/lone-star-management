@@ -40,6 +40,11 @@ export function Sparkline({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
+      // Intrinsic width/height so a `w-full` sparkline can't flash at the SVG default size
+      // (~300×150) before the viewBox aspect ratio settles. CSS classes (w-full, h-12 …)
+      // still override these, so callers that size via className are unaffected.
+      width={width}
+      height={height}
       preserveAspectRatio="none"
       className={className}
       aria-hidden="true"

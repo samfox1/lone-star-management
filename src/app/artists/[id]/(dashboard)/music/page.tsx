@@ -64,6 +64,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       deezer_id: (row.deezer_id as string | null) ?? null,
       apple_url: (row.apple_url as string | null) ?? null,
       soundcloud_url: (row.soundcloud_url as string | null) ?? null,
+      deezer_url: (row.deezer_url as string | null) ?? null,
       created_at: (row.created_at as string | null) ?? '',
       // Its own category tag — so an orphan remix lands in Remixes, not Singles.
       release_type: toReleaseType(row.release_type as string | null),
@@ -80,6 +81,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
         stream_url: t.stream_url,
         apple_url: t.apple_url,
         soundcloud_url: t.soundcloud_url ?? null,
+        deezer_url: t.deezer_url ?? null,
         released: (row.released as boolean | null) ?? false,
       },
       (rid) => relBucket.get(rid),
@@ -106,6 +108,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       deezer_id: (row.deezer_id as string | null) ?? null,
       apple_url: (row.apple_url as string | null) ?? null,
       soundcloud_url: (row.soundcloud_url as string | null) ?? null,
+      deezer_url: (row.deezer_url as string | null) ?? null,
     })
     songsByRelease.set(rid, list)
   }
