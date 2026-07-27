@@ -5,7 +5,7 @@ import { type IconType } from 'react-icons'
 import { SiApplemusic, SiDeezer, SiSoundcloud, SiSpotify } from 'react-icons/si'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
+import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type TrackPlatformIds } from '@/lib/music'
 import { CardModal } from '../card-modal'
 import { toast } from '../toast'
@@ -259,26 +259,98 @@ export function ReleaseCard({
       </div>
     )
 
-  // Type pills — always live in the modal (single ⇄ remix ⇄ album …), one tap applies.
-  const typeControl = (
+  // Type control, constrained to conversions that make sense: a multi-track release only
+  // switches EP ⇄ Album (never down to a single); a single is a remix or not (a toggle);
+  // a featured release just shows its label.
+  const isRemix = release.release_type === 'remix'
+  const typePill = (t: ReleaseType) => (
+    <button
+      key={t}
+      type="button"
+      onClick={() => applyType(t)}
+      aria-pressed={t === release.release_type}
+      className={cx(
+        'rounded-lg px-3 py-1.5 font-space text-[12px] font-semibold transition-colors',
+        t === release.release_type ? 'bg-ink text-white' : 'border border-hairline text-ink-muted hover:text-ink',
+      )}
+    >
+      {RELEASE_TYPE_LABEL[t]}
+    </button>
+  )
+  const typeControl = expandable ? (
     <div className="flex flex-wrap items-center gap-2">
       <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-      {RELEASE_TYPES.map((t) => (
-        <button
-          key={t}
-          type="button"
-          onClick={() => applyType(t)}
-          aria-pressed={t === release.release_type}
+      {(['ep', 'album'] as const).map(typePill)}
+    </div>
+  ) : release.release_type === 'single' || release.release_type === 'remix' ? (
+    <label className="flex items-center gap-3">
+      <span className="text-[13px] text-ink-muted">Is this a remix of another track?</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isRemix}
+        onClick={() => applyType(isRemix ? 'single' : 'remix')}
+        className={cx('relative h-6 w-11 flex-none rounded-full transition-colors', isRemix ? 'bg-ink' : 'bg-ink/15')}
+      >
+        <span
           className={cx(
-            'rounded-lg px-3 py-1.5 font-space text-[12px] font-semibold transition-colors',
-            t === release.release_type
-              ? 'bg-ink text-white'
-              : 'border border-hairline text-ink-muted hover:text-ink',
+            'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+            isRemix && 'translate-x-5',
           )}
+        />
+      </button>
+    </label>
+  ) : (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+      <span className="text-[13px] text-ink">{RELEASE_TYPE_LABEL[release.release_type]}</span>
+    </div>
+  )
+
+  // The 3-dots menu (Edit / Share / Delete). Lives beside the title in the modal's left column.
+  const kebabMenu = (
+    <div ref={menuRef} className="relative flex-none">
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label={`${release.title} options`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+      >
+        <Icon name="more" size={18} />
+      </button>
+      {menuOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
         >
-          {RELEASE_TYPE_LABEL[t]}
-        </button>
-      ))}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={enterEdit}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+          >
+            <Icon name="edit" size={15} /> Edit
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={share}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+          >
+            <Icon name="share" size={15} /> Share
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={del}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
+          >
+            <Icon name="trash" size={15} /> Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 
@@ -332,72 +404,17 @@ export function ReleaseCard({
       <CardModal
         open={editing}
         // Escape/click-outside closes ONE layer: while a song's link modal is open it guards
-        // this one, so Escape dismisses the link modal and leaves the editor.
+        // this one, so Escape dismisses the link modal and leaves the editor. The Save button
+        // lives in the right column (footer={null}) so a long tracklist can run full-height.
         onClose={() => !linkSong && setEditing(false)}
         wide
-        footer={
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={saveAndClose}
-              className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
-            >
-              Save
-            </button>
-          </div>
-        }
+        footer={null}
       >
-        <div className="relative font-space">
-          {/* 3-dots (Edit / Share / Delete) floats in the top-right corner — no dedicated row. */}
-          <div ref={menuRef} className="absolute right-0 top-0 z-20">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label={`${release.title} options`}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-            >
-              <Icon name="more" size={18} />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={enterEdit}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-                >
-                  <Icon name="edit" size={15} /> Edit
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={share}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-                >
-                  <Icon name="share" size={15} /> Share
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={del}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
-                >
-                  <Icon name="trash" size={15} /> Delete
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* pt-7 leaves a slim top band for the floating 3-dots so it never sits on the
-              sparkline — small, not a full row. */}
-          <div className="grid grid-cols-2 gap-8 pt-7">
-            {/* LEFT — the release itself. Singles show a big cover + big title (no tracklist);
-                EPs/albums pair a compact cover with a scrollable tracklist. */}
+        <div className="font-space">
+          <div className="grid grid-cols-2 gap-8">
+            {/* LEFT — the release itself. The 3-dots sits to the right of the title. Singles
+                show a big cover + big title (no tracklist); EPs/albums pair a compact cover
+                with a scrollable tracklist. */}
             <div className="flex min-w-0 flex-col gap-6">
               {expandable ? (
                 <div className="flex items-start gap-4">
@@ -409,7 +426,10 @@ export function ReleaseCard({
                       <span className="h-9 w-9 rounded-full bg-ink" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">{renderDetails('text-lg')}</div>
+                  <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                    <div className="min-w-0">{renderDetails('text-lg')}</div>
+                    {kebabMenu}
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -421,7 +441,10 @@ export function ReleaseCard({
                       <span className="h-16 w-16 rounded-full bg-ink" />
                     )}
                   </div>
-                  {renderDetails('text-2xl')}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">{renderDetails('text-2xl')}</div>
+                    {kebabMenu}
+                  </div>
                 </div>
               )}
 
@@ -429,7 +452,7 @@ export function ReleaseCard({
 
               {/* Tracklist — EPs/albums only; click a song to edit its per-platform links */}
               {expandable && songCount > 0 && (
-                <ol className="max-h-[280px] space-y-0.5 overflow-auto">
+                <ol className="max-h-[52vh] space-y-0.5 overflow-auto">
                   {release.songs.map((s, i) => (
                     <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
                       <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
@@ -483,6 +506,18 @@ export function ReleaseCard({
                     </div>
                   )
                 })}
+              </div>
+
+              {/* Save lives here (not a bottom row) so the left tracklist can run full-height.
+                  mt-auto pins it to the bottom of the taller column. */}
+              <div className="mt-auto flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={saveAndClose}
+                  className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
+                >
+                  Save
+                </button>
               </div>
             </div>
           </div>

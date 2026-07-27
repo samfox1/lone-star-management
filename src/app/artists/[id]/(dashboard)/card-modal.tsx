@@ -32,8 +32,9 @@ export function CardModal({
   deleteNoun?: string
   /** Wide, two-column card that sizes to its content instead of scrolling. */
   wide?: boolean
-  /** Replaces the default Delete / Done footer row entirely (e.g. a single Save button). */
-  footer?: ReactNode
+  /** Replaces the default Delete / Done footer row (e.g. a single Save button). Pass `null`
+   *  to render NO footer at all — for modals that carry their own action inside the body. */
+  footer?: ReactNode | null
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -75,7 +76,7 @@ export function CardModal({
     >
       <div className={wide ? modalCardWideClass : modalCardClass}>
         {children}
-        {footer !== undefined ? (
+        {footer === null ? null : footer !== undefined ? (
           <div className="mt-6">{footer}</div>
         ) : (
           <div className="mt-6 flex items-center justify-between">
