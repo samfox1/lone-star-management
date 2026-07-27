@@ -467,9 +467,7 @@ export function ReleaseCard({
                   const link = release.links.find((l) => l.label === p.label) ?? null
                   return (
                     <div key={p.label} className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-surface">
-                        <p.Icon size={18} className={link ? p.color : 'text-ink-faint'} />
-                      </span>
+                      <p.Icon size={22} className={cx('flex-none', link ? p.color : 'text-ink-faint')} />
                       <input
                         // Remount when the saved url changes so the uncontrolled default resyncs.
                         key={link?.url ?? ''}
