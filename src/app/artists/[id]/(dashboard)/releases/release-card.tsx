@@ -95,9 +95,9 @@ export function ReleaseCard({
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  // Editing the release's own details (title, date, type) is gated behind the modal's
-  // 3-dots "Edit" — otherwise the modal is a read-only overview with editable links.
-  const [editMode, setEditMode] = useState(false)
+  // The overview modal is read-only (links aside). "Edit" opens a SEPARATE modal that holds
+  // the editable details — title, date, type — committed together on its own Save.
+  const [detailsEditOpen, setDetailsEditOpen] = useState(false)
   const [titleDraft, setTitleDraft] = useState(release.title)
   const [dateDraft, setDateDraft] = useState(release.release_date?.slice(0, 10) ?? '')
   const [typeDraft, setTypeDraft] = useState<ReleaseType>(release.release_type)
@@ -159,52 +159,48 @@ export function ReleaseCard({
     }
   }
 
-  // Enter edit mode with fresh drafts (in case the server state changed since last open).
+  // "Edit" opens the separate details modal with fresh drafts (the server state may have
+  // changed since this card last rendered).
   function enterEdit() {
     setMenuOpen(false)
     setTitleDraft(release.title)
     setDateDraft(release.release_date?.slice(0, 10) ?? '')
     setTypeDraft(release.release_type)
-    setEditMode(true)
+    setDetailsEditOpen(true)
   }
 
-  // The Save button: commit any detail edits (title, date, type) as a batch — nothing is
-  // written until this is pressed. Overview mode has no drafts, so it just closes. (Streaming
-  // links are separate; they still save on blur.)
-  async function saveAndClose() {
-    if (editMode) {
-      const t = titleDraft.trim()
-      if (!t) {
-        toast('Give the release a title.', 'error')
+  // The details modal's Save: commit title, date, and type as one batch — nothing is written
+  // until this is pressed — then close that modal (the overview stays open behind it).
+  async function saveDetails() {
+    const t = titleDraft.trim()
+    if (!t) {
+      toast('Give the release a title.', 'error')
+      return
+    }
+    let saved = false
+    if (t !== release.title || dateDraft !== (release.release_date?.slice(0, 10) ?? '')) {
+      const fd = new FormData()
+      fd.set('title', t)
+      fd.set('release_date', dateDraft)
+      const res = await updateReleaseDetailsAction(release.id, artistId, fd)
+      if (res?.error) {
+        toast(res.error, 'error')
         return
       }
-      let saved = false
-      const detailsChanged = t !== release.title || dateDraft !== (release.release_date?.slice(0, 10) ?? '')
-      if (detailsChanged) {
-        const fd = new FormData()
-        fd.set('title', t)
-        fd.set('release_date', dateDraft)
-        const res = await updateReleaseDetailsAction(release.id, artistId, fd)
-        if (res?.error) {
-          toast(res.error, 'error')
-          return
-        }
-        saved = true
-      }
-      if (typeDraft !== release.release_type) {
-        const fd = new FormData()
-        fd.set('release_type', typeDraft)
-        const res = await setReleaseTypeAction(release.id, artistId, fd)
-        if (res?.error) {
-          toast(res.error, 'error')
-          return
-        }
-        saved = true
-      }
-      if (saved) toast('Saved')
+      saved = true
     }
-    setEditMode(false)
-    setEditing(false)
+    if (typeDraft !== release.release_type) {
+      const fd = new FormData()
+      fd.set('release_type', typeDraft)
+      const res = await setReleaseTypeAction(release.id, artistId, fd)
+      if (res?.error) {
+        toast(res.error, 'error')
+        return
+      }
+      saved = true
+    }
+    if (saved) toast('Saved')
+    setDetailsEditOpen(false)
   }
 
   // A release link slot saves on blur: type a url and it's stored, clear it and it's
@@ -231,80 +227,62 @@ export function ReleaseCard({
     else toast(val ? 'Link saved' : 'Link removed')
   }
 
-  // Title + release date. Read-only overview by default; editable once "Edit" is chosen.
-  // titleCls lets a single (big cover) carry a bigger title than an album's compact header.
-  const renderDetails = (titleCls: string) =>
-    editMode ? (
-      <div className="space-y-2">
-        <input
-          value={titleDraft}
-          onChange={(e) => setTitleDraft(e.target.value)}
-          placeholder="Release title"
-          aria-label="Release title"
-          className={cx(
-            'w-full rounded-lg bg-surface px-3 py-2 font-bold text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline',
-            titleCls,
-          )}
-        />
-        <label className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Released</span>
-          <input
-            type="date"
-            value={dateDraft}
-            onChange={(e) => setDateDraft(e.target.value)}
-            aria-label="Release date"
-            className="rounded-lg bg-surface px-2.5 py-1.5 font-space text-[12px] text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
-          />
-        </label>
-      </div>
-    ) : (
-      <div>
-        <h3 className={cx('font-bold leading-tight tracking-[-0.01em]', titleCls)}>{release.title}</h3>
-        {meta && <div className="mt-1 text-[13px] text-ink-muted">{meta}</div>}
-      </div>
-    )
-
-  // Type control, constrained to conversions that make sense: a multi-track release only
-  // switches EP ⇄ Album (never down to a single); a single is a remix or not (a toggle);
-  // a featured release just shows its label.
-  // Type is a value in overview and only changes in edit mode — and even then only on Save
-  // (it tracks a draft). The choice is constrained: EP ⇄ Album for multi-track, Single ⇄
-  // Remix for a single. `null` (e.g. Featured) shows the label with no toggle.
+  // Type is only editable in the details modal, constrained to sensible conversions: EP ⇄
+  // Album for a multi-track release, Single ⇄ Remix for a single. `null` (e.g. Featured) has
+  // no toggle.
   const typeOptions: readonly [ReleaseType, ReleaseType] | null = expandable
     ? ['ep', 'album']
     : release.release_type === 'single' || release.release_type === 'remix'
       ? ['single', 'remix']
       : null
-  const typeControl =
-    editMode && typeOptions ? (
-      // Segmented two-option toggle, same shape as the released/unreleased choice.
-      <div className="space-y-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-        <div className="grid max-w-[240px] grid-cols-2 gap-2">
-          {typeOptions.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTypeDraft(t)}
-              aria-pressed={typeDraft === t}
-              className={cx(
-                'rounded-lg border px-3 py-2 font-space text-xs font-semibold transition-colors',
-                typeDraft === t
-                  ? 'border-ink bg-ink text-white'
-                  : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
-              )}
-            >
-              {RELEASE_TYPE_LABEL[t]}
-            </button>
-          ))}
+
+  // Body of the separate "Edit release" modal — the only place details are editable.
+  const detailsEditForm = (
+    <div className="space-y-5 font-space">
+      <h3 className="text-lg font-bold tracking-[-0.01em]">Edit release</h3>
+      <label className="block space-y-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Title</span>
+        <input
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          placeholder="Release title"
+          className="w-full rounded-lg bg-surface px-3 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release date</span>
+        <input
+          type="date"
+          value={dateDraft}
+          onChange={(e) => setDateDraft(e.target.value)}
+          className="block rounded-lg bg-surface px-2.5 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
+        />
+      </label>
+      {typeOptions && (
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+          <div className="grid max-w-[260px] grid-cols-2 gap-2">
+            {typeOptions.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTypeDraft(t)}
+                aria-pressed={typeDraft === t}
+                className={cx(
+                  'rounded-lg border px-3 py-2 font-space text-xs font-semibold transition-colors',
+                  typeDraft === t
+                    ? 'border-ink bg-ink text-white'
+                    : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
+                )}
+              >
+                {RELEASE_TYPE_LABEL[t]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-    ) : (
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-        <span className="text-[13px] text-ink">{RELEASE_TYPE_LABEL[release.release_type]}</span>
-      </div>
-    )
+      )}
+    </div>
+  )
 
   // The 3-dots menu (Edit / Share / Delete). Lives beside the title in the modal's left column.
   const kebabMenu = (
@@ -402,10 +380,10 @@ export function ReleaseCard({
 
       <CardModal
         open={editing}
-        // Escape/click-outside closes ONE layer: while a song's link modal is open it guards
-        // this one, so Escape dismisses the link modal and leaves the editor. The Save button
-        // lives in the right column (footer={null}) so a long tracklist can run full-height.
-        onClose={() => !linkSong && setEditing(false)}
+        // Escape/click-outside closes ONE layer: while the link OR details modal is open it
+        // guards this one, so Escape dismisses the top layer first. The Save button lives in the
+        // right column (footer={null}) so a long tracklist can run full-height.
+        onClose={() => !linkSong && !detailsEditOpen && setEditing(false)}
         wide
         footer={null}
       >
@@ -414,8 +392,9 @@ export function ReleaseCard({
             {/* LEFT — the release itself. The 3-dots sits to the right of the title. Singles
                 show a big cover + big title (no tracklist); EPs/albums pair a compact cover
                 with a scrollable tracklist. */}
-            <div className="flex min-w-0 flex-col gap-6">
-              {expandable ? (
+            {expandable ? (
+              // EP/album: compact cover beside the title, then a scrollable tracklist.
+              <div className="flex min-w-0 flex-col gap-6">
                 <div className="flex items-start gap-4">
                   <div className="flex h-24 w-24 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
                     {release.cover_url ? (
@@ -426,49 +405,51 @@ export function ReleaseCard({
                     )}
                   </div>
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                    <div className="min-w-0">{renderDetails('text-lg')}</div>
+                    <div className="min-w-0">
+                      <h3 className="text-lg font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
+                      {meta && <div className="mt-1 text-[13px] text-ink-muted">{meta}</div>}
+                    </div>
                     {kebabMenu}
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  <div className="flex h-64 w-64 max-w-full flex-none items-center justify-center overflow-hidden rounded-2xl bg-surface">
-                    {release.cover_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="h-16 w-16 rounded-full bg-ink" />
-                    )}
-                  </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">{renderDetails('text-2xl')}</div>
-                    {kebabMenu}
-                  </div>
+                {songCount > 0 && (
+                  <ol className="max-h-[52vh] space-y-0.5 overflow-auto">
+                    {release.songs.map((s, i) => (
+                      <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
+                        <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setLinkSong(s)}
+                          title="Add or edit links"
+                          className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
+                        >
+                          {s.title}
+                        </button>
+                        {feat(s) && <span className="max-w-[40%] flex-none truncate text-ink-faint">{feat(s)}</span>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            ) : (
+              // Single: a big cover fills the column, with the year pinned to the bottom so it
+              // lines up with the Close/Save buttons across in the right column.
+              <div className="flex min-w-0 flex-col gap-4">
+                <div className="flex aspect-square w-full max-w-[360px] items-center justify-center overflow-hidden rounded-2xl bg-surface">
+                  {release.cover_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="h-16 w-16 rounded-full bg-ink" />
+                  )}
                 </div>
-              )}
-
-              {typeControl}
-
-              {/* Tracklist — EPs/albums only; click a song to edit its per-platform links */}
-              {expandable && songCount > 0 && (
-                <ol className="max-h-[52vh] space-y-0.5 overflow-auto">
-                  {release.songs.map((s, i) => (
-                    <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
-                      <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => setLinkSong(s)}
-                        title="Add or edit links"
-                        className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
-                      >
-                        {s.title}
-                      </button>
-                      {feat(s) && <span className="max-w-[40%] flex-none truncate text-ink-faint">{feat(s)}</span>}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 text-2xl font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
+                  {kebabMenu}
+                </div>
+                {year && <div className="mt-auto text-[13px] text-ink-muted">{year}</div>}
+              </div>
+            )}
 
             {/* RIGHT — performance sparkline + streaming link inputs. No section labels: the
                 sparkline carries its own "Listens · 30d" and each input has its platform icon. */}
@@ -508,21 +489,19 @@ export function ReleaseCard({
               </div>
 
               {/* Close + Save live here (not a bottom row) so the left tracklist can run
-                  full-height. mt-auto pins them to the bottom of the taller column. */}
+                  full-height. mt-auto pins them to the bottom of the taller column. Streaming
+                  links save on blur, so both buttons simply close the overview. */}
               <div className="mt-auto flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditMode(false)
-                    setEditing(false)
-                  }}
+                  onClick={() => setEditing(false)}
                   className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
                 >
                   Close
                 </button>
                 <button
                   type="button"
-                  onClick={saveAndClose}
+                  onClick={() => setEditing(false)}
                   className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
                 >
                   Save
@@ -531,6 +510,33 @@ export function ReleaseCard({
             </div>
           </div>
         </div>
+      </CardModal>
+
+      {/* Edit details — a separate modal opened from the overview's 3-dots "Edit". This is the
+          only place the title / date / type can be changed; the overview stays read-only. */}
+      <CardModal
+        open={detailsEditOpen}
+        onClose={() => setDetailsEditOpen(false)}
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setDetailsEditOpen(false)}
+              className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveDetails}
+              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
+            >
+              Save
+            </button>
+          </div>
+        }
+      >
+        {detailsEditForm}
       </CardModal>
 
       {/* Per-song links: click a song in the tracklist to add/edit its streaming link. */}
