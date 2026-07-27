@@ -483,8 +483,8 @@ export function ReleaseCard({
                         }}
                         className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
                       />
-                      {/* Open the saved link in a new tab to confirm it works. Faint + inert
-                          until a link is set, so the rows stay aligned either way. */}
+                      {/* Just the ↗ icon — opens the saved link in a new tab to confirm it works.
+                          Faint + inert until a link is set, so the rows stay aligned either way. */}
                       {link ? (
                         <a
                           href={link.url}
@@ -492,15 +492,12 @@ export function ReleaseCard({
                           rel="noopener noreferrer"
                           aria-label={`Open ${p.label} link in a new tab`}
                           title="Open link to check it works"
-                          className="flex h-10 w-10 flex-none items-center justify-center rounded-xl text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+                          className="flex-none text-ink-muted transition-colors hover:text-ink"
                         >
                           <Icon name="external" size={16} />
                         </a>
                       ) : (
-                        <span
-                          aria-hidden
-                          className="flex h-10 w-10 flex-none items-center justify-center text-ink-faint/40"
-                        >
+                        <span aria-hidden className="flex-none text-ink-faint/40">
                           <Icon name="external" size={16} />
                         </span>
                       )}
