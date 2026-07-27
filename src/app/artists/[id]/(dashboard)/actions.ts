@@ -908,6 +908,29 @@ export async function setReleaseLinkAction(
   return {}
 }
 
+/**
+ * Edit a release's own details (title + date) from the editor modal. The slug stays
+ * fixed on purpose — changing it would break the public release URL and every smart
+ * link (same rule as the artist handle). RLS scopes the write to the owner.
+ */
+export async function updateReleaseDetailsAction(
+  releaseId: string,
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const title = String(formData.get('title') ?? '').trim()
+  if (!title) return { error: 'Give the release a title.' }
+  const rawDate = String(formData.get('release_date') ?? '').trim()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('releases')
+    .update({ title: title.slice(0, 200), release_date: rawDate || null })
+    .eq('id', releaseId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 /** Choose which public-site template this artist's page renders. */
 export async function saveTemplateAction(artistId: string, formData: FormData) {
   const template = String(formData.get('template') ?? 'classic')

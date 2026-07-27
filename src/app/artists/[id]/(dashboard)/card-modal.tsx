@@ -22,6 +22,7 @@ export function CardModal({
   deleteLabel = 'Delete',
   deleteNoun = 'Item',
   wide = false,
+  footer,
   children,
 }: {
   open: boolean
@@ -31,6 +32,8 @@ export function CardModal({
   deleteNoun?: string
   /** Wide, two-column card that sizes to its content instead of scrolling. */
   wide?: boolean
+  /** Replaces the default Delete / Done footer row entirely (e.g. a single Save button). */
+  footer?: ReactNode
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -72,23 +75,27 @@ export function CardModal({
     >
       <div className={wide ? modalCardWideClass : modalCardClass}>
         {children}
-        <div className="mt-6 flex items-center justify-between">
-          {deleteAction ? (
-            <button
-              type="button"
-              onClick={del}
-              disabled={deleting}
-              className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
-            >
-              {deleting ? 'Deleting…' : deleteLabel}
+        {footer !== undefined ? (
+          <div className="mt-6">{footer}</div>
+        ) : (
+          <div className="mt-6 flex items-center justify-between">
+            {deleteAction ? (
+              <button
+                type="button"
+                onClick={del}
+                disabled={deleting}
+                className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : deleteLabel}
+              </button>
+            ) : (
+              <span />
+            )}
+            <button type="button" onClick={onClose} className={buttonClass('ghost')}>
+              Done
             </button>
-          ) : (
-            <span />
-          )}
-          <button type="button" onClick={onClose} className={buttonClass('ghost')}>
-            Done
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
