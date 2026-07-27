@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { modalOverlayClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField } from './file-drop-field'
 import { useStorageUpload } from './use-storage-upload'
@@ -55,7 +55,8 @@ function AudioUploadModal({ open, onClose, children }: { open: boolean; onClose:
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={cx(modalCardClass, 'relative font-space')}>
+      {/* Half the standard modal width — the drop zone doesn't need 560px. */}
+      <div className="relative flex max-h-[88vh] w-[280px] max-w-[90vw] flex-col overflow-auto rounded-2xl bg-paper p-7 font-space shadow-2xl">
         <button
           type="button"
           onClick={onClose}
