@@ -85,6 +85,11 @@ export function ReleaseCard({
   // Only EPs and albums reveal a tracklist (Sam, 2026-07-24) — a single IS its song.
   const expandable = release.release_type === 'ep' || release.release_type === 'album'
   const showList = expandable && expanded
+  // Singles read as just the year (a "single" is one track — no song count); EPs/albums
+  // keep the count. No year → no meta line at all (never a "—" placeholder).
+  const meta = expandable
+    ? [year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
+    : (year ?? '')
 
   return (
     // A fixed-width tile that grows ONLY by the tracklist's width when open (never the
@@ -141,9 +146,7 @@ export function ReleaseCard({
                 </span>
               )}
             </div>
-            <div className="mt-0.5 font-space text-[13px] text-ink-muted">
-              {[year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || '—'}
-            </div>
+            {meta && <div className="mt-0.5 font-space text-[13px] text-ink-muted">{meta}</div>}
             <CardStat value={release.stat ?? 0} label={metricLabel('release')} />
           </button>
         </div>
@@ -303,21 +306,33 @@ export function ReleaseCard({
                 })}
               </div>
             )}
-            {/* One primary Listen link per song (paste any platform URL). Setting it also
-                marks the song Released by derivation — same as every other listen link. */}
+            {/* Per-platform links for the song. Setting any marks it Released by derivation
+                — same as every other listen link. Save writes all three at once. */}
             <SaveForm
               action={updateContentAction.bind(null, 'track', linkSong.id, artistId)}
-              savedMessage="Link saved"
-              className="mt-4 flex items-center gap-2"
+              savedMessage="Links saved"
+              className="mt-4 space-y-2"
             >
-              <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Link</span>
-              <input
-                name="stream_url"
-                type="url"
-                defaultValue={linkSong.stream_url ?? ''}
-                placeholder="https://open.spotify.com/…  ·  soundcloud.com/…"
-                className={`${inputClass} min-w-0 flex-1`}
-              />
+              {(
+                [
+                  { name: 'stream_url', label: 'Listen', value: linkSong.stream_url, ph: 'https://open.spotify.com/…' },
+                  { name: 'soundcloud_url', label: 'SoundCloud', value: linkSong.soundcloud_url, ph: 'https://soundcloud.com/…' },
+                  { name: 'apple_url', label: 'Apple Music', value: linkSong.apple_url, ph: 'https://music.apple.com/…' },
+                ] as const
+              ).map((f) => (
+                <label key={f.name} className="flex items-center gap-2">
+                  <span className="w-24 flex-none font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+                    {f.label}
+                  </span>
+                  <input
+                    name={f.name}
+                    type="url"
+                    defaultValue={f.value ?? ''}
+                    placeholder={f.ph}
+                    className={`${inputClass} min-w-0 flex-1`}
+                  />
+                </label>
+              ))}
               <button type="submit" className={buttonClass('ghost')}>
                 Save
               </button>
