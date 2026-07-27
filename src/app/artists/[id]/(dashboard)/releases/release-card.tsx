@@ -61,18 +61,18 @@ function feat(song: ReleaseSong): string | null {
  *  mark (react-icons) and colour, shown coloured when a link is set, grey when empty. The
  *  `label` is also the key stored in `release.links`. */
 const STREAMING_PLATFORMS: { label: string; Icon: IconType; color: string; placeholder: string }[] = [
-  { label: 'Spotify', Icon: SiSpotify, color: 'text-[#1DB954]', placeholder: 'Add Spotify link' },
-  { label: 'Apple Music', Icon: SiApplemusic, color: 'text-[#FA243C]', placeholder: 'Add Apple Music link' },
-  { label: 'SoundCloud', Icon: SiSoundcloud, color: 'text-[#FF5500]', placeholder: 'Add SoundCloud link' },
-  { label: 'Deezer', Icon: SiDeezer, color: 'text-[#A238FF]', placeholder: 'Add Deezer link' },
+  { label: 'Spotify', Icon: SiSpotify, color: 'text-[#1DB954]', placeholder: 'Spotify link' },
+  { label: 'Apple Music', Icon: SiApplemusic, color: 'text-[#FA243C]', placeholder: 'Apple Music link' },
+  { label: 'SoundCloud', Icon: SiSoundcloud, color: 'text-[#FF5500]', placeholder: 'SoundCloud link' },
+  { label: 'Deezer', Icon: SiDeezer, color: 'text-[#A238FF]', placeholder: 'Deezer link' },
 ]
 
 /** A song's editable per-platform link fields (the sync-only ids like spotify_id/deezer_id
  *  aren't manually set, so they aren't slots here). */
 const SONG_PLATFORMS: { field: 'stream_url' | 'soundcloud_url' | 'apple_url'; label: string; Icon: IconType; color: string; placeholder: string }[] = [
-  { field: 'stream_url', label: 'Spotify', Icon: SiSpotify, color: 'text-[#1DB954]', placeholder: 'Add Spotify link' },
-  { field: 'soundcloud_url', label: 'SoundCloud', Icon: SiSoundcloud, color: 'text-[#FF5500]', placeholder: 'Add SoundCloud link' },
-  { field: 'apple_url', label: 'Apple Music', Icon: SiApplemusic, color: 'text-[#FA243C]', placeholder: 'Add Apple Music link' },
+  { field: 'stream_url', label: 'Spotify', Icon: SiSpotify, color: 'text-[#1DB954]', placeholder: 'Spotify link' },
+  { field: 'soundcloud_url', label: 'SoundCloud', Icon: SiSoundcloud, color: 'text-[#FF5500]', placeholder: 'SoundCloud link' },
+  { field: 'apple_url', label: 'Apple Music', Icon: SiApplemusic, color: 'text-[#FA243C]', placeholder: 'Apple Music link' },
 ]
 
 /**
@@ -97,7 +97,6 @@ export function ReleaseCard({
   onToggleSelect?: () => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [tracksOpen, setTracksOpen] = useState(false)
   // The tracklist song whose links modal is open (click a song to add/edit its link).
   const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
   const year = release.release_date?.slice(0, 4)
@@ -133,10 +132,11 @@ export function ReleaseCard({
           <Icon name="edit" size={14} />
         </button>
 
-        {/* Clicking an EP/album opens its tracklist modal; a single just opens the editor. */}
+        {/* Every release opens the one wide editor modal (cover + tracklist on the left,
+            analytics + links on the right). */}
         <button
           type="button"
-          onClick={() => (expandable ? setTracksOpen(true) : setEditing(true))}
+          onClick={() => setEditing(true)}
           aria-haspopup="dialog"
           aria-label={`${release.title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
           className="block w-full text-left"
@@ -167,208 +167,178 @@ export function ReleaseCard({
         </button>
       </div>
 
-      {/* Tracklist modal (Sam, 2026-07-27): opening it never disturbs the grid, and a
-          far-left album's songs can't fall off-screen. Click a song to edit its links. */}
-      {expandable && (
-        // Escape/click-outside closes ONE layer: while a song's link modal is open it
-        // guards this one, so Escape dismisses the link modal and leaves the tracklist.
-        <CardModal open={tracksOpen} onClose={() => !linkSong && setTracksOpen(false)}>
-          <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
-              {release.cover_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="h-7 w-7 rounded-full bg-ink" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-bold tracking-[-0.01em]">{release.title}</h3>
-              <div className="font-space text-xs text-ink-muted">
-                {[RELEASE_TYPE_LABEL[release.release_type], year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </div>
-            </div>
-          </div>
-
-          {songCount === 0 ? (
-            <p className="mt-4 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
-          ) : (
-            <ol className="mt-4 max-h-[50vh] space-y-0.5 overflow-auto">
-              {release.songs.map((s, i) => (
-                <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
-                  <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => setLinkSong(s)}
-                    title="Add or edit links"
-                    className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
-                  >
-                    {s.title}
-                  </button>
-                  {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
-                </li>
-              ))}
-            </ol>
-          )}
-        </CardModal>
-      )}
-
       <CardModal
         open={editing}
-        onClose={() => setEditing(false)}
+        // Escape/click-outside closes ONE layer: while a song's link modal is open it guards
+        // this one, so Escape dismisses the link modal and leaves the editor.
+        onClose={() => !linkSong && setEditing(false)}
         deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
         deleteLabel="Delete release"
         deleteNoun="Release"
+        wide
       >
-        {/* font-space throughout so the modal speaks the site's mono voice; sections breathe
-            (mt-6/7) and each carries a leading icon. */}
-        <div className="font-space">
-          {/* Header — cover + title + public URL */}
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
-              {release.cover_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="h-7 w-7 rounded-full bg-ink" />
-              )}
+        {/* Two columns, font-space throughout: LEFT is the release itself (cover, details,
+            tracklist); RIGHT is its performance + streaming links. Sized to fit — no scroll. */}
+        <div className="grid grid-cols-2 gap-8 font-space">
+          {/* LEFT — cover, details, tracklist */}
+          <div className="flex min-w-0 flex-col gap-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-24 w-24 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
+                {release.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="h-9 w-9 rounded-full bg-ink" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
+                {meta && <div className="mt-1 text-[12px] text-ink-muted">{meta}</div>}
+                <Link
+                  href={`/${artistSlug}/r/${release.slug}`}
+                  className="mt-1.5 flex items-center gap-1 truncate text-xs text-ink-muted hover:text-ink"
+                >
+                  <Icon name="external" size={12} className="flex-none" />
+                  <span className="truncate">/{artistSlug}/r/{release.slug}</span>
+                </Link>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-lg font-bold tracking-[-0.01em]">{release.title}</h3>
-              <Link
-                href={`/${artistSlug}/r/${release.slug}`}
-                className="mt-0.5 flex items-center gap-1 truncate text-xs text-ink-muted hover:text-ink"
+
+            {/* Type */}
+            <div className="flex items-center gap-2.5">
+              <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+              <SaveForm
+                action={setReleaseTypeAction.bind(null, release.id, artistId)}
+                className="ml-1 flex items-center gap-2"
               >
-                <Icon name="external" size={12} className="flex-none" />
-                <span className="truncate">/{artistSlug}/r/{release.slug}</span>
-              </Link>
+                <select
+                  name="release_type"
+                  defaultValue={release.release_type}
+                  className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-sm text-ink outline-none focus:border-ink-faint"
+                >
+                  {RELEASE_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {RELEASE_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className={buttonClass('ghost')}>
+                  Save
+                </button>
+              </SaveForm>
             </div>
-          </div>
 
-          <div className="mt-6">
-            <EntitySparkline
-              artistId={artistId}
-              entityIds={[release.id, ...release.songs.map((s) => s.id)]}
-              label="Listens · 30d"
-            />
-          </div>
-
-          {/* Type */}
-          <div className="mt-6 flex items-center gap-2.5">
-            <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-            <SaveForm
-              action={setReleaseTypeAction.bind(null, release.id, artistId)}
-              className="ml-1 flex items-center gap-2"
-            >
-              <select
-                name="release_type"
-                defaultValue={release.release_type}
-                className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-sm text-ink outline-none focus:border-ink-faint"
-              >
-                {RELEASE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {RELEASE_TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className={buttonClass('ghost')}>
-                Save
-              </button>
-            </SaveForm>
-          </div>
-
-          {/* Streaming links — one fixed slot per platform, brand icon coloured when set */}
-          <div className="mt-7 flex items-center gap-2">
-            <Icon name="links" size={15} className="flex-none text-ink-faint" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Streaming links</span>
-          </div>
-          <div className="mt-3 space-y-2.5">
-            {STREAMING_PLATFORMS.map((p) => {
-              const idx = release.links.findIndex((l) => l.label === p.label)
-              const link = idx >= 0 ? release.links[idx] : null
-              return (
-                <div key={p.label} className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-surface">
-                    <p.Icon size={18} className={link ? p.color : 'text-ink-faint'} />
-                  </span>
-                  {link ? (
-                    <>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink">{p.label}</div>
-                        <a
-                          href={safeHref(link.url) ?? '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block truncate text-[11px] text-ink-faint hover:text-ink-muted"
-                        >
-                          {link.url}
-                        </a>
-                      </div>
+            {/* Tracklist — click a song to edit its per-platform links */}
+            {songCount > 0 && (
+              <div>
+                <div className="flex items-center gap-2">
+                  <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Tracklist</span>
+                </div>
+                <ol className="mt-3 max-h-[280px] space-y-0.5 overflow-auto">
+                  {release.songs.map((s, i) => (
+                    <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
+                      <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
                       <button
                         type="button"
-                        aria-label={`Remove ${p.label}`}
-                        onClick={async () => {
-                          const res = await removeReleaseLinkAction(release.id, idx, artistId)
-                          if (res?.error) toast(res.error, 'error')
-                          else toast(`${p.label} removed`)
-                        }}
-                        className="flex-none rounded-lg p-2 text-ink-faint transition-colors hover:bg-danger-soft hover:text-accent-red"
+                        onClick={() => setLinkSong(s)}
+                        title="Add or edit links"
+                        className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
                       >
-                        <Icon name="trash" size={15} />
+                        {s.title}
                       </button>
-                    </>
-                  ) : (
-                    <SaveForm
-                      action={addReleaseLinkAction.bind(null, release.id, artistId)}
-                      savedMessage={`${p.label} added`}
-                      className="flex min-w-0 flex-1 items-center gap-2"
-                    >
-                      <input type="hidden" name="label" value={p.label} />
-                      <input
-                        name="url"
-                        type="url"
-                        required
-                        placeholder={p.placeholder}
-                        className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
-                      />
-                      <button
-                        type="submit"
-                        aria-label={`Add ${p.label}`}
-                        className="flex-none rounded-lg bg-ink p-2 text-white transition-colors hover:bg-ink/85"
-                      >
-                        <Icon name="plus" size={15} />
-                      </button>
-                    </SaveForm>
-                  )}
-                </div>
-              )
-            })}
+                      {feat(s) && <span className="max-w-[40%] flex-none truncate text-ink-faint">{feat(s)}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </div>
 
-          {/* Tracklist */}
-          {songCount > 0 && (
-            <>
-              <div className="mt-7 flex items-center gap-2">
-                <Icon name="tracks" size={15} className="flex-none text-ink-faint" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Tracklist</span>
+          {/* RIGHT — analytics + streaming links */}
+          <div className="flex min-w-0 flex-col gap-6">
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <Icon name="analytics" size={15} className="flex-none text-ink-faint" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Performance</span>
               </div>
-              <ul className="mt-3 max-h-44 space-y-0.5 overflow-auto">
-                {release.songs.map((s, i) => (
-                  <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
-                    <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-ink">{s.title}</span>
-                    {feat(s) && <span className="max-w-[40%] flex-none truncate text-ink-faint">{feat(s)}</span>}
-                    {s.stat ? (
-                      <span className="ml-auto flex-none tabular-nums text-ink-faint">{s.stat.toLocaleString()}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+              <EntitySparkline
+                artistId={artistId}
+                entityIds={[release.id, ...release.songs.map((s) => s.id)]}
+                label="Listens · 30d"
+              />
+            </div>
+
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <Icon name="links" size={15} className="flex-none text-ink-faint" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Streaming links</span>
+              </div>
+              <div className="space-y-2.5">
+                {STREAMING_PLATFORMS.map((p) => {
+                  const idx = release.links.findIndex((l) => l.label === p.label)
+                  const link = idx >= 0 ? release.links[idx] : null
+                  return (
+                    <div key={p.label} className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-surface">
+                        <p.Icon size={18} className={link ? p.color : 'text-ink-faint'} />
+                      </span>
+                      {link ? (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink">{p.label}</div>
+                            <a
+                              href={safeHref(link.url) ?? '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block truncate text-[11px] text-ink-faint hover:text-ink-muted"
+                            >
+                              {link.url}
+                            </a>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${p.label}`}
+                            onClick={async () => {
+                              const res = await removeReleaseLinkAction(release.id, idx, artistId)
+                              if (res?.error) toast(res.error, 'error')
+                              else toast(`${p.label} removed`)
+                            }}
+                            className="flex-none rounded-lg p-2 text-ink-faint transition-colors hover:bg-danger-soft hover:text-accent-red"
+                          >
+                            <Icon name="trash" size={15} />
+                          </button>
+                        </>
+                      ) : (
+                        <SaveForm
+                          action={addReleaseLinkAction.bind(null, release.id, artistId)}
+                          savedMessage={`${p.label} added`}
+                          className="flex min-w-0 flex-1 items-center gap-2"
+                        >
+                          <input type="hidden" name="label" value={p.label} />
+                          <input
+                            name="url"
+                            type="url"
+                            required
+                            placeholder={p.placeholder}
+                            className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
+                          />
+                          <button
+                            type="submit"
+                            aria-label={`Add ${p.label}`}
+                            className="flex-none rounded-lg bg-ink p-2 text-white transition-colors hover:bg-ink/85"
+                          >
+                            <Icon name="plus" size={15} />
+                          </button>
+                        </SaveForm>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </CardModal>
 

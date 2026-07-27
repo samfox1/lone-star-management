@@ -39,6 +39,9 @@ export const inputClass =
  *  so Add / edit / publish / confirm dialogs never drift apart. */
 export const modalOverlayClass = 'fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6'
 export const modalCardClass = 'flex max-h-[88vh] w-[560px] max-w-full flex-col overflow-auto rounded-2xl bg-paper p-7 shadow-2xl'
+/** Wide, two-column variant (e.g. the release editor): fits its content without a
+ *  vertical scroll, so both columns read at a glance. */
+export const modalCardWideClass = 'flex w-[880px] max-w-[94vw] flex-col rounded-2xl bg-paper p-7 shadow-2xl'
 
 /** Square icon button with a hairline border. */
 export function IconButton({

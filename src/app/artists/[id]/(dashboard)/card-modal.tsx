@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { buttonClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from './use-lock-body-scroll'
 import { toast } from './toast'
 
@@ -21,6 +21,7 @@ export function CardModal({
   deleteAction,
   deleteLabel = 'Delete',
   deleteNoun = 'Item',
+  wide = false,
   children,
 }: {
   open: boolean
@@ -28,6 +29,8 @@ export function CardModal({
   deleteAction?: DeleteAction
   deleteLabel?: string
   deleteNoun?: string
+  /** Wide, two-column card that sizes to its content instead of scrolling. */
+  wide?: boolean
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -67,7 +70,7 @@ export function CardModal({
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={modalCardClass}>
+      <div className={wide ? modalCardWideClass : modalCardClass}>
         {children}
         <div className="mt-6 flex items-center justify-between">
           {deleteAction ? (
