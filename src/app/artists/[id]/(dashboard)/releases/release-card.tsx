@@ -13,6 +13,7 @@ import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { EntitySparkline } from '../entity-sparkline'
+import { TrackAudio } from '../track-audio'
 import {
   deleteContentAction,
   setReleaseLinkAction,
@@ -31,6 +32,8 @@ export type ReleaseSong = TrackPlatformIds & {
   stat?: number
   /** Primary Listen link (paste a Spotify / SoundCloud / … URL). Editable per song. */
   stream_url: string | null
+  /** Uploaded-audio object path (private bucket) — drives the modal's audio player. */
+  audio_path: string | null
 }
 export type Release = {
   id: string
@@ -65,7 +68,9 @@ const STREAMING_PLATFORMS: { label: string; Icon: IconType; color: string; place
 
 /** A song's editable per-platform link fields (the sync-only ids like spotify_id/deezer_id
  *  aren't manually set, so they aren't slots here). */
-const SONG_PLATFORMS: {
+/** A song's editable per-platform link fields — shared with the orphan-single (TrackCard)
+ *  modal so a song opens the same everywhere it appears. */
+export const SONG_PLATFORMS: {
   field: 'stream_url' | 'soundcloud_url' | 'apple_url' | 'deezer_url'
   label: string
   Icon: IconType
@@ -454,6 +459,14 @@ export function ReleaseCard({
                   <h3 className="min-w-0 flex-1 text-2xl font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
                   {kebabMenu}
                 </div>
+                {/* Audio for the single's underlying track (a single IS one song). */}
+                {release.songs[0] && (
+                  <TrackAudio
+                    artistId={artistId}
+                    trackId={release.songs[0].id}
+                    audioPath={release.songs[0].audio_path}
+                  />
+                )}
                 {year && <div className="mt-auto text-[13px] text-ink-muted">{year}</div>}
               </div>
             )}
@@ -582,6 +595,7 @@ export function ReleaseCard({
                   <h3 className="text-2xl font-bold leading-tight tracking-[-0.01em]">{linkSong.title}</h3>
                   {feat(linkSong) && <div className="mt-1 text-[13px] text-ink-muted">{feat(linkSong)}</div>}
                 </div>
+                <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
                 {year && <div className="mt-auto text-[13px] text-ink-muted">{year}</div>}
               </div>
 

@@ -109,6 +109,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       apple_url: (row.apple_url as string | null) ?? null,
       soundcloud_url: (row.soundcloud_url as string | null) ?? null,
       deezer_url: (row.deezer_url as string | null) ?? null,
+      audio_path: (row.audio_path as string | null) ?? null,
     })
     songsByRelease.set(rid, list)
   }

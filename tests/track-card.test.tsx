@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 /**
- * TrackCard — the song editor modal. Tests the Listen link field (stream_url via
- * updateContentAction — setting it promotes an upload to Released by derivation)
- * and the song-not-track copy. The audio uploader and server actions are mocked.
+ * TrackCard — the orphan-single editor, now the SAME single-style modal a release
+ * single uses. Tests the Spotify (stream_url) slot: pasting a link saves it on blur
+ * via updateContentAction, which promotes an upload to Released by derivation. The
+ * audio uploader, supabase client (sparkline + signed audio URL), and server actions
+ * are mocked.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
@@ -13,10 +15,20 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
   TrackAudioUploader: () => <div data-testid="uploader" />,
 }))
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({
+    rpc: async () => ({ data: [] }),
+    storage: { from: () => ({ createSignedUrl: async () => ({ data: null }) }) },
+  }),
+}))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
   setTrackReleaseAction: vi.fn(async () => ({})),
+  // Pulled in transitively via release-card (shared SONG_PLATFORMS).
+  setReleaseLinkAction: vi.fn(async () => ({})),
+  setReleaseTypeAction: vi.fn(async () => ({})),
+  updateReleaseDetailsAction: vi.fn(async () => ({})),
 }))
 
 afterEach(() => {
@@ -27,7 +39,7 @@ afterEach(() => {
 const track = (over: Partial<Track> = {}): Track => ({
   id: 't1', title: 'Demo', cover_url: null, stream_url: null, source: 'manual',
   audio_path: null, release_id: null, spotify_id: null, apple_id: null,
-  deezer_id: null, apple_url: null, ...over,
+  deezer_id: null, apple_url: null, soundcloud_url: null, deezer_url: null, ...over,
 })
 
 function openModal(t: Track = track()) {
@@ -36,11 +48,11 @@ function openModal(t: Track = track()) {
 }
 
 describe('TrackCard listen link', () => {
-  it('saves a pasted listen link through updateContentAction (promotes the song)', async () => {
+  it('saves a pasted Spotify link on blur through updateContentAction (promotes the song)', async () => {
     openModal()
-    const input = screen.getByPlaceholderText('https://open.spotify.com/track/…')
+    const input = screen.getByPlaceholderText('Spotify link')
     fireEvent.change(input, { target: { value: 'https://soundcloud.com/x/song' } })
-    fireEvent.submit(input.closest('form')!)
+    fireEvent.blur(input)
 
     await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
     const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
@@ -48,8 +60,8 @@ describe('TrackCard listen link', () => {
     expect((fd as FormData).get('stream_url')).toBe('https://soundcloud.com/x/song')
   })
 
-  it('prefills the current listen link', () => {
+  it('prefills the current Spotify link', () => {
     openModal(track({ stream_url: 'https://x/s' }))
-    expect(screen.getByPlaceholderText('https://open.spotify.com/track/…')).toHaveValue('https://x/s')
+    expect(screen.getByPlaceholderText('Spotify link')).toHaveValue('https://x/s')
   })
 })
