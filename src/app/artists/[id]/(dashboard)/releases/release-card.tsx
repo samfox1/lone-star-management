@@ -459,7 +459,6 @@ export function ReleaseCard({
                   <h3 className="min-w-0 flex-1 text-2xl font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
                   {kebabMenu}
                 </div>
-                {year && <div className="text-[13px] text-ink-muted">{year}</div>}
                 {/* Audio for the single's underlying track (a single IS one song), at the bottom. */}
                 {release.songs[0] && (
                   <div className="mt-auto">
@@ -597,7 +596,6 @@ export function ReleaseCard({
                   <h3 className="text-2xl font-bold leading-tight tracking-[-0.01em]">{linkSong.title}</h3>
                   {feat(linkSong) && <div className="mt-1 text-[13px] text-ink-muted">{feat(linkSong)}</div>}
                 </div>
-                {year && <div className="text-[13px] text-ink-muted">{year}</div>}
                 <div className="mt-auto">
                   <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
                 </div>

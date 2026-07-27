@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
@@ -32,6 +33,8 @@ export type Track = TrackPlatformIds & {
   parent_release_id: string | null
   /** Optional own release date (orphan singles); album songs show the album's year instead. */
   release_date: string | null
+  /** The song's own category (single/remix/…), shown as a tile badge like the release cards. */
+  release_type: ReleaseType
 }
 
 /**
@@ -63,7 +66,6 @@ export function TrackCard({
   const [parentDraft, setParentDraft] = useState(track.parent_release_id ?? '')
   const [releaseDateDraft, setReleaseDateDraft] = useState(track.release_date?.slice(0, 10) ?? '')
   const platforms = trackPlatforms(track)
-  const year = track.release_date?.slice(0, 4)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -157,7 +159,12 @@ export function TrackCard({
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="group block w-full text-left">
-        <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
+        <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
+          {/* Same type badge the release cards carry, from the song's own release_type —
+              so an orphan remix reads "REMIX" just like a release-based one. */}
+          <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
+            {RELEASE_TYPE_LABEL[track.release_type]}
+          </span>
           {track.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={track.cover_url} alt="" className="h-full w-full object-cover" />
@@ -229,7 +236,6 @@ export function TrackCard({
                   )}
                 </div>
               </div>
-              {year && <div className="text-[13px] text-ink-muted">{year}</div>}
 
               {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
               <div className="mt-auto">
