@@ -77,106 +77,125 @@ export function ReleaseCard({
   onToggleSelect?: () => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [tracksOpen, setTracksOpen] = useState(false)
   // The tracklist song whose links modal is open (click a song to add/edit its link).
   const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
   const year = release.release_date?.slice(0, 4)
   const songCount = release.songs.length
-  // Only EPs and albums reveal a tracklist (Sam, 2026-07-24) — a single IS its song.
+  // Only EPs and albums open a tracklist (Sam, 2026-07-24) — a single IS its song.
   const expandable = release.release_type === 'ep' || release.release_type === 'album'
-  const showList = expandable && expanded
-  // Singles read as just the year (a "single" is one track — no song count); EPs/albums
-  // keep the count. No year → no meta line at all (never a "—" placeholder).
+  // Singles read as just the year (no song count — a single is one track); EPs/albums keep
+  // the count. No year → no meta line at all (never a "—" placeholder).
   const meta = expandable
     ? [year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
     : (year ?? '')
 
   return (
-    // A fixed-width tile that grows ONLY by the tracklist's width when open (never the
-    // cover) — so opening an EP/album never resizes the cover or reflows the row.
-    <div className={cx('flex-none', showList ? 'w-auto' : 'w-48')}>
-      <div className={showList ? 'flex items-start gap-4' : undefined}>
-        {/* The cover tile — unchanged; only pinned to its size once open so the songs get
-            room beside it rather than shrinking the cover. */}
-        <div className={cx('group relative', showList && 'w-48 flex-none')}>
-          {/* On-site select — top-left, doesn't open the modal */}
-          {onToggleSelect && (
-            <div className="absolute left-2 top-2 z-10">
-              <SelectToggle selected={!!selected} onSite={release.on_site} onToggle={onToggleSelect} label={release.title} />
-            </div>
-          )}
+    // A plain fixed-width tile — the tracklist lives in a modal now, so the card never grows
+    // and the grid never reflows or pushes a far-left album's songs off-screen.
+    <div className="w-48 flex-none">
+      <div className="group relative">
+        {/* On-site select — top-left, doesn't open a modal */}
+        {onToggleSelect && (
+          <div className="absolute left-2 top-2 z-10">
+            <SelectToggle selected={!!selected} onSite={release.on_site} onToggle={onToggleSelect} label={release.title} />
+          </div>
+        )}
 
-          {/* Edit — top-right pencil. */}
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            title="Edit release"
-            aria-label={`Edit ${release.title}`}
-            className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-ink-muted shadow-sm transition-colors hover:text-ink"
-          >
-            <Icon name="edit" size={14} />
-          </button>
+        {/* Edit — top-right pencil. */}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="Edit release"
+          aria-label={`Edit ${release.title}`}
+          className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-ink-muted shadow-sm transition-colors hover:text-ink"
+        >
+          <Icon name="edit" size={14} />
+        </button>
 
-          {/* Clicking an EP/album reveals its songs; a single just opens the editor. */}
-          <button
-            type="button"
-            onClick={() => (expandable ? setExpanded((v) => !v) : setEditing(true))}
-            aria-expanded={expandable ? expanded : undefined}
-            aria-label={`${release.title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
-            className="block w-full text-left"
-          >
-            <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
-              <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
-                {RELEASE_TYPE_LABEL[release.release_type]}
+        {/* Clicking an EP/album opens its tracklist modal; a single just opens the editor. */}
+        <button
+          type="button"
+          onClick={() => (expandable ? setTracksOpen(true) : setEditing(true))}
+          aria-haspopup="dialog"
+          aria-label={`${release.title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
+          className="block w-full text-left"
+        >
+          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
+            <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
+              {RELEASE_TYPE_LABEL[release.release_type]}
+            </span>
+            {release.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="h-9 w-9 rounded-full bg-ink" />
+            )}
+          </div>
+          <div className="mt-3 flex items-center gap-1">
+            <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
+              {release.title}
+            </span>
+            {expandable && (
+              <span className="flex-none text-ink-faint" aria-hidden>
+                <Icon name="chevronRight" size={16} />
               </span>
+            )}
+          </div>
+          {meta && <div className="mt-0.5 font-space text-[13px] text-ink-muted">{meta}</div>}
+          <CardStat value={release.stat ?? 0} label={metricLabel('release')} />
+        </button>
+      </div>
+
+      {/* Tracklist modal (Sam, 2026-07-27): opening it never disturbs the grid, and a
+          far-left album's songs can't fall off-screen. Click a song to edit its links. */}
+      {expandable && (
+        <CardModal open={tracksOpen} onClose={() => setTracksOpen(false)}>
+          <div className="flex items-start gap-4">
+            <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
               {release.cover_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="h-9 w-9 rounded-full bg-ink" />
+                <span className="h-7 w-7 rounded-full bg-ink" />
               )}
             </div>
-            <div className="mt-3 flex items-center gap-1">
-              <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
-                {release.title}
-              </span>
-              {expandable && (
-                <span className={cx('flex-none text-ink-faint transition-transform', expanded && 'rotate-90')} aria-hidden>
-                  <Icon name="chevronRight" size={16} />
-                </span>
-              )}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-bold tracking-[-0.01em]">{release.title}</h3>
+              <div className="font-space text-xs text-ink-muted">
+                {[RELEASE_TYPE_LABEL[release.release_type], year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
             </div>
-            {meta && <div className="mt-0.5 font-space text-[13px] text-ink-muted">{meta}</div>}
-            <CardStat value={release.stat ?? 0} label={metricLabel('release')} />
-          </button>
-        </div>
+          </div>
 
-        {/* Songs to the RIGHT of the cover — borderless, detached (a gap, no shared box),
-            scrollable, capped at the cover's height. */}
-        {showList &&
-          (songCount === 0 ? (
-            <p className="flex-1 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
+          <div className="mt-5 font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Tracklist</div>
+          {songCount === 0 ? (
+            <p className="mt-2 font-space text-[12px] text-ink-faint">No songs on this release yet.</p>
           ) : (
-            <ol className="no-scrollbar max-h-48 w-80 min-w-0 flex-none space-y-0.5 overflow-y-auto pr-1">
-              {release.songs.map((s, i) => (
-                <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
-                  <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                  {/* Click a song to add/edit its streaming link. */}
-                  <button
-                    type="button"
-                    onClick={() => setLinkSong(s)}
-                    title="Add or edit links"
-                    className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
-                  >
-                    {s.title}
-                  </button>
-                  {/* Cap the feat. so a long "feat. A, B" can't starve the title to nothing. */}
-                  {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
-                </li>
-              ))}
-            </ol>
-          ))}
-      </div>
+            <>
+              <ol className="mt-2 max-h-[50vh] space-y-0.5 overflow-auto">
+                {release.songs.map((s, i) => (
+                  <li key={s.id} className="flex items-baseline gap-2 py-0.5 font-space text-[13px]">
+                    <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => setLinkSong(s)}
+                      title="Add or edit links"
+                      className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
+                    >
+                      {s.title}
+                    </button>
+                    {feat(s) && <span className="max-w-[45%] flex-none truncate text-ink-faint">{feat(s)}</span>}
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 font-space text-[11px] text-ink-faint">Click a song to add or edit its links.</p>
+            </>
+          )}
+        </CardModal>
+      )}
 
       <CardModal
         open={editing}
