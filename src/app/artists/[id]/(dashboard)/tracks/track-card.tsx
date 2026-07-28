@@ -13,6 +13,7 @@ import { toast } from '../toast'
 import { SONG_PLATFORMS } from '../releases/release-card'
 import {
   deleteContentAction,
+  setTrackOnSiteAction,
   setTrackParentReleaseAction,
   setTrackReleaseAction,
   updateContentAction,
@@ -35,6 +36,8 @@ export type Track = TrackPlatformIds & {
   release_date: string | null
   /** The song's own category (single/remix/…), shown as a tile badge like the release cards. */
   release_type: ReleaseType
+  /** Live on-site state — only surfaced/toggled for orphans (a track with a release follows it). */
+  on_site: boolean
 }
 
 /**
@@ -65,7 +68,22 @@ export function TrackCard({
   const [releaseDraft, setReleaseDraft] = useState(track.release_id ?? '')
   const [parentDraft, setParentDraft] = useState(track.parent_release_id ?? '')
   const [releaseDateDraft, setReleaseDateDraft] = useState(track.release_date?.slice(0, 10) ?? '')
+  // Only an orphan (no home release) exposes its own on-site switch; others follow the release.
+  const isOrphan = !track.release_id
+  const [onSite, setOnSite] = useState(track.on_site)
   const platforms = trackPlatforms(track)
+
+  async function toggleOnSite() {
+    const next = !onSite
+    setOnSite(next) // optimistic
+    const res = await setTrackOnSiteAction(track.id, artistId, next)
+    if (res?.error) {
+      setOnSite(!next)
+      toast(res.error, 'error')
+    } else {
+      toast(next ? 'On the site' : 'Off the site')
+    }
+  }
 
   useEffect(() => {
     if (!menuOpen) return
@@ -236,6 +254,31 @@ export function TrackCard({
                   )}
                 </div>
               </div>
+
+              {/* On-site switch — only for an orphan song (no release to follow). Live, green
+                  when on. A song with a release is governed by that release instead. */}
+              {isOrphan && (
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">On site</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={onSite}
+                    onClick={toggleOnSite}
+                    className={cx(
+                      'relative h-6 w-11 flex-none rounded-full transition-colors',
+                      onSite ? 'bg-accent' : 'bg-ink/15',
+                    )}
+                  >
+                    <span
+                      className={cx(
+                        'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+                        onSite && 'translate-x-5',
+                      )}
+                    />
+                  </button>
+                </label>
+              )}
 
               {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
               <div className="mt-auto">

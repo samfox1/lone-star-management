@@ -60,6 +60,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       audio_path: (row.audio_path as string | null) ?? null,
       release_id: (row.release_id as string | null) ?? null,
       parent_release_id: (row.parent_release_id as string | null) ?? null,
+      on_site: (row.on_site as boolean | null) ?? false,
       spotify_id: (row.spotify_id as string | null) ?? null,
       apple_id: (row.apple_id as string | null) ?? null,
       deezer_id: (row.deezer_id as string | null) ?? null,

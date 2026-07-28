@@ -912,6 +912,25 @@ export async function setTrackReleaseAction(
  * single can live on its own AND show in the album's tracklist. Empty clears it. RLS scopes
  * the write to the owner.
  */
+/**
+ * Flip a single track on/off the public site directly. This is for ORPHAN songs (no home
+ * release) — a song imported from Apple/Deezer with no release has nothing to follow, so it
+ * needs its own switch. A track that DOES have a release follows that release's on-site state
+ * (reconciled on publish), so the UI only exposes this for orphans. Live, like the video/tour
+ * toggles (ADR 0009): the public door reads the working `on_site`. RLS scopes the write.
+ */
+export async function setTrackOnSiteAction(
+  trackId: string,
+  artistId: string,
+  onSite: boolean,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('tracks').update({ on_site: onSite }).eq('id', trackId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 export async function setTrackParentReleaseAction(
   trackId: string,
   artistId: string,

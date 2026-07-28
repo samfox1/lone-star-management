@@ -35,7 +35,7 @@ const release = (over: Partial<Release>): Release => ({
 const song = (over: Partial<UnreleasedSong>): UnreleasedSong => ({
   id: 's', title: 's', cover_url: null, stream_url: null, source: 'manual',
   audio_path: null, release_id: null, parent_release_id: null, release_date: null,
-  release_type: 'single', spotify_id: null, apple_id: null,
+  release_type: 'single', on_site: false, spotify_id: null, apple_id: null,
   deezer_id: null, apple_url: null, group: LOOSE, groupLabel: '', ...over,
 })
 
@@ -107,7 +107,8 @@ describe('MusicBrowser lenses', () => {
 describe('MusicBrowser — orphan singles (no loose bucket)', () => {
   const orphan = (over: Partial<MusicSong>): MusicSong => ({
     id: 'o', title: 'Bootleg', cover_url: null, stream_url: null, source: 'manual',
-    audio_path: null, release_id: null, parent_release_id: null, release_date: null, spotify_id: null, apple_id: null,
+    audio_path: null, release_id: null, parent_release_id: null, release_date: null, on_site: false,
+    spotify_id: null, apple_id: null,
     deezer_id: null, apple_url: null, created_at: '2026-01-01', release_type: 'single', ...over,
   })
 
