@@ -288,7 +288,10 @@ async function syncTracks(
       continue
     }
 
-    // 3) A song we haven't seen on any platform → insert new.
+    // 3) A song we haven't seen on any platform → insert new, OFF-SITE. A fresh import
+    //    isn't public until the manager puts its release on the site (option A: a song's
+    //    on-site state follows its home release, reconciled on publish). Existing tracks are
+    //    never touched here (paths 1 & 2 don't write on_site), so nothing already live drops.
     const { error: iErr } = await supabase.from('tracks').insert({
       artist_id: artistId,
       [idCol]: item.externalId,
@@ -297,6 +300,7 @@ async function syncTracks(
       cover_url: item.cover_url,
       album_name: item.album_name,
       duration_ms: item.duration_ms,
+      on_site: false,
       ...item.owned,
     })
     if (iErr) {

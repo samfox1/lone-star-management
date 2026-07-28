@@ -794,6 +794,33 @@ export async function publishReleasesAction(
 
   try {
     await reconcileOnSite(supabase, 'release', artistId, onSiteIds)
+    // Option A: a song's on-site state follows its HOME release. Putting a release on the
+    // site turns its tracks on; taking it off turns them off. This is how a freshly-synced
+    // song (inserted off-site) becomes public. Orphan tracks (no release_id) are left alone —
+    // they carry their own on_site (e.g. a SoundCloud single).
+    const { data: allRels, error: relErr } = await supabase
+      .from('releases')
+      .select('id')
+      .eq('artist_id', artistId)
+    if (relErr) throw new Error(relErr.message)
+    const onSet = new Set(onSiteIds)
+    const offIds = (allRels ?? []).map((r) => r.id as string).filter((id) => !onSet.has(id))
+    if (onSiteIds.length) {
+      const { error } = await supabase
+        .from('tracks')
+        .update({ on_site: true })
+        .eq('artist_id', artistId)
+        .in('release_id', onSiteIds)
+      if (error) throw new Error(error.message)
+    }
+    if (offIds.length) {
+      const { error } = await supabase
+        .from('tracks')
+        .update({ on_site: false })
+        .eq('artist_id', artistId)
+        .in('release_id', offIds)
+      if (error) throw new Error(error.message)
+    }
     await publishContent(supabase, 'release', artistId, gate.userId)
     await publishContent(supabase, 'track', artistId, gate.userId)
   } catch (e) {
