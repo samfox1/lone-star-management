@@ -6,6 +6,7 @@ import { SiSoundcloud, SiYoutube } from 'react-icons/si'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { metricLabel } from '@/lib/analytics'
+import { safeHref } from '@/lib/url'
 import { publicVideoSrc } from '@/lib/video-render'
 import { CardModal } from '../card-modal'
 import { EntitySparkline } from '../entity-sparkline'
@@ -315,7 +316,7 @@ export function VideoCard({
                   {url}
                 </span>
                 <a
-                  href={url}
+                  href={safeHref(url) ?? '#'}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Open the video in a new tab"
