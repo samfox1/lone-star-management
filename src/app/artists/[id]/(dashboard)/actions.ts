@@ -1122,6 +1122,26 @@ export async function saveDeezerIdAction(artistId: string, formData: FormData) {
   return saveArtistField(artistId, 'deezer_artist_id', formData)
 }
 
+/**
+ * Save (or clear) the artist's SoundCloud PROFILE url. SoundCloud can't auto-sync (no usable
+ * catalog API), so this is just captured/validated for the public social link and manual
+ * reference — not a pull source. Empty clears it.
+ */
+export async function saveSoundcloudUrlAction(artistId: string, formData: FormData): Promise<{ error?: string }> {
+  const raw = String(formData.get('soundcloud_url') ?? '').trim()
+  let value: string | null = null
+  if (raw) {
+    const safe = safeHref(raw)
+    if (!safe) return { error: 'Enter a valid SoundCloud URL.' }
+    value = safe
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.from('artists').update({ soundcloud_url: value }).eq('id', artistId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 /** Pull the artist's Deezer catalog into draft tracks (metadata + link-out). Merges
  *  into the union track set alongside any other connected service. */
 export async function syncDeezerAction(artistId: string): Promise<{ ok: boolean; error?: string }> {

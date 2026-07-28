@@ -78,6 +78,23 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
+    // DEV BYPASS: auto-sign-in as a dev user so a local session skips the login page while
+    // keeping a REAL session (so RLS still applies — nothing is loosened). Fires only when
+    // NODE_ENV=development AND both DEV_LOGIN_* env vars are set, so it can never run in
+    // production. signInWithPassword writes the session cookie through the setAll callback
+    // above (onto request + supabaseResponse), so this same request proceeds authenticated.
+    if (
+      process.env.NODE_ENV === 'development' &&
+      process.env.DEV_LOGIN_EMAIL &&
+      process.env.DEV_LOGIN_PASSWORD
+    ) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: process.env.DEV_LOGIN_EMAIL,
+        password: process.env.DEV_LOGIN_PASSWORD,
+      })
+      if (!error) return supabaseResponse
+    }
+
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     const redirectResponse = NextResponse.redirect(url)
