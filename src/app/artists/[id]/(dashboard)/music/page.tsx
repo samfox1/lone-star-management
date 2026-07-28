@@ -4,7 +4,7 @@ import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { dashboardDiff, requireArtist } from '../_data'
-import { importDriveFileAction, listDriveFilesAction, refreshSpotifyAction } from '../actions'
+import { importDriveFileAction, listDriveFilesAction, refreshMusicAction } from '../actions'
 import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
@@ -178,7 +178,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       releaseOptions={releaseOptions}
       artistId={id}
       artistSlug={artist.slug}
-      refreshAction={refreshSpotifyAction.bind(null, id)}
+      refreshAction={refreshMusicAction.bind(null, id)}
       dirty={musicDirty}
       importButton={
         artist.drive_folder_id ? (

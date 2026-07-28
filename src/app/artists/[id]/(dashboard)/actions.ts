@@ -1067,6 +1067,37 @@ export async function refreshSpotifyAction(artistId: string): Promise<{ ok: bool
   return pullSpotify(artistId)
 }
 
+/**
+ * The Music page's "Sync": pull from EVERY connected music service in one click, so a
+ * catalog scattered across platforms lands in one place. Runs Spotify FIRST (it's the only
+ * source that creates releases + links tracks), then Apple and Deezer, which MERGE their
+ * links onto the union rows by title (see lib/sync.ts syncTracks). Only runs the services
+ * the artist has actually linked; reports each service's error but doesn't abort the rest.
+ */
+export async function refreshMusicAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('spotify_artist_id, apple_artist_id, deezer_artist_id')
+    .eq('id', artistId)
+    .single()
+
+  const jobs: { name: string; connected: boolean; run: () => Promise<{ ok: boolean; error?: string }> }[] = [
+    { name: 'Spotify', connected: !!artist?.spotify_artist_id, run: () => pullSpotify(artistId) },
+    { name: 'Apple Music', connected: !!artist?.apple_artist_id, run: () => syncAppleAction(artistId) },
+    { name: 'Deezer', connected: !!artist?.deezer_artist_id, run: () => syncDeezerAction(artistId) },
+  ]
+  const connected = jobs.filter((j) => j.connected)
+  if (connected.length === 0) return { ok: false, error: 'No music services connected yet. Add them in Integrations.' }
+
+  const errors: string[] = []
+  for (const j of connected) {
+    const res = await j.run()
+    if (!res.ok && res.error) errors.push(`${j.name}: ${res.error}`)
+  }
+  return errors.length ? { ok: false, error: errors.join(' · ') } : { ok: true }
+}
+
 /** Save (or clear) the artist's Deezer artist id used to pull their catalog. */
 export async function saveDeezerIdAction(artistId: string, formData: FormData) {
   return saveArtistField(artistId, 'deezer_artist_id', formData)
