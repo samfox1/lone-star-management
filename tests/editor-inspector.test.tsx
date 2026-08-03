@@ -7,7 +7,7 @@
  * strip); Back returns; accordions collapse.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
   deleteContentAction,
@@ -28,7 +28,9 @@ import {
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import type { SelectTarget } from '@/lib/site-editor/bridge'
 import type {
+  EditorImageField,
   EditorLink,
   EditorMerch,
   EditorProject,
@@ -54,6 +56,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   assignHeroSlotAction: vi.fn(async () => ({})),
   assignComponentSlotAction: vi.fn(async () => ({})),
   setSongsOnSiteAction: vi.fn(async () => ({})),
+  setImageFieldAction: vi.fn(async () => ({ ok: true })),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
@@ -167,20 +170,27 @@ function renderInspector(
     styleOptions?: SiteStyleOptions
     selectedStyle?: string | null
     components?: ManifestComponent[]
-    componentLabels?: Record<string, string>
     showGallery?: boolean
     linkRegions?: ManifestLinkRegion[]
     linkValues?: Record<string, string>
     selectedLink?: string | null
+    imageFields?: EditorImageField[]
+    selectedRegion?: { target: SelectTarget; nonce: number } | null
     onApplyField?: (k: string, v: string) => void
     onApplyStyle?: (k: string, c: string) => void
     onApplyLink?: (k: string, u: string) => void
+    onHighlight?: (t: SelectTarget) => void
+    onClearHighlight?: () => void
   } = {},
 ) {
   return render(
     <EditorInspector
       artistId="artist-1"
       photos={photos}
+      imageFields={opts.imageFields ?? []}
+      selectedRegion={opts.selectedRegion ?? null}
+      onHighlight={opts.onHighlight}
+      onClearHighlight={opts.onClearHighlight}
       textFields={opts.textFields ?? []}
       links={opts.links ?? []}
       supportLinks={opts.supportLinks ?? []}
@@ -190,7 +200,6 @@ function renderInspector(
       releases={opts.releases ?? []}
       tours={opts.tours ?? []}
       components={opts.components ?? []}
-      componentLabels={opts.componentLabels ?? {}}
       showGallery={opts.showGallery ?? true}
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
@@ -281,9 +290,11 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal')
   })
 
-  it('Edit → Remove takes a photo off the site (never deletes)', () => {
+  it('Edit opens the full-panel editor; Remove takes the photo off the site (never deletes)', () => {
     openImages()
     fireEvent.click(screen.getByRole('button', { name: 'Edit horizontal photo 1' }))
+    // The whole panel is now the item editor, headed "Edit <label>".
+    expect(screen.getByRole('heading', { name: 'Edit Horizontal 1' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false)
     expect(deleteMock).not.toHaveBeenCalled()
@@ -305,7 +316,8 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     openImages()
     fireEvent.click(screen.getByRole('button', { name: 'Edit horizontal photo 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Horizontal 1/ })) // m2
+    // The item editor's picker labels candidates by filename (m2 = h-lib.jpg).
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /h-lib\.jpg/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false) // old off
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed
   })
@@ -333,6 +345,66 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     const strip = screen.getByRole('button', { name: 'Images' })
     expect(strip.getAttribute('aria-current')).toBe('true')
     expect(within(document.body).getByRole('button', { name: 'Videos' })).toBeTruthy()
+  })
+})
+
+describe('EditorInspector — Images: image fields + two-way highlight', () => {
+  const IMAGE_FIELDS: EditorImageField[] = [
+    { key: 'hero_image', label: 'Hero image', previewUrl: 'https://cdn/hero.jpg', target: { store: 'artist', column: 'hero_image_url' } },
+    { key: 'profile_photo', label: 'Profile photo', previewUrl: null, target: { store: 'media', purpose: 'profile_photo' } },
+  ]
+  const openImages = () => fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+
+  it('surfaces every declared image field under "Set slots" — filled shows the image, empty shows Add', () => {
+    renderInspector([], { imageFields: IMAGE_FIELDS, showGallery: false })
+    openImages()
+    expect(screen.getByText('Set slots')).toBeTruthy()
+    // hero has a value → a selectable tile; profile is empty → an Add drop target.
+    expect(screen.getByRole('button', { name: 'Select Hero image' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Profile photo' })).toBeTruthy()
+  })
+
+  it('clicking an image tile highlights that exact region in the live frame', () => {
+    const onHighlight = vi.fn()
+    renderInspector([], { imageFields: IMAGE_FIELDS, showGallery: false, onHighlight })
+    openImages()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Hero image' }))
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'field', key: 'hero_image' })
+  })
+
+  it('a frame click on an image region opens Images, rings the tile, and re-outlines it', () => {
+    const onHighlight = vi.fn()
+    renderInspector([], {
+      imageFields: IMAGE_FIELDS,
+      showGallery: false,
+      selectedRegion: { target: { kind: 'field', key: 'hero_image' }, nonce: 1 },
+      onHighlight,
+    })
+    // Images opened itself (no click needed), and the hero tile is the focused one.
+    const tile = screen.getByRole('button', { name: 'Select Hero image' })
+    expect(tile.getAttribute('aria-pressed')).toBe('true')
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'field', key: 'hero_image' })
+  })
+
+  it('a frame click on a NON-image region (a text heading) does NOT hijack the panel to Images', () => {
+    renderInspector([], {
+      imageFields: IMAGE_FIELDS,
+      textFields: TEXT_FIELDS,
+      selectedRegion: { target: { kind: 'field', key: 'hero_tagline' }, nonce: 1 },
+    })
+    // Still on the browse list — Images was not force-opened by a non-image select.
+    expect(screen.queryByText('Set slots')).toBeNull()
+    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('photo')
+  })
+
+  it('a gallery photo card is selectable and rings when it is the focused region', () => {
+    renderInspector(PHOTOS, {
+      showGallery: true,
+      selectedRegion: { target: { kind: 'item', assetType: 'image', id: 'm1' }, nonce: 1 },
+    })
+    // m1 (on-site horizontal) is the focused gallery card.
+    const card = screen.getByRole('button', { name: 'Select horizontal photo 1' })
+    expect(card.getAttribute('aria-pressed')).toBe('true')
   })
 })
 
@@ -1228,11 +1300,13 @@ describe('EditorInspector — tour tools', () => {
 })
 
 
-/* ── Component slots: the polaroid wall ─────────────────────────────────────────────
- * The site declares the component and its count; the manager fills each slot and may
- * rename each instance. A placed photo carries `site_role = <key>_<n>_<slot>`, exactly
- * the field key skeen declares, and leaves the gallery collage groups. */
-describe('EditorInspector — component slots (polaroids)', () => {
+/* ── Component slots: a flat wall of numbered image slots (skeen's polaroids) ────────
+ * The site declares the component and its count; the manager fills each slot. The slots
+ * are shown as a FLAT numbered grid ("Slot 1 … Slot N", sequential across every instance)
+ * — no named cards, no rename (Sam, 2026-07-28). A placed photo carries
+ * `site_role = <key>_<n>_<slot>`, exactly the field key skeen declares, and leaves the
+ * gallery collage groups. Slot 1 = polaroid_1_photo, Slot 2 = polaroid_1_caption, … */
+describe('EditorInspector — component slots (flat numbered wall)', () => {
   const POLAROID: ManifestComponent = {
     key: 'polaroid',
     label: 'Polaroid',
@@ -1243,33 +1317,39 @@ describe('EditorInspector — component slots (polaroids)', () => {
     ],
   }
 
-  const openImages = (photos: GalleryPhoto[], componentLabels: Record<string, string> = {}) => {
-    renderInspector(photos, { components: [POLAROID], componentLabels })
+  const openImages = (photos: GalleryPhoto[]) => {
+    renderInspector(photos, { components: [POLAROID] })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
-  it('heads the section with the number of IMAGE SLOTS, not the number of cards', () => {
-    // 2 cards x 2 slots = 4 images wanted. "2 polaroids" would undercount what the
-    // manager actually has to fill.
+  it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {
     openImages(PHOTOS)
-    expect(screen.getByText('4 image slots')).toBeTruthy()
+    expect(screen.getByText('Custom slots')).toBeTruthy()
     expect(screen.queryByText(/polaroids/i)).toBeNull()
   })
 
-  it('renders one card per declared instance, with a drop spot per slot', () => {
+  it('renders one flat numbered slot per image, across every instance — Slot 1 … Slot N', () => {
     openImages(PHOTOS)
-    // count: 2 → two cards, each with both slots empty.
-    expect(screen.getByRole('button', { name: 'Polaroid 1 Photo' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Polaroid 1 Handwriting' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Polaroid 2 Photo' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Polaroid 3 Photo' })).toBeNull()
+    // 2 instances × 2 slots → Slot 1..4, all empty; no named "Polaroid" cards, no Slot 5.
+    expect(screen.getByRole('button', { name: 'Slot 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Slot 4' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Slot 5' })).toBeNull()
+    expect(screen.queryByText(/^Polaroid 1$/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Rename/ })).toBeNull()
   })
 
-  it('placing a photo writes the slot role skeen reads', () => {
+  it('placing a photo into Slot 1 writes the role skeen reads (instance 1, first slot)', () => {
     openImages(PHOTOS)
-    fireEvent.click(screen.getByRole('button', { name: 'Polaroid 1 Photo' })) // opens the picker
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1' })) // opens the picker
     fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
+  })
+
+  it('numbers sequentially ACROSS instances — Slot 3 is instance 2, first slot', () => {
+    openImages(PHOTOS)
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 3' }))
+    fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
+    expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_2_photo', 'm2')
   })
 
   it('a slot-held photo LEAVES the gallery groups', () => {
@@ -1279,23 +1359,23 @@ describe('EditorInspector — component slots (polaroids)', () => {
       ...PHOTOS,
     ]
     openImages(held)
-    // It is in its slot...
-    expect(screen.getByRole('button', { name: 'Remove Polaroid 1 Handwriting' })).toBeTruthy()
+    // polaroid_1_caption is Slot 2 — it is in its slot (its Edit button is present)...
+    expect(screen.getByRole('button', { name: 'Edit Slot 2' })).toBeTruthy()
     // ...and not offered as a horizontal gallery card (only the two real ones are).
     expect(screen.queryByRole('button', { name: 'Edit horizontal photo 3' })).toBeNull()
   })
 
-  it('warns (but does not block) when the handwriting slot holds a non-PNG', () => {
+  it('warns (but does not block) when a PNG-preferring slot holds a non-PNG', () => {
     const jpg: GalleryPhoto[] = [
       { id: 'mj', storage_path: 'artist-1/gallery/hand.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_caption' },
     ]
     openImages(jpg)
     expect(screen.getByText(/transparent PNG/i)).toBeTruthy()
     // The image is still placed — a warning, not a rejection.
-    expect(screen.getByRole('button', { name: 'Remove Polaroid 1 Handwriting' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Edit Slot 2' })).toBeTruthy()
   })
 
-  it('does NOT warn when the handwriting slot holds a real PNG', () => {
+  it('does NOT warn when that slot holds a real PNG', () => {
     const png: GalleryPhoto[] = [
       { id: 'mp', storage_path: 'artist-1/gallery/hand.PNG', onSite: true, orientation: null, siteRole: 'polaroid_1_caption' },
     ]
@@ -1303,68 +1383,316 @@ describe('EditorInspector — component slots (polaroids)', () => {
     expect(screen.queryByText(/transparent PNG/i)).toBeNull()
   })
 
-  it('clearing a slot releases it without deleting the photo', () => {
-    const held: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo' },
-    ]
-    openImages(held)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Polaroid 1 Photo' }))
+  const HELD_SLOT: GalleryPhoto[] = [
+    { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo' },
+  ]
+
+  /** Both polaroid PHOTO slots filled, for cross-item behaviour (styling one, then the
+   *  other). Slots are flattened across cards, so card 2's photo is Slot 3 — card 1's
+   *  caption is Slot 2. */
+  const TWO_SLOTS: GalleryPhoto[] = [
+    ...HELD_SLOT,
+    { id: 'mq', storage_path: 'artist-1/gallery/b.jpg', onSite: true, orientation: null, siteRole: 'polaroid_2_photo' },
+  ]
+
+  it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls, Revert', () => {
+    openImages(HELD_SLOT)
+    // Not editing yet — the wall is shown, not the item editor.
+    expect(screen.queryByRole('heading', { name: /^Edit / })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    // The panel is now the item editor for this slot, headed "Edit Slot 1".
+    expect(screen.getByRole('heading', { name: 'Edit Slot 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Revert changes/ })).toBeTruthy()
+    // The visual controls, keyed by the slot's label.
+    expect(screen.getByLabelText('Slot 1 Size')).toBeTruthy()
+    expect(screen.getByLabelText('Slot 1 Transparency')).toBeTruthy()
+    expect(screen.getByLabelText('Slot 1 Border')).toBeTruthy()
+    expect(screen.getByLabelText('Slot 1 Corners')).toBeTruthy()
+    expect(screen.getByLabelText('Slot 1 Shadow')).toBeTruthy()
+    // The border colour is one compact row by default — clear, the current colour (which
+    // opens the palette), and the hex. The mixing surface stays folded away: it is used
+    // occasionally but would cost panel height on every visit.
+    expect(screen.getByLabelText('Slot 1 Border color hex')).toBeTruthy()
+    expect(screen.getByLabelText('Slot 1 Border color palette')).toBeTruthy()
+    expect(screen.queryByLabelText('Slot 1 Border color saturation and brightness')).toBeNull()
+    expect(screen.queryByLabelText('Slot 1 Border color hue')).toBeNull()
+    // Back returns to the wall.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.queryByRole('heading', { name: /^Edit / })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Edit Slot 1' })).toBeTruthy()
+  })
+
+  it('Revert is disabled until a change, then returns to the opened-in state and re-saves', () => {
+    vi.useFakeTimers()
+    try {
+      const onApplyStyle = vi.fn()
+      renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+      fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+      // Unstyled to start → nothing to revert.
+      expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(true)
+      // Corners → 6px (step index 3: Square, 2px, 4px, 6px).
+      fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+      expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px]')
+      expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(false)
+      // Revert → back to '' (the opened-in state), painted + saved.
+      fireEvent.click(screen.getByRole('button', { name: /Revert changes/ }))
+      expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'slot:polaroid_1_photo', '')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /** Open the item editor for the held slot, unfold the palette, and hand back its parts.
+   *  jsdom gives every element a zero-sized rect, so the square is measured explicitly —
+   *  its geometry is the one thing a component test can't observe for free. */
+  function openPalette(onApplyStyle = vi.fn()) {
+    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
+    const area = screen.getByLabelText('Slot 1 Border color saturation and brightness')
+    area.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON: () => ({}) })
+    return {
+      onApplyStyle,
+      area,
+      hue: screen.getByLabelText('Slot 1 Border color hue'),
+      hex: screen.getByLabelText('Slot 1 Border color hex'),
+    }
+  }
+
+  it('the palette opens as a modal and closes on Escape, Done, or the backdrop', () => {
+    renderInspector(HELD_SLOT, { components: [POLAROID] })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const openIt = () => fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
+
+    openIt()
+    expect(screen.getByRole('dialog', { name: 'Slot 1 Border color palette' })).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    openIt()
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    openIt()
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(dialog) // the backdrop itself, not the card
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a colour mixed in the modal applies live, and survives closing it', () => {
+    const { onApplyStyle, area, hue } = openPalette()
+    fireEvent.change(hue, { target: { value: '240' } })
+    fireEvent.pointerDown(area, { clientX: 200, clientY: 0 })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#0000ff]')
+    // No confirm step: the edit is already applied, so closing just closes.
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect((screen.getByLabelText('Slot 1 Border color hex') as HTMLInputElement).value).toBe('#0000ff')
+  })
+
+  it('the palette applies any hex the manager types, with or without the #', () => {
+    const { onApplyStyle, hex } = openPalette()
+    fireEvent.change(hex, { target: { value: '#123abc' } })
+    fireEvent.blur(hex)
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#123abc]')
+    // A bare hex is forgiven, and uppercase is normalised.
+    fireEvent.change(hex, { target: { value: 'FFAA00' } })
+    fireEvent.keyDown(hex, { key: 'Enter' })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#ffaa00]')
+  })
+
+  it('a half-typed hex is left alone rather than applied or destroyed', () => {
+    const { onApplyStyle, hex } = openPalette()
+    fireEvent.change(hex, { target: { value: '#12' } })
+    fireEvent.blur(hex)
+    expect(onApplyStyle).not.toHaveBeenCalled()
+  })
+
+  it('dragging the saturation/brightness square picks a colour off the palette', () => {
+    const { onApplyStyle, area, hue } = openPalette()
+    // Hue 240 (blue), then the top-right corner of the square = full saturation, full
+    // brightness → pure blue.
+    fireEvent.change(hue, { target: { value: '240' } })
+    fireEvent.pointerDown(area, { clientX: 200, clientY: 0 })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#0000ff]')
+    // Drag continues over the window, and left/down darkens + desaturates: the middle of
+    // the square at half brightness.
+    fireEvent.pointerMove(window, { clientX: 100, clientY: 50 })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#404080]')
+    // The pointer leaving the square pins rather than jumping.
+    fireEvent.pointerMove(window, { clientX: -500, clientY: -500 })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#ffffff]')
+    // After release the square stops following the pointer.
+    fireEvent.pointerUp(window)
+    onApplyStyle.mockClear()
+    fireEvent.pointerMove(window, { clientX: 10, clientY: 90 })
+    expect(onApplyStyle).not.toHaveBeenCalled()
+  })
+
+  it('the square is keyboard-operable (arrow keys move saturation and brightness)', () => {
+    const { onApplyStyle, area } = openPalette()
+    // Opens on red at full saturation + brightness. Down darkens by one 2% step.
+    fireEvent.keyDown(area, { key: 'ArrowDown' })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#fa0000]')
+    // Home is fully desaturated at that brightness.
+    fireEvent.keyDown(area, { key: 'Home' })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#fafafa]')
+  })
+
+  it('the hue slider keeps its position when the colour is dragged to black', () => {
+    const { onApplyStyle, area, hue } = openPalette()
+    fireEvent.change(hue, { target: { value: '240' } })
+    // Bottom of the square = black, which carries no hue of its own.
+    fireEvent.pointerDown(area, { clientX: 200, clientY: 100 })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#000000]')
+    expect((hue as HTMLInputElement).value).toBe('240') // NOT snapped back to red
+    // Dragging back up returns to the hue the manager chose, not to red.
+    fireEvent.pointerMove(window, { clientX: 200, clientY: 0 })
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#0000ff]')
+  })
+
+  it("offers the SITE'S OWN palette as swatches, ahead of one-off colours", () => {
+    // The site declares its colours as classes (`text-flash-1`); only the hex it also
+    // declares can be painted as a swatch, because the editor never sees its stylesheet.
+    const styleOptions = {
+      textColors: [{ value: 'text-flash-1', label: 'Red', hex: '#c63a2a' }],
+      bgColors: [{ value: 'bg-cream', label: 'Cream', hex: '#f4f1ea' }],
+    }
+    renderInspector(HELD_SLOT, {
+      components: [POLAROID],
+      styleOptions,
+      styleValues: { footer: 'border-[#123abc]' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    // The swatches live in the palette modal, under the mixer.
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
+    const swatches = screen
+      .getAllByRole('button', { name: /^Slot 1 Border color #/ })
+      .map((b) => b.getAttribute('aria-label'))
+    // Declared palette first (those are the canonical ones), then the one-off already used.
+    expect(swatches).toEqual([
+      'Slot 1 Border color #c63a2a',
+      'Slot 1 Border color #f4f1ea',
+      'Slot 1 Border color #123abc',
+    ])
+  })
+
+  it('offers the colours the site already uses, most-used first', () => {
+    // Matching a colour you picked three sections ago should not mean remembering its hex.
+    const styleValues = {
+      hero_wordmark: 'text-[#ff0000]',
+      'slot:polaroid_2_photo': 'border-[#123abc]',
+      footer: 'bg-[#123ABC]', // same colour, different case — one swatch, not two
+    }
+    const onApplyStyle = vi.fn()
+    renderInspector(HELD_SLOT, { components: [POLAROID], styleValues, onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
+    expect(screen.getByText('On site')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Slot 1 Border color #ff0000' })).toBeTruthy()
+    // Clicking one applies it to this item.
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color #123abc' }))
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#123abc]')
+    expect(screen.queryAllByRole('button', { name: /Border color #123abc/ })).toHaveLength(1)
+  })
+
+  it('a colour picked on one item is offered on the NEXT, without a reload', () => {
+    vi.useFakeTimers()
+    try {
+      renderInspector(TWO_SLOTS, { components: [POLAROID] })
+      fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+      // Nothing used yet on a site with no saved styles and no declared palette.
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
+      expect(screen.queryByText('On site')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+      const hex = screen.getByLabelText('Slot 1 Border color hex')
+      fireEvent.change(hex, { target: { value: '#ff8800' } })
+      fireEvent.blur(hex)
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+      // The used-colour record is DEBOUNCED (recording per drag frame re-rendered the
+      // whole inspector at pointer rate), so let it settle before the next item looks.
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      // The other photo can now reach for the same colour.
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 3' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Slot 3 Border color palette' }))
+      expect(screen.getByRole('button', { name: 'Slot 3 Border color #ff8800' })).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the item preview in the pinned header, out of the scrolling body', () => {
+    // The controls are what you scroll to; judging a border against an image you have to
+    // scroll back up to see is guesswork.
+    const { container } = renderInspector(HELD_SLOT, { components: [POLAROID] })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    const header = screen.getByRole('heading', { name: 'Edit Slot 1' }).parentElement!
+    expect(header.querySelector('img')).not.toBeNull()
+    // And exactly one preview of it — the body no longer carries its own copy.
+    expect(container.querySelectorAll(`img[src*="${HELD_SLOT[0].storage_path}"]`)).toHaveLength(1)
+  })
+
+  it('None clears the border colour and keeps the other item styles', () => {
+    const { onApplyStyle, hex } = openPalette()
+    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+    fireEvent.change(hex, { target: { value: '#123abc' } })
+    fireEvent.blur(hex)
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px] border-[#123abc]')
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color none' }))
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px]')
+  })
+
+  it('Edit → Remove releases the slot without deleting the photo', () => {
+    openImages(HELD_SLOT)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', null)
     expect(deleteMock).not.toHaveBeenCalled()
   })
 
-  it('shows the name as TEXT until the pencil is clicked', () => {
-    openImages(PHOTOS)
-    // No live input up front — the card reads as a card, not a form.
-    expect(screen.queryByLabelText('Polaroid 1 name')).toBeNull()
-    expect(screen.getByText('Polaroid 1')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
-    expect(screen.getByLabelText('Polaroid 1 name')).toBeTruthy()
+  it('changing a visual control paints the site optimistically and debounce-saves it', () => {
+    vi.useFakeTimers()
+    try {
+      const onApplyStyle = vi.fn()
+      renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+      fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+      // Size is a SLIDER over 5% steps (50%..150%); its value is a step index. Index 12 is
+      // scale-110 (110%). Dragging there applies it to the per-item style key.
+      fireEvent.change(screen.getByLabelText('Slot 1 Size'), { target: { value: '12' } })
+      expect(onApplyStyle).toHaveBeenCalledWith('slot:polaroid_1_photo', 'scale-110')
+      expect(saveStyleMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'scale-110')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('renaming saves on Enter, as ordinary site text', () => {
-    openImages(PHOTOS)
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 2' }))
-    const field = screen.getByLabelText('Polaroid 2 name')
-    fireEvent.change(field, { target: { value: 'Backstage' } })
-    fireEvent.keyDown(field, { key: 'Enter' })
-    expect(saveMock).toHaveBeenCalledWith('artist-1', 'polaroid_2_label', 'Backstage')
-    // Back to reading as text, showing the new name.
-    expect(screen.queryByLabelText('Polaroid 2 name')).toBeNull()
-    expect(screen.getByText('Backstage')).toBeTruthy()
-  })
-
-  it('renaming also saves when the field loses focus', () => {
-    openImages(PHOTOS)
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
-    const field = screen.getByLabelText('Polaroid 1 name')
-    fireEvent.change(field, { target: { value: 'Front row' } })
-    fireEvent.blur(field)
-    expect(saveMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_label', 'Front row')
-  })
-
-  it('Escape abandons the edit without saving', () => {
-    openImages(PHOTOS, { polaroid_1_label: 'Backstage' })
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
-    const field = screen.getByLabelText('Polaroid 1 name')
-    fireEvent.change(field, { target: { value: 'Typo' } })
-    fireEvent.keyDown(field, { key: 'Escape' })
-    expect(saveMock).not.toHaveBeenCalled()
-    expect(screen.getByText('Backstage')).toBeTruthy()
-  })
-
-  it('does not save when the name is unchanged', () => {
-    openImages(PHOTOS, { polaroid_1_label: 'Backstage' })
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Polaroid 1' }))
-    fireEvent.blur(screen.getByLabelText('Polaroid 1 name'))
-    expect(saveMock).not.toHaveBeenCalled()
-  })
-
-  it('shows the saved rename, falling back to the site label', () => {
-    openImages(PHOTOS, { polaroid_1_label: 'Backstage' })
-    expect(screen.getByText('Backstage')).toBeTruthy()
-    // Instance 2 has no rename: the site's default shows instead.
-    expect(screen.getByText('Polaroid 2')).toBeTruthy()
+  it('a placed slot is selectable and highlights its region in the frame', () => {
+    const onHighlight = vi.fn()
+    const held: GalleryPhoto[] = [
+      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo' },
+    ]
+    renderInspector(held, { components: [POLAROID], onHighlight })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select Slot 1' }))
+    // polaroid slots are marked as field regions on the site.
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'field', key: 'polaroid_1_photo' })
   })
 
   it('hides the collage groups when the site declares no image slot', () => {
@@ -1372,7 +1700,7 @@ describe('EditorInspector — component slots (polaroids)', () => {
     // group in the editor would be a place to put work that never appears anywhere.
     renderInspector(PHOTOS, { components: [POLAROID], showGallery: false })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    expect(screen.getByRole('button', { name: 'Rename Polaroid 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Slot 1' })).toBeTruthy()
     expect(screen.queryByText('Horizontal')).toBeNull()
     expect(screen.queryByText('Vertical')).toBeNull()
     expect(screen.queryByRole('button', { name: /Add horizontal photo/i })).toBeNull()
@@ -1384,9 +1712,9 @@ describe('EditorInspector — component slots (polaroids)', () => {
     expect(screen.getByText(/no image slots/i)).toBeTruthy()
   })
 
-  it('offers no component section when the site declares none', () => {
+  it('offers no numbered slots when the site declares no component', () => {
     renderInspector(PHOTOS)
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    expect(screen.queryByRole('button', { name: 'Rename Polaroid 1' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Slot 1' })).toBeNull()
   })
 })

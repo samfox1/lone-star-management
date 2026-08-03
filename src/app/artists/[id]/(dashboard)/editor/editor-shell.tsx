@@ -7,6 +7,7 @@ import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
 import {
   EditorInspector,
+  type EditorImageField,
   type EditorLink,
   type EditorMerch,
   type EditorProject,
@@ -41,6 +42,7 @@ export function EditorShell({
   customSiteUrl,
   draft,
   photos,
+  imageFields,
   textFields,
   links,
   supportLinks,
@@ -49,7 +51,6 @@ export function EditorShell({
   merch,
   releases,
   tours,
-  componentLabels,
 }: {
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
@@ -58,6 +59,12 @@ export function EditorShell({
    *  built-in template, which reads its own draft server-side. */
   draft?: PublicSitePayload | null
   photos: GalleryPhoto[]
+  /** Single-occupancy image fields (hero image, profile photo) — the "Set slots" group.
+   *  BUILT-IN templates only: page.tsx resolves them with a save target. A custom site
+   *  (skeen) declares its images without a lone-star target and edits them via the component
+   *  slots + gallery instead, so it passes []; skeen's hero is a video (Videos panel), not an
+   *  image, so there is deliberately no hero-image tile for it. */
+  imageFields: EditorImageField[]
   textFields: EditorTextField[]
   links: EditorLink[]
   supportLinks: EditorSupportLink[]
@@ -68,9 +75,6 @@ export function EditorShell({
   merch: EditorMerch[]
   releases: EditorProject[]
   tours: EditorTour[]
-  /** Every site_content key/value, so a component instance can show its rename
-   *  (`polaroid_3_label`). The COMPONENTS themselves come from the frame's manifest. */
-  componentLabels: Record<string, string>
 }) {
   const [device, setDevice] = useState<Device>('desktop')
   const panelRef = useRef<HTMLDivElement>(null)
@@ -80,12 +84,23 @@ export function EditorShell({
   // handshake, select routing — lives behind this hook, where it's testable.
   // Destructured, not held as an object: the react-hooks/refs rule rejects reaching
   // through a member expression for a ref during render.
-  const { frameRef, src: frameSrc, applyField, applyStyle, applyLink, manifest, selectedStyle, selectedLink } =
-    useFrameBridge({
-      artistId,
-      customSiteUrl,
-      draft,
-    })
+  const {
+    frameRef,
+    src: frameSrc,
+    applyField,
+    applyStyle,
+    applyLink,
+    applyHighlight,
+    clearHighlight,
+    manifest,
+    selectedStyle,
+    selectedLink,
+    selectedRegion,
+  } = useFrameBridge({
+    artistId,
+    customSiteUrl,
+    draft,
+  })
 
   // Measure the frame panel so the canvas can be scaled to fit it. The panel
   // resizes with the window (and would with a collapsible inspector), so observe
@@ -109,6 +124,7 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         photos={photos}
+        imageFields={imageFields}
         textFields={textFields}
         links={links}
         supportLinks={supportLinks}
@@ -119,7 +135,6 @@ export function EditorShell({
         components={manifest?.components ?? []}
         // The collage exists only if the site declares somewhere to render one.
         showGallery={(manifest?.slots ?? []).some((sl) => sl.accepts === 'image')}
-        componentLabels={componentLabels}
         styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
         styleOptions={manifest?.styleOptions}
@@ -127,9 +142,12 @@ export function EditorShell({
         linkRegions={manifest?.links ?? []}
         linkValues={linkValues}
         selectedLink={selectedLink}
+        selectedRegion={selectedRegion}
         onApplyField={applyField}
         onApplyStyle={applyStyle}
         onApplyLink={applyLink}
+        onHighlight={applyHighlight}
+        onClearHighlight={clearHighlight}
       />
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface p-3">

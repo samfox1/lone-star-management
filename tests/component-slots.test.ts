@@ -7,7 +7,7 @@
  * are the single place that shape is built, so the editor, the DB and skeen can't drift.
  */
 import { describe, expect, it } from 'vitest'
-import { componentLabelKey, componentSlotRole } from '@/lib/site-editor/manifest'
+import { componentSlotRole } from '@/lib/site-editor/manifest'
 
 /** Mirrors the DB CHECK on media.site_role. */
 const SITE_ROLE_RE = /^[a-z0-9_]{1,64}$/
@@ -33,16 +33,3 @@ describe('componentSlotRole', () => {
   })
 })
 
-describe('componentLabelKey', () => {
-  it('names the site_content row holding the manager rename', () => {
-    expect(componentLabelKey('polaroid', 3)).toBe('polaroid_3_label')
-  })
-
-  it('never collides with a slot role — a label is not a slot', () => {
-    // Both live in flat namespaces, so an accidental collision would let a rename
-    // overwrite a photo binding.
-    const roles = [1, 2, 3, 4, 5].flatMap((n) => ['photo', 'caption'].map((s) => componentSlotRole('polaroid', n, s)))
-    const labels = [1, 2, 3, 4, 5].map((n) => componentLabelKey('polaroid', n))
-    expect(roles.some((r) => labels.includes(r))).toBe(false)
-  })
-})

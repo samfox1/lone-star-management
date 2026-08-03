@@ -4,6 +4,13 @@
 @import "tailwindcss" source("..");
 @import "../styles/effects.css";
 
+/* Per-item image/video style utilities (the editor's "Customize" panel). They're chosen from
+   sliders/dropdowns at runtime, so the class strings are never literal in any component —
+   safelist the full set here so the panel PREVIEW renders them (and the saved strings resolve
+   once the site safelists the same set). scale/opacity in 5% steps; border widths; radii;
+   shadows; the fixed border colours. */
+@source inline("scale-{50..150..5} opacity-{5..100..5} border border-{0,2,4,8} border-[{1..12}px] rounded rounded-{sm,md,lg,xl,2xl,3xl,full} rounded-[{2..24..2}px] shadow shadow-{sm,md,lg,xl,2xl}");
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

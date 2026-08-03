@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
-import { editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
+import { editorMessage, isFrameMessage, type SelectTarget } from '@/lib/site-editor/bridge'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**
@@ -43,6 +43,11 @@ export function frameOrigin(customSiteUrl: string | null | undefined, fallback: 
   return customSiteUrl ? new URL(customSiteUrl).origin : fallback
 }
 
+/** How often the editor re-asks the frame to announce itself, and for how long. A remote
+ *  frame can take seconds to hydrate, so this outlasts a slow cold load. */
+export const HELLO_RETRY_MS = 400
+export const HELLO_TIMEOUT_MS = 20_000
+
 export type FrameBridge = {
   /** Attach to the iframe. */
   frameRef: React.RefObject<HTMLIFrameElement | null>
@@ -54,6 +59,10 @@ export type FrameBridge = {
   applyStyle: (key: string, className: string) => void
   /** Optimistically set a link-powered element's href in the frame, before the save. */
   applyLink: (key: string, url: string) => void
+  /** Outline + scroll a region into view in the frame (a tile click in the inspector). */
+  applyHighlight: (target: SelectTarget) => void
+  /** Drop the frame's current highlight (the tile was deselected). */
+  clearHighlight: () => void
   /** A custom site's own edit-list, received on `ready` (D-D). Null for a built-in
    *  template, which has none to send. */
   manifest: TemplateManifest | null
@@ -61,6 +70,11 @@ export type FrameBridge = {
   selectedStyle: string | null
   /** Link-region key the frame last reported a click on, to focus the Site-links panel. */
   selectedLink: string | null
+  /** The IMAGE region (field / slot / item) the frame last reported a click on, so the
+   *  inspector can open Images and focus the matching tile (the reverse of applyHighlight).
+   *  Only field/slot/item selects land here — style/link route to their own panels. A
+   *  bumped `nonce` re-fires the focus even when the same tile is clicked twice. */
+  selectedRegion: { target: SelectTarget; nonce: number } | null
 }
 
 export function useFrameBridge({
@@ -74,8 +88,12 @@ export function useFrameBridge({
 }): FrameBridge {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [manifest, setManifest] = useState<TemplateManifest | null>(null)
+  /** Has the frame answered at all? Internal: it drives the `hello` retries and the
+   *  init-data effect. Not returned — nothing displays it (yet). */
+  const [connected, setConnected] = useState(false)
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
+  const [selectedRegion, setSelectedRegion] = useState<{ target: SelectTarget; nonce: number } | null>(null)
 
   // Resolved lazily: `window` only exists in the browser, and every caller below
   // runs client-side.
@@ -97,6 +115,14 @@ export function useFrameBridge({
     [post],
   )
   const applyLink = useCallback((key: string, url: string) => post({ type: 'apply-link', key, url }), [post])
+  const applyHighlight = useCallback((target: SelectTarget) => post({ type: 'highlight', target }), [post])
+  const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
+
+  /** The draft last handed to the frame, so the `ready` handler and the connected
+   *  effect below (either of which may fire first) don't each post the largest message
+   *  in the protocol — the whole site payload — for the same handshake. A frame that
+   *  RELOADS re-announces `ready`, and that path deliberately re-sends. */
+  const deliveredDraft = useRef<PublicSitePayload | null>(null)
 
   // One listener for everything the frame says.
   useEffect(() => {
@@ -106,22 +132,75 @@ export function useFrameBridge({
       // both are required before the payload is trusted.
       if (e.origin !== origin || !isFrameMessage(e.data)) return
       const msg = e.data
+      setConnected(true) // anything from the frame means the bridge is up
       if (msg.type === 'ready') {
         // `ready`, not the iframe's `load`: load can fire before the frame's bridge
         // has mounted its listener, and the draft would land in the void.
         if (msg.manifest) setManifest(msg.manifest)
         if (draft) {
+          deliveredDraft.current = draft
           frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
         }
       } else if (msg.type === 'select' && msg.target.kind === 'style') {
         setSelectedStyle(msg.target.key)
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
         setSelectedLink(msg.target.key)
+      } else if (msg.type === 'select') {
+        // field / slot / item — an image (or text) region. Hand it to the inspector,
+        // which knows which of these are images and opens the Images panel on them.
+        // The nonce lets a repeat click on the same region re-fire the focus.
+        const target = msg.target
+        setSelectedRegion((prev) => ({ target, nonce: (prev?.nonce ?? 0) + 1 }))
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [draft, targetOrigin])
+
+  /**
+   * Hand the frame its draft whenever we have both a draft and a live bridge.
+   *
+   * `ready` only carries the draft when one is already loaded; arrive first and the
+   * frame waits forever for data the editor had all along. This closes the other half
+   * of that ordering — either side may become ready first, and the draft still lands.
+   */
+  useEffect(() => {
+    if (!connected || !draft || deliveredDraft.current === draft) return
+    deliveredDraft.current = draft
+    frameRef.current?.contentWindow?.postMessage(
+      editorMessage({ type: 'init-data', site: draft }),
+      targetOrigin(),
+    )
+  }, [connected, draft, targetOrigin])
+
+  /**
+   * Ask the frame to announce itself, until it does.
+   *
+   * The frame announcing on its own mount is a race the editor can lose: this listener
+   * attaches on mount and RE-attaches whenever `draft` changes, and a `ready` posted in
+   * any gap is dropped by the browser silently. Then the editor holds no manifest, shows
+   * "0 regions", and nothing distinguishes that from a site that declares nothing.
+   *
+   * So the editor pushes too. Both sides retry, so connecting no longer depends on who
+   * mounted first, and `connected` gives the shell something honest to display instead
+   * of a frame that just sits there.
+   */
+  useEffect(() => {
+    if (connected) return
+    const origin = targetOrigin()
+    const hello = () =>
+      frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'hello' }), origin)
+    hello() // the iframe may already be up (a re-render, or a fast cache hit)
+    const frame = frameRef.current
+    frame?.addEventListener('load', hello)
+    const timer = setInterval(hello, HELLO_RETRY_MS)
+    const giveUp = setTimeout(() => clearInterval(timer), HELLO_TIMEOUT_MS)
+    return () => {
+      frame?.removeEventListener('load', hello)
+      clearInterval(timer)
+      clearTimeout(giveUp)
+    }
+  }, [connected, targetOrigin])
 
   return {
     frameRef,
@@ -129,8 +208,11 @@ export function useFrameBridge({
     applyField,
     applyStyle,
     applyLink,
+    applyHighlight,
+    clearHighlight,
     manifest,
     selectedStyle,
     selectedLink,
+    selectedRegion,
   }
 }

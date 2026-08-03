@@ -1,17 +1,23 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { cx } from '@/lib/cx'
-import { plural, GroupLabel, EYEBROW } from './inspector-shared'
+import { plural, GroupLabel, EYEBROW, SCROLL_BODY } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
+import { type SelectTarget, selectTargetKey } from '@/lib/site-editor/bridge'
 import {
+  componentSlotRole,
   type ManifestComponent,
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
 import { type SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { isContactLink } from '@/lib/url'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { ItemEditor } from './item-editor'
+import { PhotoThumb, fileNameOf } from './inspector-grid'
+import { GallerySlotUploader } from '../media-uploader'
 import {
   PhotoTools,
   TextTools,
@@ -49,6 +55,7 @@ import {
 // editor-shell.tsx, and the tests keep importing them from './editor-inspector'.
 import type {
   GalleryPhoto,
+  EditorImageField,
   EditorTextField,
   EditorLink,
   EditorSupportLink,
@@ -58,9 +65,11 @@ import type {
   EditorSong,
   EditorProject,
   EditorTour,
+  ItemEdit,
 } from './inspector-types'
 export type {
   GalleryPhoto,
+  EditorImageField,
   EditorTextField,
   EditorLink,
   EditorSupportLink,
@@ -134,6 +143,7 @@ export function countLabel(kind: Kind, c: KindCount): string {
 export function EditorInspector({
   artistId,
   photos: initial,
+  imageFields = [],
   textFields = [],
   links: initialLinks = [],
   supportLinks = [],
@@ -142,7 +152,6 @@ export function EditorInspector({
   releases: initialReleases = [],
   tours: initialTours = [],
   components = [],
-  componentLabels = {},
   showGallery = false,
   styleRegions = [],
   styleValues = {},
@@ -151,12 +160,17 @@ export function EditorInspector({
   linkRegions = [],
   linkValues = {},
   selectedLink = null,
+  selectedRegion = null,
   onApplyField,
   onApplyStyle,
   onApplyLink,
+  onHighlight,
+  onClearHighlight,
 }: {
   artistId: string
   photos: GalleryPhoto[]
+  /** Single-occupancy image regions (hero image, profile photo) — the "Set slots" group. */
+  imageFields?: EditorImageField[]
   textFields?: EditorTextField[]
   links?: EditorLink[]
   /** Support acts across the artist's tour dates, for the Links panel's "Tour support"
@@ -171,8 +185,6 @@ export function EditorInspector({
   /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
    *  edit-list at runtime; a site that declares none simply has no component section. */
   components?: ManifestComponent[]
-  /** Current `<key>_<n>_label` values (the manager's rename per instance), from site text. */
-  componentLabels?: Record<string, string>
   /** Does the site declare a photo collage (an image slot)? Defaults FALSE — a group is
    *  shown because the site asked for it, never just because the editor can render one. */
   showGallery?: boolean
@@ -193,10 +205,17 @@ export function EditorInspector({
   linkValues?: Record<string, string>
   /** Link region the frame reported a click on — jumps to the Site-links panel. */
   selectedLink?: string | null
+  /** Image region (field / slot / gallery item) the frame reported a click on — opens the
+   *  Images panel and focuses the matching tile. Bumped `nonce` re-fires on a repeat click. */
+  selectedRegion?: { target: SelectTarget; nonce: number } | null
   onApplyField?: (key: string, value: string) => void
   onApplyStyle?: (key: string, className: string) => void
   /** Optimistically set a link's href in the frame before the debounced save. */
   onApplyLink?: (key: string, url: string) => void
+  /** Outline + scroll a region into view in the frame (a tile click). */
+  onHighlight?: (target: SelectTarget) => void
+  /** Drop the frame's highlight (left the Images panel). */
+  onClearHighlight?: () => void
 }) {
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
@@ -234,6 +253,168 @@ export function EditorInspector({
     setLastSelectedLink(selectedLink)
     setActive(COMPONENTS.find((c) => c.kind === 'links') ?? null)
   }
+
+  // Two-way image selection. `focused` is the ONE image region highlighted right now — a
+  // tile the manager clicked, OR an image they clicked in the live frame. It drives the
+  // ring on the tile (below) and, via the effect, the outline in the frame.
+  const [focused, setFocused] = useState<SelectTarget | null>(null)
+
+  // The image regions THIS panel owns, so a frame click on a non-image (a text heading,
+  // a video) doesn't wrongly yank the panel to Images. Field-backed images (hero/profile)
+  // + every component slot role + any gallery item. Memoized: it's consulted only when a
+  // frame select lands, but building it walks components × count × slots.
+  const imageRegionKeys = useMemo(() => {
+    const keys = new Set(imageFields.map((f) => f.key))
+    for (const c of components)
+      for (let n = 1; n <= c.count; n++) for (const s of c.slots) keys.add(componentSlotRole(c.key, n, s.key))
+    return keys
+  }, [imageFields, components])
+  const isImageRegion = (t: SelectTarget): boolean =>
+    t.kind === 'field' ? imageRegionKeys.has(t.key) : t.kind === 'item' && t.assetType === 'image'
+
+  // Frame → editor: a click on an image region opens Images and focuses its tile. Same
+  // render-time "reset state on prop change" pattern as selectedStyle; the nonce lets a
+  // repeat click on the same region re-focus. Non-image selects are ignored here (they
+  // route to Style / Links / Text via their own state above).
+  const [lastRegionNonce, setLastRegionNonce] = useState(0)
+  if (selectedRegion && selectedRegion.nonce !== lastRegionNonce && isImageRegion(selectedRegion.target)) {
+    setLastRegionNonce(selectedRegion.nonce)
+    setActive(COMPONENTS.find((c) => c.kind === 'images') ?? null)
+    setFocused(selectedRegion.target)
+  }
+
+  // Editor → frame: whenever the focused tile changes, outline it in the preview (or clear
+  // it). A real side effect (postMessage), so it lives in an effect, not in render.
+  useEffect(() => {
+    if (focused) onHighlight?.(focused)
+    else onClearHighlight?.()
+  }, [focused, onHighlight, onClearHighlight])
+
+  // Switching components (or backing out) drops the highlight — it belongs to Images.
+  function selectComponent(c: Component | null) {
+    setActive(c)
+    if (!c || c.kind !== 'images') setFocused(null)
+  }
+
+  // The one image/video handed the whole panel for editing (Replace / Remove / styling).
+  const [editingItem, setEditingItem] = useState<ItemEdit | null>(null)
+  const filename = (p: GalleryPhoto) => fileNameOf(p.storage_path)
+
+  // Every colour the site already uses, for the palette's quick-pick row. Held in state and
+  // updated as items are styled, so a colour chosen on one photo is offerable on the next
+  // WITHOUT a reload — matching two images is the whole reason the row exists.
+  const [styleMap, setStyleMap] = useState(styleValues)
+  const [seenStyleValues, setSeenStyleValues] = useState(styleValues)
+  if (seenStyleValues !== styleValues) {
+    setSeenStyleValues(styleValues)
+    setStyleMap(styleValues)
+  }
+  const siteColors = useMemo(() => siteSwatches(styleOptions, styleMap), [styleOptions, styleMap])
+  /** Paint the frame immediately, and record the colour DEBOUNCED — the swatch row only
+   *  needs to be current by the time the palette next opens, and recording per emitted
+   *  drag frame re-rendered the whole inspector (and re-scanned every stored style) at
+   *  pointer rate. */
+  const recordTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (recordTimer.current) clearTimeout(recordTimer.current)
+  }, [])
+  const applyItemStyle = useCallback(
+    (key: string, className: string) => {
+      onApplyStyle?.(key, className)
+      if (recordTimer.current) clearTimeout(recordTimer.current)
+      recordTimer.current = setTimeout(() => {
+        recordTimer.current = null
+        setStyleMap((m) => (m[key] === className ? m : { ...m, [key]: className }))
+      }, 500)
+    },
+    [onApplyStyle],
+  )
+
+  /** Build the full-panel editor for the item being edited, from the inspector's LIVE state
+   *  (so Replace candidates stay fresh) and its place handlers. Null if the item vanished.
+   *  Only what genuinely differs between a component slot and a gallery photo is computed
+   *  per branch; the ItemEditor call itself exists once. */
+  function buildItemEditor(item: ItemEdit) {
+    const back = () => setEditingItem(null)
+    let cfg: {
+      key: string
+      placed: GalleryPhoto
+      aspect: string
+      candidates: GalleryPhoto[]
+      onPick: (id: string) => void
+      onRemove: () => void
+      uploader: React.ReactNode
+    }
+    if (item.type === 'imageSlot') {
+      const placed = photos.find((p) => p.siteRole === item.role)
+      if (!placed) return null
+      cfg = {
+        key: `slot:${item.role}`,
+        placed,
+        aspect: 'aspect-square',
+        candidates: photos.filter((p) => !p.siteRole),
+        onPick: (id) => placeInSlot(item.role, photos.find((p) => p.id === id) ?? null),
+        onRemove: () => placeInSlot(item.role, null),
+        uploader: (
+          <GallerySlotUploader
+            artistId={artistId}
+            orientation="horizontal"
+            label="Drop an image or click to upload"
+            onUploaded={(m) => placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role })}
+          />
+        ),
+      }
+    } else {
+      const placed = photos.find((p) => p.id === item.id)
+      if (!placed) return null
+      cfg = {
+        key: `image:${item.id}`,
+        placed,
+        aspect: item.orientation === 'vertical' ? 'aspect-[2/3]' : 'aspect-[3/2]',
+        candidates: photos.filter(
+          (p) =>
+            !p.onSite &&
+            !p.siteRole &&
+            (p.orientation === item.orientation || (item.orientation === 'horizontal' && p.orientation == null)),
+        ),
+        onPick: (id) => {
+          const next = photos.find((p) => p.id === id)
+          unplacePhoto(placed)
+          if (next) placePhoto(next, item.orientation)
+        },
+        onRemove: () => unplacePhoto(placed),
+        uploader: <GallerySlotUploader artistId={artistId} orientation={item.orientation} onUploaded={addPhoto} />,
+      }
+    }
+    return (
+      <ItemEditor
+        key={cfg.key}
+        artistId={artistId}
+        styleKey={cfg.key}
+        label={item.label}
+        initialClasses={styleValues[cfg.key] ?? ''}
+        preview={<PhotoThumb path={cfg.placed.storage_path} aspect={cfg.aspect} fit="cover" />}
+        replace={{
+          title: `Replace ${item.label}`,
+          candidates: cfg.candidates.map((p) => ({
+            id: p.id,
+            label: filename(p),
+            thumb: <PhotoThumb path={p.storage_path} aspect={cfg.aspect} fit="cover" />,
+          })),
+          onPick: cfg.onPick,
+          uploader: cfg.uploader,
+        }}
+        onRemove={() => {
+          cfg.onRemove()
+          back()
+        }}
+        swatches={siteColors}
+        onApplyStyle={applyItemStyle}
+        onBack={back}
+      />
+    )
+  }
+  const itemEditor = editingItem ? buildItemEditor(editingItem) : null
 
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
@@ -429,10 +610,16 @@ export function EditorInspector({
 
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
-      {active ? (
+      {itemEditor ? (
+        itemEditor
+      ) : active ? (
         <EditingView
           component={active}
           photos={photos}
+          imageFields={imageFields}
+          focusedKey={focused ? selectTargetKey(focused) : null}
+          onFocus={setFocused}
+          onEditItem={setEditingItem}
           textFields={textFields}
           links={links}
           supportLinks={supportLinks}
@@ -452,7 +639,6 @@ export function EditorInspector({
           onRemoveTour={removeTour}
           onReorderTour={reorderTours}
           components={components}
-          componentLabels={componentLabels}
           showGallery={showGallery}
           onPlaceSlot={placeInSlot}
           onRemoveLink={removeLink}
@@ -468,11 +654,11 @@ export function EditorInspector({
           onApplyField={onApplyField}
           onApplyStyle={onApplyStyle}
           onApplyLink={onApplyLink}
-          onBack={() => setActive(null)}
-          onSwitch={setActive}
+          onBack={() => selectComponent(null)}
+          onSwitch={selectComponent}
         />
       ) : (
-        <BrowseView counts={counts} onOpen={setActive} />
+        <BrowseView counts={counts} onOpen={selectComponent} />
       )}
     </aside>
   )
@@ -492,7 +678,7 @@ function BrowseView({
         <div className={EYEBROW}>Editor</div>
         <h2 className="mt-2 text-[19px] font-semibold tracking-[-0.01em]">Edit your site</h2>
       </div>
-      <div className="flex-1 overflow-y-auto border-t border-hairline-soft">
+      <div className={cx(SCROLL_BODY, 'border-t border-hairline-soft')}>
         {COMPONENTS.map((c) => (
           <button
             key={c.kind}
@@ -521,6 +707,10 @@ function BrowseView({
 function EditingView({
   component,
   photos,
+  imageFields,
+  focusedKey,
+  onFocus,
+  onEditItem,
   textFields,
   links,
   supportLinks,
@@ -540,7 +730,6 @@ function EditingView({
   onRemoveTour,
   onReorderTour,
   components,
-  componentLabels,
   showGallery,
   onPlaceSlot,
   onRemoveLink,
@@ -561,6 +750,13 @@ function EditingView({
 }: {
   component: Component
   photos: GalleryPhoto[]
+  imageFields: EditorImageField[]
+  /** selectTargetKey of the focused image region, so a tile can ring itself. */
+  focusedKey: string | null
+  /** Focus a region (a tile click) — highlights it in the frame via the parent's effect. */
+  onFocus: (target: SelectTarget) => void
+  /** Open one image/video in the full-panel editor (its Edit button). */
+  onEditItem: (item: ItemEdit) => void
   textFields: EditorTextField[]
   links: EditorLink[]
   supportLinks: EditorSupportLink[]
@@ -580,7 +776,6 @@ function EditingView({
   onRemoveTour: (t: EditorTour) => void
   onReorderTour: (fromId: string, toId: string) => void
   components: ManifestComponent[]
-  componentLabels: Record<string, string>
   showGallery: boolean
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onRemoveLink: (l: EditorLink) => void
@@ -624,12 +819,15 @@ function EditingView({
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={SCROLL_BODY}>
         {isImages ? (
           <PhotoTools
             photos={photos}
+            imageFields={imageFields}
+            focusedKey={focusedKey}
+            onFocus={onFocus}
+            onEditItem={onEditItem}
             components={components}
-            componentLabels={componentLabels}
             showGallery={showGallery}
             artistId={artistId}
             onAdd={onAddPhoto}

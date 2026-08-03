@@ -37,6 +37,9 @@ describe('cleanClassText', () => {
 describe('saveEditorStyle (live)', () => {
   const REGION = 'test_hero_wordmark'
   const ITEM_REGION = 'videos:00000000-0000-0000-0000-000000000001'
+  // A component-slot per-item key carries UNDERSCORES after the colon — this was rejected,
+  // so the per-item editor reported "save failed" on every polaroid slot.
+  const SLOT_REGION = 'slot:polaroid_1_photo'
   let artistA: string
   let asA: SupabaseClient
   const svc = serviceClient()
@@ -47,7 +50,7 @@ describe('saveEditorStyle (live)', () => {
   })
 
   afterAll(async () => {
-    await svc.from('site_styles').delete().eq('artist_id', artistA).in('region_key', [REGION, ITEM_REGION])
+    await svc.from('site_styles').delete().eq('artist_id', artistA).in('region_key', [REGION, ITEM_REGION, SLOT_REGION])
   })
 
   it('rejects an unknown region key shape', async () => {
@@ -90,6 +93,19 @@ describe('saveEditorStyle (live)', () => {
       .eq('region_key', ITEM_REGION)
       .maybeSingle<{ class_names: string }>()
     expect(data?.class_names).toBe('rounded border-4')
+  })
+
+  it('accepts a component-slot key (underscores after the colon) + arbitrary px classes', async () => {
+    // Regression: `slot:polaroid_1_photo` used to fail isRegionKey → "save failed" in the
+    // per-item editor. Arbitrary-value widths/radii (border-[3px]) must also clean through.
+    expect((await saveEditorStyle(asA, artistA, SLOT_REGION, 'scale-110 border-[3px] rounded-[6px]')).ok).toBe(true)
+    const { data } = await svc
+      .from('site_styles')
+      .select('class_names')
+      .eq('artist_id', artistA)
+      .eq('region_key', SLOT_REGION)
+      .maybeSingle<{ class_names: string }>()
+    expect(data?.class_names).toBe('scale-110 border-[3px] rounded-[6px]')
   })
 
   it("CRITICAL: RLS blocks writing another tenant's style", async () => {

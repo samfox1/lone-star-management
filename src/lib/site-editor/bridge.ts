@@ -35,6 +35,12 @@ export type SelectTarget =
   | { kind: 'style'; key: string }
   | { kind: 'link'; key: string }
 
+/** A stable string id for a SelectTarget — so a tile can compare itself against the
+ *  region the frame reported a click on (matching → focused) without deep-equal. */
+export function selectTargetKey(t: SelectTarget): string {
+  return t.kind === 'item' ? `item:${t.assetType}:${t.id}` : `${t.kind}:${t.key}`
+}
+
 /** frame → editor. A custom site carries its own edit-list (manifest) on `ready`,
  *  so the editor never hardcodes a custom site's regions (SITE_STYLING_PLAN.md D-D).
  *
@@ -57,19 +63,37 @@ export type FrameMessage =
  *  with a lone-star-built `url` and would blank every image. Only custom sites
  *  consume this — the built-in `/edit-frame` reads its own draft server-side.
  *
- *  Like FrameMessage, this is exactly what is SENT today. `highlight`, `set-device`
- *  and `refresh` were declared here with no sender and no receiver in either repo and
- *  have been removed. Deleting them was free: skeen's own copy of this protocol
- *  (`lib/frameBridge.ts`) names only apply-field / apply-style / init-data and routes
- *  anything else through an open `{ type: string }` catch-all, so those three never
- *  reached the wire and BRIDGE_VERSION does not move. `set-device` in particular
- *  described a design the viewport-scaling frame replaced — the editor resizes the
- *  iframe itself and the site just reflows. */
+ *  `highlight` / `clear-highlight` drive the SELECTION overlay from the editor side:
+ *  clicking an image tile in the inspector scrolls the matching region into view in the
+ *  frame and outlines it (the reverse of the frame's `select`). They are ADDITIVE — a
+ *  frame that doesn't handle them (skeen's current build routes unknown types through an
+ *  open `{ type: string }` catch-all) simply ignores them, so BRIDGE_VERSION does not
+ *  move. `set-device` and `refresh` were declared here once with no sender/receiver and
+ *  stay deleted: the viewport-scaling frame resizes the iframe itself and reflows.
+ *
+ *  Like FrameMessage, this is exactly what is SENT today. */
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-link'; key: string; url: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: PublicSitePayload }
+  /** Outline + scroll a marked region into view in the frame (editor → frame). */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'highlight'; target: SelectTarget }
+  /** Drop the current highlight (the tile was deselected). */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'clear-highlight' }
+  /**
+   * "I'm listening — announce yourself." The editor sends this once the iframe has
+   * loaded, and the frame answers with `ready`.
+   *
+   * `ready` alone made the handshake a one-way race: whoever mounted second lost, the
+   * message was dropped by the browser with no error, and the editor sat with no
+   * manifest — "0 regions", every declared component missing, nothing to debug. Neither
+   * side could tell "not connected yet" from "connected and empty".
+   *
+   * With both sides pushing, connecting no longer depends on who won. Additive: a frame
+   * that predates it ignores an unknown type, so BRIDGE_VERSION does not move.
+   */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'hello' }
 
 function isVersionedFrom(x: unknown, source: string): x is { v: number; source: string; type: string } {
   if (typeof x !== 'object' || x === null) return false

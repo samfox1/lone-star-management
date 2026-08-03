@@ -53,6 +53,12 @@ export const PANEL_BODY = 'bg-surface px-5 pb-3 pt-2'
 /** The mono micro-cap that names a control or field. */
 export const CONTROL_LABEL = 'font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-muted'
 
+/** The inspector's scrolling body. Scrolls, but draws NO scrollbar: the panel is a fixed
+ *  narrow column beside the site preview, and a permanent gutter (or a bar that appears
+ *  and reflows every row by a few px) is visual noise on a surface that is meant to read
+ *  as chrome. Wheel, trackpad, keyboard and touch are untouched. */
+export const SCROLL_BODY = 'flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 /**
@@ -110,13 +116,11 @@ export function SectionRow({
   )
 }
 
-/** One control on the sheet grid: [icon] [mono label] [control]. */
-export function ControlRow({ icon, label, children }: { icon: IconName; label: string; children: React.ReactNode }) {
+/** One control on the sheet grid: [mono label] [control]. No icon — the style controls
+ *  read as a clean list of named values, and a glyph per row was noise, not navigation. */
+export function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[20px_1fr_auto] items-center gap-x-2.5 py-1.5">
-      <span className="justify-self-center text-ink-faint" aria-hidden>
-        <Icon name={icon} size={14} />
-      </span>
+    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2.5 py-1.5">
       <span className={CONTROL_LABEL}>{label}</span>
       {children}
     </div>

@@ -21,6 +21,9 @@ export const ITEM_ATTR = 'data-lse-item'
 export const STYLE_ATTR = 'data-lse-style'
 /** A link-powered <a> whose href the editor sets by KEY (manifest `links`). */
 export const LINK_ATTR = 'data-lse-link'
+/** Transient marker the editor sets on the ONE region it's highlighting (editor →
+ *  frame `highlight`). Carries no value; the frame styles `[data-lse-highlight]`. */
+export const HIGHLIGHT_ATTR = 'data-lse-highlight'
 
 /** Build a `data-lse-item` value. Asset ids are UUIDs (no colon), and the asset
  *  type has no colon, so the first colon is an unambiguous separator. */

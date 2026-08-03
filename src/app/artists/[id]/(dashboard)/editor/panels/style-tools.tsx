@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { cx } from '@/lib/cx'
-import { Icon, type IconName } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icons'
 import { groupStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
-import { cleanClassText } from '@/lib/site-editor/save'
 import {
   applyStyleValue,
   buildStyleControls,
@@ -11,44 +10,33 @@ import {
   type StyleControl,
 } from '@/lib/site-editor/style-controls'
 import {
-  runSerialized,
   SectionRow,
   ControlRow,
   SaveLine,
   GroupLabel,
   PANEL_BODY,
-  type SaveStatus,
+  CONTROL_LABEL,
 } from '../inspector-shared'
-import { saveEditorStyleAction } from '../../actions'
+import { useStyleRegionSave } from '../use-style-save'
 
-const STYLE_CONTROL_ICON: Record<string, IconName> = {
-  font: 'text',
-  size: 'fontSize',
-  weight: 'bold',
-  textColor: 'palette',
-  bgColor: 'fill',
-  align: 'align',
-  uppercase: 'uppercase',
-  italic: 'italic',
-}
-/** One friendly control row (a labelled dropdown or a toggle) for a style region. */
-function StyleControlRow({
-  region,
+/** One friendly control row (a labelled dropdown or a toggle) for a style region — reused
+ *  by the per-item editor. `regionLabel` prefixes every aria label ("Hero title Size"). */
+export function StyleControlRow({
+  regionLabel,
   control,
   cls,
   onChange,
 }: {
-  region: ManifestStyleRegion
+  regionLabel: string
   control: StyleControl
   cls: string
   onChange: (value: string) => void
 }) {
   const current = readStyleValue(control, cls)
-  const aria = `${region.label} ${control.label}`
-  const icon = STYLE_CONTROL_ICON[control.id] ?? 'tools'
+  const aria = `${regionLabel} ${control.label}`
   if (control.kind === 'toggle') {
     return (
-      <ControlRow icon={icon} label={control.label}>
+      <ControlRow label={control.label}>
         {/* A switch, not a checkbox: it reads as on/off at a glance in a panel where
             every other control is a value, and it matches OnSiteToggle elsewhere. */}
         <button
@@ -72,6 +60,34 @@ function StyleControlRow({
       </ControlRow>
     )
   }
+  if (control.kind === 'slider') {
+    // Map the current utility to its step index; an off-scale value (or none) falls to the
+    // default `''` step. Dragging emits the step's class through the same onChange.
+    let idx = control.steps.findIndex((s) => s.value === current)
+    if (idx < 0) idx = control.steps.findIndex((s) => s.value === '')
+    if (idx < 0) idx = 0
+    return (
+      <div className="py-1.5">
+        <div className="flex items-center justify-between">
+          <span className={CONTROL_LABEL}>{control.label}</span>
+          <span className="font-space text-[11px] text-ink-muted">{control.steps[idx].label}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={control.steps.length - 1}
+          value={idx}
+          aria-label={aria}
+          onChange={(e) => onChange(control.steps[Number(e.target.value)].value)}
+          className="mt-1 w-full accent-ink"
+        />
+      </div>
+    )
+  }
+  // Colour controls are rendered by the item editor's own ColorPalette, never here — this
+  // row handles selects/toggles/sliders. The guard also narrows `control` to a select for
+  // the rest of the function.
+  if (control.kind === 'color') return null
   // Show the current value even when it's a class the site declared no option for (e.g. a
   // base class), so nothing is silently dropped or mislabelled as Default.
   const options =
@@ -80,7 +96,7 @@ function StyleControlRow({
       : control.options
   const currentLabel = options.find((o) => o.value === current)?.label ?? options[0]?.label ?? ''
   return (
-    <ControlRow icon={icon} label={control.label}>
+    <ControlRow label={control.label}>
       {/* The <select> stays for BEHAVIOUR (native menu, keyboard, a11y, and the `.value`
           every test drives) but is transparent and stretched over the row; the value is
           painted beside it as ordinary DOM text. macOS Chrome renders a control's own
@@ -138,13 +154,9 @@ export function StyleTools({
     Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])),
   )
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
-  const [status, setStatus] = useState<SaveStatus>('idle')
   const [open, setOpen] = useState<string | null>(null)
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Map<string, string>>(new Map())
   const rowRefs = useRef<Map<string, HTMLElement | null>>(new Map())
+  const { status, save } = useStyleRegionSave(artistId, onApplyStyle)
 
   const controls = useMemo(() => buildStyleControls(options), [options])
   const groupedRegions = useMemo(() => groupStyleRegions(regions), [regions])
@@ -170,52 +182,18 @@ export function StyleTools({
     rowRefs.current.get(open)?.scrollIntoView?.({ block: 'center' })
   }, [open])
 
-  const persist = useCallback(
-    (key: string, className: string) => {
-      pending.current.delete(key)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, key, () => saveEditorStyleAction(artistId, key, className))
-    },
-    [artistId],
-  )
-
-  // Flush pending edits on unmount so tabbing away can't drop the last change.
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingMap = pending.current
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingMap.forEach((className, key) => {
-        void saveEditorStyleAction(artistId, key, className)
-      })
-    }
-  }, [artistId])
-
   function edit(key: string, raw: string) {
     setText((t) => ({ ...t, [key]: raw }))
-    // Validate with the SAME function the server uses, so the panel can't claim "Saved"
-    // on a rejected write. Controls always emit clean utilities; only the Advanced raw
-    // box can produce something invalid.
-    const clean = cleanClassText(raw)
+    // The hook validates with the SAME function the server uses, so the panel can't
+    // claim "Saved" on a rejected write. Controls always emit clean utilities; only a
+    // raw escape hatch could produce something invalid.
+    const ok = save(key, raw)
     setInvalid((s) => {
       const next = new Set(s)
-      if (clean === null) next.add(key)
-      else next.delete(key)
+      if (ok) next.delete(key)
+      else next.add(key)
       return next
     })
-    if (clean === null) return
-
-    onApplyStyle?.(key, clean) // optimistic repaint in the frame
-    pending.current.set(key, clean)
-    const existing = timers.current.get(key)
-    if (existing) clearTimeout(existing)
-    timers.current.set(
-      key,
-      setTimeout(() => {
-        timers.current.delete(key)
-        persist(key, clean)
-      }, 500),
-    )
   }
 
   if (!regions.length) {
@@ -255,7 +233,7 @@ export function StyleTools({
                     {controls.map((control) => (
                       <StyleControlRow
                         key={control.id}
-                        region={r}
+                        regionLabel={r.label}
                         control={control}
                         cls={cls}
                         onChange={(v) => edit(r.key, applyStyleValue(cls, control, v))}

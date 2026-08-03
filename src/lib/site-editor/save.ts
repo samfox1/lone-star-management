@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { acceptsValue, fieldsFor, SEO_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
+import { mediaUrl } from '@/lib/storage-url'
 import { safeHref } from '@/lib/url'
 
 export async function saveEditorField(
@@ -55,6 +56,59 @@ export async function saveEditorField(
 }
 
 /**
+ * Replace (or clear) a single-occupancy IMAGE field from the visual editor — the hero
+ * image or the profile photo. `storagePath` is a freshly-uploaded media object, or null
+ * to clear the slot. Resolves the field's manifest target:
+ *
+ *  • artist column (hero_image_url) — store the object's public URL. The hero object is
+ *    uploaded OUTSIDE MEDIA_FOLDERS (the `hero` folder), so publish GC can never sweep the
+ *    live hero out from under the URL (storage-gc.ts sweeps only referenced-by-row folders).
+ *  • media purpose (profile_photo) — single occupancy: drop any existing row of that
+ *    purpose, then insert the new one. A media row references the object, so GC keeps it;
+ *    the replaced object drops out of `referenced` and the next publish sweeps it.
+ *
+ * RLS scopes every write to the caller's tenant; the action wrapper adds auth + revalidate.
+ */
+export async function setImageField(
+  supabase: SupabaseClient,
+  artistId: string,
+  template: string,
+  fieldKey: string,
+  storagePath: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const manifest = manifestFor(template)
+  const field = manifest ? fieldByKey(manifest, fieldKey) : undefined
+  if (!field || field.type !== 'image') return { ok: false, error: 'Unknown image field.' }
+
+  if (field.target.store === 'artist') {
+    const { error } = await supabase
+      .from('artists')
+      .update({ [field.target.column]: storagePath ? mediaUrl(storagePath) : null })
+      .eq('id', artistId)
+    return error ? { ok: false, error: error.message } : { ok: true }
+  }
+
+  if (field.target.store === 'media') {
+    const purpose = field.target.purpose
+    // Vacate the purpose first (single occupancy), so a clear is just this delete and a
+    // replace can't leave two rows claiming the same slot.
+    const del = await supabase.from('media').delete().eq('artist_id', artistId).eq('purpose', purpose)
+    if (del.error) return { ok: false, error: del.error.message }
+    if (!storagePath) return { ok: true }
+    const { error } = await supabase.from('media').insert({
+      artist_id: artistId,
+      purpose,
+      storage_path: storagePath,
+      on_site: true,
+      sort_order: Math.floor(Date.now() / 1000),
+    })
+    return error ? { ok: false, error: error.message } : { ok: true }
+  }
+
+  return { ok: false, error: 'That field is not an image.' }
+}
+
+/**
  * Clean the class-name TEXT a manager typed for a region. Returns the cleaned
  * string, or null if it holds characters that don't belong in a class attribute
  * (reject — don't silently mangle). '' (empty/whitespace) is valid: it clears the
@@ -72,8 +126,12 @@ export function cleanClassText(raw: string): string | null {
 
 /** A region key is a manifest style-region key ('hero_wordmark') or a per-item key
  *  '<slot>:<id>' (D-E) — item ids are UUIDs, so hyphens are allowed after the colon. */
+// A region key is a bare identifier (`hero_wordmark`) or a prefixed per-item key
+// (`image:<uuid>`, `slot:polaroid_1_photo`, `videos:abc-123`). The segment after the colon
+// allows underscores too — component slot roles (`polaroid_1_photo`) carry them, and
+// rejecting those made the per-item editor report "save failed" on every slot.
 function isRegionKey(key: string): boolean {
-  return key.length <= 200 && /^[A-Za-z0-9_]+(?::[A-Za-z0-9-]+)?$/.test(key)
+  return key.length <= 200 && /^[A-Za-z0-9_]+(?::[A-Za-z0-9_-]+)?$/.test(key)
 }
 
 /**

@@ -35,7 +35,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
-import { saveEditorField, saveEditorLink, saveEditorStyle } from '@/lib/site-editor/save'
+import { saveEditorField, saveEditorLink, saveEditorStyle, setImageField } from '@/lib/site-editor/save'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
@@ -285,6 +285,31 @@ export async function saveEditorFieldAction(
   if (!artist) return { ok: false, error: 'Artist not found.' }
 
   const res = await saveEditorField(supabase, artistId, artist.template as string, fieldKey, value)
+  if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
+  return res
+}
+
+/**
+ * Replace (or clear) a single-occupancy image field from the editor's Images panel — the
+ * hero image / profile photo. `storagePath` is a just-uploaded media object, or null to
+ * clear. The upload happens client-side (useStorageUpload → the `media` bucket); this
+ * persists it. Auth + owner gate, then setImageField routes by the field's manifest target.
+ */
+export async function setImageFieldAction(
+  artistId: string,
+  fieldKey: string,
+  storagePath: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select('template').eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+
+  const res = await setImageField(supabase, artistId, artist.template as string, fieldKey, storagePath)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
 }

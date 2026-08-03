@@ -30,6 +30,9 @@ export default async function EditFramePage({ params }: { params: Promise<{ id: 
         [data-lse-field],[data-lse-slot],[data-lse-item]{cursor:pointer}
         [data-lse-field]:hover,[data-lse-item]:hover{outline:2px solid #2563eb;outline-offset:2px;border-radius:2px}
         [data-lse-slot]:hover{outline:2px dashed rgba(37,99,235,.5);outline-offset:6px}
+        /* The region the editor is highlighting (a tile click in the inspector). A solid
+           ring + soft wash so it reads as "this one" even mid-scroll. */
+        [data-lse-highlight]{outline:3px solid #2563eb!important;outline-offset:3px;border-radius:2px;box-shadow:0 0 0 9999px rgba(37,99,235,.06)}
       `}</style>
       <ArtistTemplate data={site} editable />
       <EditFrameBridge />

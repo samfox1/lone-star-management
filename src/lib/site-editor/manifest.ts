@@ -74,10 +74,6 @@ export type ManifestStyleRegion = {
  * adds to (Sam, 2026-07-21) — and owns the slot names. A media row is bound to one slot
  * by `media.site_role`, whose value is `<key>_<n>_<slot.key>` (e.g. `polaroid_3_photo`),
  * matching the field keys skeen already declares.
- *
- * The manager CAN rename each instance. The name is ordinary editable site text under
- * `<key>_<n>_label`, so it publishes through site_content like every other text field
- * and needs no storage of its own.
  */
 export type ManifestComponent = {
   /** Component type id, e.g. 'polaroid'. Lowercase/underscore — it becomes a site_role. */
@@ -108,11 +104,6 @@ export type ComponentSlot = {
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`
-}
-
-/** The site_content key holding the manager's name for instance `n`. */
-export function componentLabelKey(component: string, n: number): string {
-  return `${component}_${n}_label`
 }
 
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by

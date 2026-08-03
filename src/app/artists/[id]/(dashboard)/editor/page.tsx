@@ -2,11 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { groupTracksIntoProjects } from '@/lib/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
-import { getWorkingSitePayload, type SiteContent } from '@/lib/site'
+import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
 import { requireArtist } from '../_data'
 import { EditorShell } from './editor-shell'
 import type {
+  EditorImageField,
   EditorLink,
   EditorMerch,
   EditorProject,
@@ -100,6 +101,26 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
           multiline: f.key === 'artist_bio' || f.key.endsWith('_copy'),
         }))
     : []
+
+  // The site's single-occupancy image fields (hero image, profile photo) — declared by
+  // the manifest, resolved to their current preview. hero_video is type:'image' too but
+  // it's a VIDEO background (edited in the Videos panel), so it's excluded here. For a
+  // custom site manifestFor is undefined, so these come from the frame's runtime manifest
+  // instead (threaded through the shell); the built-in templates resolve here.
+  const profilePhotoPath = (mediaRows ?? []).find((m) => m.purpose === 'profile_photo')?.storage_path as
+    | string
+    | undefined
+  const imageFields: EditorImageField[] = (manifest?.fields ?? [])
+    .filter(
+      (f) =>
+        (f.type === 'image' && f.target.store === 'artist' && f.target.column === 'hero_image_url') ||
+        (f.type === 'image' && f.target.store === 'media' && f.target.purpose === 'profile_photo'),
+    )
+    .map((f) =>
+      f.target.store === 'artist'
+        ? { key: f.key, label: f.label, previewUrl: ctx.artist.hero_image_url, target: { store: 'artist', column: 'hero_image_url' } }
+        : { key: f.key, label: f.label, previewUrl: profilePhotoPath ? mediaUrl(profilePhotoPath) : null, target: { store: 'media', purpose: 'profile_photo' } },
+    )
 
   const photos = (mediaRows ?? [])
     .filter((m) => m.purpose === 'gallery_image')
@@ -227,6 +248,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       customSiteUrl={customSiteUrl}
       draft={draft}
       photos={photos}
+      imageFields={imageFields}
       textFields={textFields}
       links={links}
       supportLinks={supportLinks}
@@ -235,7 +257,6 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       merch={merch}
       releases={releases}
       tours={tours}
-      componentLabels={siteContent}
     />
   )
 }

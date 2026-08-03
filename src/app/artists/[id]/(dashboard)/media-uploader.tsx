@@ -4,14 +4,9 @@ import { useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SiteMedia } from '@/lib/site'
 import { orientationOf, type Orientation } from '@/lib/site-editor/gallery'
+import { IMAGE_UPLOAD_RULES, VIDEO_UPLOAD_RULES } from '@/lib/upload'
 import { useStorageUpload } from './use-storage-upload'
 import { FileDropField } from './file-drop-field'
-
-const IMAGE_RULES = {
-  allowedExt: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-  maxBytes: 26214400,
-  allowedMime: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-}
 
 /** Read an image file's natural pixel size in the browser, for orientation detection.
  *  Resolves null if it can't decode (then we simply don't warn). */
@@ -54,13 +49,7 @@ export function MediaUploader({
 }) {
   const isVideo = accept.includes('video')
   const noun = isVideo ? 'video' : accept.includes('image') ? 'image' : 'file'
-  const rules = isVideo
-    ? { allowedExt: ['mp4', 'webm', 'mov'], maxBytes: 524288000, allowedMime: ['video/mp4', 'video/webm', 'video/quicktime'] }
-    : {
-        allowedExt: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-        maxBytes: 26214400,
-        allowedMime: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-      }
+  const rules = isVideo ? VIDEO_UPLOAD_RULES : IMAGE_UPLOAD_RULES
   const { busy, error, upload } = useStorageUpload({
     bucket: 'media',
     artistId,
@@ -112,7 +101,7 @@ export function GallerySlotUploader({
     artistId,
     category: 'gallery',
     noun: 'image',
-    rules: IMAGE_RULES,
+    rules: IMAGE_UPLOAD_RULES,
     writeRow: async (path) => {
       const orient = detectedRef.current ?? orientation
       const { data, error: rowErr } = await createClient()

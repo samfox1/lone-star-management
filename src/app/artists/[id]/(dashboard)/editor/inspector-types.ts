@@ -29,6 +29,24 @@ export type EditorTextField = {
   value: string
   multiline: boolean
 }
+/** A single image/video opened for full-panel editing (Replace / Remove / styling). The
+ *  inspector holds the live state + place handlers, so a tile passes only this descriptor. */
+export type ItemEdit =
+  | { type: 'imageSlot'; role: string; label: string }
+  | { type: 'galleryPhoto'; id: string; orientation: Orientation; label: string }
+/**
+ * A single-occupancy IMAGE region the site declares as a manifest field (the hero image,
+ * the profile photo) — one fixed image, not an open collection like the gallery. The
+ * manager replaces or clears it. `previewUrl` is the current image (null = empty slot);
+ * `target` is how it saves (an artist URL column, or a media row by purpose). The site
+ * marks it `data-lse-field="<key>"`, so its highlight target is `{kind:'field', key}`.
+ */
+export type EditorImageField = {
+  key: string
+  label: string
+  previewUrl: string | null
+  target: { store: 'artist'; column: 'hero_image_url' } | { store: 'media'; purpose: 'profile_photo' }
+}
 export type EditorLink = { id: string; label: string; url: string; onSite: boolean }
 /**
  * One support act on a tour date, surfaced in the Links panel's "Tour support" group so

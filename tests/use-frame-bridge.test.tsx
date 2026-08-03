@@ -18,11 +18,15 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { frameOrigin, frameSrc, useFrameBridge } from '@/app/artists/[id]/(dashboard)/editor/use-frame-bridge'
+import { frameOrigin, frameSrc, useFrameBridge, HELLO_RETRY_MS, HELLO_TIMEOUT_MS } from '@/app/artists/[id]/(dashboard)/editor/use-frame-bridge'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@/lib/site-editor/bridge'
 import type { PublicSitePayload } from '@/lib/site'
 
 const CUSTOM = 'https://skeen-website.vercel.app'
+
+/** Every message the editor posted, by type. */
+const posted = (frame: { postMessage: ReturnType<typeof vi.fn> }, type: string) =>
+  frame.postMessage.mock.calls.filter((c) => (c[0] as { type?: string })?.type === type)
 
 const draft: PublicSitePayload = {
   artist: {
@@ -38,7 +42,13 @@ const draft: PublicSitePayload = {
 /** A stand-in for the iframe's contentWindow — the thing we postMessage into. */
 function fakeFrame() {
   const postMessage = vi.fn()
-  return { postMessage, el: { contentWindow: { postMessage } } as unknown as HTMLIFrameElement }
+  // addEventListener too: the editor listens for the iframe's `load` to send `hello`.
+  const el = {
+    contentWindow: { postMessage },
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  } as unknown as HTMLIFrameElement
+  return { postMessage, el }
 }
 
 /** Mount the hook with a fake frame already attached, as the real iframe ref would be. */
@@ -179,12 +189,39 @@ describe('inbound: select routing', () => {
     const { result } = mount({ customSiteUrl: CUSTOM })
     frameSays({ type: 'select', target: { kind: 'style', key: 'hero_wordmark' }, rect: {} }, CUSTOM)
     expect(result.current.selectedStyle).toBe('hero_wordmark')
+    // A style select is NOT an image region — it doesn't also fire selectedRegion.
+    expect(result.current.selectedRegion).toBeNull()
   })
 
-  it('ignores non-style selects (no tool for them yet)', () => {
+  it('reports a field/slot/item click as selectedRegion (the inspector decides if it\'s an image)', () => {
     const { result } = mount({ customSiteUrl: CUSTOM })
-    frameSays({ type: 'select', target: { kind: 'field', key: 'hero_tagline' }, rect: {} }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'field', key: 'hero_image' }, rect: {} }, CUSTOM)
+    expect(result.current.selectedRegion?.target).toEqual({ kind: 'field', key: 'hero_image' })
     expect(result.current.selectedStyle).toBeNull()
+  })
+
+  it('bumps the nonce so re-clicking the SAME region re-fires the focus', () => {
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'select', target: { kind: 'item', assetType: 'image', id: 'g1' }, rect: {} }, CUSTOM)
+    const first = result.current.selectedRegion!.nonce
+    frameSays({ type: 'select', target: { kind: 'item', assetType: 'image', id: 'g1' }, rect: {} }, CUSTOM)
+    expect(result.current.selectedRegion!.nonce).toBe(first + 1)
+  })
+})
+
+describe('outbound: highlight / clear-highlight', () => {
+  it('posts a highlight for a tile click, targeted at the frame origin', () => {
+    const { result, frame } = mount({ customSiteUrl: CUSTOM })
+    act(() => result.current.applyHighlight({ kind: 'field', key: 'hero_image' }))
+    const [msg, origin] = frame.postMessage.mock.calls[0]
+    expect(origin).toBe(CUSTOM)
+    expect(msg).toMatchObject({ type: 'highlight', target: { kind: 'field', key: 'hero_image' } })
+  })
+
+  it('posts clear-highlight on deselect', () => {
+    const { result, frame } = mount({ customSiteUrl: CUSTOM })
+    act(() => result.current.clearHighlight())
+    expect(frame.postMessage.mock.calls[0][0]).toMatchObject({ type: 'clear-highlight' })
   })
 })
 
@@ -195,5 +232,66 @@ describe('teardown', () => {
     unmount()
     frameSays({ type: 'ready' }, CUSTOM)
     expect(frame.postMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('hello — the editor asks until the frame answers', () => {
+  it('keeps asking, then stops once the frame speaks', () => {
+    // The frame announcing on its own was a race the editor could lose: this listener
+    // re-attaches whenever `draft` changes, and a `ready` posted in the gap is dropped
+    // silently. Both sides pushing means connecting no longer depends on who was first.
+    vi.useFakeTimers()
+    try {
+      const { frame } = mount({ customSiteUrl: CUSTOM })
+      act(() => {
+        vi.advanceTimersByTime(HELLO_RETRY_MS * 3)
+      })
+      expect(posted(frame, 'hello').length).toBeGreaterThan(1)
+      expect(posted(frame, 'hello')[0][1]).toBe(CUSTOM) // never '*'
+
+      frameSays({ type: 'ready', manifest: { template: 'skeen', fields: [], slots: [], styles: [] } }, CUSTOM)
+      const settled = posted(frame, 'hello').length
+      act(() => {
+        vi.advanceTimersByTime(HELLO_RETRY_MS * 10)
+      })
+      expect(posted(frame, 'hello')).toHaveLength(settled)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives up asking rather than polling a dead frame forever', () => {
+    vi.useFakeTimers()
+    try {
+      const { frame } = mount({ customSiteUrl: CUSTOM })
+      act(() => {
+        vi.advanceTimersByTime(HELLO_TIMEOUT_MS + HELLO_RETRY_MS * 20)
+      })
+      const stopped = posted(frame, 'hello').length
+      act(() => {
+        vi.advanceTimersByTime(HELLO_RETRY_MS * 20)
+      })
+      expect(posted(frame, 'hello')).toHaveLength(stopped)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delivers a draft that arrives AFTER the frame was ready', () => {
+    // `ready` only carries the draft if one is loaded; arriving first left the frame
+    // waiting forever for data the editor already had.
+    const frame = fakeFrame()
+    const hook = renderHook(
+      ({ d }: { d: PublicSitePayload | null }) =>
+        useFrameBridge({ artistId: 'a1', customSiteUrl: CUSTOM, draft: d }),
+      { initialProps: { d: null as PublicSitePayload | null } },
+    )
+    hook.result.current.frameRef.current = frame.el
+    frameSays({ type: 'ready' }, CUSTOM)
+    expect(posted(frame, 'init-data')).toHaveLength(0) // nothing to send yet
+
+    hook.rerender({ d: draft })
+    expect(posted(frame, 'init-data')).toHaveLength(1)
+    expect(posted(frame, 'init-data')[0][1]).toBe(CUSTOM)
   })
 })

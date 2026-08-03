@@ -8,6 +8,20 @@
 export type UploadRules = { allowedExt: string[]; maxBytes: number; allowedMime?: string[] }
 export type ValidateResult = { ok: true; ext: string } | { ok: false; error: string }
 
+/** The image/video upload rules, in ONE place — they were copy-pasted per uploader
+ *  (media-uploader twice, the editor's Images panel) and would drift the first time one
+ *  was edited. Client-side UX only; the bucket's limits are the real guard. */
+export const IMAGE_UPLOAD_RULES: UploadRules = {
+  allowedExt: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+  maxBytes: 26214400,
+  allowedMime: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+}
+export const VIDEO_UPLOAD_RULES: UploadRules = {
+  allowedExt: ['mp4', 'webm', 'mov'],
+  maxBytes: 524288000,
+  allowedMime: ['video/mp4', 'video/webm', 'video/quicktime'],
+}
+
 /** Human-readable size, binary (MiB) so it matches the bucket's file_size_limit and
  *  the "up to 500 MB" hints: 524288000 → "500 MB", 31457280 → "30 MB". */
 export function sizeLabel(bytes: number): string {

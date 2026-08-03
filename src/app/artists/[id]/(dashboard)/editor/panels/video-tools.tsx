@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type EditorVideo, type SiteVideoRole } from '../inspector-types'
-import { CardThumb, EmptySlot, EditMenu, AddFirstLink, LibraryPicker } from '../inspector-grid'
+import { CardThumb, EmptySlot, EditMenu, AddFirstLink, LibraryPicker, useDismiss } from '../inspector-grid'
 import { runSerialized, SlotGroupLabel } from '../inspector-shared'
 import { renameVideoAction } from '../../actions'
 
@@ -47,17 +47,8 @@ export function VideoTools({
   // The band video being REPLACED, if any. It stays on the site until a replacement is
   // actually picked — so closing the picker without choosing leaves it in place.
   const [replacingBand, setReplacingBand] = useState<EditorVideo | null>(null)
-  // A click anywhere outside an open Replace/Remove menu closes it (the menus tag
-  // themselves with data-edit-menu; the edit button that opens one fires on click,
-  // after this mousedown, so it never self-closes).
-  useEffect(() => {
-    if (!editing) return
-    const onDown = (e: MouseEvent) => {
-      if (!(e.target as Element).closest('[data-edit-menu]')) setEditing(null)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [editing])
+  // A click anywhere outside an open Replace/Remove menu closes it.
+  useDismiss(editing !== null, () => setEditing(null))
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const saving = useRef<Map<string, Promise<unknown>>>(new Map())
   const errored = useRef<Set<string>>(new Set())

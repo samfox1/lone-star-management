@@ -1,227 +1,348 @@
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { componentLabelKey, componentSlotRole, type ManifestComponent } from '@/lib/site-editor/manifest'
+import { PortalModal } from '@/components/ui/portal-modal'
+import { mediaUrl } from '@/lib/site'
+import { IMAGE_UPLOAD_RULES } from '@/lib/upload'
+import { componentSlotRole, type ComponentSlot, type ManifestComponent } from '@/lib/site-editor/manifest'
+import { type SelectTarget, selectTargetKey } from '@/lib/site-editor/bridge'
 import { type Orientation } from '@/lib/site-editor/gallery'
-import { type GalleryPhoto } from '../inspector-types'
-import { plural, GroupLabel, SlotGroupLabel, FIELD, CONTROL_LABEL } from '../inspector-shared'
-import { PhotoThumb, EmptySlot, LibraryPicker, MediaGrid } from '../inspector-grid'
+import { type EditorImageField, type GalleryPhoto, type ItemEdit } from '../inspector-types'
+import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, EYEBROW } from '../inspector-shared'
+import {
+  PhotoThumb,
+  EmptySlot,
+  CoverEditMenu,
+  LibraryPicker,
+  MediaGrid,
+  SelectableTile,
+  TileEditButton,
+  fileNameOf,
+  useDismiss,
+} from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
-import { saveEditorFieldAction } from '../../actions'
+import { FileDropField } from '../../file-drop-field'
+import { useStorageUpload } from '../../use-storage-upload'
+import { toast } from '../../toast'
+import { setImageFieldAction } from '../../actions'
 
-/* ── Image tools: the gallery grouped by orientation, each an assets grid ────────────
- * skeen's photo collage lays each photo out by shape, so the gallery is edited in two
- * orientation groups (Horizontal, Vertical). Add opens the asset picker — the manager's
- * ALREADY-UPLOADED photos, exactly like the video picker — and choosing one places it in
- * that group, which is when its orientation is set (photos upload as plain assets). The
- * WHOLE library shows in both pickers, so an untagged upload is never hidden. Replace /
- * Remove behave like the video slots (Remove takes a photo off the site, back to the
- * library — never deletes). Cards are 3-up. The picker footer can still upload a new
- * asset, but picking existing ones is the primary path. */
-/* ── Component slots: repeated multi-image cards (skeen's polaroid wall) ─────────────
- * The site declares the component and how many it renders (manifest.components); the
- * manager fills each slot and may RENAME each instance. A name is ordinary editable site
- * text under `<key>_<n>_label`, so it saves and publishes through saveEditorFieldAction
- * like every other text field — no storage of its own.
- *
- * A placed photo carries `media.site_role = <key>_<n>_<slot>`, which is exactly the field
- * key skeen already declares, so the two can't drift (tests/component-slots.test.ts). */
-function ComponentTools({
-  components,
-  photos,
-  labels,
+/* ── The Images panel ────────────────────────────────────────────────────────────────
+ * Every image the site shows, in ONE place, each an editable tile in a 3-up grid, and
+ * clicking a tile highlights the matching element in the live preview (the frame outlines
+ * `[data-lse-highlight]`). Three groups, top to bottom:
+ *   • Set slots — the template's FIXED single positions (hero image, profile photo). Replace
+ *     or remove; each saves to its manifest target (an artist URL column, or a media row).
+ *   • Custom slots — the artist's own photo arrangement: the repeated multi-image wall
+ *     (skeen's polaroids), numbered Slot 1…N.
+ *   • Gallery — the orientation collages (Horizontal / Vertical), open collections.
+ * Every tile reports its highlight TARGET via `onFocus`, and rings itself when its key
+ * matches `focusedKey` — the two directions of the two-way selection sync. */
+
+/** The highlight target for each image kind — the marker the frame outlines. */
+const fieldTarget = (key: string): SelectTarget => ({ kind: 'field', key })
+const galleryTarget = (id: string): SelectTarget => ({ kind: 'item', assetType: 'image', id })
+
+/* ── Set slots: the template's fixed single positions ─────────────────────────────────
+ * The hero image and profile photo are ONE fixed image apiece — positions the template
+ * SETS, not an arrangement the artist builds (that's the custom slots below). Each tile is
+ * the same size as the custom slots; Replace uploads a new file (portaled modal, so it
+ * never resizes the grid), Remove clears the field. The write routes by the field's
+ * manifest target (setImageFieldAction). */
+function ImageFieldTools({
+  fields,
   artistId,
-  onPlaceSlot,
+  focusedKey,
+  onFocus,
   onApplyField,
 }: {
-  components: ManifestComponent[]
-  photos: GalleryPhoto[]
-  /** Current `<key>_<n>_label` values from published/draft site text. */
-  labels: Record<string, string>
+  fields: EditorImageField[]
   artistId: string
-  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  focusedKey: string | null
+  onFocus: (t: SelectTarget) => void
   onApplyField?: (key: string, value: string) => void
 }) {
   return (
-    <div className="pb-2">
-      {components.map((c) => (
-        <div key={c.key}>
-          {/* Counted in SLOTS, not components: what the manager needs to know is how
-              many images this section wants of them (5 cards × 2 each = 10), not how
-              many cards there happen to be (Sam, 2026-07-21). */}
-          <GroupLabel>{plural(c.count * c.slots.length, 'image slot')}</GroupLabel>
-          {/* Two compact cards per row (Sam, 2026-07-24): each instance is its own boxed
-              container so the wall reads as an arrangeable grid, not one tall column. */}
-          <div className="grid grid-cols-2 gap-2.5 px-5 pt-1">
-            {Array.from({ length: c.count }, (_, i) => i + 1).map((n) => (
-              <ComponentCard
-                key={`${c.key}_${n}`}
-                component={c}
-                n={n}
-                photos={photos}
-                labelKey={componentLabelKey(c.key, n)}
-                labelValue={labels[componentLabelKey(c.key, n)] ?? ''}
-                artistId={artistId}
-                onPlaceSlot={onPlaceSlot}
-                onApplyField={onApplyField}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+    <div>
+      <GroupLabel>Set slots</GroupLabel>
+      <div className="grid grid-cols-3 gap-2 px-5 pt-1">
+        {fields.map((f) => (
+          <ImageFieldTile
+            key={f.key}
+            field={f}
+            artistId={artistId}
+            focused={focusedKey === selectTargetKey(fieldTarget(f.key))}
+            onFocus={() => onFocus(fieldTarget(f.key))}
+            onApplyField={onApplyField}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
-/** One instance: an editable name plus one drop target per declared slot. */
-function ComponentCard({
-  component,
-  n,
-  photos,
-  labelKey,
-  labelValue,
+function ImageFieldTile({
+  field,
   artistId,
-  onPlaceSlot,
+  focused,
+  onFocus,
   onApplyField,
 }: {
-  component: ManifestComponent
-  n: number
-  photos: GalleryPhoto[]
-  labelKey: string
-  labelValue: string
+  field: EditorImageField
   artistId: string
-  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  focused: boolean
+  onFocus: () => void
   onApplyField?: (key: string, value: string) => void
 }) {
-  const [name, setName] = useState(labelValue)
-  const [renaming, setRenaming] = useState(false)
-  const [picking, setPicking] = useState<string | null>(null)
-
-  // Re-seed when the saved value lands after first render, without clobbering typing.
-  const [seeded, setSeeded] = useState(labelValue)
-  if (seeded !== labelValue) {
-    setSeeded(labelValue)
-    setName(labelValue)
+  // Local optimistic preview so the tile updates the instant a save returns, before the
+  // router refresh re-fetches the field. Re-seed when the server value changes (same
+  // pattern as ComponentCard's name), without clobbering an in-flight optimistic value.
+  const [preview, setPreview] = useState(field.previewUrl)
+  const [seeded, setSeeded] = useState(field.previewUrl)
+  if (seeded !== field.previewUrl) {
+    setSeeded(field.previewUrl)
+    setPreview(field.previewUrl)
   }
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  useDismiss(editing, () => setEditing(false))
 
-  /** Commit on an explicit finish (blur / Enter), not on every keystroke: the name is
-   *  read as text until the pencil is clicked, so there is a clear start and end to the
-   *  edit and no debounce guessing when typing stopped. */
-  function commitName() {
-    setRenaming(false)
-    if (name === labelValue) return
-    onApplyField?.(labelKey, name) // optimistic repaint in the frame
-    void saveEditorFieldAction(artistId, labelKey, name)
+  async function remove() {
+    setRemoving(true)
+    const res = await setImageFieldAction(artistId, field.key, null)
+    setRemoving(false)
+    setEditing(false)
+    if (!res.ok) return toast(res.error ?? 'Could not remove the image.', 'error')
+    setPreview(null)
+    onApplyField?.(field.key, '') // clear it in the frame too
   }
-
-  // The library a slot can draw from: every photo NOT already holding a slot. A photo in
-  // another slot is excluded so one image can't silently serve two cards.
-  const library = photos.filter((p) => !p.siteRole)
-  const fallbackName = `${component.label} ${n}`
 
   return (
-    <div className="rounded-xl border border-hairline p-2">
-      {/* The name READS as text; the pencil turns it into a field, so the cards read as a
-          wall to arrange rather than a form to fill. */}
-      {renaming ? (
-        <input
-          autoFocus
-          aria-label={`${fallbackName} name`}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={commitName}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitName()
-            if (e.key === 'Escape') {
-              setName(labelValue) // abandon the edit, keep what was saved
-              setRenaming(false)
-            }
-          }}
-          placeholder={fallbackName}
-          className={cx(FIELD, 'mb-1.5 px-2 py-1 text-[12px]')}
-        />
+    <div>
+      <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>{field.label}</span>
+      {preview ? (
+        <SelectableTile
+          label={field.label}
+          focused={focused}
+          onSelect={onFocus}
+          thumb={<PhotoThumb url={preview} aspect="aspect-square" fit="cover" />}
+        >
+          {editing ? (
+            <CoverEditMenu
+              replaceAria={`Replace ${field.label}`}
+              removeAria={`Remove ${field.label}`}
+              onReplace={() => { setEditing(false); setUploadOpen(true) }}
+              onRemove={remove}
+            />
+          ) : (
+            <TileEditButton label={`Edit ${field.label}`} onClick={() => setEditing(true)} />
+          )}
+          {removing && <div className="absolute inset-0 grid place-items-center bg-paper/60 text-[10px] text-ink-muted">Removing…</div>}
+        </SelectableTile>
       ) : (
-        <div className="mb-1.5 flex items-center gap-1">
-          <span className={cx('min-w-0 flex-1 truncate text-[12px]', name ? 'text-ink' : 'text-ink-faint')}>
-            {name || fallbackName}
-          </span>
-          <button
-            type="button"
-            aria-label={`Rename ${fallbackName}`}
-            onClick={() => setRenaming(true)}
-            className="flex-none rounded p-0.5 text-ink-faint hover:bg-surface hover:text-ink"
-          >
-            <Icon name="edit" size={12} />
-          </button>
-        </div>
+        <EmptySlot label="Add" ariaLabel={field.label} aspect="aspect-square" onClick={() => setUploadOpen(true)} />
       )}
-      <div className="grid grid-cols-2 gap-1.5">
-        {component.slots.map((slot, si) => {
-          const role = componentSlotRole(component.key, n, slot.key)
-          const placed = photos.find((p) => p.siteRole === role) ?? null
-          const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
-          return (
-            <div key={slot.key}>
-              {/* Generic "Slot N" (Sam, 2026-07-24) — the real slot name ("Handwriting") is
-                  too long for a half-card and overflowed; it lives on in the aria-labels. */}
-              <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>Slot {si + 1}</span>
-              {placed ? (
-                <>
-                  {/* The thumbnail IS the slot; Replace/Remove live in a hover overlay so it
-                      stays small enough to fit two cards per row. */}
-                  <div
-                    className="group/slot relative overflow-hidden rounded-md border border-hairline"
-                    title={placed.storage_path.split('/').pop()}
-                  >
-                    <PhotoThumb path={placed.storage_path} aspect="aspect-square" />
-                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/50 py-0.5 opacity-0 transition-opacity group-hover/slot:opacity-100">
-                      <button
-                        type="button"
-                        aria-label={`Replace ${fallbackName} ${slot.label}`}
-                        onClick={() => setPicking(role)}
-                        className="rounded p-0.5 text-white/85 hover:text-white"
-                      >
-                        <Icon name="edit" size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${fallbackName} ${slot.label}`}
-                        onClick={() => onPlaceSlot(role, null)}
-                        className="rounded p-0.5 text-white/85 hover:text-accent-red"
-                      >
-                        <Icon name="trash" size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  {/* Advisory, never blocking (Sam, 2026-07-21): a JPG in a PNG slot renders
-                      as a solid box on the site, so flag it — fixable, not a dead end. */}
-                  {wrongFormat && (
-                    <span className="mt-0.5 flex items-start gap-1 text-[10px] leading-tight text-status-pending">
-                      <Icon name="alert" size={11} />
-                      Needs a transparent PNG.
-                    </span>
-                  )}
-                </>
-              ) : (
-                <EmptySlot
-                  label="Add"
-                  ariaLabel={`${fallbackName} ${slot.label}`}
-                  title={slot.hint ?? slot.label}
-                  aspect="aspect-square"
-                  onClick={() => setPicking(role)}
+
+      {uploadOpen && (
+        <ImageUploadModal
+          field={field}
+          hasCurrent={!!preview}
+          artistId={artistId}
+          onClose={() => setUploadOpen(false)}
+          onSaved={(path) => {
+            setUploadOpen(false)
+            setPreview(mediaUrl(path))
+            onApplyField?.(field.key, mediaUrl(path)) // repaint the frame's <img> immediately
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/** The shared small portaled modal around an upload-only drop zone for one image field.
+ *  Owns the field write (`setImageFieldAction`) and derives its title and storage folder
+ *  from the field, so call sites just say which field. The hero folder choice keeps the
+ *  publish-GC invariant: `hero` sits outside MEDIA_FOLDERS so GC can't sweep the live
+ *  hero object (save.ts). */
+function ImageUploadModal({
+  field,
+  hasCurrent,
+  artistId,
+  onClose,
+  onSaved,
+}: {
+  field: EditorImageField
+  /** Whether the field currently shows an image — titles the modal Replace vs Add. */
+  hasCurrent: boolean
+  artistId: string
+  onClose: () => void
+  onSaved: (path: string) => void
+}) {
+  const title = `${hasCurrent ? 'Replace' : 'Add'} ${field.label}`
+  const { busy, error, upload } = useStorageUpload({
+    bucket: 'media',
+    artistId,
+    category: field.target.store === 'artist' ? 'hero' : 'profile',
+    noun: 'image',
+    rules: IMAGE_UPLOAD_RULES,
+    writeRow: async (path) => {
+      const res = await setImageFieldAction(artistId, field.key, path)
+      if (!res.ok) return res.error ?? 'Save failed'
+      onSaved(path)
+      return null
+    },
+  })
+
+  return (
+    <PortalModal ariaLabel={title} onClose={onClose}>
+      <div className={cx(EYEBROW, 'mb-2 pr-6')}>{title}</div>
+      <FileDropField accept="image/*" label="Drop an image or click to upload" busy={busy} error={error} onFile={upload} />
+    </PortalModal>
+  )
+}
+
+/* ── Custom slots: the artist's own photo arrangement (skeen's polaroids) ─────────────
+ * Where the artist arranges their own photos. The site declares the component and how many
+ * images it renders (manifest.components: count × slots); the manager fills each one. NOT
+ * boxed into named cards (Sam, 2026-07-28) — just a flat grid of "Slot 1 … Slot N", numbered
+ * sequentially across every instance, so the wall reads as bare slots to fill.
+ *
+ * A placed photo carries `media.site_role = <key>_<n>_<slot>`, which is exactly the field
+ * key skeen already declares, so the two can't drift (tests/component-slots.test.ts). The
+ * per-slot format hint (a caption wants a transparent PNG) rides on the slot and still
+ * warns, but the visible label is just its number. */
+function ComponentTools({
+  components,
+  photos,
+  artistId,
+  focusedKey,
+  onFocus,
+  onEditItem,
+  onPlaceSlot,
+}: {
+  components: ManifestComponent[]
+  photos: GalleryPhoto[]
+  artistId: string
+  focusedKey: string | null
+  onFocus: (t: SelectTarget) => void
+  onEditItem: (item: ItemEdit) => void
+  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+}) {
+  // One pass over the photo list for the whole wall, instead of every tile scanning it
+  // twice: who holds which role, and the shared library of unplaced photos (a photo NOT
+  // already holding a slot, so one image can't silently serve two slots).
+  const placedByRole = new Map<string, GalleryPhoto>()
+  for (const p of photos) if (p.siteRole) placedByRole.set(p.siteRole, p)
+  const library = photos.filter((p) => !p.siteRole)
+  return (
+    <div className="pb-2">
+      {components.map((c) => {
+        // Flatten every instance's slots into one sequential list: instance 1's slots,
+        // then instance 2's, … so numbering runs Slot 1 … Slot (count × slots).
+        const slots = Array.from({ length: c.count }, (_, i) => i + 1).flatMap((n) =>
+          c.slots.map((slot) => ({ slot, role: componentSlotRole(c.key, n, slot.key) })),
+        )
+        return (
+          <div key={c.key}>
+            <GroupLabel>Custom slots</GroupLabel>
+            <div className="grid grid-cols-3 gap-2 px-5 pt-1">
+              {slots.map(({ slot, role }, i) => (
+                <SlotTile
+                  key={role}
+                  index={i + 1}
+                  slot={slot}
+                  role={role}
+                  placed={placedByRole.get(role) ?? null}
+                  library={library}
+                  artistId={artistId}
+                  focused={focusedKey === selectTargetKey(fieldTarget(role))}
+                  onFocus={() => onFocus(fieldTarget(role))}
+                  onEdit={() => onEditItem({ type: 'imageSlot', role, label: `Slot ${i + 1}` })}
+                  onPlaceSlot={onPlaceSlot}
                 />
-              )}
+              ))}
             </div>
-          )
-        })}
-      </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** One numbered slot: a drop target, or a placed thumbnail with Select / Replace / Remove
+ *  and the two-way highlight ring. Owns its own picker. */
+function SlotTile({
+  index,
+  slot,
+  role,
+  placed,
+  library,
+  artistId,
+  focused,
+  onFocus,
+  onEdit,
+  onPlaceSlot,
+}: {
+  index: number
+  slot: ComponentSlot
+  role: string
+  /** The photo holding this slot, or null when it's empty. */
+  placed: GalleryPhoto | null
+  /** The unplaced photos every slot's picker draws from. */
+  library: GalleryPhoto[]
+  artistId: string
+  focused: boolean
+  onFocus: () => void
+  /** Open this slot in the full-panel editor (its Edit button). */
+  onEdit: () => void
+  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+}) {
+  const [picking, setPicking] = useState(false)
+  const label = `Slot ${index}`
+  const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
+
+  return (
+    <div>
+      <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>{label}</span>
+      {placed ? (
+        <>
+          {/* The thumbnail IS the slot; clicking it SELECTS (highlights in the frame). The
+              Edit button (a hover corner) opens this slot in the full-panel editor. */}
+          <SelectableTile
+            label={label}
+            focused={focused}
+            onSelect={onFocus}
+            title={fileNameOf(placed.storage_path)}
+            thumb={<PhotoThumb path={placed.storage_path} aspect="aspect-square" fit="cover" />}
+          >
+            <TileEditButton label={`Edit ${label}`} title="Customize this image" onClick={onEdit} />
+          </SelectableTile>
+          {/* Advisory, never blocking (Sam, 2026-07-21): a JPG in a PNG slot renders as a
+              solid box on the site, so flag it — fixable, not a dead end. */}
+          {wrongFormat && (
+            <span className="mt-0.5 flex items-start gap-1 text-[10px] leading-tight text-status-pending">
+              <Icon name="alert" size={11} />
+              Needs a transparent PNG.
+            </span>
+          )}
+        </>
+      ) : (
+        <EmptySlot
+          label="Add"
+          ariaLabel={label}
+          title={slot.hint ?? slot.label}
+          aspect="aspect-square"
+          onClick={() => setPicking(true)}
+        />
+      )}
 
       {picking && (
         <LibraryPicker<GalleryPhoto>
-          title="Choose an image"
+          title={`Choose an image for ${label}`}
           candidates={library}
           keyOf={(p) => p.id}
-          labelOf={(p) => p.storage_path.split('/').pop() ?? ''}
+          labelOf={(p) => fileNameOf(p.storage_path)}
           renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
           empty={
             <p className="py-2 text-center text-xs text-ink-muted">
@@ -233,29 +354,36 @@ function ComponentCard({
               artistId={artistId}
               orientation="horizontal"
               label="Drop an image or click to upload"
-              onUploaded={(m) => onPlaceSlot(picking, { ...m, onSite: true, siteRole: picking })}
+              onUploaded={(m) => {
+                onPlaceSlot(role, { ...m, onSite: true, siteRole: role })
+                setPicking(false)
+              }}
             />
           }
           onPick={(p) => {
-            onPlaceSlot(picking, p)
-            setPicking(null)
+            onPlaceSlot(role, p)
+            setPicking(false)
           }}
-          onCancel={() => setPicking(null)}
+          onCancel={() => setPicking(false)}
         />
       )}
     </div>
   )
 }
 
-const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string; cols: string }[] = [
-  { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]', cols: 'grid-cols-2' },
-  { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]', cols: 'grid-cols-3' },
+/* ── Gallery: the orientation collages, uniformly 3-up ───────────────────────────── */
+const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string }[] = [
+  { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]' },
+  { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]' },
 ]
 
 export function PhotoTools({
   photos,
+  imageFields,
+  focusedKey,
+  onFocus,
+  onEditItem,
   components,
-  componentLabels,
   showGallery,
   artistId,
   onAdd,
@@ -265,8 +393,15 @@ export function PhotoTools({
   onApplyField,
 }: {
   photos: GalleryPhoto[]
+  /** Single-occupancy image fields (hero image, profile photo) — the "Set slots" group. */
+  imageFields: EditorImageField[]
+  /** selectTargetKey of the focused image region (rings that tile). */
+  focusedKey: string | null
+  /** Focus a region (a tile click) — highlights it in the frame. */
+  onFocus: (t: SelectTarget) => void
+  /** Open one image in the full-panel editor (a tile's Edit button). */
+  onEditItem: (item: ItemEdit) => void
   components: ManifestComponent[]
-  componentLabels: Record<string, string>
   /** Whether the SITE renders a photo collage (it declares an image slot). When it does
    *  not, the orientation groups are hidden: an editor slot with nothing behind it on the
    *  site is a place to put work that never appears (Sam, 2026-07-21). */
@@ -288,46 +423,62 @@ export function PhotoTools({
   // the photo wall (20260724120000).
   const belongs = (p: GalleryPhoto, group: Orientation) =>
     !p.siteRole && (p.orientation === group || (group === 'horizontal' && p.orientation == null))
+  const nothing = imageFields.length === 0 && components.length === 0 && !showGallery
   return (
     <div className="py-2">
+      {imageFields.length > 0 && (
+        <ImageFieldTools
+          fields={imageFields}
+          artistId={artistId}
+          focusedKey={focusedKey}
+          onFocus={onFocus}
+          onApplyField={onApplyField}
+        />
+      )}
       {components.length > 0 && (
         <ComponentTools
           components={components}
           photos={photos}
-          labels={componentLabels}
           artistId={artistId}
+          focusedKey={focusedKey}
+          onFocus={onFocus}
+          onEditItem={onEditItem}
           onPlaceSlot={onPlaceSlot}
-          onApplyField={onApplyField}
         />
       )}
       {showGallery &&
-        PHOTO_GROUPS.map(({ orientation, label, aspect, cols }) => (
-        <div key={orientation}>
-          <div className="px-5 pt-3">
-            <SlotGroupLabel>{label}</SlotGroupLabel>
-          </div>
-          <MediaGrid
-            onSiteItems={photos.filter((p) => p.onSite && belongs(p, orientation))}
-            library={photos.filter((p) => !p.onSite && belongs(p, orientation))}
-            noun={`${orientation} photo`}
-            keyOf={(p) => p.id}
-            labelOf={(_, i) => `${label} ${i + 1}`}
-            renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect={aspect} />}
-            aspect={aspect}
-            cols={cols}
-            pickTitle={`Add a ${orientation} photo`}
-            addLabel={`Add ${orientation} photo`}
-            empty={
-              <p className="py-2 text-center text-xs text-ink-muted">
-                No {orientation} photos in your library yet. Upload one below.
-              </p>
-            }
-            pickerFooter={<GallerySlotUploader artistId={artistId} orientation={orientation} onUploaded={onAdd} />}
-            onSetOnSite={(p, next) => (next ? onPlace(p, orientation) : onUnplace(p))}
-          />
+        PHOTO_GROUPS.map(({ orientation, label, aspect }) => (
+          <div key={orientation}>
+            <div className="px-5 pt-3">
+              <SlotGroupLabel>{label}</SlotGroupLabel>
+            </div>
+            <MediaGrid
+              onSiteItems={photos.filter((p) => p.onSite && belongs(p, orientation))}
+              library={photos.filter((p) => !p.onSite && belongs(p, orientation))}
+              noun={`${orientation} photo`}
+              keyOf={(p) => p.id}
+              labelOf={(_, i) => `${label} ${i + 1}`}
+              renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect={aspect} fit="cover" />}
+              aspect={aspect}
+              cols="grid-cols-3"
+              pickTitle={`Add a ${orientation} photo`}
+              addLabel={`Add ${orientation} photo`}
+              empty={
+                <p className="py-2 text-center text-xs text-ink-muted">
+                  No {orientation} photos in your library yet. Upload one below.
+                </p>
+              }
+              pickerFooter={<GallerySlotUploader artistId={artistId} orientation={orientation} onUploaded={onAdd} />}
+              onSetOnSite={(p, next) => (next ? onPlace(p, orientation) : onUnplace(p))}
+              select={{
+                onSelect: (p) => onFocus(galleryTarget(p.id)),
+                isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
+                onEdit: (p, i) => onEditItem({ type: 'galleryPhoto', id: p.id, orientation, label: `${label} ${i + 1}` }),
+              }}
+            />
           </div>
         ))}
-      {!showGallery && components.length === 0 && (
+      {nothing && (
         <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
           This site has no image slots. Photos you upload live in Assets until the site
           declares somewhere to put them.

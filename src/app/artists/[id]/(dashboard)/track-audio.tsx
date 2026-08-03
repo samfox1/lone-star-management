@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { modalOverlayClass } from '@/components/ui/ui'
+import { PortalModal } from '@/components/ui/portal-modal'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField } from './file-drop-field'
 import { useStorageUpload } from './use-storage-upload'
@@ -29,47 +28,16 @@ function fmtTime(s: number): string {
 }
 
 /**
- * A small modal for the drop zone, so uploading never resizes the modal it's opened from.
- * It's PORTALED to document.body (not nested in the parent modal's DOM), so it can't affect
- * the parent's layout at all. It sits on top of another CardModal, so its Escape handler runs
- * in the CAPTURE phase and stops immediate propagation — Escape closes THIS modal only, not
- * the parent (whose keydown listener is on document in the bubble phase).
+ * The drop zone's modal is the shared PortalModal: portaled (so uploading never resizes
+ * the modal it's opened from) with the capture-phase Escape that closes THIS modal only,
+ * not the CardModal under it. The `open` gate stays here so call sites keep their shape.
  */
 function AudioUploadModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopImmediatePropagation()
-        onClose()
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [open, onClose])
-
-  if (!open || typeof document === 'undefined') return null
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      className={modalOverlayClass}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      {/* Half the standard modal width — the drop zone doesn't need 560px. */}
-      <div className="relative flex max-h-[88vh] w-[280px] max-w-[90vw] flex-col overflow-auto rounded-2xl bg-paper p-7 font-space shadow-2xl">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-4 top-4 text-ink-faint transition-colors hover:text-ink"
-        >
-          <Icon name="plus" size={18} className="rotate-45" />
-        </button>
-        {children}
-      </div>
-    </div>,
-    document.body,
+  if (!open) return null
+  return (
+    <PortalModal ariaLabel="Upload audio" onClose={onClose}>
+      {children}
+    </PortalModal>
   )
 }
 

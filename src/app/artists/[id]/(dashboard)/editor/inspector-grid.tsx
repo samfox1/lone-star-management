@@ -26,20 +26,38 @@ import { EYEBROW } from './inspector-shared'
  * Purely presentational + local UI state. No data, no server actions, no panel logic.
  */
 
+/** The last path segment — how the editor names a stored object to the manager. */
+export function fileNameOf(storagePath: string): string {
+  return storagePath.split('/').pop() ?? ''
+}
+
 /** A gallery thumbnail at its orientation's aspect (3:2 horizontal, 2:3 vertical).
  *  `fit` defaults to `contain` — the WHOLE photo shows, letterboxed on the neutral
- *  ground, so the manager sees the entire image rather than a cropped centre. */
-export function PhotoThumb({ path, aspect, fit = 'contain' }: { path: string; aspect: string; fit?: 'cover' | 'contain' }) {
+ *  ground, so the manager sees the entire image rather than a cropped centre.
+ *  Addressed by storage `path` (downscaled thumb + full-object fallback) or, for a
+ *  value that is already a full URL (an image field), by `url` as-is. */
+export function PhotoThumb({
+  path,
+  url,
+  aspect,
+  fit = 'contain',
+}: {
+  path?: string
+  url?: string
+  aspect: string
+  fit?: 'cover' | 'contain'
+}) {
   return (
     <div className={cx('w-full overflow-hidden bg-track', aspect)}>
       {/* Load a downscaled/compressed thumbnail; fall back to the full object ONCE if
           the transform can't handle this image (guarding the src check against a loop). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={mediaThumbUrl(path)}
+        src={url ?? (path ? mediaThumbUrl(path) : '')}
         alt=""
         className={cx('h-full w-full', fit === 'cover' ? 'object-cover' : 'object-contain')}
         onError={(e) => {
+          if (!path) return
           const img = e.currentTarget
           const full = mediaUrl(path)
           if (img.src !== full) img.src = full
@@ -141,6 +159,121 @@ export function EditMenu({ onReplace, onRemove }: { onReplace: () => void; onRem
       </button>
     </div>
   )
+}
+
+/** A Replace / Remove menu that COVERS the thumbnail — two stacked, full-height rows,
+ *  opened by a tile's edit button. For tiles that are just an image with no caption row to
+ *  hold a side-by-side EditMenu (the image slots, gallery cards, image fields). Sits over a
+ *  `relative` thumbnail wrapper; tag `data-edit-menu` so an outside-click can dismiss it.
+ *  `replaceAria` / `removeAria` name the buttons where several tiles share the panel. */
+export function CoverEditMenu({
+  onReplace,
+  onRemove,
+  replaceAria,
+  removeAria,
+}: {
+  onReplace: () => void
+  onRemove: () => void
+  replaceAria?: string
+  removeAria?: string
+}) {
+  return (
+    <div data-edit-menu className="absolute inset-0 z-10 flex flex-col overflow-hidden">
+      <button
+        type="button"
+        aria-label={replaceAria}
+        onClick={onReplace}
+        className="flex flex-1 items-center justify-center gap-1.5 bg-black/70 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-black/80"
+      >
+        <Icon name="edit" size={12} /> Replace
+      </button>
+      <span className="h-px bg-white/20" />
+      <button
+        type="button"
+        aria-label={removeAria}
+        onClick={onRemove}
+        className="flex flex-1 items-center justify-center gap-1.5 bg-black/70 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-red-300 transition-colors hover:bg-black/80 hover:text-red-200"
+      >
+        <Icon name="trash" size={12} /> Remove
+      </button>
+    </div>
+  )
+}
+
+/** The hover "Edit" corner button a selectable tile floats over its thumbnail — opens
+ *  the tile's edit affordance (a CoverEditMenu, or the full-panel item editor). One
+ *  component so the treatment can't drift per panel. Appears on `group/slot` hover,
+ *  which `SelectableTile` provides. */
+export function TileEditButton({ label, title, onClick }: { label: string; title?: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      onClick={onClick}
+      className="absolute right-1.5 top-1.5 rounded-lg bg-black/60 p-2 text-white/90 opacity-0 transition-opacity hover:bg-black/75 hover:text-white group-hover/slot:opacity-100"
+    >
+      <Icon name="edit" size={16} />
+    </button>
+  )
+}
+
+/**
+ * The selectable image tile every collection shares: a bordered wrapper that rings when
+ * focused, a full-bleed Select button over the content, and whatever floats above it as
+ * `children` (a TileEditButton, a CoverEditMenu, a busy overlay). This was hand-rolled
+ * per panel — identical ring, aria and hover treatment three times — before it lived here.
+ */
+export function SelectableTile({
+  label,
+  focused,
+  onSelect,
+  title,
+  rounded = 'rounded-md',
+  thumb,
+  children,
+}: {
+  /** Names the tile: the Select button is `Select ${label}`. */
+  label: string
+  focused: boolean
+  onSelect: () => void
+  /** Hover text on the wrapper (e.g. the stored file's name). */
+  title?: string
+  rounded?: string
+  /** The tile's face — a thumbnail, optionally with a caption row. */
+  thumb: React.ReactNode
+  children?: React.ReactNode
+}) {
+  return (
+    <div
+      title={title}
+      className={cx(
+        'group/slot relative overflow-hidden border transition-shadow',
+        rounded,
+        focused ? 'border-accent ring-2 ring-accent' : 'border-hairline',
+      )}
+    >
+      <button type="button" onClick={onSelect} aria-label={`Select ${label}`} aria-pressed={focused} className="block w-full text-left">
+        {thumb}
+      </button>
+      {children}
+    </div>
+  )
+}
+
+/** Close an open edit menu when the pointer goes down outside any `data-edit-menu`
+ *  element (CoverEditMenu / EditMenu tag themselves — the attribute contract lives in
+ *  this file, so its dismiss does too). The edit button that OPENS a menu fires on
+ *  click, after this mousedown, so it never self-closes. */
+export function useDismiss(open: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('[data-edit-menu]')) onClose()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open, onClose])
 }
 
 /** The dashed "add your first item" link shown in a picker with no candidates left —
@@ -261,6 +394,7 @@ export function MediaGrid<T>({
   empty,
   pickerFooter,
   onSetOnSite,
+  select,
 }: {
   onSiteItems: T[]
   /** Off-site items — the picker's candidates. */
@@ -281,70 +415,54 @@ export function MediaGrid<T>({
   empty: React.ReactNode
   pickerFooter?: React.ReactNode
   onSetOnSite: (v: T, next: boolean) => void
+  /** Two-way selection + per-card editing (the Images panel): clicking a card SELECTS it
+   *  (highlights the matching region in the live frame), `isFocused` draws its ring, and
+   *  the hover Edit button opens the full-panel editor. Optional as ONE unit — Music and
+   *  other callers omit it and their cards are plain. */
+  select?: {
+    onSelect: (v: T) => void
+    isFocused: (v: T) => boolean
+    onEdit: (v: T, i: number) => void
+  }
 }) {
   const [picking, setPicking] = useState(false)
-  const [editingKey, setEditingKey] = useState<string | null>(null)
-  const [replacing, setReplacing] = useState<T | null>(null)
-
-  // A click anywhere outside an open Replace/Remove menu closes it (same pattern as
-  // the video slots; the edit button fires on click, after this mousedown).
-  useEffect(() => {
-    if (!editingKey) return
-    const onDown = (e: MouseEvent) => {
-      if (!(e.target as Element).closest('[data-edit-menu]')) setEditingKey(null)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [editingKey])
 
   return (
     <div className="space-y-3 px-5 py-4">
       <div className={cx('grid gap-2', cols)}>
         {onSiteItems.map((item, i) => {
           const k = keyOf(item)
-          return (
+          const caption = (
+            <div className="px-2 py-1.5">
+              <span className="block truncate text-xs">{labelOf(item, i)}</span>
+            </div>
+          )
+          // A selectable card is the shared tile (ring + Select + hover Edit); a plain
+          // card (Music) is just its thumbnail and caption.
+          return select ? (
+            <SelectableTile
+              key={k}
+              label={`${noun} ${i + 1}`}
+              focused={select.isFocused(item)}
+              onSelect={() => select.onSelect(item)}
+              rounded="rounded-lg"
+              thumb={
+                <>
+                  {renderThumb(item)}
+                  {caption}
+                </>
+              }
+            >
+              <TileEditButton label={`Edit ${noun} ${i + 1}`} title="Customize this image" onClick={() => select.onEdit(item, i)} />
+            </SelectableTile>
+          ) : (
             <div key={k} className="overflow-hidden rounded-lg border border-hairline">
               {renderThumb(item)}
-              <div className="px-2 py-1.5">
-                {editingKey === k ? (
-                  <EditMenu
-                    onReplace={() => {
-                      setEditingKey(null)
-                      setReplacing(item)
-                      setPicking(true)
-                    }}
-                    onRemove={() => {
-                      setEditingKey(null)
-                      onSetOnSite(item, false)
-                    }}
-                  />
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="min-w-0 flex-1 truncate text-xs">{labelOf(item, i)}</span>
-                    <button
-                      type="button"
-                      aria-label={`Edit ${noun} ${i + 1}`}
-                      title="Replace or remove"
-                      onClick={() => setEditingKey(k)}
-                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
-                    >
-                      <Icon name="edit" size={13} />
-                    </button>
-                  </div>
-                )}
-              </div>
+              {caption}
             </div>
           )
         })}
-        <EmptySlot
-          label={addLabel}
-          aspect={aspect}
-          stretch
-          onClick={() => {
-            setReplacing(null)
-            setPicking(true)
-          }}
-        />
+        <EmptySlot label={addLabel} aspect={aspect} stretch onClick={() => setPicking(true)} />
       </div>
 
       {picking && (
@@ -358,15 +476,9 @@ export function MediaGrid<T>({
           footer={pickerFooter}
           onPick={(v) => {
             setPicking(false)
-            // Replacing: take the old one off only now that a replacement is chosen.
-            if (replacing) onSetOnSite(replacing, false)
-            setReplacing(null)
             onSetOnSite(v, true)
           }}
-          onCancel={() => {
-            setPicking(false)
-            setReplacing(null) // closing without picking keeps the current items
-          }}
+          onCancel={() => setPicking(false)}
         />
       )}
     </div>
