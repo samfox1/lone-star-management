@@ -144,7 +144,7 @@ async function sweepExpiredAttachments(): Promise<void> {
   try {
     const cutoff = retentionCutoffIso(Date.now())
     const rows = await rest<{ id: string; storage_path: string }[]>(
-      `enquiry_attachments?created_at=lt.${encodeURIComponent(cutoff)}&select=id,storage_path&limit=100`,
+      `enquiry_attachments?created_at=lt.${encodeURIComponent(cutoff)}&storage_path=not.is.null&select=id,storage_path&limit=100`,
     )
     if (!rows?.length) return
 
@@ -162,8 +162,15 @@ async function sweepExpiredAttachments(): Promise<void> {
     })
     if (!del.ok) return
 
+    // TOMBSTONE, don't delete. Deleting the row destroyed the only evidence a file ever
+    // existed, so the dashboard could not say "attachment expired" — it just showed
+    // nothing, indistinguishable from an enquiry that never had audio. Keeping the row
+    // (filename, type, expired_at) costs a few bytes and keeps the manager informed.
     const ids = rows.map((r) => r.id).join(',')
-    await rest(`enquiry_attachments?id=in.(${ids})`, { method: 'DELETE' })
+    await rest(`enquiry_attachments?id=in.(${ids})`, {
+      method: 'PATCH',
+      body: { storage_path: null, expired_at: new Date().toISOString() },
+    })
   } catch (e) {
     console.error('contact: attachment sweep failed', e)
   }
@@ -191,15 +198,25 @@ async function issueUploadTickets(
   artistId: string | null,
   attachments: { filename: string; mime_type: string; bytes: number }[],
   attempt: { slug: string; purpose: string; ipHash: string },
-): Promise<{ filename: string; bucket: string; path: string; token: string; signed_url: string }[]> {
-  if (!enquiryId || !artistId || attachments.length === 0) return []
+): Promise<{
+  tickets: { filename: string; bucket: string; path: string; token: string; signed_url: string }[]
+  skipped: { item: string; reason: string }[]
+}> {
+  if (!enquiryId || !artistId || attachments.length === 0) return { tickets: [], skipped: [] }
   try {
 
     const tickets = []
+    const failed: { item: string; reason: string }[] = []
     for (const att of attachments) {
       const path = `${artistId}/${enquiryId}/${crypto.randomUUID()}-${sanitiseFilename(att.filename)}`
       const signed = await signUpload(path)
-      if (!signed) continue
+      if (!signed) {
+        // Reported, not dropped in silence. `uploads` can be SHORTER than `attachments`,
+        // so a client matching by index would pair the wrong ticket to the wrong file —
+        // and a client matching by filename would simply never hear about this one.
+        failed.push({ item: att.filename, reason: 'upload_unavailable' })
+        continue
+      }
 
       // The row is written NOW, before the file exists. The alternative — a second
       // endpoint the browser calls after uploading — is more surface for a stranger to
@@ -235,10 +252,10 @@ async function issueUploadTickets(
         signed_url: signed.signedUrl,
       })
     }
-    return tickets
+    return { tickets, skipped: failed }
   } catch (e) {
     console.error('contact: upload tickets failed', e)
-    return []
+    return { tickets: [], skipped: attachments.map((a) => ({ item: a.filename, reason: 'upload_unavailable' })) }
   }
 }
 
@@ -453,14 +470,19 @@ Deno.serve(async (req: Request) => {
     })
 
     if (sendError) {
-      console.error('contact: send failed', { slug: body.slug, error: sendError })
+      console.error('contact: send failed, enquiry kept', { slug: body.slug, enquiry: row.enquiry_id, error: sendError })
       await rpc('log_contact_attempt', {
         p_slug: body.slug,
         p_purpose: body.purpose,
         p_ip_hash: ipHash,
         p_outcome: 'send_failed',
       })
-      return json(500, { ok: false, error: 'send_failed' }, origin)
+      // NOT a 500. The enquiry is stored and the manager has it — telling the visitor it
+      // failed makes them send again (two rows in the inbox) or give up believing nothing
+      // arrived. Storing before sending exists precisely so a mail outage cannot lose a
+      // message; reporting the outage as the outcome throws that away. The failure is
+      // already recorded where someone can act on it: status='failed' with send_error on
+      // the row, plus the contact_attempts ledger. (skeen review, 2026-08-04.)
     }
 
     // Never echo the RECIPIENT — to_email, from, or recipient_source. Resolving the
@@ -474,11 +496,13 @@ Deno.serve(async (req: Request) => {
     // get_public_site, and enquiry_id grants nothing under RLS, where `enquiries` is
     // manager-only and no endpoint is keyed on it. The recipient fields are what that
     // rule protects, and they are untouched.
-    const uploads = await issueUploadTickets(row.enquiry_id, artistId, attachments, {
+    const issued = await issueUploadTickets(row.enquiry_id, artistId, attachments, {
       slug: body.slug,
       purpose: body.purpose,
       ipHash,
     })
+    const uploads = issued.tickets
+    skipped = [...skipped, ...issued.skipped]
 
     // Opportunistic retention sweep, AFTER the response work is done, so a slow delete
     // never delays the visitor's confirmation. Best-effort by design.

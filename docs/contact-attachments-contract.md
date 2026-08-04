@@ -62,8 +62,19 @@ row can outlive the validator that let it in. Send it only on demos; it is ignor
 elsewhere.
 
 `attachments` — **metadata only, no bytes.** You are describing what you intend to upload
-so the server can decide whether to let you. `bytes` is advisory (used for display), so do
-not rely on it being enforced — the bucket's own size cap is the real limit.
+so the server can decide whether to let you. `bytes` is what you claim and is never
+enforced — the bucket's own size cap is the real limit. It is also no longer shown to the
+manager as fact: the dashboard reads the REAL size from storage and displays nothing when
+that is unavailable, so a declared 1 byte against a 25MB upload misleads nobody. Send it
+anyway; it costs nothing and may become useful.
+
+**Purpose does not gate attachments.** They are accepted on `booking` and `other` as well
+as `demo`. Refusing them elsewhere would be a surprise with no security benefit, and audio
+is audio. `demo_url` is likewise stored whatever the purpose.
+
+**Multiple problems report together.** A bad link plus a fourth file yields two entries in
+`skipped`, not a single winning error — there is no precedence to reason about because
+nothing rejects.
 
 Allowed `mime_type`: `audio/mpeg`, `audio/mp4`, `audio/x-m4a`, `audio/wav`, `audio/x-wav`,
 `audio/aac`, `audio/ogg`, `audio/flac`. Anything else is dropped into `skipped` before any
@@ -98,8 +109,14 @@ would be a wasted write capability handed to a stranger.
 and a missing key the same way anyway — it costs you nothing and survives me changing my
 mind.
 
-Order matches the order you sent `attachments` in. Match on `filename` rather than index
-if a visitor can pick two files with the same name; the `path` is unique regardless.
+**`uploads` can be SHORTER than `attachments`.** If signing a ticket fails, that file gets
+an entry in `skipped` with reason `upload_unavailable` instead of a ticket. So match on
+`filename`, never on index — index matching would pair the wrong ticket to the wrong file
+the moment one is missing. (The first draft promised order matching; it was not true, and
+your client was already right to ignore it.)
+
+The `filename` echoed back is the RAW one you sent, while `path` carries the sanitised
+version. That is deliberate so your pairing survives spaces and punctuation.
 
 ### The upload call
 
@@ -148,7 +165,11 @@ survive as `reason` values inside `skipped`. Keeping your 400 handling costs not
   treat an empty `uploads` as an error.
 - A rate-limited request gets nothing. Minting tickets is itself counted as an attempt in
   `contact_attempts`, so attachments cannot be used to sidestep the per-IP limits.
-- A failed send returns 500 with no tickets, even though the enquiry row exists.
+- A failed send **now returns 200 with tickets**, not a 500. Your finding: the enquiry is
+  already stored, so telling the visitor it failed makes them send again (two rows in the
+  inbox) or give up believing nothing arrived — and it contradicts the reason storing
+  happens first. A Resend outage is an ops problem, recorded where someone can act on it
+  (`status='failed'` with `send_error`, plus the ledger). Fixed.
 
 ---
 
@@ -183,8 +204,12 @@ configurable. The brief asked for short-lived, and two hours is what the platfor
 
 What actually bounds the risk is not the clock: the path is an unguessable UUID inside a
 folder scoped to one enquiry, the bucket is private with no public read, and it accepts
-only audio MIME types under its own size cap. A leaked ticket lets someone put one audio
-file in one folder belonging to one enquiry. Worth knowing, not worth blocking on.
+only audio MIME types under its own size cap.
+
+**And the ticket is effectively single-use** — you asked, and I tested it rather than
+assuming. A second PUT to the same path returns `409 Duplicate` (`KeyAlreadyExists`), so a
+leaked ticket cannot replace audio the manager is about to listen to. It can only write if
+the first upload never happened.
 
 ### 2. This relaxes a rule the endpoint currently states explicitly
 
@@ -211,13 +236,22 @@ next person reading it doesn't think the ticket is a violation someone missed.
 
 ## Retention: files expire, messages don't
 
-Attachment **objects and their rows are deleted after 90 days**. The enquiry itself is
-kept — the message is small and it is the manager's record of who got in touch.
+Attachment **objects are deleted after 90 days; the row is kept as a tombstone** (path
+nulled, `expired_at` stamped). The enquiry itself is kept too — the message is small and it
+is the manager's record of who got in touch.
 
-The dashboard shows "attachment expired" where a file used to be. Nothing is required of
-you for this, but it is worth saying in your UI copy near the upload control: a visitor
-sending a demo should know the file is not archived forever.
+You caught that the first version deleted the row as well, which made "attachment expired"
+impossible to render: the attachment did not expire, it silently vanished, and a manager
+could not tell that from an enquiry which never had audio. Fixed — the row survives with
+its filename and type so the dashboard can say what is gone.
 
-One consequence on your side: an `uploads` ticket you never use leaves a row pointing at
-an object that was never created. The dashboard treats that identically to an expired one,
-so an abandoned upload is not an error state you need to clean up.
+That also makes two states genuinely distinct, which the first version wrongly collapsed:
+
+- **expired** — the file was here and the 90 days ran out
+- **upload didn't complete** — a ticket was issued and the bytes never arrived
+
+They lead to different next moves (only one is worth chasing a sender about), so the
+dashboard says which. An abandoned upload is still not an error state you need to clean up.
+
+Worth saying in your UI copy near the upload control: a visitor sending a demo should know
+the file is not archived forever.

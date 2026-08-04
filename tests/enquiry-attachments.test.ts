@@ -7,10 +7,7 @@
  * state, and the page has to say so rather than break or show a dead player.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { fileSize, isExpired, toPlayable, type AttachmentRow } from '@/lib/enquiry-attachments'
-
-const NOW = Date.parse('2026-08-04T12:00:00Z')
-const ago = (days: number) => new Date(NOW - days * 24 * 60 * 60 * 1000).toISOString()
+import { fileSize, toPlayable, type AttachmentRow } from '@/lib/enquiry-attachments'
 
 const row = (over: Partial<AttachmentRow> = {}): AttachmentRow => ({
   id: 'r1',
@@ -18,69 +15,77 @@ const row = (over: Partial<AttachmentRow> = {}): AttachmentRow => ({
   storage_path: 'a/e/one.mp3',
   filename: 'one.mp3',
   mime_type: 'audio/mpeg',
-  bytes: 4210233,
-  created_at: ago(1),
+  bytes: 999, // DECLARED by the sender — never trusted
+  created_at: '2026-08-03T12:00:00Z',
+  expired_at: null,
   ...over,
 })
 
-/** A client whose signing can be made to succeed or fail per call. */
-const client = (signed: string | null) =>
+/** A client whose signing and listing can each be made to succeed or fail. */
+const client = (signed: string | null, listed: { name: string; metadata?: { size?: number } }[] = []) =>
   ({
     storage: {
       from: () => ({
         createSignedUrl: vi.fn(async () => ({ data: signed ? { signedUrl: signed } : null })),
+        list: vi.fn(async () => ({ data: listed })),
       }),
     },
   }) as never
 
-describe('isExpired', () => {
-  it('is false inside the window and true past it', () => {
-    expect(isExpired(ago(89), NOW)).toBe(false)
-    expect(isExpired(ago(91), NOW)).toBe(true)
-  })
-
-  it('CRITICAL: a fresh upload is never treated as expired', () => {
-    // A sign error here would read as "expired" for a file uploaded seconds ago.
-    expect(isExpired(new Date(NOW).toISOString(), NOW)).toBe(false)
-  })
-})
-
 describe('toPlayable', () => {
   it('signs a live file', async () => {
-    const [a] = await toPlayable(client('https://signed.example/one.mp3'), [row()], NOW)
+    const [a] = await toPlayable(client('https://signed.example/one.mp3'), [row()])
     expect(a.url).toBe('https://signed.example/one.mp3')
+    expect(a.expired).toBe(false)
+    expect(a.neverUploaded).toBe(false)
+  })
+
+  it('CRITICAL: reports the REAL size from storage, not the sender-declared one', async () => {
+    // The row says 999. Someone can declare 1 byte and upload 25MB, so a number the
+    // manager reads must come from the object itself.
+    const [a] = await toPlayable(
+      client('https://signed.example/one.mp3', [{ name: 'one.mp3', metadata: { size: 4210233 } }]),
+      [row({ bytes: 999 })],
+    )
+    expect(a.bytes).toBe(4210233)
+  })
+
+  it('reports null rather than the declared size when storage has no metadata', async () => {
+    const [a] = await toPlayable(client('https://signed.example/one.mp3', []), [row({ bytes: 999 })])
+    expect(a.bytes).toBeNull()
+  })
+
+  it('CRITICAL: an EXPIRED attachment keeps its identity so the page can say so', async () => {
+    // The sweep tombstones: object gone, storage_path nulled, expired_at stamped. If the
+    // row were deleted instead there would be nothing left to render and the attachment
+    // would silently vanish — the bug skeen found in the first version.
+    const [a] = await toPlayable(client(null), [
+      row({ storage_path: null, expired_at: '2026-08-01T00:00:00Z' }),
+    ])
+    expect(a.expired).toBe(true)
+    expect(a.neverUploaded).toBe(false)
+    expect(a.filename).toBe('one.mp3')
+    expect(a.url).toBeNull()
+  })
+
+  it('CRITICAL: never-uploaded is a DIFFERENT state from expired', async () => {
+    // A ticket was minted and nothing arrived. Collapsing this into "expired" tells the
+    // manager a file aged out when in fact the sender never sent one — different facts,
+    // and only one is worth chasing someone about.
+    const [a] = await toPlayable(client(null), [row()])
+    expect(a.neverUploaded).toBe(true)
     expect(a.expired).toBe(false)
   })
 
-  it('CRITICAL: does not even try to sign a file past retention', async () => {
-    // The object is gone; asking costs a round trip per row to learn what the timestamp
-    // already says.
-    const c = client('https://signed.example/x')
+  it('does not try to sign a tombstoned row', async () => {
+    const c = client('https://x')
     const spy = c as unknown as { storage: { from: () => { createSignedUrl: ReturnType<typeof vi.fn> } } }
-    const [a] = await toPlayable(c, [row({ created_at: ago(120) })], NOW)
-    expect(a.expired).toBe(true)
-    expect(a.url).toBeNull()
+    await toPlayable(c, [row({ storage_path: null, expired_at: '2026-08-01T00:00:00Z' })])
     expect(spy.storage.from().createSignedUrl).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: a row whose object never arrived reads as expired, not as an error', async () => {
-    // An abandoned upload: the row is written when the ticket is minted. To the manager
-    // this is the same fact as an expired file — the audio is not there — and a second
-    // error state would be a distinction they cannot act on.
-    const [a] = await toPlayable(client(null), [row()], NOW)
-    expect(a.expired).toBe(true)
-    expect(a.url).toBeNull()
-  })
-
-  it('keeps the filename and type even when the file is gone', async () => {
-    // The manager should still see WHAT expired, not a blank row.
-    const [a] = await toPlayable(client(null), [row({ filename: 'demo.wav' })], NOW)
-    expect(a.filename).toBe('demo.wav')
-    expect(a.mime_type).toBe('audio/mpeg')
-  })
-
   it('handles an empty list', async () => {
-    expect(await toPlayable(client(null), [], NOW)).toEqual([])
+    expect(await toPlayable(client(null), [])).toEqual([])
   })
 })
 
@@ -91,9 +96,8 @@ describe('fileSize', () => {
     expect(fileSize(4210233)).toBe('4.0 MB')
   })
 
-  it('renders nothing rather than "0 B" when the sender declared no size', () => {
-    // `bytes` is client-declared and advisory, so absent is common and not worth showing.
+  it('renders nothing when the size is unknown', () => {
+    expect(fileSize(null)).toBe('')
     expect(fileSize(0)).toBe('')
-    expect(fileSize(-1)).toBe('')
   })
 })
