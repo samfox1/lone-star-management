@@ -10,7 +10,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
  * avatar → /account). Sign-out lives on /account. Mirrors the prototype's
  * `.topbar` so every roster-level page shares one shell.
  */
-export type RosterSection = 'roster' | 'analytics' | 'releases' | 'tour' | 'videos' | 'merch' | 'book'
+export type RosterSection = 'roster' | 'analytics' | 'releases' | 'tour' | 'videos' | 'merch' | 'book' | 'enquiries'
 
 const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[] = [
   { key: 'roster', label: 'Roster', icon: 'roster', href: '/roster' },
@@ -19,6 +19,9 @@ const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[]
   { key: 'videos', label: 'Videos', icon: 'videos', href: '/videos' },
   { key: 'merch', label: 'Merch', icon: 'merch', href: '/merch' },
   { key: 'book', label: 'Book', icon: 'list', href: '/book' },
+  // Enquiries sits beside Book: both are cross-artist rollups the manager works FROM,
+  // rather than per-artist surfaces they navigate INTO.
+  { key: 'enquiries', label: 'Enquiries', icon: 'text', href: '/artists' },
 ]
 
 function rosterNav(active?: RosterSection): NavItem[] {
