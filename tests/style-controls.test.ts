@@ -176,9 +176,9 @@ describe('slider seeding round-trips (skeen brief 2026-08-03)', () => {
     const all = [...buildItemStyleControls(), ...buildVideoItemStyleControls('embed'), ...buildVideoItemStyleControls('file')]
     for (const control of all) {
       if (control.kind !== 'slider') continue
-      for (const [i, step] of control.steps.entries()) {
+      for (const step of control.steps) {
         const applied = applyStyleValue('', control, step.value)
-        expect(sliderIdx(control, applied)).toBe(i === 0 && step.value === '' ? control.steps.findIndex((s) => s.value === '') : control.steps.findIndex((s) => s.value === step.value))
+        expect(sliderIdx(control, applied)).toBe(control.steps.findIndex((s) => s.value === step.value))
       }
     }
   })

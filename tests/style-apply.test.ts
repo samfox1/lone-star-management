@@ -7,6 +7,7 @@ import {
   siteSwatches,
   usedColors,
 } from '@/lib/site-editor/style-apply'
+import { buildVideoItemStyleControls } from '@/lib/site-editor/style-controls'
 
 describe('resolveStyle — arbitrary colours leave the class string', () => {
   it('lifts border/text/background hexes into inline CSS', () => {
@@ -103,9 +104,15 @@ describe('resolveStyle — playback speed leaves the class string too', () => {
   })
 
   it('every speed the item panel can emit survives the clamp', () => {
-    // The clamp must never reject the product's own vocabulary.
-    for (const rate of [0.25, 0.5, 0.75, 1.25, 1.5, 2]) {
-      expect(resolveStyle(`speed-[${rate}x]`).playbackRate).toBe(rate)
+    // The clamp must never reject the product's own vocabulary — read the REAL steps from
+    // the panel, so a new step here cannot silently fall outside the playable range.
+    const speed = buildVideoItemStyleControls('file').find((c) => c.id === 'speed')
+    if (!speed || speed.kind !== 'slider') throw new Error('file videos lost their Speed slider')
+    const emitted = speed.steps.filter((s) => s.value !== '') // '' is Normal: no token to clamp
+    expect(emitted.length).toBeGreaterThan(0)
+    for (const step of emitted) {
+      const rate = Number(step.value.match(/^speed-\[(.+)x\]$/)?.[1])
+      expect(resolveStyle(step.value).playbackRate).toBe(rate)
     }
   })
 })

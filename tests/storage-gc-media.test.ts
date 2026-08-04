@@ -22,10 +22,14 @@ function fake(
   const { revCount = 0, mediaRows = [], byPrefix = {} } = opts
   const removed: string[] = []
   const listedPrefixes: string[] = []
+  const eqCalls: [string, unknown][] = []
   const thenable = (result: unknown): Record<string, unknown> => {
     const p: Record<string, unknown> = {
       select: () => p,
-      eq: () => p,
+      eq: (col: string, val: unknown) => {
+        eqCalls.push([col, val])
+        return p
+      },
       then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(result).then(res, rej),
     }
     return p
@@ -53,22 +57,28 @@ function fake(
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
-  return { client, removed, listedPrefixes }
+  return { client, removed, listedPrefixes, eqCalls }
 }
 
 const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString() // 1h ago (past the age gate)
 
 describe('gcDeletedMediaObject', () => {
   it('KEEPS the object when the media was published (a revision references it)', async () => {
-    const { client, removed } = fake({ revCount: 1 })
+    const { client, removed, eqCalls } = fake({ revCount: 1 })
     await gcDeletedMediaObject(client, 'm1', 'artist-1/gallery/a.jpg')
     expect(removed).toEqual([]) // live site still serves it from its snapshot
+    // The publish check must be scoped to THIS media row — a query filtered on the wrong
+    // entity_type (e.g. 'video') would count someone else's revisions and still pass here.
+    expect(eqCalls).toContainEqual(['entity_type', 'media'])
+    expect(eqCalls).toContainEqual(['entity_id', 'm1'])
   })
 
   it('removes the object when the media was never published (draft-only)', async () => {
-    const { client, removed } = fake({ revCount: 0 })
+    const { client, removed, eqCalls } = fake({ revCount: 0 })
     await gcDeletedMediaObject(client, 'm1', 'artist-1/gallery/a.jpg')
     expect(removed).toEqual(['artist-1/gallery/a.jpg'])
+    expect(eqCalls).toContainEqual(['entity_type', 'media'])
+    expect(eqCalls).toContainEqual(['entity_id', 'm1'])
   })
 
   it('no-ops without a storage path', async () => {

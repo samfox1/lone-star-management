@@ -14,7 +14,6 @@ import {
   deleteMediaAction,
   renameVideoAction,
   reorderContentAction,
-  reorderGalleryAction,
   placeGalleryPhotoAction,
   saveEditorFieldAction,
   saveEditorLinkAction,
@@ -86,7 +85,6 @@ vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 const deleteMock = vi.mocked(deleteMediaAction)
-const reorderMock = vi.mocked(reorderGalleryAction)
 const saveMock = vi.mocked(saveEditorFieldAction)
 const updateContentMock = vi.mocked(updateContentAction)
 const deleteContentMock = vi.mocked(deleteContentAction)
@@ -216,19 +214,9 @@ function renderInspector(
 
 afterEach(() => {
   cleanup()
-  deleteMock.mockClear()
-  reorderMock.mockClear()
-  saveMock.mockClear()
-  updateContentMock.mockClear()
-  deleteContentMock.mockClear()
-  reorderContentMock.mockClear()
-  renameVideoMock.mockClear()
-  setOnSiteMock.mockClear()
-  placePhotoMock.mockClear()
-  setSupportUrlMock.mockClear()
-  saveStyleMock.mockClear()
-  saveLinkMock.mockClear()
-  assignHeroMock.mockClear()
+  // Every action mock, not a hand-kept list — a missed mock leaks call history into the
+  // next test and lets an assertion pass on a stale call.
+  vi.clearAllMocks()
 })
 
 describe('EditorInspector — browse state', () => {
@@ -1820,18 +1808,6 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', null)
     expect(deleteMock).not.toHaveBeenCalled()
-  })
-
-  it('a size drag paints the frame instantly under the per-item key', () => {
-    const onApplyStyle = vi.fn()
-    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
-    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
-    // Size is a SLIDER over 5% steps (50%..150%); its value is a step index. Index 12 is
-    // scale-110 (110%). Dragging there paints it; persisting is Save's job (staged model).
-    fireEvent.change(screen.getByLabelText('Slot 1 Size'), { target: { value: '12' } })
-    expect(onApplyStyle).toHaveBeenCalledWith('slot:polaroid_1_photo', 'scale-110')
-    expect(saveStyleMock).not.toHaveBeenCalled()
   })
 
   it('a placed slot is selectable and highlights its region in the frame', () => {

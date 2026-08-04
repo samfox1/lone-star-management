@@ -142,11 +142,6 @@ export function speedToken(token: string): number | null {
   return rate >= SPEED_MIN && rate <= SPEED_MAX ? rate : null
 }
 
-/** The speed token for a playback rate — the write half of `speedToken`. */
-export function speedClass(rate: number): string {
-  return `speed-[${rate}x]`
-}
-
 /**
  * True when the key addresses ONE item rather than a whole section. Item strings are
  * overlays and merge onto the element's base classes; section strings replace them.
