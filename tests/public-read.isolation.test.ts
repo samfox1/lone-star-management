@@ -125,8 +125,27 @@ describe('get_public_site — public-safe shape', () => {
     expect(artist).toBeTruthy()
     // spotify_artist_id and template are public (the id is in the artist's
     // public Spotify URL); the template drives which public design renders.
+    // press_pitch/press_quotes are press-kit copy the manager writes FOR publication
+    // (20260804120000) — public by intent, not by accident. Every name in this list is
+    // a deliberate decision, so adding one means changing this line on purpose.
     expect(Object.keys(artist).sort()).toEqual(
-      ['bio', 'hero_image_url', 'id', 'name', 'slug', 'spotify_artist_id', 'template'].sort(),
+      [
+        'bio',
+        'hero_image_url',
+        'id',
+        'name',
+        'press_pitch',
+        'press_quotes',
+        // Paths into the PRIVATE `documents` bucket. A path is not access here: the
+        // bucket has no anon policy, so it is neither readable nor enumerable without a
+        // manager session. They ride the snapshot so a generated EPK is entirely
+        // published content (20260804140000).
+        'stage_plot_path',
+        'tech_rider_path',
+        'slug',
+        'spotify_artist_id',
+        'template',
+      ].sort(),
     )
   })
 

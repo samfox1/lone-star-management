@@ -95,6 +95,17 @@ export const ARTIST_SNAPSHOT = [
   'hero_image_url',
   'template',
   'spotify_artist_id',
+  // Press-kit fields (lib/epk.ts). Fan-visible in the sense that matters here: they are
+  // published, not secret. They ride the profile so the PDF and /[slug]/epk always agree.
+  // Revisions published before 20260804120000 simply lack them — read with parsePressQuotes
+  // / `?? null`, never assume presence.
+  'press_pitch',
+  'press_quotes',
+  // Press-kit documents (20260804140000). Paths into the PRIVATE `documents` bucket, so
+  // publishing one exposes a path, never the file. They ride the snapshot so a generated
+  // EPK is entirely published content rather than published copy plus a draft rider.
+  'tech_rider_path',
+  'stage_plot_path',
 ] as const
 
 export type ContentRow = Record<string, unknown> & {

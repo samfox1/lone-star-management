@@ -11,7 +11,7 @@
  * separate mock (PLAN decision #7).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
+import { ARTIST_SNAPSHOT, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
 import { mediaUrl } from '@/lib/storage-url'
 
 export type SiteTrack = {
@@ -119,6 +119,15 @@ export type SiteData = {
     hero_image_url: string | null
     template: string
     spotify_artist_id: string | null
+    /** Press-kit fields. Optional because every revision published before
+     *  20260804120000 lacks them — run `press_quotes` through `parsePressQuotes`
+     *  (lib/epk.ts) rather than casting it. */
+    press_pitch?: string | null
+    press_quotes?: unknown
+    /** Paths into the PRIVATE `documents` bucket — not URLs, and not resolvable by a
+     *  fan. Only the EPK PDF builder reads them, server-side. */
+    tech_rider_path?: string | null
+    stage_plot_path?: string | null
   }
   tracks: SiteTrack[]
   tour_dates: SiteTourDate[]
@@ -205,7 +214,13 @@ export async function getWorkingSitePayload(
     await Promise.all([
       supabase
         .from('artists')
-        .select('id, slug, name, bio, hero_image_url, template, spotify_artist_id')
+        // Derived from ARTIST_SNAPSHOT rather than listed by hand: the public door
+        // serves exactly the snapshotted columns, so a hardcoded list here silently
+        // drifts the moment a column joins the snapshot, and preview stops matching
+        // live. (It did: press_pitch/press_quotes were published but missing from the
+        // preview until the parity test caught it.) id + slug are identity, not
+        // snapshot — get_public_site adds them back the same way.
+        .select(['id', 'slug', ...ARTIST_SNAPSHOT].join(', '))
         .eq('id', artistId)
         .single(),
     // Tracks mirror get_public_site: expose has_audio (never the raw audio_path)
@@ -300,7 +315,20 @@ export async function getWorkingSitePayload(
       .map((r) => [r.region_key, r.class_names as string]),
   )
 
-  return { artist, tracks, tour_dates, merch, links, videos, media, site_content, styles }
+  // The select list is built at runtime from ARTIST_SNAPSHOT, so supabase-js can't infer
+  // the row type from a literal the way it does elsewhere. Same cast publishProfile uses
+  // for the same reason; the shape is guaranteed by the select, not by the cast.
+  return {
+    artist: artist as unknown as PublicSitePayload['artist'],
+    tracks,
+    tour_dates,
+    merch,
+    links,
+    videos,
+    media,
+    site_content,
+    styles,
+  }
 }
 
 /**

@@ -21,6 +21,24 @@ export const VIDEO_UPLOAD_RULES: UploadRules = {
   maxBytes: 524288000,
   allowedMime: ['video/mp4', 'video/webm', 'video/quicktime'],
 }
+/**
+ * Press-kit DOCUMENTS: the stage plot and tech rider on the EPK.
+ *
+ * A SEPARATE constant, not a widened IMAGE_UPLOAD_RULES, so a PDF can never be accepted
+ * by an uploader that expects an image (and vice versa) — the two are widened for
+ * different reasons and must not move together.
+ *
+ * PDF only. `application/pdf` is the one document type a browser renders inline without
+ * scripting, and it is what a promoter expects to receive; adding an office format would
+ * mean either converting it or handing over a file half of them can't open. The cap is
+ * deliberately far below the image limit — a rider is a few pages, and these get fetched
+ * and stapled onto the generated EPK at download time, so size is latency for everyone.
+ */
+export const DOCUMENT_UPLOAD_RULES: UploadRules = {
+  allowedExt: ['pdf'],
+  maxBytes: 10485760, // 10 MB
+  allowedMime: ['application/pdf'],
+}
 
 /** Human-readable size, binary (MiB) so it matches the bucket's file_size_limit and
  *  the "up to 500 MB" hints: 524288000 → "500 MB", 31457280 → "30 MB". */
@@ -92,6 +110,7 @@ const CONTENT_TYPES: Record<string, string> = {
   png: 'image/png',
   webp: 'image/webp',
   gif: 'image/gif',
+  pdf: 'application/pdf',
 }
 /** A content-type the bucket's allowed_mime_types will accept (browsers report some
  *  formats inconsistently, so we set it explicitly rather than trust file.type). */

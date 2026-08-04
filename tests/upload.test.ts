@@ -4,7 +4,17 @@
  * have fast regression guards. No DB, no React.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { validateUpload, buildStoragePath, contentTypeFor, performUpload, friendlyUploadError, formatProgress } from '@/lib/upload'
+import {
+  validateUpload,
+  buildStoragePath,
+  contentTypeFor,
+  performUpload,
+  friendlyUploadError,
+  formatProgress,
+  DOCUMENT_UPLOAD_RULES,
+  IMAGE_UPLOAD_RULES,
+  VIDEO_UPLOAD_RULES,
+} from '@/lib/upload'
 import { videoRenderMode, embedOrStorageValid, publicVideoSrc, isRenderableVideo } from '@/lib/video-render'
 import { orphanedPaths, collectablePaths } from '@/lib/storage-gc'
 
@@ -36,6 +46,54 @@ describe('validateUpload', () => {
     const withMime = { ...rules, allowedMime: ['video/mp4', 'video/quicktime', 'video/webm'] }
     expect(validateUpload({ name: 'a.mp4', size: 1, type: '' }, withMime).ok).toBe(true) // browser reported no mime
     expect(validateUpload({ name: 'a.mp4', size: 1, type: 'text/html' }, withMime).ok).toBe(false) // spoofed
+  })
+})
+
+/**
+ * Press-kit DOCUMENTS (stage plot, tech rider) — the first non-media upload.
+ *
+ * These are PDFs, and everything that already exists assumes images or video. The rules
+ * are their own constant rather than a widened IMAGE_UPLOAD_RULES: a PDF must never be
+ * accepted anywhere an image is expected. The `media` bucket is PUBLIC, so a PDF landing
+ * there would be readable by URL forever; documents get a private bucket instead and are
+ * fetched server-side when the EPK PDF is assembled.
+ */
+describe('DOCUMENT_UPLOAD_RULES (press-kit PDFs)', () => {
+  it('accepts a PDF', () => {
+    expect(validateUpload({ name: 'rider.pdf', size: 1000, type: 'application/pdf' }, DOCUMENT_UPLOAD_RULES)).toEqual({
+      ok: true,
+      ext: 'pdf',
+    })
+  })
+
+  it('CRITICAL: rejects an image — documents are not the media uploader', () => {
+    expect(validateUpload({ name: 'photo.jpg', size: 1000, type: 'image/jpeg' }, DOCUMENT_UPLOAD_RULES).ok).toBe(false)
+  })
+
+  it('CRITICAL: rejects a spoofed mime on a .pdf name', () => {
+    // A public-facing document store that took text/html would serve stored XSS from the
+    // Supabase origin. The bucket is the real guard; this is the client-side half.
+    expect(validateUpload({ name: 'rider.pdf', size: 1000, type: 'text/html' }, DOCUMENT_UPLOAD_RULES).ok).toBe(false)
+  })
+
+  it('CRITICAL: a PDF is rejected by the IMAGE rules, so widening one never widens the other', () => {
+    expect(validateUpload({ name: 'rider.pdf', size: 1000, type: 'application/pdf' }, IMAGE_UPLOAD_RULES).ok).toBe(false)
+    expect(validateUpload({ name: 'rider.pdf', size: 1000, type: 'application/pdf' }, VIDEO_UPLOAD_RULES).ok).toBe(false)
+  })
+
+  it('caps the size well below the image limit — a rider is a few pages', () => {
+    expect(DOCUMENT_UPLOAD_RULES.maxBytes).toBeLessThan(IMAGE_UPLOAD_RULES.maxBytes)
+    expect(validateUpload({ name: 'r.pdf', size: DOCUMENT_UPLOAD_RULES.maxBytes + 1, type: '' }, DOCUMENT_UPLOAD_RULES).ok).toBe(false)
+  })
+
+  it('names PDF in the rejection message', () => {
+    const r = validateUpload({ name: 'x.doc', size: 1, type: '' }, DOCUMENT_UPLOAD_RULES)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/PDF/)
+  })
+
+  it('sets an explicit application/pdf content type on upload', () => {
+    expect(contentTypeFor('pdf')).toBe('application/pdf')
   })
 })
 

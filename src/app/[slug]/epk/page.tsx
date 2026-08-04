@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { parsePressQuotes } from '@/lib/epk'
 import { getPublishedSite } from '@/lib/site'
 import { safeHref } from '@/lib/url'
 
@@ -24,6 +25,11 @@ export default async function EpkPage({ params }: { params: Promise<{ slug: stri
   const photo = safeHref(site.media.find((m) => m.purpose === 'profile_photo')?.url ?? site.artist.hero_image_url)
   const mailto = site.links.find((l) => l.url.toLowerCase().startsWith('mailto:'))
   const socials = site.links.filter((l) => l !== mailto)
+  // Press-only fields. Both are absent on any revision published before 20260804120000,
+  // so neither is assumed present — and an empty one renders NOTHING rather than an
+  // empty heading (the placeholder rule).
+  const pitch = site.artist.press_pitch ?? ''
+  const quotes = parsePressQuotes(site.artist.press_quotes)
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -35,6 +41,7 @@ export default async function EpkPage({ params }: { params: Promise<{ slug: stri
         <div>
           <p className="text-xs uppercase tracking-widest text-zinc-400">Press kit</p>
           <h1 className="text-3xl font-bold tracking-tight">{site.artist.name}</h1>
+          {pitch && <p className="mt-2 text-zinc-600 dark:text-zinc-400">{pitch}</p>}
         </div>
       </header>
 
@@ -46,6 +53,35 @@ export default async function EpkPage({ params }: { params: Promise<{ slug: stri
               <p key={i}>{p}</p>
             ))}
           </div>
+        </section>
+      )}
+
+      {quotes.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Press</h2>
+          <ul className="mt-4 space-y-4">
+            {quotes.map((q, i) => {
+              const href = q.url ? safeHref(q.url) : undefined
+              return (
+                <li key={i} className="border-l-2 border-zinc-200 pl-4 dark:border-zinc-800">
+                  <p className="italic leading-relaxed text-zinc-700 dark:text-zinc-300">
+                    &ldquo;{q.quote}&rdquo;
+                  </p>
+                  {q.source && (
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {href ? (
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                          {q.source}
+                        </a>
+                      ) : (
+                        q.source
+                      )}
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
         </section>
       )}
 
