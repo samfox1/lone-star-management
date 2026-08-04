@@ -11,6 +11,8 @@ import {
   MESSAGE_MAX,
   buildSubject,
   coercePurpose,
+  composeExtras,
+  decideDoor,
   firstForwardedIp,
   formatFrom,
   hasContent,
@@ -428,5 +430,127 @@ describe('hasContent — an enquiry must carry something', () => {
     // A name and an email with no message, no link and no audio is not a submission.
     expect(hasContent({ message: '', demoUrl: null, attachmentCount: 0 })).toBe(false)
     expect(hasContent({ message: '   ', demoUrl: null, attachmentCount: 0 })).toBe(false)
+  })
+})
+
+describe('composeExtras — merge the optional fields after validation', () => {
+  // This step lived inline in index.ts, where nothing typechecks or tests it. It owns
+  // one rule: a bad link or file NEVER fails the enquiry (dropped + named in skipped),
+  // but an enquiry carrying NOTHING still must be rejected — and that rejection can only
+  // be decided here, after demo/attachment validation, because validateBody cannot see
+  // either field.
+
+  it('a message alone goes through with nothing skipped', () => {
+    const r = composeExtras('hello', undefined, undefined)
+    expect(r).toEqual({ kind: 'ok', demoUrl: null, attachments: [], skipped: [] })
+  })
+
+  it('CRITICAL: a demo with only a link and audio goes through with an empty message', () => {
+    // The case that once bounced every skeen demo with missing_field.
+    const r = composeExtras('', 'https://soundcloud.com/x', [
+      { filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: 1000 },
+    ])
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') {
+      expect(r.demoUrl).toBe('https://soundcloud.com/x')
+      expect(r.attachments).toHaveLength(1)
+    }
+  })
+
+  it('CRITICAL: empty message + nothing usable is missing_field, not a stored empty row', () => {
+    const r = composeExtras('', undefined, undefined)
+    expect(r).toEqual({ kind: 'reject', error: 'missing_field' })
+  })
+
+  it('CRITICAL: an enquiry whose ONLY content was an invalid link is rejected, not stored empty', () => {
+    // The link is dropped by validation, so nothing remains. Storing a blank row here
+    // would hand the manager a nameless shrug; the visitor should hear it failed.
+    const r = composeExtras('', 'javascript:alert(1)', undefined)
+    expect(r).toEqual({
+      kind: 'reject',
+      error: 'missing_field',
+    })
+  })
+
+  it('a bad link never fails an enquiry that has a message — dropped and named', () => {
+    const r = composeExtras('hello', 'http://insecure.example', undefined)
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') {
+      expect(r.demoUrl).toBeNull()
+      expect(r.skipped).toEqual([{ item: 'demo link', reason: 'invalid_demo_url' }])
+    }
+  })
+
+  it('skipped merges link and attachment drops in one list', () => {
+    const r = composeExtras('hello', 'ftp://x', [
+      { filename: 'notes.zip', mime_type: 'application/zip', bytes: 10 },
+    ])
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') {
+      expect(r.skipped.map((s) => s.reason).sort()).toEqual([
+        'invalid_demo_url',
+        'unsupported_audio_type',
+      ])
+    }
+  })
+})
+
+describe('decideDoor — the RPC status → HTTP outcome map', () => {
+  // Extracted from index.ts so the mapping is pinned by tests: this is where the
+  // deployment-only bugs lived, and where "unroutable is a success for the visitor"
+  // could quietly regress to a 500.
+
+  it('ok proceeds, not unroutable', () => {
+    expect(decideDoor({ status: 'ok', enquiry_id: 'e1' })).toEqual({
+      kind: 'proceed',
+      unroutable: false,
+    })
+  })
+
+  it('CRITICAL: no_recipient with a stored row PROCEEDS — the visitor must see success', () => {
+    // While mail is unconfigured EVERY submission takes this path. Mapping it back to an
+    // error would tell every visitor their message failed when it is safely stored.
+    expect(decideDoor({ status: 'no_recipient', enquiry_id: 'e1' })).toEqual({
+      kind: 'proceed',
+      unroutable: true,
+    })
+  })
+
+  it('no_recipient WITHOUT a stored row is a 500 — nothing was kept, do not claim success', () => {
+    expect(decideDoor({ status: 'no_recipient', enquiry_id: null })).toEqual({
+      kind: 'reject',
+      httpStatus: 500,
+      error: 'send_failed',
+    })
+  })
+
+  it('rate_limited is 429 with Retry-After', () => {
+    expect(decideDoor({ status: 'rate_limited', enquiry_id: null })).toEqual({
+      kind: 'reject',
+      httpStatus: 429,
+      error: 'rate_limited',
+      retryAfterSeconds: 3600,
+    })
+  })
+
+  it('invalid and unknown_artist are both client errors', () => {
+    expect(decideDoor({ status: 'invalid', enquiry_id: null })).toMatchObject({
+      kind: 'reject',
+      httpStatus: 400,
+      error: 'missing_field',
+    })
+    expect(decideDoor({ status: 'unknown_artist', enquiry_id: null })).toMatchObject({
+      kind: 'reject',
+      httpStatus: 400,
+      error: 'missing_field',
+    })
+  })
+
+  it('no row, or a status this map was never taught, is a 500', () => {
+    expect(decideDoor(undefined)).toMatchObject({ kind: 'reject', httpStatus: 500 })
+    expect(decideDoor({ status: 'surprise_new_status', enquiry_id: null })).toMatchObject({
+      kind: 'reject',
+      httpStatus: 500,
+    })
   })
 })

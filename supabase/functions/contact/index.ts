@@ -31,6 +31,8 @@
 import { corsHeaders, json } from '../_shared/cors.ts'
 import {
   buildSubject,
+  composeExtras,
+  decideDoor,
   firstForwardedIp,
   formatFrom,
   hashIp,
@@ -39,12 +41,11 @@ import {
   retentionCutoffIso,
   sanitiseFilename,
   shouldSweep,
-  validateAttachments,
-  hasContent,
   validateBody,
-  validateDemoUrl,
 } from './validate.ts'
 
+// PINNED to the copy in src/lib/enquiry-attachments.ts — this file cannot import from
+// src/. If either changes alone, uploads and playback silently split into two buckets.
 const ATTACHMENT_BUCKET = 'enquiry-attachments'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -381,24 +382,25 @@ Deno.serve(async (req: Request) => {
     // downstream problem — rejecting the whole submission over one optional field was the
     // same principle applied inconsistently (caught by the skeen side, 2026-08-04).
     if (result.kind === 'ok') {
-      const demo = validateDemoUrl((raw as Record<string, unknown>).demo_url)
-      const atts = validateAttachments((raw as Record<string, unknown>).attachments)
-      demoUrl = demo.value
-      attachments = atts.value
-      skipped = [...demo.skipped, ...atts.skipped]
-
-      // An enquiry has to carry something. Checked HERE rather than in validateBody
-      // because a demo's content may be entirely the link and the audio, neither of which
-      // exists until this point.
-      if (!hasContent({ message: result.value.message, demoUrl, attachmentCount: attachments.length })) {
+      // One tested step (composeExtras) owns the whole decision: drops are named in
+      // `skipped`, and an enquiry left carrying nothing at all is still missing_field.
+      const extras = composeExtras(
+        result.value.message,
+        (raw as Record<string, unknown>).demo_url,
+        (raw as Record<string, unknown>).attachments,
+      )
+      if (extras.kind === 'reject') {
         await rpc('log_contact_attempt', {
           p_slug: result.value.slug,
           p_purpose: result.value.purpose,
           p_ip_hash: ipHash,
           p_outcome: 'invalid',
         })
-        return json(400, { ok: false, error: 'missing_field' }, origin)
+        return json(400, { ok: false, error: extras.error }, origin)
       }
+      demoUrl = extras.demoUrl
+      attachments = extras.attachments
+      skipped = extras.skipped
     }
 
     // Log rejections too, so probing the endpoint with garbage still burns a
@@ -444,44 +446,38 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (!row || row.status !== 'ok') {
-      if (row?.status === 'rate_limited') {
-        return json(429, { ok: false, error: 'rate_limited' }, origin, { 'Retry-After': '3600' })
+    // The status → HTTP map is decideDoor, which is pure and tested — including the two
+    // rules that regressed or nearly regressed here before: unroutable-but-stored is a
+    // SUCCESS for the visitor (their message is safe in the manager's table, the only
+    // place it was ever going to land while mail is unconfigured), and an unknown status
+    // is a 500, never a silent success.
+    const decision = decideDoor(row)
+    if (decision.kind === 'reject') {
+      if (decision.httpStatus === 500) {
+        console.error('contact: unhandled door status', { slug: body.slug, status: row?.status })
       }
-      if (row?.status === 'invalid') {
-        return json(400, { ok: false, error: 'missing_field' }, origin)
-      }
-      // unknown_artist is a 400: the slug is client-supplied and wrong.
-      if (row?.status === 'unknown_artist') {
-        return json(400, { ok: false, error: 'missing_field' }, origin)
-      }
-
-      // UNROUTABLE is not a failure the VISITOR should see. Since 20260804230000 the door
-      // STORES the enquiry even with no recipient or no verified sender, so the message is
-      // safe in the manager's table — which, until mail is configured, is the only place
-      // it was ever going to land. Telling the sender it failed would make them send again
-      // or give up over a gap on our side that they cannot do anything about.
-      if (row?.status === 'no_recipient' && row.enquiry_id) {
-        console.error('contact: stored but unroutable — mail not configured', {
-          slug: body.slug,
-          enquiry: row.enquiry_id,
-        })
-        const issued = await issueUploadTickets(row.enquiry_id, artistId, attachments, {
-          slug: body.slug,
-          purpose: body.purpose,
-          ipHash,
-        })
-        return json(
-          200,
-          { ok: true, uploads: issued.tickets, skipped: [...skipped, ...issued.skipped] },
-          origin,
-        )
-      }
-
-      // Anything left is genuinely unexpected — a status the door grew that this function
-      // has not been taught, or no row at all.
-      console.error('contact: unhandled door status', { slug: body.slug, status: row?.status })
-      return json(500, { ok: false, error: 'send_failed' }, origin)
+      return json(
+        decision.httpStatus,
+        { ok: false, error: decision.error },
+        origin,
+        decision.retryAfterSeconds ? { 'Retry-After': String(decision.retryAfterSeconds) } : {},
+      )
+    }
+    if (decision.unroutable) {
+      console.error('contact: stored but unroutable — mail not configured', {
+        slug: body.slug,
+        enquiry: row.enquiry_id,
+      })
+      const issued = await issueUploadTickets(row.enquiry_id, artistId, attachments, {
+        slug: body.slug,
+        purpose: body.purpose,
+        ipHash,
+      })
+      return json(
+        200,
+        { ok: true, uploads: issued.tickets, skipped: [...skipped, ...issued.skipped] },
+        origin,
+      )
     }
 
     // ---- Send. The enquiry row already exists, so a failure here loses nothing. ----

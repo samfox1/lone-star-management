@@ -245,6 +245,18 @@ describe('submit_enquiry — validation', () => {
     expect(data?.purpose).toBe('other')
   })
 
+  it('an empty message is ACCEPTED — a demo can be a link and some audio', async () => {
+    await clearRungs()
+    // This rule flip-flopped three times on 2026-08-04: 20260804230000 dropped all
+    // validation, 240000 restored message-required byte-for-byte, 260000 removed it
+    // again on purpose. If a future "restore validation" migration copy-pastes 240000,
+    // this is the test that catches it re-bouncing every one of skeen's demo
+    // submissions with missing_field.
+    const row = await submit({ p_message: '' })
+    expect(row.status).toBe('ok')
+    expect(row.enquiry_id).not.toBeNull()
+  })
+
   it('reports no_recipient when no rung resolves and there is no default', async () => {
     await clearRungs()
     // The CHECK constraint forbids storing a non-address, so the only way to have
@@ -252,6 +264,17 @@ describe('submit_enquiry — validation', () => {
     await svc.from('mail_settings').delete().eq('id', true)
     const row = await submit()
     expect(row.status).toBe('no_recipient')
+    // The enquiry is STILL STORED, as status='unroutable' — while mail is unconfigured
+    // this row is the only copy of the message that exists. Reverting 20260804230000's
+    // store-before-routing (returning early instead) would discard every real enquiry
+    // and this status check alone would stay green.
+    expect(row.enquiry_id).not.toBeNull()
+    const { data: stored } = await svc
+      .from('enquiries')
+      .select('status')
+      .eq('id', row.enquiry_id!)
+      .single()
+    expect(stored?.status).toBe('unroutable')
     await svc.from('mail_settings').insert({
       default_to_email: DEFAULT_TO,
       sending_domain: 'mail.example.com',
@@ -322,6 +345,40 @@ describe('submit_enquiry — rate limiting', () => {
       expect(error).toBeNull()
     }
     expect((await submit({ p_ip_hash: ip })).status).toBe('rate_limited')
+  })
+
+  it('the 31st enquiry for one artist inside an hour is rate_limited even from a fresh IP', async () => {
+    await clearRungs()
+    // The botnet case the per-IP window cannot see: every request arrives from a new
+    // address. The cap counts rows in `enquiries`, so seed the 30 stored enquiries
+    // directly instead of submitting 30 times — same signal, without 30 round trips.
+    //
+    // This cap was silently DROPPED by the 20260804230000 rewrite and the omission
+    // survived two further rewrites, because nothing tested it. The rule that had a
+    // test (char_length) survived the same rewrites. That asymmetry is why this test
+    // exists.
+    const seed = Array.from({ length: 30 }, (_, i) => ({
+      artist_id: artistA,
+      purpose: 'booking',
+      name: `Flood ${i}`,
+      email: 'flood@example.com',
+      message: 'flood',
+      status: 'queued',
+    }))
+    const { error } = await svc.from('enquiries').insert(seed)
+    expect(error).toBeNull()
+
+    const ip = freshIp()
+    const row = await submit({ p_ip_hash: ip })
+    expect(row.status).toBe('rate_limited')
+    expect(row.enquiry_id).toBeNull()
+
+    // The rejection is logged like every other outcome — never raised, never forgotten.
+    const { data: logged } = await svc
+      .from('contact_attempts')
+      .select('outcome')
+      .eq('ip_hash', ip)
+    expect(logged?.map((l) => l.outcome)).toEqual(['rate_limited'])
   })
 
   it('a different IP is unaffected by another IP hitting the cap', async () => {

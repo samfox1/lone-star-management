@@ -372,3 +372,73 @@ export function retentionCutoffIso(nowMs: number, days: number = RETENTION_DAYS)
 export function shouldSweep(roll: number, probability: number = SWEEP_PROBABILITY): boolean {
   return roll < probability
 }
+
+/* ── Post-validation composition + the door's HTTP map ──────────────────────────── */
+
+export type ExtrasResult =
+  | { kind: 'reject'; error: 'missing_field' }
+  | { kind: 'ok'; demoUrl: string | null; attachments: AttachmentRequest[]; skipped: SkippedItem[] }
+
+/**
+ * Merge the two optional Block B fields into the enquiry, AFTER validateBody has passed.
+ *
+ * This step used to live inline in index.ts, where nothing typechecks or tests it —
+ * and it owns a real decision: a bad link or file never fails the enquiry (dropped and
+ * named in `skipped`), but an enquiry left carrying NOTHING once the drops are done is
+ * still missing_field. That ordering matters — an invalid link whose enquiry had no
+ * message must reject, not store a blank row the manager can do nothing with.
+ */
+export function composeExtras(
+  message: string,
+  demoUrlRaw: unknown,
+  attachmentsRaw: unknown,
+): ExtrasResult {
+  const demo = validateDemoUrl(demoUrlRaw)
+  const atts = validateAttachments(attachmentsRaw)
+  if (!hasContent({ message, demoUrl: demo.value, attachmentCount: atts.value.length })) {
+    return { kind: 'reject', error: 'missing_field' }
+  }
+  return {
+    kind: 'ok',
+    demoUrl: demo.value,
+    attachments: atts.value,
+    skipped: [...demo.skipped, ...atts.skipped],
+  }
+}
+
+export type DoorDecision =
+  | { kind: 'proceed'; unroutable: boolean }
+  | { kind: 'reject'; httpStatus: 400 | 429 | 500; error: string; retryAfterSeconds?: number }
+
+/**
+ * Map what submit_enquiry said to what the visitor hears.
+ *
+ * Two rules this map exists to protect:
+ * - `no_recipient` WITH a stored row is a SUCCESS for the visitor. While mail is
+ *   unconfigured every submission takes this path; the message is safely in the
+ *   manager's table, and reporting failure would make the sender resend or give up.
+ * - A status this map has never been taught — or no row at all — is a 500, never a
+ *   silent success. If the door grows a new status, the visitor-facing behaviour has
+ *   to be decided here, on purpose, with a test.
+ */
+export function decideDoor(
+  row: { status: string; enquiry_id: string | null } | null | undefined,
+): DoorDecision {
+  if (!row) return { kind: 'reject', httpStatus: 500, error: 'send_failed' }
+  switch (row.status) {
+    case 'ok':
+      return { kind: 'proceed', unroutable: false }
+    case 'no_recipient':
+      return row.enquiry_id
+        ? { kind: 'proceed', unroutable: true }
+        : { kind: 'reject', httpStatus: 500, error: 'send_failed' }
+    case 'rate_limited':
+      return { kind: 'reject', httpStatus: 429, error: 'rate_limited', retryAfterSeconds: 3600 }
+    // unknown_artist is also a 400: the slug is client-supplied and wrong.
+    case 'invalid':
+    case 'unknown_artist':
+      return { kind: 'reject', httpStatus: 400, error: 'missing_field' }
+    default:
+      return { kind: 'reject', httpStatus: 500, error: 'send_failed' }
+  }
+}
