@@ -28,7 +28,7 @@
  *   429   { ok: false, error: "rate_limited" }
  *   5xx   { ok: false, error: "send_failed" }
  */
-import { json } from '../_shared/cors.ts'
+import { corsHeaders, json } from '../_shared/cors.ts'
 import {
   buildSubject,
   firstForwardedIp,
@@ -78,7 +78,13 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     signal: AbortSignal.timeout(10_000),
   })
   if (!res.ok) throw new Error(`rpc ${fn} failed: ${res.status} ${await res.text()}`)
-  return (await res.json()) as T
+  // A void-returning function answers 204 with NO BODY, and res.json() throws on empty
+  // input. `log_contact_attempt` is exactly that, so every path that logs an attempt —
+  // honeypot, invalid input, send failure, attachment tickets — threw into the catch-all
+  // and returned 500. The success path was unaffected because it never calls it, which is
+  // why this survived until the function was deployed and a bot-shaped request hit it.
+  const text = await res.text()
+  return (text ? JSON.parse(text) : null) as T
 }
 
 /** PostgREST table access as service_role. Same reasoning as `rpc`: one HTTP call, no
@@ -314,8 +320,14 @@ Deno.serve(async (req: Request) => {
   const origin = pickOrigin(req.headers.get('origin'), ALLOWED)
 
   // Preflight first, before anything that could throw.
+  //
+  // `corsHeaders` directly, NOT `json(204, ...)`. That threw: 204 is a null-body status,
+  // so the Response constructor rejects a body, and the old line called json() purely to
+  // borrow its headers — the throw happened while building the object it was reaching
+  // into. Every preflight 500d, which a browser reports as an opaque CORS failure with
+  // nothing in it to suggest the cause. Found by curling the deployed function.
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: json(204, {}, origin).headers })
+    return new Response(null, { status: 204, headers: corsHeaders(origin) })
   }
   // The speed bump that used to be `verify_jwt = true`, moved here so it cannot break
   // preflight. OPTIONS is answered ABOVE this, unauthenticated, because a CORS preflight
