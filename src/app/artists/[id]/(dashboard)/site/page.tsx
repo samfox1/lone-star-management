@@ -83,7 +83,16 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
           </div>
         )}
 
-        <MediaPanel artistId={id} media={(media ?? []) as MediaRow[]} />
+        {/* Filtered, not cast: `media` now also carries brand rows (logo_primary,
+            logo_secondary, favicon), which MediaRow's union does not describe. The panel
+            ignores them today, so a blanket cast would compile and behave — until
+            someone renders the list unfiltered and a logo appears among the hero videos. */}
+        <MediaPanel
+          artistId={id}
+          media={((media ?? []) as MediaRow[]).filter(
+            (m) => m.purpose === 'hero_video' || m.purpose === 'profile_photo',
+          )}
+        />
       </div>
     </section>
   )

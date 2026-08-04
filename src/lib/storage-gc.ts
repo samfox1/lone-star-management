@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { BRAND_FOLDER } from '@/lib/brand'
 
 /**
  * Storage garbage collection: remove uploaded objects nothing points at anymore.
@@ -97,8 +98,13 @@ export async function gcDeletedMediaObject(
  *  `media.purpose` (20260624140000). The GC must know ALL of them: it once swept only
  *  `gallery`, so replacing a hero video or profile photo stranded the old object in a
  *  PUBLIC bucket forever, referenced by nothing and collected by no one. skeen carried
- *  6 such strays (~17.6MB) from a single hero change. Add a purpose → add it here. */
-export const MEDIA_FOLDERS = ['gallery', 'hero-videos', 'profile'] as const
+ *  6 such strays (~17.6MB) from a single hero change. Add a purpose → add it here.
+ *
+ *  `brand` holds the logos AND the generated favicon (20260804160000). It matters more
+ *  than the others: the favicon is REGENERATED on every save, so re-framing the tab icon
+ *  three times leaves three strays. Live objects are kept because their media row still
+ *  references them — only superseded ones are swept. */
+export const MEDIA_FOLDERS = ['gallery', 'hero-videos', 'profile', BRAND_FOLDER] as const
 
 /**
  * Remove orphaned objects from the `media` bucket for one artist. Call AFTER publishing

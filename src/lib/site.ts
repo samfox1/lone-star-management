@@ -88,7 +88,16 @@ export type SiteVideo = {
   sort_order: number
 }
 
-export type MediaPurpose = 'hero_video' | 'profile_photo' | 'gallery_image' | 'bio_video'
+export type MediaPurpose =
+  | 'hero_video'
+  | 'profile_photo'
+  | 'gallery_image'
+  | 'bio_video'
+  // Brand (20260804160000). `favicon` is derived from `logo_primary`, not uploaded — see
+  // lib/brand.ts for why the framing has to be baked into the pixels.
+  | 'logo_primary'
+  | 'logo_secondary'
+  | 'favicon'
 
 export type SiteMedia = {
   purpose: MediaPurpose

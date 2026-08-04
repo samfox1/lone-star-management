@@ -7,7 +7,8 @@
  * Fake Supabase client — pure behavior, no live DB.
  */
 import { describe, expect, it } from 'vitest'
-import { gcDeletedMediaObject, gcMediaObjects } from '@/lib/storage-gc'
+import { MEDIA_FOLDERS, gcDeletedMediaObject, gcMediaObjects } from '@/lib/storage-gc'
+import { BRAND_FOLDER } from '@/lib/brand'
 
 type ListObj = { name: string; created_at: string | null }
 function fake(
@@ -117,6 +118,39 @@ describe('gcMediaObjects (publish-time sweep of the media folders)', () => {
     await gcMediaObjects(client, 'artist-1')
     expect(listedPrefixes).toContain('artist-1/hero-videos')
     expect(removed).toEqual(['artist-1/hero-videos/old.mp4'])
+  })
+
+  it('CRITICAL: sweeps brand too — logos and the regenerated favicon', async () => {
+    // The same regression as hero-videos, re-introduced 2026-08-04 by adding three media
+    // purposes (logo_primary/logo_secondary/favicon) without adding their folder. It
+    // matters more here: the favicon is REGENERATED on every save, so re-framing the tab
+    // icon three times leaves three strays in a PUBLIC bucket.
+    const { client, removed, listedPrefixes } = fake({
+      mediaRows: [
+        { storage_path: 'artist-1/brand/logo-current.png' },
+        { storage_path: 'artist-1/brand/favicon-current.png' },
+      ],
+      byPrefix: {
+        'artist-1/brand': [
+          { name: 'logo-current.png', created_at: OLD },
+          { name: 'favicon-current.png', created_at: OLD },
+          { name: 'logo-old.png', created_at: OLD },
+          { name: 'favicon-old.png', created_at: OLD },
+        ],
+      },
+    })
+    await gcMediaObjects(client, 'artist-1')
+    expect(listedPrefixes).toContain('artist-1/brand')
+    expect(removed.sort()).toEqual(['artist-1/brand/favicon-old.png', 'artist-1/brand/logo-old.png'])
+  })
+
+  it('CRITICAL: every folder an uploader writes to is swept', async () => {
+    // The guard that would have caught the above without anyone thinking of brand:
+    // MEDIA_FOLDERS must contain the category every media uploader passes to
+    // buildStoragePath. Add a purpose, add its folder — or this fails.
+    for (const folder of ['gallery', 'hero-videos', 'profile', BRAND_FOLDER]) {
+      expect(MEDIA_FOLDERS).toContain(folder)
+    }
   })
 
   it('sweeps profile too, and keeps the referenced photo', async () => {

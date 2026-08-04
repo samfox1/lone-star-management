@@ -38,9 +38,17 @@ export function siteMetadata(site: SiteData | null): Metadata {
   const ogImage = safeHref((c.og_image || '').trim() || hero_image_url)
   const images = ogImage ? [ogImage] : []
 
+  // The browser-tab icon, derived from the primary logo by the Brand page and published
+  // as a media row. Deliberately NO fallback to the hero image or the raw logo: an
+  // unframed wide lockup squeezed into 32px reads as a smudge, which is worse than the
+  // browser's default, and the Brand page exists so the manager picks the crop.
+  // Through safeHref like every other rendered URL — a media row is manager-supplied.
+  const favicon = safeHref(site.media.find((m) => m.purpose === 'favicon')?.url)
+
   return {
     title,
     description,
+    ...(favicon ? { icons: { icon: favicon } } : {}),
     openGraph: { title, description, type: 'website', images },
     twitter: {
       card: images.length ? 'summary_large_image' : 'summary',
