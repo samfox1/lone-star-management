@@ -99,6 +99,32 @@ export function buildStoragePath(artistId: string, category: string, ext: string
   return `${artistId}/${category}/${uuid}.${ext.toLowerCase()}`
 }
 
+/**
+ * Does this storage path belong to `artistId`, in the shape `buildStoragePath` produces?
+ *
+ * A path arrives from the CLIENT: the browser uploads direct-to-Storage, then asks a
+ * server action to record where it put the object. Storage's own RLS policies pin the
+ * upload to `{artistId}/…`, and the row's RLS pins the tenant — but nothing tied the two
+ * together, so a manager could record a row pointing at any path at all: another artist's
+ * folder, another bucket's shape, or a traversal string that `mediaUrl` would happily
+ * concatenate into a URL and serve on their public site.
+ *
+ * Bounded damage (the objects it could point at are public anyway, and the row itself
+ * still can't cross tenants), which is why this is a hardening step rather than a
+ * breach fix — but it was the one boundary here held by convention alone.
+ *
+ * Deliberately strict: the tenant prefix, a simple folder name, a UUID filename, a short
+ * extension. Everything the app writes goes through `buildStoragePath`, so anything that
+ * fails this was not written by the normal path.
+ */
+export function isOwnedStoragePath(artistId: string, path: string): boolean {
+  if (typeof path !== 'string' || path.includes('..')) return false
+  const re = new RegExp(
+    `^${artistId.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}/[a-z0-9-]{1,32}/[0-9a-f-]{36}\\.[a-z0-9]{2,5}$`,
+  )
+  return re.test(path)
+}
+
 const CONTENT_TYPES: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',

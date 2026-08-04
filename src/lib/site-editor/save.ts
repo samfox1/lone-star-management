@@ -11,6 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { acceptsValue, fieldsFor, SEO_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
+import { isOwnedStoragePath } from '@/lib/upload'
 import { safeHref } from '@/lib/url'
 
 export async function saveEditorField(
@@ -79,6 +80,11 @@ export async function setImageField(
   const manifest = manifestFor(template)
   const field = manifest ? fieldByKey(manifest, fieldKey) : undefined
   if (!field || field.type !== 'image') return { ok: false, error: 'Unknown image field.' }
+
+  // Same client-supplied-path guard as setBrandAsset (lib/brand.ts). This is the older of
+  // the two write paths and carried the gap first.
+  if (storagePath !== null && !isOwnedStoragePath(artistId, storagePath))
+    return { ok: false, error: 'That file location is not valid.' }
 
   if (field.target.store === 'artist') {
     const { error } = await supabase

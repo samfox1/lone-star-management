@@ -12,6 +12,7 @@ import {
   friendlyUploadError,
   formatProgress,
   DOCUMENT_UPLOAD_RULES,
+  isOwnedStoragePath,
   IMAGE_UPLOAD_RULES,
   VIDEO_UPLOAD_RULES,
 } from '@/lib/upload'
@@ -298,5 +299,56 @@ describe('video-render helpers', () => {
     expect(isRenderableVideo({ provider: 'uploaded', embed_url: null, storage_path: '../../etc/passwd' })).toBe(false)
     expect(isRenderableVideo({ provider: 'youtube', embed_url: 'https://www.youtube.com/embed/dQw4w9WgXcQ', storage_path: null })).toBe(true)
     expect(isRenderableVideo({ provider: 'youtube', embed_url: null, storage_path: null })).toBe(false)
+  })
+})
+
+/**
+ * `isOwnedStoragePath` — the tie between "who uploaded" and "what row points where".
+ *
+ * A storage path arrives from the CLIENT: the browser uploads direct-to-Storage, then
+ * asks a server action to record the location. Storage RLS pins the upload to the
+ * tenant's folder and row RLS pins the row's tenant, but until this nothing connected
+ * the two, so a manager could record a row pointing at any path they liked.
+ */
+describe('isOwnedStoragePath', () => {
+  const A = '1f2a969b-cb1c-493c-851f-647581a3e4ab'
+  const B = '99999999-cb1c-493c-851f-647581a3e4ab'
+  const good = buildStoragePath(A, 'brand', 'png')
+
+  it('accepts exactly what buildStoragePath produces', () => {
+    expect(isOwnedStoragePath(A, good)).toBe(true)
+    for (const folder of ['brand', 'gallery', 'hero-videos', 'profile', 'documents']) {
+      expect(isOwnedStoragePath(A, buildStoragePath(A, folder, 'jpg'))).toBe(true)
+    }
+  })
+
+  it("CRITICAL: rejects another artist's folder", () => {
+    expect(isOwnedStoragePath(A, buildStoragePath(B, 'brand', 'png'))).toBe(false)
+  })
+
+  it('CRITICAL: rejects traversal and absolute paths', () => {
+    for (const bad of [
+      `${A}/brand/../../${B}/brand/x.png`,
+      `../${A}/brand/x.png`,
+      `/${A}/brand/x.png`,
+      `${A}/../x.png`,
+    ]) {
+      expect(isOwnedStoragePath(A, bad), bad).toBe(false)
+    }
+  })
+
+  it('CRITICAL: rejects a prefix that merely STARTS with the artist id', () => {
+    // `${A}-evil/...` starts with A's id but is a different folder entirely.
+    expect(isOwnedStoragePath(A, `${A}-evil/brand/${A}.png`)).toBe(false)
+  })
+
+  it('rejects a non-uuid filename, a missing folder, and junk', () => {
+    for (const bad of [`${A}/brand/evil.png`, `${A}/x.png`, `${A}/brand/`, '', 'x']) {
+      expect(isOwnedStoragePath(A, bad), bad).toBe(false)
+    }
+  })
+
+  it('rejects a non-string', () => {
+    expect(isOwnedStoragePath(A, null as unknown as string)).toBe(false)
   })
 })

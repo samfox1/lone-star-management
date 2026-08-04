@@ -43,7 +43,7 @@ function fakeClient(): { client: SupabaseClient; ops: Op[] } {
 describe('setImageField', () => {
   it('rejects a field that is not a declared image', async () => {
     const { client } = fakeClient()
-    expect(await setImageField(client, 'a1', TEMPLATE, 'hero_tagline', 'a1/hero/x.jpg')).toEqual({
+    expect(await setImageField(client, 'a1', TEMPLATE, 'hero_tagline', 'a1/hero/11111111-1111-4111-8111-111111111111.jpg')).toEqual({
       ok: false,
       error: 'Unknown image field.',
     })
@@ -51,11 +51,11 @@ describe('setImageField', () => {
 
   it('hero image → stores the object PUBLIC URL on the artist column', async () => {
     const { client, ops } = fakeClient()
-    expect(await setImageField(client, 'a1', TEMPLATE, 'hero_image', 'a1/hero/x.jpg')).toEqual({ ok: true })
+    expect(await setImageField(client, 'a1', TEMPLATE, 'hero_image', 'a1/hero/11111111-1111-4111-8111-111111111111.jpg')).toEqual({ ok: true })
     expect(ops).toHaveLength(1)
     expect(ops[0].table).toBe('artists')
     expect(ops[0].eq).toEqual({ id: 'a1' })
-    expect(String((ops[0].values as any).hero_image_url)).toContain('/media/a1/hero/x.jpg')
+    expect(String((ops[0].values as any).hero_image_url)).toContain('/media/a1/hero/11111111-1111-4111-8111-111111111111.jpg')
   })
 
   it('clearing the hero image nulls the column', async () => {
@@ -66,14 +66,14 @@ describe('setImageField', () => {
 
   it('profile photo → drops any existing row of that purpose, then inserts the new one', async () => {
     const { client, ops } = fakeClient()
-    expect(await setImageField(client, 'a1', TEMPLATE, 'profile_photo', 'a1/profile/y.jpg')).toEqual({ ok: true })
+    expect(await setImageField(client, 'a1', TEMPLATE, 'profile_photo', 'a1/profile/22222222-2222-4222-8222-222222222222.jpg')).toEqual({ ok: true })
     // Vacate then fill — single occupancy per purpose.
     expect(ops.map((o) => [o.table, o.type])).toEqual([
       ['media', 'delete'],
       ['media', 'insert'],
     ])
     expect(ops[0].eq).toEqual({ artist_id: 'a1', purpose: 'profile_photo' })
-    expect(ops[1].values).toMatchObject({ artist_id: 'a1', purpose: 'profile_photo', storage_path: 'a1/profile/y.jpg', on_site: true })
+    expect(ops[1].values).toMatchObject({ artist_id: 'a1', purpose: 'profile_photo', storage_path: 'a1/profile/22222222-2222-4222-8222-222222222222.jpg', on_site: true })
   })
 
   it('clearing the profile photo deletes the row and inserts nothing', async () => {
