@@ -14,9 +14,17 @@
  * Keep it that way: logic added here is logic nobody can test.
  *
  * Contract (pinned with the skeen site):
- *   body  { slug, purpose, name, email, message, website }
- *   200   { ok: true }
+ *   body  { slug, purpose, name, email, message, website, demo_url?, attachments? }
+ *   200   { ok: true, uploads: Ticket[], skipped: { item, reason }[] }
  *   400   { ok: false, error: "invalid_email" | "missing_field" | "message_too_long" }
+ *
+ *   A bad demo_url or a non-audio attachment NEVER 400s. It is dropped and named in
+ *   `skipped`, because losing a real person's message to save them from their own file
+ *   picker is the worse outcome — and this endpoint already stores the enquiry before
+ *   sending for exactly that reason.
+ *
+ *   The honeypot returns the same shape as a genuine submission with no files. Any
+ *   difference is a signal that teaches whoever wrote the bot which field caught them.
  *   429   { ok: false, error: "rate_limited" }
  *   5xx   { ok: false, error: "send_failed" }
  */
@@ -28,8 +36,15 @@ import {
   hashIp,
   parseAllowedOrigins,
   pickOrigin,
+  retentionCutoffIso,
+  sanitiseFilename,
+  shouldSweep,
+  validateAttachments,
   validateBody,
+  validateDemoUrl,
 } from './validate.ts'
+
+const ATTACHMENT_BUCKET = 'enquiry-attachments'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 // Auto-injected by the platform. NOT a secret we manage, and never sent to the client.
@@ -39,6 +54,10 @@ const IP_SALT = Deno.env.get('CONTACT_IP_SALT') ?? ''
 const ALLOWED = parseAllowedOrigins(Deno.env.get('CONTACT_ALLOWED_ORIGINS'))
 /** Skips the Resend call and marks the enquiry sent. Used for deploy smoke tests. */
 const DRY_RUN = Deno.env.get('CONTACT_DRY_RUN') === 'true'
+/** Where the manager reads their enquiries. Optional: without it the email says "open
+ *  Lone Star" instead of linking, which is worse but never broken. A wrong link in an
+ *  email cannot be corrected after sending, so this is not guessed from a header. */
+const APP_URL = (Deno.env.get('LONE_STAR_APP_URL') ?? '').replace(/\/+$/, '')
 
 /**
  * Call a Postgres function as service_role over PostgREST.
@@ -62,6 +81,167 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   return (await res.json()) as T
 }
 
+/** PostgREST table access as service_role. Same reasoning as `rpc`: one HTTP call, no
+ *  client library. `prefer` carries return=representation where a result is needed. */
+async function rest<T>(
+  path: string,
+  init: { method: string; body?: unknown; prefer?: string } = { method: 'GET' },
+): Promise<T> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method: init.method,
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      ...(init.prefer ? { Prefer: init.prefer } : {}),
+    },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`rest ${init.method} ${path} failed: ${res.status} ${await res.text()}`)
+  const text = await res.text()
+  return (text ? JSON.parse(text) : null) as T
+}
+
+/**
+ * Mint a one-shot signed UPLOAD url for exactly one object path.
+ *
+ * This is what lets an anonymous visitor write to a private bucket without the bucket
+ * ever granting anon a write policy: the capability is scoped to a single path we chose,
+ * inside a folder named after the enquiry we just created. The token is Supabase's, and
+ * its lifetime (two hours) is not configurable — what actually bounds the risk is the
+ * scope, not the clock.
+ */
+async function signUpload(path: string): Promise<{ signedUrl: string; token: string } | null> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/${ATTACHMENT_BUCKET}/${path}`, {
+      method: 'POST',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    // `url` comes back as a relative path carrying ?token=...
+    const { url } = (await res.json()) as { url: string }
+    const token = new URL(url, SUPABASE_URL).searchParams.get('token') ?? ''
+    return { signedUrl: `${SUPABASE_URL}/storage/v1${url.startsWith('/') ? url : `/${url}`}`, token }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Delete expired attachment OBJECTS and their rows. Files only — the enquiry is kept.
+ *
+ * Runs here rather than in SQL for a reason that is easy to get wrong: deleting a row
+ * from `storage.objects` does NOT delete the underlying file. A SQL-side prune would
+ * leave paid-for orphans in the bucket with nothing left pointing at them. The Storage
+ * API has to be the one doing it.
+ *
+ * Opportunistic, ~1 request in 100, like the contact_attempts prune — there is no pg_cron
+ * here. Entirely best-effort: a failed sweep must never affect the enquiry being handled.
+ */
+async function sweepExpiredAttachments(): Promise<void> {
+  try {
+    const cutoff = retentionCutoffIso(Date.now())
+    const rows = await rest<{ id: string; storage_path: string }[]>(
+      `enquiry_attachments?created_at=lt.${encodeURIComponent(cutoff)}&select=id,storage_path&limit=100`,
+    )
+    if (!rows?.length) return
+
+    // Objects FIRST. If this half fails we keep the rows and try again next sweep; the
+    // other order would forget the paths and strand the files permanently.
+    const del = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATTACHMENT_BUCKET}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prefixes: rows.map((r) => r.storage_path) }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!del.ok) return
+
+    const ids = rows.map((r) => r.id).join(',')
+    await rest(`enquiry_attachments?id=in.(${ids})`, { method: 'DELETE' })
+  } catch (e) {
+    console.error('contact: attachment sweep failed', e)
+  }
+}
+
+/**
+ * Store the demo link, then mint one upload ticket per requested file.
+ *
+ * ORDER IS THE SECURITY MODEL. This runs only after the enquiry has passed validation,
+ * rate limiting and recipient resolution — so a bot that gets 400ed or 429ed never
+ * receives a write capability at all. Uploading is a privilege earned by submitting a
+ * real enquiry, not a thing the endpoint offers up front.
+ *
+ * The demo url and the artist id come back from ONE update rather than a second read,
+ * and `submit_enquiry` is deliberately left alone: it is a carefully documented function
+ * with a hard "never raise" invariant, and changing its signature would mean dropping and
+ * recreating it to widen a return type. Not worth it to avoid one round trip.
+ *
+ * Every failure here degrades rather than throws. The enquiry is already stored and the
+ * email already sent; losing an attachment ticket must not turn a delivered message into
+ * a 500 for the visitor.
+ */
+async function issueUploadTickets(
+  enquiryId: string | null,
+  artistId: string | null,
+  attachments: { filename: string; mime_type: string; bytes: number }[],
+  attempt: { slug: string; purpose: string; ipHash: string },
+): Promise<{ filename: string; bucket: string; path: string; token: string; signed_url: string }[]> {
+  if (!enquiryId || !artistId || attachments.length === 0) return []
+  try {
+
+    const tickets = []
+    for (const att of attachments) {
+      const path = `${artistId}/${enquiryId}/${crypto.randomUUID()}-${sanitiseFilename(att.filename)}`
+      const signed = await signUpload(path)
+      if (!signed) continue
+
+      // The row is written NOW, before the file exists. The alternative — a second
+      // endpoint the browser calls after uploading — is more surface for a stranger to
+      // reach, and this table has exactly one writer on purpose. An abandoned upload
+      // leaves a row with no object, which the dashboard shows the same way it shows an
+      // expired one.
+      await rest('enquiry_attachments', {
+        method: 'POST',
+        body: {
+          enquiry_id: enquiryId,
+          artist_id: artistId,
+          storage_path: path,
+          filename: att.filename.slice(0, 200),
+          mime_type: att.mime_type,
+          bytes: att.bytes,
+        },
+      })
+
+      // Each ticket costs its own rate-limit slot, so attachments cannot be used to
+      // sidestep the per-IP limits.
+      await rpc('log_contact_attempt', {
+        p_slug: attempt.slug,
+        p_purpose: attempt.purpose,
+        p_ip_hash: attempt.ipHash,
+        p_outcome: 'attachment',
+      })
+
+      tickets.push({
+        filename: att.filename,
+        bucket: ATTACHMENT_BUCKET,
+        path,
+        token: signed.token,
+        signed_url: signed.signedUrl,
+      })
+    }
+    return tickets
+  } catch (e) {
+    console.error('contact: upload tickets failed', e)
+    return []
+  }
+}
+
 type DoorRow = {
   status: 'ok' | 'rate_limited' | 'invalid' | 'unknown_artist' | 'no_recipient'
   enquiry_id: string | null
@@ -77,15 +257,40 @@ type DoorRow = {
  * HTML body would mean escaping attacker-controlled text into markup that lands in
  * someone's mail client. Text has no such surface.
  */
-function composeText(b: { name: string; email: string; purpose: string; message: string }): string {
-  return [
+function composeText(b: {
+  name: string
+  email: string
+  purpose: string
+  message: string
+  demoUrl: string | null
+  attachmentCount: number
+  dashboardUrl: string | null
+}): string {
+  const lines = [
     `From:    ${b.name} <${b.email}>`,
     `Purpose: ${b.purpose}`,
-    '',
-    b.message,
-    '',
-    '— Sent from your Lone Star site contact form. Reply to this email to answer directly.',
-  ].join('\n')
+  ]
+  if (b.demoUrl) lines.push(`Demo:    ${b.demoUrl}`)
+  lines.push('', b.message, '')
+
+  // The audio is NEVER attached. A large attachment gets rejected by the receiving side
+  // and damages the sending domain's reputation for every other enquiry, so the email
+  // links to the file instead — and says when it goes, because nobody checks an inbox
+  // knowing there is a 90-day clock on it.
+  if (b.attachmentCount > 0) {
+    const n = b.attachmentCount
+    lines.push(
+      `${n} audio file${n === 1 ? '' : 's'} attached to this enquiry.`,
+      b.dashboardUrl
+        ? `Listen or download: ${b.dashboardUrl}`
+        : 'Open the enquiry in Lone Star to listen or download.',
+      'Files are deleted after 90 days — save anything worth keeping. The message itself is kept.',
+      '',
+    )
+  }
+
+  lines.push('— Sent from your Lone Star site contact form. Reply to this email to answer directly.')
+  return lines.join('\n')
 }
 
 Deno.serve(async (req: Request) => {
@@ -108,6 +313,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const result = validateBody(raw)
+    let demoUrl: string | null = null
+    let attachments: { filename: string; mime_type: string; bytes: number }[] = []
+    let skipped: { item: string; reason: string }[] = []
     const ip = firstForwardedIp(req.headers)
     const ipHash = await hashIp(IP_SALT, ip)
 
@@ -120,7 +328,22 @@ Deno.serve(async (req: Request) => {
         p_ip_hash: ipHash,
         p_outcome: 'honeypot',
       })
-      return json(200, { ok: true }, origin)
+      // Identical to a genuine submission with no files, deliberately: any difference
+      // here is a signal that tells whoever wrote the bot which field caught them.
+      return json(200, { ok: true, uploads: [], skipped: [] }, origin)
+    }
+
+    // The two Block B fields. NEITHER CAN FAIL THE ENQUIRY: a bad link or a stray
+    // non-audio file is dropped and named, never a rejection. This endpoint stores the
+    // enquiry before it even tries to send, precisely so a message is never lost to a
+    // downstream problem — rejecting the whole submission over one optional field was the
+    // same principle applied inconsistently (caught by the skeen side, 2026-08-04).
+    if (result.kind === 'ok') {
+      const demo = validateDemoUrl((raw as Record<string, unknown>).demo_url)
+      const atts = validateAttachments((raw as Record<string, unknown>).attachments)
+      demoUrl = demo.value
+      attachments = atts.value
+      skipped = [...demo.skipped, ...atts.skipped]
     }
 
     // Log rejections too, so probing the endpoint with garbage still burns a
@@ -166,6 +389,24 @@ Deno.serve(async (req: Request) => {
     let providerId: string | null = null
     let sendError: string | null = null
 
+    // Persist the demo link and learn the tenant BEFORE the email is composed, so the
+    // "listen or download" link can point at the actual enquiry rather than the app root.
+    // One PATCH does both; `submit_enquiry` is left untouched (widening its return type
+    // would mean dropping and recreating a function with a hard never-raise invariant).
+    let artistId: string | null = null
+    try {
+      const updated = await rest<{ artist_id: string }[]>(
+        `enquiries?id=eq.${row.enquiry_id}&select=artist_id`,
+        { method: 'PATCH', body: { demo_url: demoUrl }, prefer: 'return=representation' },
+      )
+      artistId = updated?.[0]?.artist_id ?? null
+    } catch (e) {
+      // The enquiry and its message are already stored. Losing the optional link is not
+      // worth failing a delivery over.
+      console.error('contact: demo_url update failed', e)
+    }
+    const dashboardUrl = APP_URL && artistId ? `${APP_URL}/artists/${artistId}/enquiries` : null
+
     if (DRY_RUN) {
       providerId = 'dry-run'
     } else {
@@ -184,7 +425,13 @@ Deno.serve(async (req: Request) => {
             // not control their domain) and land the whole thing in spam.
             reply_to: body.email,
             subject: buildSubject(body.purpose, row.artist_name ?? '', body.name),
-            text: composeText({ ...body, purpose: body.purpose }),
+            text: composeText({
+              ...body,
+              purpose: body.purpose,
+              demoUrl,
+              attachmentCount: attachments.length,
+              dashboardUrl,
+            }),
           }),
           signal: AbortSignal.timeout(10_000),
         })
@@ -216,10 +463,28 @@ Deno.serve(async (req: Request) => {
       return json(500, { ok: false, error: 'send_failed' }, origin)
     }
 
-    // {ok:true} AND NOTHING ELSE. Never echo to_email, from, enquiry_id, or
-    // recipient_source — the whole point of resolving the recipient server-side is that
-    // it never reaches the client. A "helpful" debug field here reopens the hole.
-    return json(200, { ok: true }, origin)
+    // Never echo the RECIPIENT — to_email, from, or recipient_source. Resolving the
+    // recipient server-side is the entire point of this endpoint, and a "helpful" debug
+    // field here reopens the hole.
+    //
+    // `enquiry_id` and `artist_id` DO now leave, inside upload ticket paths, and that is a
+    // deliberate narrowing of the older "nothing else" rule rather than an oversight:
+    // there is no way to hand a stranger a scoped write location without telling them the
+    // scope. Both are safe to disclose — artist_id is already public through
+    // get_public_site, and enquiry_id grants nothing under RLS, where `enquiries` is
+    // manager-only and no endpoint is keyed on it. The recipient fields are what that
+    // rule protects, and they are untouched.
+    const uploads = await issueUploadTickets(row.enquiry_id, artistId, attachments, {
+      slug: body.slug,
+      purpose: body.purpose,
+      ipHash,
+    })
+
+    // Opportunistic retention sweep, AFTER the response work is done, so a slow delete
+    // never delays the visitor's confirmation. Best-effort by design.
+    if (shouldSweep(Math.random())) await sweepExpiredAttachments()
+
+    return json(200, { ok: true, uploads, skipped }, origin)
   } catch (e) {
     // Catch-all so a throw still returns WITH CORS HEADERS. Without this the browser
     // reports an opaque CORS failure and hides the real 500 completely.

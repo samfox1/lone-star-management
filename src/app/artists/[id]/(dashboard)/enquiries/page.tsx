@@ -1,4 +1,6 @@
+import { fileSize, toPlayable, type AttachmentRow, type PlayableAttachment } from '@/lib/enquiry-attachments'
 import { createClient } from '@/lib/supabase/server'
+import { safeHref } from '@/lib/url'
 import { Icon } from '@/components/ui/icons'
 import { SectionShell } from '../section-shell'
 import { requireArtist } from '../_data'
@@ -43,6 +45,7 @@ type Enquiry = {
   sent_at: string | null
   read_at: string | null
   created_at: string
+  demo_url: string | null
 }
 
 export default async function EnquiriesPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,12 +59,26 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
   const { data } = await supabase
     .from('enquiries')
     .select(
-      'id, purpose, name, email, message, to_email, recipient_source, status, send_error, sent_at, read_at, created_at',
+      'id, purpose, name, email, message, to_email, recipient_source, status, send_error, sent_at, read_at, created_at, demo_url',
     )
     .eq('artist_id', id)
     .order('created_at', { ascending: false })
   const rows = (data ?? []) as Enquiry[]
   const unread = rows.filter((r) => !r.read_at).length
+
+  // Attachments for every enquiry on the page in ONE read (RLS-scoped), then signed in
+  // parallel. Signing is per-object and cannot be batched, but the rows can — and a demo
+  // enquiry rarely has more than one file.
+  const { data: attachmentRows } = await supabase
+    .from('enquiry_attachments')
+    .select('id, enquiry_id, storage_path, filename, mime_type, bytes, created_at')
+    .in('enquiry_id', rows.length ? rows.map((r) => r.id) : ['00000000-0000-0000-0000-000000000000'])
+  const playable = await toPlayable(supabase, (attachmentRows ?? []) as AttachmentRow[])
+  const byEnquiry = new Map<string, PlayableAttachment[]>()
+  for (const [i, a] of playable.entries()) {
+    const key = ((attachmentRows ?? [])[i] as AttachmentRow).enquiry_id
+    byEnquiry.set(key, [...(byEnquiry.get(key) ?? []), a])
+  }
 
   // The live resolved recipient, which may differ from any single row's frozen
   // to_email if the address has since changed. SECURITY DEFINER with an internal owner
@@ -122,6 +139,58 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
               </div>
 
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{r.message}</p>
+
+              {/* Visitor-supplied and https-only (validated at the door AND by a CHECK),
+                  but still through safeHref at render — the rule in lib/url.ts is that
+                  render-time sanitisation is the must-have guard, because a row can
+                  predate a validator. noopener/noreferrer because the manager clicks it. */}
+              {r.demo_url && safeHref(r.demo_url) && (
+                <p className="mt-3 font-space text-sm">
+                  <span className="text-ink-faint">Demo: </span>
+                  <a
+                    href={safeHref(r.demo_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent underline underline-offset-2"
+                  >
+                    {r.demo_url}
+                  </a>
+                </p>
+              )}
+
+              {(byEnquiry.get(r.id) ?? []).length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {(byEnquiry.get(r.id) ?? []).map((a) => (
+                    <li key={a.id} className="rounded-lg border border-hairline px-3 py-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-space text-xs font-medium">{a.filename}</span>
+                        {fileSize(a.bytes) && (
+                          <span className="font-space text-[11px] text-ink-faint">{fileSize(a.bytes)}</span>
+                        )}
+                      </div>
+                      {a.expired ? (
+                        // The normal end state, not an error: files go after 90 days and
+                        // the message is kept. Saying so beats a dead player.
+                        <p className="mt-1 font-space text-[11px] text-ink-faint">
+                          Attachment expired — audio is deleted after 90 days.
+                        </p>
+                      ) : (
+                        <>
+                          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                          <audio controls preload="none" src={a.url ?? undefined} className="mt-1.5 w-full" />
+                          <a
+                            href={a.url ?? undefined}
+                            download={a.filename}
+                            className="mt-1 inline-block font-space text-[11px] text-ink-muted underline underline-offset-2"
+                          >
+                            Download
+                          </a>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 font-space text-[11px] text-ink-faint">
                 {/* Delivery is reported honestly. An enquiry that failed to send is

@@ -16,8 +16,13 @@ import {
   hashIp,
   parseAllowedOrigins,
   pickOrigin,
+  retentionCutoffIso,
+  sanitiseFilename,
+  shouldSweep,
   stripHeader,
+  validateAttachments,
   validateBody,
+  validateDemoUrl,
 } from '../supabase/functions/contact/validate'
 
 const good = {
@@ -240,5 +245,158 @@ describe('CORS origin selection', () => {
 
   it('degrades to "null" when nothing is configured, rather than to "*"', () => {
     expect(pickOrigin('https://evil.example', [])).toBe('null')
+  })
+})
+
+/* ── Block B: demo links and audio attachments ──────────────────────────────────── */
+
+describe('validateDemoUrl', () => {
+  it('accepts an https URL', () => {
+    expect(validateDemoUrl('https://soundcloud.com/artist/track')).toEqual({
+      value: 'https://soundcloud.com/artist/track',
+      skipped: [],
+    })
+  })
+
+  it('treats absent, empty and whitespace as "not provided"', () => {
+    for (const v of [undefined, null, '', '   ', 123]) {
+      expect(validateDemoUrl(v)).toEqual({ value: null, skipped: [] })
+    }
+  })
+
+  it('CRITICAL: drops every scheme except https — and never loses the enquiry over it', () => {
+    // This is attacker-controlled text a MANAGER clicks in their dashboard. javascript:
+    // and data: are the ones that matter; http: goes too, since a demo link is not worth
+    // a downgrade. The link is dropped, the message still arrives.
+    for (const bad of [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)',
+      '  javascript:alert(1)',
+      'java\tscript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'http://example.com/demo',
+      'vbscript:msgbox(1)',
+      'file:///etc/passwd',
+      '//evil.example.com',
+      '/relative/path',
+      'not a url',
+    ]) {
+      const res = validateDemoUrl(bad)
+      expect(res.value, bad).toBeNull()
+      expect(res.skipped, bad).toEqual([{ item: 'demo link', reason: 'invalid_demo_url' }])
+    }
+  })
+
+  it('drops a URL over the length cap', () => {
+    expect(validateDemoUrl(`https://example.com/${'a'.repeat(2100)}`).value).toBeNull()
+  })
+})
+
+describe('validateAttachments', () => {
+  const mp3 = { filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: 1000 }
+
+  it('treats absent as none', () => {
+    expect(validateAttachments(undefined)).toEqual({ value: [], skipped: [] })
+    expect(validateAttachments([])).toEqual({ value: [], skipped: [] })
+  })
+
+  it('accepts up to three audio files', () => {
+    const three = [
+      mp3,
+      { ...mp3, filename: 'b.wav', mime_type: 'audio/wav' },
+      { ...mp3, filename: 'c.flac', mime_type: 'audio/flac' },
+    ]
+    expect(validateAttachments(three).value).toHaveLength(3)
+    expect(validateAttachments(three).skipped).toEqual([])
+  })
+
+  it('CRITICAL: a stray non-audio file is DROPPED, not fatal — the message still gets through', () => {
+    // The flaw skeen caught. Rejecting the whole enquiry meant one .zip picked alongside a
+    // demo lost the entire message, in an endpoint that stores the enquiry before sending
+    // precisely so a message is never lost.
+    const res = validateAttachments([mp3, { filename: 'notes.zip', mime_type: 'application/zip', bytes: 10 }])
+    expect(res.value.map((a) => a.filename)).toEqual(['demo.mp3'])
+    expect(res.skipped).toEqual([{ item: 'notes.zip', reason: 'unsupported_audio_type' }])
+  })
+
+  it('CRITICAL: names what it dropped — silence would read as acceptance', () => {
+    // A visitor who deliberately attached a file expects it to arrive.
+    const res = validateAttachments([{ filename: 'song.pdf', mime_type: 'application/pdf', bytes: 1 }])
+    expect(res.skipped).toEqual([{ item: 'song.pdf', reason: 'unsupported_audio_type' }])
+  })
+
+  it('CRITICAL: keeps the first three and names the rest', () => {
+    const five = ['a', 'b', 'c', 'd', 'e'].map((n) => ({ ...mp3, filename: `${n}.mp3` }))
+    const res = validateAttachments(five)
+    expect(res.value.map((a) => a.filename)).toEqual(['a.mp3', 'b.mp3', 'c.mp3'])
+    expect(res.skipped).toEqual([
+      { item: 'd.mp3', reason: 'too_many_attachments' },
+      { item: 'e.mp3', reason: 'too_many_attachments' },
+    ])
+  })
+
+  it('rejects every non-audio type', () => {
+    for (const bad of ['application/pdf', 'image/png', 'text/html', 'application/octet-stream', '']) {
+      expect(validateAttachments([{ ...mp3, mime_type: bad }]).value, bad).toEqual([])
+    }
+  })
+
+  it('ignores entries with no filename, and junk in place of the list', () => {
+    expect(validateAttachments([{ ...mp3, filename: '' }]).value).toEqual([])
+    expect(validateAttachments('nope')).toEqual({ value: [], skipped: [] })
+    expect(validateAttachments([null]).value).toEqual([])
+  })
+})
+
+describe('sanitiseFilename', () => {
+  it('keeps an ordinary name intact', () => {
+    expect(sanitiseFilename('demo-track_02.mp3')).toBe('demo-track_02.mp3')
+  })
+
+  it('CRITICAL: strips path separators and traversal', () => {
+    // The name lands in a storage path. A slash or a .. would let a visitor choose where
+    // their file is written, escaping the per-enquiry folder the ticket is scoped to.
+    expect(sanitiseFilename('../../etc/passwd')).not.toContain('..')
+    expect(sanitiseFilename('../../etc/passwd')).not.toContain('/')
+    expect(sanitiseFilename('a/b\\c.mp3')).not.toMatch(/[/\\]/)
+  })
+
+  it('replaces characters that do not belong in a URL path', () => {
+    expect(sanitiseFilename('my song (final?) #2.mp3')).toMatch(/^[A-Za-z0-9._-]+$/)
+  })
+
+  it('caps the length so the path cannot grow without bound', () => {
+    expect(sanitiseFilename(`${'a'.repeat(400)}.mp3`).length).toBeLessThanOrEqual(120)
+  })
+
+  it('never returns empty, even for a name made entirely of junk', () => {
+    // An empty segment would produce a path ending in the separator and an unusable key.
+    expect(sanitiseFilename('///').length).toBeGreaterThan(0)
+    expect(sanitiseFilename('....').length).toBeGreaterThan(0)
+  })
+})
+
+describe('attachment retention', () => {
+  const NOW = Date.parse('2026-08-04T12:00:00Z')
+
+  it('expires files older than 90 days', () => {
+    const cutoff = retentionCutoffIso(NOW)
+    expect(cutoff).toBe(new Date(Date.parse('2026-05-06T12:00:00Z')).toISOString())
+  })
+
+  it('CRITICAL: the cutoff is in the PAST — a sign error would delete everything', () => {
+    // The failure mode worth pinning: a `+` instead of a `-` produces a future cutoff, and
+    // then "created before the cutoff" matches every attachment ever uploaded.
+    expect(Date.parse(retentionCutoffIso(NOW))).toBeLessThan(NOW)
+  })
+
+  it('honours a custom window', () => {
+    expect(Date.parse(retentionCutoffIso(NOW, 1))).toBe(NOW - 24 * 60 * 60 * 1000)
+  })
+
+  it('sweeps on roughly one roll in a hundred', () => {
+    expect(shouldSweep(0.005)).toBe(true)
+    expect(shouldSweep(0.5)).toBe(false)
+    expect(shouldSweep(0.01)).toBe(false) // boundary: strictly below
   })
 })
