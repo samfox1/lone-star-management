@@ -78,6 +78,36 @@ describe('resolveStyle — playback speed leaves the class string too', () => {
   it('last speed token wins, matching every other property', () => {
     expect(resolveStyle('speed-[0.5x] speed-[2x]').playbackRate).toBe(2)
   })
+
+  /**
+   * A media element only accepts roughly 0.0625×–16×; WebKit THROWS NotSupportedError
+   * outside that range. Both consumers (`applyStyleToDom` here and skeen's mirror) assign
+   * `video.playbackRate` unguarded, so an out-of-range stored token doesn't merely
+   * misbehave — it throws mid-apply and aborts the rest of that style update, leaving the
+   * element half-styled. Clamping in `speedToken` means an impossible rate resolves to
+   * null and stays an inert class, which is what every other malformed token does.
+   *
+   * Reported from the skeen mirror diff, 2026-08-04: skeen already clamps, so until this
+   * lands the two sides disagree about what `speed-[50x]` means.
+   */
+  it('CRITICAL: rejects a speed no media element can play (stays an inert class)', () => {
+    expect(resolveStyle('speed-[50x]').className).toBe('speed-[50x]')
+    expect(resolveStyle('speed-[50x]')).not.toHaveProperty('playbackRate')
+    expect(resolveStyle('speed-[0.001x]').className).toBe('speed-[0.001x]')
+    expect(resolveStyle('speed-[0.001x]')).not.toHaveProperty('playbackRate')
+  })
+
+  it('accepts the boundaries of the playable range', () => {
+    expect(resolveStyle('speed-[16x]').playbackRate).toBe(16)
+    expect(resolveStyle('speed-[0.0625x]').playbackRate).toBe(0.0625)
+  })
+
+  it('every speed the item panel can emit survives the clamp', () => {
+    // The clamp must never reject the product's own vocabulary.
+    for (const rate of [0.25, 0.5, 0.75, 1.25, 1.5, 2]) {
+      expect(resolveStyle(`speed-[${rate}x]`).playbackRate).toBe(rate)
+    }
+  })
 })
 
 describe('isItemKey', () => {
@@ -204,5 +234,40 @@ describe('resolveRegionStyle — the whole pipeline', () => {
       className: 'w-full object-cover',
       style: {},
     })
+  })
+
+  /**
+   * PROVENANCE (the 2026-08-03 review's rule, previously undefended — a mutation sweep
+   * on 2026-08-04 found that flipping the section path to a full lift broke nothing).
+   *
+   * A SECTION string lifts colours only. Its vocabulary is site-compiled classes, and
+   * those legitimately carry variant pairs (`hover:`, `md:`) plus utilities like
+   * `opacity-0` and `rounded-full` that only MEAN anything as classes. Inlining them
+   * would silently destroy the variant — an inline style has no hover state — so
+   * `opacity-0` on a section must stay a class even though the identical token on an
+   * item is lifted.
+   */
+  it('CRITICAL: a SECTION string lifts colours only — item tokens stay classes', () => {
+    expect(resolveRegionStyle('hero_wordmark', 'text-6xl', 'opacity-50 rounded-full text-[#ff0000]')).toEqual({
+      className: 'opacity-50 rounded-full',
+      style: { color: '#ff0000' },
+    })
+  })
+
+  it('CRITICAL: the SAME token is lifted on an item and left alone on a section', () => {
+    const onItem = resolveRegionStyle('image:abc', 'w-full', 'opacity-50')
+    const onSection = resolveRegionStyle('hero_wordmark', 'w-full', 'opacity-50')
+
+    expect(onItem.style.opacity).toBe('0.5')
+    expect(onItem.className).toBe('w-full')
+
+    expect(onSection.style.opacity).toBeUndefined()
+    expect(onSection.className).toContain('opacity-50')
+  })
+
+  it('a section string keeps hover: variants as classes rather than inlining them', () => {
+    const resolved = resolveRegionStyle('hero_wordmark', 'text-6xl', 'hover:opacity-50 shadow-lg')
+    expect(resolved.className).toContain('hover:opacity-50')
+    expect(resolved.style.boxShadow).toBeUndefined()
   })
 })

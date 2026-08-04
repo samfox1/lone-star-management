@@ -124,11 +124,22 @@ export function colorClass(prefix: keyof typeof COLOR_PROPS, hex: string): strin
  *  describes the whole per-item look. The site must apply it too (skeen mirrors this). */
 const SPEED_TOKEN_RE = /^speed-\[(\d+(?:\.\d+)?)x\]$/
 
+/** What a media element will actually accept. Outside this WebKit throws
+ *  NotSupportedError on assignment, and both consumers (applyStyleToDom here, skeen's
+ *  mirror) set `video.playbackRate` unguarded — so an out-of-range token would not just
+ *  misbehave, it would throw mid-apply and abandon the rest of the style update, leaving
+ *  the element half-styled. Rejecting here instead means the token stays an inert class,
+ *  exactly like any other malformed one. Comfortably wider than the panel's own range
+ *  (0.25×–2×), so the product's vocabulary is never clipped. */
+const SPEED_MIN = 0.0625
+const SPEED_MAX = 16
+
 export function speedToken(token: string): number | null {
   const m = token.match(SPEED_TOKEN_RE)
   if (!m) return null
   const rate = Number(m[1])
-  return Number.isFinite(rate) && rate > 0 ? rate : null
+  if (!Number.isFinite(rate)) return null
+  return rate >= SPEED_MIN && rate <= SPEED_MAX ? rate : null
 }
 
 /** The speed token for a playback rate — the write half of `speedToken`. */
@@ -136,9 +147,17 @@ export function speedClass(rate: number): string {
   return `speed-[${rate}x]`
 }
 
-/** True when the key addresses ONE item inside a slot rather than a whole section — the
- *  colon convention from D-E. Item strings are overlays and merge onto the element's base
- *  classes; section strings replace them. */
+/**
+ * True when the key addresses ONE item rather than a whole section. Item strings are
+ * overlays and merge onto the element's base classes; section strings replace them.
+ *
+ * The vocabulary is a RULE, not a fixed list: any `<kind>:<id>` is an item key. Today
+ * that means `slot:<role>` for a named placement and `<assetType>:<id>` for a library
+ * asset — `image:`, `video:`, `track:`, `merch:`, `tour_date:`, `link:` (see
+ * `ASSET_TYPES` in ./markers). Sites emit their own subset: skeen emits `video:` for
+ * video tiles, which older docs here didn't mention. A section key never contains a
+ * colon, which is what makes the test cheap and open-ended.
+ */
 export function isItemKey(key: string): boolean {
   return key.includes(':')
 }
@@ -199,6 +218,14 @@ export function mergeStyle(key: string, base: string, override: string): string 
  * may legitimately carry `opacity-0`/`rounded-full`/variant pairs whose class semantics
  * (hover:, md:) inlining would destroy. Section strings lift colours only, matching
  * their pre-inline behavior: their vocabulary is site-compiled classes.
+ *
+ * KNOWN, ACCEPTED (skeen mirror diff, 2026-08-04): the protection stops at the overlay's
+ * edge. WITHIN a manager's overlay a bare token still lifts even when the same overlay
+ * also carries a variant of that property — `opacity-40 hover:opacity-100` inlines
+ * opacity, and an inline value has no hover state, so the hover half is dead. Both sides
+ * behave identically, so they agree. It is unreachable from the item panel, whose
+ * controls emit bare tokens only; it can only be produced by hand-authoring an overlay.
+ * Revisit if hand-authored overlays ever become a supported path.
  */
 export function resolveRegionStyle(key: string, base: string, override: string): ResolvedStyle {
   if (!isItemKey(key)) return resolveTokens(mergeStyle(key, base, override), false)

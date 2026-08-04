@@ -55,8 +55,12 @@ export function ItemEditor({
   onBack,
 }: {
   artistId: string
-  /** Per-item style-region key (`slot:<role>`, `image:<id>`, …). The frame styles the element
-   *  marked `data-lse-style="<styleKey>"`. */
+  /** Per-item style-region key. The rule, not a list: `<kind>:<id>` — either
+   *  `slot:<role>` for a named placement, or `<assetType>:<id>` for one library asset
+   *  (`image:`, `video:`, `track:`, `merch:`, `tour_date:`, `link:` — the set is
+   *  `ASSET_TYPES` in `lib/site-editor/markers.ts`, and skeen emits `video:` today).
+   *  Earlier docs here enumerated two of them, which read as the whole vocabulary.
+   *  The frame styles the element marked `data-lse-style="<styleKey>"`. */
   styleKey: string
   label: string
   /** The item's SAVED overlay class string (from the draft styles), '' if unstyled. */

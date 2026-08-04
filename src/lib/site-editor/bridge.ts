@@ -99,10 +99,29 @@ export type EditorMessage =
    */
   | { v: number; source: typeof EDITOR_SOURCE; type: 'hello' }
 
+/**
+ * Accept the current version and any OLDER one; refuse anything NEWER.
+ *
+ * An exact match makes the protocol un-bumpable in practice (skeen mirror diff,
+ * 2026-08-04): the two sides are separate repos deployed separately, so whichever raises
+ * BRIDGE_VERSION first starts dropping EVERY message from the other — `ready` included.
+ * The frame then announces into the void and goes quiet with connected:false, which
+ * looks identical to a wrong origin or a crashed frame and says nothing in the console.
+ * Accepting older senders degrades a bump to "this one message type is ignored", which
+ * is the failure mode the additive design already assumes.
+ *
+ * Newer is still refused: a future message may carry fields this side has no code for,
+ * and acting on half-understood input is worse than ignoring it.
+ */
 function isVersionedFrom(x: unknown, source: string): x is { v: number; source: string; type: string } {
   if (typeof x !== 'object' || x === null) return false
   const m = x as Record<string, unknown>
-  return m.source === source && m.v === BRIDGE_VERSION && typeof m.type === 'string'
+  return (
+    m.source === source &&
+    typeof m.v === 'number' &&
+    m.v <= BRIDGE_VERSION &&
+    typeof m.type === 'string'
+  )
 }
 
 /** True iff `x` is a bridge message from the frame at the current version. Callers

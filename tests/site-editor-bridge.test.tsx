@@ -20,7 +20,7 @@ import {
   markedAncestor,
   targetOf,
 } from '@/lib/site-editor/bridge-client'
-import { BRIDGE_VERSION } from '@/lib/site-editor/bridge'
+import { BRIDGE_VERSION, isEditorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
 
 describe('bridge-client — resolve a clicked element to a target', () => {
   it('resolves the NEAREST marker (an item beats its enclosing slot)', () => {
@@ -109,6 +109,41 @@ describe('style regions — resolve + optimistic restyle', () => {
     expect(el().getAttribute('class')).toBe('w-full object-cover')
     expect(el().style.scale).toBe('')
     expect(el().style.borderRadius).toBe('')
+  })
+
+  /**
+   * BASE_CLASSES must be captured ONCE per element, on first touch.
+   *
+   * Previously undefended: a 2026-08-04 mutation sweep found that re-capturing the base
+   * on every apply broke nothing in the suite. It breaks two real things, and the
+   * existing per-item test can't see either — that one only asserts INLINE props, and
+   * inline props are rewritten wholesale each apply, so they look fine either way.
+   */
+  it('CRITICAL: clearing a section style restores the SITE’s original classes, not the last applied ones', () => {
+    document.body.innerHTML = `<h1 data-lse-style="hero_wordmark" class="font-glitch text-9xl">SKEEN</h1>`
+    const el = () => document.querySelector('[data-lse-style="hero_wordmark"]')!
+
+    applyStyleToDom(document, 'hero_wordmark', 'font-momo uppercase')
+    expect(el().getAttribute('class')).toBe('font-momo uppercase')
+
+    // Clearing the field must fall back to the base captured on FIRST touch. If the base
+    // were re-read now it would be 'font-momo uppercase', and the site's own styling
+    // would be permanently lost the moment the manager cleared the box.
+    applyStyleToDom(document, 'hero_wordmark', '')
+    expect(el().getAttribute('class')).toBe('font-glitch text-9xl')
+  })
+
+  it('CRITICAL: an unowned token on an item does not accumulate across applies', () => {
+    // A token the editor does not own passes through as a CLASS. If the base were
+    // re-captured each time it would already contain that class, and every keystroke
+    // would append another copy — the class attribute growing without bound.
+    document.body.innerHTML = `<img data-lse-style="image:abc" class="w-full">`
+    const el = () => document.querySelector('[data-lse-style="image:abc"]')!
+
+    applyStyleToDom(document, 'image:abc', 'font-momo')
+    applyStyleToDom(document, 'image:abc', 'font-momo')
+    applyStyleToDom(document, 'image:abc', 'font-momo')
+    expect(el().getAttribute('class')).toBe('w-full font-momo')
   })
 
   it('border width + colour both apply inline, and "None" clears them', () => {
@@ -233,6 +268,43 @@ describe('highlight — the editor outlines a region in the frame', () => {
     document.body.innerHTML = `<img data-lse-field="hero_image" data-lse-highlight src="h.jpg" />`
     clearHighlightFromDom(document)
     expect(document.querySelector('[data-lse-highlight]')).toBeNull()
+  })
+})
+
+/**
+ * The version gate must accept OLDER senders, not only exact matches.
+ *
+ * Reported from the skeen mirror diff, 2026-08-04. `m.v === BRIDGE_VERSION` makes the
+ * protocol un-bumpable in practice: whichever repo raises the number first drops every
+ * message from the other, including `ready`, so the frame announces into the void and
+ * then goes quiet with connected:false — indistinguishable from a wrong origin or a
+ * crashed frame, and with nothing in the console to say so. Accepting `m.v <=
+ * BRIDGE_VERSION` degrades a bump to "that one message type is ignored" instead.
+ *
+ * A message from the FUTURE is still refused: it may carry fields this side has no code
+ * for, and guessing is worse than ignoring.
+ */
+describe('bridge version gate — older senders are accepted, newer are not', () => {
+  it('CRITICAL: a message from an OLDER bridge version is still accepted', () => {
+    expect(isFrameMessage({ v: BRIDGE_VERSION - 1, source: 'lse-frame', type: 'ready' })).toBe(true)
+    expect(isEditorMessage({ v: BRIDGE_VERSION - 1, source: 'lse-editor', type: 'hello' })).toBe(true)
+  })
+
+  it('accepts the current version', () => {
+    expect(isFrameMessage({ v: BRIDGE_VERSION, source: 'lse-frame', type: 'ready' })).toBe(true)
+    expect(isEditorMessage({ v: BRIDGE_VERSION, source: 'lse-editor', type: 'hello' })).toBe(true)
+  })
+
+  it('refuses a message from a NEWER version — it may carry fields we cannot read', () => {
+    expect(isFrameMessage({ v: BRIDGE_VERSION + 1, source: 'lse-frame', type: 'ready' })).toBe(false)
+    expect(isEditorMessage({ v: BRIDGE_VERSION + 1, source: 'lse-editor', type: 'hello' })).toBe(false)
+  })
+
+  it('still refuses a wrong source, a missing type, and non-objects', () => {
+    expect(isFrameMessage({ v: BRIDGE_VERSION, source: 'lse-editor', type: 'ready' })).toBe(false)
+    expect(isFrameMessage({ v: BRIDGE_VERSION, source: 'lse-frame' })).toBe(false)
+    expect(isFrameMessage(null)).toBe(false)
+    expect(isFrameMessage('ready')).toBe(false)
   })
 })
 

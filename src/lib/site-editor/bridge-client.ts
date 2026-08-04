@@ -105,7 +105,8 @@ const BASE_CLASSES = new WeakMap<Element, string>()
  * stuck on the element.
  *
  * No-op if the region isn't present. A ':' in a per-item key is fine inside a quoted
- * attribute selector.
+ * attribute selector — and per-item keys are any `<kind>:<id>` (`slot:<role>` or an
+ * asset type from `ASSET_TYPES`, e.g. `image:`/`video:`), not a fixed pair.
  */
 export function applyStyleToDom(root: ParentNode, key: string, className: string): void {
   const el = root.querySelector(`[${STYLE_ATTR}="${key}"]`)
