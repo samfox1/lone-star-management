@@ -77,6 +77,18 @@ export function applyFieldToDom(root: ParentNode, key: string, value: string): v
   else el.textContent = value
 }
 
+/** Optimistically repaint ONE image region (`apply-image`): the marked element's own
+ *  `src` if it is an <img>, else the first <img> inside it. Never writes text — an
+ *  image URL landing as textContent is worse than no repaint — and a '' url is left to
+ *  the init-data refresh, since what "empty" looks like is the template's call. */
+export function applyImageToDom(root: ParentNode, key: string, url: string): void {
+  if (!url) return
+  const el = root.querySelector(`[${FIELD_ATTR}="${key}"]`)
+  if (!el) return
+  const img = el instanceof HTMLImageElement ? el : el.querySelector('img')
+  if (img) img.src = url
+}
+
 /** Each styled element's ORIGINAL class list, captured the first time the editor touches
  *  it. A per-item overlay merges onto this rather than onto the previous overlay's result
  *  — otherwise every keystroke would compound and the classes would grow without bound.
@@ -106,6 +118,10 @@ export function applyStyleToDom(root: ParentNode, key: string, className: string
     // CSSOM camelCase index accepts both, so no name conversion is needed.
     for (const prop of MANAGED_STYLE_PROPS) el.style[prop] = resolved.style[prop] ?? ''
   }
+  // Playback speed is a DOM property, not CSS. The marked region may be the <video>
+  // itself or a wrapper around it; clearing the token resets to normal speed.
+  const video = el instanceof HTMLVideoElement ? el : el.querySelector('video')
+  if (video) video.playbackRate = resolved.playbackRate ?? 1
 }
 
 /** Optimistically set a link-powered element's href by key. No-op if the region isn't
@@ -185,6 +201,7 @@ export function mountFrameBridge(options: {
     // apply-field updates the DOM here (generic frame behaviour); everything else
     // goes to the caller.
     if (e.data.type === 'apply-field') applyFieldToDom(document, e.data.key, e.data.value)
+    else if (e.data.type === 'apply-image') applyImageToDom(document, e.data.key, e.data.url)
     else if (e.data.type === 'apply-style') applyStyleToDom(document, e.data.key, e.data.className)
     else if (e.data.type === 'apply-link') applyLinkToDom(document, e.data.key, e.data.url)
     else if (e.data.type === 'highlight') {

@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyFieldToDom,
   applyHighlightToDom,
+  applyImageToDom,
   applyLinkToDom,
   applyStyleToDom,
   clearHighlightFromDom,
@@ -89,36 +90,78 @@ describe('style regions — resolve + optimistic restyle', () => {
     expect(document.querySelector('[data-lse-style="hero_wordmark"]')!.getAttribute('class')).toBe('font-momo uppercase')
   })
 
-  it('a per-item overlay ADDS to the element base classes instead of erasing them', () => {
-    // The item editor starts EMPTY and emits only the manager's overlay, so replacing here
-    // would strip the image's own layout and drop it out of the wall.
+  it('a per-item overlay lands as INLINE STYLE — the base classes are never disturbed', () => {
+    // The item editor starts EMPTY and emits only the manager's overlay. It applies as
+    // inline CSS: a class could be uncompiled by the site's build, or outranked by a
+    // same-property base class via stylesheet order. Inline is deterministic.
     document.body.innerHTML = `<img data-lse-style="slot:polaroid_1_photo" class="w-full object-cover">`
-    const el = () => document.querySelector('[data-lse-style="slot:polaroid_1_photo"]')!
+    const el = () => document.querySelector('[data-lse-style="slot:polaroid_1_photo"]') as HTMLElement
     applyStyleToDom(document, 'slot:polaroid_1_photo', 'scale-110')
-    expect(el().getAttribute('class')).toBe('w-full object-cover scale-110')
-    // A second overlay replaces the FIRST overlay, not the base — no unbounded growth as
-    // the manager drags a slider.
+    expect(el().getAttribute('class')).toBe('w-full object-cover')
+    expect(el().style.scale).toBe('1.1')
+    // A second overlay replaces the FIRST overlay, not the base — no compounding as the
+    // manager drags a slider.
     applyStyleToDom(document, 'slot:polaroid_1_photo', 'scale-125 rounded-[6px]')
-    expect(el().getAttribute('class')).toBe('w-full object-cover scale-125 rounded-[6px]')
-    // Clearing returns the element to exactly its base classes.
+    expect(el().style.scale).toBe('1.25')
+    expect(el().style.borderRadius).toBe('6px')
+    // Clearing returns the element to exactly its base: classes AND managed inline props.
     applyStyleToDom(document, 'slot:polaroid_1_photo', '')
     expect(el().getAttribute('class')).toBe('w-full object-cover')
+    expect(el().style.scale).toBe('')
+    expect(el().style.borderRadius).toBe('')
   })
 
-  it('an arbitrary hex colour is applied INLINE — no build can compile that class', () => {
+  it('border width + colour both apply inline, and "None" clears them', () => {
     document.body.innerHTML = `<img data-lse-style="slot:polaroid_1_photo" class="w-full">`
     const el = () => document.querySelector('[data-lse-style="slot:polaroid_1_photo"]') as HTMLElement
     applyStyleToDom(document, 'slot:polaroid_1_photo', 'border-[4px] border-[#123abc]')
-    // The width stays a class (it IS safelisted); only the colour is lifted out.
-    expect(el().getAttribute('class')).toBe('w-full border-[4px]')
+    expect(el().getAttribute('class')).toBe('w-full')
+    expect(el().style.borderWidth).toBe('4px')
     expect(el().style.borderColor).toBe('rgb(18, 58, 188)') // the CSSOM normalises the hex
     // Picking a different colour replaces it.
     applyStyleToDom(document, 'slot:polaroid_1_photo', 'border-[4px] border-[#ff0000]')
     expect(el().style.borderColor).toBe('rgb(255, 0, 0)')
-    // Choosing "None" clears it rather than leaving the last colour stuck on the element.
+    // Choosing "None" clears the colour rather than leaving the last one stuck.
     applyStyleToDom(document, 'slot:polaroid_1_photo', 'border-[4px]')
     expect(el().style.borderColor).toBe('')
-    expect(el().getAttribute('class')).toBe('w-full border-[4px]')
+    expect(el().style.borderWidth).toBe('4px')
+  })
+
+  it('applies speed-[Nx] as playbackRate on the marked video, or a video inside the region', () => {
+    document.body.innerHTML = `
+      <div data-lse-style="slot:hero_landscape" class="absolute inset-0"><video id="clip"></video></div>
+      <video data-lse-style="video:v1" id="direct" class="w-full"></video>`
+    const clip = document.getElementById('clip') as HTMLVideoElement
+    const direct = document.getElementById('direct') as HTMLVideoElement
+    // A wrapper region reaches the video inside it; neither token lands as a class.
+    applyStyleToDom(document, 'slot:hero_landscape', 'speed-[1.5x] opacity-50')
+    expect(clip.playbackRate).toBe(1.5)
+    const wrapper = document.querySelector('[data-lse-style="slot:hero_landscape"]') as HTMLElement
+    expect(wrapper.getAttribute('class')).toBe('absolute inset-0')
+    expect(wrapper.style.opacity).toBe('0.5')
+    // A directly-marked video takes it too.
+    applyStyleToDom(document, 'video:v1', 'speed-[0.5x]')
+    expect(direct.playbackRate).toBe(0.5)
+    // Clearing the token resets to normal speed instead of leaving the last rate stuck.
+    applyStyleToDom(document, 'slot:hero_landscape', 'opacity-50')
+    expect(clip.playbackRate).toBe(1)
+  })
+
+  it('applyImageToDom repaints the marked <img>, or the first img inside the region', () => {
+    document.body.innerHTML = `
+      <img data-lse-field="polaroid_1_photo" src="https://x/old.jpg">
+      <div data-lse-field="hero_image"><img id="inner" src="https://x/old2.jpg"></div>
+      <div data-lse-field="empty_slot">Add photo</div>`
+    applyImageToDom(document, 'polaroid_1_photo', 'https://x/new.jpg')
+    expect((document.querySelector('[data-lse-field="polaroid_1_photo"]') as HTMLImageElement).src).toBe('https://x/new.jpg')
+    applyImageToDom(document, 'hero_image', 'https://x/new2.jpg')
+    expect((document.getElementById('inner') as HTMLImageElement).src).toBe('https://x/new2.jpg')
+    // Never writes text — a URL as textContent is worse than no repaint.
+    applyImageToDom(document, 'empty_slot', 'https://x/new3.jpg')
+    expect(document.querySelector('[data-lse-field="empty_slot"]')!.textContent).toBe('Add photo')
+    // '' (a cleared slot) is left to the init-data refresh.
+    applyImageToDom(document, 'polaroid_1_photo', '')
+    expect((document.querySelector('[data-lse-field="polaroid_1_photo"]') as HTMLImageElement).src).toBe('https://x/new.jpg')
   })
 
   it('no-ops when the style region is not present', () => {

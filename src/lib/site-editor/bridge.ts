@@ -74,6 +74,10 @@ export type FrameMessage =
  *  Like FrameMessage, this is exactly what is SENT today. */
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
+  /** Repaint ONE image region (a slot placement) without waiting on the revalidate →
+   *  full init-data chain — the largest message in the protocol was the only path an
+   *  image change had to the preview (skeen brief, 2026-08-03). `url` '' clears it. */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-image'; key: string; url: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-link'; key: string; url: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: PublicSitePayload }

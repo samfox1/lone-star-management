@@ -88,6 +88,7 @@ export function EditorShell({
     frameRef,
     src: frameSrc,
     applyField,
+    applyImage,
     applyStyle,
     applyLink,
     applyHighlight,
@@ -144,6 +145,7 @@ export function EditorShell({
         selectedLink={selectedLink}
         selectedRegion={selectedRegion}
         onApplyField={applyField}
+        onApplyImage={applyImage}
         onApplyStyle={applyStyle}
         onApplyLink={applyLink}
         onHighlight={applyHighlight}

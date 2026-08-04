@@ -193,7 +193,7 @@ const isRadius = (t: string) =>
   t === 'rounded' || /^rounded-(sm|md|lg|xl|2xl|3xl|full|none)$/.test(t) || /^rounded-\[\d+px\]$/.test(t)
 const isShadow = (t: string) => t === 'shadow' || /^shadow-(sm|md|lg|xl|2xl|none|inner)$/.test(t)
 
-/** The controls the per-item editor shows for one image/video: size, transparency, border
+/** The controls the per-item editor shows for one image: size, transparency, border
  *  (width + colour), corners, shadow. The border colour is any hex the manager picks from the
  *  palette; site-palette border colours (`border-<token>`) are a later addition once the site
  *  safelists them. */
@@ -203,6 +203,50 @@ export function buildItemStyleControls(): StyleControl[] {
     { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, owns: (t) => t.startsWith('opacity-') },
     { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, owns: isBorderWidth },
     { id: 'borderColor', label: 'Border color', kind: 'color', owns: (t) => colorToken(t)?.prop === 'borderColor' },
+    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, owns: isRadius },
+    { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, owns: isShadow },
+  ]
+}
+
+/** Playback-speed steps, Normal (1×, the `''` default) in the middle of a slow→fast run.
+ *  Values are `speed-[Nx]` pseudo-tokens (style-apply lifts them to `video.playbackRate`
+ *  — speed can never be CSS), so nothing here needs safelisting. */
+const SPEED_STEPS: StyleOption[] = [
+  { value: 'speed-[0.25x]', label: '0.25×' },
+  { value: 'speed-[0.5x]', label: '0.5×' },
+  { value: 'speed-[0.75x]', label: '0.75×' },
+  { value: '', label: 'Normal' },
+  { value: 'speed-[1.25x]', label: '1.25×' },
+  { value: 'speed-[1.5x]', label: '1.5×' },
+  { value: 'speed-[2x]', label: '2×' },
+]
+
+/**
+ * The per-item controls for one VIDEO — a different set from images (Sam, 2026-08-03):
+ * borders don't earn their keep on video, and what IS wanted is video-specific.
+ *
+ *  • 'embed' (the YouTube band): visual-only — size, transparency, corners, shadow.
+ *    An iframe's playback can't be touched from outside, so no Speed.
+ *  • 'file' (an uploaded background clip): Speed + transparency. It renders full-bleed
+ *    behind the page, so scale/corners/shadow have nothing visible to act on.
+ */
+export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleControl[] {
+  const opacity: StyleControl = {
+    id: 'opacity',
+    label: 'Transparency',
+    kind: 'slider',
+    steps: OPACITY_STEPS,
+    owns: (t) => t.startsWith('opacity-'),
+  }
+  if (kind === 'file') {
+    return [
+      { id: 'speed', label: 'Speed', kind: 'slider', steps: SPEED_STEPS, owns: (t) => t.startsWith('speed-') },
+      opacity,
+    ]
+  }
+  return [
+    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, owns: (t) => t.startsWith('scale-') },
+    opacity,
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, owns: isRadius },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, owns: isShadow },
   ]

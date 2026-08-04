@@ -15,11 +15,28 @@ describe('resolveStyle — arbitrary colours leave the class string', () => {
     expect(resolveStyle('bg-[#00ff0080]')).toEqual({ className: '', style: { backgroundColor: '#00ff0080' } })
   })
 
-  it('keeps everything a build CAN compile as a class', () => {
-    // border-[4px] is a LENGTH, not a colour: it is safelisted, so it must stay a class.
+  it('lifts the WHOLE owned item vocabulary inline — a class can be uncompiled or outranked', () => {
+    // Classes fail two ways inline styles cannot: the site's build may never have
+    // compiled them, and a same-property base class (border-4 vs border-[6px]) wins or
+    // loses by STYLESHEET order, which nobody controls. So everything the item sliders
+    // emit resolves to inline CSS.
     const r = resolveStyle('scale-110 opacity-50 border-[4px] border-[#ff0000] rounded-[6px] shadow-lg')
-    expect(r.className).toBe('scale-110 opacity-50 border-[4px] rounded-[6px] shadow-lg')
-    expect(r.style).toEqual({ borderColor: '#ff0000' })
+    expect(r.className).toBe('')
+    expect(r.style).toEqual({
+      scale: '1.1',
+      opacity: '0.5',
+      borderWidth: '4px',
+      borderStyle: 'solid',
+      borderColor: '#ff0000',
+      borderRadius: '6px',
+      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    })
+  })
+
+  it('leaves tokens it does not own as classes — site vocabulary passes through', () => {
+    const r = resolveStyle('w-full object-cover rounded-md font-momo')
+    expect(r.className).toBe('w-full object-cover rounded-md font-momo')
+    expect(r.style).toEqual({})
   })
 
   it('leaves named colour utilities alone — the site compiles its own tokens', () => {
@@ -36,6 +53,30 @@ describe('resolveStyle — arbitrary colours leave the class string', () => {
   it('ignores a prefix with no colour meaning, and a malformed arbitrary value', () => {
     expect(resolveStyle('ring-[#ff0000]').className).toBe('ring-[#ff0000]') // not a managed prop
     expect(resolveStyle('border-[#xyz]').className).toBe('border-[#xyz]') // not a hex
+  })
+})
+
+describe('resolveStyle — playback speed leaves the class string too', () => {
+  it('lifts speed-[Nx] into playbackRate (a DOM property, never CSS)', () => {
+    expect(resolveStyle('speed-[1.5x]')).toEqual({ className: '', style: {}, playbackRate: 1.5 })
+    expect(resolveStyle('speed-[0.25x] opacity-50')).toEqual({
+      className: '',
+      style: { opacity: '0.5' },
+      playbackRate: 0.25,
+    })
+  })
+
+  it('omits playbackRate when there is no speed token — the consumer resets to 1', () => {
+    expect(resolveStyle('scale-110')).not.toHaveProperty('playbackRate')
+  })
+
+  it('rejects a malformed or non-positive speed (stays a class, inert)', () => {
+    expect(resolveStyle('speed-[fast]').className).toBe('speed-[fast]')
+    expect(resolveStyle('speed-[0x]').className).toBe('speed-[0x]')
+  })
+
+  it('last speed token wins, matching every other property', () => {
+    expect(resolveStyle('speed-[0.5x] speed-[2x]').playbackRate).toBe(2)
   })
 })
 
@@ -151,10 +192,10 @@ describe('siteSwatches — the site palette, then its one-offs', () => {
 })
 
 describe('resolveRegionStyle — the whole pipeline', () => {
-  it('merges the overlay, then splits the colour out of it', () => {
+  it('merges the overlay, then lifts the owned tokens out of it — the base stays classes', () => {
     expect(resolveRegionStyle('slot:polaroid_1_photo', 'w-full object-cover', 'border-[4px] border-[#123abc]')).toEqual({
-      className: 'w-full object-cover border-[4px]',
-      style: { borderColor: '#123abc' },
+      className: 'w-full object-cover',
+      style: { borderWidth: '4px', borderStyle: 'solid', borderColor: '#123abc' },
     })
   })
 

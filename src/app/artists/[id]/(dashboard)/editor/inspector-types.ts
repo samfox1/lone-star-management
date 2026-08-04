@@ -34,6 +34,10 @@ export type EditorTextField = {
 export type ItemEdit =
   | { type: 'imageSlot'; role: string; label: string }
   | { type: 'galleryPhoto'; id: string; orientation: Orientation; label: string }
+  /** A background video slot (hero landscape/portrait, bio) — style key `slot:<role>`. */
+  | { type: 'videoSlot'; role: SiteVideoRole; label: string }
+  /** A YouTube video in the band — style key `video:<id>`. */
+  | { type: 'bandVideo'; id: string; label: string }
 /**
  * A single-occupancy IMAGE region the site declares as a manifest field (the hero image,
  * the profile photo) — one fixed image, not an open collection like the gallery. The

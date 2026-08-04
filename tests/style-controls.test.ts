@@ -8,8 +8,10 @@ import {
   applyStyleValue,
   buildItemStyleControls,
   buildStyleControls,
+  buildVideoItemStyleControls,
   readStyleValue,
   type SiteStyleOptions,
+  type StyleControl,
 } from '@/lib/site-editor/style-controls'
 
 const PALETTE: SiteStyleOptions = {
@@ -144,5 +146,56 @@ describe('applyStyleValue', () => {
   it('swaps a font family without touching the weight', () => {
     const out = applyStyleValue('font-momo font-bold', byId('font'), 'font-display')
     expect(out.split(/\s+/).sort()).toEqual(['font-bold', 'font-display'])
+  })
+})
+
+describe('slider seeding round-trips (skeen brief 2026-08-03)', () => {
+  // A stored row like `scale-145 opacity-60 border-[4px] shadow-sm` was reported seeding
+  // every slider at its MAX. Whatever parses a stored string back into slider positions
+  // must round-trip, and an unparseable token must land on the DEFAULT step, never max.
+  const sliderIdx = (control: StyleControl, cls: string): number => {
+    if (control.kind !== 'slider') throw new Error('not a slider')
+    const current = readStyleValue(control, cls)
+    let idx = control.steps.findIndex((s) => s.value === current)
+    if (idx < 0) idx = control.steps.findIndex((s) => s.value === '')
+    return idx < 0 ? 0 : idx
+  }
+
+  it('the reported string seeds each item slider at its own stored value', () => {
+    const cls = 'scale-145 opacity-60 border-[4px] shadow-sm'
+    const byId = Object.fromEntries(buildItemStyleControls().map((c) => [c.id, c]))
+    expect(byId.size.kind === 'slider' && byId.size.steps[sliderIdx(byId.size, cls)].label).toBe('145%')
+    expect(byId.opacity.kind === 'slider' && byId.opacity.steps[sliderIdx(byId.opacity, cls)].label).toBe('60%')
+    expect(byId.borderWidth.kind === 'slider' && byId.borderWidth.steps[sliderIdx(byId.borderWidth, cls)].label).toBe('4px')
+    expect(byId.shadow.kind === 'slider' && byId.shadow.steps[sliderIdx(byId.shadow, cls)].label).toBe('XS')
+    // No rounded token stored → Corners sits on its default (Square), NOT Circle.
+    expect(byId.radius.kind === 'slider' && byId.radius.steps[sliderIdx(byId.radius, cls)].label).toBe('Square')
+  })
+
+  it('every slider step round-trips: applying a step then reading it lands on that step', () => {
+    const all = [...buildItemStyleControls(), ...buildVideoItemStyleControls('embed'), ...buildVideoItemStyleControls('file')]
+    for (const control of all) {
+      if (control.kind !== 'slider') continue
+      for (const [i, step] of control.steps.entries()) {
+        const applied = applyStyleValue('', control, step.value)
+        expect(sliderIdx(control, applied)).toBe(i === 0 && step.value === '' ? control.steps.findIndex((s) => s.value === '') : control.steps.findIndex((s) => s.value === step.value))
+      }
+    }
+  })
+
+  it('an off-scale or unparseable owned token seeds the DEFAULT step', () => {
+    const byId = Object.fromEntries(buildItemStyleControls().map((c) => [c.id, c]))
+    // scale-37 is owned (scale-*) but not a step; opacity-33 likewise. Each must land on
+    // its default. (For opacity the default 100% IS the right end — that's the one
+    // control whose default legitimately sits at max.)
+    for (const [id, cls] of [['size', 'scale-37'], ['opacity', 'opacity-33'], ['radius', 'rounded-[999px]']] as const) {
+      const c = byId[id]
+      if (c.kind !== 'slider') throw new Error('not a slider')
+      expect(sliderIdx(c, cls)).toBe(c.steps.findIndex((s) => s.value === ''))
+    }
+    // For the size scale specifically, default is the middle (100%) — never the max.
+    const size = byId.size
+    if (size.kind !== 'slider') throw new Error('not a slider')
+    expect(sliderIdx(size, 'scale-37')).not.toBe(size.steps.length - 1)
   })
 })

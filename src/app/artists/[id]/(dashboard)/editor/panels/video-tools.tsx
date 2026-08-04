@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { type EditorVideo, type SiteVideoRole } from '../inspector-types'
-import { CardThumb, EmptySlot, EditMenu, AddFirstLink, LibraryPicker, useDismiss } from '../inspector-grid'
+import { type EditorVideo, type ItemEdit, type SiteVideoRole } from '../inspector-types'
+import { CardThumb, EmptySlot, AddFirstLink, LibraryPicker } from '../inspector-grid'
 import { runSerialized, SlotGroupLabel } from '../inspector-shared'
 import { renameVideoAction } from '../../actions'
 
@@ -22,33 +22,32 @@ const BAND_SLOTS = 2 // skeen's band is designed 2-up; show at least two slots.
  *    an UPLOADED video (assignHeroSlotAction sets its site_role; skeen reads it).
  *  • Videos band — the two YouTube embeds below the disco ball. Picking marks a YouTube
  *    video on-site; the picker offers only real YouTube videos (uploads are hero-only,
- *    Shorts aren't used). Removing a band video marks it off-site (stays in the library). */
+ *    Shorts aren't used). Removing a band video marks it off-site (stays in the library).
+ *
+ * A filled slot's Edit button hands the WHOLE panel to that video (`onEditItem`) — the
+ * same full-panel item editor images get: Replace / Remove plus the visual controls
+ * (size, transparency, border + colour, corners, shadow). The pickers here only fill
+ * EMPTY slots; replace/remove for a filled slot live in the item editor. */
 export function VideoTools({
   videos,
   artistId,
   onToggleOnSite,
   onAssignHero,
+  onEditItem,
 }: {
   videos: EditorVideo[]
   artistId: string
   onToggleOnSite: (v: EditorVideo) => void
   onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
+  /** Open one video in the full-panel editor (a tile's Edit button). */
+  onEditItem: (item: ItemEdit) => void
 }) {
   const [titles, setTitles] = useState<Record<string, string>>(() =>
     Object.fromEntries(videos.map((v) => [v.id, v.title])),
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  // Which slot's picker is open: a background role, the band, or none.
+  // Which EMPTY slot's picker is open: a background role, the band, or none.
   const [picking, setPicking] = useState<SiteVideoRole | 'band' | null>(null)
-  // Which filled slot's Replace/Remove menu is open.
-  const [editing, setEditing] = useState<{ type: 'slot'; role: SiteVideoRole } | { type: 'band'; video: EditorVideo } | null>(
-    null,
-  )
-  // The band video being REPLACED, if any. It stays on the site until a replacement is
-  // actually picked — so closing the picker without choosing leaves it in place.
-  const [replacingBand, setReplacingBand] = useState<EditorVideo | null>(null)
-  // A click anywhere outside an open Replace/Remove menu closes it.
-  useDismiss(editing !== null, () => setEditing(null))
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const saving = useRef<Map<string, Promise<unknown>>>(new Map())
   const errored = useRef<Set<string>>(new Set())
@@ -99,8 +98,8 @@ export function VideoTools({
     onAssignHero(role, videoId)
   }
 
-  // A background slot as a card (preview on top, title + edit below). Clicking opens
-  // the picker modal — see the render. Reused by both hero slots and the bio slot.
+  // A background slot as a card (preview on top, title + edit below). An empty slot
+  // opens the picker; a filled one's Edit opens the full-panel item editor.
   function slotCard(role: SiteVideoRole) {
     const label = SLOT_LABELS[role]
     const placed = uploaded.find((v) => v.siteRole === role)
@@ -111,31 +110,18 @@ export function VideoTools({
           <div className="overflow-hidden rounded-lg border border-hairline">
             <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />
             <div className="px-2 py-1.5">
-              {editing?.type === 'slot' && editing.role === role ? (
-                <EditMenu
-                  onReplace={() => {
-                    setEditing(null)
-                    setPicking(role)
-                  }}
-                  onRemove={() => {
-                    setEditing(null)
-                    assignHero(role, null)
-                  }}
-                />
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span className="min-w-0 flex-1 truncate text-xs">{placed.title || 'Untitled video'}</span>
-                  <button
-                    type="button"
-                    aria-label={`Edit the ${label} slot`}
-                    title="Replace or remove"
-                    onClick={() => setEditing({ type: 'slot', role })}
-                    className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
-                  >
-                    <Icon name="edit" size={13} />
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-1">
+                <span className="min-w-0 flex-1 truncate text-xs">{placed.title || 'Untitled video'}</span>
+                <button
+                  type="button"
+                  aria-label={`Edit the ${label} slot`}
+                  title="Customize this video"
+                  onClick={() => onEditItem({ type: 'videoSlot', role, label })}
+                  className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                >
+                  <Icon name="edit" size={13} />
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -186,40 +172,24 @@ export function VideoTools({
             <div key={v.id} className="overflow-hidden rounded-lg border border-hairline">
               <CardThumb poster={v.poster} previewUrl={v.previewUrl} />
               <div className="px-1.5 py-1">
-                {editing?.type === 'band' && editing.video.id === v.id ? (
-                  <EditMenu
-                    onReplace={() => {
-                      setEditing(null)
-                      // Don't vacate yet — mark it as the one to swap out, and only take
-                      // it off when a replacement is actually picked (see the picker).
-                      setReplacingBand(v)
-                      setPicking('band')
-                    }}
-                    onRemove={() => {
-                      setEditing(null)
-                      onToggleOnSite(v)
-                    }}
+                <div className="flex items-center gap-0.5">
+                  <input
+                    aria-label={`Slot ${i + 1} title`}
+                    value={titles[v.id] ?? ''}
+                    onChange={(e) => edit(v.id, e.target.value)}
+                    placeholder="Title"
+                    className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 font-space text-xs text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-hairline"
                   />
-                ) : (
-                  <div className="flex items-center gap-0.5">
-                    <input
-                      aria-label={`Slot ${i + 1} title`}
-                      value={titles[v.id] ?? ''}
-                      onChange={(e) => edit(v.id, e.target.value)}
-                      placeholder="Title"
-                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 font-space text-xs text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-hairline"
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Edit video slot ${i + 1}`}
-                      title="Replace or remove"
-                      onClick={() => setEditing({ type: 'band', video: v })}
-                      className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
-                    >
-                      <Icon name="edit" size={14} />
-                    </button>
-                  </div>
-                )}
+                  <button
+                    type="button"
+                    aria-label={`Edit video slot ${i + 1}`}
+                    title="Customize this video"
+                    onClick={() => onEditItem({ type: 'bandVideo', id: v.id, label: `Video slot ${i + 1}` })}
+                    className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                  >
+                    <Icon name="edit" size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           )
@@ -227,7 +197,7 @@ export function VideoTools({
       </div>
       {picking === 'band' && (
         <LibraryPicker
-          title={replacingBand ? 'Replace with' : 'YouTube video'}
+          title="YouTube video"
           candidates={bandLibrary}
           keyOf={(v) => v.id}
           labelOf={(v) => v.title || 'Untitled video'}
@@ -235,15 +205,9 @@ export function VideoTools({
           empty={<AddFirstLink href={addHref} label="Add a video first" />}
           onPick={(v) => {
             setPicking(null)
-            // Replacing: take the old one off only now that a new one is chosen.
-            if (replacingBand) onToggleOnSite(replacingBand)
-            setReplacingBand(null)
             onToggleOnSite(v)
           }}
-          onCancel={() => {
-            setPicking(null)
-            setReplacingBand(null) // closing without picking keeps the old video
-          }}
+          onCancel={() => setPicking(null)}
         />
       )}
 

@@ -871,6 +871,65 @@ describe('EditorInspector — Videos component', () => {
     expect(screen.queryByLabelText('Slot 2 title')).toBeNull()
     expect(screen.getByRole('button', { name: /Pick a YouTube video/ })).toBeTruthy()
   })
+
+  it('band Edit opens the full-panel item editor with the EMBED control set', () => {
+    openVideos()
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    expect(screen.getByRole('heading', { name: 'Edit Video slot 1' })).toBeTruthy()
+    // Videos get their own vocabulary: no borders (Sam, 2026-08-03), and no Speed on an
+    // embed — an iframe's playback can't be touched from outside.
+    for (const control of ['Size', 'Transparency', 'Corners', 'Shadow']) {
+      expect(screen.getByLabelText(`Video slot 1 ${control}`)).toBeTruthy()
+    }
+    expect(screen.queryByLabelText('Video slot 1 Border')).toBeNull()
+    expect(screen.queryByLabelText('Video slot 1 Border color palette')).toBeNull()
+    expect(screen.queryByLabelText('Video slot 1 Speed')).toBeNull()
+  })
+
+  it('styles a band video under its own per-item key (video:<id>), persisted on Save', async () => {
+    const onApplyStyle = vi.fn()
+    renderInspector([], { videos: VIDEOS, onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    // Size slider index 12 = scale-110 (same scale as the image item editor).
+    fireEvent.change(screen.getByLabelText('Video slot 1 Size'), { target: { value: '12' } })
+    expect(onApplyStyle).toHaveBeenCalledWith('video:v2', 'scale-110')
+    expect(saveStyleMock).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    })
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'video:v2', 'scale-110')
+  })
+
+  it('an uploaded background slot gets the FILE set: Speed saves under slot:<role>', async () => {
+    const onApplyStyle = vi.fn()
+    const placed: EditorVideo[] = [
+      { id: 'up', title: 'Landing Page (H)', provider: 'uploaded', isShort: false, siteRole: 'hero_landscape', previewUrl: 'https://x/up.mp4#t=0.1', poster: null, onSite: true },
+    ]
+    renderInspector([], { videos: placed, onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit the Landscape/ }))
+    // The file set is Speed + Transparency — a full-bleed background has nothing
+    // visible for size/corners/shadow to act on.
+    expect(screen.getByLabelText('Landscape · desktop Transparency')).toBeTruthy()
+    expect(screen.queryByLabelText('Landscape · desktop Size')).toBeNull()
+    expect(screen.queryByLabelText('Landscape · desktop Border')).toBeNull()
+    // Speed slider: index 5 of [0.25, 0.5, 0.75, Normal, 1.25, 1.5, 2] = 1.5×.
+    fireEvent.change(screen.getByLabelText('Landscape · desktop Speed'), { target: { value: '5' } })
+    expect(onApplyStyle).toHaveBeenCalledWith('slot:hero_landscape', 'speed-[1.5x]')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    })
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:hero_landscape', 'speed-[1.5x]')
+  })
+
+  it('video Replace with an empty library points at the Videos page', () => {
+    renderInspector([], { videos: [yt({ id: 'v2', title: 'Studio session', poster: null, onSite: true })] })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    expect(screen.getByRole('link', { name: /Add a video first/ }).getAttribute('href')).toBe('/artists/artist-1/videos')
+  })
 })
 
 describe('EditorInspector — Merch component', () => {
@@ -1072,6 +1131,47 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("returning the controls to the region's BASE saves '' — the override row is deleted, not pinned", async () => {
+    // A stored copy of the defaults would win forever over any later change to the
+    // site's own base classes (skeen brief, 2026-08-03).
+    vi.useFakeTimers()
+    try {
+      openStyle()
+      expand('Hero wordmark (SKEEN)')
+      const weight = screen.getByLabelText('Hero wordmark (SKEEN) Boldness')
+      fireEvent.change(weight, { target: { value: 'font-bold' } })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'uppercase font-bold')
+      // Back to the base weight: same tokens as the base (order aside) → save ''.
+      // (Async advance: the second persist chains behind the first's promise.)
+      fireEvent.change(weight, { target: { value: 'font-black' } })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Revert changes walks every touched region back to its session-start value', async () => {
+    // hero_wordmark starts with NO stored row (before = null → revert deletes via '');
+    // footer starts with a stored override (before = that string → revert restores it).
+    openStyle({ styleValues: { footer: 'mt-auto text-lg' } })
+    expand('Hero wordmark (SKEEN)')
+    fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'font-bold' } })
+    expand('Footer')
+    fireEvent.change(screen.getByLabelText('Footer Size'), { target: { value: 'text-6xl' } })
+    // Two keys touched → one button, with the count.
+    const btn = screen.getByRole('button', { name: 'Revert 2 changes' })
+    await act(async () => {
+      fireEvent.click(btn)
+    })
+    // Reverse order: footer (touched last) first, then the wordmark.
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', 'mt-auto text-lg')
+    expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
+    // The ledger clears — the button leaves until something new is touched.
+    expect(screen.queryByRole('button', { name: /Revert \d/ })).toBeNull()
   })
 
   it('shows Font + colour controls only when the site declares a palette', () => {
@@ -1322,6 +1422,19 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
+  it('Revert changes puts a slot placement back to its previous holder', async () => {
+    // m2 takes Slot 1 (previously empty) → revert re-places null.
+    openImages(PHOTOS)
+    fireEvent.click(screen.getByRole('button', { name: 'Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
+    expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Revert 1 change' }))
+    })
+    expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
+    expect(screen.queryByRole('button', { name: /Revert \d/ })).toBeNull()
+  })
+
   it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {
     openImages(PHOTOS)
     expect(screen.getByText('Custom slots')).toBeTruthy()
@@ -1424,27 +1537,68 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.getByRole('button', { name: 'Edit Slot 1' })).toBeTruthy()
   })
 
-  it('Revert is disabled until a change, then returns to the opened-in state and re-saves', () => {
-    vi.useFakeTimers()
-    try {
-      const onApplyStyle = vi.fn()
-      renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
-      fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
-      // Unstyled to start → nothing to revert.
-      expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(true)
-      // Corners → 6px (step index 3: Square, 2px, 4px, 6px).
-      fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
-      expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px]')
-      expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(false)
-      // Revert → back to '' (the opened-in state), painted + saved.
-      fireEvent.click(screen.getByRole('button', { name: /Revert changes/ }))
-      expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
-      vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'slot:polaroid_1_photo', '')
-    } finally {
-      vi.useRealTimers()
-    }
+  it('changes are STAGED: paint immediately, persist nothing until Save', async () => {
+    const onApplyStyle = vi.fn()
+    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    // Nothing staged yet → both exit buttons idle.
+    expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+    // The frame paints instantly; the DB is untouched.
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px]')
+    expect(saveStyleMock).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    })
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]')
+    // Saved → clean again.
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('Revert restores the last-saved state on the sliders AND the frame, without saving', () => {
+    const onApplyStyle = vi.fn()
+    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: /Revert changes/ }))
+    // Repainted back to the saved state ('' — unstyled), nothing written.
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
+    expect(saveStyleMock).not.toHaveBeenCalled()
+    // Clean again: Back leaves without any Save/Discard question.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull()
+  })
+
+  it('backing out with staged changes asks — Discard repaints and leaves, saving nothing', () => {
+    const onApplyStyle = vi.fn()
+    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    // Still in the editor — the question is up instead.
+    expect(screen.getByRole('dialog', { name: 'Save changes to Slot 1?' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
+    expect(saveStyleMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull()
+  })
+
+  it('backing out with staged changes asks — Save & close persists, then leaves', async () => {
+    renderInspector(HELD_SLOT, { components: [POLAROID] })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save & close' }))
+    })
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]')
+    expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull()
   })
 
   /** Open the item editor for the held slot, unfold the palette, and hand back its parts.
@@ -1606,7 +1760,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.queryAllByRole('button', { name: /Border color #123abc/ })).toHaveLength(1)
   })
 
-  it('a colour picked on one item is offered on the NEXT, without a reload', () => {
+  it('a colour picked on one item is offered on the NEXT, without a reload', async () => {
     vi.useFakeTimers()
     try {
       renderInspector(TWO_SLOTS, { components: [POLAROID] })
@@ -1619,6 +1773,10 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
       const hex = screen.getByLabelText('Slot 1 Border color hex')
       fireEvent.change(hex, { target: { value: '#ff8800' } })
       fireEvent.blur(hex)
+      // Staged model: Save first, so Back leaves without the Save/Discard question.
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      })
       fireEvent.click(screen.getByRole('button', { name: 'Back' }))
       // The used-colour record is DEBOUNCED (recording per drag frame re-rendered the
       // whole inspector at pointer rate), so let it settle before the next item looks.
@@ -1664,23 +1822,16 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(deleteMock).not.toHaveBeenCalled()
   })
 
-  it('changing a visual control paints the site optimistically and debounce-saves it', () => {
-    vi.useFakeTimers()
-    try {
-      const onApplyStyle = vi.fn()
-      renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
-      fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
-      // Size is a SLIDER over 5% steps (50%..150%); its value is a step index. Index 12 is
-      // scale-110 (110%). Dragging there applies it to the per-item style key.
-      fireEvent.change(screen.getByLabelText('Slot 1 Size'), { target: { value: '12' } })
-      expect(onApplyStyle).toHaveBeenCalledWith('slot:polaroid_1_photo', 'scale-110')
-      expect(saveStyleMock).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'scale-110')
-    } finally {
-      vi.useRealTimers()
-    }
+  it('a size drag paints the frame instantly under the per-item key', () => {
+    const onApplyStyle = vi.fn()
+    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    // Size is a SLIDER over 5% steps (50%..150%); its value is a step index. Index 12 is
+    // scale-110 (110%). Dragging there paints it; persisting is Save's job (staged model).
+    fireEvent.change(screen.getByLabelText('Slot 1 Size'), { target: { value: '12' } })
+    expect(onApplyStyle).toHaveBeenCalledWith('slot:polaroid_1_photo', 'scale-110')
+    expect(saveStyleMock).not.toHaveBeenCalled()
   })
 
   it('a placed slot is selectable and highlights its region in the frame', () => {

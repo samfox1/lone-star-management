@@ -55,6 +55,9 @@ export type FrameBridge = {
   src: string
   /** Optimistically repaint a text field in the frame, before the debounced save. */
   applyField: (key: string, value: string) => void
+  /** Optimistically repaint ONE image region (a slot placement) — before this, an image
+   *  change's only route to the frame was revalidate → full init-data (~2-3s, silent). */
+  applyImage: (key: string, url: string) => void
   /** Optimistically repaint a region's classes in the frame, before the save. */
   applyStyle: (key: string, className: string) => void
   /** Optimistically set a link-powered element's href in the frame, before the save. */
@@ -110,6 +113,7 @@ export function useFrameBridge({
   )
 
   const applyField = useCallback((key: string, value: string) => post({ type: 'apply-field', key, value }), [post])
+  const applyImage = useCallback((key: string, url: string) => post({ type: 'apply-image', key, url }), [post])
   const applyStyle = useCallback(
     (key: string, className: string) => post({ type: 'apply-style', key, className }),
     [post],
@@ -206,6 +210,7 @@ export function useFrameBridge({
     frameRef,
     src: frameSrc(artistId, customSiteUrl),
     applyField,
+    applyImage,
     applyStyle,
     applyLink,
     applyHighlight,

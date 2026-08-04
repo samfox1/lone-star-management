@@ -182,12 +182,23 @@ export function StyleTools({
     rowRefs.current.get(open)?.scrollIntoView?.({ block: 'center' })
   }, [open])
 
-  function edit(key: string, raw: string) {
+  /** Two class strings that mean the same styling — same tokens, any order. Order only
+   *  breaks ties within equal specificity, which the controls never produce. */
+  const sameClasses = (a: string, b: string) => {
+    const norm = (s: string) => s.split(/\s+/).filter(Boolean).sort().join(' ')
+    return norm(a) === norm(b)
+  }
+
+  function edit(key: string, raw: string, base: string) {
     setText((t) => ({ ...t, [key]: raw }))
+    // A string that equals the region's BASE is not an override — save '' so the row is
+    // DELETED rather than pinning a copy of the defaults (skeen brief, 2026-08-03: a
+    // pinned copy wins forever over any later change to the site's own base classes).
+    const toSave = sameClasses(raw, base) ? '' : raw
     // The hook validates with the SAME function the server uses, so the panel can't
     // claim "Saved" on a rejected write. Controls always emit clean utilities; only a
     // raw escape hatch could produce something invalid.
-    const ok = save(key, raw)
+    const ok = save(key, toSave)
     setInvalid((s) => {
       const next = new Set(s)
       if (ok) next.delete(key)
@@ -236,7 +247,7 @@ export function StyleTools({
                         regionLabel={r.label}
                         control={control}
                         cls={cls}
-                        onChange={(v) => edit(r.key, applyStyleValue(cls, control, v))}
+                        onChange={(v) => edit(r.key, applyStyleValue(cls, control, v), r.base ?? '')}
                       />
                     ))}
                     {/* No raw-class escape hatch: this panel is for a MANAGER, and a

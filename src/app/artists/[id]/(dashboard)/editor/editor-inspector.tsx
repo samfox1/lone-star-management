@@ -11,12 +11,13 @@ import {
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
-import { type SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import { buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
+import { mediaUrl } from '@/lib/storage-url'
 import { isContactLink } from '@/lib/url'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { ItemEditor } from './item-editor'
-import { PhotoThumb, fileNameOf } from './inspector-grid'
+import { ItemEditor, type PickCandidate } from './item-editor'
+import { AddFirstLink, CardThumb, PhotoThumb, fileNameOf } from './inspector-grid'
 import { GallerySlotUploader } from '../media-uploader'
 import {
   PhotoTools,
@@ -37,8 +38,12 @@ import {
   deleteContentAction,
   placeGalleryPhotoAction,
   reorderContentAction,
+  saveEditorFieldAction,
+  saveEditorLinkAction,
+  saveEditorStyleAction,
   setOnSiteAction,
 } from '../actions'
+import { useSessionJournal } from './use-session-journal'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -162,6 +167,7 @@ export function EditorInspector({
   selectedLink = null,
   selectedRegion = null,
   onApplyField,
+  onApplyImage,
   onApplyStyle,
   onApplyLink,
   onHighlight,
@@ -209,6 +215,9 @@ export function EditorInspector({
    *  Images panel and focuses the matching tile. Bumped `nonce` re-fires on a repeat click. */
   selectedRegion?: { target: SelectTarget; nonce: number } | null
   onApplyField?: (key: string, value: string) => void
+  /** Optimistically repaint ONE image region in the frame (a slot placement) — the
+   *  init-data refresh stays as the consistency backstop, not the only path. */
+  onApplyImage?: (key: string, url: string) => void
   onApplyStyle?: (key: string, className: string) => void
   /** Optimistically set a link's href in the frame before the debounced save. */
   onApplyLink?: (key: string, url: string) => void
@@ -318,41 +327,112 @@ export function EditorInspector({
   useEffect(() => () => {
     if (recordTimer.current) clearTimeout(recordTimer.current)
   }, [])
+  /* ── Session journal: what every key was BEFORE this session first touched it ─────
+   * Autosave persists ~500ms behind each edit, so "Revert changes" needs its own memory
+   * of the session-start values. Every optimistic paint is the choke point all edits
+   * pass through BEFORE their save — the wrappers below record there. Reverting walks
+   * the ledger in reverse through the same actions + paints. */
+  const journal = useSessionJournal()
+  const [reverting, setReverting] = useState(false)
+
+  const paintStyle = useCallback(
+    (key: string, className: string) => {
+      journal.record({ kind: 'style', key, before: styleValues[key] ?? null })
+      onApplyStyle?.(key, className)
+    },
+    [journal, styleValues, onApplyStyle],
+  )
+  const paintField = useCallback(
+    (key: string, value: string) => {
+      // Image fields also repaint via apply-field (their value is a URL, saved as a
+      // storage path elsewhere) — those aren't journal-revertable v1, so skip them.
+      const field = textFields.find((f) => f.key === key)
+      if (field) journal.record({ kind: 'field', key, before: field.value })
+      onApplyField?.(key, value)
+    },
+    [journal, textFields, onApplyField],
+  )
+  const paintLink = useCallback(
+    (key: string, url: string) => {
+      journal.record({ kind: 'link', key, before: linkValues[key] ?? '' })
+      onApplyLink?.(key, url)
+    },
+    [journal, linkValues, onApplyLink],
+  )
+
+  async function revertSession() {
+    if (reverting) return
+    setReverting(true)
+    try {
+      for (const e of [...journal.entries].reverse()) {
+        if (e.kind === 'style') {
+          // before=null → save '' → the override row is DELETED, not written empty.
+          onApplyStyle?.(e.key, e.before ?? '')
+          await saveEditorStyleAction(artistId, e.key, e.before ?? '')
+        } else if (e.kind === 'field') {
+          onApplyField?.(e.key, e.before)
+          await saveEditorFieldAction(artistId, e.key, e.before)
+        } else if (e.kind === 'link') {
+          onApplyLink?.(e.key, e.before)
+          await saveEditorLinkAction(artistId, e.key, e.before, linkRegions.find((r) => r.key === e.key)?.label ?? e.key)
+        } else {
+          // Re-place the previous holder: the shared optimistic half, then an AWAITED
+          // persist (not startTransition — a revert must not skip mid-transition).
+          const next = e.before ? (photos.find((p) => p.id === e.before) ?? null) : null
+          applySlotOptimistic(e.role, next)
+          await assignComponentSlotAction(artistId, e.role, next?.id ?? null)
+        }
+      }
+    } finally {
+      journal.clear()
+      setReverting(false)
+    }
+  }
+
   const applyItemStyle = useCallback(
     (key: string, className: string) => {
-      onApplyStyle?.(key, className)
+      paintStyle(key, className)
       if (recordTimer.current) clearTimeout(recordTimer.current)
       recordTimer.current = setTimeout(() => {
         recordTimer.current = null
         setStyleMap((m) => (m[key] === className ? m : { ...m, [key]: className }))
       }, 500)
     },
-    [onApplyStyle],
+    [paintStyle],
   )
 
   /** Build the full-panel editor for the item being edited, from the inspector's LIVE state
    *  (so Replace candidates stay fresh) and its place handlers. Null if the item vanished.
-   *  Only what genuinely differs between a component slot and a gallery photo is computed
-   *  per branch; the ItemEditor call itself exists once. */
+   *  Only what genuinely differs per media kind — the preview, the candidate list, and the
+   *  place/unplace semantics — is computed per branch; the ItemEditor call itself exists
+   *  once. Videos get the same visual controls as images (size, transparency, border,
+   *  corners, shadow); their overlay rides site_styles under the same colon-key contract. */
   function buildItemEditor(item: ItemEdit) {
     const back = () => setEditingItem(null)
+    const photoCandidates = (list: GalleryPhoto[], aspect: string): PickCandidate[] =>
+      list.map((p) => ({ id: p.id, label: filename(p), thumb: <PhotoThumb path={p.storage_path} aspect={aspect} fit="cover" /> }))
+    const videoCandidates = (list: EditorVideo[]): PickCandidate[] =>
+      list.map((v) => ({ id: v.id, label: v.title || 'Untitled video', thumb: <CardThumb poster={v.poster} previewUrl={v.previewUrl} /> }))
+    const videosPageLink = <AddFirstLink href={`/artists/${artistId}/videos`} label="Add a video first" />
+
     let cfg: {
       key: string
-      placed: GalleryPhoto
-      aspect: string
-      candidates: GalleryPhoto[]
+      preview: React.ReactNode
+      candidates: PickCandidate[]
       onPick: (id: string) => void
       onRemove: () => void
-      uploader: React.ReactNode
+      uploader?: React.ReactNode
+      empty?: React.ReactNode
+      /** Overrides the default (image) visual control set — the video branches use it. */
+      controls?: StyleControl[]
     }
     if (item.type === 'imageSlot') {
       const placed = photos.find((p) => p.siteRole === item.role)
       if (!placed) return null
       cfg = {
         key: `slot:${item.role}`,
-        placed,
-        aspect: 'aspect-square',
-        candidates: photos.filter((p) => !p.siteRole),
+        preview: <PhotoThumb path={placed.storage_path} aspect="aspect-square" fit="cover" />,
+        candidates: photoCandidates(photos.filter((p) => !p.siteRole), 'aspect-square'),
         onPick: (id) => placeInSlot(item.role, photos.find((p) => p.id === id) ?? null),
         onRemove: () => placeInSlot(item.role, null),
         uploader: (
@@ -364,18 +444,21 @@ export function EditorInspector({
           />
         ),
       }
-    } else {
+    } else if (item.type === 'galleryPhoto') {
       const placed = photos.find((p) => p.id === item.id)
       if (!placed) return null
+      const aspect = item.orientation === 'vertical' ? 'aspect-[2/3]' : 'aspect-[3/2]'
       cfg = {
         key: `image:${item.id}`,
-        placed,
-        aspect: item.orientation === 'vertical' ? 'aspect-[2/3]' : 'aspect-[3/2]',
-        candidates: photos.filter(
-          (p) =>
-            !p.onSite &&
-            !p.siteRole &&
-            (p.orientation === item.orientation || (item.orientation === 'horizontal' && p.orientation == null)),
+        preview: <PhotoThumb path={placed.storage_path} aspect={aspect} fit="cover" />,
+        candidates: photoCandidates(
+          photos.filter(
+            (p) =>
+              !p.onSite &&
+              !p.siteRole &&
+              (p.orientation === item.orientation || (item.orientation === 'horizontal' && p.orientation == null)),
+          ),
+          aspect,
         ),
         onPick: (id) => {
           const next = photos.find((p) => p.id === id)
@@ -385,6 +468,39 @@ export function EditorInspector({
         onRemove: () => unplacePhoto(placed),
         uploader: <GallerySlotUploader artistId={artistId} orientation={item.orientation} onUploaded={addPhoto} />,
       }
+    } else if (item.type === 'videoSlot') {
+      const placed = videos.find((v) => v.siteRole === item.role)
+      if (!placed) return null
+      cfg = {
+        key: `slot:${item.role}`,
+        preview: <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />,
+        // Only uploaded videos, and not one already holding another background slot.
+        candidates: videoCandidates(videos.filter((v) => v.provider === 'uploaded' && !v.siteRole)),
+        onPick: (id) => assignHero(item.role, id),
+        onRemove: () => assignHero(item.role, null),
+        empty: videosPageLink,
+        // An uploaded background clip: playback is ours to control, so Speed applies.
+        controls: buildVideoItemStyleControls('file'),
+      }
+    } else {
+      const placed = videos.find((v) => v.id === item.id)
+      if (!placed) return null
+      cfg = {
+        key: `video:${item.id}`,
+        preview: <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />,
+        // The band is YouTube embeds only (no uploads, no Shorts), same as its picker.
+        candidates: videoCandidates(videos.filter((v) => !v.onSite && v.provider === 'youtube' && !v.isShort)),
+        onPick: (id) => {
+          // Swap: the old video only leaves the site now that a replacement is chosen.
+          const next = videos.find((v) => v.id === id)
+          toggleVideoOnSite(placed)
+          if (next) toggleVideoOnSite(next)
+        },
+        onRemove: () => toggleVideoOnSite(placed),
+        empty: videosPageLink,
+        // A YouTube iframe: playback can't be touched from outside, so visual-only.
+        controls: buildVideoItemStyleControls('embed'),
+      }
     }
     return (
       <ItemEditor
@@ -393,17 +509,15 @@ export function EditorInspector({
         styleKey={cfg.key}
         label={item.label}
         initialClasses={styleValues[cfg.key] ?? ''}
-        preview={<PhotoThumb path={cfg.placed.storage_path} aspect={cfg.aspect} fit="cover" />}
+        preview={cfg.preview}
         replace={{
           title: `Replace ${item.label}`,
-          candidates: cfg.candidates.map((p) => ({
-            id: p.id,
-            label: filename(p),
-            thumb: <PhotoThumb path={p.storage_path} aspect={cfg.aspect} fit="cover" />,
-          })),
+          candidates: cfg.candidates,
           onPick: cfg.onPick,
           uploader: cfg.uploader,
+          empty: cfg.empty,
         }}
+        controls={cfg.controls}
         onRemove={() => {
           cfg.onRemove()
           back()
@@ -427,9 +541,10 @@ export function EditorInspector({
    * whoever held the role is released first (so the UI can never show one image in two
    * slots), then the new one takes it — mirroring what the action does server-side.
    */
-  function placeInSlot(role: string, photo: GalleryPhoto | null) {
-    if (isPending) return
-    const prev = photos
+  /** The optimistic half of a slot placement: local state + the frame repaint. Shared
+   *  by the normal flow and the session revert (which persists on its own, without the
+   *  isPending gate — a revert must not silently skip entries mid-transition). */
+  function applySlotOptimistic(role: string, photo: GalleryPhoto | null) {
     setPhotos((list) =>
       list.map((p) => {
         if (p.siteRole === role) return { ...p, siteRole: null, onSite: false }
@@ -441,6 +556,17 @@ export function EditorInspector({
     if (photo && !photos.some((p) => p.id === photo.id)) {
       setPhotos((list) => [...list, { ...photo, siteRole: role, onSite: true }])
     }
+    // Repaint the frame's slot immediately (`apply-image`) — the persisted write and the
+    // revalidate → init-data refresh land behind it. Clearing is left to the refresh:
+    // what an EMPTY slot looks like is the template's call, not ours.
+    if (photo) onApplyImage?.(role, mediaUrl(photo.storage_path))
+  }
+
+  function placeInSlot(role: string, photo: GalleryPhoto | null) {
+    if (isPending) return
+    journal.record({ kind: 'slot', role, before: photos.find((p) => p.siteRole === role)?.id ?? null })
+    const prev = photos
+    applySlotOptimistic(role, photo)
     startTransition(async () => {
       const res = await assignComponentSlotAction(artistId, role, photo?.id ?? null)
       if (res?.error) setPhotos(prev)
@@ -651,14 +777,30 @@ export function EditorInspector({
           linkRegions={linkRegions}
           linkValues={linkValues}
           selectedLink={selectedLink}
-          onApplyField={onApplyField}
-          onApplyStyle={onApplyStyle}
-          onApplyLink={onApplyLink}
+          onApplyField={paintField}
+          onApplyStyle={paintStyle}
+          onApplyLink={paintLink}
           onBack={() => selectComponent(null)}
           onSwitch={selectComponent}
         />
       ) : (
         <BrowseView counts={counts} onOpen={selectComponent} />
+      )}
+      {/* The session's one exit ramp: everything touched since the editor opened, put
+          back in one click. Hidden at zero — an inert Revert would only raise "revert
+          to what?" — and hidden while the ITEM editor is open, whose own Revert/Save
+          pair owns that surface (two Revert buttons at once, Sam 2026-08-03). */}
+      {!itemEditor && journal.count > 0 && (
+        <div className="border-t border-hairline px-4 py-2.5">
+          <button
+            type="button"
+            onClick={revertSession}
+            disabled={reverting}
+            className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-accent enabled:hover:text-accent disabled:opacity-40"
+          >
+            {reverting ? 'Reverting…' : `Revert ${plural(journal.count, 'change')}`}
+          </button>
+        </div>
       )}
     </aside>
   )
@@ -880,7 +1022,13 @@ function EditingView({
             />
           </>
         ) : isVideos ? (
-          <VideoTools videos={videos} artistId={artistId} onToggleOnSite={onToggleVideoOnSite} onAssignHero={onAssignHero} />
+          <VideoTools
+            videos={videos}
+            artistId={artistId}
+            onToggleOnSite={onToggleVideoOnSite}
+            onAssignHero={onAssignHero}
+            onEditItem={onEditItem}
+          />
         ) : isTour ? (
           <TourTools
             tours={tours}

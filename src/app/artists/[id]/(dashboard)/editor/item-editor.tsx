@@ -1,25 +1,26 @@
 import { useMemo, useState } from 'react'
-import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { applyStyleValue, buildItemStyleControls } from '@/lib/site-editor/style-controls'
+import { PortalModal } from '@/components/ui/portal-modal'
+import { applyStyleValue, buildItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
 import { colorClass, resolveStyle } from '@/lib/site-editor/style-apply'
-import { GroupLabel, SaveLine, SCROLL_BODY } from './inspector-shared'
+import { EYEBROW, GroupLabel, SaveLine, SCROLL_BODY, type SaveStatus } from './inspector-shared'
 import { StyleControlRow } from './panels/style-tools'
 import { ColorPalette } from './color-picker'
 import { LibraryPicker } from './inspector-grid'
-import { useStyleRegionSave } from './use-style-save'
+import { saveEditorStyleAction } from '../actions'
 
 /**
  * The per-ITEM editor (SITE_EDITOR_PLAN.md — image/video customization). Clicking Edit on an
- * image or video hands the WHOLE left panel to that one item: a live preview, Replace /
- * Remove, the visual controls (size, transparency, border + colour, corners, shadow), and a
- * Revert to the state the editor opened in.
+ * image or video hands the WHOLE left panel to that one item: a live preview in the site
+ * frame, Replace / Remove, and the visual controls (size, transparency, border + colour,
+ * corners, shadow — or the video sets).
  *
- * The visual style is a per-item class string stored + applied through the SAME style system
- * as the section regions (site_styles.class_names keyed by the item's `styleKey`, optimistic
- * `apply-style` to the frame, debounced save). ADDITIVE, not replace: these classes augment
- * the item's own layout on the site, so the saved string is just the manager's overlay. The
- * preview here applies them directly, so the effect is visible before the site renders it.
+ * STAGED, not autosaved (Sam, 2026-08-03): dragging a slider paints the frame immediately
+ * (`apply-style` over the bridge) but persists NOTHING. The explicit pair at the bottom is
+ * the exit contract — Revert restores the last-saved state, Save writes it — and backing
+ * out with unsaved changes asks Save/Discard rather than deciding for the manager. The
+ * stored value is still one overlay class string per item key (`site_styles`), ADDITIVE
+ * over the element's own classes.
  */
 
 /** One candidate in the Replace picker — an id plus how to show it. */
@@ -32,7 +33,13 @@ export type ItemReplace = {
   candidates: PickCandidate[]
   onPick: (id: string) => void
   uploader?: React.ReactNode
+  /** Shown when there are no candidates. Defaults to an upload hint — pass something
+   *  else where the library is filled elsewhere (videos point at the Videos page). */
+  empty?: React.ReactNode
 }
+
+const FOOT_BUTTON =
+  'flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] transition-colors disabled:opacity-40'
 
 export function ItemEditor({
   artistId,
@@ -41,6 +48,7 @@ export function ItemEditor({
   initialClasses,
   preview,
   replace,
+  controls: controlsProp,
   swatches = [],
   onRemove,
   onApplyStyle,
@@ -48,16 +56,17 @@ export function ItemEditor({
 }: {
   artistId: string
   /** Per-item style-region key (`slot:<role>`, `image:<id>`, …). The frame styles the element
-   *  marked `data-lse-style="<styleKey>"`; until the site tags it, the save persists and the
-   *  panel preview shows the effect. */
+   *  marked `data-lse-style="<styleKey>"`. */
   styleKey: string
   label: string
-  /** The item's current overlay class string (from the draft styles), '' if unstyled. Revert
-   *  returns here. */
+  /** The item's SAVED overlay class string (from the draft styles), '' if unstyled. */
   initialClasses: string
-  /** The item's thumbnail; the editor applies the live style around it. */
+  /** The item's identifying thumbnail — static; the site frame is the live preview. */
   preview: React.ReactNode
   replace: ItemReplace
+  /** The visual controls for this item kind. Defaults to the image set; videos pass
+   *  `buildVideoItemStyleControls` (no borders; Speed where playback is controllable). */
+  controls?: StyleControl[]
   /** The palette's quick-pick row: the site's declared colours + ones already used
    *  (`siteSwatches`). */
   swatches?: string[]
@@ -66,44 +75,64 @@ export function ItemEditor({
   onBack: () => void
 }) {
   const [classes, setClasses] = useState(initialClasses)
+  /** What is actually persisted — Revert's target, and what `dirty` compares against.
+   *  Starts at the stored value and moves only when Save succeeds. */
+  const [savedClasses, setSavedClasses] = useState(initialClasses)
+  const [status, setStatus] = useState<SaveStatus>('idle')
   const [picking, setPicking] = useState(false)
-  const controls = useMemo(() => buildItemStyleControls(), [])
-  // Optimistic paint on the site is a no-op until the frame tags the item's region.
-  const { status, save } = useStyleRegionSave(artistId, onApplyStyle)
+  const [confirmExit, setConfirmExit] = useState(false)
+  const defaultControls = useMemo(() => buildItemStyleControls(), [])
+  const controls = controlsProp ?? defaultControls
+  const dirty = classes !== savedClasses
 
+  /** Stage a change: paint the frame, persist nothing. */
   function change(next: string) {
     setClasses(next)
-    save(styleKey, next)
+    onApplyStyle?.(styleKey, next)
   }
 
-  // The preview resolves the class string exactly as the frame and the site do, so what the
-  // manager sees here is what the page will render — including the colours that have to be
-  // inline because no build can compile an arbitrary hex. The border hex is read back out
-  // of the same resolution, so the picker and the preview can't disagree.
-  const shown = resolveStyle(classes)
-  const borderHex = shown.style.borderColor ?? ''
-  const dirty = classes !== initialClasses
+  async function save(): Promise<boolean> {
+    setStatus('saving')
+    const res = await saveEditorStyleAction(artistId, styleKey, classes)
+    if (!res.ok) {
+      setStatus('error')
+      return false
+    }
+    setSavedClasses(classes)
+    setStatus('saved')
+    return true
+  }
+
+  /** Back to the last-saved state — on the sliders AND on the site frame. */
+  function revert() {
+    change(savedClasses)
+  }
+
+  function requestBack() {
+    if (dirty) setConfirmExit(true)
+    else onBack()
+  }
+
+  // The border hex is read back out of the same resolution the site uses, so the picker
+  // always reflects what is actually staged.
+  const borderHex = resolveStyle(classes).style.borderColor ?? ''
 
   return (
     <>
-      {/* Header: back, the live thumbnail, then this item's name ("Edit Slot 3"). The
-          preview lives HERE, outside the scrolling body, because the styling controls are
-          what you scroll to — and judging a border or a corner radius against an image you
-          have to scroll back up to see is guesswork. It carries the same resolved style as
-          the frame, so it changes under the sliders as you drag them. */}
+      {/* Header: back, a plain identifying thumbnail, then this item's name ("Edit
+          Slot 3"). The thumb is deliberately STATIC (Sam, 2026-08-03): the live preview
+          is the site frame on the right — the one render that is true. */}
       <div className="flex items-center gap-2.5 border-b border-hairline px-4 pb-2.5 pt-[15px]">
         <button
           type="button"
-          onClick={onBack}
+          onClick={requestBack}
           aria-label="Back"
           className="flex-none rounded-md p-1 text-ink-muted hover:bg-surface hover:text-ink"
         >
           <Icon name="chevronLeft" size={18} />
         </button>
         <span className="grid h-14 w-14 flex-none place-items-center overflow-hidden rounded-lg bg-surface p-1.5">
-          <span className={cx('block w-full overflow-hidden', shown.className)} style={shown.style}>
-            {preview}
-          </span>
+          <span className="block w-full overflow-hidden">{preview}</span>
         </span>
         <h2 className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">Edit {label}</h2>
       </div>
@@ -152,15 +181,24 @@ export function ItemEditor({
           )}
         </div>
 
-        {/* Revert everything back to the state the editor opened in. */}
-        <div className="px-5 pt-1">
+        {/* The exit contract: Revert restores the last-saved state, Save commits what's
+            staged. Both idle until something is actually different. */}
+        <div className="flex gap-2 px-5 pt-1">
           <button
             type="button"
-            onClick={() => change(initialClasses)}
+            onClick={revert}
             disabled={!dirty}
-            className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-accent enabled:hover:text-accent disabled:opacity-40"
+            className={`${FOOT_BUTTON} text-ink-muted enabled:hover:border-accent enabled:hover:text-accent`}
           >
             Revert changes
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!dirty || status === 'saving'}
+            className={`${FOOT_BUTTON} border-ink bg-ink text-white enabled:hover:bg-black`}
+          >
+            Save
           </button>
         </div>
 
@@ -174,7 +212,11 @@ export function ItemEditor({
           keyOf={(c) => c.id}
           labelOf={(c) => c.label}
           renderThumb={(c) => c.thumb}
-          empty={<p className="py-2 text-center text-xs text-ink-muted">Nothing else in your library. Upload one below.</p>}
+          empty={
+            replace.empty ?? (
+              <p className="py-2 text-center text-xs text-ink-muted">Nothing else in your library. Upload one below.</p>
+            )
+          }
           footer={replace.uploader}
           onPick={(c) => {
             setPicking(false)
@@ -183,7 +225,43 @@ export function ItemEditor({
           onCancel={() => setPicking(false)}
         />
       )}
+
+      {/* Leaving with staged changes: ask, don't decide. Escape / backdrop just closes
+          the question and stays in the editor. */}
+      {confirmExit && (
+        <PortalModal ariaLabel={`Save changes to ${label}?`} onClose={() => setConfirmExit(false)}>
+          <div className={`${EYEBROW} mb-2 pr-6`}>Unsaved changes</div>
+          <p className="mb-3 text-[13px] leading-relaxed text-ink">
+            You changed {label}&apos;s style. Save it, or discard and leave it as it was?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                revert()
+                setConfirmExit(false)
+                onBack()
+              }}
+              className={`${FOOT_BUTTON} text-ink-muted hover:border-accent-red hover:text-accent-red`}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void save().then((ok) => {
+                  setConfirmExit(false)
+                  if (ok) onBack()
+                })
+              }}
+              disabled={status === 'saving'}
+              className={`${FOOT_BUTTON} border-ink bg-ink text-white enabled:hover:bg-black`}
+            >
+              Save &amp; close
+            </button>
+          </div>
+        </PortalModal>
+      )}
     </>
   )
 }
-
