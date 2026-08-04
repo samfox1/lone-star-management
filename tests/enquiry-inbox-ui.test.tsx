@@ -36,6 +36,8 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   created_at: '2026-08-04T10:00:00Z',
   demo_url: null,
   attachmentCount: 0,
+  artistId: 'a1',
+  artistName: 'Lone Pine',
   ...over,
 })
 
@@ -56,14 +58,14 @@ describe('Inbox — reading', () => {
       row({ id: 'older-unread', name: 'Still Unread', created_at: '2026-08-03T10:00:00Z' }),
     ]
     await act(async () => {
-      render(<Inbox artistId="a1" rows={rows} />)
+      render(<Inbox rows={rows} />)
     })
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Still Unread')
   })
 
   it('CRITICAL: opening a message marks it read', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ id: 'x' })]} />)
+      render(<Inbox rows={[row({ id: 'x' })]} />)
     })
     await waitFor(() => expect(read).toHaveBeenCalledWith('a1', 'x'))
   })
@@ -72,7 +74,7 @@ describe('Inbox — reading', () => {
     // Without the undo, glancing at a message permanently loses the manager's own record
     // of what they still have to deal with.
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ id: 'x' })]} />)
+      render(<Inbox rows={[row({ id: 'x' })]} />)
     })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
@@ -82,7 +84,7 @@ describe('Inbox — reading', () => {
 
   it('does not re-mark a message that is already read', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} />)
+      render(<Inbox rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} />)
     })
     expect(read).not.toHaveBeenCalled()
   })
@@ -90,7 +92,7 @@ describe('Inbox — reading', () => {
   it('switching messages shows the other one', async () => {
     const rows = [row({ id: 'a', name: 'First' }), row({ id: 'b', name: 'Second' })]
     await act(async () => {
-      render(<Inbox artistId="a1" rows={rows} />)
+      render(<Inbox rows={rows} />)
     })
     await act(async () => {
       fireEvent.click(screen.getByText('Second'))
@@ -105,7 +107,7 @@ describe('Inbox — the list', () => {
     // scanned at all.
     const long = row({ message: 'x'.repeat(500) })
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[long]} />)
+      render(<Inbox rows={[long]} />)
     })
     const listRow = rowButtons()[0]
     expect(within(listRow).getByText(/…$/)).toBeInTheDocument()
@@ -114,7 +116,7 @@ describe('Inbox — the list', () => {
 
   it('marks unread rows for a screen reader too, not just in bold', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ id: 'u' }), row({ id: 'r', read_at: '2026-08-04T11:00:00Z' })]} />)
+      render(<Inbox rows={[row({ id: 'u' }), row({ id: 'r', read_at: '2026-08-04T11:00:00Z' })]} />)
     })
     // The one we opened becomes read, so exactly one stays unread.
     await waitFor(() => expect(screen.getAllByText('read')).toHaveLength(2))
@@ -126,7 +128,7 @@ describe('Inbox — the list', () => {
       row({ id: 'b', name: 'Read One', read_at: '2026-08-04T11:00:00Z' }),
     ]
     await act(async () => {
-      render(<Inbox artistId="a1" rows={rows} />)
+      render(<Inbox rows={rows} />)
     })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'unread' }))
@@ -137,7 +139,7 @@ describe('Inbox — the list', () => {
 
   it('shows an empty state with no enquiries at all', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[]} />)
+      render(<Inbox rows={[]} />)
     })
     expect(screen.getByText(/No enquiries yet/)).toBeInTheDocument()
   })
@@ -149,7 +151,7 @@ describe('Inbox — attachments', () => {
     // unread, while the one you wanted had been counting down since render.
     const rows = [row({ id: 'a', attachmentCount: 2 }), row({ id: 'b', attachmentCount: 1 })]
     await act(async () => {
-      render(<Inbox artistId="a1" rows={rows} />)
+      render(<Inbox rows={rows} />)
     })
     await waitFor(() => expect(sign).toHaveBeenCalledTimes(1))
     expect(sign).toHaveBeenCalledWith('a')
@@ -157,7 +159,7 @@ describe('Inbox — attachments', () => {
 
   it('does not sign for a message with no attachments', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ attachmentCount: 0 })]} />)
+      render(<Inbox rows={[row({ attachmentCount: 0 })]} />)
     })
     await waitFor(() => expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument())
     expect(sign).not.toHaveBeenCalled()
@@ -170,7 +172,7 @@ describe('Inbox — attachments', () => {
       { id: 'f1', filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: null, url: null, expired: true, neverUploaded: false },
     ])
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ attachmentCount: 1 })]} />)
+      render(<Inbox rows={[row({ attachmentCount: 1 })]} />)
     })
     expect(await screen.findByText(/Attachment expired/)).toBeInTheDocument()
     expect(screen.getByText('demo.mp3')).toBeInTheDocument()
@@ -181,7 +183,7 @@ describe('Inbox — attachments', () => {
       { id: 'f1', filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: null, url: null, expired: false, neverUploaded: true },
     ])
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ attachmentCount: 1 })]} />)
+      render(<Inbox rows={[row({ attachmentCount: 1 })]} />)
     })
     expect(await screen.findByText(/Upload didn’t complete/)).toBeInTheDocument()
   })
@@ -191,7 +193,7 @@ describe('Inbox — attachments', () => {
       { id: 'f1', filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: 4210233, url: 'https://s/x', expired: false, neverUploaded: false },
     ])
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ attachmentCount: 1 })]} />)
+      render(<Inbox rows={[row({ attachmentCount: 1 })]} />)
     })
     expect(await screen.findByText('4.0 MB')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Download' })).toHaveAttribute('href', 'https://s/x')
@@ -199,14 +201,14 @@ describe('Inbox — attachments', () => {
 
   it('CRITICAL: a javascript: demo link is never rendered as a link', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ demo_url: 'javascript:alert(1)' })]} />)
+      render(<Inbox rows={[row({ demo_url: 'javascript:alert(1)' })]} />)
     })
     expect(screen.queryByText(/javascript:/)).toBeNull()
   })
 
   it('renders an https demo link with noopener', async () => {
     await act(async () => {
-      render(<Inbox artistId="a1" rows={[row({ demo_url: 'https://soundcloud.com/x' })]} />)
+      render(<Inbox rows={[row({ demo_url: 'https://soundcloud.com/x' })]} />)
     })
     const link = screen.getByRole('link', { name: 'https://soundcloud.com/x' })
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')

@@ -1,0 +1,12 @@
+-- Drop `enquiry_counts_by_artist` (20260804180000).
+--
+-- It backed a table of per-artist enquiry counts at /artists. That page is gone: /artists
+-- is now the roster-wide INBOX — the messages themselves, labelled by artist — because a
+-- table of counts answered "who has a pile waiting" while leaving every message two clicks
+-- away, and looked nothing like the page it linked to.
+--
+-- The inbox reads `enquiries` directly (RLS scopes it to the caller's roster), so nothing
+-- queries this view any more. Dropping it rather than leaving it: its own comment claims
+-- it "backs the manager overview at /artists", and a view that lies about who uses it is
+-- worse than no view.
+drop view if exists public.enquiry_counts_by_artist;

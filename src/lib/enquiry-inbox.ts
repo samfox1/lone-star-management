@@ -18,9 +18,14 @@ export type InboxRow = {
   /** Shown as a badge in the list, so the manager can see a demo has audio without
    *  opening it. A count, not the files — signing happens on open. */
   attachmentCount: number
+  /** Which artist this came in for. Always present, because the same inbox serves the
+   *  whole roster and one artist — the difference is whether the LABEL is shown, not
+   *  whether the data is there. Read/unread writes need it too. */
+  artistId: string
+  artistName: string
 }
 
-export type InboxFilter = 'all' | 'unread'
+export type InboxFilter = 'all' | 'unread' | 'demos'
 
 /**
  * One line of the message, for the list.
@@ -41,8 +46,12 @@ export function snippet(message: string, max = 90): string {
   return `${body.replace(/[.,;:!?-]+$/, '')}…`
 }
 
+/** `demos` is a KIND, not a status, so it deliberately ignores read state: the manager
+ *  batching demos wants all of them, not only the new ones. */
 export function filterRows(rows: InboxRow[], filter: InboxFilter): InboxRow[] {
-  return filter === 'unread' ? rows.filter((r) => !r.read_at) : rows
+  if (filter === 'unread') return rows.filter((r) => !r.read_at)
+  if (filter === 'demos') return rows.filter((r) => r.purpose === 'demo')
+  return rows
 }
 
 /**

@@ -21,7 +21,7 @@ const NAV: { key: RosterSection; label: string; icon: IconName; href: string }[]
   { key: 'book', label: 'Book', icon: 'list', href: '/book' },
   // Enquiries sits beside Book: both are cross-artist rollups the manager works FROM,
   // rather than per-artist surfaces they navigate INTO.
-  { key: 'enquiries', label: 'Enquiries', icon: 'text', href: '/artists' },
+  { key: 'enquiries', label: 'Enquiries', icon: 'note', href: '/artists' },
 ]
 
 function rosterNav(active?: RosterSection): NavItem[] {

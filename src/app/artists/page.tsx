@@ -1,116 +1,82 @@
-import Link from 'next/link'
-import { buildRoster, type EnquiryCountRow } from '@/lib/enquiries'
 import { createClient } from '@/lib/supabase/server'
-import { KLabel } from '@/components/ui/ui'
+import type { InboxRow } from '@/lib/enquiry-inbox'
+import { Inbox } from './[id]/(dashboard)/enquiries/inbox'
 import { EmptyState, RosterShell, SectionToolbar } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
 
 export const metadata = { title: 'Enquiries — Lone Star Management' }
 
-/** "Aug 4, 2026" — the roster view needs the day, not the minute; the per-artist
- *  inbox shows the time. */
-function fmtDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
-}
+/** Enough to hold a busy roster's recent mail without asking the browser to render a
+ *  thousand rows nobody scrolls to. Older enquiries stay reachable on the artist's own
+ *  page, which is scoped and therefore shorter. */
+const MAX_ROWS = 200
 
 /**
- * Enquiries across the whole roster — who needs answering.
+ * The roster-wide enquiries inbox.
  *
- * Deliberately TRIAGE, not a directory. `/roster` already lists every artist a manager
- * has and links to each one, so a second alphabetical index would earn nothing. This
- * sorts by attention: anyone with unread first, freshest at the top (see
- * `sortByAttention` for why recency beats pile size).
+ * One inbox for every artist a manager has, because that is what an inbox IS — one list of
+ * mail from many senders, with the sender labelled. The artist page renders the SAME
+ * component scoped to one artist; the only difference is whether the artist label is
+ * shown. Two screens that behave identically, from one piece of code.
  *
- * Two RLS-scoped reads, no N+1 and no second permission model: `ownedArtists` for the
- * roster, and the `enquiry_counts_by_artist` view for the numbers. The view is
- * `security_invoker`, so `enquiries`' own policy scopes the counts — a manager cannot see
- * another tenant's VOLUME, which is a real leak even though no message text is involved.
+ * This replaced a table of per-artist counts. The table answered "who has a pile waiting"
+ * but you could not read anything from it — every message was still two clicks away, and
+ * it looked nothing like the page it linked to.
+ *
+ * RLS does the scoping: `enquiries` is is_admin() OR is_manager_of(artist_id), so this
+ * unfiltered read returns exactly the caller's roster and nothing else.
  */
-export default async function ArtistsEnquiriesPage() {
+export default async function EnquiriesInboxPage() {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   const artists = await ownedArtists(supabase)
+  const nameById = new Map(artists.map((a) => [a.id, a.name]))
 
-  // Same degradation the Book uses: a missing view surfaces as 42P01, or as PGRST205
-  // through PostgREST's schema cache. Anything else (RLS, network) is real and must
-  // surface rather than quietly render as "no enquiries".
-  const { data: countRows, error: countErr } = await supabase
-    .from('enquiry_counts_by_artist')
-    .select('artist_id, total, unread, latest_at')
-  const viewMissing = countErr?.code === '42P01' || countErr?.code === 'PGRST205'
-  if (countErr && !viewMissing) throw countErr
+  const { data } = await supabase
+    .from('enquiries')
+    .select('id, artist_id, purpose, name, email, message, read_at, created_at, demo_url')
+    .order('created_at', { ascending: false })
+    .limit(MAX_ROWS)
+  const enquiries = (data ?? []) as (Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'> & {
+    artist_id: string
+  })[]
 
-  const rows = buildRoster(artists, (countRows ?? []) as EnquiryCountRow[])
-  const totalUnread = rows.reduce((s, r) => s + r.unread, 0)
-  const total = rows.reduce((s, r) => s + r.total, 0)
+  // Counts only. Signing happens when a message is opened, so the page costs one extra
+  // query rather than a round trip per attachment for URLs that mostly expire unread.
+  const { data: attachmentRows } = await supabase
+    .from('enquiry_attachments')
+    .select('enquiry_id')
+    .in('enquiry_id', enquiries.length ? enquiries.map((r) => r.id) : ['00000000-0000-0000-0000-000000000000'])
+  const counts = new Map<string, number>()
+  for (const a of attachmentRows ?? []) {
+    const key = a.enquiry_id as string
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+
+  const rows: InboxRow[] = enquiries.map((r) => ({
+    ...r,
+    attachmentCount: counts.get(r.id) ?? 0,
+    artistId: r.artist_id,
+    // An artist RLS hides would be a bug, not a normal state — but rendering "Unknown"
+    // beats dropping the message, which would hide mail somebody sent.
+    artistName: nameById.get(r.artist_id) ?? 'Unknown artist',
+  }))
 
   return (
     <RosterShell active="enquiries" page="Enquiries" email={user?.email ?? null}>
       <SectionToolbar title="Enquiries" />
       {artists.length === 0 ? (
         <EmptyState
-          icon="text"
+          icon="note"
           title="No artists yet"
           sub="Request your first artist — booking and demo enquiries from their site collect here, across your whole roster."
         />
       ) : (
         <div className="px-7 pb-12">
-          <div className="border-b border-hairline pb-7">
-            <KLabel>Unread · your roster</KLabel>
-            <div className="mt-2 font-space text-[34px] font-bold tabular-nums tracking-[-0.02em]">
-              {totalUnread}
-            </div>
-            <p className="mt-1 font-space text-xs text-ink-faint">
-              {total === 0
-                ? 'No enquiries yet. They arrive from the contact form on each artist’s site.'
-                : `${total} enquir${total === 1 ? 'y' : 'ies'} in total.`}
-            </p>
-          </div>
-
-          <table className="mt-7 w-full text-left">
-            <thead>
-              <tr className="border-b border-hairline">
-                <th className="pb-2 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                  Artist
-                </th>
-                <th className="pb-2 text-right font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                  Unread
-                </th>
-                <th className="pb-2 text-right font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                  Total
-                </th>
-                <th className="pb-2 text-right font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                  Latest
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b border-hairline-soft last:border-0">
-                  <td className="py-3">
-                    <Link
-                      href={`/artists/${r.id}/enquiries`}
-                      className="font-medium transition-colors hover:text-accent"
-                    >
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td className="py-3 text-right font-space text-sm tabular-nums">
-                    {r.unread > 0 ? (
-                      <span className="font-bold text-accent">{r.unread}</span>
-                    ) : (
-                      <span className="text-ink-faint">0</span>
-                    )}
-                  </td>
-                  <td className="py-3 text-right font-space text-sm tabular-nums text-ink-muted">{r.total}</td>
-                  <td className="py-3 text-right font-space text-sm text-ink-muted">{fmtDate(r.latestAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Inbox rows={rows} showArtist />
         </div>
       )}
     </RosterShell>

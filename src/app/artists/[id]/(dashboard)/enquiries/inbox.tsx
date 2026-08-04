@@ -43,7 +43,16 @@ function fullDate(iso: string): string {
  * dozens of round trips for URLs that mostly expired unused, and the one you actually
  * wanted had been counting down since the page rendered.
  */
-export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }) {
+export function Inbox({
+  rows,
+  showArtist = false,
+}: {
+  rows: InboxRow[]
+  /** Label each row with the artist it came in for. On the roster-wide inbox that is the
+   *  single most useful thing on the row; on one artist's page it is noise repeated on
+   *  every line. Same component either way — the DATA is identical, only the label moves. */
+  showArtist?: boolean
+}) {
   const [filter, setFilter] = useState<InboxFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(() => initialSelection(rows))
   // Read state is tracked locally so the list updates the instant you click, rather than
@@ -90,7 +99,7 @@ export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }
     if (!readIds.has(id)) {
       startTransition(() => {
         setReadIds((prev) => new Set(prev).add(id))
-        void markEnquiryReadAction(artistId, id)
+        void markEnquiryReadAction(selected.artistId, id)
       })
     }
     return () => {
@@ -99,7 +108,7 @@ export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }
     // `readIds` deliberately omitted: including it would re-run this the moment we mark
     // read, and the guard above already makes the write idempotent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, artistId])
+  }, [selected?.id])
 
   function markUnread() {
     if (!selected) return
@@ -109,7 +118,7 @@ export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }
       return next
     })
     startTransition(() => {
-      void markEnquiryUnreadAction(artistId, selected.id)
+      void markEnquiryUnreadAction(selected.artistId, selected.id)
     })
   }
 
@@ -129,7 +138,7 @@ export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }
           {unreadCount > 0 && ` · ${unreadCount} unread`}
         </span>
         <div className="ml-auto flex gap-1">
-          {(['all', 'unread'] as const).map((f) => (
+          {(['all', 'unread', 'demos'] as const).map((f) => (
             <button
               key={f}
               type="button"
@@ -173,12 +182,17 @@ export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }
                           className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
                         />
                       )}
-                      <span className={`truncate text-sm ${isRead ? 'text-ink-muted' : 'font-bold'}`}>
-                        {r.name}
-                      </span>
+                      {showArtist && (
+                        <span className="truncate font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-muted">
+                          {r.artistName}
+                        </span>
+                      )}
                       <span className="ml-auto shrink-0 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
                         {PURPOSE_LABEL[r.purpose] ?? r.purpose}
                       </span>
+                    </div>
+                    <div className={`truncate text-sm ${isRead ? 'text-ink-muted' : 'font-bold'}`}>
+                      {r.name}
                     </div>
                     <p className="mt-1 truncate font-space text-xs text-ink-faint">{snippet(r.message)}</p>
                     <div className="mt-1 flex items-center gap-2 font-space text-[10px] text-ink-faint">
@@ -204,6 +218,7 @@ export function Inbox({ artistId, rows }: { artistId: string; rows: InboxRow[] }
           ) : (
             <article>
               <p className="font-space text-[11px] uppercase tracking-[0.08em] text-ink-muted">
+                {showArtist && <span className="text-ink">{selected.artistName} · </span>}
                 {PURPOSE_LABEL[selected.purpose] ?? selected.purpose}
               </p>
               <h2 className="mt-1 text-[17px] font-bold tracking-[-0.01em]">{selected.name}</h2>

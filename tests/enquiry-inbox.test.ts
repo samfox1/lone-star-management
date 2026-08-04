@@ -17,6 +17,8 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   created_at: '2026-08-04T10:00:00Z',
   demo_url: null,
   attachmentCount: 0,
+  artistId: 'a1',
+  artistName: 'Lone Pine',
   ...over,
 })
 
@@ -56,6 +58,7 @@ describe('snippet', () => {
 describe('filterRows', () => {
   const unread = row({ id: 'u', read_at: null })
   const read = row({ id: 'r', read_at: '2026-08-04T11:00:00Z' })
+  const demo = row({ id: 'd', purpose: 'demo', read_at: '2026-08-04T11:00:00Z' })
 
   it('shows everything under "all"', () => {
     expect(filterRows([unread, read], 'all').map((r) => r.id)).toEqual(['u', 'r'])
@@ -63,6 +66,17 @@ describe('filterRows', () => {
 
   it('shows only unread under "unread"', () => {
     expect(filterRows([unread, read], 'unread').map((r) => r.id)).toEqual(['u'])
+  })
+
+  it('shows only demos under "demos"', () => {
+    // Its own filter because demos are the ones with audio to listen to, which is a
+    // different job from answering a booking — and the one a manager batches.
+    expect(filterRows([unread, read, demo], 'demos').map((r) => r.id)).toEqual(['d'])
+  })
+
+  it('demos filter ignores read state — it is a kind, not a status', () => {
+    const unreadDemo = row({ id: 'ud', purpose: 'demo' })
+    expect(filterRows([demo, unreadDemo], 'demos').map((r) => r.id)).toEqual(['d', 'ud'])
   })
 
   it('preserves order — the caller already sorted newest first', () => {

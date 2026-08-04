@@ -18,7 +18,7 @@ const SOURCE_LABEL: Record<string, string> = {
 export default async function EnquiriesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  await requireArtist(id) // non-owner → 404
+  const artist = await requireArtist(id) // non-owner → 404
 
   // RLS scopes this to the artist's managers + admins (see 20260722120000).
   const { data } = await supabase
@@ -26,7 +26,7 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     .select('id, purpose, name, email, message, read_at, created_at, demo_url')
     .eq('artist_id', id)
     .order('created_at', { ascending: false })
-  const enquiries = (data ?? []) as Omit<InboxRow, 'attachmentCount'>[]
+  const enquiries = (data ?? []) as Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'>[]
 
   // COUNTS only, not signed URLs. The list needs a badge; signing happens when a message
   // is opened, so a page load costs one query instead of one round trip per attachment
@@ -40,7 +40,15 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     const key = a.enquiry_id as string
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
-  const rows: InboxRow[] = enquiries.map((r) => ({ ...r, attachmentCount: counts.get(r.id) ?? 0 }))
+  // Artist identity rides on every row even here, where the label is hidden: the
+  // read/unread writes need it, and it keeps this page's data identical to the
+  // roster-wide inbox so one component serves both.
+  const rows: InboxRow[] = enquiries.map((r) => ({
+    ...r,
+    attachmentCount: counts.get(r.id) ?? 0,
+    artistId: id,
+    artistName: artist.name as string,
+  }))
 
   // The live resolved recipient, which may differ from any single row's frozen to_email if
   // the address has since changed. SECURITY DEFINER with an internal owner guard — the
@@ -68,7 +76,7 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
         )}
       </div>
 
-      <Inbox artistId={id} rows={rows} />
+      <Inbox rows={rows} />
     </SectionShell>
   )
 }

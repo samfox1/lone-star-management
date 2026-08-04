@@ -27,7 +27,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
     { seg: 'links', icon: 'links', title: 'Links', desc: 'Social & external links' },
     { seg: 'epk', icon: 'epk', title: 'Press kit', desc: 'Shareable EPK one-pager' },
     { seg: 'subscribers', icon: 'list', title: 'Subscribers', desc: 'Emails from the site popup' },
-    { seg: 'enquiries', icon: 'text', title: 'Enquiries', desc: 'Booking & contact messages from the site' },
+    { seg: 'enquiries', icon: 'note', title: 'Enquiries', desc: 'Booking & contact messages from the site' },
     {
       seg: 'tools/integrations',
       icon: 'integrations',

@@ -40,6 +40,7 @@ export type IconName =
   | 'folder'
   | 'photo'
   | 'text'
+  | 'note'
   | 'grip'
   | 'minus'
   // Typography controls (the editor's Style panel) — one per style control row.
@@ -200,6 +201,15 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
   trash: <path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13" />,
   text: <path d="M5 6h14M5 10h14M5 14h9M5 18h6" />,
+  // A page with a folded corner and a couple of written lines — enquiries are notes
+  // somebody wrote, and `text` (bare lines) reads as formatting rather than a message.
+  note: (
+    <>
+      <path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+      <path d="M14 4v5h5" />
+      <path d="M8 13h8M8 16.5h5" />
+    </>
+  ),
   minus: <path d="M5 12h14" />,
   grip: (
     <>
