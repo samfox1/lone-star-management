@@ -38,6 +38,28 @@ decisions behind them (esp. ADR-0002).
   fans read tenant data (ADR-0001). Each door is a thin **projection** over the
   published state into its output shape (`get_public_site`, `get_release`,
   `get_public_releases`, `audio_path_for_play`).
+- **Edge door** — the ONE public entry that is not a SQL function: the `/contact`
+  Edge Function (ADR-0010). Postgres provably cannot host it — it needs the client IP
+  (per-IP rate limiting) and an outbound call to Resend — so the door moved to the edge
+  and the RPC behind it (`submit_enquiry`) is `service_role`-only. "Resolve the tenant
+  from the slug, never trust the client" still holds; only the runtime changed.
+
+## Enquiries
+
+- **Enquiry** — a contact-form submission from an artist site. Stored in `enquiries`
+  (the manager's inbox, owner-read) *before* being emailed, so a bounced or failed send
+  still leaves a record the manager can act on.
+- **Recipient resolution** — the booking address, resolved SERVER-SIDE by
+  `resolve_booking_recipient`: ops override → `links.role='booking'` →
+  `site_content.booking_email` → configured default, each rung skipped if it isn't a
+  valid address. Never accepted from the request body — that would be an open relay on
+  our verified sending domain. Reads WORKING rows, so correcting a dead address takes
+  effect immediately without publishing unrelated edits; `enquiries.to_email` freezes
+  what was resolved per row.
+- **Attempt ledger** — `contact_attempts`, admin-only: every attempt including honeypot
+  hits and rejections, keyed by a salted IP hash. It is the rate limiter's counter
+  (5/hour, 20/day per IP), kept separate from `enquiries` so a dropped attempt costs the
+  attacker a slot without reaching a manager's screen. Runbook: `docs/contact-endpoint.md`.
 
 ## Music & assets
 

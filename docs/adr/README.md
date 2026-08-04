@@ -14,6 +14,8 @@ Supersede rather than edit: add a new ADR that marks the old one superseded.
 | [0006](0006-visual-site-editor.md) | Visual site editor: editable-regions rulebook + embedded-frame | Accepted (styling clause superseded by 0008) |
 | [0007](0007-released-is-a-library-label.md) | Released/Unreleased is a library label, not a site gate | Accepted |
 | [0008](0008-per-region-style-overrides.md) | Per-region style overrides + the custom-site contract | Accepted |
+| [0009](0009-editor-picked-types-are-live-toggled.md) | A type the editor can pick is live-toggled, never publish-reconciled | Accepted |
+| [0010](0010-edge-functions-as-public-doors.md) | An Edge Function may be a public door, when Postgres provably cannot be | Accepted (extends 0001) |
 
 See also: `PLAN.md` (original brief), `DASHBOARD_PLAN.md` (multi-page dashboard
 plan + pressure-test), `PHASE0.md` (versioning foundation),

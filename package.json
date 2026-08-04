@@ -10,6 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:push": "supabase db push",
+    "fn:serve": "supabase functions serve contact --env-file supabase/functions/.env.local",
+    "fn:deploy": "supabase functions deploy contact",
+    "fn:secrets": "supabase secrets list",
     "db:seed": "tsx scripts/seed.ts",
     "make:admin": "tsx scripts/make-admin.ts",
     "site:custom": "tsx scripts/set-custom-site.ts"

@@ -37,7 +37,7 @@ const TABS: Tab[] = [
     label: 'Manager tools',
     seg: 'tools',
     icon: 'tools',
-    match: ['tools', 'site', 'brand', 'links', 'epk', 'subscribers', 'settings', 'edit'],
+    match: ['tools', 'site', 'brand', 'links', 'epk', 'subscribers', 'enquiries', 'settings', 'edit'],
     dirtySegs: ['site', 'links'],
   },
 ]

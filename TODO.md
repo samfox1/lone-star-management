@@ -93,6 +93,64 @@ Decisions that don't change the sequence:
       app's HTTP APIs (RLS + validation enforced) or an RLS-scoped per-manager client.
       Do not add write tools on the god-key transport.
 
+## Contact enquiries — BUILT 2026-07-21 (needs Resend domain + secrets to go live)
+
+Server-side send for artist-site contact forms, replacing skeen's `mailto:` handler
+(which loses an enquiry whenever the visitor has no mail client). The public door is an
+**Edge Function**, not an anon SQL door — it needs the client IP for per-IP rate
+limiting and an outbound call to Resend, neither of which Postgres can do. See
+**ADR 0010** and the runbook at **`docs/contact-endpoint.md`**.
+
+Shipped: migrations `20260722120000` (tables) + `20260722130000` (functions), both
+**applied**; `supabase/functions/contact/`; manager inbox at
+`/artists/<id>/enquiries`; 77 tests. Recipient is resolved SERVER-SIDE only —
+`artist_mail_settings.booking_email` → `links.role='booking'` →
+`site_content.booking_email` → `mail_settings.default_to_email` — because accepting it
+from the request body would make the endpoint an open relay on our verified domain.
+
+**Blocked on Sam, in order — nothing sends until all four are done:**
+- [ ] Sam: pick a domain **Lone Star controls** and verify it with Resend (SPF + DKIM).
+      The long pole (DNS propagation). We cannot send `from:` an artist's own booking
+      address unless we control that DNS — a spoofed From fails DMARC and lands in spam.
+      The visitor goes in `reply_to`, which is what makes reply-to-enquirer work.
+- [ ] Sam: `supabase secrets set` for `RESEND_API_KEY`, `CONTACT_IP_SALT`
+      (`openssl rand -hex 32`), `CONTACT_ALLOWED_ORIGINS`, `CONTACT_DRY_RUN=true`.
+      Template + rationale in `supabase/functions/.env.example`. These are Edge
+      Function secrets, NEVER `.env.local` — one `NEXT_PUBLIC_` typo there ships the
+      Resend key to every visitor's browser.
+- [ ] Sam: seed the `mail_settings` singleton (needs the verified domain from step 1).
+      Until it exists the endpoint 500s for any artist with no booking address of
+      their own.
+- [ ] Sam: `npm run fn:deploy`, then the curl checklist in `docs/contact-endpoint.md`
+      with `CONTACT_DRY_RUN=true`. Send one to Resend's `delivered@resend.dev` sink
+      before flipping dry-run off.
+
+**Then, skeen side:**
+- [ ] Add `sendContact()` to `lib/backend.ts` and swap `ContactModal`'s `mailto:`
+      handler for it, with pending/sent/failed states. Keep the `mailto:` as the
+      failure fallback so an enquiry is never simply lost.
+- [ ] Declare `booking` as a link region in the manifest skeen posts on `ready`, so the
+      manager can set the booking address from the editor (rung 2 above). `mapConfig`'s
+      existing `role='booking'` resolution already matches.
+
+**Deliberate deviation from the agreed plan, flagged for review:** we did NOT add a
+`booking` link region to the built-in `classic`/`cinematic` manifests. A
+`ManifestLinkRegion` is a contract with a `data-lse-link` anchor, and neither template
+has a booking anchor — declaring it would show an inspector row for an element that
+doesn't exist and quietly redefine link regions as "anchors, plus one that's secretly
+mail routing". Instead `booking_email` was added to `TEMPLATE_FIELDS.classic`
+(`cinematic` already had it), reusing the existing site-text machinery. Add the region
+later if those templates grow a real booking anchor.
+
+**Later (not blocking):**
+- [ ] Per-artist sending domains. The schema already carries
+      `artist_mail_settings.sending_domain` / `.resend_domain_id` /
+      `.domain_verified_at`, so this is a data + Resend Domains API change, not a
+      rewrite. Needs a pending/verified state in the UI since nothing sends until the
+      artist's DNS is live.
+- [ ] `contact_attempts` prunes opportunistically (`random() < 0.01`, 30 days) because
+      there is no `pg_cron` here. Revisit if the table ever gets big enough to notice.
+
 ## Google Drive integration — BUILT 2026-07-09 (needs GOOGLE_API_KEY to go live)
 
 Public-folder-link model: the manager pastes a link-shared folder URL in

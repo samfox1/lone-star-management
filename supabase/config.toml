@@ -375,6 +375,18 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The public contact/booking enquiry door. See supabase/functions/contact/index.ts and
+# ADR 0010 for why this feature's public entry point is an Edge Function rather than an
+# anon-granted SECURITY DEFINER function like every other door in this system.
+#
+# verify_jwt stays ON. The artist sites already send the anon key as a Bearer JWT (the
+# same key they use for get_public_site), so legitimate callers pass unchanged, and it
+# turns away the entirely-scripted abuse that never bothered to read our bundle. It is
+# NOT an authorization control — the anon key is public — it is a speed bump, and the
+# real controls are the per-IP rate limit and the server-side recipient resolution.
+[functions.contact]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

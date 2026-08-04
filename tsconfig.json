@@ -30,5 +30,10 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // The Edge Function ENTRYPOINT runs in Deno, not Next: it uses Deno.serve/Deno.env
+  // and `./validate.ts`-style extension imports, neither of which typechecks under this
+  // config. Only the entrypoint is excluded — validate.ts and _shared/cors.ts are pure
+  // TS and stay covered here (and validate.ts is additionally pulled in, and therefore
+  // typechecked, via tests/contact-validate.test.ts).
+  "exclude": ["node_modules", "supabase/functions/contact/index.ts"]
 }

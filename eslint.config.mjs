@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     // artifacts alone OOM eslint) and throwaway HTML mocks.
     "lone-star-agent/**",
     "prototypes/**",
+    // Deno entrypoint, not Next: Deno.serve/Deno.env and .ts-extension imports.
+    // Its pure helpers (contact/validate.ts, _shared/cors.ts) are NOT ignored.
+    "supabase/functions/contact/index.ts",
   ]),
 ]);
 
