@@ -3,7 +3,7 @@ import type { InboxRow } from '@/lib/enquiry-inbox'
 import { Icon } from '@/components/ui/icons'
 import { SectionShell } from '../section-shell'
 import { requireArtist } from '../_data'
-import { Inbox } from './inbox'
+import { EnquiryTable } from './enquiry-table'
 
 export const metadata = { title: 'Enquiries — Lone Star Management' }
 
@@ -76,7 +76,7 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
         )}
       </div>
 
-      <Inbox rows={rows} />
+      <EnquiryTable rows={rows} />
     </SectionShell>
   )
 }

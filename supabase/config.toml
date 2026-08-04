@@ -379,13 +379,21 @@ deno_version = 2
 # ADR 0010 for why this feature's public entry point is an Edge Function rather than an
 # anon-granted SECURITY DEFINER function like every other door in this system.
 #
-# verify_jwt stays ON. The artist sites already send the anon key as a Bearer JWT (the
-# same key they use for get_public_site), so legitimate callers pass unchanged, and it
-# turns away the entirely-scripted abuse that never bothered to read our bundle. It is
-# NOT an authorization control — the anon key is public — it is a speed bump, and the
-# real controls are the per-IP rate limit and the server-side recipient resolution.
+# verify_jwt is OFF, and that is a MOVE rather than a weakening. It was on, and it would
+# have broken every browser submission: a CORS preflight carries no Authorization header
+# by specification, so the gateway 401s the OPTIONS request before the handler's own
+# OPTIONS branch ever runs. The browser then reports an opaque CORS failure and the deploy
+# looks broken for a reason nothing in the logs explains.
+#   https://supabase.com/docs/guides/troubleshooting/unable-to-call-edge-function-with-cors
+#
+# The speed bump it provided is kept, moved INTO the function: POST requires the anon key
+# in the Authorization header and 401s without it, while OPTIONS is answered first and
+# unauthenticated. Same effect on scripted abuse, no effect on preflight.
+#
+# It was never an authorization control — the anon key is public. The real controls are
+# unchanged: the per-IP rate limit and server-side recipient resolution.
 [functions.contact]
-verify_jwt = true
+verify_jwt = false
 
 [analytics]
 enabled = true

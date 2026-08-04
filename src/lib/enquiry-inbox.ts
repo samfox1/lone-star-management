@@ -1,9 +1,13 @@
 /**
- * The inbox's pure rules.
+ * The enquiries table's pure rules.
  *
- * Kept out of the component on purpose: what a row says before you open it, and what is
- * open when you arrive, are product decisions worth stating and testing plainly. The
- * component is then only responsible for the split pane.
+ * A TABLE, not a mail client. These messages are a record kept in case something is lost
+ * — nobody replies to a booking from in here, they reply from their own mail. So the job
+ * is dense, scannable, filterable storage, and the rules worth stating are what a row
+ * says and what each filter means.
+ *
+ * (There is no `initialSelection` any more. An inbox opens something for you because you
+ * came to read; an archive opens nothing, because you came to look something up.)
  */
 
 export type InboxRow = {
@@ -52,19 +56,4 @@ export function filterRows(rows: InboxRow[], filter: InboxFilter): InboxRow[] {
   if (filter === 'unread') return rows.filter((r) => !r.read_at)
   if (filter === 'demos') return rows.filter((r) => r.purpose === 'demo')
   return rows
-}
-
-/**
- * Which message is open when the page loads.
- *
- * The newest UNREAD, not simply the newest. The reason a manager opens this page is the
- * thing they have not read yet; landing on something they already dealt with makes them
- * do the finding themselves. Falls back to the newest when everything is read, so the
- * pane is never empty for no reason.
- *
- * `rows` is expected newest-first, as the page queries it.
- */
-export function initialSelection(rows: InboxRow[]): string | null {
-  if (rows.length === 0) return null
-  return (rows.find((r) => !r.read_at) ?? rows[0]).id
 }

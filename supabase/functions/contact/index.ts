@@ -317,6 +317,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: json(204, {}, origin).headers })
   }
+  // The speed bump that used to be `verify_jwt = true`, moved here so it cannot break
+  // preflight. OPTIONS is answered ABOVE this, unauthenticated, because a CORS preflight
+  // carries no Authorization header by specification — checking it at the gateway 401s
+  // the preflight and the browser reports an opaque CORS error instead.
+  //
+  // Not an authorization control: the anon key is public and anyone reading the site
+  // bundle has it. It turns away the entirely-scripted abuse that never bothered to look.
+  // The real controls are the per-IP rate limit and server-side recipient resolution.
+  if (req.method === 'POST' && !req.headers.get('authorization')) {
+    return json(401, { ok: false, error: 'unauthorized' }, origin)
+  }
+
   if (req.method !== 'POST') {
     return json(405, { ok: false, error: 'method_not_allowed' }, origin)
   }

@@ -106,10 +106,10 @@ describe('/artists — the roster-wide inbox', () => {
     expect(screen.getByText('No artists yet')).toBeInTheDocument()
   })
 
-  it('renders the inbox chrome, not a table of counts', async () => {
+  it('renders a table of messages, not of per-artist counts', async () => {
     enquiries = [enquiry()]
     await renderPage()
-    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByText(/1 enquiry/)).toBeInTheDocument()
   })
 })

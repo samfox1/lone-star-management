@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { InboxRow } from '@/lib/enquiry-inbox'
-import { Inbox } from './[id]/(dashboard)/enquiries/inbox'
+import { EnquiryTable } from './[id]/(dashboard)/enquiries/enquiry-table'
 import { EmptyState, RosterShell, SectionToolbar } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
 
@@ -76,7 +76,7 @@ export default async function EnquiriesInboxPage() {
         />
       ) : (
         <div className="px-7 pb-12">
-          <Inbox rows={rows} showArtist />
+          <EnquiryTable rows={rows} showArtist />
         </div>
       )}
     </RosterShell>

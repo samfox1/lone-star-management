@@ -5,7 +5,7 @@
  * render test is a bad place to argue. The component is then just the split pane.
  */
 import { describe, expect, it } from 'vitest'
-import { filterRows, initialSelection, snippet, type InboxRow } from '@/lib/enquiry-inbox'
+import { filterRows, snippet, type InboxRow } from '@/lib/enquiry-inbox'
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
@@ -82,29 +82,5 @@ describe('filterRows', () => {
   it('preserves order — the caller already sorted newest first', () => {
     const older = row({ id: 'old', created_at: '2026-01-01T00:00:00Z' })
     expect(filterRows([unread, older], 'all').map((r) => r.id)).toEqual(['u', 'old'])
-  })
-})
-
-describe('initialSelection', () => {
-  it('CRITICAL: opens the newest UNREAD, not simply the newest', () => {
-    // The reason you opened the inbox is the thing you have not read. Landing on a
-    // message you already dealt with makes you do the work of finding it yourself.
-    const rows = [
-      row({ id: 'newest-read', read_at: '2026-08-04T11:00:00Z', created_at: '2026-08-04T10:00:00Z' }),
-      row({ id: 'older-unread', read_at: null, created_at: '2026-08-03T10:00:00Z' }),
-    ]
-    expect(initialSelection(rows)).toBe('older-unread')
-  })
-
-  it('falls back to the newest when everything is read', () => {
-    const rows = [
-      row({ id: 'a', read_at: '2026-08-04T11:00:00Z' }),
-      row({ id: 'b', read_at: '2026-08-04T11:00:00Z' }),
-    ]
-    expect(initialSelection(rows)).toBe('a')
-  })
-
-  it('selects nothing when the inbox is empty', () => {
-    expect(initialSelection([])).toBeNull()
   })
 })
