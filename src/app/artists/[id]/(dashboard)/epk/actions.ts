@@ -13,12 +13,16 @@
 import { revalidatePath } from 'next/cache'
 import { type PressDocumentKind, readPressQuotesFromForm, savePressKit, setPressDocument } from '@/lib/epk'
 import { createClient } from '@/lib/supabase/server'
+import { callerOwns } from '../_owns'
 
 export async function savePressKitAction(
   artistId: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
+  // RLS row-filters the UPDATE, so a non-owner matches zero rows and the write reports
+  // success — the guard turns that silent nothing into a real failure.
+  if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
   const res = await savePressKit(supabase, artistId, {
     pitch: formData.get('press_pitch'),
     quotes: readPressQuotesFromForm(formData),
@@ -47,10 +51,7 @@ export async function savePressDocumentAction(
   if (!DOCUMENT_KINDS.includes(kind as PressDocumentKind)) return { error: 'Unknown document.' }
 
   const supabase = await createClient()
-  // RLS blocks a non-owner's write, but a row-filtered UPDATE matches zero rows and
-  // returns no error — so without this an authorization failure reads as success.
-  const { data: owned } = await supabase.from('artists').select('id').eq('id', artistId).maybeSingle()
-  if (!owned) return { error: 'Not found.' }
+  if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
 
   const res = await setPressDocument(supabase, artistId, kind as PressDocumentKind, storagePath)
   if (!res.ok) return { error: res.error ?? 'Could not save that document.' }

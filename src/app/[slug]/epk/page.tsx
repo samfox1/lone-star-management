@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { parsePressQuotes } from '@/lib/epk'
+import { parsePressQuotes, resolveEpkContact } from '@/lib/epk'
 import { getPublishedSite } from '@/lib/site'
 import { safeHref } from '@/lib/url'
 
@@ -23,8 +23,9 @@ export default async function EpkPage({ params }: { params: Promise<{ slug: stri
   const releases = (data as PublicRelease[] | null) ?? []
 
   const photo = safeHref(site.media.find((m) => m.purpose === 'profile_photo')?.url ?? site.artist.hero_image_url)
-  const mailto = site.links.find((l) => l.url.toLowerCase().startsWith('mailto:'))
-  const socials = site.links.filter((l) => l !== mailto)
+  // Shared resolver: this is the same rule the readiness gate and the PDF apply, so a
+  // booking_email with no mailto link shows here too instead of silently vanishing.
+  const { address, socials } = resolveEpkContact(site)
   // Press-only fields. Both are absent on any revision published before 20260804120000,
   // so neither is assumed present — and an empty one renders NOTHING rather than an
   // empty heading (the placeholder rule).
@@ -111,9 +112,9 @@ export default async function EpkPage({ params }: { params: Promise<{ slug: stri
 
       <section className="mt-10">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Contact</h2>
-        {mailto && (
-          <a href={safeHref(mailto.url)} className="mt-3 block font-medium hover:underline">
-            {mailto.url.replace(/^mailto:/i, '')}
+        {address && (
+          <a href={safeHref(`mailto:${address}`)} className="mt-3 block font-medium hover:underline">
+            {address}
           </a>
         )}
         {socials.length > 0 && (

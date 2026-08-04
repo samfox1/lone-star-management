@@ -87,24 +87,14 @@ describe('public EPK page — press fields', () => {
     expect(screen.getByRole('link', { name: 'NME' })).toHaveAttribute('href', 'https://nme.com/x')
   })
 
-  it('a javascript: URL in the stored row never becomes a link', async () => {
-    // Belt: `parsePressQuotes` nulls it before the page ever sees it. This pins the
-    // OUTCOME, and is deliberately not evidence about which layer did the work.
-    mockedSite.mockResolvedValue(
-      site({ press_quotes: [{ quote: 'Great.', source: 'NME', url: 'javascript:alert(1)' }] }) as never,
-    )
-    await renderPage()
-    expect(screen.queryByRole('link', { name: 'NME' })).toBeNull()
-    expect(screen.getByText('NME')).toBeInTheDocument()
-  })
-
   it('CRITICAL: the render refuses a dangerous URL even if the parse guard lets one through', async () => {
     // Braces. `lib/url.ts` is explicit that render-time sanitization is the must-have
     // guard, because rows predating validation (or arriving by sync) can carry anything.
-    // The test above CANNOT prove that: parse nulls the URL first, so stripping safeHref
-    // out of the page leaves it green — a mutation check caught exactly that. Here the
-    // parse layer is forced to pass the raw row through, so the only thing left between
-    // an old revision and a stored-XSS sink on click is the page's own safeHref.
+    // Feeding a dangerous URL through the stored row CANNOT prove that: parse nulls it
+    // first, so stripping safeHref out of the page stays green — a mutation check caught
+    // exactly that. Here the parse layer is forced to pass the raw row through, so the
+    // only thing left between an old revision and a stored-XSS sink on click is the
+    // page's own safeHref.
     mockedParse.mockReturnValueOnce([{ quote: 'Great.', source: 'NME', url: 'javascript:alert(1)' }])
     mockedSite.mockResolvedValue(site({ press_quotes: [] }) as never)
     await renderPage()

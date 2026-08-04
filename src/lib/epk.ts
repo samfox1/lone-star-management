@@ -104,6 +104,9 @@ export function readPressQuotesFromForm(formData: FormData): PressQuote[] {
 
 /** The storage folder press documents live under, in the PRIVATE `documents` bucket. */
 export const DOCUMENTS_FOLDER = 'documents'
+/** The PRIVATE bucket press documents live in. Coincidentally the same word as the
+ *  folder above — bucket and folder are different axes, so both names stay explicit. */
+export const DOCUMENTS_BUCKET = 'documents'
 
 export type PressDocumentKind = 'tech_rider' | 'stage_plot'
 
@@ -163,6 +166,34 @@ export type EpkRequirement = {
  *  box, without rejecting the unusual-but-valid addresses real bookers use. */
 const looksLikeEmail = (v: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
 
+export type EpkContact = {
+  /** The address a promoter should write to, or null when none is published. */
+  address: string | null
+  /** Every published link except the mailto that became the address. */
+  socials: SiteData['links']
+}
+
+/**
+ * THE contact rule, shared by the readiness gate, the PDF, and /[slug]/epk.
+ *
+ * One implementation on purpose: this rule existed three times and the copies drifted —
+ * the public page skipped the booking_email fallback, so an artist with only that field
+ * passed the gate and got an address in the PDF while the page showed none. A mailto
+ * link wins; otherwise a plausible booking_email; otherwise no address. The scheme and
+ * any ?subject query are stripped, because the address is DISPLAYED, not just linked.
+ */
+export function resolveEpkContact(site: SiteData): EpkContact {
+  const mailto = site.links.find((l) => l.url?.toLowerCase().startsWith('mailto:'))
+  if (mailto) {
+    return {
+      address: mailto.url.replace(/^mailto:/i, '').split('?')[0],
+      socials: site.links.filter((l) => l !== mailto),
+    }
+  }
+  const booking = (site.site_content?.booking_email ?? '').trim()
+  return { address: looksLikeEmail(booking) ? booking : null, socials: site.links }
+}
+
 /**
  * Can this artist's press kit be generated yet, and what is still missing?
  *
@@ -191,9 +222,7 @@ export function epkReadiness(input: {
   // neither, so a full gallery with no portrait still leaves the header empty.
   const hasPhoto =
     !!site?.media.some((m) => m.purpose === 'profile_photo') || !!site?.artist.hero_image_url?.trim()
-  const hasContact =
-    !!site?.links.some((l) => l.url?.toLowerCase().startsWith('mailto:')) ||
-    looksLikeEmail(site?.site_content?.booking_email ?? '')
+  const hasContact = !!site && resolveEpkContact(site).address !== null
 
   const requirements: EpkRequirement[] = [
     { key: 'bio', label: 'A bio', hint: 'Add one on the Site page, then publish.', met: hasBio },

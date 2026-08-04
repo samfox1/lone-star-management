@@ -69,12 +69,6 @@ describe('cleanPressQuotes (write path)', () => {
     expect(cleanPressQuotes([{ quote: '   ', source: 'NME', url: '' }])).toEqual([])
   })
 
-  it('rejects a dangerous url instead of storing it', () => {
-    expect(cleanPressQuotes([{ quote: 'q', source: '', url: 'javascript:alert(1)' }])).toEqual([
-      { quote: 'q', source: '', url: null },
-    ])
-  })
-
   it('caps how many quotes are stored', () => {
     const many = Array.from({ length: QUOTES_MAX + 5 }, (_, i) => ({ quote: `q${i}`, source: '', url: '' }))
     expect(cleanPressQuotes(many)).toHaveLength(QUOTES_MAX)

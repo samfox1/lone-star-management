@@ -16,7 +16,7 @@
  * WORKS, not about which field was used.
  */
 import { describe, expect, it } from 'vitest'
-import { epkReadiness } from '@/lib/epk'
+import { epkReadiness, resolveEpkContact } from '@/lib/epk'
 import type { SiteData } from '@/lib/site'
 
 function site(over: Partial<SiteData> = {}, artist: Partial<SiteData['artist']> = {}): SiteData {
@@ -134,6 +134,62 @@ describe('epkReadiness — a contact email, from either source', () => {
   it('ignores a tel: link — a press kit needs an address to write to', () => {
     const tel = [{ id: 'l1', label: 'Phone', url: 'tel:+15125551234', sort_order: 0 }] as never
     expect(keysMissing(ready({ links: tel }))).toEqual(['contact'])
+  })
+})
+
+describe('resolveEpkContact — ONE contact rule for the gate, the PDF, and the public page', () => {
+  // Before this resolver existed the rule was implemented three times, and the copies
+  // had already drifted: the gate and the PDF fell back to booking_email, the public
+  // page did not — so an artist with only a booking_email passed the gate and got an
+  // address in the PDF while /[slug]/epk showed no address at all. The gate's own
+  // docstring promises it "mirrors what /[slug]/epk actually renders"; sharing the
+  // resolver is what makes that promise structural instead of aspirational.
+
+  it('uses the mailto link, stripping the scheme and any ?subject query', () => {
+    const s = site({
+      links: [{ id: 'l1', label: 'Booking', url: 'mailto:book@example.com?subject=Booking', sort_order: 0 }] as never,
+    })
+    expect(resolveEpkContact(s).address).toBe('book@example.com')
+  })
+
+  it('falls back to booking_email when there is no mailto link', () => {
+    const s = site({ links: [], site_content: { booking_email: 'desk@example.com' } })
+    expect(resolveEpkContact(s).address).toBe('desk@example.com')
+  })
+
+  it('a junk booking_email resolves to no address, matching the gate', () => {
+    const s = site({ links: [], site_content: { booking_email: 'not-an-email' } })
+    expect(resolveEpkContact(s).address).toBeNull()
+  })
+
+  it('socials are every link EXCEPT the mailto that became the address', () => {
+    const s = site({
+      links: [
+        { id: 'l1', label: 'Booking', url: 'mailto:book@example.com', sort_order: 0 },
+        { id: 'l2', label: 'Instagram', url: 'https://instagram.com/x', sort_order: 1 },
+      ] as never,
+    })
+    expect(resolveEpkContact(s).socials.map((l) => l.id)).toEqual(['l2'])
+  })
+
+  it('CRITICAL: gate parity — the contact requirement is met exactly when an address resolves', () => {
+    // The drift detector. If the gate ever grows its own contact logic again, some
+    // site shape will split the two and this sweep catches it.
+    const shapes: Partial<SiteData>[] = [
+      {},
+      { links: [] },
+      { links: [], site_content: { booking_email: 'desk@example.com' } },
+      { links: [], site_content: { booking_email: 'nope' } },
+      { links: [{ id: 'l1', label: 'IG', url: 'https://instagram.com/x', sort_order: 0 }] as never },
+      { links: [{ id: 'l1', label: 'Phone', url: 'tel:+15125551234', sort_order: 0 }] as never },
+    ]
+    for (const over of shapes) {
+      const s = site(over)
+      const met = epkReadiness({ site: s, releaseCount: 1 }).requirements.find(
+        (q) => q.key === 'contact',
+      )!.met
+      expect(met).toBe(resolveEpkContact(s).address !== null)
+    }
   })
 })
 

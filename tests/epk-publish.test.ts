@@ -76,9 +76,12 @@ describe('press kit publishes with the profile', () => {
     })
     await publishProfile(asA, artistA)
 
-    const quotes = parsePressQuotes((await publicArtist())?.press_quotes)
-    expect(quotes).toHaveLength(1)
-    expect(quotes[0].url).toBeNull()
+    // Assert on the RAW stored JSON, not through parsePressQuotes — the parser nulls
+    // javascript: URLs at read time, so it would pass even if the raw URL had been
+    // stored and every consumer that skips the parser were serving it.
+    const raw = (await publicArtist())?.press_quotes as { quote: string; url: unknown }[]
+    expect(raw).toHaveLength(1)
+    expect(raw[0].url).toBeNull()
   })
 
   it('the database refuses a press_quotes value that is not an array', async () => {

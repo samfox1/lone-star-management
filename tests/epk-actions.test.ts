@@ -13,7 +13,7 @@
  * would still pass if a refactor moved validation AFTER the write.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { setPressDocument } from '@/lib/epk'
+import { savePressKit, setPressDocument } from '@/lib/epk'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
@@ -30,13 +30,16 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/epk', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/epk')>()),
   setPressDocument: vi.fn(async () => ({ ok: true })),
+  savePressKit: vi.fn(async () => ({ ok: true })),
 }))
 
 const mockedWrite = vi.mocked(setPressDocument)
+const mockedKitWrite = vi.mocked(savePressKit)
 const load = () => import('@/app/artists/[id]/(dashboard)/epk/actions')
 
 beforeEach(() => {
   mockedWrite.mockClear()
+  mockedKitWrite.mockClear()
   visible = true
 })
 
@@ -64,5 +67,22 @@ describe('savePressDocumentAction — kind allowlist', () => {
     visible = false
     expect((await savePressDocumentAction('a1', 'tech_rider', null)).error).toBe('Not found.')
     expect(mockedWrite).not.toHaveBeenCalled()
+  })
+})
+
+describe('savePressKitAction — ownership guard', () => {
+  it('saves for an owner', async () => {
+    const { savePressKitAction } = await load()
+    expect((await savePressKitAction('a1', new FormData())).error).toBeUndefined()
+    expect(mockedKitWrite).toHaveBeenCalledTimes(1)
+  })
+
+  it('CRITICAL: a non-owner gets an error, and the write is never attempted', async () => {
+    // RLS row-filters the UPDATE underneath, so a non-owner matches zero rows and the
+    // action would answer {} — an authorization failure indistinguishable from success.
+    const { savePressKitAction } = await load()
+    visible = false
+    expect((await savePressKitAction('a1', new FormData())).error).toBe('Not found.')
+    expect(mockedKitWrite).not.toHaveBeenCalled()
   })
 })

@@ -16,12 +16,11 @@
  * /[slug]/epk link can never disagree.
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
-import { parsePressQuotes } from '@/lib/epk'
+import { parsePressQuotes, resolveEpkContact } from '@/lib/epk'
 import type { SiteData } from '@/lib/site'
 
 /** The PRIVATE bucket press documents live in. Exported here because the download route
  *  is the only thing that ever reads them, and it reads them to staple into this PDF. */
-export const DOCUMENTS_BUCKET = 'documents'
 
 /** US Letter, in points. Letter over A4 because the likeliest recipient is a US promoter,
  *  and the two are close enough that neither prints badly on the other's paper. */
@@ -313,11 +312,8 @@ export async function buildEpkPdf(
     }
   }
 
-  // Contact resolves the same way the public EPK page does, so the two agree.
-  const mailto = site.links.find((l) => l.url?.toLowerCase().startsWith('mailto:'))
-  const bookingEmail = site.site_content?.booking_email
-  const address = mailto ? mailto.url.replace(/^mailto:/i, '') : bookingEmail
-  const socials = site.links.filter((l) => l !== mailto)
+  // Shared resolver, so the PDF, the gate, and the public page can never disagree.
+  const { address, socials } = resolveEpkContact(site)
   if (address || socials.length) {
     sheet.heading('Contact')
     if (address) sheet.text(address, { bold: true })

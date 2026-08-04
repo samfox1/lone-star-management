@@ -13,26 +13,9 @@
 import { revalidatePath } from 'next/cache'
 import { type BrandPurpose, saveFraming, setBrandAsset } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/server'
+import { callerOwns } from '../_owns'
 
 const PURPOSES: readonly BrandPurpose[] = ['logo_primary', 'logo_secondary', 'favicon']
-
-/**
- * Can the caller see this artist at all?
- *
- * RLS already BLOCKS a non-owner's write — but a row-filtered UPDATE or DELETE matches
- * zero rows and returns no error, so without this the action answered `{}` and an
- * authorization failure was indistinguishable from success. That is the "defaults to
- * allow" shape: it hides nothing today, and it would hide an RLS regression completely.
- *
- * The read is RLS-scoped too, so a non-owner sees no row and gets a real failure.
- */
-async function callerOwns(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  artistId: string,
-): Promise<boolean> {
-  const { data } = await supabase.from('artists').select('id').eq('id', artistId).maybeSingle()
-  return !!data
-}
 
 export async function setBrandAssetAction(
   artistId: string,

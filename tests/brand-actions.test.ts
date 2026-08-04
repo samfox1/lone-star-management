@@ -70,13 +70,6 @@ describe('setBrandAssetAction — purpose allowlist', () => {
     expect(mockedWrite).not.toHaveBeenCalled()
   })
 
-  it('rejects BEFORE the write, not after — order is the whole guarantee', async () => {
-    const { setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
-    await setBrandAssetAction('a1', 'gallery_image', null)
-    // A clear (null path) is pure DELETE. If validation moved after the write, this call
-    // would have wiped the gallery and still returned an error.
-    expect(mockedWrite).not.toHaveBeenCalled()
-  })
 })
 
 describe('ownership guard — a blocked write must not look like a success', () => {

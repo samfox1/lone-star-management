@@ -1,6 +1,6 @@
 'use client'
 
-import { DOCUMENTS_FOLDER, type PressDocumentKind } from '@/lib/epk'
+import { DOCUMENTS_BUCKET, DOCUMENTS_FOLDER, type PressDocumentKind } from '@/lib/epk'
 import { DOCUMENT_UPLOAD_RULES } from '@/lib/upload'
 import { buttonClass } from '@/components/ui/ui'
 import { FileDropField } from '../file-drop-field'
@@ -30,7 +30,7 @@ export function DocumentUpload({
   present: boolean
 }) {
   const { busy, error, upload } = useStorageUpload({
-    bucket: 'documents',
+    bucket: DOCUMENTS_BUCKET,
     artistId,
     category: DOCUMENTS_FOLDER,
     noun: 'document',
