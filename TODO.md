@@ -498,3 +498,105 @@ any code.
 **Refs:** Docs — https://developers.soundcharts.com/documentation/getting-started ·
 Artist endpoints — https://developers.soundcharts.com/documentation/reference/artist/summary ·
 Terms — https://soundcharts.com/en/terms · Pricing — https://developers.soundcharts.com/pricing
+
+## Test coverage — wider mutation sweep (OPEN, added 2026-08-04)
+
+On 2026-08-04 we ran 30 mutations across the EPK slice and the editor work in `c06d5f9`.
+They found **one bad test and four unguarded behaviours** — all closed the same day. The
+method should now be pointed at the rest of the codebase, worst-covered first.
+
+**The method.** Break the implementation on purpose, one targeted edit at a time, and
+confirm a test goes red. Scripts used: `mutate.py` / `mutate3.py` (source edits) and
+`mutate_constraint.py` (a DB constraint, drop → run → normalise data → re-add, with the
+restore in a `finally`). A test that has never been red is unproven; green is not
+evidence.
+
+**What the sweep already caught, as examples of what to look for:**
+- A test that passed for the wrong reason — a "javascript: URL is not linked" assertion
+  on the public EPK page was satisfied by the PARSE guard, so the RENDER guard could be
+  deleted freely. When two layers guard one thing, a test through the outer interface
+  proves the outcome, never which layer did the work.
+- `BASE_CLASSES` capture-once in `bridge-client.ts` — re-capturing on every apply passed
+  the whole suite, but would permanently destroy a site's original classes the moment a
+  manager cleared a style box.
+- `useSessionJournal` had NO direct test: both invariants could be deleted silently.
+
+### How to read the gap list below
+Measured statically (scratchpad `coverage_map.py`): a symbol counts as covered if its NAME
+appears anywhere under `tests/`. That **overstates** coverage — a name can be mentioned
+without being exercised, and common names collide across modules. So everything listed
+here is a HARD gap, but absence from the list is only a hint, not a guarantee.
+
+Totals: 181 modules with value exports — 74 with every export named, 26 partial, **81 with
+no export ever named in any test**.
+
+### Tier 1 — untested AND consequential (do these first)
+- `src/lib/supabase/middleware.ts` — `updateSession`. Session refresh + route protection.
+  Nothing under `tests/` mentions middleware at all; the auth boundary is unguarded.
+- `src/app/auth-actions.ts` — `login`, `logout`.
+- `src/app/admin/applications/actions.ts` — `setApplicationStatus`, an admin-only write.
+- `src/app/artists/[id]/(dashboard)/use-live-on-site.ts` — `useLiveOnSite`, the hook behind
+  the LIVE on-site toggle (ADR 0009). A bug here puts content on the public site with no
+  publish, or silently drops a toggle.
+- `src/app/artists/[id]/(dashboard)/_data.ts` — `requireArtist` (the ownership gate that
+  404s a non-owner) and `dashboardDiff` (service-role, cached, runs outside the request).
+- `src/lib/releases.ts`, `src/lib/format.ts`, `src/lib/storage-url.ts`, `src/lib/slug.ts`,
+  `src/lib/resumable-upload.ts` — pure logic, cheap to cover, no excuse.
+- `src/app/artists/[id]/(dashboard)/integrations.ts`, `src/app/roster-data.ts`.
+
+### Tier 2 — the dashboard server actions
+**All 38 exports of `src/app/artists/[id]/(dashboard)/actions.ts` are never named in any
+test**: publishAction, publishSectionAction, publishSiteAction, saveSiteContentAction,
+saveSeoAction, addVideoAction, resolveVideoUrlAction, scrapeMerchUrlAction,
+saveYoutubeChannelAction, syncYouTubeAction, refreshYouTubeAction, publishSelectionAction,
+publishEntityAction, setTrackOnSiteAction, setTrackParentReleaseAction, saveTemplateAction,
+updateArtistAction, saveSpotifyIdAction, syncSpotifyAction, refreshSpotifyAction,
+refreshMusicAction, saveDeezerIdAction, saveSoundcloudUrlAction, syncDeezerAction,
+saveAppleIdAction, syncAppleAction, saveBandsintownNameAction, syncBandsintownAction,
+saveTicketmasterIdAction, syncTicketmasterAction, connectShopifyAction,
+disconnectShopifyAction, syncShopifyAction, saveDriveFolderAction, checkDriveFolderAction,
+listDriveFilesAction, importDriveFileAction, and markEnquiryReadAction (that last one
+from the in-flight enquiries thread — it is in the working tree, not yet committed, so
+don't be surprised when it isn't there).
+
+By design these are thin wrappers over lib functions that ARE tested, so the risk is
+concentrated in the wrapper itself: the auth check, the `revalidatePath` target, and the
+error mapping. Test those three things, not the logic underneath.
+
+### Tier 3 — exports named nowhere, in modules that ARE otherwise covered
+`style-apply.ts`: MANAGED_STYLE_PROPS, colorToken, colorClass, speedToken, speedClass ·
+`markers.ts`: FIELD_ATTR, SLOT_ATTR, ITEM_ATTR, STYLE_ATTR, LINK_ATTR, HIGHLIGHT_ATTR,
+linkRegion · `analytics.ts`: entityCounts, ON_SITE_METRIC, daysAgo · `events.ts`:
+EVENT_TYPES, EVENT_TYPE_SET, ENTITY_KINDS · `site-content-schema.ts`: fieldsFor, SEO_FIELDS,
+acceptsValue · `upload.ts`: IMAGE_UPLOAD_RULES, VIDEO_UPLOAD_RULES, sizeLabel · `url.ts`:
+isUrlField, isContactLink · `content.ts`: publicSnapshot · `color.ts`: canonicalHex ·
+`storage-gc.ts`: GC_MIN_AGE_MS, MEDIA_FOLDERS · `gallery.ts`: SLOTS_PER_ORIENTATION ·
+`sync.ts`: normalizeTitle · `bridge.ts`: selectTargetKey · `bridge-client.ts`: rectOf ·
+`song-links.ts`: STREAMING_SERVICES · `drive-import.ts`: DRIVE_IMPORT · `audio.ts`:
+AUDIO_BUCKET, AUDIO_URL_TTL_SECONDS · `epk.ts`: QUOTE_MAX, SOURCE_MAX.
+
+Several are constants used indirectly by covered code — check before writing a test for
+its own sake. `colorToken`/`speedToken`/`canonicalHex`/`acceptsValue`/`normalizeTitle` are
+real logic and worth direct tests.
+
+### Tier 4 — presentational components (~50 files)
+Card/grid/modal/browser components with one export each. Lowest value; the UI harness
+([[ui-test-harness]]) exists if a specific one starts carrying logic.
+
+## Storage CDN caches past authorisation (learned 2026-08-04)
+
+Tightening a storage policy does **not** purge what the CDN already served. Supabase
+Storage caches by object PATH and invalidates on object WRITES — a policy change is
+invisible to it.
+
+Found while mutation-checking `tests/documents.isolation.test.ts`: a temporary wide-open
+SELECT policy let an anonymous fetch succeed once, and that object stayed anon-readable
+at the same path after the policy was removed. The test only recovered when it started
+using a fresh object path per run.
+
+**Operational consequence, worth remembering before it matters:** if a private document
+is ever exposed by a policy mistake, fixing the policy is NOT sufficient. The object has
+to be re-written to a NEW path (or deleted and re-uploaded) to make the leaked URL stop
+working. Rotating the path is the remediation, not fixing the rule.
+
+Applies to `documents` (private) most sharply, but the same mechanic governs `audio`.
