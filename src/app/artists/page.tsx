@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { InboxRow } from '@/lib/enquiry-inbox'
+import { attachmentCounts } from '@/lib/enquiry-inbox-server'
 import { EnquiryTable } from './[id]/(dashboard)/enquiries/enquiry-table'
 import { EmptyState, RosterShell } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
@@ -44,17 +45,7 @@ export default async function EnquiriesInboxPage() {
     artist_id: string
   })[]
 
-  // Counts only. Signing happens when a message is opened, so the page costs one extra
-  // query rather than a round trip per attachment for URLs that mostly expire unread.
-  const { data: attachmentRows } = await supabase
-    .from('enquiry_attachments')
-    .select('enquiry_id')
-    .in('enquiry_id', enquiries.length ? enquiries.map((r) => r.id) : ['00000000-0000-0000-0000-000000000000'])
-  const counts = new Map<string, number>()
-  for (const a of attachmentRows ?? []) {
-    const key = a.enquiry_id as string
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  }
+  const counts = await attachmentCounts(supabase, enquiries.map((r) => r.id))
 
   const rows: InboxRow[] = enquiries.map((r) => ({
     ...r,

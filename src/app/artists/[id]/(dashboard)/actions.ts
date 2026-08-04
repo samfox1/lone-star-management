@@ -1443,35 +1443,3 @@ export async function resolveStreamingSongAction(
     return { ok: false, error: e instanceof Error ? e.message : 'Could not read those links.' }
   }
 }
-
-/**
- * Mark one contact enquiry as read.
- *
- * The ONLY write a manager can make to their inbox. That is enforced in Postgres by a
- * COLUMN grant (`grant update (read_at) on enquiries to authenticated`, see
- * 20260722120000), not by this action and not by the RLS policy — RLS has no column
- * granularity, so a row-scoped policy alone would let a manager rewrite `message` or
- * `to_email`. This function is the convenience; the grant is the control.
- */
-export async function markEnquiryReadAction(
-  artistId: string,
-  enquiryId: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
-
-  // RLS scopes the update to enquiries the caller manages, so a non-owner silently
-  // matches zero rows rather than erroring.
-  const { error } = await supabase
-    .from('enquiries')
-    .update({ read_at: new Date().toISOString() })
-    .eq('id', enquiryId)
-    .eq('artist_id', artistId)
-
-  if (error) return { ok: false, error: 'Could not mark that as read.' }
-  revalidatePath(`/artists/${artistId}/enquiries`)
-  return { ok: true }
-}

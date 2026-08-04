@@ -5,8 +5,7 @@ import { fileSize, type PlayableAttachment } from '@/lib/enquiry-attachments'
 import { artistsIn, filterByArtist, filterRows, snippet, type InboxFilter, type InboxRow } from '@/lib/enquiry-inbox'
 import { safeHref } from '@/lib/url'
 import { Icon } from '@/components/ui/icons'
-import { markEnquiryReadAction } from '../actions'
-import { markEnquiryUnreadAction, signEnquiryAttachmentsAction } from './actions'
+import { setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
 
 const PURPOSE_LABEL: Record<string, string> = { booking: 'Booking', demo: 'Demo', other: 'Contact' }
 
@@ -81,7 +80,7 @@ export function EnquiryTable({
     if (!readIds.has(row.id)) {
       setReadIds((prev) => new Set(prev).add(row.id))
       startTransition(() => {
-        void markEnquiryReadAction(row.artistId, row.id)
+        void setEnquiryReadAction(row.artistId, row.id, true)
       })
     }
   }
@@ -93,7 +92,7 @@ export function EnquiryTable({
       return next
     })
     startTransition(() => {
-      void markEnquiryUnreadAction(row.artistId, row.id)
+      void setEnquiryReadAction(row.artistId, row.id, false)
     })
   }
 
@@ -325,7 +324,7 @@ function FragmentRow({
                         </p>
                       ) : (
                         <>
-                          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                          { }
                           <audio controls preload="none" src={a.url ?? undefined} className="mt-1.5 w-full" />
                           <a
                             href={a.url ?? undefined}

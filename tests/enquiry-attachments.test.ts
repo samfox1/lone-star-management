@@ -8,6 +8,10 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { fileSize, toPlayable, type AttachmentRow } from '@/lib/enquiry-attachments'
+import { createClient } from '@/lib/supabase/server'
+
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 
 const row = (over: Partial<AttachmentRow> = {}): AttachmentRow => ({
   id: 'r1',
@@ -86,6 +90,27 @@ describe('toPlayable', () => {
 
   it('handles an empty list', async () => {
     expect(await toPlayable(client(null), [])).toEqual([])
+  })
+})
+
+describe('signEnquiryAttachmentsAction — the columns it reads', () => {
+  it('CRITICAL: selects expired_at, or the expired branch above is unreachable', async () => {
+    // AttachmentRow requires expired_at; the cast in the action would hide a select that
+    // drops it, and every expired attachment would render as "never uploaded" instead.
+    let selected = ''
+    vi.mocked(createClient).mockResolvedValue({
+      from: () => ({
+        select: (cols: string) => {
+          selected = cols
+          return { eq: () => ({ order: async () => ({ data: [] }) }) }
+        },
+      }),
+    } as never)
+    const { signEnquiryAttachmentsAction } = await import(
+      '@/app/artists/[id]/(dashboard)/enquiries/actions'
+    )
+    await signEnquiryAttachmentsAction('e1')
+    expect(selected.split(',').map((c) => c.trim())).toContain('expired_at')
   })
 })
 

@@ -26,19 +26,26 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
 }))
 
 let enquiries: unknown[] = []
+// Query-builder stub: any method chain returns itself, awaiting resolves { data }. Pins
+// only the data contract — the page can add or reorder builder calls without this mock
+// having to know.
+function queryStub(data: () => unknown[]) {
+  const stub: Record<string | symbol, unknown> = new Proxy(
+    {},
+    {
+      get: (_t, prop) =>
+        prop === 'then'
+          ? (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+              Promise.resolve({ data: data() }).then(res, rej)
+          : () => stub,
+    },
+  )
+  return stub
+}
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { email: 'm@example.com' } } }) },
-    from: (table: string) => {
-      const result = table === 'enquiries' ? enquiries : []
-      const chain = {
-        select: () => chain,
-        order: () => chain,
-        limit: async () => ({ data: result }),
-        in: async () => ({ data: result }),
-      }
-      return chain
-    },
+    from: (table: string) => queryStub(() => (table === 'enquiries' ? enquiries : [])),
   }),
 }))
 
@@ -79,6 +86,7 @@ describe('/artists — the roster-wide inbox', () => {
     // you cannot tell whose booking you are reading.
     enquiries = [enquiry({ id: 'e1', artist_id: 'a1' }), enquiry({ id: 'e2', artist_id: 'a2', name: 'Nia Patel' })]
     await renderPage()
+    // An artist's name legitimately renders twice: the row label and its filter <option>.
     expect(screen.getAllByText('Lone Pine').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Gulf Static').length).toBeGreaterThan(0)
   })
@@ -86,10 +94,8 @@ describe('/artists — the roster-wide inbox', () => {
   it('shows messages from every artist in one list', async () => {
     enquiries = [enquiry({ id: 'e1', name: 'Jamie Rowe' }), enquiry({ id: 'e2', artist_id: 'a2', name: 'Nia Patel' })]
     await renderPage()
-    // The selected message's name appears twice (list row + reading pane), which is
-    // correct — so assert presence, not uniqueness.
-    expect(screen.getAllByText('Jamie Rowe').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Nia Patel').length).toBeGreaterThan(0)
+    expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
+    expect(screen.getByText('Nia Patel')).toBeInTheDocument()
   })
 
   it('CRITICAL: never drops a message whose artist name cannot be resolved', async () => {

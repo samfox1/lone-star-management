@@ -10,6 +10,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+/** PINNED to the copy in supabase/functions/contact/index.ts — the Edge Function runs in
+ *  Deno and cannot import from src/, so the name exists twice. If either changes alone,
+ *  uploads and playback silently split into two buckets. */
 export const ATTACHMENT_BUCKET = 'enquiry-attachments'
 
 /** Long enough to press play, short enough that a copied URL is useless by the time it is

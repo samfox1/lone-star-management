@@ -10,21 +10,18 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EnquiryTable } from '@/app/artists/[id]/(dashboard)/enquiries/enquiry-table'
-import { markEnquiryReadAction } from '@/app/artists/[id]/(dashboard)/actions'
 import {
-  markEnquiryUnreadAction,
+  setEnquiryReadAction,
   signEnquiryAttachmentsAction,
 } from '@/app/artists/[id]/(dashboard)/enquiries/actions'
 import type { InboxRow } from '@/lib/enquiry-inbox'
 
-vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({ markEnquiryReadAction: vi.fn(async () => ({ ok: true })) }))
 vi.mock('@/app/artists/[id]/(dashboard)/enquiries/actions', () => ({
-  markEnquiryUnreadAction: vi.fn(async () => ({ ok: true })),
+  setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
   signEnquiryAttachmentsAction: vi.fn(async () => []),
 }))
 
-const read = vi.mocked(markEnquiryReadAction)
-const unread = vi.mocked(markEnquiryUnreadAction)
+const setRead = vi.mocked(setEnquiryReadAction)
 const sign = vi.mocked(signEnquiryAttachmentsAction)
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
@@ -44,8 +41,7 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
 })
 
 beforeEach(() => {
-  read.mockClear()
-  unread.mockClear()
+  setRead.mockClear()
   sign.mockClear()
   sign.mockResolvedValue([])
 })
@@ -95,7 +91,7 @@ describe('EnquiryTable — rows', () => {
 
   it('CRITICAL: nothing is expanded on arrival — you came to look something up', async () => {
     render(<EnquiryTable rows={[row()]} />)
-    expect(read).not.toHaveBeenCalled()
+    expect(setRead).not.toHaveBeenCalled()
     expect(screen.getAllByRole('row')).toHaveLength(2) // header + one row, no detail row
   })
 
@@ -106,7 +102,7 @@ describe('EnquiryTable — rows', () => {
       'Can you play the Aug 14 show at Mohawk? We can cover travel and provide backline, and we would want a 45 minute set.'
     render(<EnquiryTable rows={[row({ id: 'x', message: long })]} />)
     await openRow('Jamie Rowe')
-    expect(read).toHaveBeenCalledWith('a1', 'x')
+    expect(setRead).toHaveBeenCalledWith('a1', 'x', true)
     expect(screen.getByText(long)).toBeInTheDocument()
   })
 
@@ -123,7 +119,7 @@ describe('EnquiryTable — rows', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
     })
-    expect(unread).toHaveBeenCalledWith('a1', 'x')
+    expect(setRead).toHaveBeenCalledWith('a1', 'x', false)
   })
 
   it('shows the artist column only when asked', () => {

@@ -22,9 +22,12 @@ import { createClient } from '@/lib/supabase/server'
  */
 export async function signEnquiryAttachmentsAction(enquiryId: string): Promise<PlayableAttachment[]> {
   const supabase = await createClient()
+  // expired_at must ride along: toPlayable reads it to tell "the sweep took the file"
+  // apart from "the sender never uploaded one", and the cast below would silently hide
+  // a select that drops it.
   const { data } = await supabase
     .from('enquiry_attachments')
-    .select('id, enquiry_id, storage_path, filename, mime_type, bytes, created_at')
+    .select('id, enquiry_id, storage_path, filename, mime_type, bytes, created_at, expired_at')
     .eq('enquiry_id', enquiryId)
     .order('created_at')
   if (!data?.length) return []
@@ -32,27 +35,39 @@ export async function signEnquiryAttachmentsAction(enquiryId: string): Promise<P
 }
 
 /**
- * Put a message back in the unread pile.
+ * Mark one enquiry read, or put it back in the unread pile.
  *
- * Opening a message marks it read, which is what an inbox does — but that quietly
- * destroys the manager's own triage signal if they were only glancing. This is the undo,
- * and it is the reason auto-read is safe to have at all.
+ * ONE action for both directions — they were briefly two, in two files, and only the
+ * read half checked the session; the same UPDATE must not have two different guards.
  *
- * Allowed by the same COLUMN grant that permits marking read (`grant update (read_at)`,
- * 20260722120000): a manager may write that one column and nothing else, so clearing it
- * needs no new permission.
+ * The ONLY write a manager can make to their inbox. That is enforced in Postgres by a
+ * COLUMN grant (`grant update (read_at) on enquiries to authenticated`, 20260722120000),
+ * not by this action and not by the RLS policy — RLS has no column granularity, so a
+ * row-scoped policy alone would let a manager rewrite `message` or `to_email`. This
+ * function is the convenience; the grant is the control.
+ *
+ * Unread is the undo for auto-read on open, and the reason auto-read is safe to have:
+ * glancing at a message must not quietly destroy the manager's own triage signal.
  */
-export async function markEnquiryUnreadAction(
+export async function setEnquiryReadAction(
   artistId: string,
   enquiryId: string,
+  read: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  // RLS scopes the update to enquiries the caller manages, so a non-owner silently
+  // matches zero rows rather than erroring.
   const { error } = await supabase
     .from('enquiries')
-    .update({ read_at: null })
+    .update({ read_at: read ? new Date().toISOString() : null })
     .eq('id', enquiryId)
     .eq('artist_id', artistId)
-  if (error) return { ok: false, error: 'Could not mark that unread.' }
+  if (error) return { ok: false, error: read ? 'Could not mark that as read.' : 'Could not mark that unread.' }
   revalidatePath(`/artists/${artistId}/enquiries`)
   return { ok: true }
 }

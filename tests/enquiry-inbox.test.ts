@@ -1,8 +1,9 @@
 /**
- * The inbox's pure rules — what a row says before you open it, and what is open by default.
+ * The inbox's pure rules — what a row says before you open it.
  *
  * Kept out of the component because these are the decisions worth arguing about, and a
- * render test is a bad place to argue. The component is then just the split pane.
+ * render test is a bad place to argue. The component is then just a dense table: a
+ * scannable archive with no row open by default.
  */
 import { describe, expect, it } from 'vitest'
 import { artistsIn, filterByArtist, filterRows, snippet, type InboxRow } from '@/lib/enquiry-inbox'
