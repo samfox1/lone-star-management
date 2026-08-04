@@ -19,6 +19,7 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   attachmentCount: 0,
   artistId: 'a1',
   artistName: 'Lone Pine',
+  status: 'sent',
   ...over,
 })
 

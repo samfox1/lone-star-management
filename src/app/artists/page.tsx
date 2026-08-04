@@ -37,7 +37,7 @@ export default async function EnquiriesInboxPage() {
 
   const { data } = await supabase
     .from('enquiries')
-    .select('id, artist_id, purpose, name, email, message, read_at, created_at, demo_url')
+    .select('id, artist_id, purpose, name, email, message, read_at, created_at, demo_url, status')
     .order('created_at', { ascending: false })
     .limit(MAX_ROWS)
   const enquiries = (data ?? []) as (Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'> & {

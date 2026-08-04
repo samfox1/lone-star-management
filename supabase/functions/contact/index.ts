@@ -404,13 +404,36 @@ Deno.serve(async (req: Request) => {
       if (row?.status === 'invalid') {
         return json(400, { ok: false, error: 'missing_field' }, origin)
       }
-      // unknown_artist is a 400: the slug is client-supplied and wrong. no_recipient is
-      // OUR misconfiguration (no booking address, or an unseeded mail_settings), so it
-      // is a 5xx — the visitor did nothing wrong and should be told to try again.
+      // unknown_artist is a 400: the slug is client-supplied and wrong.
       if (row?.status === 'unknown_artist') {
         return json(400, { ok: false, error: 'missing_field' }, origin)
       }
-      console.error('contact: unroutable', { slug: body.slug, status: row?.status })
+
+      // UNROUTABLE is not a failure the VISITOR should see. Since 20260804230000 the door
+      // STORES the enquiry even with no recipient or no verified sender, so the message is
+      // safe in the manager's table — which, until mail is configured, is the only place
+      // it was ever going to land. Telling the sender it failed would make them send again
+      // or give up over a gap on our side that they cannot do anything about.
+      if (row?.status === 'no_recipient' && row.enquiry_id) {
+        console.error('contact: stored but unroutable — mail not configured', {
+          slug: body.slug,
+          enquiry: row.enquiry_id,
+        })
+        const issued = await issueUploadTickets(row.enquiry_id, null, attachments, {
+          slug: body.slug,
+          purpose: body.purpose,
+          ipHash,
+        })
+        return json(
+          200,
+          { ok: true, uploads: issued.tickets, skipped: [...skipped, ...issued.skipped] },
+          origin,
+        )
+      }
+
+      // Anything left is genuinely unexpected — a status the door grew that this function
+      // has not been taught, or no row at all.
+      console.error('contact: unhandled door status', { slug: body.slug, status: row?.status })
       return json(500, { ok: false, error: 'send_failed' }, origin)
     }
 

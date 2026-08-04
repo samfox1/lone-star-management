@@ -54,6 +54,7 @@ const enquiry = (over: Record<string, unknown> = {}) => ({
   read_at: '2026-08-04T11:00:00Z',
   created_at: '2026-08-04T10:00:00Z',
   demo_url: null,
+  status: 'sent',
   ...over,
 })
 

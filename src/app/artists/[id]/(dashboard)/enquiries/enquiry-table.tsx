@@ -229,15 +229,30 @@ function FragmentRow({
         <td className="whitespace-nowrap px-4 py-2.5 text-right font-space text-[11px] text-ink-faint">
           {received(row.created_at)}
         </td>
-        <td className="px-4 py-2.5 text-right font-space text-[11px] text-ink-faint">
+        <td className="whitespace-nowrap px-4 py-2.5 text-right font-space text-[11px] text-ink-faint">
           {row.attachmentCount > 0 ? row.attachmentCount : ''}
           {row.demo_url && <Icon name="external" size={11} />}
+          {/* Not emailed. Says so plainly, because a table of messages reads as a record of
+              messages DELIVERED, and right now none of them are. */}
+          {(row.status === 'unroutable' || row.status === 'failed') && (
+            <span title={row.status === 'unroutable' ? 'Not emailed — mail is not configured' : 'Email failed to send'}>
+              {' '}
+              <Icon name="alert" size={11} />
+            </span>
+          )}
         </td>
       </tr>
 
       {isOpen && (
         <tr className="border-b border-hairline-soft bg-surface">
           <td colSpan={colSpan} className="px-4 pb-4 pt-1">
+            {(row.status === 'unroutable' || row.status === 'failed') && (
+              <p className="mb-3 font-space text-[11px] text-ink-muted">
+                {row.status === 'unroutable'
+                  ? 'Not emailed — no sending address is configured yet. The message is safe here.'
+                  : 'The notification email failed to send. The message is safe here.'}
+              </p>
+            )}
             <p className="whitespace-pre-wrap text-sm leading-relaxed">{row.message}</p>
 
             {/* https-only at the door and by a CHECK, but still through safeHref here:

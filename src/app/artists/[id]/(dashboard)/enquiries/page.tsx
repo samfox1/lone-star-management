@@ -23,7 +23,7 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
   // RLS scopes this to the artist's managers + admins (see 20260722120000).
   const { data } = await supabase
     .from('enquiries')
-    .select('id, purpose, name, email, message, read_at, created_at, demo_url')
+    .select('id, purpose, name, email, message, read_at, created_at, demo_url, status')
     .eq('artist_id', id)
     .order('created_at', { ascending: false })
   const enquiries = (data ?? []) as Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'>[]

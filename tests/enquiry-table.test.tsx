@@ -39,6 +39,7 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   attachmentCount: 0,
   artistId: 'a1',
   artistName: 'Lone Pine',
+  status: 'sent',
   ...over,
 })
 
@@ -175,5 +176,27 @@ describe('EnquiryTable — attachments', () => {
     await openRow('Jamie Rowe')
     const link = screen.getByRole('link', { name: 'https://soundcloud.com/x' })
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+})
+
+describe('EnquiryTable — delivery state', () => {
+  it('CRITICAL: says when a message was never emailed', async () => {
+    // Without this the table reads as a record of messages DELIVERED. With mail not yet
+    // configured, none of them are, and a manager assuming otherwise is the failure.
+    render(<EnquiryTable rows={[row({ status: 'unroutable' })]} />)
+    await openRow('Jamie Rowe')
+    expect(screen.getByText(/Not emailed/)).toBeInTheDocument()
+  })
+
+  it('distinguishes a failed send from an unconfigured one — different fixes', async () => {
+    render(<EnquiryTable rows={[row({ status: 'failed' })]} />)
+    await openRow('Jamie Rowe')
+    expect(screen.getByText(/failed to send/)).toBeInTheDocument()
+  })
+
+  it('says nothing for a delivered message', async () => {
+    render(<EnquiryTable rows={[row({ status: 'sent' })]} />)
+    await openRow('Jamie Rowe')
+    expect(screen.queryByText(/Not emailed/)).toBeNull()
   })
 })

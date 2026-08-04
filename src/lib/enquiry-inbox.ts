@@ -27,6 +27,10 @@ export type InboxRow = {
    *  whether the data is there. Read/unread writes need it too. */
   artistId: string
   artistName: string
+  /** 'queued' | 'sent' | 'failed' | 'unroutable'. Surfaced because a manager reading this
+   *  table would otherwise assume the message was emailed — and while mail is not
+   *  configured, none of them are. */
+  status: string
 }
 
 export type InboxFilter = 'all' | 'unread' | 'demos'
