@@ -8,7 +8,7 @@ import { Icon } from '@/components/ui/icons'
 import { createClient } from '@/lib/supabase/client'
 import { mediaUrl } from '@/lib/site'
 import { slugify } from '@/lib/slug'
-import { buildStoragePath, contentTypeFor, friendlyUploadError, validateUpload } from '@/lib/upload'
+import { acceptFor, AUDIO_UPLOAD_RULES, buildStoragePath, contentTypeFor, friendlyUploadError, validateUpload } from '@/lib/upload'
 import { STREAMING_SERVICES, parseStreamingLinks, type StreamingUrls } from '@/lib/song-links'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { resolveStreamingSongAction } from '../actions'
@@ -24,11 +24,6 @@ export function parseContributors(raw: string): string[] {
     .slice(0, 20)
 }
 
-const AUDIO_RULES = {
-  allowedExt: ['mp3', 'm4a'],
-  maxBytes: 30 * 1024 * 1024,
-  allowedMime: ['audio/mpeg', 'audio/mp4', 'audio/x-m4a'],
-}
 const COVER_RULES = {
   allowedExt: ['jpg', 'jpeg', 'png', 'webp'],
   maxBytes: 25 * 1024 * 1024,
@@ -207,7 +202,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
         for (const [i, r] of rows.entries()) {
           if (!r.title.trim()) return setError(`Song ${i + 1} needs a title.`)
           if (!r.file) return setError(`Song ${i + 1} needs its audio file (MP3 or M4A).`)
-          const check = validateUpload(r.file, AUDIO_RULES)
+          const check = validateUpload(r.file, AUDIO_UPLOAD_RULES)
           if (!check.ok) return setError(`Song ${i + 1}: ${check.error}`)
         }
         let coverExt: string | null = null
@@ -256,7 +251,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
         }
 
         for (const r of rows) {
-          const check = validateUpload(r.file!, AUDIO_RULES)
+          const check = validateUpload(r.file!, AUDIO_UPLOAD_RULES)
           if (!check.ok) {
             await rollback()
             return setError(check.error)
@@ -267,7 +262,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
             .upload(audioPath, r.file!, { contentType: contentTypeFor(check.ext), upsert: false })
           if (audErr) {
             await rollback()
-            return setError(friendlyUploadError(audErr.message, { noun: 'song', allowed: AUDIO_RULES.allowedExt }))
+            return setError(friendlyUploadError(audErr.message, { noun: 'song', allowed: AUDIO_UPLOAD_RULES.allowedExt }))
           }
           uploaded.push({ bucket: 'audio', path: audioPath })
           const { data: trk, error: trkErr } = await supabase
@@ -398,7 +393,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
         className={`${inputClass} w-full`}
       />
       <FileDropField
-        accept="audio/mpeg,audio/mp4,.mp3,.m4a"
+        accept={acceptFor(AUDIO_UPLOAD_RULES)}
         label={r.file ? r.file.name : 'Drop the audio file or click to pick'}
         hint="MP3 or M4A · up to 30 MB"
         busy={false}

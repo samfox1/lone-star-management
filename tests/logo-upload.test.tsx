@@ -17,6 +17,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { LogoUpload } from '@/app/artists/[id]/(dashboard)/brand/logo-upload'
 import { setBrandAssetAction } from '@/app/artists/[id]/(dashboard)/brand/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
+import { acceptFor, IMAGE_UPLOAD_RULES } from '@/lib/upload'
 
 vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
   setBrandAssetAction: vi.fn(async () => ({})),
@@ -88,9 +89,15 @@ describe('LogoUpload — removing', () => {
 })
 
 describe('LogoUpload — accepted formats', () => {
-  it('CRITICAL: never advertises SVG — the media bucket is public and an SVG can carry script', () => {
+  it('CRITICAL: the picker offers exactly the validated allowlist — no SVG, no wildcard', () => {
+    // The old check asserted accept didn't CONTAIN "svg" while the component rendered
+    // accept="image/*" — which admits SVG in a real picker. The picker must advertise
+    // only what validateUpload accepts: the media bucket is public, and an SVG can
+    // carry script.
     renderPrimary(null)
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input.accept).toBe(acceptFor(IMAGE_UPLOAD_RULES))
     expect(input.accept).not.toMatch(/svg/i)
+    expect(input.accept).not.toContain('*')
   })
 })

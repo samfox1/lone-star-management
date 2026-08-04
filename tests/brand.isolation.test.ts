@@ -105,3 +105,23 @@ describe('the database bounds the framing even when lib/brand.ts is bypassed', (
     ).toBeNull()
   })
 })
+
+describe('the media bucket refuses SVG even when every client guard is bypassed', () => {
+  it('CRITICAL: an image/svg+xml upload is rejected by the bucket itself', async () => {
+    // SVG is a stored-XSS vector on a PUBLIC bucket: it executes script when opened
+    // directly. The picker filter and IMAGE_UPLOAD_RULES both exclude it, but browser
+    // uploads go straight to Storage — so the bucket's own allowed_mime_types is the
+    // only guard a direct writer cannot route around. Service role on purpose: if even
+    // the god key is refused, no session can do better.
+    const svg = new Blob(['<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'], {
+      type: 'image/svg+xml',
+    })
+    const { error } = await svc.storage
+      .from('media')
+      .upload(`${artistA}/brand/svg-guard-${crypto.randomUUID()}.svg`, svg, {
+        contentType: 'image/svg+xml',
+      })
+    expect(error).not.toBeNull()
+    expect(error?.message ?? '').toMatch(/mime type|not supported/i)
+  })
+})

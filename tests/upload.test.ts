@@ -11,13 +11,15 @@ import {
   performUpload,
   friendlyUploadError,
   formatProgress,
+  acceptFor,
+  AUDIO_UPLOAD_RULES,
   DOCUMENT_UPLOAD_RULES,
   isOwnedStoragePath,
   IMAGE_UPLOAD_RULES,
   VIDEO_UPLOAD_RULES,
 } from '@/lib/upload'
 import { videoRenderMode, embedOrStorageValid, publicVideoSrc, isRenderableVideo } from '@/lib/video-render'
-import { orphanedPaths, collectablePaths } from '@/lib/storage-gc'
+import { collectablePaths } from '@/lib/storage-gc'
 
 describe('validateUpload', () => {
   const rules = { allowedExt: ['mp4', 'mov', 'webm'], maxBytes: 200_000_000 }
@@ -47,6 +49,59 @@ describe('validateUpload', () => {
     const withMime = { ...rules, allowedMime: ['video/mp4', 'video/quicktime', 'video/webm'] }
     expect(validateUpload({ name: 'a.mp4', size: 1, type: '' }, withMime).ok).toBe(true) // browser reported no mime
     expect(validateUpload({ name: 'a.mp4', size: 1, type: 'text/html' }, withMime).ok).toBe(false) // spoofed
+  })
+
+  it('CRITICAL: the IMAGE rules reject SVG — the media bucket is public and an SVG can carry script', () => {
+    expect(validateUpload({ name: 'logo.svg', size: 1000, type: 'image/svg+xml' }, IMAGE_UPLOAD_RULES).ok).toBe(false)
+  })
+})
+
+/**
+ * Track/song audio. ONE constant, because three uploaders hand-rolled the same list and
+ * one had already drifted (song-add accepted audio/x-m4a, the other two rejected the
+ * same file) — the exact failure IMAGE_UPLOAD_RULES exists to prevent.
+ */
+describe('AUDIO_UPLOAD_RULES (track/song audio)', () => {
+  it('accepts mp3 and m4a', () => {
+    expect(validateUpload({ name: 's.mp3', size: 1000, type: 'audio/mpeg' }, AUDIO_UPLOAD_RULES).ok).toBe(true)
+    expect(validateUpload({ name: 's.m4a', size: 1000, type: 'audio/mp4' }, AUDIO_UPLOAD_RULES).ok).toBe(true)
+  })
+
+  it('CRITICAL: accepts an m4a the browser reports as audio/x-m4a — the drift that split the uploaders', () => {
+    expect(validateUpload({ name: 's.m4a', size: 1000, type: 'audio/x-m4a' }, AUDIO_UPLOAD_RULES).ok).toBe(true)
+  })
+
+  it('rejects other audio formats and a spoofed mime', () => {
+    expect(validateUpload({ name: 's.wav', size: 1000, type: 'audio/wav' }, AUDIO_UPLOAD_RULES).ok).toBe(false)
+    expect(validateUpload({ name: 's.mp3', size: 1000, type: 'text/html' }, AUDIO_UPLOAD_RULES).ok).toBe(false)
+  })
+
+  it('caps at 30 MB, matching what all three uploaders already enforced', () => {
+    expect(AUDIO_UPLOAD_RULES.maxBytes).toBe(30 * 1024 * 1024)
+    expect(validateUpload({ name: 's.mp3', size: AUDIO_UPLOAD_RULES.maxBytes + 1, type: '' }, AUDIO_UPLOAD_RULES).ok).toBe(false)
+  })
+})
+
+/**
+ * `acceptFor` — the file-picker accept list, derived from the SAME rules validateUpload
+ * enforces. Hand-written accept attributes are how the logo picker advertised image/*
+ * (which admits SVG) while the validator refused it.
+ */
+describe('acceptFor', () => {
+  it('lists every allowed mime and dot-extension', () => {
+    expect(acceptFor(AUDIO_UPLOAD_RULES)).toBe('audio/mpeg,audio/mp4,audio/x-m4a,.mp3,.m4a')
+  })
+
+  it('CRITICAL: the image list never admits SVG — no wildcards, only the allowlist', () => {
+    const accept = acceptFor(IMAGE_UPLOAD_RULES)
+    expect(accept).not.toMatch(/svg/i)
+    expect(accept).not.toContain('*')
+    expect(accept).toContain('image/png')
+    expect(accept).toContain('.jpg')
+  })
+
+  it('falls back to extensions alone when the rules carry no mime list', () => {
+    expect(acceptFor({ allowedExt: ['pdf'], maxBytes: 1 })).toBe('.pdf')
   })
 })
 
@@ -131,18 +186,6 @@ describe('friendlyUploadError (raw Supabase/DB errors → specific manager-facin
   })
   it('omits the type/limit clauses when context is absent', () => {
     expect(friendlyUploadError('mime not supported', { noun: 'file' })).not.toMatch(/undefined/)
-  })
-})
-
-describe('orphanedPaths (storage GC diff)', () => {
-  it('returns listed objects that are no longer referenced', () => {
-    const listed = ['a/videos/1.mp4', 'a/videos/2.mp4', 'a/videos/3.mp4']
-    const referenced = ['a/videos/2.mp4'] // only #2 still in a working row/live revision
-    expect(orphanedPaths(listed, referenced)).toEqual(['a/videos/1.mp4', 'a/videos/3.mp4'])
-  })
-  it('keeps everything when all are referenced, removes nothing on empty input', () => {
-    expect(orphanedPaths(['a/1.mp4'], ['a/1.mp4'])).toEqual([])
-    expect(orphanedPaths([], ['a/1.mp4'])).toEqual([])
   })
 })
 

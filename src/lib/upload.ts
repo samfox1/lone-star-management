@@ -21,6 +21,15 @@ export const VIDEO_UPLOAD_RULES: UploadRules = {
   maxBytes: 524288000,
   allowedMime: ['video/mp4', 'video/webm', 'video/quicktime'],
 }
+/** Track/song audio, in ONE place for the same reason as the image rules: three uploaders
+ *  hand-rolled this list and one had already drifted — song-add accepted `audio/x-m4a`
+ *  (what Safari and Windows report for an .m4a) while the other two rejected the very
+ *  same file. 30 MB is the cap all three already enforced. */
+export const AUDIO_UPLOAD_RULES: UploadRules = {
+  allowedExt: ['mp3', 'm4a'],
+  maxBytes: 31457280, // 30 MB
+  allowedMime: ['audio/mpeg', 'audio/mp4', 'audio/x-m4a'],
+}
 /**
  * Press-kit DOCUMENTS: the stage plot and tech rider on the EPK.
  *
@@ -48,6 +57,14 @@ export function sizeLabel(bytes: number): string {
 }
 
 const upperList = (exts: string[]) => exts.map((e) => e.toUpperCase()).join(', ')
+
+/** The file-picker `accept` list, derived from the SAME rules validateUpload enforces —
+ *  never a wildcard. A hand-written attribute is how the logo picker advertised
+ *  `image/*` (which admits SVG, a stored-XSS vector on the public bucket) while the
+ *  validator refused it. */
+export function acceptFor(rules: UploadRules): string {
+  return [...(rules.allowedMime ?? []), ...rules.allowedExt.map((e) => `.${e}`)].join(',')
+}
 
 /** Validate a picked file against ext + size (+ optional mime). Client-side UX only —
  *  the bucket's allowed_mime_types / file_size_limit are the real, unbypassable guard.

@@ -5,6 +5,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { createClient } from '@/lib/supabase/client'
+import { acceptFor, AUDIO_UPLOAD_RULES } from '@/lib/upload'
 import { FileDropField } from './file-drop-field'
 import { useStorageUpload } from './use-storage-upload'
 import { toast } from './toast'
@@ -69,7 +70,7 @@ export function TrackAudio({
     artistId,
     category: 'audio',
     noun: 'audio',
-    rules: { allowedExt: ['mp3', 'm4a'], maxBytes: 30 * 1024 * 1024, allowedMime: ['audio/mpeg', 'audio/mp4'] },
+    rules: AUDIO_UPLOAD_RULES,
     writeRow: async (path) => {
       const { error: rowErr } = await createClient().from('tracks').update({ audio_path: path }).eq('id', trackId)
       return rowErr?.message ?? null
@@ -170,7 +171,7 @@ export function TrackAudio({
         <h3 className="text-lg font-bold tracking-[-0.01em]">Add audio</h3>
         <div className="mt-4">
           <FileDropField
-            accept="audio/mpeg,audio/mp4,.mp3,.m4a"
+            accept={acceptFor(AUDIO_UPLOAD_RULES)}
             label="Drop an audio file, or click to upload"
             busy={busy}
             progress={progress}

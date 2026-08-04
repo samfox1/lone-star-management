@@ -1,7 +1,7 @@
 'use client'
 
 import { BRAND_FOLDER } from '@/lib/brand'
-import { IMAGE_UPLOAD_RULES } from '@/lib/upload'
+import { acceptFor, IMAGE_UPLOAD_RULES } from '@/lib/upload'
 import { buttonClass } from '@/components/ui/ui'
 import { FileDropField } from '../file-drop-field'
 import { toast } from '../toast'
@@ -81,8 +81,11 @@ export function LogoUpload({
           </button>
         </div>
       )}
+      {/* The explicit allowlist, never image/* — the wildcard admits SVG in the picker
+          even though validateUpload refuses it, and the picker must not advertise what
+          the validator rejects. */}
       <FileDropField
-        accept="image/*"
+        accept={acceptFor(IMAGE_UPLOAD_RULES)}
         label={currentUrl ? `Replace ${label.toLowerCase()}` : label}
         hint={hint}
         busy={busy}

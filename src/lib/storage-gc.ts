@@ -14,12 +14,6 @@ import { BRAND_FOLDER } from '@/lib/brand'
  * (no revisions), so its objects are GC'd at delete instead.
  */
 
-/** Bucket paths present but no longer referenced → safe to remove. */
-export function orphanedPaths(listed: string[], referenced: Iterable<string>): string[] {
-  const keep = new Set(referenced)
-  return listed.filter((p) => !keep.has(p))
-}
-
 /** Default: never collect an object younger than this. performUpload writes the object
  *  BEFORE its row, so a just-uploaded object briefly looks unreferenced — the age gate
  *  stops a concurrent publish's GC from deleting it (and the replaced-file race) before

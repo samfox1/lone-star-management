@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { acceptFor, AUDIO_UPLOAD_RULES } from '@/lib/upload'
 import { useStorageUpload } from './use-storage-upload'
 
 /**
@@ -25,7 +26,7 @@ export function TrackAudioUploader({
     artistId,
     category: 'audio',
     noun: 'audio',
-    rules: { allowedExt: ['mp3', 'm4a'], maxBytes: 30 * 1024 * 1024, allowedMime: ['audio/mpeg', 'audio/mp4'] },
+    rules: AUDIO_UPLOAD_RULES,
     writeRow: async (path) => {
       const { error: rowErr } = await createClient().from('tracks').update({ audio_path: path }).eq('id', trackId)
       return rowErr?.message ?? null
@@ -38,7 +39,7 @@ export function TrackAudioUploader({
       <input
         ref={inputRef}
         type="file"
-        accept="audio/mpeg,audio/mp4,.mp3,.m4a"
+        accept={acceptFor(AUDIO_UPLOAD_RULES)}
         onChange={(e) => {
           const f = e.target.files?.[0]
           if (f) upload(f)
