@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { fileSize, type PlayableAttachment } from '@/lib/enquiry-attachments'
-import { filterRows, snippet, type InboxFilter, type InboxRow } from '@/lib/enquiry-inbox'
+import { artistsIn, filterByArtist, filterRows, snippet, type InboxFilter, type InboxRow } from '@/lib/enquiry-inbox'
 import { safeHref } from '@/lib/url'
 import { Icon } from '@/components/ui/icons'
 import { markEnquiryReadAction } from '../actions'
@@ -48,6 +48,7 @@ export function EnquiryTable({
   showArtist?: boolean
 }) {
   const [filter, setFilter] = useState<InboxFilter>('all')
+  const [artistId, setArtistId] = useState<string>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [readIds, setReadIds] = useState<Set<string>>(
     () => new Set(rows.filter((r) => r.read_at).map((r) => r.id)),
@@ -55,10 +56,16 @@ export function EnquiryTable({
   const [audio, setAudio] = useState<{ id: string; items: PlayableAttachment[] } | null>(null)
   const [, startTransition] = useTransition()
 
-  const visible = filterRows(
-    rows.map((r) => ({ ...r, read_at: readIds.has(r.id) ? (r.read_at ?? 'local') : null })),
-    filter,
+  const visible = filterByArtist(
+    filterRows(
+      rows.map((r) => ({ ...r, read_at: readIds.has(r.id) ? (r.read_at ?? 'local') : null })),
+      filter,
+    ),
+    artistId,
   )
+  // Built from the rows themselves, not the whole roster: an artist with no enquiries is
+  // an option that can only ever return nothing.
+  const artistOptions = artistsIn(rows)
   const unreadCount = rows.filter((r) => !readIds.has(r.id)).length
 
   function toggle(row: InboxRow) {
@@ -93,15 +100,32 @@ export function EnquiryTable({
   const colSpan = showArtist ? 6 : 5
 
   return (
-    <div className="overflow-hidden rounded-xl border border-hairline">
+    <div>
       {/* Rendered whether or not there is anything to filter. An empty page that shows
           only "no enquiries" says nothing about what lands here or how you will find it
           once it does. */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 pb-2">
         <span className="font-space text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           {rows.length} {rows.length === 1 ? 'enquiry' : 'enquiries'}
           {unreadCount > 0 && ` · ${unreadCount} unread`}
         </span>
+        {showArtist && artistOptions.length > 1 && (
+          <label className="ml-3 flex items-center gap-1.5">
+            <span className="sr-only">Filter by artist</span>
+            <select
+              value={artistId}
+              onChange={(e) => setArtistId(e.target.value)}
+              className="rounded-md border border-hairline bg-paper px-2 py-1 font-space text-[11px] text-ink-muted"
+            >
+              <option value="all">All artists</option>
+              {artistOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="ml-auto flex gap-1">
           {FILTERS.map((f) => (
             <button
@@ -122,7 +146,7 @@ export function EnquiryTable({
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
-            <tr className="border-b border-hairline">
+            <tr className="border-y border-hairline">
               {showArtist && <Th>Artist</Th>}
               <Th>From</Th>
               <Th>Type</Th>
@@ -135,11 +159,17 @@ export function EnquiryTable({
             {visible.length === 0 ? (
               <tr>
                 <td colSpan={colSpan} className="px-4 py-10 text-center font-space text-xs text-ink-faint">
+                  {/* Name the NARROWEST true reason. With an artist and a filter both
+                      active, "no demos yet" is false — there are demos, just not this
+                      artist's — and a message that is wrong about why is worse than a
+                      vague one. */}
                   {rows.length === 0
                     ? 'No enquiries yet. Booking and demo messages from the site’s contact form land here.'
-                    : filter === 'unread'
-                      ? 'Nothing unread.'
-                      : 'No demos yet.'}
+                    : artistId !== 'all'
+                      ? `Nothing here for ${artistOptions.find((a) => a.id === artistId)?.name ?? 'this artist'}.`
+                      : filter === 'unread'
+                        ? 'Nothing unread.'
+                        : 'No demos yet.'}
                 </td>
               </tr>
             ) : (

@@ -5,7 +5,7 @@
  * render test is a bad place to argue. The component is then just the split pane.
  */
 import { describe, expect, it } from 'vitest'
-import { filterRows, snippet, type InboxRow } from '@/lib/enquiry-inbox'
+import { artistsIn, filterByArtist, filterRows, snippet, type InboxRow } from '@/lib/enquiry-inbox'
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
@@ -83,5 +83,42 @@ describe('filterRows', () => {
   it('preserves order — the caller already sorted newest first', () => {
     const older = row({ id: 'old', created_at: '2026-01-01T00:00:00Z' })
     expect(filterRows([unread, older], 'all').map((r) => r.id)).toEqual(['u', 'old'])
+  })
+})
+
+describe('artistsIn', () => {
+  it('lists each artist once, alphabetically', () => {
+    const rows = [
+      row({ id: '1', artistId: 'z', artistName: 'Zed' }),
+      row({ id: '2', artistId: 'a', artistName: 'Ada' }),
+      row({ id: '3', artistId: 'z', artistName: 'Zed' }),
+    ]
+    expect(artistsIn(rows)).toEqual([
+      { id: 'a', name: 'Ada' },
+      { id: 'z', name: 'Zed' },
+    ])
+  })
+
+  it('CRITICAL: is built from the ROWS, so it never offers an artist with nothing to show', () => {
+    // Offering the whole roster would put options in the list that can only ever return
+    // an empty table, which reads as a bug the first time somebody picks one.
+    expect(artistsIn([row({ artistId: 'only', artistName: 'Only One' })])).toHaveLength(1)
+  })
+
+  it('handles an empty table', () => {
+    expect(artistsIn([])).toEqual([])
+  })
+})
+
+describe('filterByArtist', () => {
+  const a = row({ id: 'a', artistId: 'a1' })
+  const b = row({ id: 'b', artistId: 'a2' })
+
+  it('"all" filters nothing', () => {
+    expect(filterByArtist([a, b], 'all')).toHaveLength(2)
+  })
+
+  it('narrows to one artist', () => {
+    expect(filterByArtist([a, b], 'a2').map((r) => r.id)).toEqual(['b'])
   })
 })

@@ -13,6 +13,7 @@ import {
   coercePurpose,
   firstForwardedIp,
   formatFrom,
+  hasContent,
   hashIp,
   parseAllowedOrigins,
   pickOrigin,
@@ -60,9 +61,19 @@ describe('validateBody', () => {
     expect(validateBody({ ...good, website: '   ' }).kind).toBe('ok')
   })
 
-  it.each(['slug', 'name', 'email', 'message'])('reports missing_field for a blank %s', (field) => {
+  it.each(['slug', 'name', 'email'])('reports missing_field for a blank %s', (field) => {
     const r = validateBody({ ...good, [field]: '   ' })
     expect(r).toMatchObject({ kind: 'error', error: 'missing_field' })
+  })
+
+  it('NO LONGER rejects a blank message on its own — a demo is a link and some audio', () => {
+    // Changed 2026-08-04: skeen's demo form sends an empty message, because "here are two
+    // tracks" is a complete submission without a covering sentence, and this rejected
+    // every one of them. The real rule — the enquiry must carry SOMETHING — moved to
+    // `hasContent`, which can see the demo link and the attachment count. This function
+    // cannot: both are validated after it runs.
+    expect(validateBody({ ...good, message: '' })).toMatchObject({ kind: 'ok' })
+    expect(validateBody({ ...good, message: '   ' })).toMatchObject({ kind: 'ok' })
   })
 
   it('reports missing_field for non-string junk', () => {
@@ -398,5 +409,24 @@ describe('attachment retention', () => {
     expect(shouldSweep(0.005)).toBe(true)
     expect(shouldSweep(0.5)).toBe(false)
     expect(shouldSweep(0.01)).toBe(false) // boundary: strictly below
+  })
+})
+
+describe('hasContent — an enquiry must carry something', () => {
+  it('accepts a written message on its own', () => {
+    expect(hasContent({ message: 'hello', demoUrl: null, attachmentCount: 0 })).toBe(true)
+  })
+
+  it('CRITICAL: accepts a demo with only a link, or only audio', () => {
+    // The case that was being rejected. Neither is visible to validateBody, which is why
+    // this check is separate and runs after both have been validated.
+    expect(hasContent({ message: '', demoUrl: 'https://sc.com/x', attachmentCount: 0 })).toBe(true)
+    expect(hasContent({ message: '', demoUrl: null, attachmentCount: 1 })).toBe(true)
+  })
+
+  it('CRITICAL: rejects an enquiry carrying nothing at all', () => {
+    // A name and an email with no message, no link and no audio is not a submission.
+    expect(hasContent({ message: '', demoUrl: null, attachmentCount: 0 })).toBe(false)
+    expect(hasContent({ message: '   ', demoUrl: null, attachmentCount: 0 })).toBe(false)
   })
 })

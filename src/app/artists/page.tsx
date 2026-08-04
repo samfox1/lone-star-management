@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { InboxRow } from '@/lib/enquiry-inbox'
 import { EnquiryTable } from './[id]/(dashboard)/enquiries/enquiry-table'
-import { EmptyState, RosterShell, SectionToolbar } from '../roster-chrome'
+import { EmptyState, RosterShell } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
 
 export const metadata = { title: 'Enquiries — Lone Star Management' }
@@ -67,7 +67,6 @@ export default async function EnquiriesInboxPage() {
 
   return (
     <RosterShell active="enquiries" page="Enquiries" email={user?.email ?? null}>
-      <SectionToolbar title="Enquiries" />
       {artists.length === 0 ? (
         <EmptyState
           icon="note"
@@ -75,7 +74,7 @@ export default async function EnquiriesInboxPage() {
           sub="Request your first artist — booking and demo enquiries from their site collect here, across your whole roster."
         />
       ) : (
-        <div className="px-7 pb-12">
+        <div className="px-7 pb-12 pt-6">
           <EnquiryTable rows={rows} showArtist />
         </div>
       )}

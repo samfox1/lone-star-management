@@ -61,3 +61,17 @@ export function filterRows(rows: InboxRow[], filter: InboxFilter): InboxRow[] {
   if (filter === 'demos') return rows.filter((r) => r.purpose === 'demo')
   return rows
 }
+
+/** The artists that actually appear in these rows, for the roster-wide filter. Built from
+ *  the rows rather than the roster on purpose: an artist with no enquiries would be an
+ *  option that can only ever return an empty table. */
+export function artistsIn(rows: InboxRow[]): { id: string; name: string }[] {
+  const seen = new Map<string, string>()
+  for (const r of rows) if (!seen.has(r.artistId)) seen.set(r.artistId, r.artistName)
+  return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** `'all'` means no filtering, so the caller can hold one string for both states. */
+export function filterByArtist(rows: InboxRow[], artistId: string): InboxRow[] {
+  return artistId === 'all' ? rows : rows.filter((r) => r.artistId === artistId)
+}

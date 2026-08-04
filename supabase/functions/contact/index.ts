@@ -40,6 +40,7 @@ import {
   sanitiseFilename,
   shouldSweep,
   validateAttachments,
+  hasContent,
   validateBody,
   validateDemoUrl,
 } from './validate.ts'
@@ -385,6 +386,19 @@ Deno.serve(async (req: Request) => {
       demoUrl = demo.value
       attachments = atts.value
       skipped = [...demo.skipped, ...atts.skipped]
+
+      // An enquiry has to carry something. Checked HERE rather than in validateBody
+      // because a demo's content may be entirely the link and the audio, neither of which
+      // exists until this point.
+      if (!hasContent({ message: result.value.message, demoUrl, attachmentCount: attachments.length })) {
+        await rpc('log_contact_attempt', {
+          p_slug: result.value.slug,
+          p_purpose: result.value.purpose,
+          p_ip_hash: ipHash,
+          p_outcome: 'invalid',
+        })
+        return json(400, { ok: false, error: 'missing_field' }, origin)
+      }
     }
 
     // Log rejections too, so probing the endpoint with garbage still burns a
@@ -409,6 +423,27 @@ Deno.serve(async (req: Request) => {
       p_ip_hash: ipHash,
     })
 
+    // Persist the demo link and learn the tenant for ANY stored enquiry — the ok path and
+    // the unroutable one alike. It used to run only on success, so while mail is
+    // unconfigured (every submission unroutable) the demo LINK was silently dropped, which
+    // on a demo is most of the payload. One PATCH does both; submit_enquiry is left alone
+    // rather than widening its return type, which would mean dropping and recreating a
+    // function with a hard never-raise invariant.
+    let artistId: string | null = null
+    if (row?.enquiry_id) {
+      try {
+        const updated = await rest<{ artist_id: string }[]>(
+          `enquiries?id=eq.${row.enquiry_id}&select=artist_id`,
+          { method: 'PATCH', body: { demo_url: demoUrl }, prefer: 'return=representation' },
+        )
+        artistId = updated?.[0]?.artist_id ?? null
+      } catch (e) {
+        // The message is already stored. Losing the optional link is not worth failing a
+        // delivery over.
+        console.error('contact: demo_url update failed', e)
+      }
+    }
+
     if (!row || row.status !== 'ok') {
       if (row?.status === 'rate_limited') {
         return json(429, { ok: false, error: 'rate_limited' }, origin, { 'Retry-After': '3600' })
@@ -431,7 +466,7 @@ Deno.serve(async (req: Request) => {
           slug: body.slug,
           enquiry: row.enquiry_id,
         })
-        const issued = await issueUploadTickets(row.enquiry_id, null, attachments, {
+        const issued = await issueUploadTickets(row.enquiry_id, artistId, attachments, {
           slug: body.slug,
           purpose: body.purpose,
           ipHash,
@@ -453,22 +488,6 @@ Deno.serve(async (req: Request) => {
     let providerId: string | null = null
     let sendError: string | null = null
 
-    // Persist the demo link and learn the tenant BEFORE the email is composed, so the
-    // "listen or download" link can point at the actual enquiry rather than the app root.
-    // One PATCH does both; `submit_enquiry` is left untouched (widening its return type
-    // would mean dropping and recreating a function with a hard never-raise invariant).
-    let artistId: string | null = null
-    try {
-      const updated = await rest<{ artist_id: string }[]>(
-        `enquiries?id=eq.${row.enquiry_id}&select=artist_id`,
-        { method: 'PATCH', body: { demo_url: demoUrl }, prefer: 'return=representation' },
-      )
-      artistId = updated?.[0]?.artist_id ?? null
-    } catch (e) {
-      // The enquiry and its message are already stored. Losing the optional link is not
-      // worth failing a delivery over.
-      console.error('contact: demo_url update failed', e)
-    }
     const dashboardUrl = APP_URL && artistId ? `${APP_URL}/artists/${artistId}/enquiries` : null
 
     if (DRY_RUN) {

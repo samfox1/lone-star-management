@@ -200,3 +200,45 @@ describe('EnquiryTable — delivery state', () => {
     expect(screen.queryByText(/Not emailed/)).toBeNull()
   })
 })
+
+describe('EnquiryTable — the artist selector', () => {
+  const two = [
+    row({ id: 'a', name: 'From Pine', artistId: 'a1', artistName: 'Lone Pine' }),
+    row({ id: 'b', name: 'From Gulf', artistId: 'a2', artistName: 'Gulf Static' }),
+  ]
+
+  it('CRITICAL: narrows the table to one artist', async () => {
+    render(<EnquiryTable rows={two} showArtist />)
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Filter by artist'), { target: { value: 'a2' } })
+    })
+    expect(screen.getByText('From Gulf')).toBeInTheDocument()
+    expect(screen.queryByText('From Pine')).toBeNull()
+  })
+
+  it('offers only artists that actually have enquiries here', () => {
+    render(<EnquiryTable rows={two} showArtist />)
+    const options = within(screen.getByLabelText('Filter by artist')).getAllByRole('option')
+    expect(options.map((o) => o.textContent)).toEqual(['All artists', 'Gulf Static', 'Lone Pine'])
+  })
+
+  it('is hidden on a single artist’s page', () => {
+    render(<EnquiryTable rows={two} />)
+    expect(screen.queryByLabelText('Filter by artist')).toBeNull()
+  })
+
+  it('is hidden when every enquiry belongs to the same artist', () => {
+    // A selector with one real choice is a control that cannot do anything.
+    render(<EnquiryTable rows={[two[0]]} showArtist />)
+    expect(screen.queryByLabelText('Filter by artist')).toBeNull()
+  })
+
+  it('CRITICAL: names the artist, not the filter, when the artist is the reason', async () => {
+    render(<EnquiryTable rows={[...two, row({ id: 'c', purpose: 'demo', artistId: 'a3', artistName: 'Third' })]} showArtist />)
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Filter by artist'), { target: { value: 'a1' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Demos' }))
+    })
+    expect(screen.getByText('Nothing here for Lone Pine.')).toBeInTheDocument()
+  })
+})

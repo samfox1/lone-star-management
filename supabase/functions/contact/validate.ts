@@ -73,7 +73,11 @@ export function validateBody(raw: unknown): ValidationResult {
   const email = str(body.email).trim()
   const message = str(body.message).trim()
 
-  if (!slug || !name || !email || !message) {
+  // MESSAGE IS NO LONGER REQUIRED HERE. A demo is a link and some audio; insisting on a
+  // note as well would reject a perfectly good submission for not saying hello. What must
+  // be true is that the enquiry carries SOMETHING, and only the caller knows that — the
+  // demo link and the attachments are validated after this. See `hasContent`.
+  if (!slug || !name || !email) {
     return { kind: 'error', error: 'missing_field', slug, purpose }
   }
   // Length is checked BEFORE syntax so a 2MB blob gets the accurate error rather than
@@ -278,6 +282,27 @@ export type AttachmentsResult = { value: AttachmentRequest[]; skipped: SkippedIt
  * advisory, for display: a number in a JSON body constrains nothing, and the bucket's own
  * size limit is what actually applies.
  */
+/**
+ * Does this enquiry carry anything at all?
+ *
+ * The real invariant, replacing "message is required". A booking with no message is
+ * useless; a demo with a link and two tracks is complete without one. So the rule is that
+ * at least one of the three must be present.
+ *
+ * It lives HERE and not in `submit_enquiry` because the database cannot know: the demo
+ * link is written after the row, and the attachments do not exist until tickets are
+ * issued. That is a genuine loosening of the door's "correct on its own" property, and it
+ * is why the SQL now accepts an empty message — the only caller is service_role, and this
+ * function is the thing standing in front of it.
+ */
+export function hasContent(input: {
+  message: string
+  demoUrl: string | null
+  attachmentCount: number
+}): boolean {
+  return input.message.trim() !== '' || !!input.demoUrl || input.attachmentCount > 0
+}
+
 export function validateAttachments(raw: unknown): AttachmentsResult {
   if (raw === undefined || raw === null || !Array.isArray(raw)) return { value: [], skipped: [] }
 
