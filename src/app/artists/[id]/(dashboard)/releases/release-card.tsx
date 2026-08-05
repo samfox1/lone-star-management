@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type TrackPlatformIds } from '@/lib/music'
 import { CardModal } from '../card-modal'
+import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { toast } from '../toast'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
@@ -95,6 +96,7 @@ export function ReleaseCard({
   artistSlug,
   selected,
   onToggleSelect,
+  mergeTargets = [],
 }: {
   release: Release
   artistId: string
@@ -103,6 +105,10 @@ export function ReleaseCard({
    *  publish doesn't apply, so no checkbox / live badge is shown. */
   selected?: boolean
   onToggleSelect?: () => void
+  /** The artist's WHOLE catalog, for "Merge into…" on tracklist rows — the sync's
+   *  merge-refusal duplicates frequently land inside a release, and their twin can be
+   *  anywhere, not just on this release. Empty (the default) hides the affordance. */
+  mergeTargets?: MergeTarget[]
 }) {
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -115,6 +121,12 @@ export function ReleaseCard({
   const [typeDraft, setTypeDraft] = useState<ReleaseType>(release.release_type)
   // The tracklist song whose links modal is open (click a song to add/edit its link).
   const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
+  // The tracklist song being merged away (the row's ⇄ icon). Same modal + server action
+  // as the standalone song cards — one merge implementation, wherever the song lives.
+  const [mergeSong, setMergeSong] = useState<ReleaseSong | null>(null)
+  // A song can never be its own merge target — the server refuses it, but offering it at
+  // all invites the manager to delete the row they are standing on.
+  const targetsFor = (id: string) => mergeTargets.filter((t) => t.id !== id)
   const year = release.release_date?.slice(0, 4)
   const songCount = release.songs.length
   // Only EPs and albums have a tracklist (Sam, 2026-07-24) — a single IS its song, so its
@@ -392,10 +404,10 @@ export function ReleaseCard({
 
       <CardModal
         open={editing}
-        // Escape/click-outside closes ONE layer: while the link OR details modal is open it
-        // guards this one, so Escape dismisses the top layer first. The Save button lives in the
-        // right column (footer={null}) so a long tracklist can run full-height.
-        onClose={() => !linkSong && !detailsEditOpen && setEditing(false)}
+        // Escape/click-outside closes ONE layer: while the link, merge, OR details modal is
+        // open it guards this one, so Escape dismisses the top layer first. The Save button
+        // lives in the right column (footer={null}) so a long tracklist can run full-height.
+        onClose={() => !linkSong && !detailsEditOpen && !mergeSong && setEditing(false)}
         wide
         footer={null}
       >
@@ -427,7 +439,7 @@ export function ReleaseCard({
                 {songCount > 0 && (
                   <ol className="max-h-[52vh] space-y-0.5 overflow-auto">
                     {release.songs.map((s, i) => (
-                      <li key={s.id} className="flex items-baseline gap-2 py-1 text-[13px]">
+                      <li key={s.id} className="group/row flex items-baseline gap-2 py-1 text-[13px]">
                         <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
                         <button
                           type="button"
@@ -438,6 +450,21 @@ export function ReleaseCard({
                           {s.title}
                         </button>
                         {feat(s) && <span className="max-w-[40%] flex-none truncate text-ink-faint">{feat(s)}</span>}
+                        {/* Merge into… — a sync-refusal duplicate frequently lives HERE, inside a
+                            release; without this the affordance existed only on standalone cards
+                            and the manager had no way to resolve it. Icon-only, like every row
+                            control; hidden when the catalog offers no other song. */}
+                        {targetsFor(s.id).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setMergeSong(s)}
+                            aria-label={`Merge ${s.title} into…`}
+                            title="Merge into…"
+                            className="flex-none self-center text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100"
+                          >
+                            <Icon name="links" size={14} />
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ol>
@@ -575,6 +602,19 @@ export function ReleaseCard({
       >
         {detailsEditForm}
       </CardModal>
+
+      {/* Merge — the SAME modal + server action the standalone song cards use, verbatim:
+          the row's song is the one deleted; the selected keeper gains its links. Mounted
+          only while open so each opening starts with a fresh keeper selection. */}
+      {mergeSong && (
+        <MergeSongModal
+          open
+          onClose={() => setMergeSong(null)}
+          artistId={artistId}
+          song={{ id: mergeSong.id, title: mergeSong.title }}
+          targets={targetsFor(mergeSong.id)}
+        />
+      )}
 
       {/* Click a tracklist song → it opens exactly like a single (a song on an album IS one),
           borrowing the album cover + year, with its own listens and per-platform links. */}

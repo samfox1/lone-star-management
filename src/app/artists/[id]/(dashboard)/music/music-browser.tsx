@@ -212,6 +212,9 @@ export function MusicBrowser({
                   artistSlug={artistSlug}
                   selected={selected.has(r.id)}
                   onToggleSelect={() => toggleSelect(r.id)}
+                  // The FULL catalog, not targetsFor: the card filters per tracklist row
+                  // (each row excludes only itself, and a row's twin can be anywhere).
+                  mergeTargets={mergeTargets}
                 />
               ))}
               {orphs.map((t) => (
@@ -237,7 +240,7 @@ export function MusicBrowser({
       {shownUnreleasedReleases.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,192px)] gap-x-5 gap-y-8">
           {shownUnreleasedReleases.map((r) => (
-            <ReleaseCard key={r.id} release={r} artistId={artistId} artistSlug={artistSlug} />
+            <ReleaseCard key={r.id} release={r} artistId={artistId} artistSlug={artistSlug} mergeTargets={mergeTargets} />
           ))}
         </div>
       )}

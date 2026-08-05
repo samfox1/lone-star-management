@@ -96,10 +96,11 @@ export async function gcDeletedMediaObject(
  * must survive until its tombstone is published or the player 404s on a file that cannot
  * be recovered. Mirrors gcDeletedMediaObject.
  *
- * Called by the song MERGE, which deletes a duplicate row: whichever master the merged
- * song does not adopt is referenced by nothing afterwards, and the audio bucket is paid
- * storage. Plain song deletion does NOT call this yet — see the note in the merge action.
- * Best-effort: never fails the operation that triggered it.
+ * Called by BOTH row-deleting paths: the song MERGE (whichever master the merged song
+ * does not adopt is referenced by nothing afterwards) and plain song deletion
+ * (deleteContentAction('track')). The audio bucket is paid storage, so an unreferenced
+ * master must not outlive its row. Best-effort: never fails the operation that
+ * triggered it.
  */
 export async function gcDeletedAudioObject(
   client: SupabaseClient,

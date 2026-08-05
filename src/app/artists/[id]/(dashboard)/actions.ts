@@ -12,7 +12,7 @@ import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from './_owns'
-import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject, gcFontObjects } from '@/lib/storage-gc'
+import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject, gcDeletedAudioObject, gcFontObjects } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
 import { placeInSlot } from '@/lib/site-editor/slots'
 import {
@@ -118,18 +118,28 @@ export async function deleteContentAction(
   artistId: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  // Grab an uploaded video's object path before the row is gone, so we can clean it up.
+  // Grab an uploaded object's path BEFORE the row is gone — the row is the only thing
+  // that knows it, and after the delete the object would be unfindable forever.
   let videoPath: string | null = null
   if (type === 'video') {
     const { data } = await supabase.from('videos').select('storage_path').eq('id', id).single()
     videoPath = (data?.storage_path as string | null) ?? null
+  }
+  let audioPath: string | null = null
+  if (type === 'track') {
+    const { data } = await supabase.from('tracks').select('audio_path').eq('id', id).single()
+    audioPath = (data?.audio_path as string | null) ?? null
   }
   try {
     await deleteContent(supabase, type, id)
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Delete failed.' }
   }
+  // GC only AFTER a successful delete, and both collectors swallow their own failures:
+  // a storage hiccup must never cost the row delete — a leaked object is recoverable,
+  // a half-failed delete confuses the manager into deleting twice.
   if (type === 'video') await gcDeletedVideoObject(supabase, id, videoPath)
+  if (type === 'track') await gcDeletedAudioObject(supabase, id, audioPath)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

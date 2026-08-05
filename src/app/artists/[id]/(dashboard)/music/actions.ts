@@ -27,8 +27,8 @@ import { callerOwns } from '../_owns'
  *     unreachable even if the client sends any pair of ids it likes.
  *
  * Storage: the duplicate's master is collected AFTER the row is gone, and only when the
- * merged song didn't adopt it. Plain song deletion still leaks its audio object — that is
- * a pre-existing gap this action deliberately does not widen, not one it inherits.
+ * merged song didn't adopt it. Plain song deletion runs the same collector from
+ * deleteContentAction('track'), so neither row-deleting path leaks its audio object.
  */
 export async function mergeSongsAction(
   artistId: string,
