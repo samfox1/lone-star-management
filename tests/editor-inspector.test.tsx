@@ -26,7 +26,7 @@ import {
   setSongsOnSiteAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
-import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import { buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import type { SelectTarget } from '@/lib/site-editor/bridge'
 import type {
   EditorImageField,
@@ -1115,10 +1115,15 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     try {
       openStyle()
       expand('Footer')
-      fireEvent.change(screen.getByLabelText('Footer Size'), { target: { value: 'text-lg' } })
+      // Derived from the real control: sizes became fluid clamps so text shrinks on a
+      // phone, and a hardcoded `text-lg` here would assert against a scale that no
+      // longer exists.
+      const sizeCtl = buildStyleControls().find((c) => c.id === 'size')!
+      const size = sizeCtl.kind === 'select' ? sizeCtl.options.find((o) => o.value)!.value : ''
+      fireEvent.change(screen.getByLabelText('Footer Size'), { target: { value: size } })
       expect(saveStyleMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', 'mt-auto border-t px-6 text-lg')
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', `mt-auto border-t px-6 ${size}`)
     } finally {
       vi.useRealTimers()
     }

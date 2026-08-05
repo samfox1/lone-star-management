@@ -72,26 +72,44 @@ const WEIGHTS = ['thin', 'extralight', 'light', 'normal', 'medium', 'semibold', 
 const ALIGNS = ['left', 'center', 'right', 'justify', 'start', 'end']
 
 const textSuffix = (t: string) => (t.startsWith('text-') ? t.slice(5) : '')
+/** A font SIZE token: one of Tailwind's named steps, or an arbitrary clamp() the size
+ *  slider emits. Must own BOTH — a site storing the old `text-4xl` needs it REPLACED
+ *  when a new size is picked, not left behind for source order to arbitrate. */
+const isTextSize = (t: string) => SIZES.includes(textSuffix(t)) || /^text-\[clamp\(/.test(t)
 const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 
 // Tailwind's FULL size scale. It was five friendly steps ("Small…Huge"), which reads well
 // in a menu and is too coarse on a slider — Sam asked for roughly double the stops so he
 // can land between them. The labels stay plain-word at the ends and fall back to the
 // Tailwind name in the middle, where "Large-ish" would be worse than `2xl`.
+// FLUID sizes, not fixed ones. A `text-4xl` is 2.25rem at every width, so a caption
+// sized against the desktop preview ran off the edge of a phone — which is exactly what
+// happened to the polaroid captions.
+//
+// Each step is a clamp: the MAX is the old fixed size, so nothing already set moves on a
+// laptop, and the MIN is roughly two-thirds of it, so the same choice simply has less to
+// give on a narrow screen. The vw term in the middle scales continuously between them,
+// which beats a breakpoint step: text does not jump at 768px, it just fits.
+//
+// The site's own hero already uses this idiom (`text-[clamp(4rem,18vw,11rem)]`), so this
+// is its vocabulary, not one imposed on it.
+//
+// SAFELIST: like everything else here, the SITE must safelist these or Tailwind compiles
+// nothing and the slider silently does nothing. See the header.
 const SIZE_OPTIONS: StyleOption[] = [
-  { value: 'text-xs', label: 'XS' },
-  { value: 'text-sm', label: 'Small' },
-  { value: 'text-base', label: 'Base' },
-  { value: 'text-lg', label: 'Medium' },
-  { value: 'text-xl', label: 'XL' },
-  { value: 'text-2xl', label: 'Large' },
-  { value: 'text-3xl', label: '3xl' },
-  { value: 'text-4xl', label: '4xl' },
-  { value: 'text-5xl', label: '5xl' },
-  { value: 'text-6xl', label: 'Huge' },
-  { value: 'text-7xl', label: '7xl' },
-  { value: 'text-8xl', label: '8xl' },
-  { value: 'text-9xl', label: 'Giant' },
+  { value: 'text-[clamp(0.7rem,1.6vw,0.75rem)]', label: 'XS' },
+  { value: 'text-[clamp(0.78rem,1.9vw,0.875rem)]', label: 'Small' },
+  { value: 'text-[clamp(0.85rem,2.2vw,1rem)]', label: 'Base' },
+  { value: 'text-[clamp(0.95rem,2.6vw,1.125rem)]', label: 'Medium' },
+  { value: 'text-[clamp(1rem,3vw,1.25rem)]', label: 'XL' },
+  { value: 'text-[clamp(1.15rem,3.6vw,1.5rem)]', label: 'Large' },
+  { value: 'text-[clamp(1.3rem,4.4vw,1.875rem)]', label: '3xl' },
+  { value: 'text-[clamp(1.5rem,5.2vw,2.25rem)]', label: '4xl' },
+  { value: 'text-[clamp(1.75rem,6.5vw,3rem)]', label: '5xl' },
+  { value: 'text-[clamp(2rem,8vw,3.75rem)]', label: 'Huge' },
+  { value: 'text-[clamp(2.25rem,9.5vw,4.5rem)]', label: '7xl' },
+  { value: 'text-[clamp(2.6rem,12vw,6rem)]', label: '8xl' },
+  { value: 'text-[clamp(3rem,15vw,8rem)]', label: 'Giant' },
 ]
 /**
  * LINE HEIGHT, emitted with Tailwind's `!` important prefix.
@@ -209,7 +227,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     label: 'Size',
     kind: 'select',
     options: [DEFAULT, ...SIZE_OPTIONS],
-    owns: (t) => SIZES.includes(textSuffix(t)),
+    owns: isTextSize,
   })
   controls.push({
     id: 'weight',
@@ -333,7 +351,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     kind: 'slider',
     steps: [DEFAULT, ...SIZE_OPTIONS],
     defaultOffScale: true,
-    owns: (t) => SIZES.includes(textSuffix(t)),
+    owns: isTextSize,
   })
   controls.push({
     id: 'weight',

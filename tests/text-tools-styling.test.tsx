@@ -192,21 +192,13 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(steps.some((s) => s.value === '')).toBe(false)
     // Ascending, and FINE: Sam asked for roughly double the stops so he can land between
     // the friendly five this used to offer.
-    expect(steps.map((s) => s.value)).toEqual([
-      'text-xs',
-      'text-sm',
-      'text-base',
-      'text-lg',
-      'text-xl',
-      'text-2xl',
-      'text-3xl',
-      'text-4xl',
-      'text-5xl',
-      'text-6xl',
-      'text-7xl',
-      'text-8xl',
-      'text-9xl',
-    ])
+    // Asserted as PROPERTIES, not as a copied ladder: the values became fluid clamps so
+    // text shrinks on a phone, and a hand-listed expectation would have to be rewritten
+    // every time the scale is retuned while proving nothing about the ordering that
+    // actually matters.
+    expect(steps.length).toBeGreaterThanOrEqual(13)
+    const maxRem = steps.map((s) => Number(s.value.match(/,\s*([\d.]+)rem\)\]$/)![1]))
+    for (let i = 1; i < maxRem.length; i++) expect(maxRem[i]).toBeGreaterThan(maxRem[i - 1])
   })
 
   it('an untouched slider sits MID-scale and reads Default, not at an end', () => {
@@ -235,31 +227,38 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(within(unset.parentElement!).queryByText('Reset')).toBeNull()
     cleanup()
 
-    editor(styled, { hero_title: 'text-2xl' })
+    const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
+    const mid = Math.floor(steps.length / 2)
+    editor(styled, { hero_title: steps[mid].value })
     const set = screen.getByLabelText('Hero title Size') as HTMLInputElement
     expect(within(set.parentElement!).getByText('Reset')).toBeTruthy()
     // And the handle sits ON that value, not at an end.
-    const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
-    expect(set.value).toBe(String(steps.findIndex((s) => s.value === 'text-2xl')))
+    expect(set.value).toBe(String(mid))
   })
 
   it('styling reports the REGION key, preserving classes the controls do not own', () => {
     // The region already carries a colour this editor does not offer. Changing the size
     // must not drop it — each control replaces only its own utility.
     const onStyle = editor(styled, { hero_title: 'text-flash-2 font-bold' })
+    // (the seed carries a colour and a weight the size control must not touch)
     // Size is a SLIDER: its value is a step INDEX. Derived from the real control rather
     // than hardcoded, so re-granulating the scale can't quietly make this test assert
     // some other size.
     const sizeControl = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
     // sliderSteps, not .steps: the panel renders the scale WITHOUT the `''` default, so
     // indexing the raw list picked the size one step along from the intended one.
-    const idx = sliderSteps(sizeControl).findIndex((s) => s.value === 'text-4xl')
+    // A step from the middle of the real scale, so retuning the values cannot silently
+    // turn this into an assertion about some other size.
+    // NOT the midpoint: an unset slider already rests there, so firing a change to it
+    // is a no-op React never reports.
+    const idx = sliderSteps(sizeControl).length - 2
+    const sizeValue = sliderSteps(sizeControl)[idx].value
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(idx) } })
 
     expect(onStyle).toHaveBeenCalledTimes(1)
     const [regionKey, className] = onStyle.mock.calls[0] as unknown as string[]
     expect(regionKey).toBe('hero_title')
-    expect(className).toContain('text-4xl')
+    expect(className).toContain(sizeValue)
     expect(className).toContain('text-flash-2')
     expect(className).toContain('font-bold')
   })
@@ -275,7 +274,7 @@ describe('TextFieldEditor — one field, full panel', () => {
     const control = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
     // sliderSteps, not control.steps: the panel renders the scale WITHOUT the `''`
     // default, so indexing the raw list was off by one against what is on screen.
-    const target = String(sliderSteps(control).findIndex((s) => s.value === 'text-4xl'))
+    const target = String(sliderSteps(control).length - 2) // not the mid resting position
 
     fireEvent.change(size, { target: { value: target } })
 
@@ -291,14 +290,15 @@ describe('TextFieldEditor — one field, full panel', () => {
     const controls = buildTextItemStyleControls(OPTIONS)
     const sizeSteps = controls.find((c) => c.id === 'size')!
     const weightSteps = controls.find((c) => c.id === 'weight')!
-    const sIdx = sliderSteps(sizeSteps).findIndex((s) => s.value === 'text-4xl')
+    const sIdx = sliderSteps(sizeSteps).length - 2 // not the mid resting position
+    const sVal = sliderSteps(sizeSteps)[sIdx].value
     const wIdx = sliderSteps(weightSteps).findIndex((s) => s.value === 'font-bold')
 
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(sIdx) } })
     fireEvent.change(screen.getByLabelText('Hero title Thickness'), { target: { value: String(wIdx) } })
 
     const last = onStyle.mock.calls.at(-1) as unknown as string[]
-    expect(last[1]).toContain('text-4xl')
+    expect(last[1]).toContain(sVal)
     expect(last[1]).toContain('font-bold')
   })
 

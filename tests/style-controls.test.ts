@@ -11,6 +11,7 @@ import {
   buildVideoItemStyleControls,
   readStyleValue,
   withUploadedFonts,
+  buildTextItemStyleControls,
   type SiteStyleOptions,
   type StyleControl,
 } from '@/lib/site-editor/style-controls'
@@ -233,5 +234,61 @@ describe('withUploadedFonts — Brand-page uploads join the manifest dropdown', 
     const manifest = { fonts: [{ value: 'font-momo', label: 'Momo' }] }
     expect(withUploadedFonts(manifest, [])).toBe(manifest)
     expect(withUploadedFonts(undefined, [])).toBeUndefined()
+  })
+})
+
+describe('text size is FLUID — it shrinks on a phone', () => {
+  const sizeControl = () => {
+    const c = buildTextItemStyleControls({ fonts: [] }).find((x) => x.id === 'size')!
+    if (c.kind !== 'slider') throw new Error('size must be a slider')
+    return c
+  }
+
+  it('CRITICAL: every step scales with the viewport', () => {
+    // A fixed `text-4xl` is 2.25rem at every width, so a caption sized on a desktop
+    // preview runs off the edge of a phone — which is exactly what happened to the
+    // polaroid captions. clamp() makes one choice mean "this big at most, smaller when
+    // there is less room".
+    for (const step of sizeControl().steps) {
+      if (step.value === '') continue // the site's own default, not ours to define
+      expect(step.value).toMatch(/^text-\[clamp\(/)
+    }
+  })
+
+  it('CRITICAL: the DESKTOP size is unchanged, so nothing already set moves', () => {
+    // The max of each clamp is the old fixed size. Only the small end is new: an
+    // existing site keeps its look on a laptop and stops overflowing on a phone.
+    const maxima = sizeControl()
+      .steps.filter((s) => s.value)
+      .map((s) => s.value.match(/,\s*([\d.]+)rem\)\]$/)?.[1])
+    expect(maxima).toEqual(['0.75', '0.875', '1', '1.125', '1.25', '1.5', '1.875', '2.25', '3', '3.75', '4.5', '6', '8'])
+  })
+
+  it('every step is smaller at its minimum than at its maximum', () => {
+    for (const step of sizeControl().steps) {
+      if (!step.value) continue
+      const m = step.value.match(/clamp\(([\d.]+)rem,\s*[\d.]+vw,\s*([\d.]+)rem\)/)
+      expect(m, step.value).not.toBeNull()
+      expect(Number(m![1])).toBeLessThan(Number(m![2]))
+    }
+  })
+
+  it('the scale ascends, so dragging right always means bigger', () => {
+    const maxima = sizeControl()
+      .steps.filter((s) => s.value)
+      .map((s) => Number(s.value.match(/,\s*([\d.]+)rem\)\]$/)![1]))
+    for (let i = 1; i < maxima.length; i++) expect(maxima[i]).toBeGreaterThan(maxima[i - 1])
+  })
+
+  it('CRITICAL: still owns a legacy fixed size, so stored values are replaced not doubled', () => {
+    // Sites already store `text-4xl`. If the control stopped recognising it, setting a
+    // new size would APPEND the clamp and leave the old class behind — two font sizes
+    // on one element, and which wins is source order.
+    const c = sizeControl()
+    expect(c.owns('text-4xl')).toBe(true)
+    expect(c.owns('text-[clamp(1.5rem,5.2vw,2.25rem)]')).toBe(true)
+    // Not a colour or an alignment that happens to share the prefix.
+    expect(c.owns('text-center')).toBe(false)
+    expect(c.owns('text-foreground')).toBe(false)
   })
 })
