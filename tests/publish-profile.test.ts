@@ -28,9 +28,15 @@ async function publicArtist(): Promise<Record<string, unknown> | null> {
   return (data as { artist?: Record<string, unknown> } | null)?.artist ?? null
 }
 
+/** Lone Pine's profile as this file found it — the tests overwrite versioned columns on
+ *  the shared live project, so teardown puts back what was there rather than a guess. */
+let original: Record<string, unknown> = {}
+
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  const { data } = await svc.from('artists').select('template, spotify_artist_id').eq('id', artistA).single()
+  original = (data ?? {}) as Record<string, unknown>
   // Establish a known PUBLISHED baseline.
   await asA.from('artists').update({ bio: BASE_BIO }).eq('id', artistA)
   await publishProfile(asA, artistA)
@@ -39,7 +45,7 @@ beforeAll(async () => {
 afterAll(async () => {
   // Restore Lone Pine to its seed profile and leave exactly ONE clean published
   // snapshot, so later tests still find a live site.
-  await svc.from('artists').update({ bio: SEED_BIO, template: 'classic' }).eq('id', artistA)
+  await svc.from('artists').update({ bio: SEED_BIO, ...original }).eq('id', artistA)
   await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'artist')
   await publishProfile(svc, artistA)
 })
@@ -79,18 +85,33 @@ describe('profile is draft until published', () => {
   })
 
   it('CRITICAL: template + spotify_artist_id also wait for publish', async () => {
-    await publishProfile(asA, artistA) // baseline published
-    const before = await publicArtist()
+    // Both drafted values must DIFFER from what is published, or the assertions hold even
+    // with profile versioning deleted and the door reading the live artists row. The
+    // baseline is written explicitly for the same reason: "publish what is already there,
+    // then assert it is there" proves nothing.
+    await asA
+      .from('artists')
+      .update({ template: 'classic', spotify_artist_id: 'PROFILE-published-id' })
+      .eq('id', artistA)
+    await publishProfile(asA, artistA)
 
-    await asA.from('artists').update({ template: 'classic' }).eq('id', artistA)
-    // Public still shows the previously published template.
-    expect((await publicArtist())?.template).toBe(before?.template)
+    await asA
+      .from('artists')
+      .update({ template: 'cinematic', spotify_artist_id: 'PROFILE-draft-id' })
+      .eq('id', artistA)
+
+    // Public still shows the PUBLISHED pair, not the draft.
+    const stale = await publicArtist()
+    expect(stale?.template).toBe('classic')
+    expect(stale?.spotify_artist_id).toBe('PROFILE-published-id')
 
     await publishProfile(asA, artistA)
-    expect((await publicArtist())?.template).toBe('classic')
+    const live = await publicArtist()
+    expect(live?.template).toBe('cinematic')
+    expect(live?.spotify_artist_id).toBe('PROFILE-draft-id')
 
-    // restore + republish so we don't leave Lone Pine on classic
-    await asA.from('artists').update({ template: (before?.template as string) ?? 'classic' }).eq('id', artistA)
+    // restore + republish so we don't leave Lone Pine on another template or a fake id
+    await asA.from('artists').update(original).eq('id', artistA)
     await publishProfile(asA, artistA)
   })
 })

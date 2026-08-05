@@ -6,8 +6,11 @@
  * Two truths, split the way ADR 0009 splits the write paths:
  *
  *  1. Every gated type behaves the same AT THE DOOR, whichever path writes the flag:
- *     a new row lands off-site, and a published row stays hidden until `on_site` is
- *     true. That's the contract the public site depends on, and it holds per-type.
+ *     a new row lands off-site, a published row stays hidden until `on_site` is true, and
+ *     a published row survives the deletion of its working row until a publish tombstones
+ *     it. That's the contract the public site depends on, and it holds per-type — which is
+ *     why it is asserted per-type rather than for whichever type came to mind: the door
+ *     joins each section separately, so the rule can be broken for exactly one of them.
  *  2. reconcileOnSite — making the live set exactly a selection — now applies ONLY to
  *     the publish-reconciled types (merch here; release has its own suite). Running it
  *     against a live-toggle type is the bug ADR 0009 exists to prevent, so it is not
@@ -47,12 +50,25 @@ beforeAll(async () => {
   asA = await signInAs(SEED.managerA)
 })
 
+/** Rows this file created, per table. Teardown removes ONLY these: the project is shared
+ *  and live, so deleting every video / merch / tour date for the artist erases whatever
+ *  else is in there and leaves later suites asserting over an empty site. */
+const created: { table: string; id: string }[] = []
+
+/** createContent + remember the row for teardown. */
+async function create(c: Case, artistId = artistA, client = asA) {
+  const row = await createContent(client, c.type, artistId, c.create)
+  created.push({ table: c.table, id: row.id as string })
+  return row
+}
+
 afterEach(async () => {
-  for (const c of CASES) {
-    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', c.type)
-    await svc.from(c.table).delete().eq('artist_id', artistA)
-    await svc.from(c.table).delete().eq('artist_id', artistB)
+  if (!created.length) return
+  await svc.from('revisions').delete().in('entity_id', created.map((r) => r.id))
+  for (const table of new Set(created.map((r) => r.table))) {
+    await svc.from(table).delete().in('id', created.filter((r) => r.table === table).map((r) => r.id))
   }
+  created.length = 0
 })
 
 async function publicSection(siteKey: string): Promise<Record<string, unknown>[]> {
@@ -70,13 +86,13 @@ const writeFlag = (client: SupabaseClient, c: Case, id: string, on: boolean, art
 
 describe.each(CASES)('on-site gating: $type', (c) => {
   it('createContent lands the new row off-site (on_site=false)', async () => {
-    const row = await createContent(asA, c.type, artistA, c.create)
+    const row = await create(c)
     const { data } = await svc.from(c.table).select('on_site').eq('id', row.id as string).single()
     expect(data!.on_site).toBe(false)
   })
 
   it('CRITICAL: a published row stays hidden until the flag is on, and hides again when off', async () => {
-    const row = await createContent(asA, c.type, artistA, c.create) // on_site=false
+    const row = await create(c) // on_site=false
     const id = row.id as string
     await publishContent(asA, c.type, artistA) // snapshot exists, but still hidden
     expect(await onSite(c)).toBe(false)
@@ -89,17 +105,21 @@ describe.each(CASES)('on-site gating: $type', (c) => {
     expect(await onSite(c)).toBe(false)
   })
 
-  it("CRITICAL: cannot flip another tenant's row on-site", async () => {
-    const { data: bRow } = await svc
-      .from(c.table)
-      .insert({ artist_id: artistB, ...c.create, on_site: false })
-      .select('id')
-      .single()
+  it('CRITICAL: a published row whose WORKING row was deleted stays live until a tombstone', async () => {
+    // The door LEFT JOINs the working row and coalesces a missing one to on-site
+    // (20260707200000). Deleting a row is a DRAFT edit like any other: the published
+    // snapshot stays authoritative until a publish tombstones it. An inner join reads as
+    // a harmless simplification and yanks live content the moment anyone deletes a row.
+    const row = await create(c)
+    const id = row.id as string
+    await writeFlag(asA, c, id, true, artistA)
+    await publishContent(asA, c.type, artistA)
+    expect(await onSite(c)).toBe(true)
 
-    await writeFlag(asA, c, bRow!.id as string, true, artistB) // RLS makes A's write a no-op
-
-    const { data } = await svc.from(c.table).select('on_site').eq('id', bRow!.id as string).single()
-    expect(data!.on_site).toBe(false) // untouched
+    await svc.from(c.table).delete().eq('id', id)
+    const { data: gone } = await svc.from(c.table).select('id').eq('id', id).maybeSingle()
+    expect(gone).toBeNull() // no working row left to join to
+    expect(await onSite(c)).toBe(true)
   })
 })
 
@@ -111,8 +131,8 @@ describe.each(CASES)('on-site gating: $type', (c) => {
  */
 describe('reconcileOnSite (publish-reconciled types)', () => {
   it('touches only rows that change, both directions', async () => {
-    const on = await createContent(asA, MERCH.type, artistA, MERCH.create)
-    const off = await createContent(asA, MERCH.type, artistA, MERCH.create)
+    const on = await create(MERCH)
+    const off = await create(MERCH)
     await reconcileOnSite(asA, 'merch', artistA, [on.id as string]) // seed: `on` is on-site
 
     // Desired set = keep `on`, add `off` → one flips on, nothing flips off.
@@ -128,7 +148,7 @@ describe('reconcileOnSite (publish-reconciled types)', () => {
   it('takes off the site anything absent from the selection', async () => {
     // The behaviour that makes reconcile incompatible with a live toggle: an empty
     // selection hides everything, including a row someone just switched on elsewhere.
-    const row = await createContent(asA, MERCH.type, artistA, MERCH.create)
+    const row = await create(MERCH)
     await reconcileOnSite(asA, 'merch', artistA, [row.id as string])
 
     const res = await reconcileOnSite(asA, 'merch', artistA, [])
@@ -139,11 +159,16 @@ describe('reconcileOnSite (publish-reconciled types)', () => {
   })
 
   it("CRITICAL: cannot flip another tenant's rows on-site", async () => {
+    // The one cross-tenant case kept here: it pins the RETURN-VALUE contract as well as
+    // the row (a caller reads {shown, hidden} to report what it published, so an RLS
+    // no-op reported as "1 shown" is a lie the row check alone wouldn't catch). Plain
+    // "A's write to B is a no-op" belongs to rls.isolation.test.ts.
     const { data: bRow } = await svc
       .from(MERCH.table)
       .insert({ artist_id: artistB, ...MERCH.create, on_site: false })
       .select('id')
       .single()
+    created.push({ table: MERCH.table, id: bRow!.id as string })
 
     const res = await reconcileOnSite(asA, 'merch', artistB, [bRow!.id as string])
     expect(res).toEqual({ shown: 0, hidden: 0 }) // RLS makes A's write a no-op

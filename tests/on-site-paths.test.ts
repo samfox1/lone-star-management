@@ -12,12 +12,26 @@
  * live map with no caller for weeks without anyone noticing an overlap. Translating
  * through LIVE_TOGGLE is what makes the two comparable, so that translation is what
  * this asserts over.
+ *
+ * Every registry this file asserts over is derived from a TYPE or an exported const, never
+ * hand-copied: a hand-written copy of a union goes stale in the widening direction without
+ * failing anything, which is the exact hole a slot placed into `releases` would slip through.
  */
 import { describe, expect, it } from 'vitest'
 import { LIVE_TOGGLE, ON_SITE_ENTITIES, PUBLISHABLE } from '@/lib/content'
 import type { SlotTable } from '@/lib/site-editor/slots'
 
 const liveEntities = Object.values(LIVE_TOGGLE)
+
+/** Every member of `SlotTable`, derived EXHAUSTIVELY from the type.
+ *
+ *  A `SlotTable[]` literal only pins the other direction: narrowing the union breaks it,
+ *  but WIDENING it (adding `releases`) leaves a stale list that still passes, which is the
+ *  regression the assertion below exists to catch. A `Record<SlotTable, true>` is total —
+ *  a new member missing here is a COMPILE error, and once added it must satisfy the
+ *  live-table assertion at runtime. */
+const SLOT_TABLE_SET: Record<SlotTable, true> = { media: true, videos: true }
+const SLOT_TABLES = Object.keys(SLOT_TABLE_SET) as SlotTable[]
 
 describe('on-site write paths', () => {
   it('CRITICAL: no entity is on both the live-toggle and publish-reconcile paths', () => {
@@ -62,9 +76,8 @@ describe('on-site write paths', () => {
     // placeInSlot → media/videos) are the ADR-0009 blind spot: they bypass setOnSiteAction,
     // so this is the guard that keeps them on the live path.
     const liveTables = new Set(liveEntities.map((e) => PUBLISHABLE[e].table))
-    const slotTables: SlotTable[] = ['media', 'videos']
     const reconcileTables = ON_SITE_ENTITIES.map((e) => PUBLISHABLE[e].table)
-    for (const t of slotTables) {
+    for (const t of SLOT_TABLES) {
       expect(liveTables.has(t), `slot table ${t} must be a live-toggle table`).toBe(true)
       expect(reconcileTables.includes(t), `slot table ${t} must NOT be a reconcile table`).toBe(false)
     }

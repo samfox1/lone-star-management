@@ -11,6 +11,10 @@ let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 const PATH = '%ARTIST%/profile/phase0-media-test.jpg'
+/** The media row this file created. Teardown removes ONLY it: the project is shared and
+ *  live, so deleting every media row for the artist erases photos nothing here uploaded
+ *  and leaves the media-dependent suites after it asserting over an empty gallery. */
+let mediaId: string | null = null
 
 async function publicMediaPaths(): Promise<string[]> {
   const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
@@ -23,8 +27,9 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('media').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'media')
+  if (!mediaId) return
+  await svc.from('media').delete().eq('id', mediaId)
+  await svc.from('revisions').delete().eq('entity_id', mediaId)
 })
 
 describe('media is draft until published', () => {
@@ -38,6 +43,7 @@ describe('media is draft until published', () => {
       .select('id')
       .single()
     expect(error).toBeNull()
+    mediaId = row!.id as string
 
     // Draft: not referenced by the public site yet.
     expect(await publicMediaPaths()).not.toContain(fullPath)

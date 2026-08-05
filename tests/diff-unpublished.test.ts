@@ -14,22 +14,38 @@ let asA: SupabaseClient
 const svc = serviceClient()
 const SEED_BIO = 'Dusty alt-country out of West Texas.'
 
+/** Track ids this file created. Teardown removes ONLY these: deleting every track for the
+ *  artist on the shared live project erases whatever else is there and leaves the later
+ *  music suites asserting over an empty catalog. */
+const createdTracks: string[] = []
+
+async function seedTrack(input: Record<string, unknown>) {
+  const row = await createContent(asA, 'track', artistA, input)
+  createdTracks.push(row.id)
+  return row
+}
+
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
 })
 
 afterAll(async () => {
-  await svc.from('tracks').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).in('entity_type', ['track', 'artist'])
-  await svc.from('artists').update({ bio: SEED_BIO, template: 'classic' }).eq('id', artistA)
+  if (createdTracks.length) {
+    await svc.from('tracks').delete().in('id', createdTracks)
+    await svc.from('revisions').delete().in('entity_id', createdTracks)
+    createdTracks.length = 0
+  }
+  // The profile is a singleton snapshot: restore the seed bio and republish so the artist
+  // is left LIVE with the content that was there before.
+  await svc.from('artists').update({ bio: SEED_BIO }).eq('id', artistA)
   await publishProfile(svc, artistA)
 })
 
 describe('diffUnpublished', () => {
   it('CRITICAL: reports nothing pending right after a full publish (no false positives)', async () => {
     await asA.from('artists').update({ bio: 'DIFF baseline bio' }).eq('id', artistA)
-    await createContent(asA, 'track', artistA, { title: 'DIFF clean track' })
+    await seedTrack({ title: 'DIFF clean track' })
     await publishAll(asA, artistA)
 
     const diff = await diffUnpublished(asA, artistA)
@@ -39,7 +55,7 @@ describe('diffUnpublished', () => {
   })
 
   it('detects an edited track and an edited bio; leaves clean sections clean', async () => {
-    const track = await createContent(asA, 'track', artistA, { title: 'DIFF edit track' })
+    const track = await seedTrack({ title: 'DIFF edit track' })
     await publishAll(asA, artistA)
 
     await asA.from('tracks').update({ title: 'DIFF edited' }).eq('id', track.id)
@@ -55,10 +71,10 @@ describe('diffUnpublished', () => {
 
   it('detects a new unpublished track (added) and a removed published track (deleted)', async () => {
     await asA.from('artists').update({ bio: 'DIFF baseline 3' }).eq('id', artistA)
-    const toDelete = await createContent(asA, 'track', artistA, { title: 'DIFF will delete' })
+    const toDelete = await seedTrack({ title: 'DIFF will delete' })
     await publishAll(asA, artistA)
 
-    await createContent(asA, 'track', artistA, { title: 'DIFF added track' })
+    await seedTrack({ title: 'DIFF added track' })
     await deleteContent(asA, 'track', toDelete.id)
 
     const diff = await diffUnpublished(asA, artistA)
