@@ -3,7 +3,8 @@ import { Icon } from '@/components/ui/icons'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { applyStyleValue, buildItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
 import { colorClass, resolveStyle } from '@/lib/site-editor/style-apply'
-import { EYEBROW, GroupLabel, SaveLine, SCROLL_BODY, type SaveStatus } from './inspector-shared'
+import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shared'
+import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
 import { ColorPalette } from './color-picker'
 import { LibraryPicker } from './inspector-grid'
@@ -123,25 +124,7 @@ export function ItemEditor({
 
   return (
     <>
-      {/* Header: back, a plain identifying thumbnail, then this item's name ("Edit
-          Slot 3"). The thumb is deliberately STATIC (Sam, 2026-08-03): the live preview
-          is the site frame on the right — the one render that is true. */}
-      <div className="flex items-center gap-2.5 border-b border-hairline px-4 pb-2.5 pt-[15px]">
-        <button
-          type="button"
-          onClick={requestBack}
-          aria-label="Back"
-          className="flex-none rounded-md p-1 text-ink-muted hover:bg-surface hover:text-ink"
-        >
-          <Icon name="chevronLeft" size={18} />
-        </button>
-        <span className="grid h-14 w-14 flex-none place-items-center overflow-hidden rounded-lg bg-surface p-1.5">
-          <span className="block w-full overflow-hidden">{preview}</span>
-        </span>
-        <h2 className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em]">Edit {label}</h2>
-      </div>
-
-      <div className={SCROLL_BODY}>
+      <EditorPanel label={label} thumb={preview} onBack={requestBack}>
         <div className="px-5 pt-4">
           <div className="flex gap-2">
             <button
@@ -207,7 +190,7 @@ export function ItemEditor({
         </div>
 
         <SaveLine status={status} />
-      </div>
+      </EditorPanel>
 
       {picking && (
         <LibraryPicker<PickCandidate>

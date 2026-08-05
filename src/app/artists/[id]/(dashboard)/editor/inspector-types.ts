@@ -28,6 +28,11 @@ export type EditorTextField = {
   type: 'text' | 'email'
   value: string
   multiline: boolean
+  /** True for a text AREA of the site the manager can restyle but not retype — a heading
+   *  or a section written into the design rather than declared as editable copy. Most of a
+   *  site's text is this kind, and leaving it out of the panel made the Text panel show
+   *  five captions on an eleven-region site. */
+  styleOnly?: boolean
   /** The style region dressing this field's element, when the site declares one — the
    *  Text panel offers Font/Size/Boldness against it, so the words and how they look are
    *  edited in one place. Null when the site declares no region for this field, which is

@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { groupTracksIntoProjects } from '@/lib/music'
-import { fieldCurrentValue, manifestFor, styleRegionForField } from '@/lib/site-editor/manifest'
+import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
+import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
 import { requireArtist } from '../_data'
@@ -102,21 +103,17 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   // describing a site nobody is looking at. The shell drops these for a custom site and
   // uses the frame's runtime manifest instead (see runtimeTextFields), which is why the
   // custom-ness test lives there rather than being repeated here.
-  const textFields: EditorTextField[] = manifest
-    ? manifest.fields
-        .filter((f) => f.type === 'text' || f.type === 'email')
-        .map((f) => ({
-          key: f.key,
-          label: f.label,
-          type: f.type as 'text' | 'email',
-          value: fieldCurrentValue(f, ctx),
-          multiline: f.key === 'artist_bio' || f.key.endsWith('_copy'),
-          // Null for both built-in templates today: they declare no style regions at
-          // all, so there is nothing to dress. The pairing is here so that changes the
-          // day a template declares one, without touching the panel.
-          styleRegion: styleRegionForField(f, manifest.styles),
-        }))
-    : []
+  // Every text area the template declares: the copy a manager types AND the regions
+  // that dress it. Built-ins declare no style regions today, so this is their fields.
+  const textFields: EditorTextField[] = textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
+    key: e.key,
+    label: e.label,
+    type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
+    value: e.field ? fieldCurrentValue(e.field, ctx) : '',
+    multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
+    styleRegion: e.styleRegion ? { key: e.styleRegion.key, label: e.styleRegion.label } : null,
+    styleOnly: !e.field,
+  }))
 
   // The site's single-occupancy image fields (hero image, profile photo) — declared by
   // the manifest, resolved to their current preview. hero_video is type:'image' too but

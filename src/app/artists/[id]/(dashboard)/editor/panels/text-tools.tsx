@@ -38,10 +38,12 @@ export function TextTools({
             <p
               className={cx(
                 'line-clamp-2 rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-[12px] leading-snug',
-                value ? 'text-ink' : 'italic text-ink-faint',
+                value && !f.styleOnly ? 'text-ink' : 'italic text-ink-faint',
               )}
             >
-              {value || 'Empty'}
+              {/* A style-only row is an AREA of the site, not a box to type in — say what
+                  it is rather than showing a blank that reads as missing content. */}
+              {f.styleOnly ? 'Set by the site — restyle only' : value || 'Empty'}
             </p>
           </div>
         )

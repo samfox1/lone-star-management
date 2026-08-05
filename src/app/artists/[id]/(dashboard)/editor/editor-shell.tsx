@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
-import { styleRegionForField, type TemplateManifest } from '@/lib/site-editor/manifest'
+import type { TemplateManifest } from '@/lib/site-editor/manifest'
+import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
@@ -38,21 +39,18 @@ export function runtimeTextFields(
   manifest: TemplateManifest | null,
   values: SiteContent,
 ): EditorTextField[] {
-  return (manifest?.fields ?? [])
-    .filter((f) => f.type === 'text' || f.type === 'email')
-    .map((f) => ({
-      key: f.key,
-      label: f.label,
-      type: f.type as 'text' | 'email',
-      value: values[f.key] ?? '',
-      // Same multiline rule the built-in path uses (page.tsx), so a body-copy field gets
-      // a textarea on a custom site too.
-      multiline: f.key === 'artist_bio' || f.key.endsWith('_copy'),
-      // The region that dresses this field, so Font/Size/Boldness sit beside the input.
-      // Resolved against the SAME runtime manifest the fields came from, so a site that
-      // declares both gets them paired with nothing to configure.
-      styleRegion: styleRegionForField(f, manifest?.styles),
-    }))
+  return textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
+    key: e.key,
+    label: e.label,
+    type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
+    value: e.field ? (values[e.field.key] ?? '') : '',
+    // Same multiline rule the built-in path uses, so a body-copy field gets a textarea
+    // on a custom site too.
+    multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
+    styleRegion: e.styleRegion ? { key: e.styleRegion.key, label: e.styleRegion.label } : null,
+    // A region with no field behind it: restyleable, not retypeable.
+    styleOnly: !e.field,
+  }))
 }
 
 /**
