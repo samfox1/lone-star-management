@@ -118,9 +118,24 @@ describe('MusicBrowser — orphan singles (no loose bucket)', () => {
     expect(screen.queryByText(/loose/i)).toBeNull()
   })
 
-  it('hides orphan singles under the Off-site lens (they are public material)', () => {
-    setup({ orphanSingles: [orphan({ id: 'o1', title: 'Bootleg Mix' })] })
-    fireEvent.click(screen.getByRole('button', { name: 'Off site' }))
+  // The site lens must read the orphan's OWN `on_site`, like every other card.
+  // It once passed orphans through untouched (`site === 'off' ? [] : orphans`), which
+  // made an off-site orphan unfindable: shown under "On site", hidden under "Off site".
+  // 48db004 gave orphan songs their own toggle, so there is no "orphans are always
+  // public" shortcut left to take.
+  it('an OFF-site orphan shows under Off site and NOT under On site', () => {
+    setup({ orphanSingles: [orphan({ id: 'o1', title: 'Bootleg Mix', on_site: false })] })
+    fireEvent.click(siteBtn('Off site'))
+    expect(screen.getByText('Bootleg Mix')).toBeInTheDocument()
+    fireEvent.click(siteBtn('On site'))
+    expect(screen.queryByText('Bootleg Mix')).toBeNull()
+  })
+
+  it('an ON-site orphan shows under On site and NOT under Off site', () => {
+    setup({ orphanSingles: [orphan({ id: 'o1', title: 'Bootleg Mix', on_site: true })] })
+    fireEvent.click(siteBtn('On site'))
+    expect(screen.getByText('Bootleg Mix')).toBeInTheDocument()
+    fireEvent.click(siteBtn('Off site'))
     expect(screen.queryByText('Bootleg Mix')).toBeNull()
   })
 })

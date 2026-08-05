@@ -44,7 +44,14 @@ describe('trackBucket (loose, no release)', () => {
   it('a platform source is released', () => {
     expect(trackBucket(trk({ source: 'spotify' }))).toBe('released')
   })
-  it.each(['spotify_id', 'apple_id', 'deezer_id', 'provider_url', 'stream_url', 'apple_url', 'soundcloud_url'] as const)(
+  // EVERY platform column trackOnPlatform reads must be listed here. `deezer_url` was
+  // missing and its check was mutation-provably dead: deleting it from lib/music.ts left
+  // the whole suite green, so a manager-entered Deezer link would silently stop promoting
+  // a song to Released.
+  it.each([
+    'spotify_id', 'apple_id', 'deezer_id', 'provider_url', 'stream_url',
+    'apple_url', 'soundcloud_url', 'deezer_url',
+  ] as const)(
     'any platform linkage (%s) makes it released',
     (field) => {
       expect(trackBucket(trk({ [field]: 'v' }))).toBe('released')
@@ -126,7 +133,7 @@ describe('the manual released flag on releases', () => {
 import { groupTracksIntoProjects, type ProjectTrack, type ReleaseMeta } from '@/lib/music'
 
 // A ProjectTrack: (id, parent release_id | null, title, type, on_site). A null parent = standalone.
-const ptrk = (id: string, releaseId: string | null, type = 'single', on = true, title = id): ProjectTrack =>
+const ptrk = (id: string, releaseId: string | null, type = 'single', on: boolean | null = true, title = id): ProjectTrack =>
   ({ id, release_id: releaseId, release_type: type, title, on_site: on })
 
 describe('groupTracksIntoProjects', () => {
@@ -171,13 +178,22 @@ describe('groupTracksIntoProjects', () => {
     expect(off[0].anyOnSite).toBe(false)
   })
 
-  it('treats a null parent as a standalone song', () => {
-    const p = groupTracksIntoProjects([ptrk('a', null)], lookup)
-    expect(p[0].key).toBe('track:a')
+  // Pins `t.on_site ?? false`: a null on_site is OFF here. Flipping it to `?? true` was
+  // mutation-provably invisible before this test.
+  //
+  // ASYMMETRY, deliberate: every SQL door does `coalesce(on_site, true)` — null reads as
+  // ON there, because a published snapshot with no live row must keep serving. Here a
+  // null means "no live row to trust", and the panel must not claim a song is live. The
+  // two can't actually diverge (tracks.on_site is NOT NULL), so this pins intent rather
+  // than guarding a reachable path.
+  it('treats a NULL on_site as off (opposite of the SQL doors coalesce(on_site, true))', () => {
+    const p = groupTracksIntoProjects([ptrk('a', 'relOut', 'ep', null)], lookup)
+    expect(p[0].anyOnSite).toBe(false)
   })
 
-  it('falls back to the album name as title when no release row matches', () => {
+  it("falls back to the SONG's own title when no release row matches", () => {
     // A parented song with an unknown release id falls back to the song's own title.
+    // (Album-name grouping is gone — there is no album name left to fall back to.)
     const p = groupTracksIntoProjects([ptrk('a', 'relUNKNOWN', 'single', true, 'Bootleg Mix')], lookup)
     expect(p[0].title).toBe('Bootleg Mix')
     expect(p[0].releaseType).toBe('single')

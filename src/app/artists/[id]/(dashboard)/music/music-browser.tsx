@@ -92,9 +92,10 @@ function sorted(releases: Release[], sort: Sort): Release[] {
  * (All / On site / Off site) — with a shared toolbar (Refresh · Add Music ·
  * sort) in the same place for every view. Refresh greys out on
  * Unreleased (platform pulls only ever produce Released music). Unreleased
- * items are never public, so the site filter treats them as off-site; orphan
- * released singles are public, so they count as on-site. The password-gated
- * publish pill covers on-site selection changes AND content edits (`dirty`).
+ * items are never public, so the site filter treats them as off-site; every
+ * other card — releases AND orphan singles — is filtered by its own `on_site`.
+ * The password-gated publish pill covers on-site selection changes AND content
+ * edits (`dirty`).
  */
 export function MusicBrowser({
   releases,
@@ -142,10 +143,13 @@ export function MusicBrowser({
   // ----- Released half (hidden when bucket === 'unreleased') ----------------
   const showReleased = bucket !== 'unreleased'
   const shownReleases = sorted(filterBySite(releases, site), sort)
-  // Orphan singles are public site material → shown unless the Off-site lens is on. They
-  // ride the Singles section (their per-song type is single/remix, but a release-less song
-  // reads as a single here), never a separate 'loose' pile.
-  const shownOrphans = site === 'off' ? [] : orphanSingles
+  // Orphan singles carry their OWN on-site toggle (48db004), so the site lens filters them
+  // by `on_site` like every other card. Passing them through unfiltered (the old
+  // `site === 'off' ? [] : orphans`) made an off-site orphan UNFINDABLE: it showed under
+  // "On site" and vanished under "Off site" — shown in exactly the lens that denies it.
+  // They ride the Singles section (a release-less song reads as a single here), never a
+  // separate 'loose' pile.
+  const shownOrphans = filterBySite(orphanSingles, site)
 
   // ----- Unreleased half (hidden when bucket === 'released'; never on site) --
   const showUnreleased = bucket !== 'released' && site !== 'on'

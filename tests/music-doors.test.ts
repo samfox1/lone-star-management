@@ -108,8 +108,20 @@ beforeAll(async () => {
   // release_id only).
   await makeTrack('Fallback Song', { stream_url: 'https://open.spotify.com/track/fb' }, { album_name: 'Public Album' })
 
+  // A RELEASED, on-site release + a track inside it, both published ON-SITE. The
+  // toggle-after-publish test below flips them off with no republish.
+  id.togRelease = await makeRelease('Toggle Album', 'toggle-album', { spotify_id: 'sp-album-3' })
+  id.togTrack = await makeTrack('Toggle Cut', { stream_url: 'https://open.spotify.com/track/tog' }, {
+    release_id: id.togRelease,
+    audio_path: `${artistA}/toggle.mp3`,
+  })
+
   await publishContent(asA, 'release', artistA)
   await publishContent(asA, 'track', artistA)
+
+  // Created AFTER the publish, so it has no revision: a genuine DRAFT. Released
+  // provenance and on-site, so only the draft-ness can keep it off the doors.
+  await makeRelease('Draft Album', 'draft-album', { spotify_id: 'sp-album-4' })
 
   // A published snapshot with no matching live track row (legacy / orphan) shows,
   // because the on_site join misses and coalesce(on_site, true) keeps it.
@@ -185,5 +197,53 @@ describe('get_public_releases — still Released-gated', () => {
 
   it('omits a released release taken off-site', async () => {
     expect((await publicReleases()).map((r) => r.title)).not.toContain('Pulled Album')
+  })
+
+  // The door reads published_revisions, so an unpublished release has no row to serve.
+  // (Kept here when tests/public-releases.test.ts was removed — that file duplicated the
+  // Released/on-site gates above and its afterAll wiped every artistA release.)
+  it('omits a DRAFT release (created after the publish, so it has no revision)', async () => {
+    expect((await publicReleases()).map((r) => r.title)).not.toContain('Draft Album')
+    expect(await releasePage('draft-album')).toBeNull()
+  })
+})
+
+/**
+ * THE KEYSTONE: every door gates on the LIVE working row's `on_site`, not on the
+ * published snapshot. So taking something off the site is INSTANT — no republish.
+ *
+ * Every other fixture in this file sets `on_site` BEFORE publishing, which means a
+ * snapshot-reading door would pass those tests too. This one publishes on-site, then
+ * flips the live rows with no republish, and requires all four doors to go dark — and
+ * come back when it flips again. Without it, a refactor that read `data ->> 'on_site'`
+ * from the revision would leave a "hidden" release publicly reachable until the manager
+ * happened to publish again.
+ */
+describe('on_site toggled AFTER publish — the doors read the LIVE row', () => {
+  it('CRITICAL: flipping on_site off darkens all four doors with no republish, and back on restores them', async () => {
+    const setOnSite = async (on: boolean) => {
+      await svc.from('releases').update({ on_site: on }).eq('id', id.togRelease)
+      await svc.from('tracks').update({ on_site: on }).eq('id', id.togTrack)
+    }
+
+    // Published on-site: all four doors serve it.
+    expect((await releasePage('toggle-album'))?.title).toBe('Toggle Album')
+    expect((await publicReleases()).map((r) => r.title)).toContain('Toggle Album')
+    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Toggle Cut')
+    expect(await audioPath(id.togTrack)).toBe(`${artistA}/toggle.mp3`)
+
+    // Off-site, NO republish.
+    await setOnSite(false)
+    expect(await releasePage('toggle-album')).toBeNull()
+    expect((await publicReleases()).map((r) => r.title)).not.toContain('Toggle Album')
+    expect((await publicSiteTracks()).map((t) => t.title)).not.toContain('Toggle Cut')
+    expect(await audioPath(id.togTrack)).toBeNull()
+
+    // Back on-site, still no republish — the old snapshot is served again.
+    await setOnSite(true)
+    expect((await releasePage('toggle-album'))?.title).toBe('Toggle Album')
+    expect((await publicReleases()).map((r) => r.title)).toContain('Toggle Album')
+    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Toggle Cut')
+    expect(await audioPath(id.togTrack)).toBe(`${artistA}/toggle.mp3`)
   })
 })

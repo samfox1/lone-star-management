@@ -42,8 +42,14 @@ afterAll(async () => {
     await svc.from('revisions').delete().in('id', createdRevisionIds)
   if (createdTrackIds.length)
     await svc.from('tracks').delete().in('id', createdTrackIds)
-  // Belt-and-suspenders title sweep for anything not captured.
-  await svc.from('tracks').delete().in('title', [TITLE, TITLE + ' (edited)', PUBLISH_TITLE])
+  // Belt-and-suspenders title sweep for anything not captured. SCOPED TO artistA: this
+  // runs as the service role against the shared live database, so an unscoped title
+  // delete would reach into other artists' (and other suites') rows.
+  await svc
+    .from('tracks')
+    .delete()
+    .eq('artist_id', artistA)
+    .in('title', [TITLE, TITLE + ' (edited)', PUBLISH_TITLE])
 })
 
 describe('tracks CRUD (owner)', () => {
@@ -89,7 +95,11 @@ describe('tracks isolation (non-owner denied)', () => {
     expect(error).not.toBeNull()
   })
 
-  it('publishing artist B as manager A is a no-op (no on-site tracks)', async () => {
+  // 0 because RLS hides artist B's tracks from manager A, so publishContent has nothing
+  // to snapshot. It is NOT an on_site filter — publishContent snapshots every working
+  // row regardless of on_site. The old name ("no on-site tracks") described a filter
+  // that has never existed, and would keep passing if RLS were removed tomorrow.
+  it('publishing artist B as manager A is a no-op (RLS hides B rows — nothing to snapshot)', async () => {
     const count = await publishTracks(asA, artistB)
     expect(count).toBe(0)
   })

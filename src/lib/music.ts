@@ -178,6 +178,11 @@ export function groupTracksIntoProjects(
       groups.get(key) ??
       { key, releaseId: t.release_id ?? null, type: t.release_type ?? 'single', title: t.title ?? null, ids: [], anyOnSite: false }
     g.ids.push(t.id)
+    // A null on_site is OFF here. This is the OPPOSITE of every SQL door, which does
+    // `coalesce(on_site, true)` — a published snapshot whose live row is gone must keep
+    // serving there, whereas the panel must never claim a song is live when it has no
+    // live row to read. `tracks.on_site` is NOT NULL, so the two can't diverge in
+    // practice; the disagreement is pinned (tests/music.test.ts) so it stays deliberate.
     if (t.on_site ?? false) g.anyOnSite = true
     groups.set(key, g)
   }

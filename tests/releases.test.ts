@@ -60,6 +60,13 @@ describe('release smart-link door', () => {
   })
 
   it('a deleted + republished release is tombstoned off the smart link', async () => {
+    // Publish + assert PRESENT inside this test. Relying on the first test to have
+    // published made this pass for the wrong reason in isolation: the release had never
+    // been published, so the smart link was already null before the delete and the
+    // tombstone proved nothing.
+    await publishContent(asA, 'release', artistA)
+    expect(await getRelease('midnight-ep')).not.toBeNull()
+
     await deleteContent(asA, 'release', releaseId)
     await publishContent(asA, 'release', artistA)
     expect(await getRelease('midnight-ep')).toBeNull()
