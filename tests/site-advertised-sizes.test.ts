@@ -86,4 +86,22 @@ describe('the size scale a site advertises', () => {
     const steps = sliderSteps(sizeOf(buildTextItemStyleControls(exotic)))
     expect(steps.map((s) => s.value)).toEqual(['text-[42vmin]'])
   })
+
+  it('CRITICAL: an exotic advertised size is still OWNED, whatever its unit', () => {
+    // The half that makes the test above safe. `owns` recognises a size by SHAPE, and its
+    // unit list stopped at pt — so a site advertising `text-[42vmin]` could offer it, but
+    // picking the NEXT size would fail to remove it: two size classes on one element, and
+    // source order deciding which wins. Every CSS length unit a site could plausibly size
+    // text with must be owned.
+    const control = sizeOf(buildTextItemStyleControls({ fonts: [] }))
+    for (const v of [
+      'text-[42vmin]', 'text-[10vmax]', 'text-[120%]', 'text-[3.2rem]',
+      'text-[5vw]', 'text-[24pt]', 'text-[2em]', 'text-[18px]',
+    ])
+      expect(control.owns(v), v).toBe(true)
+    // …while the look-alikes that are NOT sizes stay unowned — handing the size control a
+    // colour or a casing to delete is the opposite bug.
+    for (const v of ['text-[#ffffff]', 'text-center', 'text-flash-1', 'text-[var(--x)]'])
+      expect(control.owns(v), v).toBe(false)
+  })
 })

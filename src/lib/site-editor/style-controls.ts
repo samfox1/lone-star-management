@@ -110,13 +110,13 @@ const textSuffix = (t: string) => (t.startsWith('text-') ? t.slice(5) : '')
  * colour to delete.
  */
 export const isTextSize = (t: string) =>
-  SIZES.includes(textSuffix(t)) || /^text-\[(clamp\(|-?[\d.]+(rem|em|px|vw|vh|ch|pt)[\])])/.test(t)
+  SIZES.includes(textSuffix(t)) ||
+  // Any CSS length unit a site could size text with, not a favourites list: sites now
+  // ADVERTISE their own scale, so a unit missing here means picking the next size fails
+  // to remove the old one — two size classes on one element, source order deciding.
+  /^text-\[(clamp\(|-?[\d.]+(r?em|px|v(w|h|min|max)|ch|ex|pt|%)[\])])/.test(t)
 const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 
-// Tailwind's FULL size scale. It was five friendly steps ("Small…Huge"), which reads well
-// in a menu and is too coarse on a slider — Sam asked for roughly double the stops so he
-// can land between them. The labels stay plain-word at the ends and fall back to the
-// Tailwind name in the middle, where "Large-ish" would be worse than `2xl`.
 // FLUID sizes, not fixed ones. A `text-4xl` is 2.25rem at every width, so a caption
 // sized against the desktop preview ran off the edge of a phone — which is exactly what
 // happened to the polaroid captions.
@@ -129,22 +129,26 @@ const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 // The site's own hero already uses this idiom (`text-[clamp(4rem,18vw,11rem)]`), so this
 // is its vocabulary, not one imposed on it.
 //
+// LABELS are the desktop px (the clamp's max), the number every other site editor shows
+// for font size. The first pass used words ("Medium, XL, Large, Huge, Giant"), which read
+// as random once the scale had 19 stops — words don't order.
+//
 // SAFELIST: like everything else here, the SITE must safelist these or Tailwind compiles
 // nothing and the slider silently does nothing. See the header.
 const SIZE_OPTIONS: StyleOption[] = [
-  { value: 'text-[clamp(0.7rem,1.6vw,0.75rem)]', label: 'XS' },
-  { value: 'text-[clamp(0.78rem,1.9vw,0.875rem)]', label: 'Small' },
-  { value: 'text-[clamp(0.85rem,2.2vw,1rem)]', label: 'Base' },
-  { value: 'text-[clamp(0.95rem,2.6vw,1.125rem)]', label: 'Medium' },
-  { value: 'text-[clamp(1rem,3vw,1.25rem)]', label: 'XL' },
-  { value: 'text-[clamp(1.15rem,3.6vw,1.5rem)]', label: 'Large' },
-  { value: 'text-[clamp(1.3rem,4.4vw,1.875rem)]', label: '3xl' },
-  { value: 'text-[clamp(1.5rem,5.2vw,2.25rem)]', label: '4xl' },
-  { value: 'text-[clamp(1.75rem,6.5vw,3rem)]', label: '5xl' },
-  { value: 'text-[clamp(2rem,8vw,3.75rem)]', label: 'Huge' },
-  { value: 'text-[clamp(2.25rem,9.5vw,4.5rem)]', label: '7xl' },
-  { value: 'text-[clamp(2.6rem,12vw,6rem)]', label: '8xl' },
-  { value: 'text-[clamp(3rem,15vw,8rem)]', label: 'Giant' },
+  { value: 'text-[clamp(0.7rem,1.6vw,0.75rem)]', label: '12px' },
+  { value: 'text-[clamp(0.78rem,1.9vw,0.875rem)]', label: '14px' },
+  { value: 'text-[clamp(0.85rem,2.2vw,1rem)]', label: '16px' },
+  { value: 'text-[clamp(0.95rem,2.6vw,1.125rem)]', label: '18px' },
+  { value: 'text-[clamp(1rem,3vw,1.25rem)]', label: '20px' },
+  { value: 'text-[clamp(1.15rem,3.6vw,1.5rem)]', label: '24px' },
+  { value: 'text-[clamp(1.3rem,4.4vw,1.875rem)]', label: '30px' },
+  { value: 'text-[clamp(1.5rem,5.2vw,2.25rem)]', label: '36px' },
+  { value: 'text-[clamp(1.75rem,6.5vw,3rem)]', label: '48px' },
+  { value: 'text-[clamp(2rem,8vw,3.75rem)]', label: '60px' },
+  { value: 'text-[clamp(2.25rem,9.5vw,4.5rem)]', label: '72px' },
+  { value: 'text-[clamp(2.6rem,12vw,6rem)]', label: '96px' },
+  { value: 'text-[clamp(3rem,15vw,8rem)]', label: '128px' },
   // DISPLAY sizes, above anything Tailwind names. Sam, 2026-08-05: "the header text needs
   // to start at a bigger size and be able to be a bigger size."
   //
@@ -156,15 +160,12 @@ const SIZE_OPTIONS: StyleOption[] = [
   // hero opens on an exact step rather than beside one — it can be Reset, and its label is
   // not an approximation. The neighbours are built around it at its own ratio.
   //
-  // Labelled by their desktop rem rather than with invented words. Past "Giant" the words
-  // stop meaning anything ("Colossal" vs "Massive" tells a manager nothing), while at this
-  // end of the scale they are choosing a display headline and the number is real.
-  { value: 'text-[clamp(3.2rem,16vw,9rem)]', label: '9rem' },
-  { value: 'text-[clamp(3.5rem,17vw,10rem)]', label: '10rem' },
-  { value: 'text-[clamp(4rem,18vw,11rem)]', label: '11rem' },
-  { value: 'text-[clamp(4.2rem,19vw,12rem)]', label: '12rem' },
-  { value: 'text-[clamp(4.6rem,21vw,14rem)]', label: '14rem' },
-  { value: 'text-[clamp(5rem,23vw,16rem)]', label: '16rem' },
+  { value: 'text-[clamp(3.2rem,16vw,9rem)]', label: '144px' },
+  { value: 'text-[clamp(3.5rem,17vw,10rem)]', label: '160px' },
+  { value: 'text-[clamp(4rem,18vw,11rem)]', label: '176px' },
+  { value: 'text-[clamp(4.2rem,19vw,12rem)]', label: '192px' },
+  { value: 'text-[clamp(4.6rem,21vw,14rem)]', label: '224px' },
+  { value: 'text-[clamp(5rem,23vw,16rem)]', label: '256px' },
 ]
 /**
  * LINE HEIGHT, emitted with Tailwind's `!` important prefix.
@@ -590,13 +591,13 @@ export function sliderSteps(control: StyleControl): StyleOption[] {
 export function sliderIndex(
   control: StyleControl,
   current: string,
-): { idx: number; label: string; exact: boolean; hasValue: boolean } {
+): { idx: number; label: string; exact: boolean } {
   const steps = sliderSteps(control)
   const middle = Math.floor((steps.length - 1) / 2)
-  if (control.kind !== 'slider' || !steps.length) return { idx: 0, label: 'Default', exact: false, hasValue: false }
+  if (control.kind !== 'slider' || !steps.length) return { idx: 0, label: 'Default', exact: false }
 
   const exact = steps.findIndex((s) => s.value === current)
-  if (exact >= 0) return { idx: exact, label: steps[exact].label, exact: true, hasValue: true }
+  if (exact >= 0) return { idx: exact, label: steps[exact].label, exact: true }
 
   const rank = control.rank
   const target = current && rank ? rank(current) : null
@@ -616,9 +617,9 @@ export function sliderIndex(
     })
     // "≈" because the handle is beside the value, not on it — the manager should not read
     // an 11rem hero as though it were the 8rem step.
-    if (best >= 0) return { idx: best, label: `≈ ${steps[best].label}`, exact: false, hasValue: true }
+    if (best >= 0) return { idx: best, label: `≈ ${steps[best].label}`, exact: false }
   }
-  return { idx: middle, label: 'Default', exact: false, hasValue: Boolean(current) }
+  return { idx: middle, label: 'Default', exact: false }
 }
 
 export function buildItemStyleControls(): StyleControl[] {

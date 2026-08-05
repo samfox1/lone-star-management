@@ -75,15 +75,15 @@ describe('sliderIndex — a value that is not a step', () => {
   it('an exact step still reports exact, so Reset stays available', () => {
     const size = textControl('size')
     const steps = sliderSteps(size)
-    const { idx, exact, hasValue } = sliderIndex(size, steps[4].value)
-    expect({ idx, exact, hasValue }).toEqual({ idx: 4, exact: true, hasValue: true })
+    const { idx, exact } = sliderIndex(size, steps[4].value)
+    expect({ idx, exact }).toEqual({ idx: 4, exact: true })
   })
 
   it('no value at all rests in the middle and reads Default', () => {
     const size = textControl('size')
     const steps = sliderSteps(size)
     const r = sliderIndex(size, '')
-    expect(r.hasValue).toBe(false)
+    expect(r.label).toBe('Default')
     expect(r.idx).toBe(Math.floor((steps.length - 1) / 2))
   })
 
