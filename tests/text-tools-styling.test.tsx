@@ -1,23 +1,23 @@
 // @vitest-environment jsdom
 /**
- * Font / Size / Boldness sit BESIDE the text input, not in a second panel.
+ * The Text panel is a LIST that types; one field opens full-panel behind Edit, exactly
+ * like an image or a video slot. Font/Size/Boldness live in that editor.
  *
- * A manager typing a headline and then wanting it bigger was made to leave the Text
- * panel, find the matching region in the Style panel, and recognise it by name. These
- * tests pin that the controls appear against the right region, save through the same
- * path the Style panel uses, and — the part that matters — do NOT appear for a field the
- * site declares no region for, where they would write to a key nothing renders.
+ * Two rules worth pinning. A field the site declares no style region for shows NO type
+ * controls — controls that write to a key nothing renders are worse than none, because
+ * the manager changes the font, nothing happens, and no error explains it. And the list
+ * does not own the text: the editor is a second window onto the same field, so both read
+ * the value the inspector holds.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TextTools } from '@/app/artists/[id]/(dashboard)/editor/panels/text-tools'
+import { TextFieldEditor } from '@/app/artists/[id]/(dashboard)/editor/text-field-editor'
 import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
 
-const saveFieldMock = vi.fn(async () => ({ ok: true }))
-const saveStyleMock = vi.fn(async () => ({ ok: true }))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
-  saveEditorFieldAction: (...a: unknown[]) => saveFieldMock(...(a as [])),
-  saveEditorStyleAction: (...a: unknown[]) => saveStyleMock(...(a as [])),
+  saveEditorFieldAction: vi.fn(async () => ({ ok: true })),
+  saveEditorStyleAction: vi.fn(async () => ({ ok: true })),
 }))
 
 afterEach(cleanup)
@@ -38,65 +38,132 @@ const unstyled: EditorTextField = {
   multiline: false,
   styleRegion: null,
 }
-
 const OPTIONS = { fonts: [{ value: 'font-momo', label: 'Momo' }] }
 
-function renderTools(fields: EditorTextField[], styleValues: Record<string, string> = {}) {
-  return render(
-    <TextTools
-      textFields={fields}
-      artistId="a1"
-      styleValues={styleValues}
-      styleOptions={OPTIONS}
-    />,
-  )
-}
+describe('TextTools — the list', () => {
+  it('every field offers Edit, and carries no leading icon', () => {
+    const onEditField = vi.fn()
+    const { container } = render(
+      <TextTools
+        textFields={[styled, unstyled]}
+        values={{ hero_title: 'Skeen', booking_email: 'book@example.com' }}
+        status="idle"
+        onEdit={vi.fn()}
+        onEditField={onEditField}
+      />,
+    )
+    fireEvent.click(screen.getByLabelText('Edit Hero title'))
+    expect(onEditField).toHaveBeenCalledWith(styled)
+    // One glyph per row down a column of text fields is noise the label already covers.
+    expect(container.querySelectorAll('svg')).toHaveLength(0)
+  })
 
-describe('TextTools — type controls beside the input', () => {
+  it('renders the values it is GIVEN — it does not hold its own copy', () => {
+    // Two windows onto one field: if the list kept its own state, opening Edit after
+    // typing would show stale text and both copies would race the debounced save.
+    render(
+      <TextTools
+        textFields={[styled]}
+        values={{ hero_title: 'Typed elsewhere' }}
+        status="idle"
+        onEdit={vi.fn()}
+      />,
+    )
+    expect(screen.getByDisplayValue('Typed elsewhere')).toBeTruthy()
+  })
+
+  it('typing reports up rather than saving itself', () => {
+    const onEdit = vi.fn()
+    render(
+      <TextTools textFields={[styled]} values={{ hero_title: 'Skeen' }} status="idle" onEdit={onEdit} />,
+    )
+    fireEvent.change(screen.getByLabelText('Hero title'), { target: { value: 'Skeen Live' } })
+    expect(onEdit).toHaveBeenCalledWith('hero_title', 'Skeen Live')
+  })
+})
+
+describe('TextFieldEditor — one field, full panel', () => {
+  const editor = (field: EditorTextField, styleValues: Record<string, string> = {}, onStyle = vi.fn()) => {
+    render(
+      <TextFieldEditor
+        field={field}
+        value={field.value}
+        status="idle"
+        styleValues={styleValues}
+        styleOptions={OPTIONS}
+        onEdit={vi.fn()}
+        onStyle={onStyle}
+        onBack={vi.fn()}
+      />,
+    )
+    return onStyle
+  }
+
   it('CRITICAL: a field with a style region gets Font, Size and Boldness', () => {
-    renderTools([styled])
+    editor(styled)
     expect(screen.getByLabelText('Hero title Font')).toBeTruthy()
     expect(screen.getByLabelText('Hero title Size')).toBeTruthy()
     expect(screen.getByLabelText('Hero title Boldness')).toBeTruthy()
   })
 
   it('CRITICAL: a field with NO region gets none — not controls that write nowhere', () => {
-    // The failure this prevents is silent: the manager changes the font, nothing on the
-    // site changes, and there is no error to explain why.
-    renderTools([unstyled])
+    editor(unstyled)
     expect(screen.queryByLabelText(/Boldness$/)).toBeNull()
     expect(screen.queryByLabelText(/Font$/)).toBeNull()
-    // The input itself is still there — the field is editable, just not styleable.
+    // Still editable — the field is just not styleable.
     expect(screen.getByDisplayValue('book@example.com')).toBeTruthy()
   })
 
-  it('saves the class against the REGION key, preserving the classes it does not own', async () => {
-    // The region already carries a colour the Text panel does not offer. Changing the
-    // size must not drop it — each control replaces only its own utility.
-    renderTools([styled], { hero_title: 'text-flash-2 font-bold' })
+  it('styling reports the REGION key, preserving classes the controls do not own', () => {
+    // The region already carries a colour this editor does not offer. Changing the size
+    // must not drop it — each control replaces only its own utility.
+    const onStyle = editor(styled, { hero_title: 'text-flash-2 font-bold' })
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: 'text-4xl' } })
 
-    // The save is DEBOUNCED, exactly as it is from the Style panel — dragging a slider
-    // must not fire a write per step. Waiting proves the debounce is shared, not bypassed.
-    await waitFor(() => expect(saveStyleMock).toHaveBeenCalledTimes(1))
-    const [artistId, regionKey, className] = saveStyleMock.mock.calls[0] as unknown as string[]
-    expect(artistId).toBe('a1')
+    expect(onStyle).toHaveBeenCalledTimes(1)
+    const [regionKey, className] = onStyle.mock.calls[0] as unknown as string[]
     expect(regionKey).toBe('hero_title')
     expect(className).toContain('text-4xl')
-    expect(className).toContain('text-flash-2') // untouched
-    expect(className).toContain('font-bold') // untouched
+    expect(className).toContain('text-flash-2')
+    expect(className).toContain('font-bold')
   })
 
   it('offers the site’s own fonts, so the dropdown is real classes not guesses', () => {
-    renderTools([styled])
+    editor(styled)
     const font = screen.getByLabelText('Hero title Font') as HTMLSelectElement
     expect([...font.options].map((o) => o.value)).toContain('font-momo')
   })
 
-  it('a site that declares no font palette still gets Size and Boldness', () => {
-    // Font needs the site's own compiled classes; size and weight are universal.
-    render(<TextTools textFields={[styled]} artistId="a1" styleValues={{}} />)
+  it('a site with no font palette still gets Size and Boldness', () => {
+    render(
+      <TextFieldEditor
+        field={styled}
+        value="Skeen"
+        status="idle"
+        styleValues={{}}
+        onEdit={vi.fn()}
+        onStyle={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
     expect(screen.queryByLabelText('Hero title Font')).toBeNull()
     expect(screen.getByLabelText('Hero title Size')).toBeTruthy()
+  })
+
+  it('Back leaves the editor', () => {
+    const onBack = vi.fn()
+    render(
+      <TextFieldEditor
+        field={styled}
+        value="Skeen"
+        status="idle"
+        styleValues={{}}
+        onEdit={vi.fn()}
+        onStyle={vi.fn()}
+        onBack={onBack}
+      />,
+    )
+    fireEvent.click(screen.getByLabelText('Back'))
+    expect(onBack).toHaveBeenCalled()
   })
 })

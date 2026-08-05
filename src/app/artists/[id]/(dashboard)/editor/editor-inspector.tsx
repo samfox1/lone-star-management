@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { cx } from '@/lib/cx'
-import { plural, GroupLabel, EYEBROW, SCROLL_BODY } from './inspector-shared'
+import { plural, GroupLabel, EYEBROW, SCROLL_BODY, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
 import { type SelectTarget, selectTargetKey } from '@/lib/site-editor/bridge'
 import {
@@ -44,6 +44,9 @@ import {
   setOnSiteAction,
 } from '../actions'
 import { useSessionJournal } from './use-session-journal'
+import { useTextFieldSave } from './use-text-save'
+import { useStyleRegionSave } from './use-style-save'
+import { TextFieldEditor } from './text-field-editor'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -307,6 +310,16 @@ export function EditorInspector({
 
   // The one image/video handed the whole panel for editing (Replace / Remove / styling).
   const [editingItem, setEditingItem] = useState<ItemEdit | null>(null)
+  // The one TEXT field handed the whole panel (the words + their type controls). Held
+  // separately from editingItem because it carries no media and shares none of that
+  // editor's Replace/Remove machinery.
+  const [editingText, setEditingText] = useState<EditorTextField | null>(null)
+  // Text values live HERE, above both the list and the editor, so the two windows onto
+  // one field can never show different text or race each other's debounced save.
+  const textSave = useTextFieldSave(artistId, textFields, onApplyField)
+  // The SAME save path the Style panel uses, so a font set from a text field and one set
+  // from the Style panel cannot disagree about what is stored or drift in debounce.
+  const { save: saveTextStyle } = useStyleRegionSave(artistId, onApplyStyle)
   const filename = (p: GalleryPhoto) => fileNameOf(p.storage_path)
 
   // Every colour the site already uses, for the palette's quick-pick row. Held in state and
@@ -529,6 +542,26 @@ export function EditorInspector({
     )
   }
   const itemEditor = editingItem ? buildItemEditor(editingItem) : null
+  // Same panel slot as the item editor, and mutually exclusive with it: opening one
+  // closes the other, so the panel is never showing two things at once.
+  const textEditor = editingText ? (
+    <TextFieldEditor
+      field={editingText}
+      value={textSave.values[editingText.key] ?? ''}
+      status={textSave.status}
+      styleValues={styleMap}
+      styleOptions={styleOptions}
+      onEdit={(v) => textSave.edit(editingText.key, v)}
+      // Paint AND persist. Unlike the item editor there is no Save button here: a
+      // sentence's font is a small, obvious change, and making the manager confirm it
+      // would sit oddly beside the words above it, which save as they type.
+      onStyle={(regionKey, className) => {
+        applyItemStyle(regionKey, className)
+        saveTextStyle(regionKey, className)
+      }}
+      onBack={() => setEditingText(null)}
+    />
+  ) : null
 
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
@@ -738,6 +771,8 @@ export function EditorInspector({
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {itemEditor ? (
         itemEditor
+      ) : textEditor ? (
+        textEditor
       ) : active ? (
         <EditingView
           component={active}
@@ -747,6 +782,13 @@ export function EditorInspector({
           onFocus={setFocused}
           onEditItem={setEditingItem}
           textFields={textFields}
+          textValues={textSave.values}
+          textStatus={textSave.status}
+          onEditText={textSave.edit}
+          onEditTextField={(f) => {
+            setEditingItem(null) // one editor in the panel at a time
+            setEditingText(f)
+          }}
           links={links}
           supportLinks={supportLinks}
           videos={videos}
@@ -790,7 +832,7 @@ export function EditorInspector({
           back in one click. Hidden at zero — an inert Revert would only raise "revert
           to what?" — and hidden while the ITEM editor is open, whose own Revert/Save
           pair owns that surface (two Revert buttons at once, Sam 2026-08-03). */}
-      {!itemEditor && journal.count > 0 && (
+      {!itemEditor && !textEditor && journal.count > 0 && (
         <div className="border-t border-hairline px-4 py-2.5">
           <button
             type="button"
@@ -854,6 +896,10 @@ function EditingView({
   onFocus,
   onEditItem,
   textFields,
+  textValues,
+  textStatus,
+  onEditText,
+  onEditTextField,
   links,
   supportLinks,
   videos,
@@ -900,6 +946,12 @@ function EditingView({
   /** Open one image/video in the full-panel editor (its Edit button). */
   onEditItem: (item: ItemEdit) => void
   textFields: EditorTextField[]
+  /** Text state is owned by the inspector (one source for the list AND the full-panel
+   *  editor), so this view renders it rather than holding it. */
+  textValues: Record<string, string>
+  textStatus: SaveStatus
+  onEditText: (key: string, value: string) => void
+  onEditTextField: (field: EditorTextField) => void
   links: EditorLink[]
   supportLinks: EditorSupportLink[]
   videos: EditorVideo[]
@@ -981,11 +1033,10 @@ function EditingView({
         ) : isText ? (
           <TextTools
             textFields={textFields}
-            artistId={artistId}
-            onApplyField={onApplyField}
-            styleValues={styleValues}
-            styleOptions={styleOptions}
-            onApplyStyle={onApplyStyle}
+            values={textValues}
+            status={textStatus}
+            onEdit={onEditText}
+            onEditField={onEditTextField}
           />
         ) : isLinks ? (
           // One Links panel, grouped by purpose: outbound social links, tour-support

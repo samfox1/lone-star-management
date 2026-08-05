@@ -137,17 +137,52 @@ export function ControlRow({ label, children }: { label: string; children: React
 }
 
 /** A labelled field on the sheet grid: [icon] [label over field]. */
-export function FieldRow({ icon, label, children }: { icon: IconName; label: string; children: React.ReactNode }) {
+export function FieldRow({
+  icon,
+  label,
+  action,
+  children,
+}: {
+  /** Optional: a column of text fields reads better without one glyph per row. */
+  icon?: IconName
+  label: string
+  /** Trailing control on the label line (an Edit button). */
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
-    <div className="grid grid-cols-[20px_1fr] items-start gap-x-2.5 py-1.5">
-      <span className="mt-2 justify-self-center text-ink-faint" aria-hidden>
-        <Icon name={icon} size={14} />
-      </span>
-      <label className="block">
-        <span className={cx(CONTROL_LABEL, 'mb-1 block')}>{label}</span>
-        {children}
-      </label>
+    <div className={cx('grid items-start gap-x-2.5 py-1.5', icon ? 'grid-cols-[20px_1fr]' : 'grid-cols-1')}>
+      {icon && (
+        <span className="mt-2 justify-self-center text-ink-faint" aria-hidden>
+          <Icon name={icon} size={14} />
+        </span>
+      )}
+      {/* The action sits OUTSIDE the <label>: a button inside one is also a click target
+          for the field, so pressing Edit would focus the input on the way past — and it
+          makes the label ambiguous to assistive tech, which then reads two controls. */}
+      <div className="min-w-0">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className={CONTROL_LABEL}>{label}</span>
+          {action}
+        </div>
+        <label className="block">{children}</label>
+      </div>
     </div>
+  )
+}
+
+/** "Edit" on a row that opens a full-panel editor — the same affordance the image and
+ *  video tiles use, so the word means one thing across the inspector. */
+export function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Edit ${label}`}
+      className="flex-none rounded-md px-1.5 py-0.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint transition-colors hover:bg-surface hover:text-accent"
+    >
+      Edit
+    </button>
   )
 }
 
