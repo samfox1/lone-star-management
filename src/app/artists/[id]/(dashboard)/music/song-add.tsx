@@ -239,6 +239,11 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               links: [],
               source: 'manual',
               released: released === 'released',
+              // EXPLICIT, because the column defaults to TRUE: omitting it would put an
+              // unreleased record on the public site at the next publish, contradicting
+              // the promise this modal makes ("unreleased music stays private to the
+              // dashboard"). Sync inserts off-site for the same reason.
+              on_site: released === 'released',
             })
             .select('id')
             .single()
@@ -280,6 +285,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               // alone, so it groups by its own id, not a shared album.
               album_name: grouped ? releaseTitle.trim().slice(0, 120) : null,
               released: released === 'released',
+              // See the release insert above: the column defaults to TRUE, so an
+              // unreleased song must say so or it goes public on the next publish.
+              on_site: released === 'released',
             })
             .select('id')
             .single()

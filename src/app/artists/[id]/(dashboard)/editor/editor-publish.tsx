@@ -16,9 +16,14 @@ import { getUnpublishedDiffAction, publishAllGatedAction } from '../actions'
  * follow-up (needs per-item diff + selective publish plumbing).
  */
 
+/** Must cover EVERY key of `UnpublishedDiff`. A missing section contributes zero to the
+ *  total, so the window reports "all caught up" and hides the publish control while real
+ *  edits sit unpublished — which is what happened to `site_styles`, publishable since
+ *  20260714120000 but absent here. Pinned by tests/editor-publish.test.tsx. */
 const SECTIONS: { key: keyof UnpublishedDiff; label: string }[] = [
   { key: 'profile', label: 'Profile' },
   { key: 'site_content', label: 'Site text' },
+  { key: 'site_styles', label: 'Styles' },
   { key: 'media', label: 'Photos & media' },
   { key: 'track', label: 'Songs' },
   { key: 'release', label: 'Releases' },

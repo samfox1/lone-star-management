@@ -92,4 +92,20 @@ describe('EditorPublish', () => {
     expect(await screen.findByText(/nothing to publish/i)).toBeTruthy()
     expect(screen.queryByPlaceholderText('Your password')).toBeNull()
   })
+
+  it('CRITICAL: every publishable section reaches this window', async () => {
+    // The window summarises changes by reducing over its own SECTIONS list. A section
+    // the diff reports but the list omits contributes ZERO to the total, so the window
+    // says "all caught up" and hides the password field — stranding real edits in the
+    // one place the manager made them. site_styles was exactly that: publishable since
+    // 20260714120000, absent from SECTIONS, invisible here.
+    for (const key of Object.keys(ZERO) as (keyof UnpublishedDiff)[]) {
+      cleanup()
+      diffMock.mockResolvedValue(diff({ [key]: { added: 0, edited: 1, deleted: 0, dirty: true } }))
+      open()
+      // The publish control exists — i.e. the change was COUNTED, not swallowed.
+      expect(await screen.findByPlaceholderText('Your password')).toBeTruthy()
+      expect(screen.queryByText(/nothing to publish/i)).toBeNull()
+    }
+  })
 })

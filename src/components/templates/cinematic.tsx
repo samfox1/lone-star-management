@@ -272,12 +272,18 @@ export function CinematicTemplate({ data, editable = false }: { data: SiteData; 
   const text = (key: string) => fieldValue(data.site_content, artist.template, key)
 
   // Hero montage = the artist's hero videos from Storage (one file per clip).
+  // safeHref here, not at the <source>: every URL reaching the DOM goes through it, and
+  // a clip that can't be sanitised is dropped rather than rendered blank.
   const clips: HeroClip[] = media
     .filter((m) => m.purpose === 'hero_video')
-    .map((m) => ({ url: m.url }))
+    .map((m) => ({ url: safeHref(m.url) }))
+    .filter((c): c is HeroClip => !!c.url)
 
-  // Profile photo for About (≠ hero video); fall back to the hero image.
-  const profilePhoto = media.find((m) => m.purpose === 'profile_photo')?.url ?? artist.hero_image_url
+  // Profile photo for About (≠ hero video); fall back to the hero image. Sanitised HERE
+  // so the hero's <img src>/<video poster> and the About section share one guarded value
+  // — About sanitised it and the hero did not, which is how an unguarded src survived.
+  const profilePhoto =
+    safeHref(media.find((m) => m.purpose === 'profile_photo')?.url ?? artist.hero_image_url) ?? null
 
   const today = new Date().toISOString().slice(0, 10)
   const upcoming = tour_dates.filter((d) => d.date >= today)
@@ -294,14 +300,17 @@ export function CinematicTemplate({ data, editable = false }: { data: SiteData; 
       link: `https://open.spotify.com/artist/${encodeURIComponent(artist.spotify_artist_id)}`,
     })
   }
-  const soundcloud = links.find((l) => l.url.toLowerCase().includes('soundcloud.com'))
-  if (soundcloud) {
+  // `.includes('soundcloud.com')` is a substring match, so a hostile scheme can satisfy
+  // it (`javascript:alert(1)/*soundcloud.com*/`) — the URL is only trustworthy after
+  // safeHref, which is what the tab link and the embed both get. No link, no tab.
+  const soundcloudUrl = safeHref(links.find((l) => l.url.toLowerCase().includes('soundcloud.com'))?.url)
+  if (soundcloudUrl) {
     tabs.push({
       key: 'sets',
       label: 'Sets',
       platform: 'SoundCloud',
-      embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(soundcloud.url)}&color=%23ff2e63&auto_play=false&show_user=true`,
-      link: soundcloud.url,
+      embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(soundcloudUrl)}&color=%23ff2e63&auto_play=false&show_user=true`,
+      link: soundcloudUrl,
     })
   }
 

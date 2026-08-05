@@ -195,10 +195,52 @@ describe('SongAddButton', () => {
       release_type: 'ep',
       source: 'manual',
       released: false,
+      // Unreleased ⇒ off the site. The column defaults to TRUE, so this must be written
+      // explicitly or the whole EP goes public on the next publish.
+      on_site: false,
     })
     const songs = inserted.slice(1)
     expect(songs.map((s) => s.title)).toEqual(['Cut 1', 'Cut 2', 'Cut 3'])
-    for (const s of songs) expect(s).toMatchObject({ __table: 'tracks', release_id: 'releases-1', released: false })
+    for (const s of songs)
+      expect(s).toMatchObject({ __table: 'tracks', release_id: 'releases-1', released: false, on_site: false })
     expect(uploads.filter((u) => u.bucket === 'audio')).toHaveLength(3)
+  })
+
+  describe('CRITICAL: unreleased music never lands on the public site', () => {
+    // The modal promises it in as many words: "unreleased music stays private to the
+    // dashboard." `tracks.on_site` DEFAULTS TO TRUE, so an insert that simply omits the
+    // column breaks that promise on the next publish — and Sync already knows this,
+    // inserting `on_site: false` explicitly everywhere (lib/sync.ts). The manual path
+    // was the one door that didn't.
+
+    it('an unreleased single is inserted OFF the site', async () => {
+      const dialog = openModal()
+      fireEvent.click(within(dialog).getByText('Add Manually'))
+      fireEvent.click(within(dialog).getByText('Single'))
+      fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Demo Take' } })
+      dropAudio(dialog)
+      fireEvent.click(within(dialog).getByRole('button', { name: 'unreleased' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(inserted).toHaveLength(1))
+      expect(inserted[0]).toMatchObject({ __table: 'tracks', released: false, on_site: false })
+    })
+
+    // The unreleased EP case rides on the existing "EP: creates the release and its song
+    // rows" test above, which asserts on_site: false on the release AND every song.
+
+    it('a RELEASED single is inserted on the site — the promise is one-directional', async () => {
+      // Guards the over-correction: "released music CAN appear on your public site".
+      const dialog = openModal()
+      fireEvent.click(within(dialog).getByText('Add Manually'))
+      fireEvent.click(within(dialog).getByText('Single'))
+      fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Out Now' } })
+      dropAudio(dialog)
+      fireEvent.click(within(dialog).getByRole('button', { name: 'released' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(inserted).toHaveLength(1))
+      expect(inserted[0]).toMatchObject({ __table: 'tracks', released: true, on_site: true })
+    })
   })
 })
