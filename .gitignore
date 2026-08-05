@@ -42,8 +42,15 @@ yarn-error.log*
 next-env.d.ts
 .gstack/
 
-# Local tooling state
-.claude/
+# Local tooling state. Ignore the CONTENTS, not the directory itself — git never
+# descends into an ignored directory, so a negation inside one can't fire.
+.claude/*
+# …except project skills, which are shared workflow the repo depends on
+# (/test-audit is the periodic test-quality review — see AGENTS.md).
+!.claude/skills/
 
 # Large media — host in Supabase Storage for production, keep local for dev
 public/videos/
+
+# stryker (mutation testing) working dir + report
+/.stryker-tmp/

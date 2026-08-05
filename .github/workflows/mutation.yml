@@ -1,0 +1,76 @@
+name: Mutation testing
+
+# Breaks the code on purpose and checks whether any test notices. A dropping score means
+# a new line went unwatched, or an existing test stopped biting. See AGENTS.md
+# "Test discipline" for why this exists: a full audit in Aug 2026 found ten live bugs
+# sitting behind green suites, every one of them behind a test that could not fail.
+#
+# Weekly rather than per-push: the run takes ~20 minutes, and test quality drifts over
+# weeks, not commits. Also runs on demand from the Actions tab.
+on:
+  schedule:
+    # Mondays 07:13 UTC. Off the hour on purpose — every scheduled job in the world
+    # fires at :00 and GitHub queues them.
+    - cron: '13 7 * * 1'
+  workflow_dispatch:
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    # A single slow run should never block a merge; it reports, it doesn't gate a PR.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # NO DATABASE SECRETS ARE PROVIDED, DELIBERATELY. Stryker runs the DB-free slice
+      # (vitest.mutation.config.ts) once per mutant — thousands of runs. Pointing that at
+      # the live hosted project would hammer production and rewrite real rows. If this
+      # job ever starts failing because a suite wants a Supabase URL, the fix is to
+      # exclude that suite from the slice, never to add the secret here.
+      # tests/mutation-config.test.ts guards the same invariant locally.
+      - name: Mutation test
+        id: mutation
+        # Tee'd so the score can be summarised below whether it passes or fails.
+        # `pipefail` keeps npm's exit code rather than tee's, so a dropped score still
+        # fails the job (and so still emails you).
+        run: |
+          set -o pipefail
+          npm run mutation 2>&1 | tee mutation-output.txt
+
+      # The score, in the run's summary — this is what shows at the top of the Actions
+      # page and in the notification, so the answer is readable without opening a log.
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## Mutation score"
+            echo ""
+            echo "A SURVIVED mutant is a line no test is watching. See AGENTS.md → Test discipline."
+            echo ""
+            echo '```'
+            # The per-file table Stryker prints at the end; strip ANSI colour codes.
+            sed 's/\x1b\[[0-9;]*m//g' mutation-output.txt \
+              | grep -A 100 "% Mutation score" \
+              | head -40 || echo "(no table — the run failed before reporting; see the log)"
+            echo '```'
+            echo ""
+            echo "Full HTML report: the **mutation-report** artifact on this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Kept even on failure — the survivor list is the point, and a failed threshold is
+      # exactly when someone wants to read it.
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: .stryker-tmp/mutation-report.html
+          retention-days: 30
+          if-no-files-found: warn

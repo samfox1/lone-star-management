@@ -1,0 +1,68 @@
+name: Test-audit reminder
+
+# `npm run mutation` finds tests that CANNOT fail. It cannot find the other two problems:
+# tests that don't exist, and tests that bite but pin the WRONG rule. Those need a human
+# (or an agent) reading the implementation beside the test, which no CI runner can do.
+#
+# So this job does the one thing automation can: make sure nobody has to remember. It
+# opens an issue once a month. Close it when the audit is done.
+on:
+  schedule:
+    # 1st of the month, 08:23 UTC. Off the hour for the same reason as mutation.yml.
+    - cron: '23 8 1 * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open the audit issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const TITLE = 'Run /test-audit — monthly test-quality review'
+
+            // Don't stack reminders: if last month's is still open, the audit hasn't been
+            // done and a second issue only adds noise to ignore.
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'test-audit',
+            })
+            if (open.data.length > 0) {
+              core.info(`Reminder already open: #${open.data[0].number}. Not stacking another.`)
+              return
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: TITLE,
+              labels: ['test-audit'],
+              body: [
+                'Run `/test-audit` in Claude Code on this repo.',
+                '',
+                '**Why this is a separate job from `npm run mutation`.** Mutation testing finds tests that',
+                'cannot fail. It cannot find a test that fails for the *wrong reason*. One test here was',
+                'named "rejects an out-of-enum status (CHECK constraint)" and had never once reached that',
+                'constraint — RLS rejected the request first. It passed, it would have failed if broken,',
+                'and it proved nothing about its own name. Only a suspicious reader finds that.',
+                '',
+                '**Before starting:** check the latest [mutation run](../../actions/workflows/mutation.yml)',
+                'and read its survivor list. The two reports are complementary; survivors point at where',
+                'to read hardest.',
+                '',
+                '**When done:** close this issue and tag the point so the next audit knows where to start:',
+                '',
+                '```',
+                'git commit --allow-empty -m "chore: test-audit baseline $(date +%Y-%m-%d)"',
+                '```',
+                '',
+                'The full rubric and the hard constraints (never reset the live DB, restore every mutation)',
+                'live in `.claude/skills/test-audit/SKILL.md`.',
+              ].join('\n'),
+            })

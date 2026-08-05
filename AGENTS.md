@@ -67,3 +67,37 @@ When a rewrite drops a rule that had no test, the rule simply evaporates — tha
 how the per-artist flood cap vanished for a day. If a behavior matters, its test must
 bite; if the test cannot be made to bite, say so in the test's comment rather than
 leaving a reassuring green.
+
+## The two tools that enforce this
+
+Rules depend on someone remembering. These do not.
+
+**`npm run mutation`** (Stryker) breaks the code on purpose and checks whether any test
+notices. A SURVIVED mutant is a line nothing is watching. It runs against
+`vitest.mutation.config.ts` — the DB-free slice of the suite — because Stryker re-runs
+tests once per mutant and the main suite crosses the internet to hosted Postgres.
+`mutate` in `stryker.config.json` lists only modules pinned by DB-free tests: adding a
+module tested solely through the live-DB suites would report false survivors and teach
+everyone to ignore the report. `tests/mutation-config.test.ts` fails if a DB-backed
+suite leaks into that slice (it caught eight on day one).
+
+The `break` threshold is a RATCHET. Raise it as the score rises; never lower it to turn
+a red build green. A drop means a new line went unwatched or an existing test stopped
+biting.
+
+**`/test-audit`** (`.claude/skills/test-audit/`) is the periodic adversarial review:
+fan out agents that read each implementation before judging its test, and prove findings
+by deleting the guard and watching the suite stay green. Run it before a release or
+quarterly, and after any large feature.
+
+They catch different things, and neither is optional:
+
+| | finds | misses |
+| --- | --- | --- |
+| `npm run mutation` | tests that CANNOT fail | tests that don't exist; tests pinning the wrong rule |
+| `/test-audit` | wrong-rule tests, missing keystones, redundancy | anything a human reader glosses over |
+
+The wrong-rule class is the one no tool can reach. A test named "rejects an out-of-enum
+status (CHECK constraint)" passed, would have failed if broken, and had never once
+reached that constraint — RLS rejected the request first. Only a suspicious reader finds
+that.

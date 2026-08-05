@@ -12,6 +12,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:nodb": "vitest run --config vitest.mutation.config.ts",
+    "mutation": "stryker run",
     "db:push": "supabase db push",
     "fn:serve": "supabase functions serve contact --env-file supabase/functions/.env.local",
     "fn:deploy": "supabase functions deploy contact",
@@ -32,6 +34,8 @@
     "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
