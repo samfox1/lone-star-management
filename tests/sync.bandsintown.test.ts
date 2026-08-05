@@ -44,16 +44,19 @@ describe('syncBandsintownTourDates', () => {
 
     const { data } = await svc
       .from('tour_dates')
-      .select('venue, source, bandsintown_id, latitude, longitude')
+      .select('venue, source, bandsintown_id, latitude, longitude, on_site')
       .eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.bandsintown_id, r]))
     expect(byId['bit-manual']).toMatchObject({ venue: 'My Manual Venue', source: 'manual' })
     expect(byId['bit-auto']).toMatchObject({ venue: 'Fresh Venue', source: 'bandsintown' })
-    expect(byId['bit-new']).toMatchObject({ venue: 'New Venue', source: 'bandsintown', latitude: 30.2672, longitude: -97.7431 })
+    // on_site is `not null default true` and the public doors coalesce to true, so the
+    // insertDefaults `on_site: false` is the only thing keeping an import off the site.
+    expect(byId['bit-new']).toMatchObject({ venue: 'New Venue', source: 'bandsintown', latitude: 30.2672, longitude: -97.7431, on_site: false })
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
-    await expect(syncBandsintownTourDates(asA, artistB, [ev('bit-x', 'x')])).rejects.toThrow()
+    // Assert Postgres refuses — a bare .toThrow() would pass on any incidental throw.
+    await expect(syncBandsintownTourDates(asA, artistB, [ev('bit-x', 'x')])).rejects.toThrow(/row-level security/i)
     const { count } = await svc
       .from('tour_dates')
       .select('id', { count: 'exact', head: true })

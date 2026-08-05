@@ -46,11 +46,13 @@ describe('syncYouTubeVideos', () => {
     ])
     expect(result).toMatchObject({ added: 1, updated: 1, skipped: 1, failed: 0 })
 
-    const { data } = await svc.from('videos').select('title, source, youtube_id').eq('artist_id', artistA)
+    const { data } = await svc.from('videos').select('title, source, youtube_id, on_site').eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.youtube_id, r]))
     expect(byId['yt-manual']).toMatchObject({ title: 'My Edit', source: 'manual' })
     expect(byId['yt-auto']).toMatchObject({ title: 'Fresh', source: 'youtube' })
-    expect(byId['yt-new']).toMatchObject({ title: 'Brand New', source: 'youtube' })
+    // on_site is `not null default true` and the public doors coalesce to true, so the
+    // insertDefaults `on_site: false` is the only thing keeping an import off the site.
+    expect(byId['yt-new']).toMatchObject({ title: 'Brand New', source: 'youtube', on_site: false })
   })
 
   it('SKIPS Shorts — they are not used on artist sites, so the sync never imports them', async () => {
@@ -64,7 +66,8 @@ describe('syncYouTubeVideos', () => {
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
-    await expect(syncYouTubeVideos(asA, artistB, [yt('yt-evil', 'evil')])).rejects.toThrow()
+    // Assert Postgres refuses — a bare .toThrow() would pass on any incidental throw.
+    await expect(syncYouTubeVideos(asA, artistB, [yt('yt-evil', 'evil')])).rejects.toThrow(/row-level security/i)
     const { count } = await svc.from('videos').select('id', { count: 'exact', head: true }).eq('artist_id', artistB)
     expect(count).toBe(0)
   })

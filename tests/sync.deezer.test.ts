@@ -25,12 +25,14 @@ afterEach(async () => {
   await svc.from('tracks').delete().eq('artist_id', artistB)
 })
 
-const dz = (id: string, title: string): DeezerTrackInput => ({
+const dz = (id: string, title: string, extra: Partial<DeezerTrackInput> = {}): DeezerTrackInput => ({
   deezer_id: id,
   title,
   cover_url: `https://img/${id}.jpg`,
+  album_name: null,
   provider_url: `https://deezer.com/track/${id}`,
   duration_ms: null,
+  ...extra,
 })
 
 describe('syncDeezerTracks', () => {
@@ -49,7 +51,7 @@ describe('syncDeezerTracks', () => {
 
     const { data } = await svc
       .from('tracks')
-      .select('title, source, deezer_id, provider_url, stream_url')
+      .select('title, source, deezer_id, provider_url, stream_url, on_site')
       .eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.deezer_id, r]))
 
@@ -60,11 +62,54 @@ describe('syncDeezerTracks', () => {
       source: 'deezer',
       provider_url: 'https://deezer.com/track/dz-new',
       stream_url: null, // link-out, no hosted audio
+      // `not null default true` in the DB, coalesced to true by the public doors:
+      // this explicit false is all that keeps an import off the artist's live site.
+      on_site: false,
+    })
+  })
+
+  it('carries the album title Deezer reports', async () => {
+    await syncDeezerTracks(asA, artistA, [dz('dz-alb', 'Rain', { album_name: 'Weather' })])
+    const { data } = await svc.from('tracks').select('album_name').eq('artist_id', artistA).single()
+    expect(data!.album_name).toBe('Weather')
+  })
+
+  it('CRITICAL: a refresh never blanks album_name another platform filled', async () => {
+    // The shipped bug. One Sync click runs Spotify → Apple → Deezer; Apple filled
+    // album_name and Deezer, running last, wrote null over it — every single click.
+    await svc.from('tracks').insert([
+      {
+        artist_id: artistA,
+        title: 'Rain',
+        deezer_id: 'dz-keep',
+        source: 'deezer',
+        album_name: 'Filled By Apple',
+        cover_url: 'https://img/apple.jpg',
+        duration_ms: 200000,
+      },
+    ])
+
+    await syncDeezerTracks(asA, artistA, [
+      dz('dz-keep', 'Rain Refreshed', { album_name: null, cover_url: null, duration_ms: null }),
+    ])
+
+    const { data } = await svc
+      .from('tracks')
+      .select('title, album_name, cover_url, duration_ms')
+      .eq('artist_id', artistA)
+      .single()
+    expect(data).toMatchObject({
+      title: 'Rain Refreshed', // Deezer owns the title of a deezer-sourced row
+      album_name: 'Filled By Apple',
+      cover_url: 'https://img/apple.jpg',
+      duration_ms: 200000,
     })
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
-    await expect(syncDeezerTracks(asA, artistB, [dz('dz-evil', 'evil')])).rejects.toThrow()
+    // Assert Postgres is the refusing party; a bare .toThrow() would also be
+    // satisfied by the sync crashing before it ever attempted the write.
+    await expect(syncDeezerTracks(asA, artistB, [dz('dz-evil', 'evil')])).rejects.toThrow(/row-level security/i)
     const { count } = await svc
       .from('tracks')
       .select('id', { count: 'exact', head: true })

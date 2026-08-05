@@ -173,8 +173,79 @@ describe('syncSpotifyReleases', () => {
     expect(count).toBe(1) // no duplicate
   })
 
+  it('a LOCKED release keeps the manager-set type, while its metadata still refreshes', async () => {
+    // release_type_locked (migration 20260727180000) is set when a manager re-tags a
+    // release by hand. Sync must stop overwriting the type but keep doing its job on
+    // everything else — a lock that froze the whole row would be indistinguishable
+    // from the sync being broken.
+    await svc.from('releases').insert({
+      artist_id: artistA,
+      title: 'Old Title',
+      slug: 'locked-rel',
+      release_type: 'remix',
+      release_type_locked: true,
+      source: 'spotify',
+      spotify_id: 'sp-alb',
+    })
+
+    await syncSpotifyReleases(asA, artistA, [
+      rel({ title: 'Fresh Title', release_type: 'album', cover_url: 'https://img/new.jpg' }),
+    ])
+
+    const { data } = await svc
+      .from('releases')
+      .select('title, cover_url, release_date, release_type, release_type_locked')
+      .eq('artist_id', artistA)
+      .single()
+    expect(data).toMatchObject({
+      release_type: 'remix', // the manager's call, untouched
+      release_type_locked: true,
+      title: 'Fresh Title', // …and Sync still refreshes what it owns
+      cover_url: 'https://img/new.jpg',
+      release_date: '2024-05-01',
+    })
+  })
+
+  it('an UNLOCKED release still tracks the type Spotify reports', async () => {
+    // The other half of the lock: without this, a lock that accidentally applied to
+    // every release would pass the test above and silently freeze all types.
+    await svc.from('releases').insert({
+      artist_id: artistA,
+      title: 'Old Title',
+      slug: 'unlocked-rel',
+      release_type: 'single',
+      source: 'spotify',
+      spotify_id: 'sp-alb',
+    })
+
+    await syncSpotifyReleases(asA, artistA, [rel({ release_type: 'album' })])
+
+    const { data } = await svc.from('releases').select('release_type').eq('artist_id', artistA).single()
+    expect(data!.release_type).toBe('album')
+  })
+
+  it('stamps the release type onto member songs, but never over a manual re-tag', async () => {
+    // release_type is a per-SONG tag (20260726120000). The sync stamps it via
+    // .eq('release_type','single') — only songs still at the column default — so a
+    // song a manager flagged as a remix keeps that flag when the album re-syncs.
+    await svc.from('tracks').insert([
+      { artist_id: artistA, title: 'Default Song', spotify_id: 't-default', source: 'spotify', release_type: 'single' },
+      { artist_id: artistA, title: 'Retagged Song', spotify_id: 't-retag', source: 'spotify', release_type: 'remix' },
+    ])
+
+    await syncSpotifyReleases(asA, artistA, [
+      rel({ release_type: 'album', track_spotify_ids: ['t-default', 't-retag'] }),
+    ])
+
+    const { data } = await svc.from('tracks').select('spotify_id, release_type').eq('artist_id', artistA)
+    const byId = Object.fromEntries((data ?? []).map((t) => [t.spotify_id, t.release_type]))
+    expect(byId['t-default']).toBe('album') // still at the default → stamped
+    expect(byId['t-retag']).toBe('remix') // hand-tagged → left alone
+  })
+
   it("CRITICAL: cannot sync releases into another tenant's artist", async () => {
-    await expect(syncSpotifyReleases(asA, artistB, [rel()])).rejects.toThrow()
+    // Postgres must be the refusing party, not an incidental throw on the way there.
+    await expect(syncSpotifyReleases(asA, artistB, [rel()])).rejects.toThrow(/row-level security/i)
     const { count } = await svc
       .from('releases')
       .select('id', { count: 'exact', head: true })

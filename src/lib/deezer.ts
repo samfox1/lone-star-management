@@ -15,12 +15,21 @@ export type DeezerTrackInput = {
   deezer_id: string
   title: string
   cover_url: string | null
+  /** Parent album's title. Deezer sends it on every track; the sync writes it as an
+   *  enrichment field, so leaving it unmapped meant Deezer contributed a null here. */
+  album_name: string | null
   provider_url: string | null
   /** Track length in ms (Deezer reports seconds; we normalize). Cross-platform match key. */
   duration_ms: number | null
 }
 
-type DeezerTrack = { id: number; title: string; link?: string; duration?: number; album?: { cover_medium?: string } }
+type DeezerTrack = {
+  id: number
+  title: string
+  link?: string
+  duration?: number
+  album?: { title?: string; cover_medium?: string }
+}
 type DeezerError = { code: number; type: string; message: string }
 type DeezerPage = { data?: DeezerTrack[]; next?: string | null; error?: DeezerError }
 
@@ -84,6 +93,7 @@ export function createDeezerClient(opts: Options = {}) {
       out.push({
         deezer_id: String(t.id),
         title: t.title,
+        album_name: t.album?.title ?? null,
         cover_url: t.album?.cover_medium ?? null,
         provider_url: t.link ?? null,
         duration_ms: t.duration != null ? t.duration * 1000 : null,

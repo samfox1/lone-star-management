@@ -164,26 +164,50 @@ type TrackRow = {
 const DURATION_TOLERANCE_MS = 3000
 
 /**
- * Normalize a title for cross-platform matching: drop parenthetical/bracket
- * qualifiers ("(feat. X)", "[Explicit]") and punctuation, lowercase, collapse
- * whitespace. Scoped per-artist, so this can stay permissive without over-merging.
+ * Parenthetical qualifiers that name a DIFFERENT recording of the same composition.
+ * They are part of a song's identity: "Rain (Live)" is not "Rain", and the app already
+ * models `remix` as its own release_type. Folding them into the base title made an
+ * alternate take get absorbed into the studio row on import — the take was never
+ * inserted, so it simply vanished from the catalog.
+ *
+ * Deliberately narrow. A qualifier NOT listed here ("(feat. X)", "[Explicit]",
+ * "(Deluxe)") is still dropped, because those name the same recording.
+ */
+const VERSION_MARKER = /\b(?:live|acoustic|unplugged|remix(?:ed|es)?|demo|edit|instrumental|radio|extended|reprise)\b/g
+
+/**
+ * Normalize a title for cross-platform matching: lowercase, drop apostrophes, drop
+ * non-version qualifiers and punctuation, collapse whitespace — so "Don't Look Back"
+ * and "Dont look  back" match. Any version marker found inside a qualifier is
+ * appended as a sorted, deduped suffix, so marked takes key apart from the base title
+ * and from each other while still matching their own counterpart on another platform.
+ * Scoped per-artist.
  */
 export function normalizeTitle(t: string): string {
-  return t
+  const markers = new Set<string>()
+  const base = t
     .toLowerCase()
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[’ʼ']/g, '')
+    .replace(/\(([^)]*)\)|\[([^\]]*)\]/g, (_m, paren?: string, bracket?: string) => {
+      for (const found of (paren ?? bracket ?? '').match(VERSION_MARKER) ?? []) markers.add(found)
+      return ' '
+    })
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ')
+  if (markers.size === 0) return base
+  return `${base} ~${[...markers].sort().join('+')}`
 }
 
 /**
  * Pick an existing row that is the SAME song as `item` but not yet on this platform:
- * same normalized title, and — when both durations are known — within tolerance
- * (closest wins). A title-only match (duration unknown on either side) is the
- * fallback. Rows already claimed this run, or already carrying this platform's id,
- * are skipped.
+ * same normalized title AND a duration within tolerance (closest wins). Rows already
+ * claimed this run, or already carrying this platform's id, are skipped.
+ *
+ * A duration on BOTH sides is required. Title alone cannot tell two recordings apart,
+ * and the two outcomes are not symmetric: a merge absorbs the incoming song so it is
+ * never inserted (silent, permanent loss), while a refusal leaves a duplicate the
+ * manager can delete in seconds. So an unknown duration refuses.
  */
 function matchTrackCandidate(
   cands: TrackRow[] | undefined,
@@ -191,23 +215,42 @@ function matchTrackCandidate(
   idCol: TrackIdCol,
   claimed: Set<string>,
 ): TrackRow | undefined {
-  if (!cands) return undefined
-  let durMatch: TrackRow | undefined
-  let durDelta = Infinity
-  let titleOnly: TrackRow | undefined
+  if (!cands || item.duration_ms == null) return undefined
+  let best: TrackRow | undefined
+  let bestDelta = Infinity
   for (const r of cands) {
-    if (claimed.has(r.id) || r[idCol] != null) continue
-    if (r.duration_ms != null && item.duration_ms != null) {
-      const d = Math.abs(r.duration_ms - item.duration_ms)
-      if (d <= DURATION_TOLERANCE_MS && d < durDelta) {
-        durMatch = r
-        durDelta = d
-      }
-    } else if (!titleOnly) {
-      titleOnly = r
+    if (claimed.has(r.id) || r[idCol] != null || r.duration_ms == null) continue
+    const d = Math.abs(r.duration_ms - item.duration_ms)
+    if (d <= DURATION_TOLERANCE_MS && d < bestDelta) {
+      best = r
+      bestDelta = d
     }
   }
-  return durMatch ?? titleOnly
+  return best
+}
+
+/**
+ * Field ownership on a same-platform refresh.
+ *
+ * AUTHORITATIVE — the provider is the source of truth and writes them unconditionally:
+ * `title` plus its own `owned` columns (its link, its provider-specific metadata). The
+ * refresh only runs on rows whose `source` is this provider, so it owns them outright.
+ *
+ * ENRICHMENT — cross-platform facts (album_name, cover_url, duration_ms) that several
+ * providers may know and none owns. Written ONLY when the incoming value is non-null:
+ * a sync must never write null over a non-null enrichment value. Without this rule,
+ * refreshMusicAction's Spotify → Apple → Deezer ordering meant whichever provider ran
+ * last and lacked a field erased it on every single Sync click.
+ *
+ * Inserts are exempt — a brand-new row has nothing to lose, so nulls go in as-is and
+ * a later provider fills them.
+ */
+function enrichmentPatch(item: IncomingTrack): Record<string, unknown> {
+  const patch: Record<string, unknown> = {}
+  if (item.cover_url != null) patch.cover_url = item.cover_url
+  if (item.album_name != null) patch.album_name = item.album_name
+  if (item.duration_ms != null) patch.duration_ms = item.duration_ms
+  return patch
 }
 
 async function syncTracks(
@@ -217,10 +260,15 @@ async function syncTracks(
   source: string,
   incoming: IncomingTrack[],
 ): Promise<SyncResult> {
+  // Ordered, not just filtered: when several rows share a normalized title the merge
+  // picks among them, so unordered Postgres row order would decide which song gets
+  // stamped — a different answer run to run against identical data.
   const { data, error } = await supabase
     .from('tracks')
     .select('id, source, title, duration_ms, spotify_id, apple_id, deezer_id, cover_url, album_name, stream_url, apple_url')
     .eq('artist_id', artistId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as unknown as TrackRow[]
 
@@ -256,7 +304,7 @@ async function syncTracks(
       }
       const { error: uErr } = await supabase
         .from('tracks')
-        .update({ title: item.title, cover_url: item.cover_url, album_name: item.album_name, duration_ms: item.duration_ms, ...item.owned })
+        .update({ title: item.title, ...enrichmentPatch(item), ...item.owned })
         .eq('id', exact.id)
       if (uErr) {
         if (uErr.code === RLS_DENIED) throw new Error(uErr.message)
@@ -473,7 +521,7 @@ export function syncDeezerTracks(
       externalId: t.deezer_id,
       title: t.title,
       cover_url: t.cover_url,
-      album_name: null,
+      album_name: t.album_name,
       duration_ms: t.duration_ms,
       owned: { provider_url: t.provider_url },
       mergeFill: {},

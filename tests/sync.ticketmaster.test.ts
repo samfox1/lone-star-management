@@ -53,17 +53,19 @@ describe('syncTicketmasterTourDates', () => {
 
     const { data } = await svc
       .from('tour_dates')
-      .select('venue, source, ticketmaster_id, latitude, longitude')
+      .select('venue, source, ticketmaster_id, latitude, longitude, on_site')
       .eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.ticketmaster_id, r]))
     expect(byId['tm-manual']).toMatchObject({ venue: 'My Edit', source: 'manual' })
     expect(byId['tm-auto']).toMatchObject({ venue: 'Fresh', source: 'ticketmaster' })
-    expect(byId['tm-new']).toMatchObject({ venue: 'Brand New', source: 'ticketmaster', latitude: 30.2672, longitude: -97.7431 })
-    expect(byId['tm-new']).toMatchObject({ venue: 'Brand New', source: 'ticketmaster' })
+    // on_site is `not null default true` and the public doors coalesce to true, so the
+    // insertDefaults `on_site: false` is the only thing keeping an import off the site.
+    expect(byId['tm-new']).toMatchObject({ venue: 'Brand New', source: 'ticketmaster', latitude: 30.2672, longitude: -97.7431, on_site: false })
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
-    await expect(syncTicketmasterTourDates(asA, artistB, [tm('tm-evil', 'evil')])).rejects.toThrow()
+    // Assert Postgres refuses — a bare .toThrow() would pass on any incidental throw.
+    await expect(syncTicketmasterTourDates(asA, artistB, [tm('tm-evil', 'evil')])).rejects.toThrow(/row-level security/i)
     const { count } = await svc
       .from('tour_dates')
       .select('id', { count: 'exact', head: true })

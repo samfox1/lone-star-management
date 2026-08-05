@@ -44,18 +44,21 @@ describe('syncShopifyMerch', () => {
 
     const { data } = await svc
       .from('merch')
-      .select('title, source, price, shopify_product_id')
+      .select('title, source, price, shopify_product_id, on_site')
       .eq('artist_id', artistA)
     const byId = Object.fromEntries((data ?? []).map((r) => [r.shopify_product_id, r]))
     expect(byId['shp-manual']).toMatchObject({ title: 'My Manual Tee', source: 'manual' })
     expect(byId['shp-auto']).toMatchObject({ title: 'Fresh Tee', source: 'shopify' })
-    expect(byId['shp-new']).toMatchObject({ title: 'New Tee', source: 'shopify' })
+    // on_site is `not null default true` and the public doors coalesce to true, so the
+    // insertDefaults `on_site: false` is the only thing keeping an import off the site.
+    expect(byId['shp-new']).toMatchObject({ title: 'New Tee', source: 'shopify', on_site: false })
     // Shopify price string round-tripped into numeric.
     expect(Number(byId['shp-new'].price)).toBe(20)
   })
 
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
-    await expect(syncShopifyMerch(asA, artistB, [product('shp-x', 'x')])).rejects.toThrow()
+    // Assert Postgres refuses — a bare .toThrow() would pass on any incidental throw.
+    await expect(syncShopifyMerch(asA, artistB, [product('shp-x', 'x')])).rejects.toThrow(/row-level security/i)
     const { count } = await svc
       .from('merch')
       .select('id', { count: 'exact', head: true })

@@ -47,7 +47,7 @@ describe('syncSpotifyTracks', () => {
 
     const { data } = await svc
       .from('tracks')
-      .select('title, source, spotify_id')
+      .select('title, source, spotify_id, on_site')
       .eq('artist_id', artistA)
     const bySpotify = Object.fromEntries((data ?? []).map((r) => [r.spotify_id, r]))
 
@@ -55,8 +55,10 @@ describe('syncSpotifyTracks', () => {
     expect(bySpotify['sp-manual']).toMatchObject({ title: 'My Edit', source: 'manual' })
     // Spotify-owned row refreshed, still spotify-owned.
     expect(bySpotify['sp-auto']).toMatchObject({ title: 'Fresh Spotify', source: 'spotify' })
-    // New row inserted as spotify-owned.
-    expect(bySpotify['sp-new']).toMatchObject({ title: 'Brand New', source: 'spotify' })
+    // New row inserted as spotify-owned, and OFF-SITE: the column is
+    // `not null default true` and the public doors coalesce to true, so this
+    // explicit false is the only thing keeping a raw import off the artist's site.
+    expect(bySpotify['sp-new']).toMatchObject({ title: 'Brand New', source: 'spotify', on_site: false })
   })
 
   it('is idempotent — a second sync of the same data changes nothing new', async () => {
@@ -73,7 +75,10 @@ describe('syncSpotifyTracks', () => {
     const incoming: SpotifyTrackInput[] = [
       { spotify_id: 'sp-evil', title: 'evil', cover_url: null, stream_url: null, featured_artists: [], album_name: null, duration_ms: null },
     ]
-    await expect(syncSpotifyTracks(asA, artistB, incoming)).rejects.toThrow()
+    // Assert it is POSTGRES refusing, not any incidental throw — a bug in the sync
+    // that threw before reaching the insert would pass a bare .toThrow() while
+    // proving nothing about isolation.
+    await expect(syncSpotifyTracks(asA, artistB, incoming)).rejects.toThrow(/row-level security/i)
     const { count } = await svc
       .from('tracks')
       .select('id', { count: 'exact', head: true })
