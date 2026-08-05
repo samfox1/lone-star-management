@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { groupTracksIntoProjects } from '@/lib/music'
-import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
+import { fieldCurrentValue, manifestFor, styleRegionForField } from '@/lib/site-editor/manifest'
 import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
 import { requireArtist } from '../_data'
@@ -111,6 +111,10 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
           type: f.type as 'text' | 'email',
           value: fieldCurrentValue(f, ctx),
           multiline: f.key === 'artist_bio' || f.key.endsWith('_copy'),
+          // Null for both built-in templates today: they declare no style regions at
+          // all, so there is nothing to dress. The pairing is here so that changes the
+          // day a template declares one, without touching the panel.
+          styleRegion: styleRegionForField(f, manifest.styles),
         }))
     : []
 

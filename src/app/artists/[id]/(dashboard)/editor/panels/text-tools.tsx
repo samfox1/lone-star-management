@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { cx } from '@/lib/cx'
 import { type IconName } from '@/components/ui/icons'
+import { applyStyleValue, buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from '../inspector-types'
 import { runSerialized, FieldRow, SaveLine, FIELD } from '../inspector-shared'
+import { StyleControlRow } from './style-tools'
+import { useStyleRegionSave } from '../use-style-save'
 import { saveEditorFieldAction } from '../../actions'
 
 /** Which icon leads a TEXT field row — matched on the field key so the panel doesn't
@@ -24,11 +27,27 @@ export function TextTools({
   textFields,
   artistId,
   onApplyField,
+  styleValues = {},
+  styleOptions,
+  onApplyStyle,
 }: {
   textFields: EditorTextField[]
   artistId: string
   onApplyField?: (key: string, value: string) => void
+  /** region_key → class string, for the region each field is dressed by. */
+  styleValues?: Record<string, string>
+  styleOptions?: SiteStyleOptions
+  onApplyStyle?: (key: string, className: string) => void
 }) {
+  // Styling saves through the SAME hook the Style panel uses, so a font set here and a
+  // font set there cannot disagree about what is stored or drift in debounce behaviour.
+  const { status: styleStatus, save: saveStyle } = useStyleRegionSave(artistId, onApplyStyle)
+  const styleControls = buildStyleControls(styleOptions).filter((c) =>
+    // Type only. Colour, alignment and the rest stay in the Style panel: the Text panel
+    // is for the words and how they READ, and a dozen controls under every input turns a
+    // content list into a wall.
+    ['font', 'size', 'weight'].includes(c.id),
+  )
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(textFields.map((f) => [f.key, f.value])),
   )
@@ -94,9 +113,33 @@ export function TextTools({
               />
             )}
           </FieldRow>
+
+          {/* Type controls for the region this field's element is dressed by, when the
+              site declares one. A field with no region shows none rather than controls
+              that write somewhere nothing renders — see styleRegionForField. */}
+          {f.styleRegion && styleControls.length > 0 && (
+            <div className="mb-3 ml-8 space-y-1.5 border-l border-hairline-soft pl-3">
+              {styleControls.map((control) => (
+                <StyleControlRow
+                  key={control.id}
+                  regionLabel={f.label}
+                  control={control}
+                  cls={styleValues[f.styleRegion!.key] ?? ''}
+                  onChange={(value) =>
+                    saveStyle(
+                      f.styleRegion!.key,
+                      applyStyleValue(styleValues[f.styleRegion!.key] ?? '', control, value),
+                    )
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
       ))}
-      <SaveLine status={status} />
+      {/* One line for both jobs: a manager editing a sentence does not think of typing
+          and restyling it as two different saves. */}
+      <SaveLine status={status === 'idle' ? styleStatus : status} />
     </div>
   )
 }

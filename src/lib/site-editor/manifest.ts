@@ -38,6 +38,18 @@ export type ManifestField = {
   label: string
   type: FieldValueType
   target: FieldTarget
+  /**
+   * The style region that dresses THIS field's element, so the Text panel can offer
+   * Font / Size / Boldness beside the input instead of sending the manager to a second
+   * panel to style the sentence they just typed.
+   *
+   * Optional, and normally unnecessary: a field whose key matches a declared style
+   * region pairs automatically. Declare it only when the two differ — e.g. several
+   * fields share one styled block, or the region is named for the element rather than
+   * the copy. Naming a region that does not exist yields NO controls rather than a
+   * broken one (see `styleRegionForField`).
+   */
+  styleKey?: string
 }
 
 /** The library asset types a slot can hold. Mirrors the content entities. */
@@ -195,6 +207,26 @@ export const MANIFESTS: Record<string, TemplateManifest> = {
 /** The manifest for a template/site id, or undefined if it declares none. */
 export function manifestFor(template: string): TemplateManifest | undefined {
   return MANIFESTS[template]
+}
+
+/**
+ * The style region that dresses a text field's element, or null if it has none.
+ *
+ * Lets the Text panel show Font/Size/Boldness beside the input, instead of making a
+ * manager type a sentence in one panel and then find the right region in another.
+ *
+ * An explicit `styleKey` wins; otherwise a region whose key MATCHES the field's pairs
+ * automatically, which is the ordinary case because sites name both after the thing on
+ * screen. Both paths verify the region actually EXISTS: offering controls that write to
+ * a key nothing renders is worse than offering none, because the manager changes the
+ * font, sees nothing happen, and gets no error to explain it.
+ */
+export function styleRegionForField(
+  field: ManifestField,
+  regions: ManifestStyleRegion[] | undefined,
+): ManifestStyleRegion | null {
+  const key = field.styleKey ?? field.key
+  return (regions ?? []).find((r) => r.key === key) ?? null
 }
 
 /** Look up one field by key within a manifest. */

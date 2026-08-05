@@ -28,6 +28,11 @@ export type EditorTextField = {
   type: 'text' | 'email'
   value: string
   multiline: boolean
+  /** The style region dressing this field's element, when the site declares one — the
+   *  Text panel offers Font/Size/Boldness against it, so the words and how they look are
+   *  edited in one place. Null when the site declares no region for this field, which is
+   *  every field of a built-in template today (they declare no regions at all). */
+  styleRegion?: { key: string; label: string } | null
 }
 /** A single image/video opened for full-panel editing (Replace / Remove / styling). The
  *  inspector holds the live state + place handlers, so a tile passes only this descriptor. */

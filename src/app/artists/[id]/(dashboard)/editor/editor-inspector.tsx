@@ -979,7 +979,14 @@ function EditingView({
             onApplyField={onApplyField}
           />
         ) : isText ? (
-          <TextTools textFields={textFields} artistId={artistId} onApplyField={onApplyField} />
+          <TextTools
+            textFields={textFields}
+            artistId={artistId}
+            onApplyField={onApplyField}
+            styleValues={styleValues}
+            styleOptions={styleOptions}
+            onApplyStyle={onApplyStyle}
+          />
         ) : isLinks ? (
           // One Links panel, grouped by purpose: outbound social links, tour-support
           // links, then the site's declared link buttons (USB / Merch).

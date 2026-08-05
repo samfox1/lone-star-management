@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
-import type { TemplateManifest } from '@/lib/site-editor/manifest'
+import { styleRegionForField, type TemplateManifest } from '@/lib/site-editor/manifest'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
@@ -48,6 +48,10 @@ export function runtimeTextFields(
       // Same multiline rule the built-in path uses (page.tsx), so a body-copy field gets
       // a textarea on a custom site too.
       multiline: f.key === 'artist_bio' || f.key.endsWith('_copy'),
+      // The region that dresses this field, so Font/Size/Boldness sit beside the input.
+      // Resolved against the SAME runtime manifest the fields came from, so a site that
+      // declares both gets them paired with nothing to configure.
+      styleRegion: styleRegionForField(f, manifest?.styles),
     }))
 }
 
