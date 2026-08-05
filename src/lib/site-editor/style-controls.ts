@@ -74,15 +74,24 @@ const ALIGNS = ['left', 'center', 'right', 'justify', 'start', 'end']
 const textSuffix = (t: string) => (t.startsWith('text-') ? t.slice(5) : '')
 const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 
-// A short, friendly scale rather than Tailwind's full 13 steps — five is plenty for a
-// no-code panel. `owns` (below) still detects any size the site's base classes use, and
-// the control surfaces that current value even when it's outside this list.
+// Tailwind's FULL size scale. It was five friendly steps ("Small…Huge"), which reads well
+// in a menu and is too coarse on a slider — Sam asked for roughly double the stops so he
+// can land between them. The labels stay plain-word at the ends and fall back to the
+// Tailwind name in the middle, where "Large-ish" would be worse than `2xl`.
 const SIZE_OPTIONS: StyleOption[] = [
+  { value: 'text-xs', label: 'XS' },
   { value: 'text-sm', label: 'Small' },
+  { value: 'text-base', label: 'Base' },
   { value: 'text-lg', label: 'Medium' },
+  { value: 'text-xl', label: 'XL' },
   { value: 'text-2xl', label: 'Large' },
-  { value: 'text-4xl', label: 'XL' },
+  { value: 'text-3xl', label: '3xl' },
+  { value: 'text-4xl', label: '4xl' },
+  { value: 'text-5xl', label: '5xl' },
   { value: 'text-6xl', label: 'Huge' },
+  { value: 'text-7xl', label: '7xl' },
+  { value: 'text-8xl', label: '8xl' },
+  { value: 'text-9xl', label: 'Giant' },
 ]
 /**
  * LINE HEIGHT, emitted with Tailwind's `!` important prefix.
@@ -95,34 +104,57 @@ const SIZE_OPTIONS: StyleOption[] = [
  * right precedence, and the only one that makes this control feel like it works.
  */
 const LEADING_OPTIONS: StyleOption[] = [
-  // Below 1.0 deliberately: a site may set a default tighter than `leading-none`, and a
-  // scale whose tight end is looser than what the page already shows makes the control
-  // feel broken — the manager drags toward "tighter" and the text gets looser.
-  { value: '!leading-[0.85]', label: 'Tightest' },
-  { value: '!leading-none', label: 'Tighter' },
-  { value: '!leading-tight', label: 'Tight' },
-  { value: '!leading-snug', label: 'Snug' },
-  { value: '!leading-normal', label: 'Normal' },
-  { value: '!leading-relaxed', label: 'Loose' },
+  // The bottom four are arbitrary values, and deliberately BELOW 1.0: a site may default
+  // tighter than `leading-none`, and a scale whose tight end is looser than what the page
+  // already shows reads as broken — the manager drags toward "tighter" and it loosens.
+  //
+  // Every value here must be safelisted by the rendering site (skeen does, in globals.css)
+  // or the class compiles to nothing and the slider silently does nothing.
+  { value: '!leading-[0.8]', label: '0.8' },
+  { value: '!leading-[0.85]', label: '0.85' },
+  { value: '!leading-[0.9]', label: '0.9' },
+  { value: '!leading-[0.95]', label: '0.95' },
+  { value: '!leading-none', label: '1.0' },
+  { value: '!leading-[1.1]', label: '1.1' },
+  { value: '!leading-tight', label: '1.25' },
+  { value: '!leading-snug', label: '1.375' },
+  { value: '!leading-normal', label: '1.5' },
+  { value: '!leading-relaxed', label: '1.625' },
+  { value: '!leading-loose', label: '2.0' },
 ]
 
 /** LETTER SPACING. No `!` needed: nothing else in the vocabulary sets letter-spacing, so a
  *  plain utility already wins over an inherited value from a parent. */
 const TRACKING_OPTIONS: StyleOption[] = [
-  { value: 'tracking-tighter', label: 'Tightest' },
-  { value: 'tracking-tight', label: 'Tight' },
-  { value: 'tracking-normal', label: 'Normal' },
-  { value: 'tracking-wide', label: 'Wide' },
-  { value: 'tracking-wider', label: 'Wider' },
+  // Named Tailwind steps interleaved with arbitrary em values, so the gaps between the
+  // named ones — which are wide — become adjustable. Same safelist requirement as leading.
+  { value: 'tracking-[-0.08em]', label: '-0.08' },
+  { value: 'tracking-[-0.06em]', label: '-0.06' },
+  { value: 'tracking-tighter', label: '-0.05' },
+  { value: 'tracking-[-0.04em]', label: '-0.04' },
+  { value: 'tracking-[-0.03em]', label: '-0.03' },
+  { value: 'tracking-tight', label: '-0.025' },
+  { value: 'tracking-[-0.01em]', label: '-0.01' },
+  { value: 'tracking-normal', label: '0' },
+  { value: 'tracking-wide', label: '0.025' },
+  { value: 'tracking-wider', label: '0.05' },
+  { value: 'tracking-widest', label: '0.1' },
 ]
 
 const isLeading = (t: string) => t.startsWith('leading-') || t.startsWith('!leading-')
 const isTracking = (t: string) => t.startsWith('tracking-') || t.startsWith('!tracking-')
 
+// Every Tailwind weight, not four. A variable font renders the in-between ones properly,
+// and on a slider the missing stops are exactly where a manager wants to sit.
 const WEIGHT_OPTIONS: StyleOption[] = [
+  { value: 'font-thin', label: 'Thin' },
+  { value: 'font-extralight', label: 'Extra light' },
+  { value: 'font-light', label: 'Light' },
   { value: 'font-normal', label: 'Normal' },
+  { value: 'font-medium', label: 'Medium' },
   { value: 'font-semibold', label: 'Semibold' },
   { value: 'font-bold', label: 'Bold' },
+  { value: 'font-extrabold', label: 'Extra bold' },
   { value: 'font-black', label: 'Black' },
 ]
 const ALIGN_OPTIONS: StyleOption[] = [
