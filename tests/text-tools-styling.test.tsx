@@ -142,6 +142,43 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(className).toContain('font-bold')
   })
 
+  it('CRITICAL: a slider moves IMMEDIATELY, without waiting for the save to land', () => {
+    // The lag this fixes: the control read its value from a prop the inspector only
+    // refreshes on a 500ms debounce, so the text resized at once while the thumb sat
+    // still and then jumped — which reads as the drag being ignored, so the manager
+    // drags further and overshoots. The editor stages the change locally, exactly as
+    // StyleTools and ItemEditor already do.
+    editor(styled, { hero_title: '' })
+    const size = screen.getByLabelText('Hero title Size') as HTMLInputElement
+    const control = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
+    const steps = control.kind === 'slider' ? control.steps : []
+    const target = String(steps.findIndex((s) => s.value === 'text-4xl'))
+
+    fireEvent.change(size, { target: { value: target } })
+
+    // Same tick, no re-render from above, no timers advanced.
+    expect((screen.getByLabelText('Hero title Size') as HTMLInputElement).value).toBe(target)
+  })
+
+  it('staged changes survive moving a SECOND control', () => {
+    // Two controls edit one class string. If the second read the stale prop instead of
+    // what the first staged, changing the size and then the thickness would silently
+    // discard the size.
+    const onStyle = editor(styled, { hero_title: '' })
+    const controls = buildTextItemStyleControls(OPTIONS)
+    const sizeSteps = controls.find((c) => c.id === 'size')!
+    const weightSteps = controls.find((c) => c.id === 'weight')!
+    const sIdx = sizeSteps.kind === 'slider' ? sizeSteps.steps.findIndex((s) => s.value === 'text-4xl') : 0
+    const wIdx = weightSteps.kind === 'slider' ? weightSteps.steps.findIndex((s) => s.value === 'font-bold') : 0
+
+    fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(sIdx) } })
+    fireEvent.change(screen.getByLabelText('Hero title Thickness'), { target: { value: String(wIdx) } })
+
+    const last = onStyle.mock.calls.at(-1) as unknown as string[]
+    expect(last[1]).toContain('text-4xl')
+    expect(last[1]).toContain('font-bold')
+  })
+
   it('offers the site’s own fonts, so the dropdown is real classes not guesses', () => {
     editor(styled)
     const font = screen.getByLabelText('Hero title Font') as HTMLSelectElement

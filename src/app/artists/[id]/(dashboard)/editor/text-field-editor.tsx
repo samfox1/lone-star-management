@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { applyStyleValue, buildTextItemStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from './inspector-types'
@@ -43,7 +44,24 @@ export function TextFieldEditor({
   // editors rather than the Style panel's menus, because this is the same gesture.
   const controls = buildTextItemStyleControls(styleOptions)
   const region = field.styleRegion
-  const cls = region ? (styleValues[region.key] ?? '') : ''
+
+  // STAGED LOCALLY, like StyleTools and ItemEditor. Reading the class string straight
+  // off `styleValues` made every control lag: the inspector only refreshes that map on a
+  // 500ms debounce, so the text repainted at once while the slider thumb sat still and
+  // then jumped — which reads as the drag being ignored, so the manager drags further
+  // and overshoots. Worse, a second control read the STALE string and silently dropped
+  // whatever the first had just set.
+  //
+  // Seeded from the prop, and re-seeded when the REGION changes (a different field is
+  // opened) rather than on every prop change, so an in-flight drag is never clobbered by
+  // the debounced write landing underneath it.
+  const [staged, setStaged] = useState(() => (region ? (styleValues[region.key] ?? '') : ''))
+  const [seededFor, setSeededFor] = useState(region?.key ?? null)
+  if (seededFor !== (region?.key ?? null)) {
+    setSeededFor(region?.key ?? null)
+    setStaged(region ? (styleValues[region.key] ?? '') : '')
+  }
+  const cls = staged
 
   return (
     <EditorPanel label={field.label} onBack={onBack}>
@@ -89,7 +107,11 @@ export function TextFieldEditor({
                 regionLabel={field.label}
                 control={control}
                 cls={cls}
-                onChange={(v) => onStyle(region.key, applyStyleValue(cls, control, v))}
+                onChange={(v) => {
+                  const next = applyStyleValue(cls, control, v)
+                  setStaged(next) // the control moves NOW; the save follows
+                  onStyle(region.key, next)
+                }}
               />
             ))}
           </div>
