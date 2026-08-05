@@ -6,6 +6,7 @@
  * A factory with injectable fetch/sleep for deterministic tests.
  */
 
+import { canonicalCountry } from '@/lib/country'
 import { httpGetJson } from '@/lib/http'
 
 const API_BASE = 'https://rest.bandsintown.com'
@@ -59,7 +60,8 @@ export function createBandsintownClient(opts: Options = {}) {
       date: e.datetime.slice(0, 10),
       venue: e.venue?.name ?? null,
       city: e.venue?.city ?? null,
-      country: e.venue?.country ?? null,
+      // Same canonical spelling Ticketmaster writes — both land in tour_dates.country.
+      country: canonicalCountry(e.venue?.country),
       ticket_url: ticket ?? e.url ?? null,
       latitude: coord(e.venue?.latitude),
       longitude: coord(e.venue?.longitude),

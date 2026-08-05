@@ -2,8 +2,9 @@
  * shopifyClient — reads a store's products via the Storefront GraphQL API. A
  * per-store storefront access token authenticates (passed in from the Vault-
  * backed integration, never hardcoded). Owns the request, cursor pagination,
- * 429 throttle retry, and error shaping, and maps products to the merch input
- * the sync consumes.
+ * throttle retry (HTTP 429 AND Storefront's in-body THROTTLED, which arrives with
+ * HTTP 200), and error shaping, and maps products to the merch input the sync
+ * consumes.
  *
  * A factory with injectable fetch/sleep for deterministic tests.
  */
@@ -42,7 +43,31 @@ type ProductNode = {
 
 type ProductsResponse = {
   data?: { products?: { edges: { node: ProductNode }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }
-  errors?: { message: string }[]
+  errors?: { message: string; extensions?: { code?: string } }[]
+}
+
+/**
+ * The Storefront API does NOT throttle with HTTP 429: it answers 200 with
+ * errors[].extensions.code === 'THROTTLED' (the cost bucket is empty). Any store
+ * big enough to page would otherwise fail its whole merch sync on the first
+ * throttle, because every `errors[]` entry reads as a hard query error.
+ */
+function isThrottled(body: ProductsResponse): boolean {
+  return body.errors?.some((e) => e.extensions?.code === 'THROTTLED') ?? false
+}
+
+/** Cost-bucket refill wait for an in-body throttle: a 200 carries no Retry-After. */
+const THROTTLE_BACKOFF_MS = 1000
+
+/**
+ * Retry-After is allowed to be an HTTP-date, not seconds. Number() then gives NaN
+ * and sleep(NaN) returns immediately, turning the backoff into a hot retry loop
+ * that burns every attempt in milliseconds. Same guard as lib/http.ts, replicated
+ * because Shopify is a GraphQL POST and keeps its own request path.
+ */
+function retryAfterMs(header: string | null): number {
+  const parsed = Number(header ?? '1')
+  return (Number.isFinite(parsed) && parsed > 0 ? parsed : 1) * 1000
 }
 
 const PRODUCTS_QUERY = `
@@ -85,12 +110,15 @@ export function createShopifyClient(opts: Options = {}) {
         body: JSON.stringify({ query: PRODUCTS_QUERY, variables: { cursor } }),
       })
       if (res.status === 429) {
-        const retryAfter = Number(res.headers.get('retry-after') ?? '1')
-        await sleep(retryAfter * 1000)
+        await sleep(retryAfterMs(res.headers.get('retry-after')))
         continue
       }
       if (!res.ok) throw new Error(`Shopify API error ${res.status} for ${domain}`)
       const body = (await res.json()) as ProductsResponse
+      if (isThrottled(body)) {
+        await sleep(THROTTLE_BACKOFF_MS)
+        continue
+      }
       if (body.errors?.length) {
         throw new Error(`Shopify GraphQL error: ${body.errors[0].message}`)
       }

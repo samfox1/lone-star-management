@@ -69,10 +69,14 @@ describe('importDriveFile', () => {
     expect(new Uint8Array(await dl.data!.arrayBuffer())).toEqual(AUDIO_BYTES)
   })
 
+  // Owns both halves of its fixture: it used to re-import the row the test above
+  // happened to leave behind, so running it alone (or after a reorder) proved nothing.
   it('re-importing the same Drive file dedupes AND leaves no orphan object', async () => {
+    const drive = fakeDrive({ id: 'df-audio-2' })
+    expect(await imp('audio', 'df-audio-2', drive)).toEqual({ ok: true })
+
     const before = await svc.storage.from('audio').list(`${artistA}/audio`)
-    const res = await imp('audio', 'df-audio-1', fakeDrive({ id: 'df-audio-1' }))
-    expect(res).toEqual({ error: 'Already imported from Drive.' })
+    expect(await imp('audio', 'df-audio-2', drive)).toEqual({ error: 'Already imported from Drive.' })
     const after = await svc.storage.from('audio').list(`${artistA}/audio`)
     expect(after.data!.length).toBe(before.data!.length) // rolled back, not orphaned
   })
@@ -117,9 +121,19 @@ describe('importDriveFile', () => {
   })
 
   it("CRITICAL: manager A cannot import into another artist's folder (storage RLS)", async () => {
+    const before = await svc.storage.from('audio').list(`${artistB}/audio`)
     const res = await importDriveFile(asA as never, fakeDrive({ id: 'df-x5' }), {
       artistId: artistB, kind: 'audio', fileId: 'df-x5', folderId: FOLDER,
     })
-    expect('error' in res).toBe(true)
+    // The refusal has to come from RLS. `'error' in res` alone also passes when the
+    // bucket name is misspelled or the file is missing — i.e. it passes while the
+    // tenancy boundary is wide open.
+    expect('error' in res && res.error).toMatch(/row-level security/i)
+
+    const { data: rows } = await svc
+      .from('tracks').select('id').eq('artist_id', artistB).eq('drive_file_id', 'df-x5')
+    expect(rows).toEqual([]) // no row for the other tenant
+    const after = await svc.storage.from('audio').list(`${artistB}/audio`)
+    expect(after.data!.length).toBe(before.data!.length) // and no bytes either
   })
 })

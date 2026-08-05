@@ -15,7 +15,15 @@ function res({ status = 200, headers = {}, body }: { status?: number; headers?: 
   }
 }
 
-function productEdge(id: string, title: string, cursor: string) {
+type EdgeNode = {
+  id: string
+  title: string
+  onlineStoreUrl: string | null
+  featuredImage: { url: string } | null
+  priceRange: { minVariantPrice: { amount: string } } | null
+}
+
+function productEdge(id: string, title: string, cursor: string, over: Partial<EdgeNode> = {}) {
   return {
     cursor,
     node: {
@@ -24,7 +32,8 @@ function productEdge(id: string, title: string, cursor: string) {
       onlineStoreUrl: `https://shop.example/${id}`,
       featuredImage: { url: `https://img.example/${id}.jpg` },
       priceRange: { minVariantPrice: { amount: '25.00' } },
-    },
+      ...over,
+    } as EdgeNode,
   }
 }
 
@@ -94,6 +103,124 @@ describe('getProducts', () => {
     expect(hits).toBe(2)
   })
 
+  it('maps a null featuredImage / onlineStoreUrl to null (Shopify sends both routinely)', async () => {
+    const bare = productEdge('gid://p9', 'Draft Tee', 'c1', {
+      onlineStoreUrl: null, // unpublished from the online store
+      featuredImage: null, // no image uploaded
+      priceRange: null,
+    })
+    const fetchImpl = vi.fn(async () => page([bare], false, null) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0]).toEqual({
+      shopify_product_id: 'gid://p9',
+      title: 'Draft Tee',
+      image_url: null,
+      price: null,
+      url: null,
+    })
+  })
+})
+
+/**
+ * Storefront throttling is NOT an HTTP 429 — it answers 200 with
+ * errors[].extensions.code === 'THROTTLED'. Treating that as a hard GraphQL error
+ * failed the whole merch sync the first time a store hit its cost bucket, and made
+ * the 429 branch these tests used to exercise unreachable in production.
+ */
+describe('throttling', () => {
+  const throttled = () =>
+    res({
+      body: {
+        errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }],
+        extensions: { cost: { requestedQueryCost: 52, throttleStatus: { currentlyAvailable: 0 } } },
+      },
+    })
+
+  it('retries an in-body THROTTLED error (HTTP 200) then succeeds', async () => {
+    let hits = 0
+    const fetchImpl = vi.fn(async () => {
+      hits++
+      if (hits === 1) return throttled() as unknown as Response
+      return page([productEdge('gid://p1', 'Tee', 'c1')], false, null) as unknown as Response
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(hits).toBe(2)
+    expect(out).toHaveLength(1) // the catalog survives a throttle, not dropped
+  })
+
+  it('still throws on a non-throttle GraphQL error instead of retrying', async () => {
+    const fetchImpl = vi.fn(async () =>
+      res({ body: { errors: [{ message: 'bad query', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }] } }) as unknown as Response,
+    )
+    await expect(client(fetchImpl as unknown as typeof fetch).getProducts()).rejects.toThrow(/bad query/)
+    expect(fetchImpl).toHaveBeenCalledTimes(1) // a bad query is not retryable
+  })
+
+  it('honours a numeric Retry-After on a 429', async () => {
+    const sleep = vi.fn(() => Promise.resolve())
+    let hits = 0
+    const fetchImpl = vi.fn(async () => {
+      hits++
+      if (hits === 1) return res({ status: 429, headers: { 'retry-after': '2' }, body: {} }) as unknown as Response
+      return page([], false, null) as unknown as Response
+    })
+    await createShopifyClient({
+      domain: 'store.myshopify.com',
+      token: 'tok',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep,
+    }).getProducts()
+    expect(sleep).toHaveBeenCalledWith(2000)
+  })
+
+  it('CRITICAL: a date-form Retry-After falls back to 1s, never sleep(NaN)', async () => {
+    const sleep = vi.fn(() => Promise.resolve())
+    let hits = 0
+    const fetchImpl = vi.fn(async () => {
+      hits++
+      if (hits === 1)
+        return res({
+          status: 429,
+          headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' },
+          body: {},
+        }) as unknown as Response
+      return page([], false, null) as unknown as Response
+    })
+    await createShopifyClient({
+      domain: 'store.myshopify.com',
+      token: 'tok',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep,
+    }).getProducts()
+    expect(sleep).toHaveBeenCalledWith(1000) // sleep(NaN) would hot-loop the retries
+  })
+
+  it('gives up after maxRetries and says so (429 never clears)', async () => {
+    const fetchImpl = vi.fn(async () => res({ status: 429, headers: { 'retry-after': '0' }, body: {} }) as unknown as Response)
+    const c = createShopifyClient({
+      domain: 'store.myshopify.com',
+      token: 'tok',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: () => Promise.resolve(),
+      maxRetries: 2,
+    })
+    await expect(c.getProducts()).rejects.toThrow(/rate-limited after 2 retries/)
+    expect(fetchImpl).toHaveBeenCalledTimes(3) // attempt + 2 retries, then stop
+  })
+
+  it('gives up after maxRetries when THROTTLED never clears', async () => {
+    const fetchImpl = vi.fn(async () => throttled() as unknown as Response)
+    const c = createShopifyClient({
+      domain: 'store.myshopify.com',
+      token: 'tok',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: () => Promise.resolve(),
+      maxRetries: 2,
+    })
+    await expect(c.getProducts()).rejects.toThrow(/rate-limited after 2 retries/)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
+
   it('throws when domain or token is missing', async () => {
     const fetchImpl = vi.fn(async () => page([], false, null) as unknown as Response)
     const c = createShopifyClient({ domain: '', token: '', fetchImpl: fetchImpl as unknown as typeof fetch })
@@ -135,5 +262,20 @@ describe('pagination termination', () => {
     const products = await client(fetchImpl as unknown as typeof fetch).getProducts()
     expect(products).toHaveLength(1)
     expect(fetchImpl).toHaveBeenCalledTimes(1) // did not re-fetch page 1
+  })
+
+  // hasNextPage:true with an endCursor that never advances is the shape that spins:
+  // without the equality break the loop re-fetches page 1 forever, accumulating the
+  // same products until the process dies. Bounded here so the failure is a wrong
+  // count, not a hung suite.
+  it('breaks when endCursor repeats (hasNextPage lies) instead of looping', async () => {
+    let hits = 0
+    const fetchImpl = vi.fn(async () => {
+      if (++hits > 20) throw new Error('pagination did not terminate')
+      return page([productEdge('p1', 'Tee', 'c1')], true, 'SAME') as unknown as Response
+    })
+    const products = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(fetchImpl).toHaveBeenCalledTimes(2) // page 1, then the repeat that stops it
+    expect(products.map((p) => p.shopify_product_id)).toEqual(['p1', 'p1'])
   })
 })

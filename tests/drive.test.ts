@@ -33,12 +33,20 @@ describe('parseDriveFolderId', () => {
     expect(parseDriveFolderId(input)).toBe(id)
   })
 
-  it.each(['https://example.com/whatever', 'not a link', "1abc'; drop--", ''])(
-    'rejects %s',
-    (input) => {
-      expect(parseDriveFolderId(input)).toBeNull()
-    },
-  )
+  // The bare-id branch needs 15+ chars before the charset matters, so a short
+  // injection string is rejected on LENGTH and never reaches the charset guard —
+  // which is the guard keeping a quote out of the files.list `q` string.
+  it.each([
+    'https://example.com/whatever',
+    'not a link',
+    "1abc'; drop--",
+    "1AbCdEfGhIjKlMnOp'; drop table media;--",
+    "1AbCdEfGhIjKlMnOp' in parents or '1",
+    '1AbCdEfGhIjKlMnOp with spaces',
+    '',
+  ])('rejects %s', (input) => {
+    expect(parseDriveFolderId(input)).toBeNull()
+  })
 })
 
 describe('driveKind', () => {
@@ -142,6 +150,66 @@ describe('listAllMediaFiles', () => {
     const files = await client(fetchImpl).listAllMediaFiles('f1', 'audio')
     expect(files.map((f) => f.id)).toEqual(['a1', 'a2'])
   })
+
+  // Drive decides when paging ends, so a token it keeps repeating would re-list the
+  // same page forever. Both guards are pinned by call count; the mocks refuse an
+  // extra request so a lost guard fails loudly instead of hanging the suite.
+  it('stops when the page token repeats', async () => {
+    let calls = 0
+    const fetchImpl = (async () => {
+      if (++calls > 10) throw new Error('pagination did not terminate')
+      return json({ files: [{ id: `a${calls}`, name: 'a.mp3', mimeType: 'audio/mpeg' }], nextPageToken: 'SAME' })
+    }) as typeof fetch
+    const files = await client(fetchImpl).listAllMediaFiles('f1', 'audio')
+    expect(calls).toBe(2) // the first page, then SAME once — the repeat is refused
+    expect(files.map((f) => f.id)).toEqual(['a1', 'a2'])
+  })
+
+  it('stops at maxPages when the token keeps advancing', async () => {
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls++
+      if (calls > 3) throw new Error('paged past maxPages')
+      return json({ files: [{ id: `a${calls}`, name: 'a.mp3', mimeType: 'audio/mpeg' }], nextPageToken: `t${calls}` })
+    }) as typeof fetch
+    const files = await client(fetchImpl, { maxPages: 3 }).listAllMediaFiles('f1', 'audio')
+    expect(calls).toBe(3)
+    expect(files.map((f) => f.id)).toEqual(['a1', 'a2', 'a3'])
+  })
+})
+
+/**
+ * getFileMeta is the import path's ONLY server-side view of a file: the client sends
+ * a bare id, and `parents` is what proves the file belongs to the connected folder
+ * (drive-import.ts). Untested, it was also the one client method with no coverage.
+ */
+describe('getFileMeta', () => {
+  it('asks for parents and turns the int64-string size into a number', async () => {
+    const seen: string[] = []
+    const fetchImpl = (async (url: RequestInfo | URL) => {
+      seen.push(String(url))
+      return json({ id: 'a1', name: 'demo.mp3', mimeType: 'audio/mpeg', size: '2048', parents: ['folder-1'] })
+    }) as typeof fetch
+    const meta = await client(fetchImpl).getFileMeta('a1')
+    expect(meta).toEqual({ id: 'a1', name: 'demo.mp3', mimeType: 'audio/mpeg', size: 2048, parents: ['folder-1'] })
+    expect(decodeURIComponent(seen[0])).toContain('fields=id,name,mimeType,size,parents')
+  })
+
+  // Drive omits `parents` for a file in a shared drive's root. Without the default,
+  // drive-import's `meta.parents.includes(folderId)` throws instead of refusing the
+  // import — a crash where the answer is "that file isn't in your folder".
+  it('defaults parents to [] and size to null when Drive omits them', async () => {
+    const fetchImpl = (async () => json({ id: 'a1', name: 'demo.mp3', mimeType: 'audio/mpeg' })) as typeof fetch
+    const meta = await client(fetchImpl).getFileMeta('a1')
+    expect(meta.parents).toEqual([])
+    expect(meta.size).toBeNull()
+  })
+
+  it('treats a non-numeric size as unknown rather than NaN', async () => {
+    const fetchImpl = (async () =>
+      json({ id: 'a1', name: 'demo.mp3', mimeType: 'audio/mpeg', size: 'huge', parents: [] })) as typeof fetch
+    expect((await client(fetchImpl).getFileMeta('a1')).size).toBeNull()
+  })
 })
 
 describe('downloadFile', () => {
@@ -185,5 +253,44 @@ describe('downloadFile', () => {
     const buf = await client(fetchImpl).downloadFile('a1', 100)
     expect(new Uint8Array(buf)).toEqual(new Uint8Array([9]))
     expect(calls).toBe(2)
+  })
+
+  // alt=media is the one path that doesn't go through lib/http.ts, so it carries its
+  // own copy of the backoff — and a copy nobody asserts on is a copy that drifts.
+  it('waits the Retry-After the header asks for', async () => {
+    const sleep = vi.fn(() => Promise.resolve())
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls++
+      if (calls === 1) return new Response('', { status: 429, headers: { 'retry-after': '3' } })
+      return new Response(new Uint8Array([9]))
+    }) as typeof fetch
+    await client(fetchImpl, { sleep }).downloadFile('a1', 100)
+    expect(sleep).toHaveBeenCalledWith(3000)
+  })
+
+  it('CRITICAL: a date-form Retry-After falls back to 1s, never sleep(NaN)', async () => {
+    const sleep = vi.fn(() => Promise.resolve())
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls++
+      if (calls === 1)
+        return new Response('', { status: 429, headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' } })
+      return new Response(new Uint8Array([9]))
+    }) as typeof fetch
+    await client(fetchImpl, { sleep }).downloadFile('a1', 100)
+    expect(sleep).toHaveBeenCalledWith(1000) // sleep(NaN) would burn every retry instantly
+  })
+
+  it('gives up after maxRetries when the 429 never clears', async () => {
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls++
+      return new Response('', { status: 429, headers: { 'retry-after': '0' } })
+    }) as typeof fetch
+    await expect(client(fetchImpl, { maxRetries: 2 }).downloadFile('a1', 100)).rejects.toThrow(
+      /rate-limited after 2 retries/,
+    )
+    expect(calls).toBe(3) // attempt + 2 retries, then stop
   })
 })

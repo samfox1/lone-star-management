@@ -72,6 +72,48 @@ describe('DriveBrowser', () => {
     expect(screen.getAllByText('Imported').length).toBe(3) // both newly badged + the old one
   })
 
+  // The recorded order alone can't tell sequential from parallel: Promise.all over
+  // the same ids records the same list. Hold the first import open and assert the
+  // second has not started — the server action buffers a whole file in memory, so
+  // two at once is two files' bytes resident at the same time.
+  it('does not start the next import until the previous one resolves', async () => {
+    const started: string[] = []
+    let releaseFirst = () => {}
+    const firstDone = new Promise<void>((r) => {
+      releaseFirst = r
+    })
+    const importAction = vi.fn(async (id: string) => {
+      started.push(id)
+      if (id === 'a1') await firstDone
+      return { ok: true }
+    })
+    setup(PAGE1, importAction)
+    fireEvent.click(await screen.findByLabelText('Demo One.mp3'))
+    fireEvent.click(screen.getByLabelText('Demo Two.mp3'))
+    fireEvent.click(screen.getByRole('button', { name: /Import 2 songs/ }))
+
+    await waitFor(() => expect(started).toEqual(['a1'])) // a2 is still queued behind a1
+
+    releaseFirst()
+    expect(await screen.findByText('Imported 2 songs')).toBeInTheDocument()
+    expect(started).toEqual(['a1', 'a2'])
+  })
+
+  it('imports in list order, not the order the boxes were ticked', async () => {
+    const order: string[] = []
+    const importAction = vi.fn(async (id: string) => {
+      order.push(id)
+      return { ok: true }
+    })
+    setup(PAGE1, importAction)
+    fireEvent.click(await screen.findByLabelText('Demo Two.mp3')) // ticked FIRST
+    fireEvent.click(screen.getByLabelText('Demo One.mp3'))
+    fireEvent.click(screen.getByRole('button', { name: /Import 2 songs/ }))
+
+    expect(await screen.findByText('Imported 2 songs')).toBeInTheDocument()
+    expect(order).toEqual(['a1', 'a2']) // the order the manager sees on screen
+  })
+
   it('keeps a per-file failure inline while the rest succeed', async () => {
     const importAction = vi.fn(async (id: string) =>
       id === 'a1' ? { ok: false, error: 'Already imported from Drive.' } : { ok: true },

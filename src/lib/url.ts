@@ -18,7 +18,7 @@ const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
  * char (U+0000–U+001F), space, and DEL (U+007F) before inspecting the scheme —
  * matching what the browser collapses, not just the visible string.
  */
-// eslint-disable-next-line no-control-regex
+ 
 const CONTROL_AND_SPACE = new RegExp('[\\u0000-\\u0020\\u007f]', 'g')
 
 export function safeHref(url: string | null | undefined): string | undefined {

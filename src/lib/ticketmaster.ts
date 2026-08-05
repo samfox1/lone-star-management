@@ -8,6 +8,7 @@
  * pulls events for that attraction. A factory with injectable fetch/sleep.
  */
 
+import { canonicalCountry } from '@/lib/country'
 import { httpGetJson } from '@/lib/http'
 
 const API_BASE = 'https://app.ticketmaster.com/discovery/v2'
@@ -28,7 +29,8 @@ export type TicketmasterTourDate = {
 type TmVenue = {
   name?: string
   city?: { name?: string }
-  country?: { name?: string }
+  /** Discovery v2 sends both: name "United States Of America", countryCode "US". */
+  country?: { name?: string; countryCode?: string }
   location?: { latitude?: string | number; longitude?: string | number }
 }
 
@@ -78,7 +80,9 @@ export function createTicketmasterClient(opts: Options = {}) {
       date: e.dates?.start?.localDate ?? '',
       venue: venue?.name ?? null,
       city: venue?.city?.name ?? null,
-      country: venue?.country?.name ?? null,
+      // Canonicalised so Ticketmaster and Bandsintown dates in the same table read
+      // the same ("United States Of America" and "United States" are one country).
+      country: canonicalCountry(venue?.country?.name ?? venue?.country?.countryCode),
       ticket_url: e.url ?? null,
       latitude: coord(venue?.location?.latitude),
       longitude: coord(venue?.location?.longitude),

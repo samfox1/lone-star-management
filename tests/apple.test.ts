@@ -17,7 +17,16 @@ function res({ status = 200, headers = {}, body }: Resp) {
   }
 }
 
-const artist = (id: number) => ({ wrapperType: 'artist', artistType: 'Artist', artistId: id, artistName: 'Skeen' })
+// A real lookup's artist row carries no trackId, which means the null-id check
+// alone would drop it and the wrapperType/kind filter would never be exercised.
+// Giving it one leaves the filter as the ONLY thing that can keep it out.
+const artist = (id: number) => ({
+  wrapperType: 'artist',
+  artistType: 'Artist',
+  artistId: id,
+  artistName: 'Skeen',
+  trackId: id,
+})
 const song = (id: number, name: string, extra: Record<string, unknown> = {}) => ({
   wrapperType: 'track',
   kind: 'song',
@@ -58,6 +67,52 @@ describe('getArtistTracks (iTunes Search)', () => {
         duration_ms: 98000,
       },
     ])
+  })
+
+  // Without the trackId check the row still maps, and apple_id becomes the string
+  // "undefined" — a row that can never match or de-duplicate against anything.
+  it('drops a song row with no trackId', async () => {
+    const noId = song(0, 'Ghost', { trackId: undefined })
+    const fetchImpl = vi.fn(async () => res({ body: { results: [noId, song(1, 'Drive')] } }) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
+    expect(out.map((t) => t.apple_id)).toEqual(['1'])
+  })
+
+  it('sends limit and country, clamping limit to the iTunes maximum of 200', async () => {
+    vi.stubEnv('APPLE_STOREFRONT', undefined) // ignore any storefront set in .env.local
+    const fetchImpl = vi.fn(async (_url: string) => res({ body: { results: [] } }) as unknown as Response)
+
+    await createAppleMusicClient({ fetchImpl: fetchImpl as unknown as typeof fetch, sleep: () => Promise.resolve() }).getArtistTracks('42')
+    expect(String(fetchImpl.mock.calls[0][0])).toContain('limit=200')
+    expect(String(fetchImpl.mock.calls[0][0])).toContain('country=us') // default storefront
+
+    await createAppleMusicClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: () => Promise.resolve(),
+      limit: 500, // iTunes rejects anything over 200
+      country: 'gb',
+    }).getArtistTracks('42')
+    expect(String(fetchImpl.mock.calls[1][0])).toContain('limit=200')
+    expect(String(fetchImpl.mock.calls[1][0])).toContain('country=gb')
+
+    await createAppleMusicClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: () => Promise.resolve(),
+      limit: 25,
+    }).getArtistTracks('42')
+    expect(String(fetchImpl.mock.calls[2][0])).toContain('limit=25') // a smaller cap is honoured
+    vi.unstubAllEnvs()
+  })
+
+  it('gives up after maxRetries when the 429 never clears', async () => {
+    const fetchImpl = vi.fn(async () => res({ status: 429, headers: { 'retry-after': '0' }, body: {} }) as unknown as Response)
+    const c = createAppleMusicClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: () => Promise.resolve(),
+      maxRetries: 2,
+    })
+    await expect(c.getArtistTracks('42')).rejects.toThrow(/rate-limited after 2 retries/)
+    expect(fetchImpl).toHaveBeenCalledTimes(3) // attempt + 2 retries, then stop
   })
 
   it('tolerates missing optional fields (null, not undefined)', async () => {

@@ -40,11 +40,21 @@ describe('viewCounts', () => {
     expect(counts.has('c')).toBe(false)
   })
 
-  it('batches ids 50 at a time', async () => {
-    const fetchImpl = vi.fn(async () => res({ body: { items: [] } }) as unknown as Response)
+  // videos.list caps at 50 ids per call. A call count alone proves nothing: a
+  // wrong slice window makes exactly as many requests while silently dropping most
+  // of the ids, so every video keeps its stale view count. Assert the partition.
+  it('batches ids 50 at a time, covering every id exactly once', async () => {
+    const batches: string[][] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      batches.push(new URL(url).searchParams.get('id')!.split(','))
+      return res({ body: { items: [] } }) as unknown as Response
+    })
     const ids = Array.from({ length: 120 }, (_, i) => `v${i}`)
     await client(fetchImpl as unknown as typeof fetch).viewCounts(ids)
-    expect(fetchImpl).toHaveBeenCalledTimes(3) // 50 + 50 + 20
+
+    expect(batches.map((b) => b.length)).toEqual([50, 50, 20])
+    expect(batches.flat()).toEqual(ids) // nothing dropped, nothing requested twice
+    expect(Math.max(...batches.map((b) => b.length))).toBeLessThanOrEqual(50) // the API's hard cap
   })
 
   it('is a no-op for no ids', async () => {

@@ -55,6 +55,88 @@ describe('getChannelVideos', () => {
     expect(urls.some((u) => u.includes('/search'))).toBe(false)
   })
 
+  // A private/deleted upload still occupies a playlist slot but carries no
+  // resourceId; emitted, it becomes a video row whose embed_url ends in
+  // "undefined" — a dead player on the artist's site.
+  it('skips playlist items with no videoId, and defaults a missing title to empty', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
+      if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
+      return res({
+        body: {
+          items: [
+            { snippet: { title: 'Deleted video' } }, // no resourceId → dropped
+            { snippet: { resourceId: { videoId: 'v2' } } }, // no title → ''
+          ],
+        },
+      }) as unknown as Response
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getChannelVideos('CH1')
+    expect(out).toEqual([
+      {
+        youtube_id: 'v2',
+        title: '',
+        provider: 'youtube',
+        embed_url: 'https://www.youtube.com/embed/v2',
+        is_short: false,
+      },
+    ])
+  })
+
+  it('probes /shorts/ with HEAD and redirect:manual (a followed 3xx would read as 200)', async () => {
+    const fetchImpl = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
+      if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
+      return res({ body: { items: [item('v1', 'One')] } }) as unknown as Response
+    })
+    await client(fetchImpl as unknown as typeof fetch).getChannelVideos('CH1')
+    const probe = fetchImpl.mock.calls.find((c) => String(c[0]).includes('/shorts/'))
+    expect(probe).toBeDefined()
+    const init = probe![1] as RequestInit
+    expect(init.method).toBe('HEAD') // body bytes are never read; GET pulls the page
+    expect(init.redirect).toBe('manual') // following the 3xx turns every video into a Short
+  })
+
+  it('bounds Shorts probes to 8 in flight (unbounded would open a socket per upload)', async () => {
+    let inFlight = 0
+    let peak = 0
+    const items = Array.from({ length: 20 }, (_, i) => item(`v${i}`, `V${i}`))
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
+      if (!url.includes('/shorts/')) return res({ body: { items } }) as unknown as Response
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await new Promise((r) => setTimeout(r, 0)) // hold the probe open so overlap is observable
+      inFlight--
+      return notShort() as unknown as Response
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getChannelVideos('CH1')
+    expect(out).toHaveLength(20)
+    expect(peak).toBe(8) // exactly the cap: neither serialized nor unbounded
+  })
+
+  // Without the cap a channel whose nextPageToken never clears (or repeats) pages
+  // forever. The mock refuses a fourth page so the failure is loud, not a hang.
+  it('stops paging at maxPages even while nextPageToken keeps coming', async () => {
+    let pages = 0
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/shorts/')) return notShort() as unknown as Response
+      if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
+      pages++
+      if (pages > 3) throw new Error('paged past maxPages')
+      return res({ body: { items: [item(`v${pages}`, `V${pages}`)], nextPageToken: `P${pages}` } }) as unknown as Response
+    })
+    const c = createYouTubeClient({
+      apiKey: 'k',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: () => Promise.resolve(),
+      maxPages: 3,
+    })
+    const out = await c.getChannelVideos('CH1')
+    expect(pages).toBe(3)
+    expect(out.map((v) => v.youtube_id)).toEqual(['v1', 'v2', 'v3'])
+  })
+
   it('classifies Shorts (200) vs normal uploads (redirect) via the /shorts/ probe', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes('/shorts/')) {
