@@ -33,6 +33,20 @@ export type SiteStyleOptions = {
   fonts?: StyleOption[]
   textColors?: StyleOption[]
   bgColors?: StyleOption[]
+  /**
+   * The FONT SIZES this site can actually render, low → high.
+   *
+   * Sizes used to be this module's business alone, and three times on 2026-08-05 the
+   * editor offered one the site could not compile: Tailwind builds only the classes it can
+   * see, so the class landed on the element with no CSS behind it and the text did not
+   * move. Two lists in two repositories with nothing joining them — every step added here
+   * broke silently until someone noticed a slider doing nothing.
+   *
+   * The site is the authority, so its list is NOT filtered against the one below. Omitted
+   * or empty falls back to SIZE_OPTIONS, which keeps older builds and lone-star's own
+   * templates working unchanged.
+   */
+  textSizes?: StyleOption[]
 }
 
 export type StyleControl =
@@ -347,6 +361,12 @@ export function withUploadedFonts(
   return { ...opts, fonts: [...manifest, ...extra] }
 }
 
+/** The scale to offer: the site's own if it advertises one, else this module's.
+ *  EMPTY counts as "not advertised" — a site mid-migration announcing `textSizes: []`
+ *  should get a working slider, not one with nothing on it. */
+const sizeScale = (opts?: SiteStyleOptions): StyleOption[] =>
+  opts?.textSizes?.length ? opts.textSizes : SIZE_OPTIONS
+
 export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   const controls: StyleControl[] = []
 
@@ -364,7 +384,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     id: 'size',
     label: 'Size',
     kind: 'select',
-    options: [DEFAULT, ...SIZE_OPTIONS],
+    options: [DEFAULT, ...sizeScale(opts)],
     owns: isTextSize,
   })
   controls.push({
@@ -487,7 +507,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     id: 'size',
     label: 'Size',
     kind: 'slider',
-    steps: [DEFAULT, ...SIZE_OPTIONS],
+    steps: [DEFAULT, ...sizeScale(opts)],
     defaultOffScale: true,
     rank: textSizeRank,
     owns: isTextSize,
