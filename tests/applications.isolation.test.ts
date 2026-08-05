@@ -8,6 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, serviceClient, signInAs } from './helpers/supabase'
+import { expectDeniedByMissingPolicy, expectRlsDenied } from './helpers/rls'
 
 const MARKER = 'ISO-APPLY' // artist_name tag, so afterAll can clean up
 const EMAIL = 'iso-apply@example.test'
@@ -19,6 +20,20 @@ const svc = serviceClient()
 beforeAll(async () => {
   asAdmin = await signInAs(SEED.admin)
   asManager = await signInAs(SEED.managerA)
+
+  // Plant the marker row with the SERVICE client, not through the door.
+  //
+  // Every denial below filters on artist_name = MARKER. If the only MARKER row came
+  // from the `submit_application` test in the describe block above, then skipping,
+  // reordering or breaking that test would silently turn "anon reads nothing" into a
+  // query over an empty table — a pass that proves nothing. The door keeps its own
+  // behavioural test; the denials get their own fixture.
+  const { data, error } = await svc
+    .from('applications')
+    .insert({ name: 'Isolation Probe', email: EMAIL, artist_name: MARKER })
+    .select('id')
+    .single()
+  if (error || !data) throw error ?? new Error('applications fixture insert failed')
 })
 
 afterAll(async () => {
@@ -57,6 +72,13 @@ describe('submit_application (public door)', () => {
 })
 
 describe('applications isolation', () => {
+  // Guard rail for the three denials below: if the fixture is gone they are all
+  // reading an empty table and cannot fail.
+  it('the marker fixture really is in the table (service role)', async () => {
+    const { data } = await svc.from('applications').select('id').eq('artist_name', MARKER)
+    expect((data ?? []).length).toBeGreaterThan(0)
+  })
+
   it('CRITICAL: anon cannot read applications', async () => {
     const { data } = await anonClient().from('applications').select('id').eq('artist_name', MARKER)
     expect(data).toEqual([])
@@ -68,11 +90,21 @@ describe('applications isolation', () => {
   })
 
   it('CRITICAL: anon cannot insert directly, bypassing the door', async () => {
+    // No anon INSERT policy exists, and anon still holds the stock table-level grant —
+    // the missing policy is the only thing between a bot and this table.
     const { error } = await anonClient()
       .from('applications')
       .insert({ name: 'spoof', email: EMAIL, artist_name: MARKER })
       .select()
-    expect(error).not.toBeNull()
+    expectDeniedByMissingPolicy(error, 'anon inserting an application')
+  })
+
+  it('CRITICAL: a non-admin manager cannot insert either', async () => {
+    const { error } = await asManager
+      .from('applications')
+      .insert({ name: 'spoof', email: EMAIL, artist_name: MARKER })
+      .select()
+    expectRlsDenied(error, 'a manager inserting an application')
   })
 
   it('admin can read submitted applications', async () => {
@@ -87,7 +119,14 @@ describe('applications isolation', () => {
 
 describe('applications status updates (admin inbox)', () => {
   async function markerId(): Promise<string> {
-    const { data } = await asAdmin.from('applications').select('id').eq('artist_name', MARKER).limit(1)
+    // Ordered, so every test in this block operates on the SAME row regardless of how
+    // many MARKER rows the door test added.
+    const { data } = await asAdmin
+      .from('applications')
+      .select('id')
+      .eq('artist_name', MARKER)
+      .order('created_at', { ascending: true })
+      .limit(1)
     const id = data?.[0]?.id
     expect(id).toBeTruthy()
     return id as string
@@ -113,9 +152,12 @@ describe('applications status updates (admin inbox)', () => {
     expect(after?.status).not.toBe('approved')
   })
 
-  it('rejects an out-of-enum status (CHECK constraint)', async () => {
+  it('rejects an out-of-enum status (CHECK constraint, exercised as admin)', async () => {
+    // Admin, deliberately: a manager's update is filtered out by RLS before the CHECK is
+    // ever evaluated, so a manager-side version of this test would measure 42501 and
+    // never touch the constraint it names.
     const id = await markerId()
     const { error } = await asAdmin.from('applications').update({ status: 'bogus' }).eq('id', id)
-    expect(error).not.toBeNull()
+    expect(error?.code).toBe('23514')
   })
 })

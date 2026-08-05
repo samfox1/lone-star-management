@@ -18,10 +18,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { expectDeniedByMissingPolicy, expectExecuteDenied, expectRlsDenied } from './helpers/rls'
 
 const svc = serviceClient()
 
 let artistA: string
+let artistB: string
 let asA: SupabaseClient
 let asB: SupabaseClient
 
@@ -29,11 +31,14 @@ let asB: SupabaseClient
 // not a vacuous pass over empty tables.
 const MARKER = 'ISOLATION probe message'
 const PROBE_IP = 'isolation-probe-ip-hash'
+const BOOKING_ADDRESS = 'isolation-booking-a@example.test'
 let enquiryA: string
 let seededMailSettings = false
+let seededArtistMailSettings = false
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
+  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
   asB = await signInAs(SEED.managerB)
 
@@ -62,7 +67,19 @@ beforeAll(async () => {
     ip_hash: PROBE_IP,
     outcome: 'accepted',
   })
-  await svc.from('artist_mail_settings').insert({ artist_id: artistA, from_name: 'Isolation Probe' })
+  // Only create the per-artist mail row if there isn't one — teardown deletes what we
+  // made, and blowing away a real booking-address override would be a live-data loss.
+  const { data: existingAms } = await svc
+    .from('artist_mail_settings')
+    .select('artist_id')
+    .eq('artist_id', artistA)
+    .maybeSingle()
+  if (!existingAms) {
+    await svc
+      .from('artist_mail_settings')
+      .insert({ artist_id: artistA, from_name: 'Isolation Probe', booking_email: BOOKING_ADDRESS })
+    seededArtistMailSettings = true
+  }
   const { data: ms } = await svc.from('mail_settings').select('id').maybeSingle()
   if (!ms) {
     await svc.from('mail_settings').insert({
@@ -76,11 +93,20 @@ beforeAll(async () => {
 afterAll(async () => {
   await svc.from('enquiries').delete().eq('id', enquiryA)
   await svc.from('contact_attempts').delete().eq('ip_hash', PROBE_IP)
-  await svc.from('artist_mail_settings').delete().eq('artist_id', artistA)
+  if (seededArtistMailSettings) {
+    await svc.from('artist_mail_settings').delete().eq('artist_id', artistA)
+  }
   if (seededMailSettings) await svc.from('mail_settings').delete().eq('id', true)
 })
 
 describe('enquiries — the anon caller cannot reach the door', () => {
+  // Every assertion in this block pins SQLSTATE 42501 ("permission denied for function
+  // <name>") rather than merely "an error came back". PostgREST returns a non-null error
+  // for any signature it cannot resolve — rename one parameter and you get PGRST202,
+  // "Could not find the function public.submit_enquiry in the schema cache". A bare
+  // not-null check stays green through that, so the day someone renames a param AND
+  // grants EXECUTE to anon, the door is gone and nothing here fails.
+
   it('anon cannot call submit_enquiry (it is service_role-only, not an anon door)', async () => {
     const { data, error } = await anonClient().rpc('submit_enquiry', {
       p_slug: SEED.artistASlug,
@@ -90,7 +116,7 @@ describe('enquiries — the anon caller cannot reach the door', () => {
       p_message: 'harvesting booking addresses',
       p_ip_hash: 'forged-ip-hash-0000',
     })
-    expect(error).not.toBeNull()
+    expectExecuteDenied(error, 'submit_enquiry')
     // Belt and braces: even if the call somehow returned, it must carry no address.
     expect(data ?? []).toEqual([])
   })
@@ -104,13 +130,16 @@ describe('enquiries — the anon caller cannot reach the door', () => {
       p_message: 'still not allowed',
       p_ip_hash: 'forged-ip-hash-0001',
     })
-    expect(error).not.toBeNull()
+    expectExecuteDenied(error, 'submit_enquiry')
   })
 
   it('anon cannot call the internal resolver or the ledger writer', async () => {
     const anon = anonClient()
-    expect((await anon.rpc('resolve_booking_recipient', { p_artist_id: artistA })).error).not.toBeNull()
-    expect(
+    expectExecuteDenied(
+      (await anon.rpc('resolve_booking_recipient', { p_artist_id: artistA })).error,
+      'resolve_booking_recipient',
+    )
+    expectExecuteDenied(
       (
         await anon.rpc('log_contact_attempt', {
           p_slug: SEED.artistASlug,
@@ -119,7 +148,8 @@ describe('enquiries — the anon caller cannot reach the door', () => {
           p_outcome: 'accepted',
         })
       ).error,
-    ).not.toBeNull()
+      'log_contact_attempt',
+    )
   })
 
   it('anon cannot select any of the four new tables', async () => {
@@ -129,6 +159,50 @@ describe('enquiries — the anon caller cannot reach the door', () => {
       // Either a hard RLS/permission error, or an empty set — never a row.
       expect(error !== null || (data ?? []).length === 0).toBe(true)
     }
+  })
+
+  it('CRITICAL: anon cannot INSERT an enquiry — there is deliberately no policy', async () => {
+    // The one thing standing between a bot and every manager's inbox is the ABSENCE of
+    // an INSERT policy. anon still holds the stock column-level INSERT grant on this
+    // table (nobody revoked it), so adding any innocuous-looking `enquiries_insert`
+    // policy in a later migration instantly makes forged enquiries writable at scale —
+    // with a plausible reply-to address on somebody else's artist. Pin the omission: the
+    // refusal must come from RLS, not from a grant that might be re-widened.
+    const { error } = await anonClient()
+      .from('enquiries')
+      .insert({
+        artist_id: artistA,
+        purpose: 'booking',
+        name: 'Forged Bot',
+        email: 'bot@example.test',
+        message: 'FORGED enquiry',
+        to_email: 'attacker@evil.example',
+        recipient_source: 'default',
+      })
+      .select()
+    expectDeniedByMissingPolicy(error, 'anon inserting an enquiry')
+
+    const { data } = await svc.from('enquiries').select('id').eq('message', 'FORGED enquiry')
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  it("CRITICAL: a manager cannot INSERT an enquiry into their own inbox either", async () => {
+    // Same omission, other side: the Edge Function (service role) is the sole writer, so
+    // even the owner may not fabricate an enquiry — otherwise anything holding a
+    // manager's token could manufacture booking history.
+    const { error } = await asA
+      .from('enquiries')
+      .insert({
+        artist_id: artistA,
+        purpose: 'booking',
+        name: 'Self Forged',
+        email: 'self@example.test',
+        message: 'SELF FORGED enquiry',
+        to_email: 'self@example.test',
+        recipient_source: 'default',
+      })
+      .select()
+    expectDeniedByMissingPolicy(error, 'a manager inserting an enquiry')
   })
 })
 
@@ -149,6 +223,107 @@ describe('enquiries — cross-tenant reads', () => {
   })
 })
 
+describe('contact_attempts — the rate limiter owns its own ledger', () => {
+  // The read denial was covered; the WRITE side was not. The limiter counts rows in this
+  // table, so anyone who can insert into it can pre-burn an IP's slots (locking a real
+  // visitor out) or, with a helpful `delete`, erase their own flood and reset the cap.
+  // Only the service role writes here, via log_contact_attempt.
+
+  it('CRITICAL: a manager cannot INSERT into the ledger', async () => {
+    const { error } = await asA
+      .from('contact_attempts')
+      .insert({
+        slug: SEED.artistASlug,
+        artist_id: artistA,
+        purpose: 'booking',
+        ip_hash: 'forged-ledger-hash',
+        outcome: 'accepted',
+      })
+      .select()
+    expectDeniedByMissingPolicy(error, 'a manager inserting a contact attempt')
+  })
+
+  it('CRITICAL: anon cannot INSERT into the ledger', async () => {
+    const { error } = await anonClient()
+      .from('contact_attempts')
+      .insert({ slug: SEED.artistASlug, ip_hash: 'forged-ledger-hash', outcome: 'accepted' })
+      .select()
+    expectDeniedByMissingPolicy(error, 'anon inserting a contact attempt')
+
+    const { data } = await svc.from('contact_attempts').select('id').eq('ip_hash', 'forged-ledger-hash')
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  it('CRITICAL: a manager cannot erase ledger rows (silent no-op, so check state)', async () => {
+    // No DELETE policy → RLS scopes every row out of the statement and PostgREST reports
+    // success over zero rows. The proof is that the planted row is still there.
+    await asA.from('contact_attempts').delete().eq('ip_hash', PROBE_IP)
+    const { data } = await svc.from('contact_attempts').select('id').eq('ip_hash', PROBE_IP)
+    expect(data ?? []).toHaveLength(1)
+  })
+})
+
+describe('artist_mail_settings — the resolved booking address', () => {
+  // ams_read is what stops one manager reading another artist's booking address, and the
+  // address IS the feature. Only the anon case had a test; the manager-to-manager case,
+  // which is the realistic threat, had none.
+
+  it('the booking address fixture is really there (service role)', async () => {
+    const { data } = await svc
+      .from('artist_mail_settings')
+      .select('artist_id')
+      .eq('artist_id', artistA)
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  it("A's own manager can read their resolved booking config", async () => {
+    const { data } = await asA
+      .from('artist_mail_settings')
+      .select('artist_id')
+      .eq('artist_id', artistA)
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  it("CRITICAL: manager B cannot read A's booking address", async () => {
+    const { data } = await asB
+      .from('artist_mail_settings')
+      .select('artist_id, booking_email, sending_domain')
+      .eq('artist_id', artistA)
+    expect(data ?? []).toEqual([])
+  })
+
+  it('CRITICAL: a manager cannot WRITE their own mail config (ops-only, silent no-op)', async () => {
+    // ams_admin_write is admin-only on purpose: a manager who could set `sending_domain`
+    // could point sends at a domain Resend has not verified and break delivery silently.
+    // The UPDATE is row-filtered rather than rejected, so assert the stored value.
+    const { data: before } = await svc
+      .from('artist_mail_settings')
+      .select('booking_email, sending_domain')
+      .eq('artist_id', artistA)
+      .single()
+
+    await asA
+      .from('artist_mail_settings')
+      .update({ booking_email: 'hijacked@evil.example', sending_domain: 'evil.example' })
+      .eq('artist_id', artistA)
+
+    const { data: after } = await svc
+      .from('artist_mail_settings')
+      .select('booking_email, sending_domain')
+      .eq('artist_id', artistA)
+      .single()
+    expect(after).toEqual(before)
+  })
+
+  it("CRITICAL: a manager cannot create mail config for another tenant", async () => {
+    const { error } = await asA
+      .from('artist_mail_settings')
+      .insert({ artist_id: artistB, booking_email: 'redirect@evil.example' })
+      .select()
+    expectRlsDenied(error, "a manager inserting another tenant's mail settings")
+  })
+})
+
 describe('enquiries — a manager may mark read, and nothing else', () => {
   it('can set read_at on their own enquiry', async () => {
     const { error } = await asA
@@ -166,20 +341,22 @@ describe('enquiries — a manager may mark read, and nothing else', () => {
       .from('enquiries')
       .update({ message: 'tampered' })
       .eq('id', enquiryA)
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, 'a manager rewriting an enquiry message')
 
     const { data } = await svc.from('enquiries').select('message').eq('id', enquiryA).single()
     expect(data?.message).toBe(MARKER)
   })
 
   it('cannot rewrite the resolved recipient or the delivery status', async () => {
-    expect(
+    expectRlsDenied(
       (await asA.from('enquiries').update({ to_email: 'attacker@evil.example' }).eq('id', enquiryA))
         .error,
-    ).not.toBeNull()
-    expect(
+      'a manager rewriting to_email',
+    )
+    expectRlsDenied(
       (await asA.from('enquiries').update({ status: 'sent' }).eq('id', enquiryA)).error,
-    ).not.toBeNull()
+      'a manager rewriting status',
+    )
 
     const { data } = await svc.from('enquiries').select('to_email, status').eq('id', enquiryA).single()
     expect(data).toMatchObject({ to_email: 'booking-a@example.com', status: 'queued' })

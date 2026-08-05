@@ -23,6 +23,7 @@ import {
   serviceClient,
   signInAs,
 } from './helpers/supabase'
+import { expectRlsDenied } from './helpers/rls'
 
 let artistA: string // Lone Pine, managed by A
 let artistB: string // Gulf Static, managed by B
@@ -177,6 +178,19 @@ describe('get_public_site — published snapshots only', () => {
 })
 
 describe('get_public_site — no cross-tenant leak', () => {
+  it("B's marker is genuinely live on B's own public site", async () => {
+    // Absence only proves something once presence is proven. B's revision is planted in
+    // beforeAll, but nothing confirmed it was actually REACHABLE through the public door
+    // — a change to get_public_site's filters (visibility gates, tombstones, a missing
+    // artist revision) would hide it from every payload, and the leak assertion below
+    // would then be checking that a string nobody can see is not visible.
+    const { data } = await anonClient().rpc('get_public_site', {
+      p_slug: SEED.artistBSlug,
+    })
+    expect(data, 'gulf-static has no published site — the leak test below is vacuous').not.toBeNull()
+    expect(JSON.stringify(data)).toContain(B_TRACK_TITLE)
+  })
+
   it("CRITICAL: lone-pine's payload contains none of gulf-static's content", async () => {
     const { data } = await anonClient().rpc('get_public_site', {
       p_slug: SEED.artistASlug,
@@ -191,6 +205,13 @@ describe('get_public_site — no cross-tenant leak', () => {
 })
 
 describe('integrations / secret_ref are unreachable', () => {
+  it('the B integrations fixture really exists (service role)', async () => {
+    // The two denials below both filter on artist B. Without this, deleting the fixture
+    // (or renaming the column) would leave them asserting emptiness over nothing.
+    const { data } = await svc.from('integrations').select('id').eq('artist_id', artistB)
+    expect((data ?? []).length).toBeGreaterThan(0)
+  })
+
   it("CRITICAL: manager A's authed client cannot read B's integrations row", async () => {
     const asA = await signInAs(SEED.managerA)
     const { data } = await asA
@@ -198,6 +219,31 @@ describe('integrations / secret_ref are unreachable', () => {
       .select('id, secret_ref')
       .eq('artist_id', artistB)
     expect(data).toEqual([])
+  })
+
+  it('CRITICAL: anon cannot read integrations at all', async () => {
+    // integrations_rw has no anon arm, and this table is where every external service
+    // credential pointer lives. Nothing tested the logged-out case before.
+    const { data } = await anonClient().from('integrations').select('id, secret_ref').limit(1)
+    expect(data ?? []).toEqual([])
+  })
+
+  it("CRITICAL: manager A cannot WRITE into B's integrations", async () => {
+    // A forged row here repoints another tenant's sync at an attacker-controlled secret.
+    const asA = await signInAs(SEED.managerA)
+    const insert = await asA
+      .from('integrations')
+      .insert({ artist_id: artistB, provider: `${TEST_PROVIDER}-forged`, secret_ref: 'vault://forged' })
+      .select()
+    expectRlsDenied(insert.error, "manager A inserting into B's integrations")
+
+    // UPDATE is the silent shape: RLS scopes B's row out of the statement, so PostgREST
+    // reports no error over zero matched rows. State is the only proof.
+    await asA.from('integrations').update({ secret_ref: 'vault://hijacked' }).eq('id', integrationB)
+    await asA.from('integrations').delete().eq('id', integrationB)
+    const { data } = await svc.from('integrations').select('secret_ref').eq('id', integrationB)
+    expect(data).toHaveLength(1)
+    expect(data![0].secret_ref).toBe(B_SECRET_REF)
   })
 
   it('CRITICAL: public read output never contains secret_ref or an integrations key', async () => {

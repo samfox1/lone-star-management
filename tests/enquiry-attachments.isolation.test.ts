@@ -16,6 +16,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { expectRlsDenied } from './helpers/rls'
 
 const BUCKET = 'enquiry-attachments'
 /** Minimal bytes with an audio content-type — the bucket checks the declared type. */
@@ -104,7 +105,7 @@ describe('enquiry_attachments — the row', () => {
       filename: 'forged.mp3',
       mime_type: 'audio/mpeg',
     })
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, "the owning manager inserting an attachment row")
   })
 
   it('CRITICAL: a manager cannot delete or repoint a row either', async () => {

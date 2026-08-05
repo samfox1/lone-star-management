@@ -9,29 +9,37 @@ import { signAudioUrl } from '@/lib/audio'
 import { GET } from '@/app/api/audio/[slug]/[trackId]/route'
 import { publishContent } from '@/lib/content'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { deleteAddedSince, snapshotIds } from './helpers/rls'
 
 let artistA: string
 let asA: SupabaseClient
 let publishedTrackId: string
 let unpublishedTrackId: string
 const svc = serviceClient()
+/** Every track this file inserts, so teardown can remove exactly those. */
+const createdTrackIds: string[] = []
+/** Revisions that already existed for A; publishing here adds more, and only those go. */
+let revisionsBefore: Set<string | number> | undefined
 const body = new Uint8Array([0xff, 0xfb, 0x90, 0x00, 0x11, 0x22, 0x33, 0x44])
 const audioPath = (suffix: string) => `${artistA}/audio/play-${suffix}.mp3`
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  revisionsBefore = await snapshotIds(svc, 'revisions', { artist_id: artistA, entity_type: 'track' })
   await svc.storage.from('audio').upload(audioPath('pub'), body, { contentType: 'audio/mpeg', upsert: true })
 
-  // A published, RELEASED track that carries audio. (The door only signs Released
-  // audio now — an uploaded-only demo is Unreleased and unsignable; this one is
-  // hand-added but marked released, so it's public and playable.)
+  // A published track that carries audio. The door gates on `on_site` (default true),
+  // NOT on Released — 20260710170000 decoupled the two, so an Unreleased demo that is
+  // on-site is signable and a Released track that is off-site is not. `released: true`
+  // below is a library label here, not what makes this one playable.
   const { data: pub } = await svc
     .from('tracks')
     .insert({ artist_id: artistA, title: 'AUDIO pub', source: 'manual', audio_path: audioPath('pub'), released: true })
     .select('id')
     .single()
   publishedTrackId = pub!.id
+  createdTrackIds.push(publishedTrackId)
   await publishContent(asA, 'track', artistA)
 
   // An unpublished track created AFTER the publish (no revision).
@@ -41,11 +49,15 @@ beforeAll(async () => {
     .select('id')
     .single()
   unpublishedTrackId = unp!.id
+  createdTrackIds.push(unpublishedTrackId)
 })
 
 afterAll(async () => {
-  await svc.from('tracks').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'track')
+  // Scoped to what this file created. The old teardown deleted EVERY track belonging to
+  // artist A and every one of A's track revisions — on the shared live project that
+  // destroys other suites' fixtures and the artist's real published catalogue.
+  if (createdTrackIds.length) await svc.from('tracks').delete().in('id', createdTrackIds)
+  await deleteAddedSince(svc, 'revisions', { artist_id: artistA, entity_type: 'track' }, revisionsBefore)
   await svc.storage.from('audio').remove([audioPath('pub'), audioPath('unpub'), audioPath('tomb')])
 })
 
@@ -101,6 +113,7 @@ describe('signAudioUrl', () => {
       .insert({ artist_id: artistA, title: 'AUDIO tomb', source: 'manual', audio_path: audioPath('tomb'), released: true })
       .select('id')
       .single()
+    createdTrackIds.push(t!.id)
     await publishContent(asA, 'track', artistA)
     expect(await signAudioUrl(svc, SEED.artistASlug, t!.id)).toBeTruthy()
 

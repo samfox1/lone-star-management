@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { expectRlsDenied } from './helpers/rls'
 
 let artistA: string
 let artistB: string
@@ -28,12 +29,19 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('site_content').delete().eq('artist_id', artistB)
-  await svc.from('site_content').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'site_content')
+  // Only the one row this file planted. It used to wipe every site_content row for BOTH
+  // seed artists plus all of A's site_content revisions — i.e. it deleted the editor
+  // copy of two live sites, on the shared hosted project, every run.
+  if (bRowId) await svc.from('site_content').delete().eq('id', bRowId)
 })
 
 describe('site_content tenant isolation', () => {
+  it('the B fixture really is in the table (service role)', async () => {
+    // Guard rail for the read denial below: an empty table would pass it for free.
+    const { data } = await svc.from('site_content').select('id').eq('id', bRowId)
+    expect(data).toHaveLength(1)
+  })
+
   it("CRITICAL: A cannot READ B's site_content", async () => {
     const { data } = await asA.from('site_content').select('*').eq('artist_id', artistB)
     expect(data ?? []).toHaveLength(0)
@@ -58,6 +66,6 @@ describe('site_content tenant isolation', () => {
     const { error } = await asA
       .from('site_content')
       .insert({ artist_id: artistB, key: 'x', value: 'y' })
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, "A inserting into B's site_content")
   })
 })

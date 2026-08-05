@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { expectRlsDenied } from './helpers/rls'
 
 let artistA: string
 let artistB: string
@@ -33,12 +34,18 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('videos').delete().eq('artist_id', artistB)
-  await svc.from('videos').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'video')
+  // Only the one row this file planted. It used to wipe every video for BOTH seed
+  // artists plus all of A's video revisions — state this file never created.
+  if (bRowId) await svc.from('videos').delete().eq('id', bRowId)
 })
 
 describe('videos tenant isolation', () => {
+  it('the B fixture really is in the table (service role)', async () => {
+    // Guard rail for the read denial below: an empty table would pass it for free.
+    const { data } = await svc.from('videos').select('id').eq('id', bRowId)
+    expect(data).toHaveLength(1)
+  })
+
   it("CRITICAL: A cannot READ B's videos", async () => {
     const { data } = await asA.from('videos').select('*').eq('artist_id', artistB)
     expect(data ?? []).toHaveLength(0)
@@ -58,6 +65,6 @@ describe('videos tenant isolation', () => {
 
   it("CRITICAL: A cannot INSERT into B's tenant", async () => {
     const { error } = await asA.from('videos').insert({ artist_id: artistB, ...bVideo })
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, "A inserting into B's videos")
   })
 })

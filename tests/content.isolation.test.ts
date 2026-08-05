@@ -18,6 +18,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { deleteAddedSince, snapshotIds } from './helpers/rls'
 
 type DenyCase = {
   type: CrudEntity
@@ -41,11 +42,14 @@ let asA: SupabaseClient
 const bRowIds: Record<string, string> = {}
 const aCreatedIds: { table: string; id: string }[] = []
 const svc = serviceClient()
+/** Revisions that already existed for A, so teardown removes only the ones we publish. */
+let revisionsBefore: Set<string | number> | undefined
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
   artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
+  revisionsBefore = await snapshotIds(svc, 'revisions', { artist_id: artistA })
 
   for (const c of DENY) {
     const { data, error } = await svc
@@ -59,11 +63,16 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('revisions').delete().eq('artist_id', artistA)
-    .in('entity_type', ['track', 'tour_date', 'merch', 'link'])
+  // Scoped to what this file created. The old teardown deleted EVERY track, tour date,
+  // merch item and link belonging to artist A, plus all four kinds of A's revisions —
+  // on the shared live project that wipes another suite's fixtures mid-run and leaves
+  // later denials with nothing to deny.
+  await deleteAddedSince(svc, 'revisions', { artist_id: artistA }, revisionsBefore)
   for (const c of DENY) {
-    await svc.from(c.table).delete().eq('id', bRowIds[c.type])
-    await svc.from(c.table).delete().eq('artist_id', artistA)
+    if (bRowIds[c.type]) await svc.from(c.table).delete().eq('id', bRowIds[c.type])
+  }
+  for (const { table, id } of aCreatedIds) {
+    await svc.from(table).delete().eq('id', id)
   }
 })
 

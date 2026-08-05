@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
+import { expectRlsDenied } from './helpers/rls'
 
 let artistA: string
 let artistB: string
@@ -30,12 +31,20 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('releases').delete().eq('artist_id', artistB)
-  await svc.from('releases').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'release')
+  // Only the one row this file planted. It used to wipe every release for BOTH seed
+  // artists plus all of A's release revisions — on the shared live project that destroys
+  // state this file never created, and leaves the next run asserting denials over an
+  // empty table.
+  if (bRowId) await svc.from('releases').delete().eq('id', bRowId)
 })
 
 describe('releases tenant isolation', () => {
+  it("the B fixture really is in the table (service role)", async () => {
+    // Guard rail for the read denial below: an empty table would pass it for free.
+    const { data } = await svc.from('releases').select('id').eq('id', bRowId)
+    expect(data).toHaveLength(1)
+  })
+
   it("CRITICAL: A cannot READ B's releases", async () => {
     const { data } = await asA.from('releases').select('*').eq('artist_id', artistB)
     expect(data ?? []).toHaveLength(0)
@@ -55,6 +64,6 @@ describe('releases tenant isolation', () => {
 
   it("CRITICAL: A cannot INSERT into B's tenant", async () => {
     const { error } = await asA.from('releases').insert({ artist_id: artistB, ...bRelease, slug: 'b-evil' })
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, "A inserting into B's releases")
   })
 })

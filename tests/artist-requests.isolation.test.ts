@@ -12,6 +12,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, serviceClient, signInAs } from './helpers/supabase'
+import { expectRlsDenied } from './helpers/rls'
 
 let uidA: string // manager A's auth id
 let uidB: string // manager B's auth id
@@ -79,7 +80,7 @@ describe('artist_requests isolation', () => {
       .from('artist_requests')
       .insert({ requested_by: uidB, name: 'spoof' })
       .select()
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, 'a requested_by spoof')
   })
 
   it('manager A can file their own request', async () => {
@@ -97,15 +98,47 @@ describe('artist_requests isolation', () => {
       .from('artist_requests')
       .insert({ requested_by: uidA, name: 'ISO-REQ A live', status: 'live' })
       .select()
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, 'a manager self-inserting at status=live')
   })
 
-  it('rejects an out-of-enum status (CHECK constraint)', async () => {
+  it('a manager supplying ANY non-requested status is stopped by RLS, before the CHECK', async () => {
+    // Note which mechanism fires. artist_requests_insert pins status = 'requested', so a
+    // manager's row is refused with 42501 and the status CHECK is never evaluated at all.
+    // This test used to be titled "rejects an out-of-enum status (CHECK constraint)" and
+    // asserted only `error !== null` — so it passed for a reason other than the one it
+    // claimed, and would have gone on passing if the CHECK were dropped entirely. The
+    // constraint gets its own test below, run as a caller who actually reaches it.
     const { error } = await asA
       .from('artist_requests')
       .insert({ requested_by: uidA, name: 'ISO-REQ A bogus', status: 'bogus' })
       .select()
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, 'a manager inserting a non-requested status')
+  })
+
+  it('the status CHECK constraint rejects an out-of-enum value (exercised as admin)', async () => {
+    // Admin passes the insert policy, so the CHECK is the only thing left to refuse the
+    // row: 23514. Drop the constraint and this goes green-to-red; the manager-side test
+    // above would not notice.
+    const { data, error } = await asAdmin
+      .from('artist_requests')
+      .insert({ requested_by: uidA, name: 'ISO-REQ admin bogus', status: 'bogus' })
+      .select('id')
+    expect(error?.code, `expected a CHECK violation, got [${error?.code}] ${error?.message}`).toBe(
+      '23514',
+    )
+    expect(error?.message ?? '').toContain('artist_requests_status_check')
+    // Belt and braces: if the constraint were gone the row would exist and need cleanup.
+    if (data?.length) createdByTest.push(data[0].id)
+  })
+
+  it('admin CAN insert a valid status (so the test above measures the CHECK, not the policy)', async () => {
+    const { data, error } = await asAdmin
+      .from('artist_requests')
+      .insert({ requested_by: uidA, name: 'ISO-REQ admin ok', status: 'in_build' })
+      .select('id')
+    expect(error).toBeNull()
+    expect(data).toHaveLength(1)
+    createdByTest.push(data![0].id)
   })
 
   it("CRITICAL: manager A cannot advance their own request's status", async () => {
@@ -150,6 +183,6 @@ describe('unauthenticated access to artist_requests', () => {
       .from('artist_requests')
       .insert({ requested_by: uidA, name: 'anon' })
       .select()
-    expect(error).not.toBeNull()
+    expectRlsDenied(error, 'anon filing a request')
   })
 })
