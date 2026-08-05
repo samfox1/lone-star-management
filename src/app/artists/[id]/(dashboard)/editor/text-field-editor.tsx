@@ -74,12 +74,16 @@ export function TextFieldEditor({
         </p>
       ) : (
       <div className="px-5 pt-4">
+        {/* The site's own fallback as the PLACEHOLDER, so opening an untouched field
+            shows the words that are actually on the page rather than an empty box that
+            reads as missing content. Typing replaces it; clearing brings it back. */}
         {field.multiline ? (
           <textarea
             autoFocus
             value={value}
             onChange={(e) => onEdit(e.target.value)}
             aria-label={field.label}
+            placeholder={field.defaultValue ?? ''}
             className={cx(FIELD, 'min-h-32 resize-y leading-relaxed')}
           />
         ) : (
@@ -89,6 +93,7 @@ export function TextFieldEditor({
             value={value}
             onChange={(e) => onEdit(e.target.value)}
             aria-label={field.label}
+            placeholder={field.defaultValue ?? ''}
             className={FIELD}
           />
         )}

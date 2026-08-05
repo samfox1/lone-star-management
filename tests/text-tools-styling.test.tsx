@@ -122,6 +122,29 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(screen.getByDisplayValue('book@example.com')).toBeTruthy()
   })
 
+  it('gives every text slider at least ten stops', () => {
+    // The ask: "each one has like 5 or 6 locations to slide to, I would like double that".
+    // A coarse scale is not just inconvenient — the value the manager wants often is not on
+    // the slider at all.
+    //
+    // Nine, not ten, because Thickness tops out there: nine is EVERY Tailwind weight, and
+    // going finer would mean arbitrary `font-[350]` values that only render on a variable
+    // font and silently round everywhere else. It was four, so it still more than doubled.
+    for (const c of buildTextItemStyleControls(OPTIONS)) {
+      if (c.kind !== 'slider') continue
+      expect(sliderSteps(c).length, `${c.id} stops`).toBeGreaterThanOrEqual(9)
+    }
+  })
+
+  it('keeps every scale strictly ascending, with no duplicate values', () => {
+    // A repeated or out-of-order step makes the handle jump or sit on two places at once.
+    for (const c of buildTextItemStyleControls(OPTIONS)) {
+      if (c.kind !== 'slider') continue
+      const values = sliderSteps(c).map((s) => s.value)
+      expect(new Set(values).size, `${c.id} duplicates`).toBe(values.length)
+    }
+  })
+
   it('offers Line spacing and Letter spacing, ascending, default off-scale', () => {
     // Sam could not touch either from the editor: the gap between stacked lines and
     // between letters was whatever the site declared, full stop.
@@ -131,7 +154,8 @@ describe('TextFieldEditor — one field, full panel', () => {
       expect(c, id).toBeTruthy()
       const steps = sliderSteps(c!)
       expect(steps.some((s) => s.value === ''), `${id} default off-scale`).toBe(false)
-      expect(steps.length).toBeGreaterThan(2)
+      // Fine-grained: the coarse 5-6 stop scales were the complaint.
+      expect(steps.length, `${id} stops`).toBeGreaterThanOrEqual(11)
     }
   })
 
@@ -166,12 +190,22 @@ describe('TextFieldEditor — one field, full panel', () => {
     const size = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
     const steps = sliderSteps(size)
     expect(steps.some((s) => s.value === '')).toBe(false)
+    // Ascending, and FINE: Sam asked for roughly double the stops so he can land between
+    // the friendly five this used to offer.
     expect(steps.map((s) => s.value)).toEqual([
+      'text-xs',
       'text-sm',
+      'text-base',
       'text-lg',
+      'text-xl',
       'text-2xl',
+      'text-3xl',
       'text-4xl',
+      'text-5xl',
       'text-6xl',
+      'text-7xl',
+      'text-8xl',
+      'text-9xl',
     ])
   })
 
@@ -305,5 +339,41 @@ describe('TextFieldEditor — one field, full panel', () => {
     )
     fireEvent.click(screen.getByLabelText('Back'))
     expect(onBack).toHaveBeenCalled()
+  })
+})
+
+describe('the site’s own fallback is visible, not just absent', () => {
+  it('CRITICAL: an untouched field shows the site’s words as its placeholder', () => {
+    // A custom site keeps its fallbacks in code, so a field with no stored row is empty
+    // in the database while the page shows real words. Opening it to a blank box reads
+    // as missing content — the manager is looking at "SKEEN" on screen and an empty
+    // input in the panel.
+    render(
+      <TextFieldEditor
+        field={{ ...styled, value: '', defaultValue: 'SKEEN' }}
+        value=""
+        status="idle"
+        styleValues={{}}
+        onEdit={vi.fn()}
+        onStyle={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    expect((screen.getByLabelText('Hero title') as HTMLInputElement).placeholder).toBe('SKEEN')
+  })
+
+  it('a stored value wins over the placeholder', () => {
+    render(
+      <TextFieldEditor
+        field={{ ...styled, defaultValue: 'SKEEN' }}
+        value="Skeen Live"
+        status="idle"
+        styleValues={{}}
+        onEdit={vi.fn()}
+        onStyle={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    expect(screen.getByDisplayValue('Skeen Live')).toBeTruthy()
   })
 })
