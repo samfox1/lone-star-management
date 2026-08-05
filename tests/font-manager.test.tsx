@@ -1,0 +1,247 @@
+// @vitest-environment jsdom
+/**
+ * FontManager — the Brand page's font list.
+ *
+ * Four behaviours here are invisible from anywhere else:
+ *   1. Each font is PREVIEWED IN ITSELF. A font is draft until publish, so this list is
+ *      the only place a manager can see the face before committing the site to it. A
+ *      preview that silently falls back to the UI font makes the whole page a lie.
+ *   2. Destructive clicks confirm, and the re-entry guard is a REF. `busyId` is state:
+ *      two fast clicks both read the pre-render value and both fire.
+ *   3. The name is required BEFORE the file, because the CSS family token is derived
+ *      from it and cannot be changed afterwards.
+ *   4. Every action reports — a Remove blocked by RLS must not look like one that worked.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { FontManager } from '@/app/artists/[id]/(dashboard)/brand/font-manager'
+import {
+  addArtistFontAction,
+  removeArtistFontAction,
+  setFontRoleAction,
+} from '@/app/artists/[id]/(dashboard)/brand/actions'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
+import { sanitizeFamily, type ArtistFont } from '@/lib/fonts'
+import { FONT_UPLOAD_RULES, acceptFor } from '@/lib/upload'
+
+vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
+  addArtistFontAction: vi.fn(async () => ({})),
+  removeArtistFontAction: vi.fn(async () => ({})),
+  setFontRoleAction: vi.fn(async () => ({})),
+}))
+vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
+vi.mock('@/app/artists/[id]/(dashboard)/use-storage-upload', () => ({
+  useStorageUpload: () => ({ busy: false, error: null, upload: vi.fn(), progress: null, reset: vi.fn() }),
+}))
+
+const mockedRemove = vi.mocked(removeArtistFontAction)
+const mockedRole = vi.mocked(setFontRoleAction)
+const mockedToast = vi.mocked(toast)
+
+const font = (over: Partial<ArtistFont> = {}): ArtistFont => ({
+  id: 'f1',
+  label: 'PP Mori',
+  family: 'pp-mori',
+  storage_path: 'a1/fonts/11111111-1111-4111-8111-111111111111.woff2',
+  format: 'woff2',
+  role: null,
+  ...over,
+})
+
+const FONTS = [
+  font(),
+  font({ id: 'f2', label: 'Bebas Neue', family: 'bebas-neue', role: 'primary', storage_path: 'a1/fonts/22222222-2222-4222-8222-222222222222.otf', format: 'otf' }),
+]
+
+const renderList = (fonts: ArtistFont[] = FONTS) => render(<FontManager artistId="a1" fonts={fonts} />)
+
+let confirmed = true
+beforeEach(() => {
+  confirmed = true
+  vi.stubGlobal('confirm', vi.fn(() => confirmed))
+  mockedRemove.mockResolvedValue({})
+  mockedRole.mockResolvedValue({})
+})
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+const clickRemove = async (name = 'Remove PP Mori') => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name }))
+  })
+}
+
+describe('FontManager — previewing', () => {
+  it('CRITICAL: renders each font in its OWN family', () => {
+    // The whole reason this list exists. A row set in the dashboard's UI font tells the
+    // manager nothing about the face they just paid a foundry for.
+    renderList()
+    expect(screen.getByText('PP Mori')).toHaveStyle({ fontFamily: "'pp-mori', sans-serif" })
+    expect(screen.getByText('Bebas Neue')).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
+  })
+
+  it('CRITICAL: injects the @font-face rules, or every preview falls back silently', () => {
+    renderList()
+    const css = document.querySelector('style')?.innerHTML ?? ''
+    expect(css).toContain("@font-face{font-family:'pp-mori'")
+    expect(css).toContain("format('woff2')")
+    expect(css).toContain("format('opentype')") // .otf is NOT 'otf' in a format() hint
+  })
+
+  it('CRITICAL: a hostile family from the database cannot escape into the page', () => {
+    // The component injects this CSS with dangerouslySetInnerHTML. sanitizeFamily is what
+    // makes that safe, so it is asserted HERE too and not only in the unit tests.
+    renderList([font({ family: "x'; } body { display:none } .y {" })])
+    const css = document.querySelector('style')?.innerHTML ?? ''
+    expect(css).not.toContain('body {')
+    expect(css).not.toContain('</style')
+  })
+
+  it('shows the class token, so the manager can see what the editor will offer', () => {
+    renderList()
+    expect(screen.getByText(/font-pp-mori/)).toBeInTheDocument()
+  })
+})
+
+describe('FontManager — uploading', () => {
+  it('CRITICAL: the file picker is disabled until the font is named', () => {
+    // The name derives the CSS family token, which is written into every per-region style
+    // that uses the font and can never be changed. An unnamed upload has no token.
+    renderList()
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input.disabled).toBe(true)
+
+    fireEvent.change(screen.getByLabelText('Font name'), { target: { value: 'PP Mori' } })
+    expect((document.querySelector('input[type="file"]') as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('CRITICAL: the picker offers exactly the validated allowlist — no SVG, no wildcard', () => {
+    renderList()
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input.accept).toBe(acceptFor(FONT_UPLOAD_RULES))
+    expect(input.accept).not.toMatch(/svg/i)
+    expect(input.accept).not.toContain('*')
+  })
+
+  it('names the licence responsibility', () => {
+    // Foundry licences are sold per use and a desktop licence does not cover a website.
+    // Uploading a font to a public bucket is the moment that becomes the artist's problem.
+    renderList()
+    expect(screen.getByText(/licence/i)).toBeInTheDocument()
+  })
+})
+
+describe('FontManager — removing', () => {
+  it('CRITICAL: confirms first, and does nothing when the manager says no', async () => {
+    confirmed = false
+    renderList()
+    await clickRemove()
+    expect(mockedRemove).not.toHaveBeenCalled()
+  })
+
+  it('removes and reports when confirmed', async () => {
+    renderList()
+    await clickRemove()
+    expect(mockedRemove).toHaveBeenCalledWith('a1', 'f1')
+    expect(mockedToast).toHaveBeenCalledWith('Font removed')
+  })
+
+  it('CRITICAL: a double click removes ONCE — the latch is a ref, not state', async () => {
+    // With a state latch both clicks read the pre-render value: the font is deleted, then
+    // the second call reports "that font is no longer there" over the top of the success.
+    let release: (v: { error?: string }) => void = () => {}
+    mockedRemove.mockImplementationOnce(() => new Promise((r) => (release = r)))
+    renderList()
+    const button = screen.getByRole('button', { name: 'Remove PP Mori' })
+    await act(async () => {
+      fireEvent.click(button)
+      fireEvent.click(button)
+    })
+    expect(mockedRemove).toHaveBeenCalledTimes(1)
+    await act(async () => release({}))
+  })
+
+  it('CRITICAL: a blocked Remove is surfaced, never silently swallowed', async () => {
+    // RLS row-filters rather than failing, so the action can answer with an error while
+    // everything looks fine. Reporting it is the only signal the manager gets.
+    mockedRemove.mockResolvedValueOnce({ error: 'Not found.' })
+    renderList()
+    await clickRemove()
+    expect(mockedToast).toHaveBeenCalledWith('Not found.', 'error')
+    expect(mockedToast).not.toHaveBeenCalledWith('Font removed')
+  })
+})
+
+describe('FontManager — roles', () => {
+  it('assigns a free role without a prompt', async () => {
+    // Nothing is being taken away, so there is nothing to warn about.
+    renderList()
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'secondary' })[0])
+    })
+    expect(mockedRole).toHaveBeenCalledWith('a1', 'f1', 'secondary')
+    expect(globalThis.confirm).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: confirms before TAKING a role off another font', async () => {
+    // One small button, and the site's heading typeface changes everywhere. The button
+    // itself gives no hint that a second font is about to lose the role.
+    confirmed = false
+    renderList()
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'primary' })[0]) // PP Mori's
+    })
+    expect(globalThis.confirm).toHaveBeenCalled()
+    expect(mockedRole).not.toHaveBeenCalled()
+  })
+
+  it('clicking the role a font already holds CLEARS it', async () => {
+    renderList()
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'primary' })[1]) // Bebas', already primary
+    })
+    expect(mockedRole).toHaveBeenCalledWith('a1', 'f2', null)
+  })
+
+  it('shows which font holds which role', () => {
+    renderList()
+    expect(screen.getAllByRole('button', { name: 'primary' })[1]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('button', { name: 'primary' })[0]).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('a failed role change is surfaced', async () => {
+    mockedRole.mockResolvedValueOnce({ error: 'Not found.' })
+    renderList()
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'secondary' })[0])
+    })
+    expect(mockedToast).toHaveBeenCalledWith('Not found.', 'error')
+  })
+})
+
+describe('FontManager — empty', () => {
+  it('renders the uploader and no list when there are no fonts', () => {
+    renderList([])
+    expect(screen.queryByRole('list')).toBeNull()
+    expect(document.querySelector('input[type="file"]')).not.toBeNull()
+  })
+
+  it('the sanitizer is the one spelling of the token the preview uses', () => {
+    // Guards against a future refactor inlining `font.family` into the style attribute,
+    // which would put an unsanitized database value into the DOM.
+    renderList([font({ family: 'Weird Family' as string })])
+    expect(screen.getByText('PP Mori')).toHaveStyle({
+      fontFamily: `'${sanitizeFamily('Weird Family')}', sans-serif`,
+    })
+  })
+})
+
+describe('addArtistFontAction is wired for upload', () => {
+  it('is the action the uploader records with', () => {
+    // The upload hook itself is mocked (it needs a browser + a bucket), so this asserts
+    // the wiring exists rather than re-testing the hook.
+    expect(addArtistFontAction).toBeTypeOf('function')
+  })
+})

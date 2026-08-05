@@ -12,6 +12,8 @@
  */
 import { revalidatePath } from 'next/cache'
 import { type BrandPurpose, saveFraming, setBrandAsset } from '@/lib/brand'
+import { type FontRole, removeArtistFont, setArtistFont, setFontRole } from '@/lib/fonts'
+import { gcFontObjects } from '@/lib/storage-gc'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from '../_owns'
 
@@ -45,6 +47,57 @@ export async function saveFramingAction(
   if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
   const res = await saveFraming(supabase, artistId, framing)
   if (!res.ok) return { error: res.error ?? 'Could not save the icon framing.' }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/* ── Custom fonts (lib/fonts.ts) ──────────────────────────────────────────── */
+
+/**
+ * Record a font the browser has just uploaded to the `fonts` bucket.
+ *
+ * `callerOwns` first, before anything else, for the reason `_owns.ts` documents: RLS
+ * ROW-FILTERS a blocked write rather than failing it, so without this a non-manager's
+ * call returns `{}` and reads as success in the UI.
+ */
+export async function addArtistFontAction(
+  artistId: string,
+  input: { label: string; storagePath: string; format: string },
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
+  const res = await setArtistFont(supabase, artistId, input)
+  if (!res.ok) return { error: res.error ?? 'Could not save that font.' }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/** Remove a font, then sweep the bucket. The sweep keeps anything a PUBLISHED revision
+ *  still names, so removing a font that is live on the site does not pull the file out
+ *  from under it before the removal is published. */
+export async function removeArtistFontAction(artistId: string, fontId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
+  const res = await removeArtistFont(supabase, artistId, fontId)
+  if (!res.ok) return { error: res.error ?? 'Could not remove that font.' }
+  // Best-effort and deliberately after the row is gone: an uncollected object costs
+  // storage, a failed sweep must not cost the manager their delete.
+  await gcFontObjects(supabase, artistId)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/** Assign or clear a site-wide role. `role` arrives from the client, so it is checked
+ *  against the allowed set in `setFontRole` rather than trusted into an UPDATE. */
+export async function setFontRoleAction(
+  artistId: string,
+  fontId: string,
+  role: FontRole | null,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
+  const res = await setFontRole(supabase, artistId, fontId, role)
+  if (!res.ok) return { error: res.error ?? 'Could not change that font.' }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

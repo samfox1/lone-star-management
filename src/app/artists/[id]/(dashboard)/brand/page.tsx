@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { loadFraming } from '@/lib/brand'
+import { listArtistFonts } from '@/lib/fonts'
 import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
 import { createClient } from '@/lib/supabase/server'
 import { Icon } from '@/components/ui/icons'
 import { requireArtist } from '../_data'
 import { FaviconEditor } from './favicon-editor'
+import { FontManager } from './font-manager'
 import { LogoUpload } from './logo-upload'
 
 /**
@@ -28,9 +30,10 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
   // `loadFraming` rather than an inline copy of the same query + cast + cleanFraming:
   // an inline copy made the tested function the one nobody ran, so the tests covered a
   // path that was not the shipped path. It returns a promise, so parallelism is kept.
-  const [{ data: assets }, framing] = await Promise.all([
+  const [{ data: assets }, framing, fonts] = await Promise.all([
     supabase.from('media').select('purpose, storage_path').eq('artist_id', id).in('purpose', ['logo_primary', 'logo_secondary']),
     loadFraming(supabase, id),
+    listArtistFonts(supabase, id),
   ])
 
   const pathOf = (purpose: string) =>
@@ -101,6 +104,19 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           that gets used.
         </p>
         <FaviconEditor artistId={id} logoUrl={primary} initialFraming={framing} />
+      </section>
+
+      {/* Fonts sit with the logos, not on the site editor: a typeface is what the artist
+          IS, the same as the mark, and it is chosen once rather than per page. The editor
+          then offers every font uploaded here in its per-region dropdown. */}
+      <section className="space-y-3 border-t border-hairline pt-8">
+        <h2 className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">Fonts</h2>
+        <p className="font-space text-xs leading-relaxed text-ink-faint">
+          Upload the fonts the site is set in. Primary is headings and display type,
+          secondary is body text. Any font here can also be picked for one part of the
+          site in the editor. Draft until you publish.
+        </p>
+        <FontManager artistId={id} fonts={fonts} />
       </section>
     </div>
   )

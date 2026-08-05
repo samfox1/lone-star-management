@@ -48,6 +48,51 @@ export const DOCUMENT_UPLOAD_RULES: UploadRules = {
   maxBytes: 10485760, // 10 MB
   allowedMime: ['application/pdf'],
 }
+/**
+ * Uploaded FONT files (lib/fonts.ts). Four formats: woff2 is what should actually ship,
+ * the other three because a foundry licence often hands over only a TTF or OTF.
+ *
+ * SVG is absent and must stay absent. An SVG "font" is a dead format and a live
+ * script-execution vector, and the `fonts` bucket is PUBLIC-READ — a fan's browser
+ * fetches the file directly — so one served as image/svg+xml from the Supabase origin is
+ * stored XSS on that origin.
+ *
+ * 2 MB, well under the image cap: this file blocks first paint of the artist's own name,
+ * and a subsetted woff2 is 20-80 KB. A 15 MB TTF with every CJK glyph in it is not a
+ * thing to serve a fan on mobile data.
+ *
+ * THE MIME LIST IS DELIBERATELY WIDE, and it is the client-side half only. What browsers
+ * report for these extensions was measured, not assumed: macOS reports `font/ttf` for a
+ * .ttf and NOTHING at all for a .woff2 (no registered UTI), Windows reports
+ * `application/octet-stream` for .ttf and .otf because neither has a registry mime entry,
+ * and older Linux stacks still say `application/x-font-ttf`. A strict list here rejects
+ * real fonts on real machines, so TTF and OTF are effectively matched by EXTENSION.
+ * That costs nothing, because the guard that matters is elsewhere: the uploader sends
+ * `contentTypeFor(ext)` — always one of the four `font/*` types — and the bucket's
+ * allowed_mime_types accepts ONLY those four. `application/octet-stream` appears here and
+ * must NEVER appear in the bucket's list, where it would admit any file at all.
+ */
+export const FONT_UPLOAD_RULES: UploadRules = {
+  allowedExt: ['woff2', 'woff', 'ttf', 'otf'],
+  maxBytes: 2097152, // 2 MB
+  allowedMime: [
+    'font/woff2',
+    'font/woff',
+    'font/ttf',
+    'font/otf',
+    'font/sfnt',
+    'application/font-woff',
+    'application/x-font-woff',
+    'application/font-woff2',
+    'application/x-font-ttf',
+    'application/x-font-truetype',
+    'application/x-font-otf',
+    'application/x-font-opentype',
+    'application/vnd.ms-opentype',
+    'application/font-sfnt',
+    'application/octet-stream',
+  ],
+}
 
 /** Human-readable size, binary (MiB) so it matches the bucket's file_size_limit and
  *  the "up to 500 MB" hints: 524288000 → "500 MB", 31457280 → "30 MB". */
@@ -154,6 +199,14 @@ const CONTENT_TYPES: Record<string, string> = {
   webp: 'image/webp',
   gif: 'image/gif',
   pdf: 'application/pdf',
+  // The RFC 8081 `font/*` types, which is what the `fonts` bucket allows. Set explicitly
+  // for exactly the reason this map exists: browsers report fonts inconsistently (macOS
+  // sends nothing for a .woff2, Windows sends application/octet-stream for a .ttf), and
+  // an upload carrying either of those is refused by the bucket.
+  woff2: 'font/woff2',
+  woff: 'font/woff',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
 }
 /** A content-type the bucket's allowed_mime_types will accept (browsers report some
  *  formats inconsistently, so we set it explicitly rather than trust file.type). */
