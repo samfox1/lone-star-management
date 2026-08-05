@@ -169,6 +169,11 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     title: r.title as string,
   }))
 
+  // Merge targets span the WHOLE catalog, not just the visible bucket: the sync's refusal
+  // to guess a cross-platform match leaves the two halves of one song wherever they landed,
+  // and a Released row's twin is routinely an Unreleased upload (or the reverse).
+  const mergeTargets = tracks.map((t) => ({ id: t.id, title: t.title }))
+
   return (
     <AssetsShell artistId={id} active="music">
     <MusicBrowser
@@ -177,6 +182,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       orphanSingles={orphanSingles}
       unreleasedSongs={unreleasedSongs}
       releaseOptions={releaseOptions}
+      mergeTargets={mergeTargets}
       artistId={id}
       artistSlug={artist.slug}
       refreshAction={refreshMusicAction.bind(null, id)}

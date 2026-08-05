@@ -1,45 +1,52 @@
 /**
- * MIRROR TEST — "Released" is ONE rule with THREE implementations. This file is the
+ * MIRROR TEST — "Released" is ONE rule with TWO implementations left. This file is the
  * only thing that stops them drifting silently:
  *
- *   1. src/lib/music.ts            — releaseBucket / trackBucket (the source of truth)
- *   2. the SQL doors               — music_release_is_released / music_track_on_platform
- *   3. lone-star-agent's copilot   — releaseIsReleased / trackIsReleased
+ *   1. @lone-star/music-rules  — releaseIsReleased / trackIsReleased, re-exported by
+ *                                src/lib/music.ts as releaseBucket / trackBucket
+ *   2. the SQL doors           — music_release_is_released / music_track_on_platform
  *
- * Each of the three gets the SAME fixtures and must return the SAME answer. Two real
- * disagreements were live when this file was written:
+ * Both get the SAME fixtures and must return the SAME answer. Two real disagreements
+ * were live when this file was written:
  *
  *   - the SQL mirror did not count `deezer_url`, so a manager-entered Deezer link made a
  *     song Released in the app and Unreleased in Postgres. Harmless only by accident —
  *     20260710170000 removed music_track_on_platform's last door caller, so it was a
  *     loaded gun with no trigger. Closed by 20260805120000.
- *   - the copilot used `inherited ?? own` — the PRE-20260710160000 NARROWING inheritance
- *     that the widen-only migration explicitly reverted — and omitted `released`,
+ *   - the copilot (a THIRD, hand-kept TypeScript copy in lone-star-agent) used
+ *     `inherited ?? own` — the PRE-20260710160000 NARROWING inheritance that the
+ *     widen-only migration explicitly reverted — and omitted `released`,
  *     `soundcloud_url` and `deezer_url`. It reported a platform-linked song inside an
- *     Unreleased album as Unreleased.
+ *     Unreleased album as Unreleased, and did so in production for weeks.
  *
- * Why three copies at all: the copilot is a separately deployed package
- * (lone-star-agent/, its own package.json + Vercel build root), so it cannot import
- * src/lib/music.ts without escaping its deploy root. Until the rule is extracted into a
- * shared workspace package, this test IS the link between them.
+ * THE THIRD COPY IS GONE. It existed only because lone-star-agent is a separately
+ * deployed package (own package.json, own Vercel build root) that could not import
+ * `../src/lib/music` without escaping that root. The rule now lives in
+ * `packages/music-rules`, an npm workspace package with zero dependencies that both the
+ * Next app and the standalone Node agent depend on by name. `describe('one TypeScript
+ * copy')` below proves that by REFERENCE IDENTITY — a re-added copy would be a
+ * different function object and fail — and by scanning the agent's source for the
+ * rule's shape.
+ *
+ * WHY THE SQL MIRROR STILL EXISTS (and is not deleted too): the public doors run
+ * INSIDE Postgres. `get_public_site` and friends are SECURITY DEFINER functions that
+ * decide Released-only visibility in the same query that reads the rows — anon never
+ * executes our TypeScript, so the rule has to be expressible in SQL or the door cannot
+ * enforce it. That copy is irreducible; this test is its leash.
  *
  * The SQL functions are revoked from anon/authenticated, so they are called with the
  * service-role client — this file asserts pure classification, never RLS.
  */
+import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { releaseBucket, trackBucket, type ReleaseProvenance, type TrackProvenance } from '@/lib/music'
-import {
-  releaseIsReleased as copilotReleaseIsReleased,
-  trackIsReleased as copilotTrackIsReleased,
-  type ReleaseProvenanceRow,
-  type TrackProvenanceRow,
-} from '../lone-star-agent/agent/lib/lonestar'
+import * as musicRules from '@lone-star/music-rules'
 import { serviceClient } from './helpers/supabase'
 
 const svc = serviceClient()
 
-type TrackRow = TrackProvenance & TrackProvenanceRow
-type ReleaseRow = ReleaseProvenance & ReleaseProvenanceRow
+type TrackRow = TrackProvenance
+type ReleaseRow = ReleaseProvenance
 
 /** Every provenance column the rule reads, all empty — fixtures set one at a time. */
 const TRACK_BASE: TrackRow = {
@@ -122,29 +129,27 @@ beforeAll(async () => {
   ])
 })
 
-describe('releaseBucket mirrors music_release_is_released (and the copilot)', () => {
+describe('releaseBucket mirrors music_release_is_released', () => {
   it.each(RELEASES.map((f) => [f.name, f] as const))('%s', (_name, f) => {
     const ts = releaseBucket(f.row) === 'released'
-    expect({ sql: sqlReleaseAnswer.get(f.name), copilot: copilotReleaseIsReleased(f.row) })
-      .toEqual({ sql: ts, copilot: ts })
+    expect(sqlReleaseAnswer.get(f.name)).toBe(ts)
   })
 })
 
-describe('trackBucket (loose) mirrors music_track_on_platform (and the copilot)', () => {
+describe('trackBucket (loose) mirrors music_track_on_platform', () => {
   it.each(TRACKS.map((f) => [f.name, f] as const))('%s', (_name, f) => {
     const ts = trackBucket(f.row) === 'released'
-    expect({ sql: sqlTrackAnswer.get(f.name), copilot: copilotTrackIsReleased(f.row, undefined) })
-      .toEqual({ sql: ts, copilot: ts })
+    expect(sqlTrackAnswer.get(f.name)).toBe(ts)
   })
 })
 
 /**
- * Release membership is WIDEN-ONLY in all three: `own OR release`. The SQL doors spell it
+ * Release membership is WIDEN-ONLY in both: `own OR release`. The SQL doors spell it
  * out at the call site (`music_track_on_platform(t) or coalesce(rel.released, false)` —
  * 20260710160000), so the mirror here is that same composition. `inherited ?? own`
  * NARROWS, and is the bug this block exists to catch.
  */
-describe('widen-only membership mirrors across all three', () => {
+describe('widen-only membership mirrors across both', () => {
   const linked = trk('platform-linked song', { spotify_id: 'sp1' })
   const bare = trk('bare manual song')
   const releasedAlbum = rel('released album', { spotify_id: 'al1' })
@@ -162,6 +167,33 @@ describe('widen-only membership mirrors across all three', () => {
     const releaseIsRel = releaseBucket(c.r.row) === 'released'
     const ts = trackBucket(parented, () => (releaseIsRel ? 'released' : 'unreleased')) === 'released'
     const sql = (await sqlTrack(parented)) || (await sqlRelease(c.r.row))
-    expect({ sql, copilot: copilotTrackIsReleased(parented, releaseIsRel) }).toEqual({ sql: ts, copilot: ts })
+    expect(sql).toBe(ts)
+    // The boolean-shaped entry point the agent calls must compose identically to the
+    // bucket-shaped one the app calls — they are two faces of one function, and the
+    // agent's face is the one that carried the narrowing bug.
+    expect(musicRules.trackIsReleased(parented, releaseIsRel)).toBe(ts)
+  })
+})
+
+/**
+ * ONE TypeScript copy, enforced two ways. The copilot's copy went four weeks reporting
+ * the wrong answer in production because nothing could see it; fixture agreement alone
+ * cannot see a copy that is merely CORRECT TODAY, so this asserts single-sourcing itself.
+ */
+describe('one TypeScript copy', () => {
+  // Reference identity: src/lib/music.ts must RE-EXPORT the package's functions, not
+  // wrap or re-derive them. A reintroduced app-side copy is a different function object.
+  it('src/lib/music.ts re-exports the package functions verbatim', () => {
+    expect(releaseBucket).toBe(musicRules.releaseBucket)
+    expect(trackBucket).toBe(musicRules.trackBucket)
+  })
+
+  // The agent is a separate deploy, so it cannot be checked by identity from here in a
+  // way that survives it being bundled — its source is checked instead. `!== 'manual'`
+  // is the rule's fingerprint: every copy of it, in every language, contains that test.
+  it('lone-star-agent holds no copy of the rule, only DB wiring', () => {
+    const src = readFileSync(new URL('../lone-star-agent/agent/lib/lonestar.ts', import.meta.url), 'utf8')
+    expect(src).toContain('@lone-star/music-rules')
+    expect(src).not.toMatch(/!==\s*["']manual["']/)
   })
 })

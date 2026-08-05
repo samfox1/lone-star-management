@@ -17,6 +17,7 @@ import { ReleaseCard, type Release } from '../releases/release-card'
 import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 import { RefreshButton } from './refresh-button'
 import { SongAddButton } from './song-add'
+import { type MergeTarget } from './merge-song-modal'
 
 /** Group key for unreleased songs that aren't on any release. */
 export const LOOSE = 'loose'
@@ -103,6 +104,7 @@ export function MusicBrowser({
   orphanSingles,
   unreleasedSongs,
   releaseOptions,
+  mergeTargets,
   artistId,
   artistSlug,
   refreshAction,
@@ -120,6 +122,11 @@ export function MusicBrowser({
   unreleasedSongs: UnreleasedSong[]
   /** Options for the per-song "assign to release" selector (ALL releases). */
   releaseOptions: ReleaseOption[]
+  /** Every song in the catalog, for "Merge into…". The sync REFUSES an uncertain
+   *  cross-platform match rather than risk absorbing a song, so duplicates land here for
+   *  the manager to resolve — and a duplicate's twin can be anywhere in the catalog, not
+   *  just in the same bucket or section. */
+  mergeTargets: MergeTarget[]
   artistId: string
   artistSlug: string
   refreshAction: () => Promise<{ ok: boolean; error?: string }>
@@ -163,10 +170,20 @@ export function MusicBrowser({
     (k) => (k === LOOSE ? 'Not on a release' : (labels.get(k) ?? k)),
   )
 
+  // A song can never be its own merge target — the server refuses it, but offering it at
+  // all invites the manager to try to delete the row they are standing on.
+  const targetsFor = (id: string) => mergeTargets.filter((t) => t.id !== id)
+
   const songGrid = (items: (MusicSong | UnreleasedSong)[]) => (
     <CardGrid size="sm" count={items.length}>
       {items.map((t) => (
-        <TrackCard key={t.id} artistId={artistId} track={t} releases={releaseOptions} />
+        <TrackCard
+          key={t.id}
+          artistId={artistId}
+          track={t}
+          releases={releaseOptions}
+          mergeTargets={targetsFor(t.id)}
+        />
       ))}
     </CardGrid>
   )
@@ -199,7 +216,13 @@ export function MusicBrowser({
               ))}
               {orphs.map((t) => (
                 <div key={t.id} className="w-48 flex-none">
-                  <TrackCard artistId={artistId} track={t} releases={releaseOptions} hideBadges />
+                  <TrackCard
+                    artistId={artistId}
+                    track={t}
+                    releases={releaseOptions}
+                    hideBadges
+                    mergeTargets={targetsFor(t.id)}
+                  />
                 </div>
               ))}
             </div>

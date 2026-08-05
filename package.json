@@ -2,6 +2,9 @@
   "name": "lone-star-management",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -18,6 +21,7 @@
     "site:custom": "tsx scripts/set-custom-site.ts"
   },
   "dependencies": {
+    "@lone-star/music-rules": "*",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "next": "16.2.9",

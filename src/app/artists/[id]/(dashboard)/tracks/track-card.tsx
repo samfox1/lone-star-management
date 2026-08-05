@@ -7,6 +7,7 @@ import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
+import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { EntitySparkline } from '../entity-sparkline'
 import { TrackAudio } from '../track-audio'
 import { toast } from '../toast'
@@ -52,6 +53,7 @@ export function TrackCard({
   artistId,
   releases,
   hideBadges = false,
+  mergeTargets = [],
 }: {
   track: Track
   artistId: string
@@ -59,11 +61,15 @@ export function TrackCard({
   /** Hide the platform-badge subtitle (orphan singles in the Singles grid read as a
    *  plain single card — title only — to match the release cards beside them). */
   hideBadges?: boolean
+  /** The artist's other songs, for "Merge into…". Empty (the default) hides the option —
+   *  a catalog of one song has nothing to merge into. */
+  mergeTargets?: MergeTarget[]
 }) {
   const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   const [titleDraft, setTitleDraft] = useState(track.title)
   const [releaseDraft, setReleaseDraft] = useState(track.release_id ?? '')
   const [parentDraft, setParentDraft] = useState(track.parent_release_id ?? '')
@@ -203,7 +209,7 @@ export function TrackCard({
       </button>
 
       {/* Same single-style modal as a release single — a song is a song wherever it lives. */}
-      <CardModal open={open} onClose={() => !editOpen && setOpen(false)} wide footer={null}>
+      <CardModal open={open} onClose={() => !editOpen && !mergeOpen && setOpen(false)} wide footer={null}>
         <div className="font-space">
           <div className="grid grid-cols-2 gap-8">
             {/* LEFT — cover + title (+ audio player when uploaded). */}
@@ -242,6 +248,19 @@ export function TrackCard({
                       >
                         <Icon name="edit" size={15} /> Edit
                       </button>
+                      {mergeTargets.length > 0 && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setMergeOpen(true)
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+                        >
+                          <Icon name="links" size={15} /> Merge into…
+                        </button>
+                      )}
                       <button
                         type="button"
                         role="menuitem"
@@ -350,6 +369,19 @@ export function TrackCard({
           </div>
         </div>
       </CardModal>
+
+      {/* Merge — fold this duplicate into the song that should survive. This card's song
+          is the one deleted, so closing the merge modal also closes the card behind it. */}
+      <MergeSongModal
+        open={mergeOpen}
+        onClose={() => {
+          setMergeOpen(false)
+          setOpen(false)
+        }}
+        artistId={artistId}
+        song={{ id: track.id, title: track.title }}
+        targets={mergeTargets}
+      />
 
       {/* Edit details — title + which release the song belongs to. */}
       <CardModal

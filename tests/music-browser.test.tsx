@@ -47,6 +47,7 @@ function setup(over: Partial<Parameters<typeof MusicBrowser>[0]> = {}) {
       orphanSingles={[]}
       unreleasedSongs={[song({ id: 's1', title: 'Bedroom Demo' })]}
       releaseOptions={[]}
+      mergeTargets={[]}
       artistId="a1"
       artistSlug="a"
       refreshAction={vi.fn(async () => ({ ok: true }))}
