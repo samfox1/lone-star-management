@@ -58,6 +58,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     trackRows,
     tourRows,
     draft,
+    { data: fontRows },
   ] = await Promise.all([
     supabase.from('artists').select('bio, hero_image_url').eq('id', id).single(),
     supabase.from('site_content').select('key, value').eq('artist_id', id),
@@ -74,7 +75,12 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     listContent(supabase, 'track', id),
     listContent(supabase, 'tour_date', id),
     customSiteUrl ? getWorkingSitePayload(supabase, id) : Promise.resolve(null),
+    supabase.from('artist_fonts').select('family, label').eq('artist_id', id).order('family'),
   ])
+  // Brand-page uploads, offered in every region's font dropdown alongside the site's own
+  // manifest tokens. The token resolves because the published payload emits the matching
+  // .font-<family> class.
+  const uploadedFonts = (fontRows ?? []) as { family: string; label: string }[]
 
   const siteContent = Object.fromEntries(
     ((contentRows ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? '']),
@@ -257,6 +263,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       merch={merch}
       releases={releases}
       tours={tours}
+      uploadedFonts={uploadedFonts}
     />
   )
 }

@@ -231,6 +231,60 @@ export function fontFaceCss(
   return blocks.join('')
 }
 
+/** What the PUBLISHED payload carries per font (get_public_site's `fonts` array and the
+ *  working-payload mirror). `path` is the storage path; the renderer resolves it. */
+export type SiteFont = {
+  family: string
+  label: string
+  path: string
+  format: string
+  role: 'primary' | 'secondary' | null
+}
+
+/**
+ * The complete `<style>` block a rendered site gets: every @font-face + utility class,
+ * then the role rules — primary drives headings, secondary drives body text (Sam's
+ * primary/secondary model, 2026-08-05; overridable per region in the editor).
+ *
+ * Role rules are emitted ONLY for fonts whose face survived `fontFaceCss`'s gates: a
+ * role pointing at a dropped face would send headings hunting for a family no
+ * stylesheet defines, falling back browser-by-browser instead of by our declared
+ * fallback. The `:root` variables ride along as the contract for custom sites (skeen)
+ * that want the roles without lone-star's element rules.
+ *
+ * Precedence (region > role > template) is the cascade itself: `.font-<family>` is a
+ * class, the heading rule is element-level, the body rule is inheritance — so this
+ * emitter must never gain `!important` or an id selector.
+ */
+export function fontStyleCss(fonts: SiteFont[], opts: { origin?: string } = {}): string {
+  const faces = fontFaceCss(fonts, opts)
+  if (!faces) return ''
+
+  // Only roles whose sanitized family actually appears in the emitted faces.
+  const byRole = (role: 'primary' | 'secondary'): string | null => {
+    const f = fonts.find((x) => x.role === role)
+    if (!f) return null
+    const family = sanitizeFamily(f.family)
+    return faces.includes(`font-family:'${family}'`) ? family : null
+  }
+  const primary = byRole('primary')
+  const secondary = byRole('secondary')
+
+  const parts = [faces]
+  if (primary || secondary) {
+    const vars = [
+      primary ? `--font-primary:'${primary}'` : '',
+      secondary ? `--font-secondary:'${secondary}'` : '',
+    ]
+      .filter(Boolean)
+      .join(';')
+    parts.push(`:root{${vars}}`)
+  }
+  if (primary) parts.push(`h1,h2,h3,h4,h5,h6{font-family:'${primary}',sans-serif}`)
+  if (secondary) parts.push(`body{font-family:'${secondary}',sans-serif}`)
+  return parts.join('')
+}
+
 /* ── Server-side reads and writes ─────────────────────────────────────────── */
 
 /** Every font this artist has uploaded, oldest first. RLS scopes the read, so a caller

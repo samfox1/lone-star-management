@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ARTIST_SNAPSHOT, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
+import type { SiteFont } from '@/lib/fonts'
 import { mediaUrl } from '@/lib/storage-url'
 
 export type SiteTrack = {
@@ -146,6 +147,10 @@ export type SiteData = {
   media: SiteMedia[]
   site_content: SiteContent
   styles: SiteStyles
+  /** Published custom fonts (family/label/path/format/role). The renderer feeds these to
+   *  `fontStyleCss`, which is the sanitizing gate — the door emits rows verbatim. Absent
+   *  on any revision published before 20260805160000, so always read with `?? []`. */
+  fonts: SiteFont[]
 }
 
 /**
@@ -186,7 +191,9 @@ export async function getPublishedSite(
   if (error) throw new Error(error.message)
   if (!data) return null
   const site = data as SiteData & { media: { purpose: SiteMedia['purpose']; path: string }[] }
-  return { ...site, media: toSiteMedia(site.media) }
+  // Revisions published before 20260805160000 have no fonts key; a legacy payload must
+  // render, not crash the whole site over a feature it predates.
+  return { ...site, media: toSiteMedia(site.media), fonts: site.fonts ?? [] }
 }
 
 async function workingSection<T>(
@@ -219,7 +226,7 @@ export async function getWorkingSitePayload(
   // The artist row and every section are independent, so fetch them in ONE wave — the
   // artist row used to serially gate the other eight for no reason (a full round-trip
   // before any section query started). A missing artist just discards the rest below.
-  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows] =
+  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows, fontRows] =
     await Promise.all([
       supabase
         .from('artists')
@@ -283,6 +290,12 @@ export async function getWorkingSitePayload(
       .select('region_key, class_names')
       .eq('artist_id', artistId)
       .then(({ data }) => data ?? []),
+    supabase
+      .from('artist_fonts')
+      .select('family, label, storage_path, format, role')
+      .eq('artist_id', artistId)
+      .order('family') // matches get_public_site's fonts order
+      .then(({ data }) => data ?? []),
   ])
   if (!artist) return null
 
@@ -337,6 +350,11 @@ export async function getWorkingSitePayload(
     media,
     site_content,
     styles,
+    // Same field names the door's fonts array carries (path, not storage_path), so
+    // preview and the custom-site bridge see the published shape.
+    fonts: (fontRows as { family: string; label: string; storage_path: string; format: string; role: SiteFont['role'] }[]).map(
+      (f) => ({ family: f.family, label: f.label, path: f.storage_path, format: f.format, role: f.role }),
+    ),
   }
 }
 

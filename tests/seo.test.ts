@@ -27,6 +27,7 @@ function site(artist: Partial<SiteData['artist']> = {}): SiteData {
     media: [],
     site_content: {},
     styles: {},
+    fonts: [],
   }
 }
 

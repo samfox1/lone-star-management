@@ -84,6 +84,28 @@ const DEFAULT: StyleOption = { value: '', label: 'Default' }
  * alignment / uppercase / italic are universal; font + colours only appear when the site
  * declares them (their classes are the site's own, so the editor can't invent them).
  */
+/**
+ * Fold the artist's UPLOADED fonts into a manifest's style options, so the editor's font
+ * dropdown offers both the site's compiled tokens (skeen's `font-momo`) and the fonts
+ * the manager uploaded on the Brand page. The uploaded token is `font-<family>`, which
+ * only resolves because the published payload's `fontStyleCss` emits the matching
+ * utility class — offer a font that isn't in the payload and the class silently no-ops,
+ * which is the exact failure this file's header warns about. Manifest tokens keep
+ * precedence in the list (they are the site's own design); dedup is by token.
+ */
+export function withUploadedFonts(
+  opts: SiteStyleOptions | undefined,
+  uploaded: { family: string; label: string }[],
+): SiteStyleOptions | undefined {
+  if (!uploaded.length) return opts
+  const manifest = opts?.fonts ?? []
+  const seen = new Set(manifest.map((f) => f.value))
+  const extra = uploaded
+    .map((f) => ({ value: `font-${f.family}`, label: f.label }))
+    .filter((f) => !seen.has(f.value))
+  return { ...opts, fonts: [...manifest, ...extra] }
+}
+
 export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   const controls: StyleControl[] = []
 

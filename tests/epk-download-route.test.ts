@@ -62,6 +62,7 @@ function site(artist: Partial<SiteData['artist']> = {}): SiteData {
     media: [{ purpose: 'profile_photo', url: 'https://img.example/p.jpg' }] as never,
     site_content: {},
     styles: {},
+    fonts: [],
   } as SiteData
 }
 

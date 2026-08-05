@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import type { SectionDiff, UnpublishedDiff } from '@/lib/content'
+import { PUBLISHABLE, type SectionDiff, type UnpublishedDiff } from '@/lib/content'
 import { getUnpublishedDiffAction, publishAllGatedAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { EditorPublish } from '@/app/artists/[id]/(dashboard)/editor/editor-publish'
 
@@ -20,18 +20,13 @@ const publishMock = vi.mocked(publishAllGatedAction)
 
 const empty: SectionDiff = { added: 0, edited: 0, deleted: 0, dirty: false }
 function diff(over: Partial<Record<keyof UnpublishedDiff, SectionDiff>>): UnpublishedDiff {
-  const base: UnpublishedDiff = {
-    profile: empty,
-    site_content: empty,
-    site_styles: empty,
-    media: empty,
-    track: empty,
-    release: empty,
-    video: empty,
-    merch: empty,
-    tour_date: empty,
-    link: empty,
-  }
+  // DERIVED from the publish registry, never hand-listed. A hand-written base silently
+  // omits every future section, and the every-section sweep below then sweeps a stale
+  // key set — which is precisely the hole that let site_styles vanish from this window
+  // in the first place. (Proven: adding artist_font left a hand-written base green.)
+  const base = Object.fromEntries(
+    ['profile', ...Object.keys(PUBLISHABLE)].map((k) => [k, empty]),
+  ) as unknown as UnpublishedDiff
   return { ...base, ...over }
 }
 const CHANGED = diff({

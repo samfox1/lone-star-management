@@ -12,7 +12,7 @@ import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from './_owns'
-import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject } from '@/lib/storage-gc'
+import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject, gcFontObjects } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
 import { placeInSlot } from '@/lib/site-editor/slots'
 import {
@@ -142,6 +142,7 @@ export async function publishAction(artistId: string) {
   await publishAll(supabase, artistId, user?.id)
   await gcVideoObjects(supabase, artistId) // publishAll includes videos → collect orphans
   await gcMediaObjects(supabase, artistId) // …and gallery media
+  await gcFontObjects(supabase, artistId) // …and fonts (safe: keeps anything a live revision names)
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 

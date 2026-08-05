@@ -6,6 +6,7 @@
 import type { SiteData } from '@/lib/site'
 import { ArtistSite } from '@/components/artist-site'
 import { CinematicTemplate } from '@/components/templates/cinematic'
+import { fontStyleCss } from '@/lib/fonts'
 
 export const TEMPLATES = [
   { value: 'classic', label: 'Classic — clean light layout' },
@@ -17,6 +18,22 @@ export const TEMPLATES = [
  *  default — the public site and the read-only preview carry no markers. Only the
  *  cinematic template is instrumented so far (classic follows in a later phase). */
 export function ArtistTemplate({ data, editable = false }: { data: SiteData; editable?: boolean }) {
-  if (data.artist.template === 'cinematic') return <CinematicTemplate data={data} editable={editable} />
-  return <ArtistSite data={data} />
+  // Custom fonts ride HERE, the one place both templates and every render mode (public
+  // page, preview, edit frame) pass through — inject anywhere lower and one mode
+  // silently loses its fonts. fontStyleCss is the sanitizing gate: everything in the
+  // emitted block is allowlisted or dropped, so this dangerouslySetInnerHTML carries
+  // nothing a manager typed. Legacy payloads have no fonts key (`?? []`).
+  const fontCss = fontStyleCss(data.fonts ?? [])
+  const body =
+    data.artist.template === 'cinematic' ? (
+      <CinematicTemplate data={data} editable={editable} />
+    ) : (
+      <ArtistSite data={data} />
+    )
+  return (
+    <>
+      {fontCss && <style dangerouslySetInnerHTML={{ __html: fontCss }} />}
+      {body}
+    </>
+  )
 }

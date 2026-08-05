@@ -84,7 +84,7 @@ export type LiveTogglePublishable = 'video' | 'tour_date'
  *  Media + site_content are published here but have no generic CRUD form (each
  *  has its own bespoke editor). The artist PROFILE is published separately as a
  *  singleton (publishProfile). */
-export type PublishableEntity = CrudEntity | 'media' | 'site_content' | 'site_styles'
+export type PublishableEntity = CrudEntity | 'media' | 'site_content' | 'site_styles' | 'artist_font'
 
 /** Fan-visible artist-profile columns that publish together as one snapshot.
  *  Deliberately excludes config/secret columns (shopify_domain, bandsintown_name)
@@ -258,6 +258,14 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     table: 'site_styles',
     snapshot: ['id', 'region_key', 'class_names'],
     orderBy: ['region_key'],
+  },
+  // Fonts publish like styles do: uploading and assigning roles is DRAFT work, and the
+  // fan-facing stylesheet changes only at publish. The revisions entity_type CHECK
+  // already admits 'artist_font' (20260805140000).
+  artist_font: {
+    table: 'artist_fonts',
+    snapshot: ['id', 'label', 'family', 'storage_path', 'format', 'role'],
+    orderBy: ['created_at'],
   },
 }
 

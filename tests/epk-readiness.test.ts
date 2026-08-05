@@ -39,6 +39,7 @@ function site(over: Partial<SiteData> = {}, artist: Partial<SiteData['artist']> 
     media: [{ purpose: 'profile_photo', url: 'https://img.example/p.jpg' }] as never,
     site_content: {},
     styles: {},
+    fonts: [],
     ...over,
   }
 }

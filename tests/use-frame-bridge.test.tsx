@@ -37,6 +37,7 @@ const draft: PublicSitePayload = {
   media: [{ purpose: 'gallery_image', path: 'a1/gallery/one.jpg' }],
   site_content: {},
   styles: {},
+  fonts: [],
 }
 
 /** A stand-in for the iframe's contentWindow — the thing we postMessage into. */

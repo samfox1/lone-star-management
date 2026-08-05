@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
+import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
 import {
@@ -51,6 +52,7 @@ export function EditorShell({
   merch,
   releases,
   tours,
+  uploadedFonts = [],
 }: {
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
@@ -75,6 +77,9 @@ export function EditorShell({
   merch: EditorMerch[]
   releases: EditorProject[]
   tours: EditorTour[]
+  /** Fonts uploaded on the Brand page, folded into the frame manifest's font options so
+   *  every region's font dropdown offers them (Sam's per-region override model). */
+  uploadedFonts?: { family: string; label: string }[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
   const panelRef = useRef<HTMLDivElement>(null)
@@ -138,7 +143,7 @@ export function EditorShell({
         showGallery={(manifest?.slots ?? []).some((sl) => sl.accepts === 'image')}
         styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
-        styleOptions={manifest?.styleOptions}
+        styleOptions={withUploadedFonts(manifest?.styleOptions, uploadedFonts)}
         selectedStyle={selectedStyle}
         linkRegions={manifest?.links ?? []}
         linkValues={linkValues}

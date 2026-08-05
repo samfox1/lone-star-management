@@ -10,6 +10,7 @@ import {
   buildStyleControls,
   buildVideoItemStyleControls,
   readStyleValue,
+  withUploadedFonts,
   type SiteStyleOptions,
   type StyleControl,
 } from '@/lib/site-editor/style-controls'
@@ -197,5 +198,40 @@ describe('slider seeding round-trips (skeen brief 2026-08-03)', () => {
     const size = byId.size
     if (size.kind !== 'slider') throw new Error('not a slider')
     expect(sliderIdx(size, 'scale-37')).not.toBe(size.steps.length - 1)
+  })
+})
+
+describe('withUploadedFonts — Brand-page uploads join the manifest dropdown', () => {
+  const uploaded = [{ family: 'archivo-narrow', label: 'Archivo Narrow' }]
+
+  it('CRITICAL: an uploaded font creates the font control even when the manifest offers none', () => {
+    // Built-in templates declare no font tokens, so without this the dropdown never
+    // exists and "per-region overrides" is a feature with no UI.
+    const opts = withUploadedFonts(undefined, uploaded)
+    const font = buildStyleControls(opts).find((c) => c.id === 'font')
+    expect(font?.kind).toBe('select')
+    if (font?.kind !== 'select') throw new Error('no font control')
+    expect(font.options.map((o) => o.value)).toContain('font-archivo-narrow')
+    expect(font.options.find((o) => o.value === 'font-archivo-narrow')?.label).toBe('Archivo Narrow')
+  })
+
+  it("manifest tokens keep list precedence — they are the site's own design", () => {
+    const opts = withUploadedFonts({ fonts: [{ value: 'font-momo', label: 'Momo' }] }, uploaded)
+    expect(opts?.fonts?.map((f) => f.value)).toEqual(['font-momo', 'font-archivo-narrow'])
+  })
+
+  it('dedupes by token, so a manifest that already compiled the family wins', () => {
+    const opts = withUploadedFonts(
+      { fonts: [{ value: 'font-archivo-narrow', label: 'Compiled Archivo' }] },
+      uploaded,
+    )
+    expect(opts?.fonts).toHaveLength(1)
+    expect(opts?.fonts?.[0].label).toBe('Compiled Archivo')
+  })
+
+  it('no uploads returns the manifest options untouched (same reference)', () => {
+    const manifest = { fonts: [{ value: 'font-momo', label: 'Momo' }] }
+    expect(withUploadedFonts(manifest, [])).toBe(manifest)
+    expect(withUploadedFonts(undefined, [])).toBeUndefined()
   })
 })

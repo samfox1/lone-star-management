@@ -35,6 +35,7 @@ const draft: PublicSitePayload = {
   media: [{ purpose: 'gallery_image', path: 'a1/gallery/one.jpg' }],
   site_content: {},
   styles: { hero_wordmark: 'text-9xl' },
+  fonts: [],
 }
 
 describe('init-data payload — the wire shape a custom site consumes', () => {

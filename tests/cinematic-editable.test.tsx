@@ -41,6 +41,7 @@ function siteData(): SiteData {
     media: [],
     site_content: {},
     styles: {},
+    fonts: [],
   }
 }
 

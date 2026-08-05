@@ -22,6 +22,7 @@ function makeData(site_content: Record<string, string>): SiteData {
     media: [],
     site_content,
     styles: {},
+    fonts: [],
   }
 }
 
