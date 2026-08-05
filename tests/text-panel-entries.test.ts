@@ -34,7 +34,15 @@ const HERO_VIDEO: ManifestStyleRegion = {
   label: 'Hero video',
   base: 'absolute inset-0 h-full w-full object-cover',
 }
+// A footer LINE: it sets type, so it is words. Not to be confused with skeen's `footer`
+// region, which is the wrapper below — `text-center` on a `px-6 py-16` box is alignment,
+// not type, and sizing it grew the whole section. See text-region-and-scale.test.ts.
 const FOOTER: ManifestStyleRegion = {
+  key: 'footer_line',
+  label: 'Footer line',
+  base: 'mt-auto px-6 py-16 text-center font-alt text-sm tracking-wide',
+}
+const FOOTER_WRAP: ManifestStyleRegion = {
   key: 'footer',
   label: 'Footer',
   base: 'mt-auto border-t border-border px-6 py-16 text-center',
@@ -50,10 +58,17 @@ describe('textPanelEntries', () => {
     // The bug this fixes: skeen declares only polaroid captions as fields, so a panel
     // driven by fields alone showed five rows and nothing else on an eleven-region site.
     const entries = textPanelEntries([], [HERO_WORDMARK, FOOTER])
-    expect(entries.map((e) => e.key)).toEqual(['hero_wordmark', 'footer'])
+    expect(entries.map((e) => e.key)).toEqual(['hero_wordmark', 'footer_line'])
     expect(entries[0].styleRegion?.key).toBe('hero_wordmark')
     // Nothing to type into: the site never declared this as editable copy.
     expect(entries[0].field).toBeNull()
+  })
+
+  it('CRITICAL: a section WRAPPER is not listed, however much text it holds', () => {
+    // Sam, 2026-08-05: the panel offered skeen's `shows_section` as if it were the TOUR
+    // heading. It is the section's outermost box; setting a size on it sets font-size on
+    // every child, so the section got taller. Alignment is not type.
+    expect(textPanelEntries([], [HERO_WORDMARK, FOOTER_WRAP]).map((e) => e.key)).toEqual(['hero_wordmark'])
   })
 
   it('CRITICAL: skips regions that are not text', () => {

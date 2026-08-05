@@ -1,4 +1,5 @@
 import type { ManifestField, ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { isTextSize } from '@/lib/site-editor/style-controls'
 
 /**
  * What the Text panel lists: every piece of the site that is WORDS.
@@ -29,25 +30,48 @@ export type TextPanelEntry = {
 }
 
 /**
- * Does this region hold TEXT?
+ * Does this region hold TEXT? It must SET TYPE, not merely mention text.
  *
- * The only signal a site gives us is the region's base classes, so this reads them: a
- * region that sets type (a family, a size, a weight, tracking, casing, leading) is text.
+ * The only signal a site gives us is the region's base classes, so this reads them. A
+ * region that sets type (a family, a size, a weight, tracking, leading, a casing) is text.
  * One that only positions or paints — `absolute inset-0 object-cover` on a video, a flex
  * container for the polaroid wall — is not.
  *
- * Deliberately CONSERVATIVE. A false positive puts Font and Size on something with no
- * words in it, which the manager has to learn to ignore; a false negative hides a text
- * area, which they can still reach from the Style panel. So it demands a type-setting
- * utility rather than guessing from the key's name.
+ * This used to count any `text-*`, on the reasoning that a region colouring or centring
+ * text must contain words. That reasoning is wrong, and Sam found the way it is wrong on
+ * 2026-08-05: every section WRAPPER on skeen carries `text-center` or `text-foreground`,
+ * so the panel offered `shows_section` — a `max-w-6xl … px-6 pb-24 pt-16` container — as
+ * if it were the TOUR heading. Setting a size on a wrapper sets font-size on everything
+ * inside it, so the whole section grew. "I increase the size it increases the height of
+ * the container."
+ *
+ * Alignment and colour are properties of a box that happens to hold words. A family, a
+ * size, a weight, tracking, leading or a casing is someone saying "these are the words".
+ * That is the line.
+ *
+ * Costing a real text region here is cheap — it stays reachable from the Style panel.
+ * Offering a container is not: the manager resizes the page and has no way to see why.
  */
-// Any `text-*` counts, not just sizes: a region setting text COLOUR or ALIGNMENT is
-// telling us it contains words just as surely as one setting a size. `font-*` covers
-// family and weight. The rest are unambiguous type properties.
-const TYPE_UTILITY = /(^|\s)(font-|text-|tracking-|leading-|uppercase|lowercase|capitalize|italic)/
+const CASING = /^(uppercase|lowercase|capitalize|italic)$/
+/** Drop responsive/state variants and the `!` important flag, so `sm:text-[14px]` and
+ *  `!leading-none` are read as the utilities they are. */
+const bare = (token: string) => token.slice(token.lastIndexOf(':') + 1).replace(/^!/, '')
+
+function setsType(token: string): boolean {
+  const t = bare(token)
+  // `font-*` is family or weight; both are type. Sizes are delegated to the size control's
+  // own predicate so the two can never disagree about what a size looks like.
+  return (
+    t.startsWith('font-') ||
+    t.startsWith('tracking-') ||
+    t.startsWith('leading-') ||
+    CASING.test(t) ||
+    isTextSize(t)
+  )
+}
 
 export function isTextRegion(region: ManifestStyleRegion): boolean {
-  return TYPE_UTILITY.test(region.base ?? '')
+  return (region.base ?? '').split(/\s+/).filter(Boolean).some(setsType)
 }
 
 export function textPanelEntries(

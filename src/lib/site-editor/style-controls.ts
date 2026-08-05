@@ -85,10 +85,18 @@ const WEIGHTS = ['thin', 'extralight', 'light', 'normal', 'medium', 'semibold', 
 const ALIGNS = ['left', 'center', 'right', 'justify', 'start', 'end']
 
 const textSuffix = (t: string) => (t.startsWith('text-') ? t.slice(5) : '')
-/** A font SIZE token: one of Tailwind's named steps, or an arbitrary clamp() the size
- *  slider emits. Must own BOTH — a site storing the old `text-4xl` needs it REPLACED
- *  when a new size is picked, not left behind for source order to arbitrate. */
-const isTextSize = (t: string) => SIZES.includes(textSuffix(t)) || /^text-\[clamp\(/.test(t)
+/**
+ * A font SIZE token: one of Tailwind's named steps, an arbitrary clamp() this slider
+ * emits, or a plain arbitrary length a site wrote itself (skeen's captions are
+ * `text-[12px]`). Must own all three — a site's existing size needs REPLACING when a new
+ * one is picked, not left behind for source order to arbitrate.
+ *
+ * `text-[#ffffff]` shares the arbitrary shape and is a COLOUR, so the bracket case demands
+ * a leading number-and-unit or a clamp. Getting that wrong would hand the size control a
+ * colour to delete.
+ */
+export const isTextSize = (t: string) =>
+  SIZES.includes(textSuffix(t)) || /^text-\[(clamp\(|-?[\d.]+(rem|em|px|vw|vh|ch|pt)[\])])/.test(t)
 const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 
 // Tailwind's FULL size scale. It was five friendly steps ("Small…Huge"), which reads well
@@ -123,6 +131,26 @@ const SIZE_OPTIONS: StyleOption[] = [
   { value: 'text-[clamp(2.25rem,9.5vw,4.5rem)]', label: '7xl' },
   { value: 'text-[clamp(2.6rem,12vw,6rem)]', label: '8xl' },
   { value: 'text-[clamp(3rem,15vw,8rem)]', label: 'Giant' },
+  // DISPLAY sizes, above anything Tailwind names. Sam, 2026-08-05: "the header text needs
+  // to start at a bigger size and be able to be a bigger size."
+  //
+  // The scale used to stop at 8rem while skeen's hero is 11rem, so the LARGEST size the
+  // editor could offer was a 27% shrink and there was no way back up. A scale whose
+  // ceiling sits below the thing it styles is not a scale.
+  //
+  // 11rem is skeen's own `text-[clamp(4rem,18vw,11rem)]`, character for character, so the
+  // hero opens on an exact step rather than beside one — it can be Reset, and its label is
+  // not an approximation. The neighbours are built around it at its own ratio.
+  //
+  // Labelled by their desktop rem rather than with invented words. Past "Giant" the words
+  // stop meaning anything ("Colossal" vs "Massive" tells a manager nothing), while at this
+  // end of the scale they are choosing a display headline and the number is real.
+  { value: 'text-[clamp(3.2rem,16vw,9rem)]', label: '9rem' },
+  { value: 'text-[clamp(3.5rem,17vw,10rem)]', label: '10rem' },
+  { value: 'text-[clamp(4rem,18vw,11rem)]', label: '11rem' },
+  { value: 'text-[clamp(4.2rem,19vw,12rem)]', label: '12rem' },
+  { value: 'text-[clamp(4.6rem,21vw,14rem)]', label: '14rem' },
+  { value: 'text-[clamp(5rem,23vw,16rem)]', label: '16rem' },
 ]
 /**
  * LINE HEIGHT, emitted with Tailwind's `!` important prefix.

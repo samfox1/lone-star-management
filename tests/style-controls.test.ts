@@ -258,10 +258,20 @@ describe('text size is FLUID — it shrinks on a phone', () => {
   it('CRITICAL: the DESKTOP size is unchanged, so nothing already set moves', () => {
     // The max of each clamp is the old fixed size. Only the small end is new: an
     // existing site keeps its look on a laptop and stops overflowing on a phone.
+    //
+    // The DISPLAY steps above 8rem (added 2026-08-05, so skeen's 11rem hero has somewhere
+    // to go) are deliberately NOT in this list. This test's whole subject is the thirteen
+    // sizes that replaced Tailwind's named scale, one for one — asserting they still line
+    // up with `text-xs … text-9xl`. Steps that never had a fixed-size ancestor cannot
+    // move anything already set, so pinning them here would only make the assertion say
+    // two things at once.
     const maxima = sizeControl()
       .steps.filter((s) => s.value)
       .map((s) => s.value.match(/,\s*([\d.]+)rem\)\]$/)?.[1])
-    expect(maxima).toEqual(['0.75', '0.875', '1', '1.125', '1.25', '1.5', '1.875', '2.25', '3', '3.75', '4.5', '6', '8'])
+    const LEGACY = ['0.75', '0.875', '1', '1.125', '1.25', '1.5', '1.875', '2.25', '3', '3.75', '4.5', '6', '8']
+    expect(maxima.slice(0, LEGACY.length)).toEqual(LEGACY)
+    // …and they are the START of the scale, not scattered through it.
+    expect(maxima.slice(LEGACY.length).every((m) => Number(m) > 8)).toBe(true)
   })
 
   it('every step is smaller at its minimum than at its maximum', () => {

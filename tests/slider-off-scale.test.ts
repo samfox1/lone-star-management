@@ -37,12 +37,14 @@ const itemControl = (id: string) => buildItemStyleControls().find((c) => c.id ==
 const rem = (step: string) => Number(/,\s*([\d.]+)rem\)/.exec(step)?.[1] ?? NaN)
 
 describe('sliderIndex — a value that is not a step', () => {
-  it('CRITICAL: skeen’s hero size lands at the TOP of the scale, not the middle', () => {
+  it('CRITICAL: a size above the ceiling lands at the TOP of the scale, not the middle', () => {
     const size = textControl('size')
     const steps = sliderSteps(size)
-    const { idx } = sliderIndex(size, 'text-[clamp(4rem,18vw,11rem)]')
-    // 11rem is above every step, so the nearest is the last one. The point is what this
-    // rules out: the middle, from which one notch right is a NINETEEN-fold shrink.
+    // skeen's own 11rem hero is an exact step now (the scale was extended for it on
+    // 2026-08-05, see text-region-and-scale.test.ts), so this uses a size beyond even the
+    // new ceiling. The point is what it rules out: the middle, from which one notch right
+    // is a fifteen-fold shrink.
+    const { idx } = sliderIndex(size, 'text-[clamp(8rem,30vw,20rem)]')
     expect(idx).toBe(steps.length - 1)
   })
 

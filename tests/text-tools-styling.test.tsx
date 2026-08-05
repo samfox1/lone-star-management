@@ -229,9 +229,16 @@ describe('TextFieldEditor — one field, full panel', () => {
     const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
     const size = screen.getByLabelText('Hero title Size') as HTMLInputElement
 
-    expect(size.value).toBe(String(steps.length - 1))
+    // Derived from the scale, not hardcoded: the step whose desktop max is the hero's own
+    // 11rem. Hardcoding an index here would quietly become an assertion about some other
+    // size the next time a step is added.
+    const own = steps.findIndex((s) => /,\s*11rem\)\]$/.test(s.value))
+    expect(size.value).toBe(String(own))
     // …and it must not still claim to be unset, which is what licensed the jump.
     expect(within(size.parentElement!).queryByText('Default')).toBeNull()
+    // There must be somewhere ABOVE it to drag. The scale used to stop at 8rem, below the
+    // hero itself, so every move was a shrink (Sam: "needs to be able to be a bigger size").
+    expect(steps.length - 1 - own).toBeGreaterThanOrEqual(3)
 
     // The site's `leading-none` is our `!leading-none` — same 1.0, different string. It
     // used to miss too, opening the manager at 1.1 on a line already set to 1.0.
