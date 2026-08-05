@@ -47,7 +47,9 @@ export function runtimeTextFields(
     // Same multiline rule the built-in path uses, so a body-copy field gets a textarea
     // on a custom site too.
     multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
-    styleRegion: e.styleRegion ? { key: e.styleRegion.key, label: e.styleRegion.label } : null,
+    styleRegion: e.styleRegion
+      ? { key: e.styleRegion.key, label: e.styleRegion.label, base: e.styleRegion.base }
+      : null,
     // A region with no field behind it: restyleable, not retypeable.
     styleOnly: !e.field,
     // What the SITE renders when the row is unset. A custom site keeps its fallbacks in

@@ -2,7 +2,12 @@
 
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
-import { applyStyleValue, buildTextItemStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import {
+  applyStyleValue,
+  buildTextItemStyleControls,
+  sameClasses,
+  type SiteStyleOptions,
+} from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from './inspector-types'
 import { FIELD, SaveLine, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
@@ -55,11 +60,17 @@ export function TextFieldEditor({
   // Seeded from the prop, and re-seeded when the REGION changes (a different field is
   // opened) rather than on every prop change, so an in-flight drag is never clobbered by
   // the debounced write landing underneath it.
-  const [staged, setStaged] = useState(() => (region ? (styleValues[region.key] ?? '') : ''))
+  // Seeded from the stored override if there is one, else the region's OWN BASE
+  // CLASSES — never from ''. A section override REPLACES the base, so seeding empty
+  // turns "set a size" into "delete every class this element had". That is not
+  // theoretical: it wiped `fx-glitch-mono` off the hero wordmark, whose effect paints
+  // the visible text, and the word disappeared from the site.
+  const seed = (r: typeof region) => (r ? (styleValues[r.key] || r.base || '') : '')
+  const [staged, setStaged] = useState(() => seed(region))
   const [seededFor, setSeededFor] = useState(region?.key ?? null)
   if (seededFor !== (region?.key ?? null)) {
     setSeededFor(region?.key ?? null)
-    setStaged(region ? (styleValues[region.key] ?? '') : '')
+    setStaged(seed(region))
   }
   const cls = staged
 
@@ -115,7 +126,10 @@ export function TextFieldEditor({
                 onChange={(v) => {
                   const next = applyStyleValue(cls, control, v)
                   setStaged(next) // the control moves NOW; the save follows
-                  onStyle(region.key, next)
+                  // A string equal to the base is not an override: save '' so the row is
+                  // DELETED rather than pinning a copy of today's defaults, which would
+                  // win forever over any later change the site makes to its own classes.
+                  onStyle(region.key, sameClasses(next, region.base ?? '') ? '' : next)
                 }}
               />
             ))}

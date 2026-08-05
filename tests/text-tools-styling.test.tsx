@@ -377,3 +377,73 @@ describe('the site’s own fallback is visible, not just absent', () => {
     expect(screen.getByDisplayValue('Skeen Live')).toBeTruthy()
   })
 })
+
+describe('CRITICAL: styling a region must not destroy the site’s own classes', () => {
+  // A section override REPLACES the base string (SITE_STYLING_PLAN D-B). So an editor
+  // that seeds from '' turns "set a size" into "delete everything this element had".
+  //
+  // This is not theoretical. Sam set a size on the hero wordmark and the word SKEEN
+  // VANISHED: the base carried `fx-glitch-mono`, whose effect paints the visible text
+  // from data-text, and the override wiped it. The polaroid captions lost the classes
+  // that kept them inside the strip at the same time.
+  const HERO_BASE = 'fx-glitch-mono font-alt text-[clamp(4rem,18vw,11rem)] font-black uppercase leading-none'
+  const withBase: EditorTextField = {
+    ...styled,
+    label: 'Hero wordmark',
+    styleRegion: { key: 'hero_wordmark', label: 'Hero wordmark', base: HERO_BASE },
+  }
+
+  it('seeds from the region’s BASE, so an untouched region keeps every class', () => {
+    const onStyle = vi.fn()
+    render(
+      <TextFieldEditor
+        field={withBase}
+        value="SKEEN"
+        status="idle"
+        styleValues={{}}
+        styleOptions={OPTIONS}
+        onEdit={vi.fn()}
+        onStyle={onStyle}
+        onBack={vi.fn()}
+      />,
+    )
+    const control = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
+    fireEvent.change(screen.getByLabelText('Hero wordmark Size'), {
+      target: { value: String(sliderSteps(control).length - 2) },
+    })
+
+    const [, className] = onStyle.mock.calls[0] as unknown as string[]
+    // Everything the size control does NOT own survives.
+    expect(className).toContain('fx-glitch-mono')
+    expect(className).toContain('font-alt')
+    expect(className).toContain('font-black')
+    expect(className).toContain('uppercase')
+    expect(className).toContain('leading-none')
+    // And the size it DOES own was swapped, not appended.
+    expect(className).not.toContain('clamp(4rem,18vw,11rem)')
+  })
+
+  it('a STORED override wins over the base — the manager’s work is not re-seeded away', () => {
+    const onStyle = vi.fn()
+    render(
+      <TextFieldEditor
+        field={withBase}
+        value="SKEEN"
+        status="idle"
+        styleValues={{ hero_wordmark: 'fx-glitch-mono font-alt uppercase text-[clamp(1rem,3vw,1.25rem)]' }}
+        styleOptions={OPTIONS}
+        onEdit={vi.fn()}
+        onStyle={onStyle}
+        onBack={vi.fn()}
+      />,
+    )
+    const control = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'weight')!
+    fireEvent.change(screen.getByLabelText('Hero wordmark Thickness'), {
+      target: { value: String(sliderSteps(control).length - 1) },
+    })
+    const [, className] = onStyle.mock.calls[0] as unknown as string[]
+    // The stored size is kept; the base's original size does not come back.
+    expect(className).toContain('clamp(1rem,3vw,1.25rem)')
+    expect(className).not.toContain('clamp(4rem,18vw,11rem)')
+  })
+})

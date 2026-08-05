@@ -475,3 +475,17 @@ export function applyStyleValue(classString: string, control: StyleControl, valu
   }
   return kept.join(' ')
 }
+
+/**
+ * Do two class strings say the same thing? Order-insensitive, whitespace-insensitive.
+ *
+ * Used to decide whether an override is REALLY an override: a string equal to the
+ * region's base is not a change, and storing it would pin a copy of today's defaults
+ * that wins forever over any later change the site makes to its own base classes
+ * (skeen brief, 2026-08-03). Shared so the Style panel and the text-field editor can
+ * never disagree about what "unchanged" means.
+ */
+export function sameClasses(a: string, b: string): boolean {
+  const norm = (s: string) => s.split(/\s+/).filter(Boolean).sort().join(' ')
+  return norm(a) === norm(b)
+}

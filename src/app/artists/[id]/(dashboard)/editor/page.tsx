@@ -111,7 +111,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
     value: e.field ? fieldCurrentValue(e.field, ctx) : '',
     multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
-    styleRegion: e.styleRegion ? { key: e.styleRegion.key, label: e.styleRegion.label } : null,
+    styleRegion: e.styleRegion
+      ? { key: e.styleRegion.key, label: e.styleRegion.label, base: e.styleRegion.base }
+      : null,
     styleOnly: !e.field,
   }))
 

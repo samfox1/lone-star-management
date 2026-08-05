@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/icons'
 import { groupStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import {
   applyStyleValue,
+  sameClasses,
   buildStyleControls,
   readStyleValue,
   type SiteStyleOptions,
@@ -209,11 +210,6 @@ export function StyleTools({
 
   /** Two class strings that mean the same styling — same tokens, any order. Order only
    *  breaks ties within equal specificity, which the controls never produce. */
-  const sameClasses = (a: string, b: string) => {
-    const norm = (s: string) => s.split(/\s+/).filter(Boolean).sort().join(' ')
-    return norm(a) === norm(b)
-  }
-
   function edit(key: string, raw: string, base: string) {
     setText((t) => ({ ...t, [key]: raw }))
     // A string that equals the region's BASE is not an override — save '' so the row is
