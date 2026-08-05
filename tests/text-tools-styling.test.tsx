@@ -215,6 +215,31 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(within(size.parentElement!).getByText('Default')).toBeTruthy()
   })
 
+  it('CRITICAL: a region sized by the SITE opens beside its own size, not mid-scale', () => {
+    // Sam, 2026-08-05: "the Skeen text slider starts in the middle, but when I move it one
+    // to the right it gets much smaller." It did. This is skeen's real hero base, verbatim
+    // from its lib/styles.ts — 11rem at desktop, above every step this editor offers. It
+    // matched no step, so the handle rested mid-scale and one notch right wrote 2.25rem.
+    //
+    // Un-styled here: no stored override at all, so `cls` is purely the site's own base.
+    // That is the ordinary case, not an edge one — every region opens this way the first
+    // time a manager touches it.
+    const heroBase = 'fx-glitch-mono font-alt text-[clamp(4rem,18vw,11rem)] font-black uppercase leading-none'
+    editor({ ...styled, styleRegion: { key: 'hero_title', label: 'Hero title', base: heroBase } }, {})
+    const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
+    const size = screen.getByLabelText('Hero title Size') as HTMLInputElement
+
+    expect(size.value).toBe(String(steps.length - 1))
+    // …and it must not still claim to be unset, which is what licensed the jump.
+    expect(within(size.parentElement!).queryByText('Default')).toBeNull()
+
+    // The site's `leading-none` is our `!leading-none` — same 1.0, different string. It
+    // used to miss too, opening the manager at 1.1 on a line already set to 1.0.
+    const leadingSteps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'leading')!)
+    const leading = screen.getByLabelText('Hero title Line spacing') as HTMLInputElement
+    expect(leadingSteps[Number(leading.value)].value).toBe('!leading-none')
+  })
+
   it('offers Reset only once a size is actually set', () => {
     // Clearing used to be a hidden position at one end of the scale, which is how a drag
     // could blow the size away by accident. It is an explicit button now.

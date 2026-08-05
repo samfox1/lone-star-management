@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — App (v8)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --hair:#ececec;
+    --blue:#2563eb; --blue-soft:#eff4ff; --red:#e5484d; --mono:'Space Mono',monospace; --sans:'Inter',sans-serif; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);color:var(--ink);background:#e9e9ec;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1120px;margin:26px auto;padding:0 24px;}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 12px;}
+  .hint b{color:var(--ink);}
+  .app.hidden{display:none;}
+  .landing{position:relative;background:var(--paper);border:1px solid var(--hair);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 14px 34px rgba(0,0,0,.06);min-height:600px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:54px 24px 72px;overflow:auto;}
+  .lstar{font-size:32px;color:var(--blue);margin-bottom:16px;}
+  .lwordmark{font-size:30px;font-weight:700;letter-spacing:-.02em;}
+  .lsub{font-family:var(--mono);font-size:13px;color:var(--muted);margin:10px 0 30px;}
+  .lcmd{width:100%;max-width:560px;display:flex;align-items:center;gap:12px;border:1px solid var(--hair);border-radius:13px;padding:15px 18px;box-shadow:0 2px 14px rgba(0,0,0,.04);color:var(--faint);}
+  .lcmd input{border:none;outline:none;flex:1;font-family:var(--mono);font-size:14px;color:var(--ink);background:transparent;}
+  .lcmd input::placeholder{color:var(--faint);}
+  .lk{font-family:var(--mono);font-size:11px;color:var(--faint);border:1px solid var(--hair);border-radius:5px;padding:2px 6px;}
+  .ljump{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;justify-content:center;}
+  .ljump button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);background:#fff;border-radius:10px;padding:9px 14px;font-family:var(--mono);font-size:12px;color:var(--muted);cursor:pointer;}
+  .ljump button:hover{color:var(--ink);border-color:#cbd5e1;}
+  .ljump button .ic{width:15px;height:15px;}
+  .lrecent{width:100%;max-width:700px;margin-top:36px;}
+  .lrlabel{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;}
+  .lrgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .lrcard{display:flex;flex-direction:column;gap:12px;border:1px solid var(--hair);border-radius:12px;padding:14px;cursor:pointer;text-align:left;background:#fff;}
+  .lrcard:hover{border-color:#cbd5e1;background:#fafafa;}
+  .lrtop{display:flex;align-items:center;gap:10px;}
+  .lrnm{font-size:13px;font-weight:600;}
+  .lrhd{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .lrstat{display:flex;align-items:baseline;gap:8px;}
+  .lrlist{font-family:var(--mono);font-size:15px;font-weight:700;}
+  .lfoot{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:11px;color:var(--faint);}
+  .lfoot a{color:var(--muted);cursor:pointer;text-decoration:underline;}
+  .auth{min-height:600px;background:var(--paper);border:1px solid var(--hair);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 14px 34px rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;padding:40px 24px;}
+  .authcard{width:380px;max-width:100%;}
+  .abrand{display:flex;align-items:center;gap:8px;justify-content:center;font-weight:700;font-size:15px;margin-bottom:28px;}
+  .abrand .star{color:var(--blue);}
+  .authtitle{font-size:21px;font-weight:700;letter-spacing:-.01em;text-align:center;}
+  .authsub{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center;margin:8px 0 26px;}
+  .afield{margin-bottom:14px;}
+  .afield label{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:7px;}
+  .afield label a{font-size:11px;color:var(--blue);text-transform:none;letter-spacing:0;cursor:pointer;}
+  .ainput{width:100%;font-family:var(--sans);font-size:14px;border:1px solid var(--hair);border-radius:9px;padding:11px 12px;color:var(--ink);outline:none;}
+  .ainput:focus{border-color:#cbd5e1;}
+  .abtn{width:100%;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:12px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;}
+  .abtn:hover{background:#000;}
+  .adiv{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--faint);font-family:var(--mono);font-size:11px;}
+  .adiv:before,.adiv:after{content:"";height:1px;background:var(--hair);flex:1;}
+  .assobtn{width:100%;display:flex;align-items:center;justify-content:center;gap:9px;background:#fff;border:1px solid var(--hair);border-radius:9px;padding:11px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;color:var(--ink);}
+  .assobtn:hover{border-color:#cbd5e1;}
+  .afoot{text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;}
+  .afoot a{color:var(--blue);cursor:pointer;}
+  .app{position:relative;background:var(--paper);border:1px solid var(--hair);border-radius:14px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.05),0 14px 34px rgba(0,0,0,.06);min-height:600px;display:flex;}
+  .right{flex:1;min-width:0;display:flex;flex-direction:column;}
+
+  .ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:middle;flex:none;}
+  .avatar{width:38px;height:38px;border-radius:50%;background:#f1f1f1;color:#111;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;flex:none;}
+  .spark{width:96px;height:28px;display:block;}
+  .spark polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .spark.down polyline{stroke:var(--red);}
+  .trend{font-family:var(--mono);font-size:12px;}
+  .trend.up{color:var(--blue);} .trend.down{color:var(--red);}
+  .tourdot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block;flex:none;}
+
+  .statspanel{flex:none;width:312px;border-left:1px solid var(--hair);overflow:hidden;transition:width .4s cubic-bezier(.4,0,.2,1);}
+  .app.panelclosed .statspanel{width:0;border-left-color:transparent;}
+  .spin{width:312px;padding:20px 22px 28px;}
+  .sphead{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+  .sphead .t{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .spclose{cursor:pointer;color:var(--faint);display:inline-flex;}
+  .spclose:hover{color:var(--ink);}
+  .spbig{font-family:var(--mono);font-size:31px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px;margin-top:16px;}
+  .spbig .trend{font-size:13px;}
+  .splbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:4px;}
+  .spspark{width:100%;height:50px;display:block;margin:14px 0 20px;}
+  .spspark polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .spspark polygon{fill:#f4f4f6;stroke:none;}
+  .spgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px 12px;padding-bottom:22px;border-bottom:1px solid var(--hair);}
+  .spstat .v{font-family:var(--mono);font-size:21px;font-weight:700;letter-spacing:-.02em;}
+  .spstat .k{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:4px;}
+  .spsec{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:20px 0 6px;}
+  .sprow{display:flex;align-items:center;gap:11px;padding:9px 0;}
+  .sprow .av{width:28px;height:28px;font-size:10px;}
+  .sprow .nm{font-size:13px;font-weight:600;flex:1;}
+  .sprow .val{font-family:var(--mono);font-size:12px;color:var(--muted);}
+
+  .panelhandle{position:absolute;top:50%;right:312px;transform:translateY(-50%);z-index:7;width:24px;height:46px;
+    border:1px solid var(--hair);border-right:none;border-radius:9px 0 0 9px;background:#fff;display:flex;align-items:center;justify-content:center;
+    color:var(--muted);cursor:pointer;box-shadow:-3px 0 10px rgba(0,0,0,.05);transition:right .4s cubic-bezier(.4,0,.2,1);}
+  .panelhandle:hover{color:var(--ink);}
+  .panelhandle svg{transition:transform .3s;}
+  .app.panelclosed .panelhandle{right:0;}
+  .app.panelclosed .panelhandle svg{transform:rotate(180deg);}
+
+  .topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px 22px;border-bottom:1px solid var(--hair);flex:none;}
+  .brand{font-size:15px;font-weight:400;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .brand .star{color:var(--blue);} .brand b{font-weight:700;}
+  .nav{display:flex;justify-content:center;gap:2px;}
+  .nav button{display:inline-flex;align-items:center;border:none;background:none;cursor:pointer;color:var(--muted);border-radius:9px;padding:9px 10px;}
+  .nav button .lbl{max-width:0;overflow:hidden;white-space:nowrap;opacity:0;font-family:var(--mono);font-size:12px;letter-spacing:.02em;
+    transition:max-width .24s ease,opacity .18s ease,margin .24s ease;}
+  .nav button:hover{color:var(--ink);background:#fafafa;}
+  .nav button.active{color:var(--blue);}
+  .nav button:hover .lbl{max-width:120px;opacity:1;margin-left:8px;}
+  .tools{display:flex;justify-content:flex-end;align-items:center;gap:14px;color:var(--muted);}
+  .tools .iconbtn{cursor:pointer;display:inline-flex;}
+  .tools .iconbtn:hover{color:var(--ink);}
+  .maincol{flex:1;min-width:0;}
+
+  .rtoolbar{display:flex;align-items:center;gap:14px;padding:22px 28px 8px;}
+  .rtoolbar .ttl{font-size:19px;font-weight:700;letter-spacing:-.01em;}
+  .rtoolbar .grow{flex:1;}
+  .seg,.range{display:inline-flex;background:#f4f4f5;border-radius:9px;padding:3px;gap:2px;}
+  .seg button{border:none;background:none;cursor:pointer;color:var(--muted);border-radius:7px;padding:6px 9px;display:inline-flex;align-items:center;}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1);}
+  .range button{border:none;background:none;cursor:pointer;color:var(--muted);border-radius:7px;padding:6px 12px;font-family:var(--mono);font-size:12px;}
+  .range button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1);}
+  .addbtn{display:inline-flex;align-items:center;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;}
+  .addbtn .ic{width:16px;height:16px;}
+  .addbtn .lbl{max-width:0;overflow:hidden;white-space:nowrap;opacity:0;transition:max-width .24s ease,opacity .18s ease,margin .24s ease;}
+  .addbtn:hover .lbl{max-width:140px;opacity:1;margin-left:7px;}
+  .ghostbtn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--hair);border-radius:9px;padding:9px 13px;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;color:var(--ink);}
+  .ghostbtn:hover{border-color:#cbd5e1;}
+  .solidbtn{display:inline-flex;align-items:center;gap:7px;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px 13px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;}
+  .solidbtn .ic{width:15px;height:15px;}
+  .backbtn{display:inline-flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-family:var(--mono);font-size:12px;padding:6px 8px;border-radius:8px;}
+  .backbtn:hover{color:var(--ink);background:#fafafa;}
+
+  .list{padding:8px 18px 26px;}
+  .lrow{display:flex;align-items:center;gap:16px;padding:16px 12px;border-radius:11px;cursor:pointer;transition:background .14s;}
+  .lrow:hover{background:#fafafa;}
+  .lrow .nm{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .lrow .hd{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px;}
+  .lrow .an{margin-left:auto;display:flex;align-items:center;gap:26px;}
+  .lrow .fig{text-align:right;}
+  .lrow .big{font-family:var(--mono);font-size:14px;font-weight:700;}
+  .lrow .lbl2{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em;}
+  .chev{color:var(--faint);}
+  .lrow:hover .chev{color:var(--blue);}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 22px 28px;}
+  .tile{padding:18px 18px 0;border-radius:14px;cursor:pointer;transition:background .14s;overflow:hidden;}
+  .tile:hover{background:#fafafa;}
+  .tile .th{display:flex;align-items:center;gap:12px;}
+  .tile .nm{font-size:15px;font-weight:600;}
+  .tile .hd{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .tile .st{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px;}
+  .tile .foot{display:flex;align-items:flex-end;justify-content:space-between;margin-top:16px;}
+  .tile .num{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-.02em;}
+  .tile .sub{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin-top:6px;display:flex;align-items:center;gap:8px;}
+  .tmini{width:calc(100% + 36px);height:50px;display:block;margin:8px -18px 0;}
+  .tmini polygon{fill:#f4f4f6;stroke:none;}
+  .tmini polyline{fill:none;stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke;}
+  .tmini.dn polyline{stroke:var(--red);}
+
+  /* analytics page */
+  .anpage{padding:14px 28px 40px;}
+  .ankpis{display:flex;gap:0;padding:14px 0 28px;border-bottom:1px solid var(--hair);}
+  .ankpi{flex:1;padding-right:26px;margin-right:26px;border-right:1px solid var(--hair);}
+  .ankpi:last-child{border:none;margin:0;padding:0;}
+  .ankpi .v{font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:8px;}
+  .ankpi .v .trend{font-size:12px;}
+  .ankpi .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:7px;}
+  .anchart{padding:26px 0 6px;}
+  .anclabel{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .anbig{font-family:var(--mono);font-size:30px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:12px;margin:6px 0 2px;}
+  .anbig .trend{font-size:14px;}
+  .anarea{width:100%;height:180px;display:block;margin:12px 0 2px;}
+  .anarea polygon{fill:#f4f4f6;stroke:none;}
+  .anarea polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .anaxis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint);}
+  .ancols{display:grid;grid-template-columns:1.25fr 1fr;gap:44px;margin-top:30px;}
+  .ankic{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:14px;}
+  .lbrow{padding:12px 0;cursor:pointer;}
+  .lbtop{display:flex;align-items:baseline;gap:12px;}
+  .lbrank{font-family:var(--mono);font-size:12px;color:var(--faint);width:22px;}
+  .lbnm{font-size:14px;font-weight:600;}
+  .lbval{margin-left:auto;font-family:var(--mono);font-size:13px;}
+  .lbtr{font-family:var(--mono);font-size:12px;width:54px;text-align:right;}
+  .lbbar{height:6px;border-radius:3px;background:#eceef1;overflow:hidden;margin-top:9px;}
+  .lbbar i{display:block;height:100%;background:var(--ink);}
+  .lbrow:hover .lbnm{color:var(--blue);}
+  .mvsec{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 6px;}
+  .mvsec.two{margin-top:24px;}
+  .mv{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--hair);cursor:pointer;}
+  .mvnm{font-size:13px;font-weight:600;flex:1;}
+  .mvnm:hover{color:var(--blue);}
+  .mvspark{width:72px;height:24px;}
+  .mvtr{font-family:var(--mono);font-size:12px;width:52px;text-align:right;}
+
+  .secph{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:90px 24px;color:var(--muted);}
+  .secph .pic{width:46px;height:46px;color:var(--faint);margin-bottom:16px;}
+  .secph h3{font-size:17px;font-weight:700;color:var(--ink);margin:0 0 6px;}
+  .secph p{font-family:var(--mono);font-size:12px;margin:0;}
+
+  /* artist page */
+  .apage{padding:22px 32px 40px;}
+  .ahero{display:flex;align-items:center;gap:18px;margin-bottom:4px;}
+  .ahero .who{flex:1;}
+  .ahero .aname{font-size:25px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:12px;}
+  .ahero .ahd{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:5px;}
+  .ahero .aback{width:34px;height:34px;border:1px solid var(--hair);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;background:#fff;flex:none;}
+  .ahero .aback:hover{color:var(--ink);background:#fafafa;}
+  .ahero .aactions{display:flex;align-items:center;gap:10px;}
+  .editbtn{width:38px;height:38px;border:1px solid var(--hair);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;background:#fff;flex:none;}
+  .editbtn:hover{color:var(--ink);border-color:#cbd5e1;}
+  .ename{font-size:22px;font-weight:700;letter-spacing:-.01em;padding:8px 12px;border:1px solid var(--hair);border-radius:9px;width:100%;font-family:var(--sans);color:var(--ink);outline:none;}
+  .ehandle{font-family:var(--mono);font-size:13px;padding:8px 12px;border:1px solid var(--hair);border-radius:9px;width:100%;color:var(--ink);outline:none;}
+  .ename:focus,.ehandle:focus,.ebio:focus{border-color:#cbd5e1;}
+  .efield{margin:22px 0 0;max-width:600px;}
+  .efield label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;}
+  .ebio{width:100%;min-height:92px;resize:vertical;font-family:var(--sans);font-size:14px;line-height:1.55;border:1px solid var(--hair);border-radius:9px;padding:11px 12px;color:var(--ink);outline:none;}
+  .eswitch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;}
+  .eswitch .track{width:40px;height:23px;border-radius:999px;background:#e4e4e7;position:relative;transition:background .18s;flex:none;}
+  .eswitch .track i{position:absolute;top:2.5px;left:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .18s;}
+  .eswitch.on .track{background:var(--red);}
+  .eswitch.on .track i{left:19px;}
+  .eswitch .lab{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .tourchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--red);border:1px solid #f3c9c9;background:#fef5f5;border-radius:20px;padding:4px 9px;}
+  .atabs{display:flex;gap:24px;margin:22px 0 0;border-bottom:1px solid var(--hair);}
+  .atab{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--faint);padding:0 0 12px;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;}
+  .atab.on{color:var(--blue);border-bottom-color:var(--blue);}
+  .atab:hover{color:var(--muted);}
+  .atab.on:hover{color:var(--blue);}
+  .aband{padding:22px 0 6px;}
+  .abig{font-family:var(--mono);font-size:44px;font-weight:700;letter-spacing:-1.5px;display:flex;align-items:baseline;gap:14px;}
+  .abig .trend{font-size:15px;}
+  .asub{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .aarea{width:100%;height:160px;display:block;margin:14px 0 2px;}
+  .aarea polygon{fill:#f4f4f6;stroke:none;}
+  .aarea polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .aarea.dn polyline{stroke:var(--red);}
+  .aaxis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint);}
+  .akpis{display:flex;gap:0;margin:24px 0 8px;}
+  .akpi{padding-right:36px;margin-right:36px;border-right:1px solid var(--hair);}
+  .akpi:last-child{border:none;margin:0;padding:0;}
+  .akpi .v{font-family:var(--mono);font-size:19px;font-weight:700;}
+  .akpi .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:5px;}
+  .acols{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:26px;}
+  .acol .kic{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;}
+  .att{display:flex;align-items:center;gap:14px;padding:11px 0;border-top:1px solid var(--hair);font-size:14px;}
+  .att .rk{font-family:var(--mono);font-size:12px;color:var(--faint);width:20px;}
+  .att .plays{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .act{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid var(--hair);font-size:13px;}
+  .act .t{display:flex;gap:9px;align-items:center;}
+  .act .tg{font-family:var(--mono);font-size:11px;color:var(--blue);}
+  .act .when{font-family:var(--mono);font-size:11px;color:var(--faint);}
+
+  /* releases tab */
+  .tabhead{display:flex;align-items:center;margin:24px 0 4px;}
+  .tabhead .kic{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .tabhead .grow{flex:1;}
+  .relgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:20px;padding-top:14px;}
+  .relcard{cursor:pointer;}
+  .relcover{position:relative;aspect-ratio:1/1;background:#f1f1f1;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--faint);margin-bottom:11px;overflow:hidden;}
+  .relcover .disc{width:34px;height:34px;}
+  .relcard:hover .relcover{background:#ececec;}
+  .reltype{position:absolute;top:9px;left:9px;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:#fff;border-radius:6px;padding:3px 7px;}
+  .relt{font-size:14px;font-weight:600;line-height:1.25;}
+  .relmeta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px;}
+
+  /* tour tab */
+  .tourlist{padding-top:8px;}
+  .tourrow{display:grid;grid-template-columns:60px 1fr auto auto;align-items:center;gap:20px;padding:16px 0;border-top:1px solid var(--hair);}
+  .tourrow:first-of-type{border-top:none;}
+  .tdate{font-family:var(--mono);text-align:center;}
+  .tdate .d{font-size:21px;font-weight:700;line-height:1;}
+  .tdate .m{font-size:10px;letter-spacing:.1em;color:var(--faint);margin-top:4px;}
+  .tvenue{font-size:15px;font-weight:600;}
+  .tcity{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px;}
+  .tstatus{font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .tstatus.sold{color:var(--red);}
+  .tix{font-family:var(--sans);font-size:12px;font-weight:500;border:1px solid var(--hair);border-radius:8px;padding:7px 12px;background:#fff;cursor:pointer;color:var(--ink);}
+  .tix:hover{border-color:#cbd5e1;}
+  .emptyrow{font-family:var(--mono);font-size:12px;color:var(--muted);padding:40px 0;text-align:center;}
+
+  /* videos tab */
+  .vidgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px;padding-top:14px;}
+  .vidcard{cursor:pointer;}
+  .vthumb{position:relative;aspect-ratio:16/9;background:#111;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:10px;overflow:hidden;}
+  .vthumb .play{width:30px;height:30px;opacity:.92;}
+  .vt{font-size:14px;font-weight:600;line-height:1.25;}
+  .vmeta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px;}
+
+  /* merch */
+  .merchgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:20px;}
+  .merchcard{cursor:pointer;}
+  .mcover{position:relative;aspect-ratio:1/1;background:#f1f1f1;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--faint);margin-bottom:11px;}
+  .mcover .ic{width:30px;height:30px;}
+  .merchcard:hover .mcover{background:#ececec;}
+  .mkind{position:absolute;top:9px;left:9px;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:#fff;border-radius:6px;padding:3px 7px;}
+  .mt{font-size:14px;font-weight:600;line-height:1.25;}
+  .mprice{font-family:var(--mono);font-size:13px;font-weight:700;margin-top:4px;}
+  .mmeta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;}
+  .synced{font-family:var(--mono);font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  .synced .dotc{width:7px;height:7px;border-radius:50%;background:var(--blue);display:inline-block;}
+
+  /* settings · integrations */
+  .setpage{padding:14px 28px 40px;}
+  .setlabel{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:8px 0 14px;}
+  .intgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(282px,1fr));gap:14px;}
+  .intcard{border:1px solid var(--hair);border-radius:13px;padding:18px;display:flex;flex-direction:column;gap:16px;min-height:150px;}
+  .inttop{display:flex;align-items:flex-start;gap:12px;}
+  .intlogo{width:40px;height:40px;border-radius:10px;background:#f1f1f1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:15px;color:var(--ink);flex:none;}
+  .intname{font-size:15px;font-weight:600;}
+  .intdesc{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;line-height:1.45;}
+  .intfoot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;}
+  .intstatus{font-family:var(--mono);font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  .intstatus .dotc{width:7px;height:7px;border-radius:50%;background:var(--blue);display:inline-block;}
+  .connectbtn{font-family:var(--sans);font-size:13px;font-weight:600;background:var(--ink);color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;}
+  .connectbtn:hover{background:#000;}
+  .managebtn{font-family:var(--sans);font-size:13px;font-weight:500;background:#fff;border:1px solid var(--hair);border-radius:8px;padding:8px 13px;cursor:pointer;color:var(--ink);}
+  .managebtn:hover{border-color:#cbd5e1;}
+  .soonlbl{font-family:var(--mono);font-size:11px;color:var(--faint);}
+  .setlist{border:1px solid var(--hair);border-radius:13px;overflow:hidden;max-width:620px;}
+  .setrow{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--hair);}
+  .setrow:last-child{border-bottom:none;}
+  .srk{font-size:14px;font-weight:600;}
+  .srv{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px;}
+  .setnote{font-family:var(--mono);font-size:12px;color:var(--muted);background:#fafafa;border:1px solid var(--hair);border-radius:11px;padding:14px 16px;margin-top:22px;max-width:620px;line-height:1.55;}
+  .setnote b{color:var(--ink);}
+
+  /* artist analytics tab */
+  .bcol .kic{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;}
+  .brow{padding:9px 0;}
+  .btop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px;font-size:13px;}
+  .btop .bv{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .bbar{height:6px;border-radius:3px;background:#eceef1;overflow:hidden;}
+  .bbar i{display:block;height:100%;background:var(--ink);}
+  .sources{display:flex;gap:0;margin-top:14px;padding-top:22px;border-top:1px solid var(--hair);}
+  .src{flex:1;padding-right:22px;margin-right:22px;border-right:1px solid var(--hair);}
+  .src:last-child{border:none;margin:0;padding:0;}
+  .src .v{font-family:var(--mono);font-size:18px;font-weight:700;}
+  .src .k{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:5px;}
+
+  .pop{position:fixed;z-index:80;width:250px;background:#fff;border:1px solid var(--hair);border-radius:13px;
+    box-shadow:0 12px 38px rgba(0,0,0,.17);padding:15px;pointer-events:none;opacity:0;transform:translateY(5px);transition:opacity .12s ease,transform .12s ease;}
+  .pop.on{opacity:1;transform:none;}
+  .pop .ph{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .pop .pn{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;line-height:1.1;}
+  .pop .phd{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;}
+  .pop .pbig{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px;}
+  .pop .pbig .trend{font-size:12px;}
+  .pop .plbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:2px;}
+  .pop .pspark{width:100%!important;height:34px;margin:11px 0 12px;}
+  .pop .prow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0;}
+  .pop .prow b{color:var(--ink);font-weight:700;}
+  .pop .ptrack{margin-top:9px;padding-top:9px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;}
+
+  /* ---- mobile (S14 shape: bottom tab bar, stacked, no side panel) ---- */
+  @media (max-width:640px){
+    .wrap{margin:10px auto;padding:0 10px;}
+    .hint{display:none;}
+    .app{flex-direction:column;min-height:calc(100vh - 20px);}
+    .statspanel,.panelhandle{display:none!important;}
+    .topbar{grid-template-columns:1fr auto;padding:12px 14px;}
+    .nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--hair);justify-content:space-around;gap:0;padding:9px 4px 12px;z-index:40;}
+    .nav button{flex:1;justify-content:center;padding:9px 0;}
+    .nav button .lbl{display:none;}
+    .maincol{padding-bottom:62px;}
+    .pop{display:none!important;}
+    .rtoolbar{flex-wrap:wrap;padding:16px 16px 6px;}
+    .list{padding:6px 8px 20px;} .grid{grid-template-columns:1fr;padding:8px 12px 20px;}
+    .lrow .spark{display:none;} .lrow .an{gap:14px;}
+    .relgrid{grid-template-columns:1fr 1fr!important;} .vidgrid{grid-template-columns:1fr!important;}
+    .apage{padding:16px 16px 28px;}
+    .ahero{flex-wrap:wrap;} .ahero .aactions{width:100%;}
+    .akpis,.ankpis{flex-wrap:wrap;gap:18px;}
+    .akpi,.ankpi{border:none!important;margin:0!important;padding:0!important;flex:0 0 44%;}
+    .acols,.ancols{grid-template-columns:1fr;gap:26px;}
+    .atabs{gap:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .abig,.anbig{font-size:34px;}
+    .lrgrid{grid-template-columns:1fr 1fr;}
+    .authcard{width:100%;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="hint"><b>v8.</b> Open any artist, then use the <b>Overview / Releases / Tour / Videos / Analytics</b> tabs — all real now. Analytics page, roster grid/list, popovers, and the stats panel still work.</p>
+  <div class="auth" id="auth"></div>
+  <div class="landing" id="landing" style="display:none">
+    <div class="lstar">★</div>
+    <div class="lwordmark">Lone Star Management</div>
+    <div class="lsub">Your roster, releases, and analytics — all in one place.</div>
+    <div class="lcmd"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="lsearch" placeholder="Search artists or jump to a section…"><span class="lk">⌘K</span></div>
+    <div class="ljump" id="ljump">
+      <button data-go="roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg>Roster</button>
+      <button data-go="analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg>Analytics</button>
+      <button data-go="releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg>Releases</button>
+      <button data-go="tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg>Tour</button>
+      <button data-go="videos"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg>Videos</button>
+    </div>
+    <div class="lrecent"><div class="lrlabel">Your artists</div><div class="lrgrid" id="lrgrid"></div></div>
+    <div class="lfoot">Signed in as Sam · samuel.j.fox1@gmail.com — <a id="signout">Sign out</a></div>
+  </div>
+  <div class="app hidden" id="app">
+    <div class="right">
+      <div class="topbar">
+        <div class="brand" id="brand" title="Back to roster"><span class="star">★</span> <span id="brandtxt">Lone Star <b>Roster</b></span></div>
+        <nav class="nav" id="nav">
+          <button class="active" data-k="roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg><span class="lbl">Roster</span></button>
+          <button data-k="analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg><span class="lbl">Analytics</span></button>
+          <button data-k="releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg><span class="lbl">Releases</span></button>
+          <button data-k="tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg><span class="lbl">Tour</span></button>
+          <button data-k="videos"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg><span class="lbl">Videos</span></button>
+          <button data-k="merch"><svg class="ic" viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg><span class="lbl">Merch</span></button>
+        </nav>
+        <div class="tools">
+          <span class="iconbtn" title="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></span>
+          <span class="iconbtn" id="settingsbtn" title="Settings"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></span>
+          <div class="avatar" style="width:30px;height:30px;font-size:11px;">SF</div>
+        </div>
+      </div>
+      <div class="maincol"><div id="main"></div></div>
+    </div>
+    <aside class="statspanel" id="stats">
+      <div class="spin">
+        <div class="sphead"><span class="t">Roster totals</span><span class="spclose" id="spclose" title="Hide"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M9 6l6 6-6 6"/></svg></span></div>
+        <div class="spbig">4.61M <span class="trend up">+3.1%</span></div>
+        <div class="splbl">Total monthly listeners</div>
+        <svg class="spspark" viewBox="0 0 100 40" preserveAspectRatio="none"><polygon points="0,28 14,26 28,22 42,23 57,16 71,12 85,8 100,4 100,40 0,40"/><polyline points="0,28 14,26 28,22 42,23 57,16 71,12 85,8 100,4"/></svg>
+        <div class="spgrid">
+          <div class="spstat"><div class="v">4</div><div class="k">Artists</div></div>
+          <div class="spstat"><div class="v">41</div><div class="k">Releases</div></div>
+          <div class="spstat"><div class="v">40</div><div class="k">Videos</div></div>
+          <div class="spstat"><div class="v">1</div><div class="k">On tour</div></div>
+        </div>
+        <div class="spsec">Top by listeners</div>
+        <div class="sprow"><div class="avatar av">GS</div><div class="nm">George Strait</div><div class="val">1.51M</div></div>
+        <div class="spsec">Biggest gainer</div>
+        <div class="sprow"><div class="avatar av">KM</div><div class="nm">Kacey Musgraves</div><div class="val trend up">+6.8%</div></div>
+        <div class="spsec">Needs attention</div>
+        <div class="sprow"><div class="avatar av">GS</div><div class="nm">George Strait</div><div class="val trend down">−2.3%</div></div>
+      </div>
+    </aside>
+    <button class="panelhandle" id="statsbtn" title="Toggle stats panel"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div>
+<div class="pop" id="pop"></div>
+
+<script>
+const ARTISTS = [
+  {id:'willie', ini:'WN', name:'Willie Nelson', handle:'/willie', listeners:'1.24M', streams:'5.8M', followers:'118K', trend:'+4.2%', dir:'up', tour:true, releases:12, videos:9, bar:82,
+    spark:'0,22 16,20 33,16 50,18 66,12 83,7 100,3', area:'0,86 53,80 106,82 160,64 213,54 266,40 320,26',
+    tracks:[['On the Road Again','48.2M'],['Always on My Mind','39.1M'],['Whiskey River','22.7M']],
+    rel:[['Live at Luck','Album','2025','4.2M'],['Bloodline','Single','2024','2.1M'],['Texas Sessions','EP','2023','1.4M'],['The Road','Album','2022','6.8M']],
+    dates:[['28','JUN','The Backyard','Austin, TX','On sale'],['02','JUL','Red Rocks','Morrison, CO','Sold out'],['09','JUL','Ryman Auditorium','Nashville, TN','On sale']],
+    vids:[['On the Road Again (Live)','1.2M','3 wks ago'],['Bloodline — Official Video','842K','2 mo ago'],['Studio: Texas Sessions','410K','5 mo ago']],
+    cities:[['Austin',18],['Nashville',12],['Dallas',9],['Houston',7]], sources:[['Spotify','58%'],['Apple Music','24%'],['YouTube','18%']]},
+  {id:'miranda', ini:'ML', name:'Miranda Lambert', handle:'/miranda', listeners:'982K', streams:'4.6M', followers:'96K', trend:'+1.1%', dir:'up', tour:false, releases:8, videos:14, bar:65,
+    spark:'0,15 16,17 33,12 50,15 66,11 83,9 100,8', area:'0,70 53,72 106,60 160,66 213,52 266,46 320,42',
+    tracks:[['Bluebird','31.5M'],['The House That Built Me','58.9M'],['Gunpowder & Lead','27.3M']],
+    rel:[['Wildcard','Album','2024','5.1M'],['Bluebird','Single','2023','3.3M'],['Palomino','Album','2022','4.0M']],
+    dates:[], vids:[['Bluebird — Official Video','2.0M','1 mo ago'],['The House That Built Me (Live)','3.4M','6 mo ago'],['Palomino — Visualizer','690K','9 mo ago']],
+    cities:[['Nashville',15],['Dallas',11],['Atlanta',8],['Phoenix',6]], sources:[['Spotify','61%'],['Apple Music','22%'],['YouTube','17%']]},
+  {id:'george', ini:'GS', name:'George Strait', handle:'/george', listeners:'1.51M', streams:'7.1M', followers:'204K', trend:'−2.3%', dir:'down', tour:false, releases:15, videos:6, bar:100,
+    spark:'0,6 16,8 33,11 50,9 66,12 83,15 100,18', area:'0,30 53,36 106,46 160,42 213,52 266,64 320,76',
+    tracks:[['Amarillo by Morning','44.0M'],['Check Yes or No','41.8M'],['The Chair','29.6M']],
+    rel:[['Honky Tonk Time Machine','Album','2024','7.2M'],['Codigo','Single','2023','2.8M'],['Strait Out','Album','2021','5.5M'],['Amarillo','Single','2020','9.1M']],
+    dates:[], vids:[['Amarillo by Morning (Live)','5.2M','2 mo ago'],['The Chair — Official Video','3.1M','8 mo ago']],
+    cities:[['San Antonio',16],['Houston',13],['Dallas',10],['Austin',7]], sources:[['Spotify','55%'],['Apple Music','27%'],['YouTube','18%']]},
+  {id:'kacey', ini:'KM', name:'Kacey Musgraves', handle:'/kacey', listeners:'873K', streams:'4.1M', followers:'88K', trend:'+6.8%', dir:'up', tour:false, releases:6, videos:11, bar:58,
+    spark:'0,24 16,21 33,18 50,14 66,10 83,6 100,2', area:'0,96 53,88 106,80 160,64 213,48 266,32 320,18',
+    tracks:[['Rainbow','35.1M'],['Slow Burn','40.4M'],['Space Cowboy','33.9M']],
+    rel:[['Deeper Well','Album','2024','6.9M'],['Star-Crossed','Album','2023','5.4M'],['Golden Hour','Album','2022','12.1M']],
+    dates:[['15','JUL','The Greek Theatre','Los Angeles, CA','On sale']],
+    vids:[['Rainbow — Official Video','4.8M','3 mo ago'],['Slow Burn (Live)','2.2M','7 mo ago']],
+    cities:[['Los Angeles',14],['Austin',11],['New York',9],['Seattle',7]], sources:[['Spotify','63%'],['Apple Music','21%'],['YouTube','16%']]},
+];
+const ACTIVITY = [['Published','Tour dates','2d'],['Updated','Release · Live at Luck','4d'],['Added','Press photos','1w']];
+const BIOS = {
+  willie:'Country music outlaw and Texas institution — seven decades on the road and still selling out rooms.',
+  miranda:'Texas-born country powerhouse known for sharp songwriting and even sharper live shows.',
+  george:'The King of Country. Record-setting tours and a catalog of timeless number-ones.',
+  kacey:'Genre-bending songwriter blending country roots with cosmic, modern pop.'
+};
+const SECTIONS = {releases:'Releases', tour:'Tour dates', videos:'Videos', merch:'Merch'};
+const TABS = ['Overview','Releases','Tour','Videos','Merch','Analytics','Integrations'];
+const MONTHS = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+let relFilter = 'All';
+const MERCH = {
+  willie:[['Tour Tee 2025','$32','Apparel','1.2k sold'],['Trigger Vinyl LP','$28','Music','840 sold'],['Lone Star Bandana','$15','Accessory','2.1k sold']],
+  miranda:[['Wildcard Hoodie','$58','Apparel','690 sold'],['Enamel Pin Set','$18','Accessory','430 sold']],
+  george:[['Felt Cowboy Hat','$45','Accessory','1.5k sold'],['Strait Logo Tee','$30','Apparel','2.8k sold'],['Tour Poster','$22','Print','970 sold']],
+  kacey:[['Deeper Well Tee','$34','Apparel','1.1k sold'],['Rainbow Tote','$24','Accessory','560 sold']]
+};
+const PROVIDERS = [
+  {name:'Spotify', desc:'Catalog, tracks & monthly listeners'},
+  {name:'Apple Music', desc:'Catalog source for releases'},
+  {name:'YouTube', desc:'Import music videos & view counts'},
+  {name:'Deezer', desc:'Catalog source for releases'},
+  {name:'Shopify', desc:'Sync merch products & inventory'},
+  {name:'Ticketmaster', desc:'Import tour dates'},
+  {name:'Bandsintown', desc:'Sync tour dates & RSVPs'},
+  {name:'Bandcamp', desc:'Sync releases & merch', soon:true}
+];
+/* each artist connects their own sources */
+const CONNS = {
+  willie:{'Spotify':'2h ago','YouTube':'1d ago','Shopify':'4h ago','Bandsintown':'3h ago'},
+  miranda:{'Apple Music':'5h ago','YouTube':'2d ago','Shopify':'1d ago'},
+  george:{'Spotify':'1h ago','Apple Music':'6h ago'},
+  kacey:{'Spotify':'3h ago','YouTube':'4h ago','Shopify':'2h ago'}
+};
+const BAG = '<svg class="ic" viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg>';
+
+const main = document.getElementById('main');
+const brandtxt = document.getElementById('brandtxt');
+const pop = document.getElementById('pop');
+const appEl = document.getElementById('app');
+const statsbtn = document.getElementById('statsbtn');
+let view = 'list', rosterView = 'list', selected = null, section = 'releases', artistTab = 'Overview', editing = false;
+const byId = id => ARTISTS.find(a => a.id === id);
+
+function sparkSvg(a, cls){ return '<svg class="spark'+(a.dir==='down'?' down':'')+(cls?' '+cls:'')+'" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="'+a.spark+'"/></svg>'; }
+function areaSvg(a, cls){ return '<svg class="'+cls+(a.dir==='down'?' dn':'')+'" viewBox="0 0 320 120" preserveAspectRatio="none"><polygon points="'+a.area+' 320,120 0,120"/><polyline points="'+a.area+'"/></svg>'; }
+function miniSvg(a){ return '<svg class="tmini'+(a.dir==='down'?' dn':'')+'" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 '+a.spark+' 100,30"/><polyline points="'+a.spark+'"/></svg>'; }
+function trendSpan(a){ return '<span class="trend '+a.dir+'">'+a.trend+'</span>'; }
+function setNav(k){ document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active', x.dataset.k===k)); }
+
+function fillPop(a){
+  pop.innerHTML =
+    '<div class="ph"><div class="avatar">'+a.ini+'</div><div><div class="pn">'+a.name+(a.tour?' <span class="tourdot"></span>':'')+'</div><div class="phd">'+a.handle+'</div></div></div>'
+    + '<div class="pbig">'+a.listeners+' '+trendSpan(a)+'</div><div class="plbl">Monthly listeners</div>'
+    + sparkSvg(a,'pspark')
+    + '<div class="prow"><span>Releases</span><b>'+a.releases+'</b></div>'
+    + '<div class="prow"><span>Videos</span><b>'+a.videos+'</b></div>'
+    + '<div class="prow"><span>Status</span><b>'+(a.tour?'On tour':'Active')+'</b></div>'
+    + '<div class="ptrack"><span>Top track</span><span>'+a.tracks[0][0]+'</span></div>';
+}
+function movePop(e){
+  const w=pop.offsetWidth, h=pop.offsetHeight; let x=e.clientX+16, y=e.clientY+16;
+  if(x+w>innerWidth-8) x=e.clientX-w-16;
+  if(y+h>innerHeight-8) y=innerHeight-h-8;
+  if(y<8) y=8;
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+}
+function attachHover(el, a){
+  el.addEventListener('mouseenter', ()=>{ fillPop(a); pop.classList.add('on'); });
+  el.addEventListener('mousemove', movePop);
+  el.addEventListener('mouseleave', ()=> pop.classList.remove('on'));
+}
+function openArtist(id){ pop.classList.remove('on'); selected = id; artistTab='Overview'; editing=false; view = 'artist'; render(); }
+function openArtistTab(id, tab){ pop.classList.remove('on'); selected = id; editing=false; artistTab = tab; view = 'artist'; render(); }
+
+/* roster */
+function rosterToolbar(){
+  return '<div class="rtoolbar"><div class="ttl">Your artists</div><div class="grow"></div>'
+    + '<div class="seg" id="seg">'
+    + '<button data-v="grid" class="'+(rosterView==='grid'?'on':'')+'" title="Grid view"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>'
+    + '<button data-v="list" class="'+(rosterView==='list'?'on':'')+'" title="List view"><svg class="ic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>'
+    + '</div>'
+    + '<button class="addbtn" title="Add artist"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add artist</span></button></div>';
+}
+function renderList(){
+  const rows = ARTISTS.map(a =>
+    '<div class="lrow" data-id="'+a.id+'"><div class="avatar">'+a.ini+'</div>'
+    + '<div><div class="nm">'+a.name+(a.tour?' <span class="tourdot"></span>':'')+'</div><div class="hd">'+a.handle+'</div></div>'
+    + '<div class="an">'+sparkSvg(a)+'<div class="fig"><div class="big">'+a.listeners+'</div><div class="lbl2">LISTENERS</div></div>'+trendSpan(a)
+    + '<span class="chev"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div></div>'
+  ).join('');
+  main.innerHTML = rosterToolbar() + '<div class="list">'+rows+'</div>'; wireRoster();
+}
+function renderGrid(){
+  const tiles = ARTISTS.map(a =>
+    '<div class="tile" data-id="'+a.id+'"><div class="th"><div class="avatar">'+a.ini+'</div><div><div class="nm">'+a.name+'</div><div class="hd">'+a.handle+'</div></div>'
+    + '<div class="st">'+(a.tour?'<span class="tourdot"></span>On tour':'<span class="tourdot" style="background:var(--faint)"></span>Active')+'</div></div>'
+    + '<div class="foot"><div><div class="num">'+a.listeners+'</div><div class="sub">listeners '+trendSpan(a)+'</div></div></div>'+miniSvg(a)+'</div>'
+  ).join('');
+  main.innerHTML = rosterToolbar() + '<div class="grid">'+tiles+'</div>'; wireRoster();
+}
+function wireRoster(){
+  main.querySelectorAll('#seg button').forEach(b => b.onclick = () => { rosterView = b.dataset.v; view = rosterView; render(); });
+  main.querySelectorAll('[data-id]').forEach(el => { const a = byId(el.dataset.id); el.onclick = () => openArtist(a.id); attachHover(el, a); });
+}
+
+/* analytics page */
+function renderAnalytics(){
+  const ranked = ARTISTS.slice().sort((x,y)=> y.bar - x.bar);
+  const rising = ARTISTS.filter(a=>a.dir==='up').sort((x,y)=> parseFloat(y.trend)-parseFloat(x.trend));
+  const falling = ARTISTS.filter(a=>a.dir==='down');
+  const lb = ranked.map((a,i)=>
+    '<div class="lbrow" data-id="'+a.id+'"><div class="lbtop"><span class="lbrank">'+('0'+(i+1)).slice(-2)+'</span><span class="lbnm">'+a.name+'</span>'
+    + '<span class="lbval">'+a.listeners+'</span><span class="lbtr" style="color:'+(a.dir==='down'?'var(--red)':'var(--blue)')+'">'+a.trend+'</span></div>'
+    + '<div class="lbbar"><i style="width:'+a.bar+'%"></i></div></div>').join('');
+  const mvRow = a => '<div class="mv" data-id="'+a.id+'"><div class="avatar" style="width:28px;height:28px;font-size:10px">'+a.ini+'</div><span class="mvnm">'+a.name+'</span>'+sparkSvg(a)+'<span class="mvtr" style="color:'+(a.dir==='down'?'var(--red)':'var(--blue)')+'">'+a.trend+'</span></div>';
+  const total = {dir:'up', area:'0,88 53,80 106,82 160,62 213,50 266,38 320,24'};
+  main.innerHTML =
+    '<div class="rtoolbar"><div class="ttl">Analytics</div><div class="grow"></div>'
+    + '<div class="range" id="range"><button>28D</button><button class="on">6M</button><button>12M</button></div>'
+    + '<button class="ghostbtn">Export <svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button></div>'
+    + '<div class="anpage">'
+    +   '<div class="ankpis">'
+    +     '<div class="ankpi"><div class="v">4.61M <span class="trend up">+3.1%</span></div><div class="k">Monthly listeners</div></div>'
+    +     '<div class="ankpi"><div class="v">18.2M <span class="trend up">+2.4%</span></div><div class="k">Monthly streams</div></div>'
+    +     '<div class="ankpi"><div class="v">312K <span class="trend up">+1.8%</span></div><div class="k">Followers</div></div>'
+    +     '<div class="ankpi"><div class="v">41</div><div class="k">Releases</div></div></div>'
+    +   '<div class="anchart"><div class="anclabel">Total monthly listeners · last 6 months</div><div class="anbig">4.61M <span class="trend up">+3.1%</span></div>'
+    +     areaSvg(total,'anarea')+'<div class="anaxis"><span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span></div></div>'
+    +   '<div class="ancols"><div class="ancol"><div class="ankic">Top artists by listeners</div>'+lb+'</div>'
+    +     '<div class="ancol"><div class="mvsec">Rising</div>'+rising.map(mvRow).join('')+'<div class="mvsec two">Needs attention</div>'+falling.map(mvRow).join('')+'</div></div>'
+    + '</div>';
+  main.querySelectorAll('[data-id]').forEach(el => el.onclick = () => openArtist(el.dataset.id));
+  main.querySelectorAll('#range button').forEach(b => b.onclick = () => { main.querySelectorAll('#range button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); });
+}
+
+function addBtn(label){ return '<button class="addbtn" title="'+label+'"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">'+label+'</span></button>'; }
+
+function renderReleases(){
+  const all = ARTISTS.flatMap(a => a.rel.map(r => ({a:a, t:r[0], type:r[1], y:r[2], s:r[3]})));
+  const filt = relFilter==='All' ? all : all.filter(x => x.type===relFilter);
+  const types = [['All','All'],['Albums','Album'],['Singles','Single'],['EPs','EP']];
+  const seg = types.map(t => '<button data-type="'+t[1]+'" class="'+(relFilter===t[1]?'on':'')+'">'+t[0]+'</button>').join('');
+  const cards = filt.map(x =>
+    '<div class="relcard" data-id="'+x.a.id+'"><div class="relcover"><span class="reltype">'+x.type+'</span>'+DISC+'</div>'
+    + '<div class="relt">'+x.t+'</div><div class="relmeta">'+x.a.name+' · '+x.y+'</div><div class="relmeta">'+x.s+' plays</div></div>').join('');
+  main.innerHTML =
+    '<div class="rtoolbar"><div class="ttl">Releases</div><div class="grow"></div>'
+    + '<div class="range" id="relfilter">'+seg+'</div>'+addBtn('Add release')+'</div>'
+    + '<div class="relgrid" style="padding:14px 28px 34px">'+cards+'</div>';
+  main.querySelectorAll('#relfilter button').forEach(b => b.onclick = () => { relFilter = b.dataset.type; renderReleases(); });
+  main.querySelectorAll('.relcard').forEach(el => el.onclick = () => openArtistTab(el.dataset.id,'Releases'));
+}
+function renderTour(){
+  const all = ARTISTS.flatMap(a => a.dates.map(d => ({a:a, d:d[0], m:d[1], venue:d[2], city:d[3], status:d[4]})));
+  all.sort((x,y) => (MONTHS[x.m]-MONTHS[y.m]) || (parseInt(x.d)-parseInt(y.d)));
+  const rows = all.map(x =>
+    '<div class="tourrow" data-id="'+x.a.id+'"><div class="tdate"><div class="d">'+x.d+'</div><div class="m">'+x.m+'</div></div>'
+    + '<div style="display:flex;align-items:center;gap:12px"><div class="avatar" style="width:32px;height:32px;font-size:11px">'+x.a.ini+'</div>'
+    + '<div><div class="tvenue">'+x.venue+'</div><div class="tcity">'+x.a.name+' · '+x.city+'</div></div></div>'
+    + '<div class="tstatus'+(x.status==='Sold out'?' sold':'')+'">'+x.status+'</div><button class="tix">Tickets</button></div>').join('');
+  main.innerHTML =
+    '<div class="rtoolbar"><div class="ttl">Tour dates</div><div class="grow"></div>'+addBtn('Add date')+'</div>'
+    + '<div class="tourlist" style="padding:14px 28px 30px">'+(rows || '<div class="emptyrow">No upcoming dates.</div>')+'</div>';
+  main.querySelectorAll('.tourrow').forEach(el => el.onclick = () => openArtistTab(el.dataset.id,'Tour'));
+}
+function renderVideos(){
+  const all = ARTISTS.flatMap(a => a.vids.map(v => ({a:a, t:v[0], views:v[1], date:v[2]})));
+  const cards = all.map(x =>
+    '<div class="vidcard" data-id="'+x.a.id+'"><div class="vthumb">'+PLAY+'</div><div class="vt">'+x.t+'</div>'
+    + '<div class="vmeta">'+x.a.name+' · '+x.views+' views · '+x.date+'</div></div>').join('');
+  main.innerHTML =
+    '<div class="rtoolbar"><div class="ttl">Videos</div><div class="grow"></div>'+addBtn('Add video')+'</div>'
+    + '<div class="vidgrid" style="padding:14px 28px 34px">'+cards+'</div>';
+  main.querySelectorAll('.vidcard').forEach(el => el.onclick = () => openArtistTab(el.dataset.id,'Videos'));
+}
+function renderMerch(){
+  const all = ARTISTS.flatMap(a => (MERCH[a.id]||[]).map(m => ({a:a, name:m[0], price:m[1], kind:m[2], sold:m[3]})));
+  const cards = all.map(x =>
+    '<div class="merchcard" data-id="'+x.a.id+'"><div class="mcover"><span class="mkind">'+x.kind+'</span>'+BAG+'</div>'
+    + '<div class="mt">'+x.name+'</div><div class="mprice">'+x.price+'</div><div class="mmeta">'+x.a.name+' · '+x.sold+'</div></div>').join('');
+  main.innerHTML =
+    '<div class="rtoolbar"><div class="ttl">Merch</div><div class="grow"></div>'
+    + '<span class="synced" style="margin-right:6px"><span class="dotc"></span>Synced from Shopify</span>'+addBtn('Add product')+'</div>'
+    + '<div class="merchgrid" style="padding:14px 28px 34px">'+cards+'</div>';
+  main.querySelectorAll('.merchcard').forEach(el => el.onclick = () => openArtistTab(el.dataset.id,'Merch'));
+}
+function renderSettings(){
+  main.innerHTML =
+    '<div class="rtoolbar"><div class="ttl">Settings</div></div>'
+    + '<div class="setpage"><div class="setlabel">Account</div>'
+    + '<div class="setlist">'
+    +   '<div class="setrow"><div><div class="srk">Profile</div><div class="srv">Sam Fox · samuel.j.fox1@gmail.com</div></div><button class="managebtn">Edit</button></div>'
+    +   '<div class="setrow"><div><div class="srk">Workspace</div><div class="srv">Lone Star Management · 4 artists</div></div><button class="managebtn">Manage</button></div>'
+    +   '<div class="setrow"><div><div class="srk">Plan</div><div class="srv">Pro · renews Jul 1</div></div><button class="managebtn">Billing</button></div>'
+    + '</div>'
+    + '<div class="setnote">Data sources (Spotify, Apple Music, YouTube, Shopify…) are connected <b>per artist</b> — open an artist and use its <b>Integrations</b> tab. Each artist can use different providers.</div>'
+    + '</div>';
+}
+function renderSection(){
+  if(section==='releases') return renderReleases();
+  if(section==='tour') return renderTour();
+  if(section==='videos') return renderVideos();
+  if(section==='merch') return renderMerch();
+  const name = SECTIONS[section] || 'Section';
+  main.innerHTML = '<div class="rtoolbar"><div class="ttl">'+name+'</div></div><div class="secph"><h3>'+name+'</h3><p>Coming soon.</p></div>';
+}
+
+/* ---- artist page + tabs ---- */
+const DISC = '<svg class="disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg>';
+const PLAY = '<svg class="play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg>';
+
+function tabOverview(a){
+  const tracks = a.tracks.map((t,i)=>'<div class="att"><span class="rk">'+('0'+(i+1)).slice(-2)+'</span>'+t[0]+'<span class="plays">'+t[1]+'</span></div>').join('');
+  const acts = ACTIVITY.map(x=>'<div class="act"><span class="t"><span class="tg">'+x[0]+'</span>'+x[1]+'</span><span class="when">'+x[2]+'</span></div>').join('');
+  return '<div class="aband"><div class="abig">'+a.listeners+' '+trendSpan(a)+'</div><div class="asub">Monthly listeners · last 6 months</div>'+areaSvg(a,'aarea')
+    +'<div class="aaxis"><span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span></div></div>'
+    +'<div class="akpis"><div class="akpi"><div class="v">'+a.releases+'</div><div class="k">Releases</div></div>'
+    +'<div class="akpi"><div class="v">'+a.videos+'</div><div class="k">Videos</div></div>'
+    +'<div class="akpi"><div class="v">'+a.followers+'</div><div class="k">Followers</div></div>'
+    +'<div class="akpi"><div class="v">'+(a.tour?'Yes':'—')+'</div><div class="k">On tour</div></div></div>'
+    +'<div class="acols"><div class="acol"><div class="kic">Top tracks</div>'+tracks+'</div>'
+    +'<div class="acol"><div class="kic">Recent activity</div>'+acts+'</div></div>';
+}
+function tabReleases(a){
+  const cards = a.rel.map(r=>'<div class="relcard"><div class="relcover"><span class="reltype">'+r[1]+'</span>'+DISC+'</div><div class="relt">'+r[0]+'</div><div class="relmeta">'+r[2]+' · '+r[3]+' plays</div></div>').join('');
+  return '<div class="tabhead"><div class="kic">'+a.rel.length+' releases</div><div class="grow"></div><button class="addbtn" title="Add release"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add release</span></button></div><div class="relgrid">'+cards+'</div>';
+}
+function tabTour(a){
+  if(!a.dates.length) return '<div class="tabhead"><div class="kic">Tour dates</div><div class="grow"></div><button class="addbtn" title="Add date"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add date</span></button></div><div class="emptyrow">No upcoming dates.</div>';
+  const rows = a.dates.map(d=>'<div class="tourrow"><div class="tdate"><div class="d">'+d[0]+'</div><div class="m">'+d[1]+'</div></div>'
+    +'<div><div class="tvenue">'+d[2]+'</div><div class="tcity">'+d[3]+'</div></div>'
+    +'<div class="tstatus'+(d[4]==='Sold out'?' sold':'')+'">'+d[4]+'</div><button class="tix">Tickets</button></div>').join('');
+  return '<div class="tabhead"><div class="kic">'+a.dates.length+' upcoming</div><div class="grow"></div><button class="addbtn" title="Add date"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add date</span></button></div><div class="tourlist">'+rows+'</div>';
+}
+function tabVideos(a){
+  const cards = a.vids.map(v=>'<div class="vidcard"><div class="vthumb">'+PLAY+'</div><div class="vt">'+v[0]+'</div><div class="vmeta">'+v[1]+' views · '+v[2]+'</div></div>').join('');
+  return '<div class="tabhead"><div class="kic">'+a.vids.length+' videos</div><div class="grow"></div><button class="addbtn" title="Add video"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add video</span></button></div><div class="vidgrid">'+cards+'</div>';
+}
+function tabMerch(a){
+  const items = MERCH[a.id]||[];
+  const cards = items.map(m=>'<div class="merchcard"><div class="mcover"><span class="mkind">'+m[2]+'</span>'+BAG+'</div><div class="mt">'+m[0]+'</div><div class="mprice">'+m[1]+'</div><div class="mmeta">'+m[3]+'</div></div>').join('');
+  return '<div class="tabhead"><div class="synced"><span class="dotc"></span>'+items.length+' products · synced from Shopify</div><div class="grow"></div><button class="addbtn" title="Add product"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add product</span></button></div>'
+    + '<div class="merchgrid" style="padding-top:14px">'+(cards || '<div class="emptyrow" style="grid-column:1/-1">No products yet.</div>')+'</div>';
+}
+function tabIntegrations(a){
+  const conn = CONNS[a.id] || {};
+  const cards = PROVIDERS.map(p => {
+    const top = '<div class="inttop"><div class="intlogo">'+p.name[0]+'</div><div><div class="intname">'+p.name+'</div><div class="intdesc">'+p.desc+'</div></div></div>';
+    let foot;
+    if(p.soon) foot = '<div class="intfoot"><span class="soonlbl">Coming soon</span></div>';
+    else if(conn[p.name]) foot = '<div class="intfoot"><span class="intstatus"><span class="dotc"></span>Connected · '+conn[p.name]+'</span><button class="managebtn" data-dis="'+p.name+'">Disconnect</button></div>';
+    else foot = '<div class="intfoot"><span class="intstatus" style="color:var(--faint)">Not connected</span><button class="connectbtn" data-con="'+p.name+'">Connect</button></div>';
+    return '<div class="intcard">'+top+foot+'</div>';
+  }).join('');
+  return '<div class="tabhead"><div class="kic">Data sources for '+a.name+'</div></div><div class="intgrid" style="margin-top:14px">'+cards+'</div>';
+}
+function tabAnalytics(a){
+  const tpct=[100,76,52];
+  const tracks = a.tracks.map((t,i)=>'<div class="brow"><div class="btop"><span>'+t[0]+'</span><span class="bv">'+t[1]+'</span></div><div class="bbar"><i style="width:'+tpct[i]+'%"></i></div></div>').join('');
+  const maxc = Math.max.apply(null,a.cities.map(c=>c[1]));
+  const cities = a.cities.map(c=>'<div class="brow"><div class="btop"><span>'+c[0]+'</span><span class="bv">'+c[1]+'%</span></div><div class="bbar"><i style="width:'+Math.round(c[1]/maxc*100)+'%"></i></div></div>').join('');
+  const src = a.sources.map(s=>'<div class="src"><div class="v">'+s[1]+'</div><div class="k">'+s[0]+'</div></div>').join('');
+  return '<div class="aband"><div class="abig">'+a.listeners+' '+trendSpan(a)+'</div><div class="asub">Monthly listeners · last 6 months</div>'+areaSvg(a,'aarea')
+    +'<div class="aaxis"><span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span></div></div>'
+    +'<div class="akpis"><div class="akpi"><div class="v">'+a.listeners+'</div><div class="k">Listeners</div></div>'
+    +'<div class="akpi"><div class="v">'+a.streams+'</div><div class="k">Monthly streams</div></div>'
+    +'<div class="akpi"><div class="v">'+a.followers+'</div><div class="k">Followers</div></div></div>'
+    +'<div class="acols"><div class="bcol"><div class="kic">Top tracks by streams</div>'+tracks+'</div>'
+    +'<div class="bcol"><div class="kic">Top cities</div>'+cities+'</div></div>'
+    +'<div class="sources">'+src+'</div>';
+}
+function renderArtistEdit(a){
+  const on = a.tour;
+  main.innerHTML =
+    '<div class="apage"><div class="ahero">'
+    + '<button class="aback" id="back" title="All artists"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M15 6l-6 6 6 6"/></svg></button>'
+    + '<div class="avatar" style="width:56px;height:56px;font-size:16px">'+a.ini+'</div>'
+    + '<div style="flex:1;max-width:460px;display:flex;flex-direction:column;gap:8px">'
+    +   '<input class="ename" id="ename" value="'+a.name+'">'
+    +   '<input class="ehandle" id="ehandle" value="'+a.handle+'">'
+    + '</div>'
+    + '<div class="aactions"><button class="ghostbtn" id="ecancel">Cancel</button><button class="solidbtn" id="esave">Save changes</button></div>'
+    + '</div>'
+    + '<div class="efield"><label>Status</label><div class="eswitch'+(on?' on':'')+'" id="eswitch"><span class="track"><i></i></span><span class="lab">'+(on?'On tour':'Active')+'</span></div></div>'
+    + '<div class="efield"><label>Bio</label><textarea class="ebio" id="ebio">'+(BIOS[a.id]||'')+'</textarea></div>'
+    + '<div class="efield"><label>Public site</label><div class="ahd" style="font-size:13px">lonestar.fm'+a.handle+'</div></div>'
+    + '</div>';
+  document.getElementById('back').onclick = () => { editing=false; view=rosterView; render(); };
+  document.getElementById('ecancel').onclick = () => { editing=false; renderArtist(); };
+  const sw = document.getElementById('eswitch');
+  sw.onclick = () => { sw.classList.toggle('on'); sw.querySelector('.lab').textContent = sw.classList.contains('on')?'On tour':'Active'; };
+  document.getElementById('esave').onclick = () => {
+    a.name = document.getElementById('ename').value.trim() || a.name;
+    let h = document.getElementById('ehandle').value.trim(); if(h && h[0]!=='/') h='/'+h; if(h) a.handle=h;
+    a.tour = sw.classList.contains('on');
+    BIOS[a.id] = document.getElementById('ebio').value;
+    editing=false; render();
+  };
+}
+function renderArtist(){
+  const a = byId(selected) || ARTISTS[0];
+  if(editing) return renderArtistEdit(a);
+  const tabs = TABS.map(t=>'<span class="atab'+(t===artistTab?' on':'')+'" data-tab="'+t+'">'+t+'</span>').join('');
+  const bodyFns = {Overview:tabOverview, Releases:tabReleases, Tour:tabTour, Videos:tabVideos, Merch:tabMerch, Analytics:tabAnalytics, Integrations:tabIntegrations};
+  main.innerHTML =
+    '<div class="apage">'
+    +   '<div class="ahero">'
+    +     '<button class="aback" id="back" title="All artists"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M15 6l-6 6 6 6"/></svg></button>'
+    +     '<div class="avatar" style="width:56px;height:56px;font-size:16px">'+a.ini+'</div>'
+    +     '<div class="who"><div class="aname">'+a.name+(a.tour?' <span class="tourchip"><span class="tourdot"></span>On tour</span>':'')+'</div><div class="ahd">'+a.handle+' · lonestar.fm'+a.handle+'</div></div>'
+    +     '<div class="aactions">'
+    +       '<button class="ghostbtn">View public site <svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M7 17L17 7M9 7h8v8"/></svg></button>'
+    +       '<button class="editbtn" id="editbtn" title="Edit info"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></svg></button>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div class="atabs">'+tabs+'</div>'
+    +   (bodyFns[artistTab]||tabOverview)(a)
+    + '</div>';
+  document.getElementById('back').onclick = () => { view = rosterView; render(); };
+  document.getElementById('editbtn').onclick = () => { editing = true; renderArtist(); };
+  main.querySelectorAll('.atab').forEach(el => el.onclick = () => { artistTab = el.dataset.tab; renderArtist(); });
+  main.querySelectorAll('[data-con]').forEach(b => b.onclick = () => { (CONNS[a.id]=CONNS[a.id]||{})[b.dataset.con]='just now'; renderArtist(); });
+  main.querySelectorAll('[data-dis]').forEach(b => b.onclick = () => { if(CONNS[a.id]) delete CONNS[a.id][b.dataset.dis]; renderArtist(); });
+}
+
+function render(){
+  pop.classList.remove('on');
+  if(view==='artist'){ brandtxt.innerHTML='Lone Star <b>'+(byId(selected)||ARTISTS[0]).name+'</b>'; setNav('roster'); return renderArtist(); }
+  if(view==='analytics'){ brandtxt.innerHTML='Lone Star <b>Analytics</b>'; setNav('analytics'); return renderAnalytics(); }
+  if(view==='settings'){ brandtxt.innerHTML='Lone Star <b>Settings</b>'; setNav(''); return renderSettings(); }
+  if(view==='section'){ brandtxt.innerHTML='Lone Star <b>'+(SECTIONS[section]||'')+'</b>'; setNav(section); return renderSection(); }
+  brandtxt.innerHTML='Lone Star <b>Roster</b>'; setNav('roster');
+  return view==='grid' ? renderGrid() : renderList();
+}
+
+function setStats(open){ appEl.classList.toggle('panelclosed', !open); }
+statsbtn.onclick = () => setStats(appEl.classList.contains('panelclosed'));
+document.getElementById('spclose').onclick = () => setStats(false);
+setStats(true);
+setTimeout(()=> setStats(false), 1200);
+
+document.getElementById('nav').querySelectorAll('button').forEach(b => b.onclick = () => {
+  const k = b.dataset.k;
+  if(k==='roster') view = rosterView;
+  else if(k==='analytics') view = 'analytics';
+  else { view = 'section'; section = k; }
+  render();
+});
+document.getElementById('brand').onclick = () => { view = rosterView; render(); };
+document.getElementById('settingsbtn').onclick = () => { view = 'settings'; render(); };
+
+/* ---- auth + landing / launcher ---- */
+const landing = document.getElementById('landing');
+const auth = document.getElementById('auth');
+function renderAuth(mode){
+  const signup = mode==='signup';
+  auth.innerHTML =
+    '<div class="authcard">'
+    + '<div class="abrand"><span class="star">★</span> Lone Star Management</div>'
+    + '<div class="authtitle">'+(signup?'Create your account':'Sign in')+'</div>'
+    + '<div class="authsub">'+(signup?'Start managing your roster in minutes.':'Welcome back — your roster and analytics await.')+'</div>'
+    + (signup?'<div class="afield"><label>Full name</label><input class="ainput" placeholder="Sam Fox"></div>':'')
+    + '<div class="afield"><label>Email</label><input class="ainput" type="email" placeholder="you@email.com" value="samuel.j.fox1@gmail.com"></div>'
+    + '<div class="afield"><label>Password'+(signup?'':' <a id="forgot">Forgot?</a>')+'</label><input class="ainput" type="password" placeholder="••••••••" value="password"></div>'
+    + '<button class="abtn" id="asubmit">'+(signup?'Create account':'Sign in')+'</button>'
+    + '<div class="adiv">or</div>'
+    + '<button class="assobtn" id="agoogle"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="12" cy="12" r="8.5"/><path d="M12 11h5a5 5 0 1 1-1.6-3.2"/></svg>Continue with Google</button>'
+    + '<div class="afoot">'+(signup?'Already have an account? <a data-mode="signin">Sign in</a>':'New to Lone Star? <a data-mode="signup">Create an account</a>')+'</div>'
+    + '</div>';
+  document.getElementById('asubmit').onclick = gotoLanding;
+  document.getElementById('agoogle').onclick = gotoLanding;
+  const fp=document.getElementById('forgot'); if(fp) fp.onclick=(e)=>{ e.preventDefault(); };
+  auth.querySelectorAll('.afoot a').forEach(a=> a.onclick=()=> renderAuth(a.dataset.mode));
+}
+function showAuth(mode){ auth.style.display='flex'; landing.style.display='none'; appEl.classList.add('hidden'); renderAuth(mode||'signin'); }
+function gotoLanding(){ auth.style.display='none'; landing.style.display='flex'; appEl.classList.add('hidden'); fillRecent(''); }
+function fillRecent(filter){
+  const f=(filter||'').toLowerCase();
+  const items=ARTISTS.filter(a=>a.name.toLowerCase().includes(f));
+  document.getElementById('lrgrid').innerHTML = items.length ? items.map(a=>
+    '<button class="lrcard" data-id="'+a.id+'"><div class="lrtop"><div class="avatar" style="width:30px;height:30px;font-size:10px">'+a.ini+'</div><div><div class="lrnm">'+a.name+'</div><div class="lrhd">'+a.handle+'</div></div></div>'
+    +'<div class="lrstat"><span class="lrlist">'+a.listeners+'</span>'+trendSpan(a)+'</div></button>').join('') : '<div class="emptyrow" style="grid-column:1/-1">No matches.</div>';
+  document.querySelectorAll('#lrgrid .lrcard').forEach(el=> el.onclick=()=> enterApp(()=> openArtist(el.dataset.id)));
+}
+function showLanding(){ auth.style.display='none'; landing.style.display='flex'; appEl.classList.add('hidden'); fillRecent(''); const i=document.getElementById('lsearch'); if(i){ i.value=''; i.focus(); } }
+function enterApp(fn){ landing.style.display='none'; appEl.classList.remove('hidden'); if(fn) fn(); else render(); }
+document.getElementById('ljump').querySelectorAll('button').forEach(b=> b.onclick=()=> enterApp(()=>{
+  const k=b.dataset.go;
+  if(k==='roster') view=rosterView; else if(k==='analytics') view='analytics'; else { view='section'; section=k; }
+  render();
+}));
+document.getElementById('lsearch').addEventListener('input', e=> fillRecent(e.target.value));
+document.getElementById('lsearch').addEventListener('keydown', e=>{ if(e.key==='Enter'){ const first=document.querySelector('#lrgrid .lrcard'); enterApp(first ? (()=>openArtist(first.dataset.id)) : (()=>{ view=rosterView; render(); })); } });
+document.getElementById('signout').onclick = () => showAuth('signin');
+document.querySelector('.tools .iconbtn').onclick = showLanding;
+
+render();
+fillRecent('');
+showAuth('signin');
+</script>
+</body>
+</html>

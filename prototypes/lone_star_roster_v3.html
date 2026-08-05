@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — Roster (v3)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --hair:#ececec;
+    --blue:#2563eb; --blue-soft:#eff4ff; --red:#e5484d; --mono:'Space Mono',monospace; --sans:'Inter',sans-serif; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);color:var(--ink);background:#e9e9ec;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1120px;margin:26px auto;padding:0 24px;}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 12px;}
+  .hint b{color:var(--ink);}
+  .app{background:var(--paper);border:1px solid var(--hair);border-radius:14px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.05),0 14px 34px rgba(0,0,0,.06);min-height:600px;display:flex;flex-direction:column;}
+
+  .ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:middle;flex:none;}
+  .avatar{width:38px;height:38px;border-radius:50%;background:#f1f1f1;color:#111;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;flex:none;}
+  .spark{width:96px;height:28px;display:block;}
+  .spark polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .spark.down polyline{stroke:var(--red);}
+  .trend{font-family:var(--mono);font-size:12px;}
+  .trend.up{color:var(--blue);} .trend.down{color:var(--red);}
+  .tourdot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block;flex:none;}
+
+  /* top bar */
+  .topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px 22px;border-bottom:1px solid var(--hair);flex:none;}
+  .brand{font-size:15px;font-weight:400;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .brand .star{color:var(--blue);}
+  .brand b{font-weight:700;}
+  .nav{display:flex;justify-content:center;gap:2px;}
+  .nav button{display:inline-flex;align-items:center;border:none;background:none;cursor:pointer;color:var(--muted);border-radius:9px;padding:9px 10px;}
+  .nav button .lbl{max-width:0;overflow:hidden;white-space:nowrap;opacity:0;font-family:var(--mono);font-size:12px;letter-spacing:.02em;
+    transition:max-width .24s ease,opacity .18s ease,margin .24s ease;}
+  .nav button:hover{color:var(--ink);background:#fafafa;}
+  .nav button.active{color:var(--blue);}
+  .nav button:hover .lbl,.nav button.active .lbl{max-width:120px;opacity:1;margin-left:8px;}
+  .tools{display:flex;justify-content:flex-end;align-items:center;gap:14px;color:var(--muted);}
+  .tools .iconbtn{cursor:pointer;display:inline-flex;}
+  .tools .iconbtn:hover{color:var(--ink);}
+  .tools .iconbtn.on{color:var(--blue);}
+
+  /* body split: main + stats panel */
+  .body{display:flex;align-items:stretch;flex:1;min-height:0;}
+  .maincol{flex:1;min-width:0;}
+
+  /* roster toolbar */
+  .rtoolbar{display:flex;align-items:center;gap:14px;padding:22px 28px 8px;}
+  .rtoolbar .ttl{font-size:19px;font-weight:700;letter-spacing:-.01em;}
+  .rtoolbar .sub{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .rtoolbar .grow{flex:1;}
+  .seg{display:inline-flex;background:#f4f4f5;border-radius:9px;padding:3px;gap:2px;}
+  .seg button{border:none;background:none;cursor:pointer;color:var(--muted);border-radius:7px;padding:6px 9px;display:inline-flex;align-items:center;}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1);}
+  /* add artist = plus that expands on hover */
+  .addbtn{display:inline-flex;align-items:center;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;}
+  .addbtn .ic{width:16px;height:16px;}
+  .addbtn .lbl{max-width:0;overflow:hidden;white-space:nowrap;opacity:0;transition:max-width .24s ease,opacity .18s ease,margin .24s ease;}
+  .addbtn:hover .lbl{max-width:120px;opacity:1;margin-left:7px;}
+  .solidbtn{display:inline-flex;align-items:center;gap:7px;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px 13px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;}
+  .solidbtn .ic{width:15px;height:15px;}
+  .ghostbtn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--hair);border-radius:9px;padding:9px 13px;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;color:var(--ink);}
+  .ghostbtn:hover{border-color:#cbd5e1;}
+  .backbtn{display:inline-flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-family:var(--mono);font-size:12px;padding:6px 8px;border-radius:8px;}
+  .backbtn:hover{color:var(--ink);background:#fafafa;}
+
+  /* list view */
+  .list{padding:8px 18px 26px;}
+  .lrow{display:flex;align-items:center;gap:16px;padding:16px 12px;border-radius:11px;cursor:pointer;transition:background .14s;}
+  .lrow:hover{background:#fafafa;}
+  .lrow .nm{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .lrow .hd{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px;}
+  .lrow .an{margin-left:auto;display:flex;align-items:center;gap:26px;}
+  .lrow .fig{text-align:right;}
+  .lrow .big{font-family:var(--mono);font-size:14px;font-weight:700;}
+  .lrow .lbl2{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em;}
+  .chev{color:var(--faint);}
+  .lrow:hover .chev{color:var(--blue);}
+
+  /* grid view */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 22px 28px;}
+  .tile{padding:18px 18px 0;border-radius:14px;cursor:pointer;transition:background .14s;overflow:hidden;}
+  .tile:hover{background:#fafafa;}
+  .tile .th{display:flex;align-items:center;gap:12px;}
+  .tile .nm{font-size:15px;font-weight:600;}
+  .tile .hd{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .tile .st{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px;}
+  .tile .foot{display:flex;align-items:flex-end;justify-content:space-between;margin-top:16px;}
+  .tile .num{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-.02em;}
+  .tile .sub{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin-top:6px;display:flex;align-items:center;gap:8px;}
+  .tmini{width:calc(100% + 36px);height:50px;display:block;margin:8px -18px 0;}
+  .tmini polygon{fill:#f4f4f6;stroke:none;}
+  .tmini polyline{fill:none;stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke;}
+  .tmini.dn polyline{stroke:var(--red);}
+
+  /* stats side panel */
+  .statspanel{flex:none;width:312px;border-left:1px solid var(--hair);overflow:hidden;
+    transition:width .4s cubic-bezier(.4,0,.2,1);}
+  .statspanel.closed{width:0;border-left-color:transparent;}
+  .spin{width:312px;padding:22px 22px 28px;}
+  .sphead{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+  .sphead .t{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .spclose{cursor:pointer;color:var(--faint);display:inline-flex;}
+  .spclose:hover{color:var(--ink);}
+  .spbig{font-family:var(--mono);font-size:31px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px;margin-top:16px;}
+  .spbig .trend{font-size:13px;}
+  .splbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:4px;}
+  .spspark{width:100%;height:50px;display:block;margin:14px 0 20px;}
+  .spspark polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .spspark polygon{fill:#f4f4f6;stroke:none;}
+  .spgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px 12px;padding-bottom:22px;border-bottom:1px solid var(--hair);}
+  .spstat .v{font-family:var(--mono);font-size:21px;font-weight:700;letter-spacing:-.02em;}
+  .spstat .k{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:4px;}
+  .spsec{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:20px 0 6px;}
+  .sprow{display:flex;align-items:center;gap:11px;padding:9px 0;}
+  .sprow .av{width:28px;height:28px;font-size:10px;}
+  .sprow .nm{font-size:13px;font-weight:600;flex:1;}
+  .sprow .val{font-family:var(--mono);font-size:12px;color:var(--muted);}
+
+  /* artist page */
+  .apage{padding:22px 32px 38px;}
+  .ahero{display:flex;align-items:center;gap:18px;margin-bottom:4px;}
+  .ahero .who{flex:1;}
+  .ahero .aname{font-size:25px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:12px;}
+  .ahero .ahd{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:5px;}
+  .tourchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--red);border:1px solid #f3c9c9;background:#fef5f5;border-radius:20px;padding:4px 9px;}
+  .atabs{display:flex;gap:24px;margin:22px 0 6px;border-bottom:1px solid var(--hair);}
+  .atab{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--faint);padding:0 0 12px;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;}
+  .atab.on{color:var(--blue);border-bottom-color:var(--blue);}
+  .atab:hover{color:var(--muted);}
+  .aband{padding:22px 0 6px;}
+  .abig{font-family:var(--mono);font-size:44px;font-weight:700;letter-spacing:-1.5px;display:flex;align-items:baseline;gap:14px;}
+  .abig .trend{font-size:15px;}
+  .asub{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .aarea{width:100%;height:160px;display:block;margin:14px 0 2px;}
+  .aarea polygon{fill:#f4f4f6;stroke:none;}
+  .aarea polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+  .aarea.dn polyline{stroke:var(--red);}
+  .aaxis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint);}
+  .akpis{display:flex;gap:0;margin:24px 0 8px;}
+  .akpi{padding-right:36px;margin-right:36px;border-right:1px solid var(--hair);}
+  .akpi:last-child{border:none;margin:0;padding:0;}
+  .akpi .v{font-family:var(--mono);font-size:19px;font-weight:700;}
+  .akpi .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:5px;}
+  .acols{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:26px;}
+  .acol .kic{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;}
+  .att{display:flex;align-items:center;gap:14px;padding:11px 0;border-top:1px solid var(--hair);font-size:14px;}
+  .att .rk{font-family:var(--mono);font-size:12px;color:var(--faint);width:20px;}
+  .att .plays{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .act{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid var(--hair);font-size:13px;}
+  .act .t{display:flex;gap:9px;align-items:center;}
+  .act .tg{font-family:var(--mono);font-size:11px;color:var(--blue);}
+  .act .when{font-family:var(--mono);font-size:11px;color:var(--faint);}
+
+  /* hover popover */
+  .pop{position:fixed;z-index:80;width:250px;background:#fff;border:1px solid var(--hair);border-radius:13px;
+    box-shadow:0 12px 38px rgba(0,0,0,.17);padding:15px;pointer-events:none;opacity:0;transform:translateY(5px);
+    transition:opacity .12s ease,transform .12s ease;}
+  .pop.on{opacity:1;transform:none;}
+  .pop .ph{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .pop .pn{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;line-height:1.1;}
+  .pop .phd{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;}
+  .pop .pbig{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px;}
+  .pop .pbig .trend{font-size:12px;}
+  .pop .plbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:2px;}
+  .pop .pspark{width:100%!important;height:34px;margin:11px 0 12px;}
+  .pop .prow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0;}
+  .pop .prow b{color:var(--ink);font-weight:700;}
+  .pop .ptrack{margin-top:9px;padding-top:9px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="hint"><b>v3.</b> <b>Hover</b> the <b>+</b> (it spells “Add artist”). Right <b>stats panel</b> peeks open then closes on load — reopen with the panel icon (top-right). Hover an artist for quick stats; click to open their page.</p>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand" id="brand" title="Back to roster"><span class="star">★</span> <span id="brandtxt">Lone Star <b>Roster</b></span></div>
+      <nav class="nav" id="nav">
+        <button class="active" data-k="roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg><span class="lbl">Roster</span></button>
+        <button data-k="analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg><span class="lbl">Analytics</span></button>
+        <button data-k="releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg><span class="lbl">Releases</span></button>
+        <button data-k="tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg><span class="lbl">Tour</span></button>
+        <button data-k="videos"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg><span class="lbl">Videos</span></button>
+      </nav>
+      <div class="tools">
+        <span class="iconbtn" title="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></span>
+        <span class="iconbtn on" id="statsbtn" title="Toggle stats panel"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></span>
+        <div class="avatar" style="width:30px;height:30px;font-size:11px;">SF</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="maincol"><div id="main"></div></div>
+      <aside class="statspanel" id="stats">
+        <div class="spin">
+          <div class="sphead"><span class="t">Roster totals</span><span class="spclose" id="spclose" title="Hide"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+          <div class="spbig">4.61M <span class="trend up">+3.1%</span></div>
+          <div class="splbl">Total monthly listeners</div>
+          <svg class="spspark" viewBox="0 0 100 40" preserveAspectRatio="none"><polygon points="0,28 14,26 28,22 42,23 57,16 71,12 85,8 100,4 100,40 0,40"/><polyline points="0,28 14,26 28,22 42,23 57,16 71,12 85,8 100,4"/></svg>
+          <div class="spgrid">
+            <div class="spstat"><div class="v">4</div><div class="k">Artists</div></div>
+            <div class="spstat"><div class="v">41</div><div class="k">Releases</div></div>
+            <div class="spstat"><div class="v">40</div><div class="k">Videos</div></div>
+            <div class="spstat"><div class="v">1</div><div class="k">On tour</div></div>
+          </div>
+          <div class="spsec">Top by listeners</div>
+          <div class="sprow"><div class="avatar av">GS</div><div class="nm">George Strait</div><div class="val">1.51M</div></div>
+          <div class="spsec">Biggest gainer</div>
+          <div class="sprow"><div class="avatar av">KM</div><div class="nm">Kacey Musgraves</div><div class="val trend up">+6.8%</div></div>
+          <div class="spsec">Needs attention</div>
+          <div class="sprow"><div class="avatar av">GS</div><div class="nm">George Strait</div><div class="val trend down">−2.3%</div></div>
+          <div class="spsec">On tour now</div>
+          <div class="sprow"><div class="avatar av">WN</div><div class="nm">Willie Nelson</div><div class="val"><span class="tourdot"></span></div></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="pop" id="pop"></div>
+
+<script>
+const ARTISTS = [
+  {id:'willie', ini:'WN', name:'Willie Nelson', handle:'/willie', listeners:'1.24M', trend:'+4.2%', dir:'up', tour:true, releases:12, videos:9,
+    spark:'0,22 16,20 33,16 50,18 66,12 83,7 100,3', area:'0,86 53,80 106,82 160,64 213,54 266,40 320,26',
+    tracks:[['On the Road Again','48.2M'],['Always on My Mind','39.1M'],['Whiskey River','22.7M']]},
+  {id:'miranda', ini:'ML', name:'Miranda Lambert', handle:'/miranda', listeners:'982K', trend:'+1.1%', dir:'up', tour:false, releases:8, videos:14,
+    spark:'0,15 16,17 33,12 50,15 66,11 83,9 100,8', area:'0,70 53,72 106,60 160,66 213,52 266,46 320,42',
+    tracks:[['Bluebird','31.5M'],['The House That Built Me','58.9M'],['Gunpowder & Lead','27.3M']]},
+  {id:'george', ini:'GS', name:'George Strait', handle:'/george', listeners:'1.51M', trend:'−2.3%', dir:'down', tour:false, releases:15, videos:6,
+    spark:'0,6 16,8 33,11 50,9 66,12 83,15 100,18', area:'0,30 53,36 106,46 160,42 213,52 266,64 320,76',
+    tracks:[['Amarillo by Morning','44.0M'],['Check Yes or No','41.8M'],['The Chair','29.6M']]},
+  {id:'kacey', ini:'KM', name:'Kacey Musgraves', handle:'/kacey', listeners:'873K', trend:'+6.8%', dir:'up', tour:false, releases:6, videos:11,
+    spark:'0,24 16,21 33,18 50,14 66,10 83,6 100,2', area:'0,96 53,88 106,80 160,64 213,48 266,32 320,18',
+    tracks:[['Rainbow','35.1M'],['Slow Burn','40.4M'],['Space Cowboy','33.9M']]},
+];
+const ACTIVITY = [['Published','Tour dates','2d'],['Updated','Release · Live at Luck','4d'],['Added','Press photos','1w']];
+
+const main = document.getElementById('main');
+const brandtxt = document.getElementById('brandtxt');
+const pop = document.getElementById('pop');
+const stats = document.getElementById('stats');
+const statsbtn = document.getElementById('statsbtn');
+let view = 'list', rosterView = 'list', selected = null;
+const byId = id => ARTISTS.find(a => a.id === id);
+
+function sparkSvg(a, cls){ return '<svg class="spark'+(a.dir==='down'?' down':'')+(cls?' '+cls:'')+'" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="'+a.spark+'"/></svg>'; }
+function areaSvg(a){ return '<svg class="aarea'+(a.dir==='down'?' dn':'')+'" viewBox="0 0 320 120" preserveAspectRatio="none"><polygon points="'+a.area+' 320,120 0,120"/><polyline points="'+a.area+'"/></svg>'; }
+function miniSvg(a){ return '<svg class="tmini'+(a.dir==='down'?' dn':'')+'" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 '+a.spark+' 100,30"/><polyline points="'+a.spark+'"/></svg>'; }
+function trendSpan(a){ return '<span class="trend '+a.dir+'">'+a.trend+'</span>'; }
+
+/* popover */
+function fillPop(a){
+  pop.innerHTML =
+    '<div class="ph"><div class="avatar">'+a.ini+'</div><div><div class="pn">'+a.name+(a.tour?' <span class="tourdot"></span>':'')+'</div><div class="phd">'+a.handle+'</div></div></div>'
+    + '<div class="pbig">'+a.listeners+' '+trendSpan(a)+'</div><div class="plbl">Monthly listeners</div>'
+    + sparkSvg(a,'pspark')
+    + '<div class="prow"><span>Releases</span><b>'+a.releases+'</b></div>'
+    + '<div class="prow"><span>Videos</span><b>'+a.videos+'</b></div>'
+    + '<div class="prow"><span>Status</span><b>'+(a.tour?'On tour':'Active')+'</b></div>'
+    + '<div class="ptrack"><span>Top track</span><span>'+a.tracks[0][0]+'</span></div>';
+}
+function movePop(e){
+  const w=pop.offsetWidth, h=pop.offsetHeight; let x=e.clientX+16, y=e.clientY+16;
+  if(x+w>innerWidth-8) x=e.clientX-w-16;
+  if(y+h>innerHeight-8) y=innerHeight-h-8;
+  if(y<8) y=8;
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+}
+function attachHover(el, a){
+  el.addEventListener('mouseenter', ()=>{ fillPop(a); pop.classList.add('on'); });
+  el.addEventListener('mousemove', movePop);
+  el.addEventListener('mouseleave', ()=> pop.classList.remove('on'));
+}
+
+/* roster */
+function rosterToolbar(){
+  return '<div class="rtoolbar"><div class="ttl">Your artists</div>'
+    + '<div class="sub">4.61M listeners · +3.1% · 41 releases · 1 on tour</div>'
+    + '<div class="grow"></div>'
+    + '<div class="seg" id="seg">'
+    + '<button data-v="grid" class="'+(rosterView==='grid'?'on':'')+'" title="Grid view"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>'
+    + '<button data-v="list" class="'+(rosterView==='list'?'on':'')+'" title="List view"><svg class="ic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>'
+    + '</div>'
+    + '<button class="addbtn" title="Add artist"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add artist</span></button></div>';
+}
+function renderList(){
+  brandtxt.innerHTML = 'Lone Star <b>Roster</b>';
+  const rows = ARTISTS.map(a =>
+    '<div class="lrow" data-id="'+a.id+'"><div class="avatar">'+a.ini+'</div>'
+    + '<div><div class="nm">'+a.name+(a.tour?' <span class="tourdot"></span>':'')+'</div><div class="hd">'+a.handle+'</div></div>'
+    + '<div class="an">'+sparkSvg(a)+'<div class="fig"><div class="big">'+a.listeners+'</div><div class="lbl2">LISTENERS</div></div>'+trendSpan(a)
+    + '<span class="chev"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div></div>'
+  ).join('');
+  main.innerHTML = rosterToolbar() + '<div class="list">'+rows+'</div>';
+  wireRoster();
+}
+function renderGrid(){
+  brandtxt.innerHTML = 'Lone Star <b>Roster</b>';
+  const tiles = ARTISTS.map(a =>
+    '<div class="tile" data-id="'+a.id+'"><div class="th"><div class="avatar">'+a.ini+'</div><div><div class="nm">'+a.name+'</div><div class="hd">'+a.handle+'</div></div>'
+    + '<div class="st">'+(a.tour?'<span class="tourdot"></span>On tour':'<span class="tourdot" style="background:var(--faint)"></span>Active')+'</div></div>'
+    + '<div class="foot"><div><div class="num">'+a.listeners+'</div><div class="sub">listeners '+trendSpan(a)+'</div></div></div>'+miniSvg(a)+'</div>'
+  ).join('');
+  main.innerHTML = rosterToolbar() + '<div class="grid">'+tiles+'</div>';
+  wireRoster();
+}
+function wireRoster(){
+  main.querySelectorAll('#seg button').forEach(b => b.onclick = () => { rosterView = b.dataset.v; view = rosterView; render(); });
+  main.querySelectorAll('[data-id]').forEach(el => {
+    const a = byId(el.dataset.id);
+    el.onclick = () => { pop.classList.remove('on'); selected = a.id; view = 'artist'; render(); };
+    attachHover(el, a);
+  });
+}
+
+/* artist page */
+function renderArtist(){
+  const a = byId(selected) || ARTISTS[0];
+  brandtxt.innerHTML = 'Lone Star <b>'+a.name+'</b>';
+  const tracks = a.tracks.map((t,i)=>'<div class="att"><span class="rk">'+('0'+(i+1)).slice(-2)+'</span>'+t[0]+'<span class="plays">'+t[1]+'</span></div>').join('');
+  const acts = ACTIVITY.map(x=>'<div class="act"><span class="t"><span class="tg">'+x[0]+'</span>'+x[1]+'</span><span class="when">'+x[2]+'</span></div>').join('');
+  main.innerHTML =
+    '<div class="rtoolbar"><button class="backbtn" id="back"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M15 6l-6 6 6 6"/></svg>All artists</button><div class="grow"></div>'
+    + '<button class="ghostbtn">View public site <svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M7 17L17 7M9 7h8v8"/></svg></button>'
+    + '<button class="solidbtn"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg>Manage</button></div>'
+    + '<div class="apage">'
+    +   '<div class="ahero"><div class="avatar" style="width:56px;height:56px;font-size:16px">'+a.ini+'</div>'
+    +     '<div class="who"><div class="aname">'+a.name+(a.tour?' <span class="tourchip"><span class="tourdot"></span>On tour</span>':'')+'</div><div class="ahd">'+a.handle+' · lonestar.fm'+a.handle+'</div></div></div>'
+    +   '<div class="atabs"><span class="atab on">Overview</span><span class="atab">Releases</span><span class="atab">Tour</span><span class="atab">Videos</span><span class="atab">Analytics</span></div>'
+    +   '<div class="aband"><div class="abig">'+a.listeners+' '+trendSpan(a)+'</div><div class="asub">Monthly listeners · last 6 months</div>'+areaSvg(a)
+    +     '<div class="aaxis"><span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span></div></div>'
+    +   '<div class="akpis"><div class="akpi"><div class="v">'+a.releases+'</div><div class="k">Releases</div></div>'
+    +     '<div class="akpi"><div class="v">'+a.videos+'</div><div class="k">Videos</div></div>'
+    +     '<div class="akpi"><div class="v">'+a.listeners+'</div><div class="k">Monthly</div></div>'
+    +     '<div class="akpi"><div class="v">'+(a.tour?'Yes':'—')+'</div><div class="k">On tour</div></div></div>'
+    +   '<div class="acols"><div class="acol"><div class="kic">Top tracks</div>'+tracks+'</div>'
+    +     '<div class="acol"><div class="kic">Recent activity</div>'+acts+'</div></div>'
+    + '</div>';
+  document.getElementById('back').onclick = () => { view = rosterView; render(); };
+}
+
+function render(){
+  pop.classList.remove('on');
+  if(view==='artist') return renderArtist();
+  if(view==='grid') return renderGrid();
+  return renderList();
+}
+
+/* stats panel toggle + open→close peek */
+function setStats(open){
+  stats.classList.toggle('closed', !open);
+  statsbtn.classList.toggle('on', open);
+}
+statsbtn.onclick = () => setStats(stats.classList.contains('closed'));
+document.getElementById('spclose').onclick = () => setStats(false);
+setStats(true);
+setTimeout(()=> setStats(false), 1200);   // peek then tuck away
+
+document.getElementById('nav').querySelectorAll('button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  if(b.dataset.k==='roster'){ view = rosterView; render(); }
+});
+document.getElementById('brand').onclick = () => {
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));
+  document.querySelector('#nav button[data-k="roster"]').classList.add('active');
+  view = rosterView; render();
+};
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star Management — Round 2 — Brutalist + Star + Color</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:'Space Mono',monospace;background:#e8e8e8;color:#000;}
+  /* board chrome */
+  .board-head{padding:28px 32px;border-bottom:3px solid #000;background:#fff;}
+  .board-head h1{margin:0;font-size:22px;text-transform:uppercase;letter-spacing:1px;}
+  .board-head p{margin:8px 0 0;font-size:13px;max-width:760px;line-height:1.5;}
+  .variant{border-bottom:3px solid #000;}
+  .variant-label{display:flex;gap:16px;align-items:baseline;background:#000;color:#fff;
+    padding:12px 32px;font-size:13px;text-transform:uppercase;letter-spacing:1px;}
+  .variant-label b{font-size:15px;}
+  .variant-label .swatch{width:13px;height:13px;display:inline-block;border:1px solid #fff;}
+  .variant-stage{padding:0;background:#fff;}
+
+  /* ============ SHARED BRUTALIST SKELETON (per-variant overrides via .rN) ============ */
+  .vroot{font-family:'Space Mono',monospace;background:#fff;color:#000;-webkit-font-smoothing:none;}
+  .vheader{display:flex;align-items:stretch;justify-content:space-between;border-bottom:2px solid #000;}
+  .vwordmark{font-weight:700;font-size:20px;text-transform:uppercase;letter-spacing:1px;padding:22px 28px;border-right:2px solid #000;display:flex;align-items:center;gap:10px;}
+  .vstar{display:inline-block;}
+  .vuserbar{display:flex;align-items:center;}
+  .vemail{padding:0 24px;font-size:13px;border-right:2px solid #000;display:flex;align-items:center;}
+  .vsignout{font-family:inherit;font-weight:700;text-transform:uppercase;font-size:13px;letter-spacing:1px;background:#000;color:#fff;border:none;padding:22px 28px;cursor:pointer;}
+  .vsignout:hover{background:#fff;color:#000;}
+  .vmain{padding:48px 28px;max-width:900px;position:relative;}
+  .vheading{font-size:54px;font-weight:700;text-transform:uppercase;line-height:.95;margin:0;letter-spacing:-1px;}
+  .vsub{font-size:14px;margin:14px 0 0;border-left:2px solid #000;padding-left:12px;}
+  .vmeta{display:flex;gap:24px;margin:40px 0 16px;font-size:12px;text-transform:uppercase;}
+  .vmeta span{border:2px solid #000;padding:4px 10px;}
+  .vlist{border:2px solid #000;border-bottom:none;}
+  .vitem{display:flex;align-items:baseline;justify-content:space-between;gap:16px;text-decoration:none;color:#000;padding:24px;border-bottom:2px solid #000;background:#fff;}
+  .vitem:hover{background:#000;color:#fff;}
+  .vnum{font-size:12px;width:48px;flex:none;}
+  .vname{font-size:26px;font-weight:700;flex:1;}
+  .vslug{font-size:15px;}
+  .vitem:hover .vslug{text-decoration:underline;}
+  .vfoot{margin-top:32px;font-size:11px;text-transform:uppercase;letter-spacing:1px;}
+
+  /* ---- R1  RED STAR — Texas red accents (#E4002B) ---- */
+  .r1 .vstar{color:#E4002B;font-size:18px;}
+  .r1 .vnum{color:#E4002B;font-weight:700;}
+  .r1 .vmeta span:first-child{background:#E4002B;color:#fff;border-color:#E4002B;}
+  .r1 .vsub{border-left-color:#E4002B;}
+  .r1 .vitem:hover{background:#E4002B;color:#fff;}
+  .r1 .vitem:hover .vnum{color:#fff;}
+
+  /* ---- R2  BLUEBONNET — deep blue (#1A3FB0), star as filled bullet ---- */
+  .r2 .vstar{color:#1A3FB0;font-size:18px;}
+  .r2 .vitem{position:relative;padding-left:56px;}
+  .r2 .vbul{position:absolute;left:22px;top:50%;transform:translateY(-50%);color:#1A3FB0;font-size:16px;}
+  .r2 .vitem:hover{background:#1A3FB0;color:#fff;}
+  .r2 .vitem:hover .vbul{color:#fff;}
+  .r2 .vmeta span{border-color:#1A3FB0;color:#1A3FB0;}
+  .r2 .vsub{border-left-color:#1A3FB0;}
+
+  /* ---- R3  BURNT ORANGE — giant outline star watermark (#BF5700) ---- */
+  .r3 .vstar{color:#BF5700;font-size:18px;}
+  .r3 .vmain{overflow:hidden;}
+  .r3 .vwm{position:absolute;right:-40px;top:-30px;font-size:280px;line-height:1;color:#BF5700;opacity:.12;pointer-events:none;z-index:0;}
+  .r3 .vheading,.r3 .vsub,.r3 .vmeta,.r3 .vlist,.r3 .vfoot{position:relative;z-index:1;}
+  .r3 .vnum{color:#BF5700;font-weight:700;}
+  .r3 .vitem:hover{background:#BF5700;color:#fff;}
+  .r3 .vitem:hover .vnum{color:#fff;}
+  .r3 .vsub{border-left-color:#BF5700;}
+
+  /* ---- R4  TWO-TONE SPLIT — red header band + black list ---- */
+  .r4 .vheader{background:#E4002B;color:#fff;border-bottom-color:#000;}
+  .r4 .vwordmark{border-right-color:#fff;}
+  .r4 .vstar{color:#fff;font-size:18px;}
+  .r4 .vemail{border-right-color:#fff;}
+  .r4 .vsignout{background:#fff;color:#E4002B;}
+  .r4 .vsignout:hover{background:#000;color:#fff;}
+  .r4 .vnum{color:#E4002B;font-weight:700;}
+  .r4 .vmeta span{border-color:#E4002B;color:#E4002B;}
+  .r4 .vitem:hover{background:#E4002B;color:#fff;}
+  .r4 .vitem:hover .vnum{color:#fff;}
+
+  /* ---- R5  STAR STAMP — amber (#F5A623), star prefixes every row ---- */
+  .r5 .vstar{color:#F5A623;font-size:18px;}
+  .r5 .vitem{padding-left:24px;}
+  .r5 .vrowstar{color:#F5A623;font-size:18px;margin-right:14px;flex:none;}
+  .r5 .vslug{color:#B07400;}
+  .r5 .vitem:hover{background:#1a1a1a;color:#fff;}
+  .r5 .vitem:hover .vslug,.r5 .vitem:hover .vrowstar{color:#F5A623;}
+  .r5 .vmeta span:first-child{background:#F5A623;border-color:#F5A623;color:#000;}
+  .r5 .vsub{border-left-color:#F5A623;}
+
+  /* ---- R6  FLAG — red + blue (Texas tricolor), star in a blue block ---- */
+  .r6 .vwordmark{padding-left:0;}
+  .r6 .vflagblock{background:#1A3FB0;color:#fff;align-self:stretch;display:flex;align-items:center;padding:0 22px;border-right:2px solid #000;font-size:22px;}
+  .r6 .vnum{color:#E4002B;font-weight:700;}
+  .r6 .vmeta span:first-child{background:#1A3FB0;color:#fff;border-color:#1A3FB0;}
+  .r6 .vmeta span:nth-child(2){background:#E4002B;color:#fff;border-color:#E4002B;}
+  .r6 .vsub{border-left-color:#1A3FB0;}
+  .r6 .vitem:hover{background:#1A3FB0;color:#fff;}
+  .r6 .vitem:hover .vnum{color:#fff;}
+</style>
+</head>
+<body>
+<div class="board-head">
+  <h1>Lone Star Management — Round 2</h1>
+  <p>Base is <b>#1 Brutalist Raw</b>, unchanged in bones (mono, hard 2px borders, zero radius).
+  Each variant adds the <b>star</b> in a different spot and tries a <b>different second color</b>,
+  so the board doubles as a color pick. Hover a row to see the invert. Tell me the variant # +
+  any tweak and I'll cut the next round.</p>
+</div>
+
+<!-- R1 -->
+<section class="variant">
+  <div class="variant-label"><b>R1 · Red Star</b><span><span class="swatch" style="background:#E4002B"></span> Texas red #E4002B</span><span>star in wordmark · red index numbers</span></div>
+  <div class="variant-stage"><div class="vroot r1">
+    <header class="vheader"><div class="vwordmark">Lone <span class="vstar">&#9733;</span> Star Management</div><div class="vuserbar"><div class="vemail">samuel.j.fox1@gmail.com</div><button class="vsignout">Sign out</button></div></header>
+    <main class="vmain"><h1 class="vheading">Your artists</h1><p class="vsub">The artists you manage.</p>
+      <div class="vmeta"><span>ROSTER: 04</span><span>STATUS: ACTIVE</span><span>SORT: A-Z</span></div>
+      <nav class="vlist">
+        <a class="vitem" href="/willie"><span class="vnum">[01]</span><span class="vname">Willie Nelson</span><span class="vslug">/willie</span></a>
+        <a class="vitem" href="/miranda"><span class="vnum">[02]</span><span class="vname">Miranda Lambert</span><span class="vslug">/miranda</span></a>
+        <a class="vitem" href="/george"><span class="vnum">[03]</span><span class="vname">George Strait</span><span class="vslug">/george</span></a>
+        <a class="vitem" href="/kacey"><span class="vnum">[04]</span><span class="vname">Kacey Musgraves</span><span class="vslug">/kacey</span></a>
+      </nav><p class="vfoot">// END OF LIST — 4 RECORDS</p></main>
+  </div></div>
+</section>
+
+<!-- R2 -->
+<section class="variant">
+  <div class="variant-label"><b>R2 · Bluebonnet</b><span><span class="swatch" style="background:#1A3FB0"></span> deep blue #1A3FB0</span><span>star as a row bullet</span></div>
+  <div class="variant-stage"><div class="vroot r2">
+    <header class="vheader"><div class="vwordmark">Lone <span class="vstar">&#9733;</span> Star Management</div><div class="vuserbar"><div class="vemail">samuel.j.fox1@gmail.com</div><button class="vsignout">Sign out</button></div></header>
+    <main class="vmain"><h1 class="vheading">Your artists</h1><p class="vsub">The artists you manage.</p>
+      <div class="vmeta"><span>ROSTER: 04</span><span>STATUS: ACTIVE</span><span>SORT: A-Z</span></div>
+      <nav class="vlist">
+        <a class="vitem" href="/willie"><span class="vbul">&#9733;</span><span class="vnum">[01]</span><span class="vname">Willie Nelson</span><span class="vslug">/willie</span></a>
+        <a class="vitem" href="/miranda"><span class="vbul">&#9733;</span><span class="vnum">[02]</span><span class="vname">Miranda Lambert</span><span class="vslug">/miranda</span></a>
+        <a class="vitem" href="/george"><span class="vbul">&#9733;</span><span class="vnum">[03]</span><span class="vname">George Strait</span><span class="vslug">/george</span></a>
+        <a class="vitem" href="/kacey"><span class="vbul">&#9733;</span><span class="vnum">[04]</span><span class="vname">Kacey Musgraves</span><span class="vslug">/kacey</span></a>
+      </nav><p class="vfoot">// END OF LIST — 4 RECORDS</p></main>
+  </div></div>
+</section>
+
+<!-- R3 -->
+<section class="variant">
+  <div class="variant-label"><b>R3 · Burnt Orange</b><span><span class="swatch" style="background:#BF5700"></span> burnt orange #BF5700</span><span>giant star watermark</span></div>
+  <div class="variant-stage"><div class="vroot r3">
+    <header class="vheader"><div class="vwordmark">Lone <span class="vstar">&#9733;</span> Star Management</div><div class="vuserbar"><div class="vemail">samuel.j.fox1@gmail.com</div><button class="vsignout">Sign out</button></div></header>
+    <main class="vmain"><span class="vwm">&#9733;</span><h1 class="vheading">Your artists</h1><p class="vsub">The artists you manage.</p>
+      <div class="vmeta"><span>ROSTER: 04</span><span>STATUS: ACTIVE</span><span>SORT: A-Z</span></div>
+      <nav class="vlist">
+        <a class="vitem" href="/willie"><span class="vnum">[01]</span><span class="vname">Willie Nelson</span><span class="vslug">/willie</span></a>
+        <a class="vitem" href="/miranda"><span class="vnum">[02]</span><span class="vname">Miranda Lambert</span><span class="vslug">/miranda</span></a>
+        <a class="vitem" href="/george"><span class="vnum">[03]</span><span class="vname">George Strait</span><span class="vslug">/george</span></a>
+        <a class="vitem" href="/kacey"><span class="vnum">[04]</span><span class="vname">Kacey Musgraves</span><span class="vslug">/kacey</span></a>
+      </nav><p class="vfoot">// END OF LIST — 4 RECORDS</p></main>
+  </div></div>
+</section>
+
+<!-- R4 -->
+<section class="variant">
+  <div class="variant-label"><b>R4 · Two-Tone Split</b><span><span class="swatch" style="background:#E4002B"></span> red header band</span><span>color block, not just accent</span></div>
+  <div class="variant-stage"><div class="vroot r4">
+    <header class="vheader"><div class="vwordmark">Lone <span class="vstar">&#9733;</span> Star Management</div><div class="vuserbar"><div class="vemail">samuel.j.fox1@gmail.com</div><button class="vsignout">Sign out</button></div></header>
+    <main class="vmain"><h1 class="vheading">Your artists</h1><p class="vsub">The artists you manage.</p>
+      <div class="vmeta"><span>ROSTER: 04</span><span>STATUS: ACTIVE</span><span>SORT: A-Z</span></div>
+      <nav class="vlist">
+        <a class="vitem" href="/willie"><span class="vnum">[01]</span><span class="vname">Willie Nelson</span><span class="vslug">/willie</span></a>
+        <a class="vitem" href="/miranda"><span class="vnum">[02]</span><span class="vname">Miranda Lambert</span><span class="vslug">/miranda</span></a>
+        <a class="vitem" href="/george"><span class="vnum">[03]</span><span class="vname">George Strait</span><span class="vslug">/george</span></a>
+        <a class="vitem" href="/kacey"><span class="vnum">[04]</span><span class="vname">Kacey Musgraves</span><span class="vslug">/kacey</span></a>
+      </nav><p class="vfoot">// END OF LIST — 4 RECORDS</p></main>
+  </div></div>
+</section>
+
+<!-- R5 -->
+<section class="variant">
+  <div class="variant-label"><b>R5 · Star Stamp</b><span><span class="swatch" style="background:#F5A623"></span> amber #F5A623</span><span>star prefixes every row</span></div>
+  <div class="variant-stage"><div class="vroot r5">
+    <header class="vheader"><div class="vwordmark">Lone <span class="vstar">&#9733;</span> Star Management</div><div class="vuserbar"><div class="vemail">samuel.j.fox1@gmail.com</div><button class="vsignout">Sign out</button></div></header>
+    <main class="vmain"><h1 class="vheading">Your artists</h1><p class="vsub">The artists you manage.</p>
+      <div class="vmeta"><span>ROSTER: 04</span><span>STATUS: ACTIVE</span><span>SORT: A-Z</span></div>
+      <nav class="vlist">
+        <a class="vitem" href="/willie"><span class="vrowstar">&#9733;</span><span class="vname">Willie Nelson</span><span class="vslug">/willie</span></a>
+        <a class="vitem" href="/miranda"><span class="vrowstar">&#9733;</span><span class="vname">Miranda Lambert</span><span class="vslug">/miranda</span></a>
+        <a class="vitem" href="/george"><span class="vrowstar">&#9733;</span><span class="vname">George Strait</span><span class="vslug">/george</span></a>
+        <a class="vitem" href="/kacey"><span class="vrowstar">&#9733;</span><span class="vname">Kacey Musgraves</span><span class="vslug">/kacey</span></a>
+      </nav><p class="vfoot">// END OF LIST — 4 RECORDS</p></main>
+  </div></div>
+</section>
+
+<!-- R6 -->
+<section class="variant">
+  <div class="variant-label"><b>R6 · Flag</b><span><span class="swatch" style="background:#1A3FB0"></span><span class="swatch" style="background:#E4002B"></span> blue + red</span><span>star in a blue block</span></div>
+  <div class="variant-stage"><div class="vroot r6">
+    <header class="vheader"><div class="vflagblock">&#9733;</div><div class="vwordmark" style="padding-left:22px">Lone Star Management</div><div class="vuserbar"><div class="vemail">samuel.j.fox1@gmail.com</div><button class="vsignout">Sign out</button></div></header>
+    <main class="vmain"><h1 class="vheading">Your artists</h1><p class="vsub">The artists you manage.</p>
+      <div class="vmeta"><span>ROSTER: 04</span><span>STATUS: ACTIVE</span><span>SORT: A-Z</span></div>
+      <nav class="vlist">
+        <a class="vitem" href="/willie"><span class="vnum">[01]</span><span class="vname">Willie Nelson</span><span class="vslug">/willie</span></a>
+        <a class="vitem" href="/miranda"><span class="vnum">[02]</span><span class="vname">Miranda Lambert</span><span class="vslug">/miranda</span></a>
+        <a class="vitem" href="/george"><span class="vnum">[03]</span><span class="vname">George Strait</span><span class="vslug">/george</span></a>
+        <a class="vitem" href="/kacey"><span class="vnum">[04]</span><span class="vname">Kacey Musgraves</span><span class="vslug">/kacey</span></a>
+      </nav><p class="vfoot">// END OF LIST — 4 RECORDS</p></main>
+  </div></div>
+</section>
+
+</body>
+</html>

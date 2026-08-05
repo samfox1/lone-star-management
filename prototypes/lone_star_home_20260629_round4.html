@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star Management — Round 4 — Dashboard, sidebar, professional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#18181b; --muted:#71717a; --faint:#a1a1aa; --line:#e4e4e7;
+    --bg:#ffffff; --surface:#fafafa; --hover:#f4f4f5;
+    --blue:#2563eb; --blue-soft:#eff4ff; --red:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,sans-serif;background:#e9e9ec;color:var(--ink);
+    -webkit-font-smoothing:antialiased;}
+
+  /* board chrome */
+  .board-head{padding:24px 32px;background:#fff;border-bottom:1px solid var(--line);}
+  .board-head h1{margin:0;font-size:18px;font-weight:600;}
+  .board-head p{margin:7px 0 0;font-size:13px;color:var(--muted);max-width:760px;line-height:1.55;}
+  .vlabel{padding:14px 32px 6px;font-size:12px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--muted);}
+  .stage{padding:0 32px 40px;}
+
+  /* ===== shared app shell ===== */
+  .app{display:grid;grid-template-columns:236px 1fr;min-height:620px;background:var(--bg);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);}
+
+  /* sidebar (base = light surface) */
+  .side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px;}
+  .brand{display:flex;align-items:center;gap:9px;padding:6px 10px 18px;font-weight:600;font-size:15px;}
+  .brand .star{color:var(--blue);font-size:15px;}
+  .navlabel{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:10px 10px 6px;}
+  .nav{display:flex;flex-direction:column;gap:2px;}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;
+    text-decoration:none;color:var(--muted);font-size:14px;font-weight:500;}
+  .nav a .ico{width:16px;height:16px;border:1.6px solid currentColor;border-radius:4px;opacity:.55;flex:none;}
+  .nav a:hover{background:var(--hover);color:var(--ink);}
+  .nav a.on{background:var(--blue-soft);color:var(--blue);}
+  .nav a.on .ico{opacity:1;}
+  .side-foot{margin-top:auto;border-top:1px solid var(--line);padding:14px 10px 4px;}
+  .side-foot .who{font-size:12px;color:var(--muted);line-height:1.5;word-break:break-all;}
+  .side-foot button{margin-top:10px;font:inherit;font-size:13px;font-weight:500;color:var(--ink);
+    background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 12px;cursor:pointer;width:100%;}
+  .side-foot button:hover{background:var(--hover);}
+
+  /* main */
+  .main{display:flex;flex-direction:column;min-width:0;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:22px 32px;border-bottom:1px solid var(--line);}
+  .topbar .tl h2{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em;}
+  .topbar .tl p{margin:4px 0 0;font-size:13px;color:var(--muted);}
+  .topbar .tr{display:flex;align-items:center;gap:10px;}
+  .search{font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;
+    background:#fff;color:var(--ink);width:200px;}
+  .search::placeholder{color:var(--faint);}
+  .btn{font:inherit;font-size:13px;font-weight:500;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid transparent;}
+  .btn.primary{background:var(--blue);color:#fff;}
+  .btn.primary:hover{background:#1d4fd8;}
+  .content{padding:28px 32px;}
+
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none;}
+  .dot.live{background:var(--red);}
+  .avatar{width:38px;height:38px;border-radius:50%;background:#ececef;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none;}
+
+  /* ===== V1 table ===== */
+  .tbl{width:100%;border-collapse:collapse;}
+  .tbl thead th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--faint);padding:0 16px 12px;border-bottom:1px solid var(--line);}
+  .tbl tbody td{padding:16px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle;}
+  .tbl tbody tr{cursor:pointer;}
+  .tbl tbody tr:hover{background:var(--hover);}
+  .tbl .artistcell{display:flex;align-items:center;gap:12px;}
+  .tbl .artistcell .nm{font-weight:600;}
+  .tbl .handle{color:var(--muted);}
+  .tbl .upd{color:var(--muted);}
+  .tbl .chev{color:var(--faint);text-align:right;}
+  .tbl tbody tr:hover .chev{color:var(--blue);}
+
+  /* ===== V2 cards ===== */
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
+  .card{border:1px solid var(--line);border-radius:11px;padding:22px;text-decoration:none;color:var(--ink);
+    display:flex;flex-direction:column;gap:16px;background:#fff;transition:border-color .12s,box-shadow .12s;}
+  .card:hover{border-color:#d4d4d8;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+  .card .row1{display:flex;align-items:center;gap:13px;}
+  .card .nm{font-size:15px;font-weight:600;}
+  .card .handle{font-size:13px;color:var(--muted);margin-top:2px;}
+  .card .row2{display:flex;align-items:center;justify-content:space-between;
+    border-top:1px solid var(--line);padding-top:14px;}
+  .card .manage{font-size:13px;font-weight:500;color:var(--blue);}
+
+  /* ===== V3 roomy list (dark sidebar variant) ===== */
+  .d3 .side{background:#18181b;border-right-color:#27272a;}
+  .d3 .brand{color:#fafafa;}
+  .d3 .brand .star{color:#60a5fa;}
+  .d3 .navlabel{color:#52525b;}
+  .d3 .nav a{color:#a1a1aa;}
+  .d3 .nav a:hover{background:#27272a;color:#fafafa;}
+  .d3 .nav a.on{background:#1e3a8a33;color:#93c5fd;}
+  .d3 .side-foot{border-top-color:#27272a;}
+  .d3 .side-foot .who{color:#a1a1aa;}
+  .d3 .side-foot button{background:#27272a;border-color:#3f3f46;color:#fafafa;}
+  .d3 .side-foot button:hover{background:#3f3f46;}
+  .rlist{display:flex;flex-direction:column;}
+  .ritem{display:flex;align-items:center;gap:16px;padding:18px 14px;border-radius:10px;
+    text-decoration:none;color:var(--ink);}
+  .ritem:hover{background:var(--hover);}
+  .ritem .av{width:44px;height:44px;font-size:14px;}
+  .ritem .meta{flex:1;min-width:0;}
+  .ritem .nm{font-size:15px;font-weight:600;}
+  .ritem .handle{font-size:13px;color:var(--muted);margin-top:2px;}
+  .ritem .chev{color:var(--faint);font-size:18px;}
+  .ritem:hover .chev{color:var(--blue);}
+  .rdivide{height:1px;background:var(--line);margin:0 14px;}
+</style>
+</head>
+<body>
+<div class="board-head">
+  <h1>Lone Star Management — Round 4</h1>
+  <p>New direction: a real management dashboard. White + black base, blue and red only as small
+  functional accents (blue = brand star + active nav/links; red = a “on tour” status dot). Clean
+  sans-serif, generous spacing, modest titles, and a persistent left sidebar across the app’s real
+  sections. Three takes on the roster view + sidebar treatment below.</p>
+</div>
+
+<!-- ============ V1 : TABLE, light sidebar ============ -->
+<div class="vlabel">V1 · Table view — light sidebar</div>
+<div class="stage">
+  <div class="app d1">
+    <aside class="side">
+      <div class="brand"><span class="star">&#9733;</span> Lone Star</div>
+      <div class="navlabel">Workspace</div>
+      <nav class="nav">
+        <a class="on" href="#"><span class="ico"></span> Roster</a>
+        <a href="#"><span class="ico"></span> Releases</a>
+        <a href="#"><span class="ico"></span> Tour Dates</a>
+        <a href="#"><span class="ico"></span> Videos</a>
+        <a href="#"><span class="ico"></span> Analytics</a>
+        <a href="#"><span class="ico"></span> Press Kit</a>
+      </nav>
+      <div class="side-foot">
+        <div class="who">samuel.j.fox1@gmail.com</div>
+        <button>Sign out</button>
+      </div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="tl"><h2>Your artists</h2><p>The artists you manage.</p></div>
+        <div class="tr"><input class="search" placeholder="Search artists…"><button class="btn primary">+ Add artist</button></div>
+      </div>
+      <div class="content">
+        <table class="tbl">
+          <thead><tr><th>Artist</th><th>Handle</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><div class="artistcell"><span class="avatar">WN</span><span class="nm">Willie Nelson</span></div></td><td class="handle">/willie</td><td><span class="status"><span class="dot live"></span> On tour</span></td><td class="upd">2 days ago</td><td class="chev">&rsaquo;</td></tr>
+            <tr><td><div class="artistcell"><span class="avatar">ML</span><span class="nm">Miranda Lambert</span></div></td><td class="handle">/miranda</td><td><span class="status"><span class="dot"></span> Active</span></td><td class="upd">5 days ago</td><td class="chev">&rsaquo;</td></tr>
+            <tr><td><div class="artistcell"><span class="avatar">GS</span><span class="nm">George Strait</span></div></td><td class="handle">/george</td><td><span class="status"><span class="dot"></span> Active</span></td><td class="upd">1 week ago</td><td class="chev">&rsaquo;</td></tr>
+            <tr><td><div class="artistcell"><span class="avatar">KM</span><span class="nm">Kacey Musgraves</span></div></td><td class="handle">/kacey</td><td><span class="status"><span class="dot"></span> Active</span></td><td class="upd">2 weeks ago</td><td class="chev">&rsaquo;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ V2 : CARDS, minimal white sidebar ============ -->
+<div class="vlabel">V2 · Card grid — minimal white sidebar</div>
+<div class="stage">
+  <div class="app d2" style="--surface:#fff">
+    <aside class="side">
+      <div class="brand"><span class="star">&#9733;</span> Lone Star</div>
+      <div class="navlabel">Workspace</div>
+      <nav class="nav">
+        <a class="on" href="#"><span class="ico"></span> Roster</a>
+        <a href="#"><span class="ico"></span> Releases</a>
+        <a href="#"><span class="ico"></span> Tour Dates</a>
+        <a href="#"><span class="ico"></span> Videos</a>
+        <a href="#"><span class="ico"></span> Analytics</a>
+        <a href="#"><span class="ico"></span> Press Kit</a>
+      </nav>
+      <div class="side-foot">
+        <div class="who">samuel.j.fox1@gmail.com</div>
+        <button>Sign out</button>
+      </div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="tl"><h2>Your artists</h2><p>The artists you manage.</p></div>
+        <div class="tr"><input class="search" placeholder="Search artists…"><button class="btn primary">+ Add artist</button></div>
+      </div>
+      <div class="content">
+        <div class="cards">
+          <a class="card" href="/willie"><div class="row1"><span class="avatar">WN</span><div><div class="nm">Willie Nelson</div><div class="handle">/willie</div></div></div><div class="row2"><span class="status"><span class="dot live"></span> On tour</span><span class="manage">Manage &rarr;</span></div></a>
+          <a class="card" href="/miranda"><div class="row1"><span class="avatar">ML</span><div><div class="nm">Miranda Lambert</div><div class="handle">/miranda</div></div></div><div class="row2"><span class="status"><span class="dot"></span> Active</span><span class="manage">Manage &rarr;</span></div></a>
+          <a class="card" href="/george"><div class="row1"><span class="avatar">GS</span><div><div class="nm">George Strait</div><div class="handle">/george</div></div></div><div class="row2"><span class="status"><span class="dot"></span> Active</span><span class="manage">Manage &rarr;</span></div></a>
+          <a class="card" href="/kacey"><div class="row1"><span class="avatar">KM</span><div><div class="nm">Kacey Musgraves</div><div class="handle">/kacey</div></div></div><div class="row2"><span class="status"><span class="dot"></span> Active</span><span class="manage">Manage &rarr;</span></div></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ V3 : ROOMY LIST, dark sidebar ============ -->
+<div class="vlabel">V3 · Roomy list — dark sidebar</div>
+<div class="stage">
+  <div class="app d3">
+    <aside class="side">
+      <div class="brand"><span class="star">&#9733;</span> Lone Star</div>
+      <div class="navlabel">Workspace</div>
+      <nav class="nav">
+        <a class="on" href="#"><span class="ico"></span> Roster</a>
+        <a href="#"><span class="ico"></span> Releases</a>
+        <a href="#"><span class="ico"></span> Tour Dates</a>
+        <a href="#"><span class="ico"></span> Videos</a>
+        <a href="#"><span class="ico"></span> Analytics</a>
+        <a href="#"><span class="ico"></span> Press Kit</a>
+      </nav>
+      <div class="side-foot">
+        <div class="who">samuel.j.fox1@gmail.com</div>
+        <button>Sign out</button>
+      </div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="tl"><h2>Your artists</h2><p>The artists you manage.</p></div>
+        <div class="tr"><input class="search" placeholder="Search artists…"><button class="btn primary">+ Add artist</button></div>
+      </div>
+      <div class="content">
+        <div class="rlist">
+          <a class="ritem" href="/willie"><span class="avatar av">WN</span><div class="meta"><div class="nm">Willie Nelson</div><div class="handle">/willie</div></div><span class="status"><span class="dot live"></span> On tour</span><span class="chev">&rsaquo;</span></a>
+          <div class="rdivide"></div>
+          <a class="ritem" href="/miranda"><span class="avatar av">ML</span><div class="meta"><div class="nm">Miranda Lambert</div><div class="handle">/miranda</div></div><span class="status"><span class="dot"></span> Active</span><span class="chev">&rsaquo;</span></a>
+          <div class="rdivide"></div>
+          <a class="ritem" href="/george"><span class="avatar av">GS</span><div class="meta"><div class="nm">George Strait</div><div class="handle">/george</div></div><span class="status"><span class="dot"></span> Active</span><span class="chev">&rsaquo;</span></a>
+          <div class="rdivide"></div>
+          <a class="ritem" href="/kacey"><span class="avatar av">KM</span><div class="meta"><div class="nm">Kacey Musgraves</div><div class="handle">/kacey</div></div><span class="status"><span class="dot"></span> Active</span><span class="chev">&rsaquo;</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,95 @@
+{
+  "submittedModule": 2,
+  "submittedAt": "2026-07-07T16:14:01.653Z",
+  "export": {
+    "course": "lone-star eve agent course",
+    "atModule": 2,
+    "answers": [
+      {
+        "module": 0,
+        "title": "The mental model",
+        "open": [
+          {
+            "q": "In your own words: why don't you need a step to \"turn on\" a tool in eve? Think about Idea 1.",
+            "a": "Because every time the agent recieves a message, it turns to the tools to see if it has any use. Eve decides that, not the user"
+          }
+        ],
+        "quiz": null,
+        "notes": [],
+        "completed": true
+      },
+      {
+        "module": 1,
+        "title": "The two-file agent",
+        "open": [
+          {
+            "q": "In your own words: what's the difference between instructions.md and a skill? When would you use each?",
+            "a": "Skill is something you call on demand. Betrter for long, gruesome tasks that dont need to be run every callf34f"
+          }
+        ],
+        "quiz": {
+          "score": 0,
+          "total": 3,
+          "picks": {}
+        },
+        "notes": [
+          {
+            "type": "question",
+            "text": "I would like to run a /grill-me at some point before we create the agent so we can think through all the rules that we need to follow for this specific agent. Strict guardrails",
+            "about": "How to work \u2014 the rules: lead with the answer, never guess numbers, ask when an artist name is unclear."
+          },
+          {
+            "type": "question",
+            "text": "What is the standard practice for how much instructions is best to enforce what you want while still limiting token usage on every call",
+            "about": null
+          },
+          {
+            "type": "idea",
+            "text": "Okay, remind me this when we are building this out please",
+            "about": null
+          }
+        ],
+        "completed": true
+      },
+      {
+        "module": 2,
+        "title": "Tools",
+        "open": [
+          {
+            "q": "In your own words: what are the three things every tool must have, and what does each do?",
+            "a": "Description: Describes when and why the tool is used in natural language for the model. \ninputSchema: Describes what data can be used in the tool to find the correct answer\nExecute: Excecutes the functions necessary to complete the tool and return desired data"
+          },
+          {
+            "q": "Prep for the build: we're about to write roster_overview, which sums up the WHOLE roster. What input(s), if any, should its schema take, and why? (Hint: does it need to know which artist?)",
+            "a": "No, it does not need to know artists, because it is all of them. It seems there is no required input"
+          }
+        ],
+        "quiz": {
+          "score": 6,
+          "total": 6,
+          "picks": {
+            "0": "A",
+            "1": "A",
+            "2": "A",
+            "3": "A",
+            "4": "A",
+            "5": "A"
+          }
+        },
+        "notes": [
+          {
+            "type": "question",
+            "text": "So the listArtists() function, is it a real, defined, written funciton, or is it just an idea that is used by the agent to do work?",
+            "about": "import { defineTool } from \"eve/tools\"; import { z } from \"zod\"; import { listArtists } from \"#lib/lonestar.js\"; export default defineTool({\u2026"
+          },
+          {
+            "type": "question",
+            "text": "I dont see ctx in the code",
+            "about": "ctx is an extra helper eve can pass to execute (like who's asking, or a stop signal). None of your tools need it yet, so we skip it \u2014 just k\u2026"
+          }
+        ],
+        "completed": false
+      }
+    ]
+  }
+}

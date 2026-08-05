@@ -58,6 +58,19 @@ export type StyleControl =
        * that owns it deletes that scale's zero.
        */
       defaultOffScale?: boolean
+      /**
+       * MEASURE an owned token, so a value that is not one of the steps can still be
+       * placed on the scale. Returns the token's magnitude in the scale's own unit (rem
+       * for size, a ratio for line spacing, em for letter spacing, px, %) or null when the
+       * value cannot be resolved to a number.
+       *
+       * Without this a slider had exactly two states — on a step, or "Default" resting at
+       * the midpoint — and a site's OWN base classes are almost never on a step. skeen's
+       * hero is `text-[clamp(4rem,18vw,11rem)]`, larger than any step we offer, so the
+       * handle opened mid-scale and the first nudge right shrank an 11rem headline to
+       * 2.25rem. See sliderIndex.
+       */
+      rank?: (token: string) => number | null
       owns: (token: string) => boolean
     }
   /** A full colour palette (hue slider + saturation/brightness square + hex field). The owned
@@ -161,6 +174,103 @@ const TRACKING_OPTIONS: StyleOption[] = [
 
 const isLeading = (t: string) => t.startsWith('leading-') || t.startsWith('!leading-')
 const isTracking = (t: string) => t.startsWith('tracking-') || t.startsWith('!tracking-')
+
+/* ── Measuring an owned token ────────────────────────────────────────────────────────
+ * Each `rank` turns a class into a number on its own scale, so sliderIndex can place a
+ * value the scale does not literally contain. They are deliberately conservative: an
+ * unrecognised shape returns null and the slider falls back to its resting position
+ * rather than guessing a position that would be wrong in an invisible way.
+ */
+
+/** A CSS length in rem. px is divided by 16 (the browser default and skeen's root size);
+ *  anything relative to the viewport or wrapped in calc() is unmeasurable here. */
+function lengthRem(raw: string): number | null {
+  const s = raw.trim()
+  const m = /^(-?[\d.]+)(rem|em|px)$/.exec(s)
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isFinite(n)) return null
+  return m[2] === 'px' ? n / 16 : n
+}
+
+/** Tailwind's named font sizes, in rem — the same numbers the fluid steps use as their
+ *  MAX, which is what makes a legacy `text-4xl` land beside its clamp replacement. */
+const SIZE_REM: Record<string, number> = {
+  xs: 0.75, sm: 0.875, base: 1, lg: 1.125, xl: 1.25, '2xl': 1.5, '3xl': 1.875,
+  '4xl': 2.25, '5xl': 3, '6xl': 3.75, '7xl': 4.5, '8xl': 6, '9xl': 8,
+}
+
+/** A font size in rem. A clamp is measured by its MAX — the desktop size, which is what
+ *  the manager is looking at while they drag. */
+function textSizeRank(t: string): number | null {
+  const named = SIZE_REM[textSuffix(t)]
+  if (named != null) return named
+  const arb = /^text-\[(.+)\]$/.exec(t)
+  if (!arb) return null
+  const clamp = /^clamp\((.+)\)$/.exec(arb[1])
+  if (clamp) {
+    const parts = clamp[1].split(',')
+    return lengthRem(parts[parts.length - 1])
+  }
+  return lengthRem(arb[1])
+}
+
+const LEADING_RATIO: Record<string, number> = {
+  none: 1, tight: 1.25, snug: 1.375, normal: 1.5, relaxed: 1.625, loose: 2,
+}
+/** A line-height RATIO. The `!` is stripped first: the site writes `leading-none`, this
+ *  editor emits `!leading-none`, and they are the same 1.0 — treating them as different
+ *  values is what put the handle at 1.1 on a region already sitting at 1.0. */
+function leadingRank(t: string): number | null {
+  const s = t.replace(/^!/, '')
+  if (!s.startsWith('leading-')) return null
+  const v = s.slice('leading-'.length)
+  const arb = /^\[([\d.]+)\]$/.exec(v)
+  if (arb) return Number(arb[1])
+  return LEADING_RATIO[v] ?? null
+}
+
+const TRACKING_EM: Record<string, number> = {
+  tighter: -0.05, tight: -0.025, normal: 0, wide: 0.025, wider: 0.05, widest: 0.1,
+}
+/** Letter spacing in em. */
+function trackingRank(t: string): number | null {
+  const s = t.replace(/^!/, '')
+  if (!s.startsWith('tracking-')) return null
+  const v = s.slice('tracking-'.length)
+  const arb = /^\[(-?[\d.]+)em\]$/.exec(v)
+  if (arb) return Number(arb[1])
+  return TRACKING_EM[v] ?? null
+}
+
+/** A percentage scale (`scale-135`, `opacity-70`). The `''` step is 100% on both. */
+const pctRank = (prefix: string) => (t: string): number | null => {
+  if (t === '') return 100
+  const m = new RegExp(`^${prefix}-(\\d+)$`).exec(t)
+  return m ? Number(m[1]) : null
+}
+
+const BORDER_PX: Record<string, number> = { border: 1, 'border-0': 0, 'border-2': 2, 'border-4': 4, 'border-8': 8 }
+const RADIUS_PX: Record<string, number> = {
+  'rounded-none': 0, 'rounded-sm': 2, rounded: 4, 'rounded-md': 6, 'rounded-lg': 8,
+  'rounded-xl': 12, 'rounded-2xl': 16, 'rounded-3xl': 24,
+  // Not a real px value — a pill. Ranked far above every other stop so nothing snaps to
+  // it by accident, and so it stays the right-hand end of the scale.
+  'rounded-full': 9999,
+}
+/** A px scale. `''` is the off/zero end for both border width and corner radius. */
+const pxRank = (named: Record<string, number>) => (t: string): number | null => {
+  if (t === '') return 0
+  const arb = /-\[(\d+)px\]$/.exec(t)
+  if (arb) return Number(arb[1])
+  return named[t] ?? null
+}
+
+const SHADOW_RANK: Record<string, number> = {
+  '': 0, 'shadow-none': 0, 'shadow-sm': 1, shadow: 2, 'shadow-md': 3,
+  'shadow-lg': 4, 'shadow-xl': 5, 'shadow-2xl': 6,
+}
+const shadowRank = (t: string): number | null => SHADOW_RANK[t] ?? null
 
 // Every Tailwind weight, not four. A variable font renders the in-between ones properly,
 // and on a slider the missing stops are exactly where a manager wants to sit.
@@ -351,6 +461,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     kind: 'slider',
     steps: [DEFAULT, ...SIZE_OPTIONS],
     defaultOffScale: true,
+    rank: textSizeRank,
     owns: isTextSize,
   })
   controls.push({
@@ -370,6 +481,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     kind: 'slider',
     steps: [DEFAULT, ...LEADING_OPTIONS],
     defaultOffScale: true,
+    rank: leadingRank,
     owns: isLeading,
   })
   controls.push({
@@ -378,9 +490,17 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     kind: 'slider',
     steps: [DEFAULT, ...TRACKING_OPTIONS],
     defaultOffScale: true,
+    rank: trackingRank,
     owns: isTracking,
   })
   return controls
+}
+
+/** Playback rate as a multiplier. `''` is 1×, the middle of this scale rather than an end. */
+const speedRank = (t: string): number | null => {
+  if (t === '') return 1
+  const m = /^speed-\[([\d.]+)x\]$/.exec(t)
+  return m ? Number(m[1]) : null
 }
 
 /**
@@ -400,14 +520,67 @@ export function sliderSteps(control: StyleControl): StyleOption[] {
   return control.defaultOffScale ? control.steps.filter((s) => s.value !== '') : control.steps
 }
 
+/**
+ * WHERE THE HANDLE GOES for the current value, and what to call it.
+ *
+ * Three cases, and the middle one is the whole point:
+ *
+ *  • the value IS a step — sit on it, exactly.
+ *  • the value is off-scale but MEASURABLE — sit on the nearest step. A site's own base
+ *    classes are almost never one of ours: skeen writes `leading-none` where we emit
+ *    `!leading-none`, sizes its captions `text-[12px]`, and sizes its hero at
+ *    `text-[clamp(4rem,18vw,11rem)]` — bigger than any step this editor offers. Treating
+ *    all of those as "no value" parked the handle mid-scale, so one notch right applied
+ *    something wildly smaller than what was on the screen. That is the bug Sam reported:
+ *    "starts in the middle, but when I move it one to the right it gets much smaller."
+ *  • the value is unmeasurable, or absent — rest at the midpoint and read "Default",
+ *    which leaves room to drag both ways and claims nothing we cannot back up.
+ *
+ * `exact` is what the caller should gate a Reset control on: nudging an off-scale value
+ * is a real change, but there is nothing of the manager's own to clear yet.
+ */
+export function sliderIndex(
+  control: StyleControl,
+  current: string,
+): { idx: number; label: string; exact: boolean; hasValue: boolean } {
+  const steps = sliderSteps(control)
+  const middle = Math.floor((steps.length - 1) / 2)
+  if (control.kind !== 'slider' || !steps.length) return { idx: 0, label: 'Default', exact: false, hasValue: false }
+
+  const exact = steps.findIndex((s) => s.value === current)
+  if (exact >= 0) return { idx: exact, label: steps[exact].label, exact: true, hasValue: true }
+
+  const rank = control.rank
+  const target = current && rank ? rank(current) : null
+  if (target != null) {
+    let best = -1
+    let bestDistance = Infinity
+    steps.forEach((step, i) => {
+      const r = rank!(step.value)
+      if (r == null) return
+      const d = Math.abs(r - target)
+      // Strictly closer, so a tie keeps the LOWER step. Nudging up from there is a
+      // smaller lie than nudging down would be.
+      if (d < bestDistance) {
+        bestDistance = d
+        best = i
+      }
+    })
+    // "≈" because the handle is beside the value, not on it — the manager should not read
+    // an 11rem hero as though it were the 8rem step.
+    if (best >= 0) return { idx: best, label: `≈ ${steps[best].label}`, exact: false, hasValue: true }
+  }
+  return { idx: middle, label: 'Default', exact: false, hasValue: Boolean(current) }
+}
+
 export function buildItemStyleControls(): StyleControl[] {
   return [
-    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, owns: (t) => t.startsWith('scale-') },
-    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, owns: (t) => t.startsWith('opacity-') },
-    { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, owns: isBorderWidth },
+    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') },
+    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-') },
+    { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, rank: pxRank(BORDER_PX), owns: isBorderWidth },
     { id: 'borderColor', label: 'Border color', kind: 'color', owns: (t) => colorToken(t)?.prop === 'borderColor' },
-    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, owns: isRadius },
-    { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, owns: isShadow },
+    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
+    { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
   ]
 }
 
@@ -439,19 +612,20 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
     label: 'Transparency',
     kind: 'slider',
     steps: OPACITY_STEPS,
+    rank: pctRank('opacity'),
     owns: (t) => t.startsWith('opacity-'),
   }
   if (kind === 'file') {
     return [
-      { id: 'speed', label: 'Speed', kind: 'slider', steps: SPEED_STEPS, owns: (t) => t.startsWith('speed-') },
+      { id: 'speed', label: 'Speed', kind: 'slider', steps: SPEED_STEPS, rank: speedRank, owns: (t) => t.startsWith('speed-') },
       opacity,
     ]
   }
   return [
-    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, owns: (t) => t.startsWith('scale-') },
+    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') },
     opacity,
-    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, owns: isRadius },
-    { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, owns: isShadow },
+    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
+    { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
   ]
 }
 

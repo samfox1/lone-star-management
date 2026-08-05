@@ -8,7 +8,7 @@ import {
   buildStyleControls,
   readStyleValue,
   type SiteStyleOptions,
-  type StyleControl, sliderSteps } from '@/lib/site-editor/style-controls'
+  type StyleControl, sliderSteps, sliderIndex } from '@/lib/site-editor/style-controls'
 import {
   SectionRow,
   ControlRow,
@@ -74,20 +74,22 @@ export function StyleControlRow({
     // MIDDLE and reads "Default": mid-scale is honest about "unset" in a way that either
     // end is not, and it leaves room to drag both ways. Clearing is an explicit button
     // rather than a hidden position at one end.
+    // ...and a value the site set itself is almost never one of OUR steps. skeen's hero is
+    // text-[clamp(4rem,18vw,11rem)] — above every step here — so it fell through to the
+    // resting position too, and one notch right dropped it to 2.25rem. sliderIndex now
+    // MEASURES an off-scale value and parks the handle at the nearest step, so dragging
+    // right is always a little bigger than what is on screen. Only a value it cannot
+    // resolve to a number rests in the middle.
     const steps = sliderSteps(control)
     const canReset = steps.length !== control.steps.length
-    const currentIdx = steps.findIndex((s) => s.value === current)
-    const isSet = currentIdx >= 0
-    const idx = isSet ? currentIdx : Math.floor((steps.length - 1) / 2)
+    const { idx, label, exact } = sliderIndex(control, current)
     return (
       <div className="py-1.5">
         <div className="flex items-center justify-between">
           <span className={CONTROL_LABEL}>{control.label}</span>
           <span className="flex items-center gap-2">
-            <span className="font-space text-[11px] text-ink-muted">
-              {isSet ? steps[idx].label : 'Default'}
-            </span>
-            {canReset && isSet && (
+            <span className="font-space text-[11px] text-ink-muted">{label}</span>
+            {canReset && exact && (
               <button
                 type="button"
                 onClick={() => onChange('')}

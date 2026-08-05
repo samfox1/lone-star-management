@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — Round 6 — 20 orientations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+
+:root{ --ink:#111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --hair:#ececec;
+  --blue:#2563eb; --red:#e5484d; --mono:'Space Mono',ui-monospace,monospace; --sans:'Inter',system-ui,sans-serif; }
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:var(--sans);background:#e9e9ec;color:var(--ink);-webkit-font-smoothing:antialiased;}
+.board-head{padding:24px 32px;background:#fff;border-bottom:1px solid var(--hair);}
+.board-head h1{margin:0;font-size:18px;font-weight:700;}
+.board-head p{margin:7px 0 0;font-size:13px;color:var(--muted);max-width:860px;line-height:1.55;}
+.board-head .key{color:var(--red);}
+.slabel{padding:26px 32px 8px;font-family:var(--mono);font-size:12px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);}
+.slabel b{color:var(--ink);}
+.frame{padding:0 32px 36px;}
+.app{position:relative;min-height:560px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05),0 12px 30px rgba(0,0,0,.06);}
+.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:middle;}
+.ic.lg{width:22px;height:22px;}
+.avatar{width:36px;height:36px;border-radius:50%;background:#f1f1f1;color:#111;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;flex:none;}
+.spark{width:96px;height:28px;display:block;}
+.spark polyline{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;}
+.spark.down polyline{stroke:var(--red);}
+.trend{font-family:var(--mono);font-size:12px;}
+.trend.up{color:var(--blue);}
+.trend.down{color:var(--red);}
+
+/* S1 · Top Nav Bar */
+.s1{font-family:var(--sans);color:var(--ink);background:var(--paper)}
+.s1 .s1-top{display:flex;align-items:center;gap:28px;padding:18px 24px;border-bottom:1px solid var(--hair)}
+.s1 .s1-mark{font-family:var(--mono);font-weight:700;font-size:16px;letter-spacing:-.5px;display:flex;align-items:center;gap:6px}
+.s1 .s1-nav{display:flex;align-items:center;gap:22px;margin-left:8px}
+.s1 .s1-nav a{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none}
+.s1 .s1-nav a.on{color:var(--ink)}
+.s1 .s1-nav a.on .ic{color:var(--blue)}
+.s1 .s1-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.s1 .s1-search{color:var(--muted);display:flex}
+.s1 .s1-add{display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;border:none;border-radius:7px;padding:8px 13px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer}
+.s1 .s1-add .ic{width:15px;height:15px}
+.s1 .s1-wrap{max-width:960px;margin:0 auto;padding:30px 24px}
+.s1 .s1-hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.s1 .s1-h{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.s1 .s1-tot{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.s1 .s1-row{display:flex;align-items:center;gap:16px;padding:16px 12px;border-radius:10px;transition:background .15s}
+.s1 .s1-row:hover{background:#fafafa}
+.s1 .s1-idx{font-family:var(--mono);font-size:11px;color:var(--faint);width:18px}
+.s1 .s1-id{min-width:0}
+.s1 .s1-name{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.s1 .s1-handle{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.s1 .s1-dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block}
+.s1 .s1-an{margin-left:auto;display:flex;align-items:center;gap:26px}
+.s1 .s1-fig{text-align:right}
+.s1 .s1-list{font-family:var(--mono);font-size:14px;font-weight:700}
+.s1 .s1-sub{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em}
+/* S2 · Left Icon Rail */
+.s2{font-family:var(--sans);color:var(--ink);display:flex;min-height:560px}
+.s2 .s2-rail{width:72px;flex:none;background:var(--ink);display:flex;flex-direction:column;align-items:center;padding:18px 0;gap:6px}
+.s2 .s2-rail .s2-mark{color:#fff;font-size:20px;margin-bottom:14px}
+.s2 .s2-rail a{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#8b8d92;text-decoration:none}
+.s2 .s2-rail a:hover{color:#fff}
+.s2 .s2-rail a.on{background:#1d1d1d;color:var(--blue)}
+.s2 .s2-rail .s2-btm{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px}
+.s2 .s2-rail .s2-av{width:30px;height:30px;border-radius:50%;background:#2a2a2a;color:#fff;font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.s2 .s2-main{flex:1;padding:34px 40px}
+.s2 .s2-hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px}
+.s2 .s2-h{font-size:22px;font-weight:700;letter-spacing:-.4px}
+.s2 .s2-tot{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.s2 .s2-row{display:flex;align-items:center;gap:18px;padding:15px 6px}
+.s2 .s2-row+.s2-row{border-top:1px solid var(--hair)}
+.s2 .s2-name{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.s2 .s2-handle{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.s2 .s2-dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block}
+.s2 .s2-an{margin-left:auto;display:flex;align-items:center;gap:28px}
+.s2 .s2-fig{text-align:right}
+.s2 .s2-list{font-family:var(--mono);font-size:14px;font-weight:700}
+.s2 .s2-sub{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em}
+/* S3 · Bottom Dock */
+.s3{font-family:var(--sans);color:var(--ink);position:relative;min-height:560px;padding:40px 48px 110px}
+.s3 .s3-hd{margin-bottom:30px}
+.s3 .s3-h{font-size:24px;font-weight:700;letter-spacing:-.5px;display:flex;align-items:center;gap:10px}
+.s3 .s3-mark{font-family:var(--mono)}
+.s3 .s3-tot{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:8px}
+.s3 .s3-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px}
+.s3 .s3-card{display:flex;align-items:center;gap:16px;padding:18px 4px}
+.s3 .s3-name{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.s3 .s3-handle{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.s3 .s3-dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block}
+.s3 .s3-an{margin-left:auto;text-align:right}
+.s3 .s3-list{font-family:var(--mono);font-size:14px;font-weight:700}
+.s3 .s3-sub{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em;margin-top:2px}
+.s3 .s3-dock{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;background:#fff;border-radius:16px;padding:9px 12px;box-shadow:0 8px 30px rgba(0,0,0,.14),0 1px 4px rgba(0,0,0,.08)}
+.s3 .s3-dock a{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--muted);text-decoration:none}
+.s3 .s3-dock a:hover{background:#f3f3f3;color:var(--ink)}
+.s3 .s3-dock a.on{color:var(--blue)}
+.s3 .s3-dock .s3-sep{width:1px;height:24px;background:var(--hair);margin:0 4px}
+/* S4 · Command-first */
+.s4{font-family:var(--sans);color:var(--ink);min-height:560px;display:flex;flex-direction:column;align-items:center;padding:70px 24px}
+.s4 .s4-mark{font-size:30px;margin-bottom:26px}
+.s4 .s4-cmd{width:100%;max-width:560px;display:flex;align-items:center;gap:12px;border:1px solid var(--hair);border-radius:13px;padding:15px 18px;box-shadow:0 2px 14px rgba(0,0,0,.04)}
+.s4 .s4-cmd .ic{color:var(--faint)}
+.s4 .s4-cmd input{border:none;outline:none;flex:1;font-family:var(--mono);font-size:14px;color:var(--ink);background:transparent}
+.s4 .s4-cmd input::placeholder{color:var(--faint)}
+.s4 .s4-k{font-family:var(--mono);font-size:11px;color:var(--faint);border:1px solid var(--hair);border-radius:5px;padding:2px 6px}
+.s4 .s4-recent{width:100%;max-width:560px;margin-top:30px}
+.s4 .s4-lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.s4 .s4-row{display:flex;align-items:center;gap:14px;padding:12px 6px;border-radius:9px}
+.s4 .s4-row:hover{background:#fafafa}
+.s4 .s4-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px}
+.s4 .s4-handle{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.s4 .s4-dot{width:6px;height:6px;border-radius:50%;background:var(--red);display:inline-block}
+.s4 .s4-an{margin-left:auto;display:flex;align-items:center;gap:16px}
+.s4 .s4-list{font-family:var(--mono);font-size:12px;font-weight:700}
+.s4 .s4-tot{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:24px}
+/* S5 · Right Rail */
+.s5{font-family:var(--sans);color:var(--ink);display:flex;min-height:560px}
+.s5 .s5-main{flex:1;padding:34px 40px}
+.s5 .s5-hd{margin-bottom:22px}
+.s5 .s5-h{font-size:22px;font-weight:700;letter-spacing:-.4px}
+.s5 .s5-tot{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:6px}
+.s5 .s5-row{display:flex;align-items:center;gap:18px;padding:16px 6px}
+.s5 .s5-row+.s5-row{border-top:1px solid var(--hair)}
+.s5 .s5-name{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.s5 .s5-handle{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.s5 .s5-dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block}
+.s5 .s5-an{margin-left:auto;display:flex;align-items:center;gap:26px}
+.s5 .s5-fig{text-align:right}
+.s5 .s5-list{font-family:var(--mono);font-size:14px;font-weight:700}
+.s5 .s5-sub{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em}
+.s5 .s5-rail{width:188px;flex:none;border-left:1px solid var(--hair);padding:26px 20px;display:flex;flex-direction:column}
+.s5 .s5-mark{font-family:var(--mono);font-weight:700;font-size:16px;text-align:right;margin-bottom:22px}
+.s5 .s5-rail a{display:flex;align-items:center;justify-content:flex-end;gap:11px;text-decoration:none;color:var(--muted);font-family:var(--mono);font-size:13px;padding:9px 4px}
+.s5 .s5-rail a.on{color:var(--ink)}
+.s5 .s5-rail a.on .ic{color:var(--blue)}
+.s5 .s5-rail .s5-btm{margin-top:auto;display:flex;align-items:center;justify-content:flex-end;gap:9px;border-top:1px solid var(--hair);padding-top:14px}
+.s5 .s5-mgr{text-align:right;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.4}
+/* ============================ S6 · Floating Pill Nav ============================ */
+.s6{padding:0}
+.s6-stage{padding:28px 30px 30px}
+.s6-pillbar{display:flex;justify-content:center;padding:18px 0 30px}
+.s6-pill{display:inline-flex;align-items:center;gap:4px;background:#fff;border-radius:999px;padding:6px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 10px 26px rgba(0,0,0,.10)}
+.s6-pill a{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:999px;color:var(--muted);text-decoration:none;cursor:pointer}
+.s6-pill a:hover{background:#f4f4f5;color:var(--ink)}
+.s6-pill a.on{background:var(--blue);color:#fff}
+.s6-sep{width:1px;height:20px;background:var(--hair);margin:0 4px}
+.s6-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.s6-tile{padding:18px;border-radius:14px;transition:background .14s ease;cursor:pointer}
+.s6-tile:hover{background:#fafafa}
+.s6-thead{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.s6-id{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.s6-nm{font-family:var(--sans);font-weight:600;font-size:15px;letter-spacing:-.01em;line-height:1.15}
+.s6-hd{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.s6-st{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.s6-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.s6-dot.live{background:var(--red)}
+.s6-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.s6-num{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.s6-sub{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin-top:8px;display:flex;align-items:center;gap:8px}
+.s6-bottom{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;letter-spacing:.04em;padding-top:24px}
+/* ============================ S7 · Segmented Control ============================ */
+.s7{padding:0}
+.s7-stage{padding:34px 36px 38px}
+.s7-h{font-family:var(--sans);font-weight:700;font-size:30px;letter-spacing:-.022em;margin:0}
+.s7-seg{display:inline-flex;background:#f4f4f5;border-radius:10px;padding:4px;gap:2px;margin:20px 0 22px}
+.s7-seg button{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.02em;color:var(--muted);background:none;border:0;border-radius:7px;padding:8px 16px;cursor:pointer}
+.s7-seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.10)}
+.s7-seg .ic{width:15px;height:15px}
+.s7-list{display:flex;flex-direction:column}
+.s7-row{display:flex;align-items:center;gap:18px;padding:16px 6px;border-radius:10px;transition:background .14s ease;cursor:pointer}
+.s7-row:hover{background:#fafafa}
+.s7-main{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.s7-nm{font-family:var(--sans);font-weight:600;font-size:15px;letter-spacing:-.01em}
+.s7-hd{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.s7-st{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px;width:96px}
+.s7-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.s7-dot.live{background:var(--red)}
+.s7-num{font-family:var(--mono);font-size:15px;color:var(--ink);width:72px;text-align:right}
+.s7-tr{width:62px;text-align:right}
+.s7-foot{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.04em;padding:20px 6px 0}
+/* ============================ S8 · Analytics Leaderboard ============================ */
+.s8{padding:0}
+.s8-topbar{display:flex;align-items:center;gap:18px;padding:16px 26px;border-bottom:1px solid var(--hair)}
+.s8-brand{font-family:var(--sans);font-weight:700;font-size:14px;letter-spacing:-.01em;margin-right:auto;display:inline-flex;align-items:center;gap:8px}
+.s8-brand .star{color:var(--blue)}
+.s8-topbar a{color:var(--muted);display:inline-flex;cursor:pointer;text-decoration:none}
+.s8-topbar a:hover{color:var(--ink)}
+.s8-topbar a.on{color:var(--blue)}
+.s8-stage{padding:26px 30px 32px}
+.s8-h{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 18px}
+.s8-row{padding:16px 4px}
+.s8-rtop{display:flex;align-items:baseline;gap:12px;margin-bottom:11px}
+.s8-rank{font-family:var(--mono);font-size:12px;color:var(--faint);width:24px}
+.s8-nm{font-family:var(--sans);font-weight:600;font-size:15px;letter-spacing:-.01em}
+.s8-hd{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.s8-st{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.s8-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.s8-dot.live{background:var(--red)}
+.s8-rnum{margin-left:auto;font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-.02em}
+.s8-rtr{font-family:var(--mono);font-size:12px;width:58px;text-align:right}
+.s8-track{height:10px;background:#f1f1f1;border-radius:2px;overflow:hidden;margin-left:36px}
+.s8-fill{height:100%;background:var(--ink);border-radius:2px}
+.s8-foot{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.04em;padding:22px 4px 0}
+/* ============================ S9 · Hub / Greeting ============================ */
+.s9{padding:0}
+.s9-top{display:flex;align-items:center;gap:6px;padding:16px 26px}
+.s9-brand{margin-right:auto;font-family:var(--sans);font-weight:700;font-size:14px;letter-spacing:-.01em;display:inline-flex;align-items:center;gap:8px}
+.s9-brand .star{color:var(--blue)}
+.s9-top a{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;color:var(--muted);cursor:pointer;text-decoration:none}
+.s9-top a:hover{background:#f4f4f5;color:var(--ink)}
+.s9-top a.on{color:var(--blue)}
+.s9-stage{padding:20px 30px 36px}
+.s9-greet{font-family:var(--sans);font-weight:700;font-size:27px;letter-spacing:-.022em;margin:0}
+.s9-date{font-family:var(--mono);font-size:12px;color:var(--muted);margin:9px 0 26px}
+.s9-kpis{display:flex;gap:12px;margin-bottom:32px}
+.s9-kpi{flex:1;padding:18px;background:#fafafa;border-radius:14px}
+.s9-kicon{color:var(--faint);margin-bottom:16px}
+.s9-knum{font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px}
+.s9-klabel{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:8px}
+.s9-sec{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+.s9-list{display:flex;flex-direction:column}
+.s9-row{display:flex;align-items:center;gap:14px;padding:13px 4px}
+.s9-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.s9-nm{font-family:var(--sans);font-weight:600;font-size:14.5px;letter-spacing:-.01em}
+.s9-hd{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.s9-rt{text-align:right}
+.s9-num{font-family:var(--mono);font-size:15px;color:var(--ink)}
+.s9-tr{font-family:var(--mono);font-size:11.5px;margin-top:3px;display:block}
+/* ============================ S10 · Two-Row Top ============================ */
+.s10{padding:0}
+.s10-r1{display:flex;align-items:center;justify-content:space-between;padding:16px 26px;border-bottom:1px solid var(--hair)}
+.s10-mark{font-family:var(--sans);font-weight:700;font-size:15px;letter-spacing:-.01em;display:inline-flex;align-items:center;gap:8px}
+.s10-mark .star{color:var(--blue);font-size:16px}
+.s10-r1r{display:flex;align-items:center;gap:16px}
+.s10-r1r a{color:var(--muted);cursor:pointer;display:inline-flex}
+.s10-r1r a:hover{color:var(--ink)}
+.s10-r2{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--hair)}
+.s10-tab{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.02em;color:var(--muted);padding:14px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;text-decoration:none}
+.s10-tab:hover{color:var(--ink)}
+.s10-tab.on{color:var(--blue);border-bottom-color:var(--blue)}
+.s10-tab .ic{width:15px;height:15px}
+.s10-stage{padding:20px 28px 32px}
+.s10-row{display:flex;align-items:center;gap:16px;padding:15px 4px}
+.s10-main{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.s10-nm{font-family:var(--sans);font-weight:600;font-size:15px;letter-spacing:-.01em}
+.s10-hd{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.s10-st{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px;width:96px}
+.s10-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.s10-dot.live{background:var(--red)}
+.s10-num{font-family:var(--mono);font-size:15px;color:var(--ink);width:72px;text-align:right}
+.s10-tr{width:60px;text-align:right}
+/* ============ S11 Master-Detail ============ */
+.s11{display:flex}
+.s11-rail{width:62px;display:flex;flex-direction:column;align-items:center;gap:24px;padding:26px 0;color:var(--faint)}
+.s11-rail .s11-star{font-size:16px;color:var(--ink);margin-bottom:6px}
+.s11-rail a{color:inherit;line-height:0;display:block}
+.s11-rail a.s11-on{color:var(--blue)}
+.s11-list{width:236px;padding:26px 22px;border-right:1px solid var(--hair)}
+.s11-kic{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.12em;text-transform:uppercase;margin:0 0 18px}
+.s11-row{display:flex;align-items:center;justify-content:space-between;padding:11px 10px;border-radius:9px;cursor:pointer}
+.s11-row.s11-sel{background:#f6f6f6}
+.s11-nm{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px}
+.s11-dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex:none}
+.s11-detail{flex:1;padding:30px 34px}
+.s11-eyebrow{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.12em;text-transform:uppercase}
+.s11-h{font-size:22px;font-weight:700;margin:6px 0 2px;display:flex;align-items:center;gap:9px}
+.s11-handle{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.s11-big{font-family:var(--mono);font-size:46px;font-weight:700;letter-spacing:-1px;margin:22px 0 2px}
+.s11-sub{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:14px;align-items:baseline}
+.s11-area{width:100%;height:128px;display:block;margin:18px 0 4px}
+.s11-area polygon{fill:#f4f4f4;stroke:none}
+.s11-area polyline{fill:none;stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.s11-tracks{margin-top:18px}
+.s11-tt{display:flex;align-items:center;gap:12px;padding:9px 0;font-family:var(--mono);font-size:13px}
+.s11-tt span{color:var(--faint);width:18px}
+/* ============ S12 Tile Grid ============ */
+.s12-top{display:flex;align-items:center;gap:18px;padding:18px 24px;border-bottom:1px solid var(--hair)}
+.s12-brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:7px}
+.s12-nav{display:flex;gap:18px;margin-left:8px;color:var(--faint)}
+.s12-nav a{color:inherit;line-height:0}
+.s12-nav a.s12-on{color:var(--blue)}
+.s12-tools{margin-left:auto;display:flex;gap:16px;color:var(--ink)}
+.s12-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;padding:22px}
+.s12-tile{padding:16px 16px 0;border-radius:12px;transition:background .15s;cursor:pointer;overflow:hidden}
+.s12-tile:hover{background:#fafafa}
+.s12-th{display:flex;align-items:center;gap:11px}
+.s12-nm{font-size:14px;font-weight:600}
+.s12-handle{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.s12-stat{display:flex;align-items:baseline;gap:10px;margin:14px 0 2px}
+.s12-list{font-family:var(--mono);font-size:20px;font-weight:700}
+.s12-mini{width:calc(100% + 32px);height:48px;display:block;margin:6px -16px 0}
+.s12-mini polygon{fill:#f4f4f4;stroke:none}
+.s12-mini polyline{fill:none;stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.s12-mini.s12-dn polyline{stroke:var(--red)}
+/* ============ S13 Spotlight ============ */
+.s13{display:flex;align-items:center;justify-content:center;padding:40px 20px;background:var(--paper)}
+.s13-palette{width:540px;max-width:100%;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.13);background:var(--paper)}
+.s13-field{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--hair);color:var(--faint)}
+.s13-input{font-family:var(--mono);font-size:15px;color:var(--ink)}
+.s13-cap{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.s13-res{padding:8px 8px}
+.s13-r{display:flex;align-items:center;gap:13px;padding:11px 12px;border-radius:9px}
+.s13-r.s13-sel{background:#f6f6f6}
+.s13-rn{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px}
+.s13-rh{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.s13-rmeta{margin-left:auto;display:flex;align-items:center;gap:14px}
+.s13-rdot{width:6px;height:6px;border-radius:50%;background:var(--red)}
+.s13-foot{display:flex;align-items:center;gap:8px;padding:13px 20px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--faint)}
+.s13-foot .s13-star{color:var(--ink)}
+/* ============ S14 Mobile ============ */
+.s14{width:400px;max-width:100%;margin:24px auto;border:1px solid var(--hair);border-radius:28px;min-height:560px;position:relative;overflow:hidden}
+.s14-bar{display:flex;align-items:center;justify-content:space-between;padding:22px 22px 8px}
+.s14-title{font-weight:700;font-size:17px;display:flex;align-items:center;gap:7px}
+.s14-kpi{padding:8px 22px 18px;border-bottom:1px solid var(--hair)}
+.s14-kp1{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase}
+.s14-kp2{display:flex;align-items:baseline;gap:12px;margin-top:4px}
+.s14-big{font-family:var(--mono);font-size:30px;font-weight:700}
+.s14-list{padding:6px 0 78px}
+.s14-row{display:flex;align-items:center;gap:13px;padding:13px 22px}
+.s14-nm{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+.s14-handle{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.s14-dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex:none}
+.s14-rl{margin-left:auto;text-align:right}
+.s14-rlc{font-family:var(--mono);font-size:13px;font-weight:700}
+.s14-tabs{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:16px 0 22px;border-top:1px solid var(--hair);background:var(--paper);color:var(--faint)}
+.s14-tabs a{color:inherit;line-height:0}
+.s14-tabs a.s14-on{color:var(--blue)}
+/* ============ S15 Sticky Top + Strip ============ */
+.s15-top{position:sticky;top:0;display:flex;align-items:center;gap:18px;padding:16px 26px;border-bottom:1px solid var(--hair);background:var(--paper)}
+.s15-brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:7px}
+.s15-nav{display:flex;gap:18px;margin-left:6px;color:var(--faint)}
+.s15-nav a{color:inherit;line-height:0}
+.s15-nav a.s15-on{color:var(--blue)}
+.s15-tools{margin-left:auto;display:flex;gap:16px}
+.s15-strip{display:flex;align-items:center;gap:26px;padding:26px}
+.s15-slab{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase}
+.s15-sval{display:flex;align-items:baseline;gap:12px;margin-top:5px}
+.s15-big{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.5px}
+.s15-wide{flex:1;height:64px;display:block}
+.s15-wide polyline{fill:none;stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.s15-roster{padding:6px 26px 26px}
+.s15-cap{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;padding:0 0 6px}
+.s15-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--hair)}
+.s15-nm{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;width:170px}
+.s15-handle{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.s15-dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex:none}
+.s15-rl{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:700}
+/* ============ S16 · Editorial Analytics ============ */
+.s16{padding:30px 38px;font-family:var(--sans)}
+.s16-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:30px}
+.s16-brand{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.s16-brand .s16-sub{color:var(--faint);font-weight:500}
+.s16-nav{display:flex;gap:22px;align-items:center;color:var(--muted)}
+.s16-nav a{color:inherit;cursor:pointer;display:inline-flex}
+.s16-nav a.active{color:var(--blue)}
+.s16-head{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:8px}
+.s16-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.s16-h{font-size:27px;font-weight:700;letter-spacing:-.02em;margin-top:6px}
+.s16-totals{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.s16-row{display:flex;align-items:center;justify-content:space-between;padding:24px 0;border-bottom:1px solid var(--hair)}
+.s16-row:last-child{border-bottom:none}
+.s16-left{display:flex;align-items:center;gap:16px}
+.s16-rank{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.s16-name{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.s16-handle{font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:3px;display:flex;align-items:center;gap:7px}
+.s16-ontour{display:inline-flex;align-items:center;gap:5px;color:var(--red)}
+.s16-dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block}
+.s16-right{display:flex;align-items:center;gap:30px}
+.s16-spark{width:172px;height:36px}
+.s16-figwrap{text-align:right;min-width:96px}
+.s16-fig{font-family:var(--mono);font-size:29px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.s16-figlabel{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+.s16-tr{font-family:var(--mono);font-size:14px;min-width:46px;text-align:right}
+/* ============ S17 · Dark Brutalist Console ============ */
+.s17{background:#111;color:#fff;padding:26px 32px;font-family:var(--mono)}
+.s17 .avatar{background:#1c1c1c;color:#fff;border:1px solid #333}
+.s17 .spark polyline{stroke:#fff}
+.s17-bar{display:flex;align-items:center;justify-content:space-between;padding-bottom:22px;border-bottom:1px solid #262626}
+.s17-brand{font-size:14px;font-weight:700;letter-spacing:.18em}
+.s17-nav{display:flex;gap:20px;align-items:center;color:#8a8a8a}
+.s17-nav a{color:inherit;cursor:pointer;display:inline-flex}
+.s17-nav a.active{color:#fff}
+.s17-mgr{font-size:11px;letter-spacing:.16em;color:#6f6f6f}
+.s17-sub{font-size:11px;letter-spacing:.16em;color:#7a7a7a;padding:18px 0 6px}
+.s17-row{display:grid;grid-template-columns:34px 1fr 110px 92px 64px;align-items:center;gap:18px;padding:16px 0;border-bottom:1px solid #1e1e1e}
+.s17-row:last-child{border-bottom:none}
+.s17-rank{font-size:12px;color:#5d5d5d}
+.s17-name{font-family:var(--sans);font-size:17px;font-weight:600;color:#fff;letter-spacing:-.01em}
+.s17-handle{font-size:11px;color:#7a7a7a;margin-top:3px;display:flex;gap:7px;align-items:center}
+.s17-tour{color:var(--red);display:inline-flex;align-items:center;gap:5px}
+.s17-tour::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--red)}
+.s17-fig{font-size:18px;font-weight:700;text-align:right;color:#fff}
+.s17-id{min-width:0}
+/* ============ S18 · Kanban by Trend ============ */
+.s18{padding:26px 32px;font-family:var(--sans)}
+.s18-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:26px}
+.s18-brand{font-size:15px;font-weight:700}
+.s18-nav{display:flex;gap:20px;color:var(--muted)}
+.s18-nav a{color:inherit;cursor:pointer;display:inline-flex}
+.s18-nav a.active{color:var(--blue)}
+.s18-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px}
+.s18-colh{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:8px;padding-bottom:16px;color:var(--ink)}
+.s18-count{font-family:var(--mono);color:var(--faint);margin-left:auto}
+.s18-tri{font-size:11px}
+.s18-tri.up{color:var(--blue)}
+.s18-tri.down{color:var(--red)}
+.s18-chip{display:flex;align-items:center;gap:12px;background:#fafafa;border-radius:12px;padding:13px 14px;margin-bottom:12px}
+.s18-chipmain{flex:1;min-width:0}
+.s18-name{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.s18-meta{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:2px}
+.s18-spark{width:60px;height:22px}
+.s18-tr{font-family:var(--mono);font-size:13px;min-width:42px;text-align:right}
+.s18-empty{font-family:var(--mono);font-size:11px;color:var(--faint);padding:16px 2px;letter-spacing:.04em}
+/* ============ S19 · Icon Sidebar + Sparkline Table ============ */
+.s19{display:flex;min-height:560px;font-family:var(--sans)}
+.s19-rail{width:78px;flex:none;padding:24px 0;display:flex;flex-direction:column;align-items:center;gap:6px;border-right:1px solid var(--hair)}
+.s19-logo{font-size:18px;margin-bottom:14px}
+.s19-item{display:flex;flex-direction:column;align-items:center;gap:5px;width:58px;padding:10px 0;border-radius:12px;color:var(--muted);cursor:pointer;text-decoration:none}
+.s19-item span{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase}
+.s19-item.active{background:#eff3ff;color:var(--blue)}
+.s19-spacer{flex:1}
+.s19-main{flex:1;padding:30px 36px;min-width:0}
+.s19-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:26px}
+.s19-h{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.s19-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.s19-totals{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.s19-thead{display:grid;grid-template-columns:1fr 130px 110px 70px;gap:18px;align-items:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding-bottom:12px;border-bottom:1px solid var(--hair)}
+.s19-tr{display:grid;grid-template-columns:1fr 130px 110px 70px;gap:18px;align-items:center;padding:15px 0}
+.s19-artist{display:flex;align-items:center;gap:13px}
+.s19-name{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.s19-handle{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:2px;display:flex;gap:7px;align-items:center}
+.s19-tour{color:var(--red);display:inline-flex;align-items:center;gap:5px}
+.s19-tour::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--red)}
+.s19-spark{width:118px;height:28px}
+.s19-fig{font-family:var(--mono);font-size:16px;font-weight:700}
+.s19-trv{font-family:var(--mono);font-size:13px;text-align:right}
+.s19-cell-r{text-align:right}
+/* ============ S20 · Overview Dashboard ============ */
+.s20{padding:26px 32px;font-family:var(--sans)}
+.s20-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:26px}
+.s20-brand{font-size:15px;font-weight:700}
+.s20-nav{display:flex;gap:20px;color:var(--muted)}
+.s20-nav a{color:inherit;cursor:pointer;display:inline-flex}
+.s20-nav a.active{color:var(--blue)}
+.s20-mgr{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.s20-band{display:grid;grid-template-columns:1.6fr 1fr;gap:38px;padding-bottom:30px;border-bottom:1px solid var(--hair)}
+.s20-clabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.s20-big{font-family:var(--mono);font-size:30px;font-weight:700;letter-spacing:-.02em;margin:8px 0 16px;display:flex;align-items:baseline;gap:12px}
+.s20-big .trend{font-size:14px}
+.s20-area{width:100%;height:130px;display:block}
+.s20-axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint);margin-top:8px}
+.s20-rank{padding-top:2px}
+.s20-rrow{padding:13px 0}
+.s20-rrow:not(:last-child){border-bottom:1px solid var(--hair)}
+.s20-rtop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.s20-rname{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.s20-rfig{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.s20-bar{height:4px;border-radius:3px;background:#eceef1;overflow:hidden}
+.s20-bar i{display:block;height:100%;background:var(--ink)}
+.s20-roster{padding-top:24px}
+.s20-rlabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.s20-row{display:grid;grid-template-columns:1fr 120px 100px 60px;gap:18px;align-items:center;padding:14px 0}
+.s20-row:not(:last-child){border-bottom:1px solid var(--hair)}
+.s20-artist{display:flex;align-items:center;gap:13px}
+.s20-aname{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.s20-ahandle{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:2px;display:flex;gap:7px;align-items:center}
+.s20-tour{color:var(--red);display:inline-flex;align-items:center;gap:5px}
+.s20-tour::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--red)}
+.s20-spark{width:108px;height:28px}
+.s20-fig{font-family:var(--mono);font-size:16px;font-weight:700}
+.s20-trv{font-family:var(--mono);font-size:13px;text-align:right}
+.s20-cell-r{text-align:right}
+
+/* ---- feedback layer ---- */
+.fb{display:flex;gap:10px;align-items:stretch;padding:0 32px 10px;}
+.fb-sel{flex:none;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);background:#fff;border-radius:8px;padding:8px 14px;font-family:var(--mono);font-size:12px;cursor:pointer;color:var(--muted);user-select:none;}
+.fb-sel:hover{border-color:#cbd5e1;}
+.fb-sel.on{border-color:var(--blue);color:var(--blue);background:#eff4ff;}
+.fb-cmt{flex:1;border:1px solid var(--hair);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:13px;resize:vertical;min-height:38px;color:var(--ink);outline:none;}
+.fb-cmt:focus{border-color:#cbd5e1;}
+.fb-cmt.has{border-color:var(--blue);}
+#fbbar{position:fixed;right:18px;bottom:18px;z-index:50;display:flex;gap:10px;align-items:center;background:#111;color:#fff;border-radius:12px;padding:10px 12px 10px 16px;box-shadow:0 8px 30px rgba(0,0,0,.28);font-family:var(--mono);font-size:12px;}
+#fbbar b{color:#fff;}
+#fbbar .mut{color:#9aa0a6;}
+#fbbar button{font-family:var(--mono);font-size:12px;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;}
+#fbexport{background:#fff;color:#111;font-weight:700;}
+#fbclear{background:#2a2a2a;color:#bbb;}
+#fbmodal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:30px;}
+#fbmodal.on{display:flex;}
+#fbmodal .box{background:#fff;border-radius:14px;width:700px;max-width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;}
+#fbmodal .hd{padding:15px 20px;border-bottom:1px solid var(--hair);display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:13px;font-weight:700;}
+#fbmodal textarea{flex:1;border:none;outline:none;padding:18px 20px;font-family:var(--mono);font-size:12px;line-height:1.5;resize:none;}
+#fbmodal .ft{padding:12px 20px;border-top:1px solid var(--hair);display:flex;gap:10px;justify-content:flex-end;align-items:center;}
+#fbmodal .ft .hint{margin-right:auto;color:var(--muted);font-family:var(--mono);font-size:11px;}
+#fbmodal .ft button{font-family:var(--mono);font-size:12px;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;}
+#fbcopy{background:#111;color:#fff;font-weight:700;}
+#fbclose{background:#f0f0f0;color:#111;}
+
+</style>
+</head>
+<body>
+<div class="board-head">
+  <h1>Lone Star — Round 6 · 20 different orientations</h1>
+  <p>Black &amp; white first (the #1 brutalist DNA: mono type, high contrast, ★). Clean — no unnecessary
+  lines. <b>Icon-driven nav, a different orientation in every variant</b> (top bar, icon rail, bottom
+  dock, right rail, floating, command, mobile, dark…). <span class="key">Analytics for every artist</span>
+  — listeners, trend %, sparklines/bars. Tell me the # to refine or ship.</p>
+</div>
+<section class="screen"><div class="slabel"><b>S1 · Top Nav Bar</b> — horizontal bar, centered borderless roster, inline analytics</div><div class="frame"><div class="app s1">
+  <div class="s1-top">
+    <div class="s1-mark">★ ROSTER</div>
+    <nav class="s1-nav">
+      <a href="#" class="on"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg>Artists</a>
+      <a href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg>Analytics</a>
+      <a href="#"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg>Releases</a>
+      <a href="#"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg>Tour</a>
+    </nav>
+    <div class="s1-right">
+      <span class="s1-search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></span>
+      <button class="s1-add"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+    </div>
+  </div>
+  <div class="s1-wrap">
+    <div class="s1-hd"><div class="s1-h">Your Artists</div><div class="s1-tot">4.61M listeners · +3.1% · 41 releases · 1 on tour</div></div>
+
+    <div class="s1-row">
+      <div class="s1-idx">01</div>
+      <div class="avatar">WN</div>
+      <div class="s1-id"><div class="s1-name">Willie Nelson <span class="s1-dot" title="On tour"></span></div><div class="s1-handle">/willie</div></div>
+      <div class="s1-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+        <div class="s1-fig"><div class="s1-list">1.24M</div><div class="s1-sub">LISTENERS</div></div>
+        <span class="trend up">+4.2%</span>
+      </div>
+    </div>
+
+    <div class="s1-row">
+      <div class="s1-idx">02</div>
+      <div class="avatar">ML</div>
+      <div class="s1-id"><div class="s1-name">Miranda Lambert</div><div class="s1-handle">/miranda</div></div>
+      <div class="s1-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+        <div class="s1-fig"><div class="s1-list">982K</div><div class="s1-sub">LISTENERS</div></div>
+        <span class="trend up">+1.1%</span>
+      </div>
+    </div>
+
+    <div class="s1-row">
+      <div class="s1-idx">03</div>
+      <div class="avatar">GS</div>
+      <div class="s1-id"><div class="s1-name">George Strait</div><div class="s1-handle">/george</div></div>
+      <div class="s1-an">
+        <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+        <div class="s1-fig"><div class="s1-list">1.51M</div><div class="s1-sub">LISTENERS</div></div>
+        <span class="trend down">−2.3%</span>
+      </div>
+    </div>
+
+    <div class="s1-row">
+      <div class="s1-idx">04</div>
+      <div class="avatar">KM</div>
+      <div class="s1-id"><div class="s1-name">Kacey Musgraves</div><div class="s1-handle">/kacey</div></div>
+      <div class="s1-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+        <div class="s1-fig"><div class="s1-list">873K</div><div class="s1-sub">LISTENERS</div></div>
+        <span class="trend up">+6.8%</span>
+      </div>
+    </div>
+  </div>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S2 · Left Icon Rail</b> — slim black icon-only rail, roster fills the rest</div><div class="frame"><div class="app s2">
+  <nav class="s2-rail">
+    <div class="s2-mark">★</div>
+    <a href="#" class="on" title="Roster"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+    <a href="#" title="Analytics"><svg class="ic lg" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+    <a href="#" title="Releases"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+    <a href="#" title="Tour"><svg class="ic lg" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    <a href="#" title="Videos"><svg class="ic lg" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg></a>
+    <div class="s2-btm">
+      <a href="#" title="Settings"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+      <div class="s2-av">SF</div>
+    </div>
+  </nav>
+  <div class="s2-main">
+    <div class="s2-hd"><div class="s2-h">Your Artists</div><div class="s2-tot">4.61M · +3.1% · 41 releases · 1 on tour</div></div>
+
+    <div class="s2-row">
+      <div class="avatar">WN</div>
+      <div><div class="s2-name">Willie Nelson <span class="s2-dot" title="On tour"></span></div><div class="s2-handle">/willie</div></div>
+      <div class="s2-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+        <div class="s2-fig"><div class="s2-list">1.24M</div><div class="s2-sub">LISTENERS</div></div>
+        <span class="trend up">+4.2%</span>
+      </div>
+    </div>
+
+    <div class="s2-row">
+      <div class="avatar">ML</div>
+      <div><div class="s2-name">Miranda Lambert</div><div class="s2-handle">/miranda</div></div>
+      <div class="s2-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+        <div class="s2-fig"><div class="s2-list">982K</div><div class="s2-sub">LISTENERS</div></div>
+        <span class="trend up">+1.1%</span>
+      </div>
+    </div>
+
+    <div class="s2-row">
+      <div class="avatar">GS</div>
+      <div><div class="s2-name">George Strait</div><div class="s2-handle">/george</div></div>
+      <div class="s2-an">
+        <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+        <div class="s2-fig"><div class="s2-list">1.51M</div><div class="s2-sub">LISTENERS</div></div>
+        <span class="trend down">−2.3%</span>
+      </div>
+    </div>
+
+    <div class="s2-row">
+      <div class="avatar">KM</div>
+      <div><div class="s2-name">Kacey Musgraves</div><div class="s2-handle">/kacey</div></div>
+      <div class="s2-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+        <div class="s2-fig"><div class="s2-list">873K</div><div class="s2-sub">LISTENERS</div></div>
+        <span class="trend up">+6.8%</span>
+      </div>
+    </div>
+  </div>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S3 · Bottom Dock</b> — floating dock, analytics-forward roster grid, lots of air</div><div class="frame"><div class="app s3">
+  <div class="s3-hd">
+    <div class="s3-h"><span class="s3-mark">★</span> Your Artists</div>
+    <div class="s3-tot">4.61M monthly listeners · +3.1% · 41 releases · 1 on tour</div>
+  </div>
+
+  <div class="s3-grid">
+    <div class="s3-card">
+      <div class="avatar">WN</div>
+      <div><div class="s3-name">Willie Nelson <span class="s3-dot" title="On tour"></span></div><div class="s3-handle">/willie</div></div>
+      <div class="s3-an"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg><div class="s3-list">1.24M <span class="trend up">+4.2%</span></div><div class="s3-sub">LISTENERS</div></div>
+    </div>
+    <div class="s3-card">
+      <div class="avatar">ML</div>
+      <div><div class="s3-name">Miranda Lambert</div><div class="s3-handle">/miranda</div></div>
+      <div class="s3-an"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg><div class="s3-list">982K <span class="trend up">+1.1%</span></div><div class="s3-sub">LISTENERS</div></div>
+    </div>
+    <div class="s3-card">
+      <div class="avatar">GS</div>
+      <div><div class="s3-name">George Strait</div><div class="s3-handle">/george</div></div>
+      <div class="s3-an"><svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg><div class="s3-list">1.51M <span class="trend down">−2.3%</span></div><div class="s3-sub">LISTENERS</div></div>
+    </div>
+    <div class="s3-card">
+      <div class="avatar">KM</div>
+      <div><div class="s3-name">Kacey Musgraves</div><div class="s3-handle">/kacey</div></div>
+      <div class="s3-an"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg><div class="s3-list">873K <span class="trend up">+6.8%</span></div><div class="s3-sub">LISTENERS</div></div>
+    </div>
+  </div>
+
+  <nav class="s3-dock">
+    <a href="#" class="on" title="Roster"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+    <a href="#" title="Analytics"><svg class="ic lg" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+    <a href="#" title="Releases"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+    <a href="#" title="Tour"><svg class="ic lg" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    <span class="s3-sep"></span>
+    <a href="#" title="Add"><svg class="ic lg" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+    <a href="#" title="Settings"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+  </nav>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S4 · Command-first</b> — no chrome, big ★ + command input, recent list with mini sparklines</div><div class="frame"><div class="app s4">
+  <div class="s4-mark">★</div>
+  <div class="s4-cmd">
+    <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <input placeholder="Search artists or jump to…" />
+    <span class="s4-k">⌘K</span>
+  </div>
+
+  <div class="s4-recent">
+    <div class="s4-lbl">Recent</div>
+
+    <div class="s4-row">
+      <div class="avatar">WN</div>
+      <div><div class="s4-name">Willie Nelson <span class="s4-dot" title="On tour"></span></div><div class="s4-handle">/willie</div></div>
+      <div class="s4-an"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg><span class="s4-list">1.24M</span><span class="trend up">+4.2%</span></div>
+    </div>
+
+    <div class="s4-row">
+      <div class="avatar">ML</div>
+      <div><div class="s4-name">Miranda Lambert</div><div class="s4-handle">/miranda</div></div>
+      <div class="s4-an"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg><span class="s4-list">982K</span><span class="trend up">+1.1%</span></div>
+    </div>
+
+    <div class="s4-row">
+      <div class="avatar">GS</div>
+      <div><div class="s4-name">George Strait</div><div class="s4-handle">/george</div></div>
+      <div class="s4-an"><svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg><span class="s4-list">1.51M</span><span class="trend down">−2.3%</span></div>
+    </div>
+
+    <div class="s4-row">
+      <div class="avatar">KM</div>
+      <div><div class="s4-name">Kacey Musgraves</div><div class="s4-handle">/kacey</div></div>
+      <div class="s4-an"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg><span class="s4-list">873K</span><span class="trend up">+6.8%</span></div>
+    </div>
+  </div>
+  <div class="s4-tot">4.61M listeners · +3.1% · 41 releases · 1 on tour</div>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S5 · Right Rail</b> — nav on the right edge, roster on the left (mirrored)</div><div class="frame"><div class="app s5">
+  <div class="s5-main">
+    <div class="s5-hd"><div class="s5-h">Your Artists</div><div class="s5-tot">4.61M monthly listeners · +3.1% · 41 releases · 1 on tour</div></div>
+
+    <div class="s5-row">
+      <div class="avatar">WN</div>
+      <div><div class="s5-name">Willie Nelson <span class="s5-dot" title="On tour"></span></div><div class="s5-handle">/willie</div></div>
+      <div class="s5-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+        <div class="s5-fig"><div class="s5-list">1.24M</div><div class="s5-sub">LISTENERS</div></div>
+        <span class="trend up">+4.2%</span>
+      </div>
+    </div>
+
+    <div class="s5-row">
+      <div class="avatar">ML</div>
+      <div><div class="s5-name">Miranda Lambert</div><div class="s5-handle">/miranda</div></div>
+      <div class="s5-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+        <div class="s5-fig"><div class="s5-list">982K</div><div class="s5-sub">LISTENERS</div></div>
+        <span class="trend up">+1.1%</span>
+      </div>
+    </div>
+
+    <div class="s5-row">
+      <div class="avatar">GS</div>
+      <div><div class="s5-name">George Strait</div><div class="s5-handle">/george</div></div>
+      <div class="s5-an">
+        <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+        <div class="s5-fig"><div class="s5-list">1.51M</div><div class="s5-sub">LISTENERS</div></div>
+        <span class="trend down">−2.3%</span>
+      </div>
+    </div>
+
+    <div class="s5-row">
+      <div class="avatar">KM</div>
+      <div><div class="s5-name">Kacey Musgraves</div><div class="s5-handle">/kacey</div></div>
+      <div class="s5-an">
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+        <div class="s5-fig"><div class="s5-list">873K</div><div class="s5-sub">LISTENERS</div></div>
+        <span class="trend up">+6.8%</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="s5-rail">
+    <div class="s5-mark">★ ROSTER</div>
+    <a href="#" class="on">Artists <svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+    <a href="#">Analytics <svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+    <a href="#">Releases <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+    <a href="#">Tour <svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    <a href="#">EPK <svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg></a>
+    <a href="#">Settings <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+    <div class="s5-btm"><div class="s5-mgr">Sam<br>samuel.j.fox1@gmail.com</div><div class="avatar">SF</div></div>
+  </nav>
+</div></div></section>
+<section class="screen">
+  <div class="slabel"><b>S6 · Floating Pill Nav</b> — centered capsule nav, artist tiles with mini charts</div>
+  <div class="frame">
+    <div class="app s6">
+      <div class="s6-stage">
+        <div class="s6-pillbar">
+          <nav class="s6-pill">
+            <a class="on" title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+            <a title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+            <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+            <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+            <a title="Videos"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg></a>
+            <span class="s6-sep"></span>
+            <a title="Add artist"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+            <a title="Settings"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+          </nav>
+        </div>
+        <div class="s6-grid">
+          <div class="s6-tile">
+            <div class="s6-thead">
+              <span class="avatar">WN</span>
+              <div><div class="s6-nm">Willie Nelson</div><div class="s6-hd">/willie</div></div>
+              <span class="s6-st"><span class="s6-dot live"></span>On tour</span>
+            </div>
+            <div class="s6-foot">
+              <div>
+                <div class="s6-num">1.24M</div>
+                <div class="s6-sub">listeners <span class="trend up">+4.2%</span></div>
+              </div>
+              <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+            </div>
+          </div>
+          <div class="s6-tile">
+            <div class="s6-thead">
+              <span class="avatar">ML</span>
+              <div><div class="s6-nm">Miranda Lambert</div><div class="s6-hd">/miranda</div></div>
+              <span class="s6-st"><span class="s6-dot"></span>Active</span>
+            </div>
+            <div class="s6-foot">
+              <div>
+                <div class="s6-num">982K</div>
+                <div class="s6-sub">listeners <span class="trend up">+1.1%</span></div>
+              </div>
+              <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+            </div>
+          </div>
+          <div class="s6-tile">
+            <div class="s6-thead">
+              <span class="avatar">GS</span>
+              <div><div class="s6-nm">George Strait</div><div class="s6-hd">/george</div></div>
+              <span class="s6-st"><span class="s6-dot"></span>Active</span>
+            </div>
+            <div class="s6-foot">
+              <div>
+                <div class="s6-num">1.51M</div>
+                <div class="s6-sub">listeners <span class="trend down">−2.3%</span></div>
+              </div>
+              <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+            </div>
+          </div>
+          <div class="s6-tile">
+            <div class="s6-thead">
+              <span class="avatar">KM</span>
+              <div><div class="s6-nm">Kacey Musgraves</div><div class="s6-hd">/kacey</div></div>
+              <span class="s6-st"><span class="s6-dot"></span>Active</span>
+            </div>
+            <div class="s6-foot">
+              <div>
+                <div class="s6-num">873K</div>
+                <div class="s6-sub">listeners <span class="trend up">+6.8%</span></div>
+              </div>
+              <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="s6-bottom">4.61M LISTENERS · +3.1% · 41 RELEASES · 1 ON TOUR — SAM · samuel.j.fox1@gmail.com</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="screen">
+  <div class="slabel"><b>S7 · Segmented Control</b> — title + icon segmented control, roster with sparklines</div>
+  <div class="frame">
+    <div class="app s7">
+      <div class="s7-stage">
+        <h1 class="s7-h">Your artists</h1>
+        <div class="s7-seg">
+          <button class="on"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg>Roster</button>
+          <button><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg>Analytics</button>
+          <button><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg>Tour</button>
+        </div>
+        <div class="s7-list">
+          <div class="s7-row">
+            <span class="avatar">WN</span>
+            <div class="s7-main"><div class="s7-nm">Willie Nelson</div><div class="s7-hd">/willie</div></div>
+            <span class="s7-st"><span class="s7-dot live"></span>On tour</span>
+            <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+            <span class="s7-num">1.24M</span>
+            <span class="s7-tr trend up">+4.2%</span>
+          </div>
+          <div class="s7-row">
+            <span class="avatar">ML</span>
+            <div class="s7-main"><div class="s7-nm">Miranda Lambert</div><div class="s7-hd">/miranda</div></div>
+            <span class="s7-st"><span class="s7-dot"></span>Active</span>
+            <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+            <span class="s7-num">982K</span>
+            <span class="s7-tr trend up">+1.1%</span>
+          </div>
+          <div class="s7-row">
+            <span class="avatar">GS</span>
+            <div class="s7-main"><div class="s7-nm">George Strait</div><div class="s7-hd">/george</div></div>
+            <span class="s7-st"><span class="s7-dot"></span>Active</span>
+            <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+            <span class="s7-num">1.51M</span>
+            <span class="s7-tr trend down">−2.3%</span>
+          </div>
+          <div class="s7-row">
+            <span class="avatar">KM</span>
+            <div class="s7-main"><div class="s7-nm">Kacey Musgraves</div><div class="s7-hd">/kacey</div></div>
+            <span class="s7-st"><span class="s7-dot"></span>Active</span>
+            <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+            <span class="s7-num">873K</span>
+            <span class="s7-tr trend up">+6.8%</span>
+          </div>
+        </div>
+        <div class="s7-foot">4.61M monthly listeners · +3.1% · 41 releases · 1 on tour</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="screen">
+  <div class="slabel"><b>S8 · Analytics Leaderboard</b> — ranked by listeners, horizontal bars</div>
+  <div class="frame">
+    <div class="app s8">
+      <div class="s8-topbar">
+        <span class="s8-brand"><span class="star">★</span> Lone Star</span>
+        <a class="on" title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+        <a title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+        <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+        <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+        <a title="Settings"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+      </div>
+      <div class="s8-stage">
+        <h2 class="s8-h">Monthly listeners · ranked</h2>
+        <div class="s8-row">
+          <div class="s8-rtop">
+            <span class="s8-rank">01</span>
+            <span class="s8-nm">George Strait</span>
+            <span class="s8-hd">/george</span>
+            <span class="s8-st"><span class="s8-dot"></span>Active</span>
+            <span class="s8-rnum">1.51M</span>
+            <span class="s8-rtr trend down">−2.3%</span>
+          </div>
+          <div class="s8-track"><div class="s8-fill" style="width:100%"></div></div>
+        </div>
+        <div class="s8-row">
+          <div class="s8-rtop">
+            <span class="s8-rank">02</span>
+            <span class="s8-nm">Willie Nelson</span>
+            <span class="s8-hd">/willie</span>
+            <span class="s8-st"><span class="s8-dot live"></span>On tour</span>
+            <span class="s8-rnum">1.24M</span>
+            <span class="s8-rtr trend up">+4.2%</span>
+          </div>
+          <div class="s8-track"><div class="s8-fill" style="width:82%"></div></div>
+        </div>
+        <div class="s8-row">
+          <div class="s8-rtop">
+            <span class="s8-rank">03</span>
+            <span class="s8-nm">Miranda Lambert</span>
+            <span class="s8-hd">/miranda</span>
+            <span class="s8-st"><span class="s8-dot"></span>Active</span>
+            <span class="s8-rnum">982K</span>
+            <span class="s8-rtr trend up">+1.1%</span>
+          </div>
+          <div class="s8-track"><div class="s8-fill" style="width:65%"></div></div>
+        </div>
+        <div class="s8-row">
+          <div class="s8-rtop">
+            <span class="s8-rank">04</span>
+            <span class="s8-nm">Kacey Musgraves</span>
+            <span class="s8-hd">/kacey</span>
+            <span class="s8-st"><span class="s8-dot"></span>Active</span>
+            <span class="s8-rnum">873K</span>
+            <span class="s8-rtr trend up">+6.8%</span>
+          </div>
+          <div class="s8-track"><div class="s8-fill" style="width:58%"></div></div>
+        </div>
+        <div class="s8-foot">TOTAL 4.61M · +3.1% · 41 RELEASES · 1 ON TOUR</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="screen">
+  <div class="slabel"><b>S9 · Hub / Greeting</b> — greeting, KPI tiles, compact roster, icon cluster top-right</div>
+  <div class="frame">
+    <div class="app s9">
+      <div class="s9-top">
+        <span class="s9-brand"><span class="star">★</span> Lone Star</span>
+        <a title="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></a>
+        <a class="on" title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+        <a title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+        <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+        <a title="Settings"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+      </div>
+      <div class="s9-stage">
+        <h1 class="s9-greet">Good evening, Sam</h1>
+        <div class="s9-date">Monday · June 29, 2026</div>
+        <div class="s9-kpis">
+          <div class="s9-kpi">
+            <div class="s9-kicon"><svg class="ic lg" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
+            <div class="s9-knum">4.61M <span class="trend up">+3.1%</span></div>
+            <div class="s9-klabel">Total listeners</div>
+          </div>
+          <div class="s9-kpi">
+            <div class="s9-kicon"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></div>
+            <div class="s9-knum">41</div>
+            <div class="s9-klabel">Releases</div>
+          </div>
+          <div class="s9-kpi">
+            <div class="s9-kicon"><svg class="ic lg" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></div>
+            <div class="s9-knum">1</div>
+            <div class="s9-klabel">On tour</div>
+          </div>
+        </div>
+        <h2 class="s9-sec">Your artists</h2>
+        <div class="s9-list">
+          <div class="s9-row">
+            <span class="avatar">WN</span>
+            <div class="s9-main"><div class="s9-nm">Willie Nelson</div><div class="s9-hd">/willie · on tour</div></div>
+            <div class="s9-rt"><span class="s9-num">1.24M</span><span class="s9-tr trend up">+4.2%</span></div>
+          </div>
+          <div class="s9-row">
+            <span class="avatar">ML</span>
+            <div class="s9-main"><div class="s9-nm">Miranda Lambert</div><div class="s9-hd">/miranda · active</div></div>
+            <div class="s9-rt"><span class="s9-num">982K</span><span class="s9-tr trend up">+1.1%</span></div>
+          </div>
+          <div class="s9-row">
+            <span class="avatar">GS</span>
+            <div class="s9-main"><div class="s9-nm">George Strait</div><div class="s9-hd">/george · active</div></div>
+            <div class="s9-rt"><span class="s9-num">1.51M</span><span class="s9-tr trend down">−2.3%</span></div>
+          </div>
+          <div class="s9-row">
+            <span class="avatar">KM</span>
+            <div class="s9-main"><div class="s9-nm">Kacey Musgraves</div><div class="s9-hd">/kacey · active</div></div>
+            <div class="s9-rt"><span class="s9-num">873K</span><span class="s9-tr trend up">+6.8%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="screen">
+  <div class="slabel"><b>S10 · Two-Row Top</b> — wordmark row + underlined tab row, roster with sparklines</div>
+  <div class="frame">
+    <div class="app s10">
+      <div class="s10-r1">
+        <span class="s10-mark"><span class="star">★</span> Lone Star</span>
+        <div class="s10-r1r">
+          <a title="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></a>
+          <span class="avatar">SP</span>
+        </div>
+      </div>
+      <nav class="s10-r2">
+        <a class="s10-tab on"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg>Roster</a>
+        <a class="s10-tab"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg>Analytics</a>
+        <a class="s10-tab"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg>Tour</a>
+      </nav>
+      <div class="s10-stage">
+        <div class="s10-row">
+          <span class="avatar">WN</span>
+          <div class="s10-main"><div class="s10-nm">Willie Nelson</div><div class="s10-hd">/willie</div></div>
+          <span class="s10-st"><span class="s10-dot live"></span>On tour</span>
+          <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+          <span class="s10-num">1.24M</span>
+          <span class="s10-tr trend up">+4.2%</span>
+        </div>
+        <div class="s10-row">
+          <span class="avatar">ML</span>
+          <div class="s10-main"><div class="s10-nm">Miranda Lambert</div><div class="s10-hd">/miranda</div></div>
+          <span class="s10-st"><span class="s10-dot"></span>Active</span>
+          <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+          <span class="s10-num">982K</span>
+          <span class="s10-tr trend up">+1.1%</span>
+        </div>
+        <div class="s10-row">
+          <span class="avatar">GS</span>
+          <div class="s10-main"><div class="s10-nm">George Strait</div><div class="s10-hd">/george</div></div>
+          <span class="s10-st"><span class="s10-dot"></span>Active</span>
+          <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+          <span class="s10-num">1.51M</span>
+          <span class="s10-tr trend down">−2.3%</span>
+        </div>
+        <div class="s10-row">
+          <span class="avatar">KM</span>
+          <div class="s10-main"><div class="s10-nm">Kacey Musgraves</div><div class="s10-hd">/kacey</div></div>
+          <span class="s10-st"><span class="s10-dot"></span>Active</span>
+          <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+          <span class="s10-num">873K</span>
+          <span class="s10-tr trend up">+6.8%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="screen"><div class="slabel"><b>S11 · Master-Detail Analytics</b> — icon rail · artist list · selected-artist detail</div><div class="frame"><div class="app s11">
+  <nav class="s11-rail">
+    <div class="s11-star">★</div>
+    <a class="s11-on" title="Roster"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+    <a title="Analytics"><svg class="ic lg" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+    <a title="Releases"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+    <a title="Tour"><svg class="ic lg" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    <a title="Settings"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+  </nav>
+  <div class="s11-list">
+    <div class="s11-kic">Your artists · 4</div>
+    <div class="s11-row s11-sel"><span class="s11-nm"><span class="s11-dot"></span>Willie Nelson</span><span class="trend up">+4.2%</span></div>
+    <div class="s11-row"><span class="s11-nm">Miranda Lambert</span><span class="trend up">+1.1%</span></div>
+    <div class="s11-row"><span class="s11-nm">George Strait</span><span class="trend down">−2.3%</span></div>
+    <div class="s11-row"><span class="s11-nm">Kacey Musgraves</span><span class="trend up">+6.8%</span></div>
+  </div>
+  <div class="s11-detail">
+    <div class="s11-eyebrow">Selected artist</div>
+    <div class="s11-h"><span class="avatar">WN</span>Willie Nelson <span class="s11-dot" style="background:var(--red)"></span></div>
+    <div class="s11-handle">/willie · on tour</div>
+    <div class="s11-big">1.24M</div>
+    <div class="s11-sub"><span>Monthly listeners</span><span class="trend up">+4.2%</span></div>
+    <svg class="s11-area" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 0,22 16,20 33,16 50,18 66,12 83,7 100,3 100,30"/><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+    <div class="s11-tracks">
+      <div class="s11-eyebrow">Top tracks</div>
+      <div class="s11-tt"><span>01</span>On the Road Again</div>
+      <div class="s11-tt"><span>02</span>Always on My Mind</div>
+      <div class="s11-tt"><span>03</span>Whiskey River</div>
+    </div>
+  </div>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S12 · Tile Grid + Charts</b> — borderless artist tiles, each with a mini area chart</div><div class="frame"><div class="app s12">
+  <div class="s12-top">
+    <div class="s12-brand">★ Roster</div>
+    <nav class="s12-nav">
+      <a class="s12-on" title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+      <a title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+      <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+      <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    </nav>
+    <div class="s12-tools">
+      <a title="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></a>
+      <a title="Add artist"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+    </div>
+  </div>
+  <div class="s12-grid">
+    <div class="s12-tile">
+      <div class="s12-th"><span class="avatar">WN</span><div><div class="s12-nm">Willie Nelson</div><div class="s12-handle">/willie</div></div></div>
+      <div class="s12-stat"><span class="s12-list">1.24M</span><span class="trend up">+4.2%</span></div>
+      <svg class="s12-mini" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 0,22 16,20 33,16 50,18 66,12 83,7 100,3 100,30"/><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+    </div>
+    <div class="s12-tile">
+      <div class="s12-th"><span class="avatar">ML</span><div><div class="s12-nm">Miranda Lambert</div><div class="s12-handle">/miranda</div></div></div>
+      <div class="s12-stat"><span class="s12-list">982K</span><span class="trend up">+1.1%</span></div>
+      <svg class="s12-mini" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 0,15 16,17 33,12 50,15 66,11 83,9 100,8 100,30"/><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+    </div>
+    <div class="s12-tile">
+      <div class="s12-th"><span class="avatar">GS</span><div><div class="s12-nm">George Strait</div><div class="s12-handle">/george</div></div></div>
+      <div class="s12-stat"><span class="s12-list">1.51M</span><span class="trend down">−2.3%</span></div>
+      <svg class="s12-mini s12-dn" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 0,6 16,8 33,11 50,9 66,12 83,15 100,18 100,30"/><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+    </div>
+    <div class="s12-tile">
+      <div class="s12-th"><span class="avatar">KM</span><div><div class="s12-nm">Kacey Musgraves</div><div class="s12-handle">/kacey</div></div></div>
+      <div class="s12-stat"><span class="s12-list">873K</span><span class="trend up">+6.8%</span></div>
+      <svg class="s12-mini" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 0,24 16,21 33,18 50,14 66,10 83,6 100,2 100,30"/><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+    </div>
+  </div>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S13 · Spotlight / Launcher</b> — ⌘K palette, artist results with inline analytics</div><div class="frame"><div class="app s13">
+  <div class="s13-palette">
+    <div class="s13-field">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <span class="s13-input">Search artists…</span>
+      <span class="s13-cap">⌘K</span>
+    </div>
+    <div class="s13-res">
+      <div class="s13-r s13-sel">
+        <span class="avatar">WN</span>
+        <div><div class="s13-rn"><span class="s13-rdot"></span>Willie Nelson</div><div class="s13-rh">/willie</div></div>
+        <div class="s13-rmeta"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg><span class="trend up">+4.2%</span></div>
+      </div>
+      <div class="s13-r">
+        <span class="avatar">ML</span>
+        <div><div class="s13-rn">Miranda Lambert</div><div class="s13-rh">/miranda</div></div>
+        <div class="s13-rmeta"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg><span class="trend up">+1.1%</span></div>
+      </div>
+      <div class="s13-r">
+        <span class="avatar">GS</span>
+        <div><div class="s13-rn">George Strait</div><div class="s13-rh">/george</div></div>
+        <div class="s13-rmeta"><svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg><span class="trend down">−2.3%</span></div>
+      </div>
+      <div class="s13-r">
+        <span class="avatar">KM</span>
+        <div><div class="s13-rn">Kacey Musgraves</div><div class="s13-rh">/kacey</div></div>
+        <div class="s13-rmeta"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg><span class="trend up">+6.8%</span></div>
+      </div>
+    </div>
+    <div class="s13-foot"><span class="s13-star">★</span> 4 artists · 4.61M listeners — type to filter · ↵ to open</div>
+  </div>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S14 · Mobile App</b> — narrow column, KPI header, bottom tab bar</div><div class="frame"><div class="app s14">
+  <div class="s14-bar">
+    <div class="s14-title">★ Your artists</div>
+    <a title="Search" style="color:var(--ink);line-height:0"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></a>
+  </div>
+  <div class="s14-kpi">
+    <div class="s14-kp1">Total monthly listeners</div>
+    <div class="s14-kp2"><span class="s14-big">4.61M</span><span class="trend up">+3.1%</span></div>
+  </div>
+  <div class="s14-list">
+    <div class="s14-row">
+      <span class="avatar">WN</span>
+      <div><div class="s14-nm"><span class="s14-dot"></span>Willie Nelson</div><div class="s14-handle">/willie</div></div>
+      <div class="s14-rl"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg><div class="s14-rlc">1.24M</div></div>
+    </div>
+    <div class="s14-row">
+      <span class="avatar">ML</span>
+      <div><div class="s14-nm">Miranda Lambert</div><div class="s14-handle">/miranda</div></div>
+      <div class="s14-rl"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg><div class="s14-rlc">982K</div></div>
+    </div>
+    <div class="s14-row">
+      <span class="avatar">GS</span>
+      <div><div class="s14-nm">George Strait</div><div class="s14-handle">/george</div></div>
+      <div class="s14-rl"><svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg><div class="s14-rlc">1.51M</div></div>
+    </div>
+    <div class="s14-row">
+      <span class="avatar">KM</span>
+      <div><div class="s14-nm">Kacey Musgraves</div><div class="s14-handle">/kacey</div></div>
+      <div class="s14-rl"><svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg><div class="s14-rlc">873K</div></div>
+    </div>
+  </div>
+  <nav class="s14-tabs">
+    <a class="s14-on" title="Roster"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+    <a title="Analytics"><svg class="ic lg" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+    <a title="Releases"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+    <a title="Tour"><svg class="ic lg" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    <a title="Settings"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+  </nav>
+</div></div></section>
+
+<section class="screen"><div class="slabel"><b>S15 · Sticky Top + Analytics Strip</b> — top bar, wide total-listeners strip, roster</div><div class="frame"><div class="app s15">
+  <div class="s15-top">
+    <div class="s15-brand">★ Roster</div>
+    <nav class="s15-nav">
+      <a class="s15-on" title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+      <a title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+      <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+      <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+    </nav>
+    <div class="s15-tools">
+      <a title="Search" style="line-height:0"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></a>
+      <a title="Add artist" style="line-height:0"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+    </div>
+  </div>
+  <div class="s15-strip">
+    <div>
+      <div class="s15-slab">Total monthly listeners</div>
+      <div class="s15-sval"><span class="s15-big">4.61M</span><span class="trend up">+3.1%</span></div>
+    </div>
+    <svg class="s15-wide" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,20 14,18 28,14 42,15 57,10 71,7 85,5 100,3"/></svg>
+  </div>
+  <div class="s15-roster">
+    <div class="s15-cap">Your artists · 41 releases · 1 on tour</div>
+    <div class="s15-row">
+      <span class="avatar">WN</span>
+      <span class="s15-nm"><span class="s15-dot"></span>Willie Nelson</span>
+      <span class="s15-handle">/willie</span>
+      <span class="trend up">+4.2%</span>
+      <span class="s15-rl">1.24M</span>
+    </div>
+    <div class="s15-row">
+      <span class="avatar">ML</span>
+      <span class="s15-nm">Miranda Lambert</span>
+      <span class="s15-handle">/miranda</span>
+      <span class="trend up">+1.1%</span>
+      <span class="s15-rl">982K</span>
+    </div>
+    <div class="s15-row">
+      <span class="avatar">GS</span>
+      <span class="s15-nm">George Strait</span>
+      <span class="s15-handle">/george</span>
+      <span class="trend down">−2.3%</span>
+      <span class="s15-rl">1.51M</span>
+    </div>
+    <div class="s15-row">
+      <span class="avatar">KM</span>
+      <span class="s15-nm">Kacey Musgraves</span>
+      <span class="s15-handle">/kacey</span>
+      <span class="trend up">+6.8%</span>
+      <span class="s15-rl">873K</span>
+    </div>
+  </div>
+</div></div></section>
+<!-- ===================== S16 · Editorial Analytics ===================== -->
+<section class="screen">
+  <div class="slabel"><b>S16 · Editorial Analytics</b> — magazine-calm rows, huge mono listener figures, top icon bar</div>
+  <div class="frame"><div class="app s16">
+    <div class="s16-top">
+      <div class="s16-brand">★ Lone Star <span class="s16-sub">Management</span></div>
+      <nav class="s16-nav">
+        <a class="active" title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+        <a title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+        <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+        <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+        <a title="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></a>
+      </nav>
+    </div>
+    <div class="s16-head">
+      <div>
+        <div class="s16-kicker">Your artists · 4 active</div>
+        <div class="s16-h">Roster</div>
+      </div>
+      <div class="s16-totals">4.61M listeners <span class="trend up">+3.1%</span> · 41 releases · 1 on tour</div>
+    </div>
+
+    <div class="s16-row">
+      <div class="s16-left">
+        <span class="s16-rank">01</span>
+        <div class="avatar">WN</div>
+        <div>
+          <div class="s16-name">Willie Nelson</div>
+          <div class="s16-handle">/willie <span class="s16-ontour"><span class="s16-dot"></span>ON TOUR</span></div>
+        </div>
+      </div>
+      <div class="s16-right">
+        <svg class="spark s16-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+        <div class="s16-figwrap"><div class="s16-fig">1.24M</div><div class="s16-figlabel">monthly</div></div>
+        <div class="s16-tr trend up">+4.2</div>
+      </div>
+    </div>
+
+    <div class="s16-row">
+      <div class="s16-left">
+        <span class="s16-rank">02</span>
+        <div class="avatar">ML</div>
+        <div>
+          <div class="s16-name">Miranda Lambert</div>
+          <div class="s16-handle">/miranda · ACTIVE</div>
+        </div>
+      </div>
+      <div class="s16-right">
+        <svg class="spark s16-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+        <div class="s16-figwrap"><div class="s16-fig">982K</div><div class="s16-figlabel">monthly</div></div>
+        <div class="s16-tr trend up">+1.1</div>
+      </div>
+    </div>
+
+    <div class="s16-row">
+      <div class="s16-left">
+        <span class="s16-rank">03</span>
+        <div class="avatar">GS</div>
+        <div>
+          <div class="s16-name">George Strait</div>
+          <div class="s16-handle">/george · ACTIVE</div>
+        </div>
+      </div>
+      <div class="s16-right">
+        <svg class="spark down s16-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+        <div class="s16-figwrap"><div class="s16-fig">1.51M</div><div class="s16-figlabel">monthly</div></div>
+        <div class="s16-tr trend down">−2.3</div>
+      </div>
+    </div>
+
+    <div class="s16-row">
+      <div class="s16-left">
+        <span class="s16-rank">04</span>
+        <div class="avatar">KM</div>
+        <div>
+          <div class="s16-name">Kacey Musgraves</div>
+          <div class="s16-handle">/kacey · ACTIVE</div>
+        </div>
+      </div>
+      <div class="s16-right">
+        <svg class="spark s16-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+        <div class="s16-figwrap"><div class="s16-fig">873K</div><div class="s16-figlabel">monthly</div></div>
+        <div class="s16-tr trend up">+6.8</div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<!-- ===================== S17 · Dark Brutalist Console ===================== -->
+<section class="screen">
+  <div class="slabel"><b>S17 · Dark Brutalist Console</b> — inverted black canvas, white mono, red on-tour + falling</div>
+  <div class="frame"><div class="app s17">
+    <div class="s17-bar">
+      <div class="s17-brand">★ LONE STAR</div>
+      <nav class="s17-nav">
+        <a class="active" title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+        <a title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+        <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+        <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+        <a title="Videos"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg></a>
+      </nav>
+      <div class="s17-mgr">SAM</div>
+    </div>
+    <div class="s17-sub">YOUR ARTISTS — 4.61M LISTENERS (+3.1%) · 41 RELEASES · 1 ON TOUR</div>
+
+    <div class="s17-row">
+      <span class="s17-rank">01</span>
+      <div class="s17-id">
+        <div class="s17-name">Willie Nelson</div>
+        <div class="s17-handle">/willie <span class="s17-tour">ON TOUR</span></div>
+      </div>
+      <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+      <div class="s17-fig">1.24M</div>
+      <div class="trend up">+4.2%</div>
+    </div>
+    <div class="s17-row">
+      <span class="s17-rank">02</span>
+      <div class="s17-id">
+        <div class="s17-name">Miranda Lambert</div>
+        <div class="s17-handle">/miranda · ACTIVE</div>
+      </div>
+      <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+      <div class="s17-fig">982K</div>
+      <div class="trend up">+1.1%</div>
+    </div>
+    <div class="s17-row">
+      <span class="s17-rank">03</span>
+      <div class="s17-id">
+        <div class="s17-name">George Strait</div>
+        <div class="s17-handle">/george · ACTIVE</div>
+      </div>
+      <svg class="spark down" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+      <div class="s17-fig">1.51M</div>
+      <div class="trend down">−2.3%</div>
+    </div>
+    <div class="s17-row">
+      <span class="s17-rank">04</span>
+      <div class="s17-id">
+        <div class="s17-name">Kacey Musgraves</div>
+        <div class="s17-handle">/kacey · ACTIVE</div>
+      </div>
+      <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+      <div class="s17-fig">873K</div>
+      <div class="trend up">+6.8%</div>
+    </div>
+  </div></div>
+</section>
+
+<!-- ===================== S18 · Kanban by Trend ===================== -->
+<section class="screen">
+  <div class="slabel"><b>S18 · Kanban by Trend</b> — artists grouped Rising / Steady / Falling by analytics</div>
+  <div class="frame"><div class="app s18">
+    <div class="s18-top">
+      <div class="s18-brand">★ Lone Star · Roster</div>
+      <nav class="s18-nav">
+        <a class="active" title="Analytics"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+        <a title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+        <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+        <a title="Add"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+      </nav>
+    </div>
+
+    <div class="s18-cols">
+      <div class="s18-col">
+        <div class="s18-colh"><span class="s18-tri up">▲</span> Rising <span class="s18-count">3</span></div>
+
+        <div class="s18-chip">
+          <div class="avatar">WN</div>
+          <div class="s18-chipmain"><div class="s18-name">Willie Nelson</div><div class="s18-meta">1.24M · on tour</div></div>
+          <svg class="spark s18-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+          <div class="s18-tr trend up">+4.2</div>
+        </div>
+        <div class="s18-chip">
+          <div class="avatar">KM</div>
+          <div class="s18-chipmain"><div class="s18-name">Kacey Musgraves</div><div class="s18-meta">873K</div></div>
+          <svg class="spark s18-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+          <div class="s18-tr trend up">+6.8</div>
+        </div>
+        <div class="s18-chip">
+          <div class="avatar">ML</div>
+          <div class="s18-chipmain"><div class="s18-name">Miranda Lambert</div><div class="s18-meta">982K</div></div>
+          <svg class="spark s18-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+          <div class="s18-tr trend up">+1.1</div>
+        </div>
+      </div>
+
+      <div class="s18-col">
+        <div class="s18-colh">Steady <span class="s18-count">0</span></div>
+        <div class="s18-empty">No artists holding flat.</div>
+      </div>
+
+      <div class="s18-col">
+        <div class="s18-colh"><span class="s18-tri down">▼</span> Falling <span class="s18-count">1</span></div>
+        <div class="s18-chip">
+          <div class="avatar">GS</div>
+          <div class="s18-chipmain"><div class="s18-name">George Strait</div><div class="s18-meta">1.51M</div></div>
+          <svg class="spark down s18-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+          <div class="s18-tr trend down">−2.3</div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<!-- ===================== S19 · Icon Sidebar + Sparkline Table ===================== -->
+<section class="screen">
+  <div class="slabel"><b>S19 · Icon Sidebar + Sparkline Table</b> — narrow icon rail (blue pill active) + clean analytics table</div>
+  <div class="frame"><div class="app s19">
+    <aside class="s19-rail">
+      <div class="s19-logo">★</div>
+      <a class="s19-item active"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg><span>Roster</span></a>
+      <a class="s19-item"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg><span>Stats</span></a>
+      <a class="s19-item"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg><span>Releases</span></a>
+      <a class="s19-item"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg><span>Tour</span></a>
+      <a class="s19-item"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5l4.5 2.5L10 14.5z" fill="currentColor" stroke="none"/></svg><span>Videos</span></a>
+      <div class="s19-spacer"></div>
+      <a class="s19-item"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg><span>Settings</span></a>
+    </aside>
+
+    <main class="s19-main">
+      <div class="s19-head">
+        <div>
+          <div class="s19-kicker">Your artists</div>
+          <div class="s19-h">Roster analytics</div>
+        </div>
+        <div class="s19-totals">4.61M <span class="trend up">+3.1%</span> · 41 releases · 1 on tour</div>
+      </div>
+
+      <div class="s19-table">
+        <div class="s19-thead">
+          <div>Artist</div>
+          <div>Trend</div>
+          <div class="s19-cell-r">Listeners</div>
+          <div class="s19-cell-r">Change</div>
+        </div>
+
+        <div class="s19-tr">
+          <div class="s19-artist"><div class="avatar">WN</div><div><div class="s19-name">Willie Nelson</div><div class="s19-handle">/willie <span class="s19-tour">on tour</span></div></div></div>
+          <svg class="spark s19-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+          <div class="s19-fig s19-cell-r">1.24M</div>
+          <div class="s19-trv trend up">+4.2%</div>
+        </div>
+        <div class="s19-tr">
+          <div class="s19-artist"><div class="avatar">ML</div><div><div class="s19-name">Miranda Lambert</div><div class="s19-handle">/miranda · active</div></div></div>
+          <svg class="spark s19-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+          <div class="s19-fig s19-cell-r">982K</div>
+          <div class="s19-trv trend up">+1.1%</div>
+        </div>
+        <div class="s19-tr">
+          <div class="s19-artist"><div class="avatar">GS</div><div><div class="s19-name">George Strait</div><div class="s19-handle">/george · active</div></div></div>
+          <svg class="spark down s19-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+          <div class="s19-fig s19-cell-r">1.51M</div>
+          <div class="s19-trv trend down">−2.3%</div>
+        </div>
+        <div class="s19-tr">
+          <div class="s19-artist"><div class="avatar">KM</div><div><div class="s19-name">Kacey Musgraves</div><div class="s19-handle">/kacey · active</div></div></div>
+          <svg class="spark s19-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+          <div class="s19-fig s19-cell-r">873K</div>
+          <div class="s19-trv trend up">+6.8%</div>
+        </div>
+      </div>
+    </main>
+  </div></div>
+</section>
+
+<!-- ===================== S20 · Overview Dashboard ===================== -->
+<section class="screen">
+  <div class="slabel"><b>S20 · Overview Dashboard</b> — total-listeners area chart + ranked list, then per-row roster</div>
+  <div class="frame"><div class="app s20">
+    <div class="s20-top">
+      <div class="s20-brand">★ Lone Star Management</div>
+      <nav class="s20-nav">
+        <a class="active" title="Overview"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></svg></a>
+        <a title="Roster"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3 3 0 0 1 0 5.8"/><path d="M16.5 14c2.5.3 4.5 2.3 4.5 5"/></svg></a>
+        <a title="Releases"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg></a>
+        <a title="Tour"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></a>
+        <a title="Settings"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.5 4.5l2 2M17.5 17.5l2 2M2.5 12h3M18.5 12h3M4.5 19.5l2-2M17.5 6.5l2-2"/></svg></a>
+      </nav>
+      <div class="s20-mgr">Sam · samuel.j.fox1@gmail.com</div>
+    </div>
+
+    <div class="s20-band">
+      <div class="s20-chart">
+        <div class="s20-clabel">Total monthly listeners</div>
+        <div class="s20-big">4.61M <span class="trend up">+3.1%</span></div>
+        <svg class="s20-area" viewBox="0 0 320 130" preserveAspectRatio="none">
+          <polygon points="0,86 53,78 106,82 160,62 213,52 266,40 320,26 320,130 0,130" fill="#f3f4f6"/>
+          <polyline points="0,86 53,78 106,82 160,62 213,52 266,40 320,26" fill="none" stroke="#111" stroke-width="2" vector-effect="non-scaling-stroke"/>
+        </svg>
+        <div class="s20-axis"><span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span></div>
+      </div>
+
+      <div class="s20-rank">
+        <div class="s20-clabel">Top artists by listeners</div>
+        <div class="s20-rrow">
+          <div class="s20-rtop"><span class="s20-rname">George Strait</span><span class="s20-rfig">1.51M</span></div>
+          <div class="s20-bar"><i style="width:100%"></i></div>
+        </div>
+        <div class="s20-rrow">
+          <div class="s20-rtop"><span class="s20-rname">Willie Nelson</span><span class="s20-rfig">1.24M</span></div>
+          <div class="s20-bar"><i style="width:82%"></i></div>
+        </div>
+        <div class="s20-rrow">
+          <div class="s20-rtop"><span class="s20-rname">Miranda Lambert</span><span class="s20-rfig">982K</span></div>
+          <div class="s20-bar"><i style="width:65%"></i></div>
+        </div>
+        <div class="s20-rrow">
+          <div class="s20-rtop"><span class="s20-rname">Kacey Musgraves</span><span class="s20-rfig">873K</span></div>
+          <div class="s20-bar"><i style="width:58%"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s20-roster">
+      <div class="s20-rlabel">Roster · 4 artists</div>
+
+      <div class="s20-row">
+        <div class="s20-artist"><div class="avatar">WN</div><div><div class="s20-aname">Willie Nelson</div><div class="s20-ahandle">/willie <span class="s20-tour">on tour</span></div></div></div>
+        <svg class="spark s20-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,22 16,20 33,16 50,18 66,12 83,7 100,3"/></svg>
+        <div class="s20-fig s20-cell-r">1.24M</div>
+        <div class="s20-trv trend up">+4.2%</div>
+      </div>
+      <div class="s20-row">
+        <div class="s20-artist"><div class="avatar">ML</div><div><div class="s20-aname">Miranda Lambert</div><div class="s20-ahandle">/miranda · active</div></div></div>
+        <svg class="spark s20-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,15 16,17 33,12 50,15 66,11 83,9 100,8"/></svg>
+        <div class="s20-fig s20-cell-r">982K</div>
+        <div class="s20-trv trend up">+1.1%</div>
+      </div>
+      <div class="s20-row">
+        <div class="s20-artist"><div class="avatar">GS</div><div><div class="s20-aname">George Strait</div><div class="s20-ahandle">/george · active</div></div></div>
+        <svg class="spark down s20-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,6 16,8 33,11 50,9 66,12 83,15 100,18"/></svg>
+        <div class="s20-fig s20-cell-r">1.51M</div>
+        <div class="s20-trv trend down">−2.3%</div>
+      </div>
+      <div class="s20-row">
+        <div class="s20-artist"><div class="avatar">KM</div><div><div class="s20-aname">Kacey Musgraves</div><div class="s20-ahandle">/kacey · active</div></div></div>
+        <svg class="spark s20-spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,24 16,21 33,18 50,14 66,10 83,6 100,2"/></svg>
+        <div class="s20-fig s20-cell-r">873K</div>
+        <div class="s20-trv trend up">+6.8%</div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<script>
+(function(){
+  var TARGET = "Lone Star — Round 6", KEY = "lsfb_round6";
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){ state = {}; }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} updateBar(); }
+
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section.screen'));
+  var order = [];
+  sections.forEach(function(sec){
+    var b = sec.querySelector('.slabel b');
+    if(!b) return;
+    var label = b.textContent.trim();           // e.g. "S1 · Top Nav Bar"
+    var id = label.split('·')[0].trim();         // "S1"
+    order.push({id:id, label:label});
+    state[id] = state[id] || {selected:false, comment:""};
+
+    var fb = document.createElement('div'); fb.className='fb';
+    var sel = document.createElement('div'); sel.className='fb-sel'+(state[id].selected?' on':'');
+    sel.innerHTML = '<span class="fbstar">'+(state[id].selected?'★':'☆')+'</span> '+(state[id].selected?'Selected':'Select');
+    var cmt = document.createElement('textarea'); cmt.className='fb-cmt'+(state[id].comment?' has':'');
+    cmt.placeholder='Comment on '+label+'…'; cmt.value = state[id].comment||"";
+
+    sel.addEventListener('click', function(){
+      state[id].selected = !state[id].selected;
+      sel.classList.toggle('on', state[id].selected);
+      sel.innerHTML = '<span class="fbstar">'+(state[id].selected?'★':'☆')+'</span> '+(state[id].selected?'Selected':'Select');
+      save();
+    });
+    cmt.addEventListener('input', function(){
+      state[id].comment = cmt.value;
+      cmt.classList.toggle('has', !!cmt.value.trim());
+      save();
+    });
+    fb.appendChild(sel); fb.appendChild(cmt);
+    sec.appendChild(fb);
+  });
+
+  // toolbar
+  var bar = document.createElement('div'); bar.id='fbbar';
+  bar.innerHTML = '<span id="fbcount" class="mut"></span><button id="fbexport">Export feedback</button><button id="fbclear">Clear</button>';
+  document.body.appendChild(bar);
+
+  // modal
+  var modal = document.createElement('div'); modal.id='fbmodal';
+  modal.innerHTML = '<div class="box"><div class="hd"><span>Feedback JSON — copied to clipboard</span></div><textarea id="fbtext" readonly></textarea><div class="ft"><span class="hint">Paste this back into the chat.</span><button id="fbcopy">Copy again</button><button id="fbclose">Close</button></div></div>';
+  document.body.appendChild(modal);
+
+  function buildJSON(){
+    return { target: TARGET, variants: order.map(function(o){
+      return { id:o.id, name:o.label, selected:!!state[o.id].selected, comment: state[o.id].comment? state[o.id].comment : null };
+    })};
+  }
+  function updateBar(){
+    var s=0,c=0; order.forEach(function(o){ if(state[o.id].selected)s++; if(state[o.id].comment&&state[o.id].comment.trim())c++; });
+    document.getElementById('fbcount').innerHTML = '<b>'+s+'</b> selected · <b>'+c+'</b> comments';
+  }
+  function copy(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
+
+  document.getElementById('fbexport').addEventListener('click', function(){
+    var txt = JSON.stringify(buildJSON(), null, 2);
+    document.getElementById('fbtext').value = txt;
+    copy(txt);
+    modal.classList.add('on');
+    var ta=document.getElementById('fbtext'); ta.focus(); ta.select();
+  });
+  document.getElementById('fbcopy').addEventListener('click', function(){ copy(document.getElementById('fbtext').value); });
+  document.getElementById('fbclose').addEventListener('click', function(){ modal.classList.remove('on'); });
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.classList.remove('on'); });
+  document.getElementById('fbclear').addEventListener('click', function(){
+    if(!confirm('Clear all selections and comments?')) return;
+    state={}; order.forEach(function(o){ state[o.id]={selected:false,comment:""}; });
+    save();
+    document.querySelectorAll('.fb-sel').forEach(function(el){ el.classList.remove('on'); el.innerHTML='<span class="fbstar">☆</span> Select'; });
+    document.querySelectorAll('.fb-cmt').forEach(function(el){ el.value=''; el.classList.remove('has'); });
+  });
+  updateBar();
+})();
+</script>
+
+</body>
+</html>

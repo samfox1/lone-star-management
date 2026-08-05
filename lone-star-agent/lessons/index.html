@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Build an Agent — Lone Star Copilot</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#0a0a0a; --mute:#6b6b6b; --line:#e6e6e6;
+    --accent:#0a0a0a; --card:#fafafa; --ok:#1a7f37; --bad:#b42318;
+    --code-bg:#0a0a0a; --code-ink:#f4f4f4; --pill:#f0f0f0;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"Space Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0c0c0c; --ink:#f4f4f4; --mute:#9a9a9a; --line:#232323;
+      --accent:#f4f4f4; --card:#141414; --pill:#1c1c1c; --ok:#4ac26b; --bad:#ff6b60;
+      --code-bg:#000; --code-ink:#eaeaea; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .app{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  /* sidebar */
+  aside{border-right:1px solid var(--line);padding:28px 20px;position:sticky;top:0;height:100vh;overflow:auto}
+  .brand{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+  .brand b{display:block;font-family:var(--sans);font-size:19px;letter-spacing:-.01em;color:var(--ink);
+    text-transform:none;margin-top:6px;font-weight:650}
+  nav{margin-top:26px;display:flex;flex-direction:column;gap:2px}
+  .navitem{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:9px;cursor:pointer;
+    border:1px solid transparent}
+  .navitem:hover{background:var(--card)}
+  .navitem.active{background:var(--card);border-color:var(--line)}
+  .navitem .dot{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);flex:none;
+    display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--mute)}
+  .navitem.done .dot{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .navitem.active .dot{border-color:var(--ink);color:var(--ink)}
+  .navitem .t{font-size:14px}
+  .navitem .s{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+  .locked{opacity:.5}
+  .progress{margin-top:26px;font-family:var(--mono);font-size:11px;color:var(--mute)}
+  .bar{height:5px;background:var(--line);border-radius:99px;margin-top:8px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--ink);width:0;transition:width .4s}
+  /* main */
+  main{padding:56px 60px;max-width:860px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+  h1{font-size:34px;line-height:1.15;letter-spacing:-.02em;margin:10px 0 6px;font-weight:680}
+  h2{font-size:21px;letter-spacing:-.01em;margin:38px 0 10px;font-weight:650}
+  h3{font-size:16px;margin:26px 0 6px;font-weight:640}
+  p{margin:12px 0}
+  .lead{font-size:18px;color:var(--ink)}
+  .idea{border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0;background:var(--card)}
+  .idea .n{font-family:var(--mono);font-size:12px;color:var(--mute);letter-spacing:.1em}
+  .idea h3{margin:6px 0 4px}
+  .callout{border-left:3px solid var(--ink);background:var(--pill);padding:12px 16px;border-radius:0 10px 10px 0;
+    margin:14px 0;font-size:14.5px}
+  .callout b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    display:block;color:var(--mute);margin-bottom:3px}
+  .term{border:1px dashed var(--mute);border-radius:12px;padding:16px 18px;margin:18px 0;font-size:14.5px}
+  .term .tag{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+  pre{background:var(--code-bg);color:var(--code-ink);padding:16px 18px;border-radius:12px;overflow:auto;
+    font-family:var(--mono);font-size:13px;line-height:1.55;margin:14px 0}
+  code.inline{font-family:var(--mono);font-size:.88em;background:var(--pill);padding:1.5px 6px;border-radius:6px}
+  ul{padding-left:22px}
+  li{margin:6px 0}
+  /* quiz */
+  .quiz{border:1px solid var(--line);border-radius:16px;padding:26px 28px;margin:34px 0;background:var(--card)}
+  .quiz .qk{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+  .q{margin:22px 0}
+  .q .stem{font-weight:600;font-size:15.5px;margin-bottom:12px}
+  .opt{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;
+    padding:12px 14px;margin:8px 0;cursor:pointer;background:var(--bg);transition:.15s}
+  .opt:hover{border-color:var(--mute)}
+  .opt.sel{border-color:var(--ink)}
+  .opt.correct{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent)}
+  .opt.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+  .opt .mk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--mute);flex:none;margin-top:1px;
+    display:grid;place-items:center;font-size:12px;font-family:var(--mono)}
+  .opt.correct .mk{background:var(--ok);border-color:var(--ok);color:#fff}
+  .opt.wrong .mk{background:var(--bad);border-color:var(--bad);color:#fff}
+  .exp{font-size:13.5px;color:var(--mute);margin-top:8px;display:none;padding-left:2px}
+  .exp.show{display:block}
+  .open{border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:var(--bg)}
+  .open textarea{width:100%;border:none;background:transparent;color:var(--ink);font-family:var(--sans);
+    font-size:14.5px;resize:vertical;min-height:74px;outline:none}
+  .btn{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--ink);color:var(--bg);border:none;padding:11px 18px;border-radius:10px;cursor:pointer;margin-top:8px}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn:disabled{opacity:.4;cursor:default}
+  .result{font-family:var(--mono);font-size:12px;margin-top:14px;color:var(--mute)}
+  .foot{display:flex;justify-content:space-between;margin-top:48px;padding-top:24px;border-top:1px solid var(--line)}
+  .soon{color:var(--mute);font-size:15px}
+  .roadmap{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:8px}
+  .rrow{display:grid;grid-template-columns:70px 1fr;border-top:1px solid var(--line);padding:12px 16px;font-size:14px}
+  .rrow:first-child{border-top:none}
+  .rrow .rn{font-family:var(--mono);color:var(--mute);font-size:12px}
+  @media(max-width:820px){.app{grid-template-columns:1fr}aside{display:none}main{padding:32px 22px}}
+  /* questions drawer */
+  .qtab{position:fixed;right:0;top:42%;transform:translateY(-50%);writing-mode:vertical-rl;
+    background:var(--ink);color:var(--bg);padding:18px 11px;border-radius:11px 0 0 11px;cursor:pointer;
+    font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;z-index:40;
+    display:flex;align-items:center;gap:8px}
+  .qtab .badge{writing-mode:horizontal-tb;background:var(--bg);color:var(--ink);border-radius:99px;
+    font-size:10px;padding:1px 6px;min-width:16px;text-align:center}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:360px;max-width:90vw;background:var(--bg);
+    border-left:1px solid var(--line);transform:translateX(100%);transition:transform .25s ease;z-index:41;
+    display:flex;flex-direction:column;box-shadow:-14px 0 40px rgba(0,0,0,.12)}
+  .drawer.open{transform:none}
+  .drawer .dh{display:flex;justify-content:space-between;align-items:center;padding:20px 20px 14px;border-bottom:1px solid var(--line)}
+  .drawer .dh b{font-size:16px}
+  .drawer .dh .sub{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin-top:2px}
+  .drawer .xx{background:none;border:none;color:var(--mute);font-size:22px;cursor:pointer;line-height:1}
+  .qlist{flex:1;overflow:auto;padding:14px 18px}
+  .qcard{border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin:10px 0;background:var(--card);font-size:14px}
+  .qcard .ctx{border-left:2px solid var(--mute);padding-left:9px;color:var(--mute);font-size:12.5px;margin-bottom:7px;font-style:italic}
+  .qcard .row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .qcard .del{background:none;border:none;color:var(--mute);cursor:pointer;font-size:15px;flex:none}
+  .qempty{color:var(--mute);font-size:13.5px;text-align:center;margin-top:30px;line-height:1.7}
+  .composer{border-top:1px solid var(--line);padding:14px 16px}
+  .composer .ctxprev{font-size:12px;color:var(--mute);font-style:italic;border-left:2px solid var(--mute);
+    padding-left:8px;margin-bottom:8px;display:none}
+  .composer textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--card);
+    color:var(--ink);font-family:var(--sans);font-size:14px;padding:10px;resize:vertical;min-height:64px;outline:none}
+  /* instructor feedback */
+  .instructor{border:1px solid var(--ink);border-radius:14px;padding:20px 24px;margin:22px 0 6px;background:var(--card)}
+  .instructor .ih{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:4px}
+  .instructor .note{font-size:15px;margin:8px 0 4px}
+  .instructor .item{border-top:1px solid var(--line);padding-top:12px;margin-top:14px}
+  .instructor .re{font-style:italic;color:var(--mute);font-size:13.5px;border-left:2px solid var(--mute);padding-left:10px;margin-bottom:6px}
+  .instructor .say{font-size:14.5px}
+  .instructor .fix{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--bad);margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">Lone Star · eve<b>Build an Agent</b></div>
+    <nav id="nav"></nav>
+    <div class="progress">Progress <span id="pct">0%</span>
+      <div class="bar"><i id="barfill"></i></div>
+    </div>
+    <button class="btn ghost" id="codeBtn" style="margin-top:22px;width:100%">Browse the code</button>
+    <button class="btn" id="exportBtn" style="margin-top:10px;width:100%">Submit answers</button>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script type="text/plain" data-file="agent/agent.ts">import { defineAgent } from "eve";
+
+export default defineAgent({
+  model: "anthropic/claude-sonnet-5",
+});
+</script>
+
+<script type="text/plain" data-file="agent/instructions.md"># Identity
+
+You are **Lone Star Copilot**, the manager's assistant for the Lone Star artist
+operating system. A single manager runs a roster of artists through the Lone Star
+dashboard. You are the one chat space from which they can see and navigate the
+whole thing.
+
+You are an automated AI assistant. If asked, say so plainly.
+
+## What you help with
+
+- **See what the services have.** Report what Spotify, Bandsintown, and the other
+  connected sources hold for an artist: which integrations are connected, what's
+  been synced, what's stale or missing.
+- **Summarize content.** Per artist and across the whole roster: releases, media,
+  links, merch, and what is published vs still draft.
+- **Summarize data and analytics.** Page views and events per artist and rolled up
+  across artists, over a time window the manager asks for.
+- **Publish and refresh content.** (Coming) Help the manager pull fresh data from a
+  source and publish snapshots live.
+- **Upload to an artist's page.** (Coming) Help add media and content to an artist.
+
+## How to work
+
+- Lead with the answer. Managers want the number or the status first, then detail.
+- When a request names an artist, resolve it by name or slug. If it's ambiguous
+  across the roster, list the candidates and ask which one.
+- Ground every claim in a tool result. Do not guess counts, connection state, or
+  analytics. If a tool returns nothing, say the data isn't there rather than
+  inventing it.
+- "Connected" means the artist has that source's id configured. The three catalog
+  sources (Spotify, Deezer, Apple) are mutually exclusive: only the artist's active
+  `catalog_source` counts as connected.
+- Keep numbers honest. Report the window a summary covers and whether it's one
+  artist or the roster.
+
+## Not yet wired
+
+Writing, uploading, publishing, and refreshing are not available as tools yet.
+When asked to do one, say it's coming and offer the read-only view you can give
+now (e.g. current published state, what's connected).
+</script>
+
+<script type="text/plain" data-file="agent/lib/lonestar.ts">import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * The single seam between the agent and the Lone Star backend. Every tool reads
+ * the roster through this module, so the transport lives in exactly one place.
+ *
+ * Today it talks to Supabase directly with the service-role key (read-only use
+ * only — the agent never writes here yet). That is safe while Lone Star has a
+ * single manager: there is no cross-tenant boundary to enforce, so bypassing RLS
+ * to read the whole roster is acceptable. When roles arrive, swap this file for a
+ * per-manager transport (the app's HTTP APIs, or an RLS-scoped client) without
+ * touching any tool.
+ */
+
+let cached: SupabaseClient | null = null;
+
+function db(): SupabaseClient {
+  if (cached) return cached;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Missing Supabase credentials. Set NEXT_PUBLIC_SUPABASE_URL and " +
+        "SUPABASE_SERVICE_ROLE_KEY in lone-star-agent/.env.",
+    );
+  }
+  cached = createClient(url, key, { auth: { persistSession: false } });
+  return cached;
+}
+
+/** The artist columns that back the integration-connected check. */
+const INTEGRATIONS = [
+  { key: "spotify", label: "Spotify", section: "music", idField: "spotify_artist_id", catalogSource: "spotify" },
+  { key: "deezer", label: "Deezer", section: "music", idField: "deezer_artist_id", catalogSource: "deezer" },
+  { key: "apple", label: "Apple Music", section: "music", idField: "apple_artist_id", catalogSource: "apple" },
+  { key: "youtube", label: "YouTube", section: "videos", idField: "youtube_channel_id" },
+  { key: "bandsintown", label: "Bandsintown", section: "tour", idField: "bandsintown_name" },
+  { key: "ticketmaster", label: "Ticketmaster", section: "tour", idField: "ticketmaster_attraction_id" },
+] as const;
+
+const ARTIST_COLUMNS =
+  "id, name, slug, template, catalog_source, spotify_artist_id, deezer_artist_id, apple_artist_id, youtube_channel_id, bandsintown_name, ticketmaster_attraction_id";
+
+type ArtistRow = Record<string, string | null>;
+
+export type ArtistSummary = { id: string; name: string; slug: string };
+
+export type IntegrationStatus = {
+  key: string;
+  label: string;
+  section: string;
+  connected: boolean;
+  /** True for the catalog source (Spotify/Deezer/Apple) that is currently active. */
+  active?: boolean;
+};
+
+export type ArtistSnapshot = {
+  id: string;
+  name: string;
+  slug: string;
+  template: string | null;
+  catalogSource: string | null;
+  integrations: IntegrationStatus[];
+  connectedCount: number;
+  counts: { releases: number; media: number; links: number; merch: number };
+};
+
+/** Every artist on the roster, name-sorted. */
+export async function listArtists(): Promise<ArtistSummary[]> {
+  const { data, error } = await db()
+    .from("artists")
+    .select("id, name, slug")
+    .order("name");
+  if (error) throw new Error(`listArtists: ${error.message}`);
+  return (data ?? []) as ArtistSummary[];
+}
+
+/** Resolve an artist by exact id, exact slug, or case-insensitive name. */
+async function resolveArtist(idOrSlugOrName: string): Promise<ArtistRow | null> {
+  const client = db();
+  const term = idOrSlugOrName.trim();
+  // uuid → id lookup; otherwise slug, then name.
+  const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(term);
+  let q = client.from("artists").select(ARTIST_COLUMNS);
+  if (byId) q = q.eq("id", term);
+  else q = q.or(`slug.eq.${term},name.ilike.${term}`);
+  const { data, error } = await q.limit(1);
+  if (error) throw new Error(`resolveArtist: ${error.message}`);
+  return (data?.[0] as ArtistRow) ?? null;
+}
+
+function integrationStatus(artist: ArtistRow): {
+  integrations: IntegrationStatus[];
+  connectedCount: number;
+} {
+  const integrations = INTEGRATIONS.map((i) => {
+    const connected = !!artist[i.idField];
+    const active =
+      "catalogSource" in i ? artist.catalog_source === i.catalogSource : undefined;
+    return { key: i.key, label: i.label, section: i.section, connected, active };
+  });
+  // Catalog sources are mutually exclusive: only the active one counts as a slot.
+  const standalone = integrations.filter(
+    (i) => i.active === undefined && i.connected,
+  ).length;
+  const activeCatalog = integrations.find((i) => i.active && i.connected) ? 1 : 0;
+  return { integrations, connectedCount: standalone + activeCatalog };
+}
+
+async function count(table: string, artistId: string): Promise<number> {
+  const { count: c, error } = await db()
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("artist_id", artistId);
+  if (error) throw new Error(`count(${table}): ${error.message}`);
+  return c ?? 0;
+}
+
+/** Full "what's here" view for one artist: integrations + content counts. */
+export async function getArtistSnapshot(
+  idOrSlugOrName: string,
+): Promise<ArtistSnapshot | null> {
+  const artist = await resolveArtist(idOrSlugOrName);
+  if (!artist) return null;
+  const id = artist.id as string;
+  const { integrations, connectedCount } = integrationStatus(artist);
+  const [releases, media, links, merch] = await Promise.all([
+    count("releases", id),
+    count("media", id),
+    count("links", id),
+    count("merch", id),
+  ]);
+  return {
+    id,
+    name: artist.name as string,
+    slug: artist.slug as string,
+    template: artist.template,
+    catalogSource: artist.catalog_source,
+    integrations,
+    connectedCount,
+    counts: { releases, media, links, merch },
+  };
+}
+
+/** Resolve an artist reference to its id + display name, or null if unknown. */
+export async function resolveArtistId(
+  idOrSlugOrName: string,
+): Promise<{ id: string; name: string } | null> {
+  const artist = await resolveArtist(idOrSlugOrName);
+  if (!artist) return null;
+  return { id: artist.id as string, name: artist.name as string };
+}
+
+export type AnalyticsRow = { type: string; count: number };
+
+/**
+ * Event counts for one artist since an ISO timestamp, via the app's
+ * `analytics_summary` RPC (the same door the dashboard reads).
+ */
+export async function getAnalyticsSummary(
+  artistId: string,
+  sinceIso: string,
+): Promise<AnalyticsRow[]> {
+  const { data, error } = await db().rpc("analytics_summary", {
+    p_artist_id: artistId,
+    p_since: sinceIso,
+  });
+  if (error) throw new Error(`analytics_summary: ${error.message}`);
+  return (data ?? []) as AnalyticsRow[];
+}
+</script>
+
+<script type="text/plain" data-file="agent/tools/list_artists.ts">import { defineTool } from "eve/tools";
+import { z } from "zod";
+import { listArtists } from "#lib/lonestar.js";
+
+export default defineTool({
+  description:
+    "List every artist on the manager's roster (name and slug). Use to see the " +
+    "whole roster or to resolve which artist the manager means.",
+  inputSchema: z.object({}),
+  async execute() {
+    const artists = await listArtists();
+    return { count: artists.length, artists };
+  },
+});
+</script>
+
+<script type="text/plain" data-file="agent/tools/artist_snapshot.ts">import { defineTool } from "eve/tools";
+import { z } from "zod";
+import { getArtistSnapshot } from "#lib/lonestar.js";
+
+export default defineTool({
+  description:
+    "What's here for one artist: which integrations are connected (Spotify, " +
+    "Bandsintown, etc.), which catalog source is active, and how many releases, " +
+    "media, links, and merch exist. Accepts an artist id, slug, or name.",
+  inputSchema: z.object({
+    artist: z
+      .string()
+      .min(1)
+      .describe("Artist id (uuid), slug, or exact name."),
+  }),
+  async execute({ artist }) {
+    const snapshot = await getArtistSnapshot(artist);
+    if (!snapshot) {
+      return { found: false as const, artist };
+    }
+    return { found: true as const, ...snapshot };
+  },
+});
+</script>
+
+<script type="text/plain" data-file="agent/tools/analytics_summary.ts">import { defineTool } from "eve/tools";
+import { z } from "zod";
+import { getAnalyticsSummary, resolveArtistId } from "#lib/lonestar.js";
+
+export default defineTool({
+  description:
+    "Event/analytics counts for one artist over a recent window, grouped by event " +
+    "type (e.g. page views). Accepts an artist id, slug, or name and a number of " +
+    "days to look back.",
+  inputSchema: z.object({
+    artist: z.string().min(1).describe("Artist id (uuid), slug, or exact name."),
+    days: z
+      .number()
+      .int()
+      .min(1)
+      .max(365)
+      .default(30)
+      .describe("How many days back to summarize."),
+  }),
+  async execute({ artist, days }) {
+    const resolved = await resolveArtistId(artist);
+    if (!resolved) return { found: false as const, artist };
+    const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
+    const rows = await getAnalyticsSummary(resolved.id, sinceIso);
+    const total = rows.reduce((sum, r) => sum + Number(r.count ?? 0), 0);
+    return {
+      found: true as const,
+      artist: resolved.name,
+      windowDays: days,
+      since: sinceIso,
+      total,
+      byType: rows,
+    };
+  },
+});
+</script>
+
+<script>
+/* ---------- instructor feedback ----------
+   Loaded from data/feedback.json (the instructor writes that file between modules).
+   Shape: { rev:int, modules:{ "1":{ note, replies:[{re,say}], corrections:[{re,say}] } } }
+*/
+let FEEDBACK = {};      // modules map, keyed by id
+let feedbackRev = 0;
+
+async function loadFeedback(){
+  try{
+    const r=await fetch("data/feedback.json",{cache:"no-store"});
+    if(!r.ok) return;
+    const d=await r.json();
+    FEEDBACK=d.modules||{}; feedbackRev=d.rev||0;
+  }catch(e){/* no feedback yet */}
+}
+
+/* ---------- course data ---------- */
+const MODULES = [
+  {
+    id:0, num:"00", title:"The mental model", sub:"Concepts",
+    body:`
+      <p class="lead">First, five simple ideas. Get these and the rest is easy. You can open the <b>Introduction</b> and <b>Concepts → The Harness</b> tabs in the docs to follow along.</p>
+
+      <div class="idea"><div class="n">IDEA 1</div><h3>Files are the setup</h3>
+        <p>You don't fill out one big settings file. In eve, each part of the agent is its own file. And <b>where the file sits decides what it is</b>.</p>
+        <p>A file at <code class="inline">agent/tools/get_weather.ts</code> becomes a tool called <code class="inline">get_weather</code>. That's it. You just make the file.</p>
+        <div class="callout"><b>Your agent</b>We never had to "add" our tools anywhere. We made the file <code class="inline">agent/tools/list_artists.ts</code>, and a tool called <code class="inline">list_artists</code> just showed up.</div>
+      </div>
+
+      <div class="idea"><div class="n">IDEA 2</div><h3>You only need two files to start</h3>
+        <ul>
+          <li><code class="inline">agent/instructions.md</code> — who the agent is and how it should act</li>
+          <li><code class="inline">agent/agent.ts</code> — which AI model to use</li>
+        </ul>
+        <p>Folders like <code class="inline">tools/</code> and <code class="inline">lib/</code> are extra. You add them when you need them. Yours already has both.</p>
+      </div>
+
+      <div class="idea"><div class="n">IDEA 3</div><h3>Write it once, use it anywhere</h3>
+        <p>A message can come from the terminal, a website, or Slack. eve handles it the same way every time. It reads the message, gives the AI its instructions and tools, does the work, and sends the answer back.</p>
+        <div class="callout"><b>Why it matters</b>Your <code class="inline">list_artists</code> tool doesn't care where the question came from. You build it once and it works everywhere.</div>
+      </div>
+
+      <div class="idea"><div class="n">IDEA 4</div><h3>It doesn't lose its place</h3>
+        <p>A chat with the agent can run for a while. It can stop to ask you something, wait, then keep going after you answer. If the server crashes in the middle, it picks up right where it left off.</p>
+        <p>One catch: if a step gets cut off, it <b>runs again</b> when things restart. So any action that changes real data (like publishing) must ask for your OK first, or be safe to repeat. That's what Module 5 is about.</p>
+      </div>
+
+      <div class="idea"><div class="n">IDEA 5</div><h3>You get some tools for free</h3>
+        <p>Every eve agent comes with built-in tools you didn't write:
+        <code class="inline">bash</code>, <code class="inline">read_file</code>, <code class="inline">write_file</code>, <code class="inline">web_fetch</code>, <code class="inline">web_search</code>, <code class="inline">ask_question</code>, and a few more.</p>
+        <p>You can keep them, swap one out, turn one off, or add your own. Your three tools are new ones you added.</p>
+        <div class="callout"><b>Spot it</b>One free tool is <code class="inline">ask_question</code>. That's what lets Copilot stop and ask <em>you</em> which artist you mean when a name is unclear.</div>
+      </div>
+
+      <h2>What we built, at a glance</h2>
+      <pre>lone-star-agent/
+└── agent/
+    ├── agent.ts            <span style="color:#8a8a8a"># picks the AI model</span>
+    ├── instructions.md     <span style="color:#8a8a8a"># who it is: "Lone Star Copilot"</span>
+    ├── lib/
+    │   └── lonestar.ts     <span style="color:#8a8a8a"># the one file that talks to the database</span>
+    └── tools/
+        ├── list_artists.ts
+        ├── artist_snapshot.ts
+        └── analytics_summary.ts</pre>
+      <p>Just reading this list tells you what the agent can do. That's Idea 1 in action.</p>
+    `,
+    quiz:{
+      questions:[
+        { stem:"You make a file: agent/tools/refresh_spotify.ts. What is the tool called, and what do you do to turn it on?",
+          options:[
+            {t:"refresh_spotify — and nothing else; making the file is enough",correct:true,
+             e:"The file name is the tool name. eve finds it on its own. (Idea 1.)"},
+            {t:"Whatever name you type inside the file",correct:false,
+             e:"There's no name to type. The file name is the tool name."},
+            {t:"refresh_spotify, but you also list it in agent.ts",correct:false,
+             e:"No list needed. Just the file."},
+          ]},
+        { stem:"Your tool stops to ask for your OK. The server crashes while it waits. What happens when it comes back?",
+          options:[
+            {t:"It picks up where it stopped, still waiting for your OK",correct:true,
+             e:"eve saves its place, so a crash doesn't lose the chat. (Idea 4.)"},
+            {t:"The whole chat is gone; you start over",correct:false,
+             e:"That would be true for a basic bot, but eve saves its progress."},
+            {t:"It just runs the action without asking",correct:false,
+             e:"It keeps waiting for your OK. It won't fire on its own."},
+          ]},
+      ],
+      open:{ stem:"In your own words: why don't you need a step to \"turn on\" a tool in eve? Think about Idea 1." }
+    }
+  },
+  { id:1, num:"01", title:"The two-file agent", sub:"agent.ts + instructions",
+    body:`
+      <p class="lead">Every eve agent needs just two files. One picks the brain. One sets the personality. Let's read both. Open <b>Browse the code</b> (bottom-left) to see the real files as we go.</p>
+
+      <h2>File 1 — agent.ts (picks the brain)</h2>
+      <p>This file says which AI model runs the agent. Here's yours, the whole thing:</p>
+      <pre>import { defineAgent } from "eve";
+
+export default defineAgent({
+  model: "anthropic/claude-sonnet-5",
+});</pre>
+      <p>Line by line, in plain words:</p>
+      <ul>
+        <li><code class="inline">import { defineAgent } from "eve"</code> — grab eve's helper for setting up an agent.</li>
+        <li><code class="inline">export default</code> — hand this setup to eve as the agent's config.</li>
+        <li><code class="inline">model: "anthropic/claude-sonnet-5"</code> — use Claude Sonnet 5 as the brain.</li>
+      </ul>
+      <div class="callout"><b>Good to know</b>If you delete <code class="inline">agent.ts</code> completely, eve still runs and uses Sonnet 5 by default. The moment you keep the file, you must set <code class="inline">model</code>.</div>
+
+      <h3>Two ways to name a model</h3>
+      <p>You can point at a model in two ways:</p>
+      <ul>
+        <li><b>Through the gateway</b> (what we use): a string like <code class="inline">"anthropic/claude-sonnet-5"</code>. eve routes it for you. Note the <b>dot</b> in versions, e.g. <code class="inline">"anthropic/claude-opus-4.8"</code>.</li>
+        <li><b>Straight to the maker</b>: import the provider and call it, e.g. <code class="inline">anthropic("claude-opus-4-8")</code>. This needs that maker's own API key. Note the <b>dashes</b> here.</li>
+      </ul>
+
+      <h3>Extra dials (all optional)</h3>
+      <p>You can add more settings to <code class="inline">defineAgent</code> later. You don't need them yet, but know they exist:</p>
+      <ul>
+        <li><code class="inline">reasoning: "low" | "medium" | "high"</code> — how hard the model thinks before answering.</li>
+        <li><code class="inline">compaction</code> — when a long chat gets summarized so it doesn't overflow. On by default.</li>
+        <li><code class="inline">limits</code> — safety caps on how many tokens one chat can burn.</li>
+      </ul>
+
+      <h2>File 2 — instructions.md (sets the personality)</h2>
+      <p>This is the agent's always-on job description. eve glues it to the top of <b>every</b> message. It's plain writing, no code. Open <code class="inline">instructions.md</code> in Browse the code and read it; here's the shape:</p>
+      <ul>
+        <li><b>Identity</b> — "You are Lone Star Copilot..." Who it is, in one breath.</li>
+        <li><b>What you help with</b> — the jobs: see the services, summarize content, summarize analytics.</li>
+        <li><b>How to work</b> — the rules: lead with the answer, never guess numbers, ask when an artist name is unclear.</li>
+        <li><b>Not yet wired</b> — honesty about what it can't do yet (writing/publishing).</li>
+      </ul>
+
+      <h3>Always-on vs on-demand</h3>
+      <p>Two ways to feed the AI words:</p>
+      <div class="roadmap">
+        <div class="rrow"><div class="rn">Always</div><div><b>instructions.md</b> — loaded every single message. For who it is and its standing rules. Keep it short.</div></div>
+        <div class="rrow"><div class="rn">On demand</div><div><b>skills/</b> — only pulled in when needed. For long, step-by-step how-tos that would clutter every message. (We'll meet these later.)</div></div>
+      </div>
+      <div class="callout"><b>Rule</b>At the root you use <code class="inline">instructions.md</code> <em>or</em> <code class="inline">instructions.ts</code>, never both. Markdown for plain text; the <code class="inline">.ts</code> version is only for when you need to build the text with code.</div>
+
+      <div class="term"><span class="tag">We'll do this in the terminal</span>
+        <p style="margin:8px 0 0">Right now your agent uses Sonnet 5. For a manager's copilot that reasons over data, we might bump it to a stronger model, or leave it. When you finish the quiz, tell me and we'll change one line in <code class="inline">agent.ts</code> together and rebuild.</p>
+      </div>
+    `,
+    quiz:{
+      questions:[
+        { stem:"Which file decides which AI model the agent uses?",
+          options:[
+            {t:"agent.ts",correct:true,e:"Yes. defineAgent's 'model' field picks the brain."},
+            {t:"instructions.md",correct:false,e:"That sets the personality and rules, not the model."},
+            {t:"lonestar.ts",correct:false,e:"That's the database file. Nothing to do with the model."},
+          ]},
+        { stem:"When does the text in instructions.md get sent to the AI?",
+          options:[
+            {t:"On every message, always",correct:true,e:"Right. It's the always-on job description, glued to the top each time."},
+            {t:"Only when the AI decides it needs it",correct:false,e:"That's how skills work. instructions.md is always on."},
+            {t:"Only the first message of a chat",correct:false,e:"No — every message, for the whole chat."},
+          ]},
+        { stem:"You want the agent to always speak in a calm, plain tone. Where does that rule go?",
+          options:[
+            {t:"instructions.md",correct:true,e:"Tone is a standing rule about who it is. Always-on. Perfect for instructions."},
+            {t:"A new tool file",correct:false,e:"Tools do actions. A tone rule isn't an action."},
+            {t:"agent.ts",correct:false,e:"agent.ts is for model and settings, not personality."},
+          ]},
+      ],
+      open:{ stem:"In your own words: what's the difference between instructions.md and a skill? When would you use each?" }
+    }
+  },
+  { id:2, num:"02", title:"Tools", sub:"defineTool",
+    body:`
+      <p class="lead">Tools are where your agent gets real powers. A tool is a small, typed action the agent can run — like "list the artists" or "get this artist's stats." Let's read all three of yours. Keep <b>Browse the code</b> open on the side.</p>
+
+      <h2>The shape of every tool</h2>
+      <p>Every tool file looks the same. You call <code class="inline">defineTool</code> and hand it three things:</p>
+      <pre>export default defineTool({
+  description: "...",      <span style="color:#8a8a8a">// what it does, written for the AI</span>
+  inputSchema: ...,        <span style="color:#8a8a8a">// what info it needs to run</span>
+  async execute(input) {   <span style="color:#8a8a8a">// the actual work</span>
+    ...
+    return { ... };        <span style="color:#8a8a8a">// what it hands back</span>
+  },
+});</pre>
+      <ul>
+        <li><b>description</b> — a plain sentence telling the AI what the tool does and when to use it. The AI reads this to decide whether to call it. Write it for the AI, not for a person.</li>
+        <li><b>inputSchema</b> — the shape of the info the tool needs. Written with <b>Zod</b> (more below). If it needs nothing, the shape is empty.</li>
+        <li><b>execute</b> — the function that does the work and returns a result.</li>
+      </ul>
+      <div class="callout"><b>Remember</b>The file name is the tool name. <code class="inline">tools/list_artists.ts</code> becomes a tool called <code class="inline">list_artists</code>. (Idea 1 from Module 0.)</div>
+
+      <h2>Tool 1 — list_artists (the simplest)</h2>
+      <pre>import { defineTool } from "eve/tools";
+import { z } from "zod";
+import { listArtists } from "#lib/lonestar.js";
+
+export default defineTool({
+  description: "List every artist on the manager's roster...",
+  inputSchema: z.object({}),      <span style="color:#8a8a8a">// needs nothing</span>
+  async execute() {
+    const artists = await listArtists();
+    return { count: artists.length, artists };
+  },
+});</pre>
+      <ul>
+        <li>The three <code class="inline">import</code> lines: eve's <code class="inline">defineTool</code>, Zod (<code class="inline">z</code>), and your database helper <code class="inline">listArtists</code>.</li>
+        <li><code class="inline">z.object({})</code> — an empty shape. This tool asks for nothing; it just lists everyone.</li>
+        <li><code class="inline">execute</code> calls <code class="inline">listArtists()</code> and returns the list plus a count.</li>
+      </ul>
+      <div class="callout"><b>What is await?</b>Talking to the database takes a beat. <code class="inline">await</code> means "wait for the answer before moving on." Any tool that reaches the outside world uses it.</div>
+
+      <h2>Tool 2 — artist_snapshot (takes input)</h2>
+      <pre>inputSchema: z.object({
+  artist: z.string().min(1).describe("Artist id, slug, or name."),
+}),
+async execute({ artist }) {
+  const snapshot = await getArtistSnapshot(artist);
+  if (!snapshot) return { found: false, artist };
+  return { found: true, ...snapshot };
+},</pre>
+      <p>What's new here:</p>
+      <ul>
+        <li><b>It needs one thing:</b> an <code class="inline">artist</code>. The schema says it must be text, at least 1 character long. <code class="inline">.describe(...)</code> is a hint the AI reads so it knows what to put there.</li>
+        <li><code class="inline">execute({ artist })</code> pulls that value out and looks up the snapshot.</li>
+        <li><b>It handles "not found":</b> if there's no such artist, it returns <code class="inline">found: false</code> instead of crashing. Good tools always answer, even when the answer is "nothing here."</li>
+      </ul>
+      <div class="callout"><b>Why the schema matters</b>Because you said <code class="inline">artist</code> must be text, the AI can't send a number or leave it blank. eve checks the input against the shape <em>before</em> your code runs. That's the "typed" in "typed action."</div>
+
+      <h2>Tool 3 — analytics_summary (two steps + a default)</h2>
+      <pre>inputSchema: z.object({
+  artist: z.string().min(1),
+  days: z.number().int().min(1).max(365).default(30),
+}),
+async execute({ artist, days }) {
+  const resolved = await resolveArtistId(artist);
+  if (!resolved) return { found: false, artist };
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const rows = await getAnalyticsSummary(resolved.id, since);
+  ...
+},</pre>
+      <ul>
+        <li><b>Two inputs:</b> an artist and a number of <code class="inline">days</code>. <code class="inline">days</code> has <code class="inline">.default(30)</code> — if the manager doesn't say, it uses 30. It also must be a whole number from 1 to 365, so nobody can ask for -5 days.</li>
+        <li><b>Two steps:</b> first find the artist's id, then use that id to pull the analytics. A tool can do several things in a row.</li>
+      </ul>
+
+      <h2>Two words worth knowing: Zod and ctx</h2>
+      <ul>
+        <li><b>Zod</b> is the little helper (<code class="inline">z</code>) you use to describe and check inputs: <code class="inline">z.string()</code>, <code class="inline">z.number()</code>, <code class="inline">z.object({...})</code>. It does two jobs at once — it documents what the tool needs, and it blocks bad input.</li>
+        <li><b>ctx</b> is an extra helper eve can pass to <code class="inline">execute</code> (like who's asking, or a stop signal). None of your tools need it yet, so we skip it — just know it exists.</li>
+      </ul>
+
+      <div class="term"><span class="tag">Next, in the terminal together</span>
+        <p style="margin:8px 0 0">You now know enough to write one. After the quiz, we'll build a <b>fourth</b> tool side by side — maybe <code class="inline">roster_overview</code>, which sums up the whole roster at once. You'll draft the schema; I'll help wire it.</p>
+      </div>
+    `,
+    quiz:{
+      questions:[
+        { stem:"What is the job of inputSchema?",
+          options:[
+            {t:"It describes and checks the info the tool needs, before the tool runs",correct:true,
+             e:"Right. Written with Zod. It documents the input and blocks anything the wrong shape."},
+            {t:"It picks which AI model the tool uses",correct:false,e:"That's agent.ts, and it's for the whole agent, not one tool."},
+            {t:"It writes the result to the database",correct:false,e:"That would be execute's job, not the schema's."},
+          ]},
+        { stem:"artist_snapshot is available, but when the manager asks about an artist the AI never calls it. Which part would you check FIRST?",
+          options:[
+            {t:"The description — the AI reads it to decide whether a tool fits",correct:true,
+             e:"Yes. Tool selection is driven by the description. A vague or wrong description = the AI won't pick it, even if the code is perfect."},
+            {t:"The execute function",correct:false,e:"execute runs the work after the tool is chosen. It has no say in whether the tool gets picked."},
+            {t:"The file's location",correct:false,e:"Location sets the name and turns it on, but the AI chooses by description, not path."},
+          ]},
+        { stem:"analytics_summary has days: z.number().int().min(1).max(365).default(30). The manager asks \"how did Skeen do?\" with no number. What happens?",
+          options:[
+            {t:"The tool runs with days = 30",correct:true,e:"Right. .default(30) fills in when the AI doesn't supply a value. No error, sensible fallback."},
+            {t:"The tool errors because days is missing",correct:false,e:"A default means it's optional — the default is used, not an error."},
+            {t:"The AI must ask the manager for a number first",correct:false,e:"It can, but it doesn't have to — the default covers the blank."},
+          ]},
+        { stem:"Why z.string().min(1) for the artist input, instead of plain z.string()?",
+          options:[
+            {t:"To reject an empty string, so the tool never runs on a blank name",correct:true,
+             e:"Exactly. z.string() would allow \"\". .min(1) forces at least one character — a real value to look up."},
+            {t:"To limit the name to one character",correct:false,e:"min(1) is a floor, not a ceiling. It means 'at least 1', not 'exactly 1'."},
+            {t:"To make the field optional",correct:false,e:"Opposite — it makes the field stricter, not optional."},
+          ]},
+        { stem:"In async execute({ artist }) { ... }, what is the { artist } part doing?",
+          options:[
+            {t:"Pulling the artist value out of the input object",correct:true,
+             e:"Right — it's destructuring. Short for: take input.artist and call it artist. The schema guarantees it's there and is text."},
+            {t:"Declaring a new empty object named artist",correct:false,e:"No new object is made; it reads a field out of the one that came in."},
+            {t:"Requiring the tool to return an artist",correct:false,e:"This is about the input, not the return."},
+          ]},
+        { stem:"Imagine a future tool that PUBLISHES a release (changes real data). It errors halfway, and eve re-runs the step on resume (Module 0, Idea 4). What does that force you to do?",
+          options:[
+            {t:"Make it safe to run twice, or put it behind approval",correct:true,
+             e:"Yes. A re-run could publish twice. Either make the action idempotent (running it again changes nothing extra) or gate it on your OK. This is exactly why Module 5 exists."},
+            {t:"Nothing — read tools and write tools behave the same",correct:false,e:"Read tools are safe to repeat; write tools are not. That's the whole difference."},
+            {t:"Turn off durability for that tool",correct:false,e:"You don't get to switch off the durable loop. You design the tool to be safe within it."},
+          ]},
+      ],
+      open:[
+        { stem:"In your own words: what are the three things every tool must have, and what does each do?" },
+        { stem:"Prep for the build: we're about to write roster_overview, which sums up the WHOLE roster. What input(s), if any, should its schema take, and why? (Hint: does it need to know which artist?)" }
+      ]
+    }
+  },
+  { id:3, num:"03", title:"The data seam", sub:"lib/lonestar.ts",
+    body:`
+      <p class="lead">A short but important one. Your tools don't talk to the database directly. They all go through one file: <code class="inline">agent/lib/lonestar.ts</code>. Open it in <b>Browse the code</b> and follow along.</p>
+
+      <h2>What a "seam" is</h2>
+      <p>A seam is a clean line between two parts, so you can change one side without touching the other. Here the two sides are:</p>
+      <div class="roadmap">
+        <div class="rrow"><div class="rn">Tools</div><div><b>The "what."</b> list_artists, artist_snapshot, roster_overview. Each one says <i>what</i> it wants (the roster, one artist's stats).</div></div>
+        <div class="rrow"><div class="rn">lonestar.ts</div><div><b>The "how."</b> The actual database queries. The one place that knows <i>how</i> to get the data.</div></div>
+      </div>
+      <p>Your <code class="inline">roster_overview</code> is a perfect example: it imported <code class="inline">listArtists</code> and <code class="inline">getArtistSnapshot</code> from this file and just called them. It never wrote a single database query itself.</p>
+
+      <h2>What's inside the file</h2>
+      <p>Three kinds of things:</p>
+      <ul>
+        <li><b>One database client</b>, built once and reused (<code class="inline">db()</code>).</li>
+        <li><b>Helper functions</b> the tools call: <code class="inline">listArtists</code>, <code class="inline">getArtistSnapshot</code>, <code class="inline">resolveArtistId</code>, <code class="inline">getAnalyticsSummary</code>.</li>
+        <li><b>Types</b> that describe the shapes those helpers return (the <code class="inline">export type</code> lines). They're just labels for the data; they don't run.</li>
+      </ul>
+
+      <h3>The client, built once</h3>
+      <pre>let cached = null;
+function db() {
+  if (cached) return cached;                     <span style="color:#8a8a8a">// already built? reuse it</span>
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  cached = createClient(url, key, ...);          <span style="color:#8a8a8a">// build it the first time</span>
+  return cached;
+}</pre>
+      <ul>
+        <li><b>process.env</b> is where secret settings live — the database address and key. They come from the <code class="inline">.env</code> file, never typed into the code. That keeps secrets out of the code.</li>
+        <li><b>The cache</b> (<code class="inline">cached</code>) means the client is built once, then reused on every later call, instead of rebuilt each time.</li>
+      </ul>
+
+      <h3>A helper the tools call</h3>
+      <pre>export async function listArtists() {
+  const { data, error } = await db()
+    .from("artists")            <span style="color:#8a8a8a">// the artists table</span>
+    .select("id, name, slug")   <span style="color:#8a8a8a">// just these columns</span>
+    .order("name");
+  return data;
+}</pre>
+      <p>That's the real code behind the question you asked in Module 2. <code class="inline">listArtists</code> is a genuine function that asks the database for every artist. Tools import it; they don't repeat it.</p>
+
+      <h2>Why one file: the "decide later" payoff</h2>
+      <p>Right now this file talks straight to Supabase with a powerful key. That's fine because Lone Star has <b>one manager</b> today. Later, with many managers, you'll want each one to see only their own artists.</p>
+      <p>When that day comes, you change the queries in <b>this one file</b> and every tool keeps working, untouched. The tools only know "call <code class="inline">listArtists</code>"; they don't care how it gets the data. That's the whole reason we could say "decide later" without painting ourselves into a corner.</p>
+      <div class="callout"><b>The big comment</b>Open <code class="inline">lonestar.ts</code> and read the comment at the very top. It spells out this exact trade-off: direct Supabase now, swap to a per-manager transport later, one file to change.</div>
+    `,
+    quiz:{
+      questions:[
+        { stem:"Why do all the tools go through lonestar.ts instead of each writing its own database query?",
+          options:[
+            {t:"So the database code lives in one place, and can be changed without touching any tool",correct:true,
+             e:"Right. One seam. Change how data is fetched in one file; every tool keeps working."},
+            {t:"Because eve won't let tools run queries",correct:false,e:"eve would allow it. This is a design choice you made for sanity, not a rule."},
+            {t:"To make the tools run faster",correct:false,e:"It's about maintainability, not speed."},
+          ]},
+        { stem:"Later you switch from talking straight to Supabase to calling the web app's API instead. How many TOOL files do you have to change?",
+          options:[
+            {t:"Zero — only lonestar.ts changes",correct:true,
+             e:"That's the payoff. Tools only call helpers like listArtists; swap the insides of those helpers and tools don't notice."},
+            {t:"All of them",correct:false,e:"That's exactly what the seam prevents. The tools never held the query."},
+            {t:"Only the ones that read artists",correct:false,e:"Still zero — the change is contained entirely in the lib."},
+          ]},
+        { stem:"What is the cached variable in db() doing?",
+          options:[
+            {t:"Building the database client once, then reusing it on later calls",correct:true,
+             e:"Yes. First call builds it and stores it; every call after returns the stored one."},
+            {t:"Saving the query results so it never hits the database twice",correct:false,e:"It caches the client (the connection), not the data. Every call still queries fresh."},
+            {t:"Remembering the last artist you looked up",correct:false,e:"No artist memory here — just the client."},
+          ]},
+        { stem:"Where do NEXT_PUBLIC_SUPABASE_URL and the service-role key come from?",
+          options:[
+            {t:"process.env — read from the .env file, not written in the code",correct:true,
+             e:"Correct. Secrets live in .env and are read at runtime. Never hardcode keys."},
+            {t:"They're typed directly into lonestar.ts",correct:false,e:"They're read from process.env on purpose, so keys stay out of the code."},
+            {t:"The AI provides them each call",correct:false,e:"The AI never sees or supplies secrets."},
+          ]},
+        { stem:"The service-role key bypasses the database's row-level security. Why is that OK now but risky later?",
+          options:[
+            {t:"One manager today means no tenant boundary to protect; with many managers it could leak one's artists to another",correct:true,
+             e:"Exactly. Read-only + single manager is safe. Add roles and this key would see everyone's data — that's when you swap the seam."},
+            {t:"It's never OK; it's a bug",correct:false,e:"It's a deliberate, documented choice that's safe under today's single-manager setup."},
+            {t:"It's always fine because it's read-only",correct:false,e:"Read-only limits writes, but reading across every manager's data is exactly the future risk."},
+          ]},
+        { stem:"You want a new 'total merch across the whole roster' number, and it needs a fresh database query. Where does the query go?",
+          options:[
+            {t:"A new helper in lonestar.ts; the tool just calls it",correct:true,
+             e:"Right. Queries belong in the lib (the 'how'); the tool stays the 'what'. Keeps the seam intact."},
+            {t:"Inside the tool's execute, as a direct query",correct:false,e:"That breaks the seam — now a tool knows how to talk to the database. Put it in the lib."},
+            {t:"In agent.ts",correct:false,e:"agent.ts is model config, not data access."},
+          ]},
+      ],
+      open:[
+        { stem:"In your own words: why does putting all the database code in one file make 'decide later' cheap instead of scary?" }
+      ]
+    }
+  },
+  { id:4, num:"04", title:"Running it live", sub:"dev TUI + sessions", locked:true,
+    preview:"Back to the terminal: start the dev server on Node 24, chat with Copilot, watch a real tool call, and see the session/stream events." },
+  { id:5, num:"05", title:"Human-in-the-loop", sub:"approval + writes", locked:true,
+    preview:"Build the first WRITE tool — refresh an artist's Spotify data — gated on your approval. Where durability (Idea #4) becomes real." },
+  { id:6, num:"06", title:"Beyond", sub:"channels · evals · skills", locked:true,
+    preview:"Pick one: expose Copilot over a channel (Slack/web), write an eval to test it, or add a skill. Your call once the core is solid." },
+];
+
+/* ---------- state ---------- */
+const KEY="lonestar-course-v1";
+let state = JSON.parse(localStorage.getItem(KEY) || "{}");
+state.done ||= {};            // {moduleId:true}
+state.current ??= 0;
+const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+const unlocked=(id)=> id===0 || state.done[id-1];
+
+/* ---------- render ---------- */
+const nav=document.getElementById("nav");
+const main=document.getElementById("main");
+
+function renderNav(){
+  nav.innerHTML="";
+  MODULES.forEach(m=>{
+    const open=unlocked(m.id);
+    const el=document.createElement("div");
+    el.className="navitem"+(m.id===state.current?" active":"")+(state.done[m.id]?" done":"")+(open?"":" locked");
+    el.innerHTML=`<div class="dot">${state.done[m.id]?"✓":m.num}</div>
+      <div><div class="t">${m.title}</div><div class="s">${m.sub}</div></div>`;
+    el.onclick=()=>{ if(open){ state.current=m.id; save(); render(); } };
+    nav.appendChild(el);
+  });
+  const total=MODULES.length, done=Object.keys(state.done).length;
+  const pct=Math.round(done/total*100);
+  document.getElementById("pct").textContent=pct+"%";
+  document.getElementById("barfill").style.width=pct+"%";
+}
+
+function instructorBlock(mid){
+  const f=FEEDBACK[mid]; if(!f) return "";
+  let h=`<div class="instructor"><div class="ih">From your instructor</div>`;
+  if(f.note) h+=`<div class="note">${f.note}</div>`;
+  (f.replies||[]).forEach(r=>{
+    h+=`<div class="item">${r.re?`<div class="re">“${r.re}”</div>`:""}<div class="say">${r.say}</div></div>`;
+  });
+  (f.corrections||[]).forEach(c=>{
+    h+=`<div class="item"><div class="fix">On a quiz answer</div>${c.re?`<div class="re">${c.re}</div>`:""}<div class="say">${c.say}</div></div>`;
+  });
+  return h+`</div>`;
+}
+
+function reviewView(mid){
+  renderNav();
+  window.scrollTo(0,0);
+  const m=MODULES[mid], next=MODULES[mid+1], prev=MODULES[mid-1];
+  main.innerHTML=`<div class="kicker">Review · Module ${m.num}</div>
+    <h1>Your review</h1>
+    <p class="lead">Here's my feedback on Module ${m.num}. Read it, then head back to an earlier module or continue on — with these answers in mind.</p>
+    ${instructorBlock(mid) || '<p class="soon">No written feedback for this one — you are all good.</p>'}`;
+  const f=document.createElement("div"); f.className="foot";
+  // reading the review counts as finishing the module → unlocks what's next
+  const finishReview=()=>{ state.done[mid]=true; state.reviewing=null; };
+  // ← return to a previous module
+  if(prev){
+    const back=document.createElement("button"); back.className="btn ghost";
+    back.textContent=`← Return to Module ${prev.num}`;
+    back.onclick=()=>{ finishReview(); state.current=prev.id; save(); render(); };
+    f.appendChild(back);
+  }
+  // ⟳ re-read this module (does not mark it done, so you can resubmit)
+  const reread=document.createElement("button"); reread.className="btn ghost";
+  reread.textContent="⟳ Re-read this module";
+  reread.onclick=()=>{ state.reviewing=null; save(); render(); };
+  f.appendChild(reread);
+  // → continue to the next module
+  const cont=document.createElement("button"); cont.className="btn";
+  cont.textContent = next ? `Continue to Module ${next.num} — ${next.title} →` : "Finish";
+  cont.onclick=()=>{
+    finishReview();
+    if(next) state.current=next.id;
+    save(); render();
+  };
+  f.appendChild(cont); main.appendChild(f);
+}
+
+function render(){
+  if(state.reviewing!=null && FEEDBACK[state.reviewing]) { reviewView(state.reviewing); return; }
+  renderNav();
+  const m=MODULES[state.current];
+  window.scrollTo(0,0);
+  if(m.locked && !unlocked(m.id)){
+    main.innerHTML=`<div class="kicker">Module ${m.num} · Locked</div><h1>${m.title}</h1>
+      <p class="soon">${m.preview}</p>
+      <p class="soon">Finish the previous module's quiz to unlock this one.</p>`;
+    return;
+  }
+  if(m.locked && unlocked(m.id) && !m.body){
+    main.innerHTML=`<div class="kicker">Module ${m.num} · ${m.sub}</div><h1>${m.title}</h1>
+      <p class="lead">${m.preview}</p>
+      <div class="term"><span class="tag">Coming up</span>
+      <p style="margin:8px 0 0">This module is unlocked but not authored yet. Tell your instructor (in the terminal) you're ready and it'll fill in here.</p></div>`;
+    return;
+  }
+  main.innerHTML=`<div class="kicker">Module ${m.num} · ${m.sub}</div><h1>${m.title}</h1>${m.body}`;
+  if(m.quiz) mountQuiz(m);
+  mountFoot(m);
+  if(typeof renderNotes==="function") renderNotes();
+}
+
+function mountQuiz(m){
+  const wrap=document.createElement("div");
+  wrap.className="quiz";
+  wrap.innerHTML=`<div class="qk">Checkpoint · click an answer, then Check</div>`;
+  const picked={}; let checked=false;
+  m.quiz.questions.forEach((q,qi)=>{
+    const qd=document.createElement("div"); qd.className="q";
+    qd.innerHTML=`<div class="stem">${qi+1}. ${q.stem}</div>`;
+    q.options.forEach((o,oi)=>{
+      const od=document.createElement("div"); od.className="opt";
+      od.innerHTML=`<div class="mk">${String.fromCharCode(65+oi)}</div><div>${o.t}<div class="exp">${o.e}</div></div>`;
+      od.onclick=()=>{ if(checked)return; picked[qi]=oi;
+        [...qd.querySelectorAll(".opt")].forEach(x=>x.classList.remove("sel"));
+        od.classList.add("sel"); };
+      qd.appendChild(od);
+    });
+    wrap.appendChild(qd);
+  });
+  const opens=Array.isArray(m.quiz.open)?m.quiz.open:(m.quiz.open?[m.quiz.open]:[]);
+  opens.forEach((o,i)=>{
+    const key="open"+m.id+(i?"_"+i:"");
+    const od=document.createElement("div"); od.className="q";
+    od.innerHTML=`<div class="stem">✎ ${o.stem}</div>
+      <div class="open"><textarea placeholder="Type your answer — this is for you; there's no auto-grade."></textarea></div>`;
+    const ta=od.querySelector("textarea"); ta.value=state[key]||"";
+    ta.addEventListener("input",e=>{state[key]=e.target.value;save();});
+    wrap.appendChild(od);
+  });
+  // already waiting on a review for this module → show status, no button
+  if(state.pending && state.pending.mid===m.id){
+    const w=document.createElement("div"); w.className="result";
+    w.textContent="⏳ Submitted — waiting for your review. This page switches to it automatically.";
+    wrap.appendChild(w); main.appendChild(wrap); startPoll(); return;
+  }
+  const btn=document.createElement("button"); btn.className="btn"; btn.textContent="Check answers";
+  const res=document.createElement("div"); res.className="result";
+  btn.onclick=()=>{
+    if(checked){ submitModule(m.id); return; }
+    let right=0;
+    m.quiz.questions.forEach((q,qi)=>{
+      const opts=wrap.querySelectorAll(".q")[qi].querySelectorAll(".opt");
+      q.options.forEach((o,oi)=>{
+        if(o.correct){opts[oi].classList.add("correct");opts[oi].querySelector(".exp").classList.add("show");}
+        if(picked[qi]===oi && !o.correct){opts[oi].classList.add("wrong");opts[oi].querySelector(".exp").classList.add("show");}
+      });
+      if(q.options[picked[qi]]?.correct) right++;
+    });
+    checked=true;
+    const letters={}; Object.keys(picked).forEach(qi=>letters[qi]=String.fromCharCode(65+picked[qi]));
+    state["quiz"+m.id]={score:right,total:m.quiz.questions.length,picks:letters}; save();
+    res.textContent=`${right}/${m.quiz.questions.length} correct. Add any last questions in the Notes tab, then submit.`;
+    btn.textContent="Submit module for review →";
+  };
+  wrap.appendChild(btn); wrap.appendChild(res);
+  main.appendChild(wrap);
+}
+
+function mountFoot(m){
+  const f=document.createElement("div"); f.className="foot";
+  const prev=document.createElement("button"); prev.className="btn ghost"; prev.textContent="← Back";
+  prev.disabled=m.id===0; prev.onclick=()=>{state.current=m.id-1;save();render();};
+  const next=document.createElement("button"); next.className="btn ghost"; next.textContent="Next →";
+  next.disabled=!unlocked(m.id+1); next.onclick=()=>{state.current=m.id+1;save();render();};
+  f.appendChild(prev); f.appendChild(next); main.appendChild(f);
+}
+
+/* ---------- export answers ---------- */
+function exportObj(){
+  const notes=state.notes||{};
+  const answers=MODULES.filter(m=>m.quiz||state["open"+m.id]||state["quiz"+m.id]||(notes[m.id]&&notes[m.id].length)).map(m=>{
+    const opens=Array.isArray(m.quiz&&m.quiz.open)?m.quiz.open:(m.quiz&&m.quiz.open?[m.quiz.open]:[]);
+    return {
+      module:m.id, title:m.title,
+      open:opens.map((o,i)=>({q:o.stem, a:(state["open"+m.id+(i?"_"+i:"")]||"").trim()||null})),
+      quiz:state["quiz"+m.id]||null,
+      notes:(notes[m.id]||[]).map(n=>({type:n.type||"question", text:n.q, about:n.ctx||null})),
+      completed:!!state.done[m.id],
+    };
+  });
+  return {course:"lone-star eve agent course", atModule:state.current, answers};
+}
+function buildExport(){ return JSON.stringify(exportObj(),null,2); }
+function openExport(){
+  const json=buildExport();
+  const ov=document.createElement("div"); ov.id="exportOverlay";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:50;padding:24px";
+  ov.innerHTML=`<div style="background:var(--bg);border:1px solid var(--line);border-radius:16px;max-width:640px;width:100%;padding:26px 28px">
+    <div class="qk" style="font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)">Export · copy this and paste it back to your instructor</div>
+    <textarea id="exportText" readonly style="width:100%;height:280px;margin-top:14px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--ink);font-family:var(--mono);font-size:12px;padding:12px;resize:vertical">${json.replace(/</g,"&lt;")}</textarea>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn" id="copyExport">Copy to clipboard</button>
+      <button class="btn ghost" id="closeExport">Close</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
+  document.getElementById("closeExport").onclick=()=>ov.remove();
+  document.getElementById("copyExport").onclick=async()=>{
+    const ta=document.getElementById("exportText"); ta.select();
+    try{ await navigator.clipboard.writeText(ta.value); }catch(e){ document.execCommand("copy"); }
+    document.getElementById("copyExport").textContent="Copied ✓";
+  };
+}
+document.getElementById("exportBtn").onclick=()=>submitModule(state.current);
+
+/* ---------- code browser ---------- */
+const FILES=[
+  {path:"agent/agent.ts", mod:"Module 1", note:"Picks the AI model. The whole file is 5 lines."},
+  {path:"agent/instructions.md", mod:"Module 1", note:"Who the agent is and how it acts. Plain English, no code."},
+  {path:"agent/tools/list_artists.ts", mod:"Module 2", note:"The simplest tool. Start here. No input, returns the roster."},
+  {path:"agent/tools/artist_snapshot.ts", mod:"Module 2", note:"Takes one input (an artist), returns a snapshot."},
+  {path:"agent/tools/analytics_summary.ts", mod:"Module 2", note:"Finds the artist first, then reads their analytics."},
+  {path:"agent/tools/roster_overview.ts", mod:"Module 2 · you built this", note:"The 4th tool. No input. Loops every artist's snapshot and adds up the totals."},
+  {path:"agent/lib/lonestar.ts", mod:"Module 3", note:"The one file that talks to the database. The longest file."},
+];
+async function fileText(path){
+  try{
+    const r=await fetch("/code?path="+encodeURIComponent(path),{cache:"no-store"});
+    if(r.ok) return await r.text();
+  }catch(e){/* server off — fall back to the embedded snapshot */}
+  const el=document.querySelector('script[type="text/plain"][data-file="'+path+'"]');
+  return el ? el.textContent.replace(/^\n/,"") : "(file not found)";
+}
+function openCode(){
+  const ov=document.createElement("div"); ov.id="codeOverlay";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:50;padding:24px";
+  ov.innerHTML=`<div style="background:var(--bg);border:1px solid var(--line);border-radius:16px;max-width:1000px;width:100%;height:82vh;display:grid;grid-template-rows:auto 1fr;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line)">
+      <div class="qk" style="font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)">The agent's real files · read only</div>
+      <button class="btn ghost" id="closeCode">Close</button>
+    </div>
+    <div style="display:grid;grid-template-columns:270px 1fr;min-height:0">
+      <div id="fileList" style="border-right:1px solid var(--line);overflow:auto;padding:10px"></div>
+      <div style="display:flex;flex-direction:column;min-height:0">
+        <div id="fileNote" style="padding:12px 20px;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--mute)"></div>
+        <pre id="fileBody" style="margin:0;border-radius:0;flex:1;overflow:auto"></pre>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
+  document.getElementById("closeCode").onclick=()=>ov.remove();
+  const list=document.getElementById("fileList");
+  const body=document.getElementById("fileBody");
+  const note=document.getElementById("fileNote");
+  async function show(f, el){
+    [...list.children].forEach(c=>c.style.background="transparent");
+    if(el) el.style.background="var(--card)";
+    note.innerHTML=`<b style="font-family:var(--mono);color:var(--ink)">${f.path}</b> &nbsp;·&nbsp; ${f.mod} &nbsp;·&nbsp; ${f.note}`;
+    body.textContent="loading…";
+    body.textContent=await fileText(f.path);
+  }
+  FILES.forEach((f,i)=>{
+    const it=document.createElement("div");
+    it.style.cssText="padding:10px 12px;border-radius:9px;cursor:pointer;margin:3px 0";
+    const parts=f.path.split("/");
+    it.innerHTML=`<div style="font-family:var(--mono);font-size:13px">${parts.pop()}</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--mute);letter-spacing:.08em;text-transform:uppercase;margin-top:2px">${f.mod}</div>`;
+    it.onmouseenter=()=>{ if(it.dataset.sel!=="1") it.style.background="var(--pill)"; };
+    it.onmouseleave=()=>{ if(it.dataset.sel!=="1") it.style.background="transparent"; };
+    it.onclick=()=>{ [...list.children].forEach(c=>c.dataset.sel="0"); it.dataset.sel="1"; show(f,it); };
+    list.appendChild(it);
+    if(i===0){ it.dataset.sel="1"; show(f,it); }
+  });
+}
+document.getElementById("codeBtn").onclick=openCode;
+
+/* ---------- submit for review → review screen ---------- */
+let pollTimer=null;
+async function submitModule(mid){
+  const payload={ submittedModule:mid, submittedAt:new Date().toISOString(), export:exportObj() };
+  let ok=false;
+  try{
+    const r=await fetch("/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    ok=r.ok;
+  }catch(e){ ok=false; }
+  if(!ok){ // fallback: no server (opened as a file) — use copy/paste
+    openExport(); return;
+  }
+  state.pending={ mid, sinceRev:feedbackRev }; save(); render(); startPoll();
+}
+function startPoll(){
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer=setInterval(checkReview, 3000);
+}
+async function checkReview(){
+  if(!state.pending) { clearInterval(pollTimer); pollTimer=null; return; }
+  const {mid,sinceRev}=state.pending;
+  await loadFeedback();
+  if(feedbackRev>sinceRev && FEEDBACK[mid]){
+    clearInterval(pollTimer); pollTimer=null;
+    state.pending=null; state.reviewing=mid; save(); render();
+  }
+}
+
+/* ---------- questions drawer ---------- */
+state.notes ||= {};   // { moduleId: [ {q, ctx, ts} ] }
+let pendingCtx=null;
+
+const qtab=document.createElement("div");
+qtab.className="qtab";
+qtab.innerHTML=`Notes <span class="badge" id="qbadge">0</span>`;
+document.body.appendChild(qtab);
+
+let pendingType="question";
+const drawer=document.createElement("div");
+drawer.className="drawer";
+drawer.innerHTML=`
+  <div class="dh"><div><b>My notes</b><div class="sub" id="qmod">Module</div></div>
+    <button class="xx" id="qclose">×</button></div>
+  <div class="qlist" id="qlist"></div>
+  <div class="composer">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="tglx" data-type="question">? Question</button>
+      <button class="tglx" data-type="idea">💡 Idea</button>
+    </div>
+    <div class="ctxprev" id="qctx"></div>
+    <textarea id="qinput" placeholder="A question, or an idea for how you'd use this in the agent… (Enter to save, Shift+Enter for a new line)"></textarea>
+  </div>`;
+document.body.appendChild(drawer);
+function paintToggles(){ drawer.querySelectorAll(".tglx").forEach(b=>{
+  const on=b.dataset.type===pendingType;
+  b.style.cssText="flex:1;font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:8px;border-radius:9px;cursor:pointer;"+
+    (on?"background:var(--ink);color:var(--bg);border:1px solid var(--ink)":"background:transparent;color:var(--ink);border:1px solid var(--line)");
+}); }
+drawer.querySelectorAll(".tglx").forEach(b=>b.onclick=()=>{ pendingType=b.dataset.type; paintToggles(); });
+paintToggles();
+
+function openDrawer(open){ drawer.classList.toggle("open", open); if(open) document.getElementById("qinput").focus(); }
+qtab.onclick=()=>openDrawer(!drawer.classList.contains("open"));
+document.getElementById("qclose").onclick=()=>{ openDrawer(false); clearPending(); };
+function clearPending(){ pendingCtx=null; const c=document.getElementById("qctx"); c.style.display="none"; c.textContent=""; }
+
+function noteStamp(){ const d=new Date(); return d.toISOString().slice(0,16).replace("T"," "); }
+
+function addNote(){
+  const inp=document.getElementById("qinput");
+  const q=inp.value.trim(); if(!q) return;
+  const mid=state.current;
+  (state.notes[mid] ||= []).push({q, type:pendingType, ctx:pendingCtx||null, ts:noteStamp()});
+  inp.value=""; clearPending(); save(); renderNotes();
+}
+document.getElementById("qinput").addEventListener("keydown",e=>{
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); addNote(); }
+});
+
+function renderNotes(){
+  const mid=state.current, m=MODULES[mid];
+  document.getElementById("qmod").textContent=`Module ${m.num} · ${m.title}`;
+  const list=state.notes[mid]||[];
+  const total=Object.values(state.notes).reduce((n,a)=>n+a.length,0);
+  document.getElementById("qbadge").textContent=total;
+  const box=document.getElementById("qlist");
+  if(!list.length){ box.innerHTML=`<div class="qempty">No notes yet for this module.<br>Jot a question or an idea below, or <b>right-click any text</b> in the lesson to pin a note to that spot.</div>`; return; }
+  box.innerHTML="";
+  list.forEach((n,i)=>{
+    const c=document.createElement("div"); c.className="qcard";
+    const tag=n.type==="idea"?"💡 Idea":"? Question";
+    c.innerHTML=(n.ctx?`<div class="ctx">“${n.ctx}”</div>`:"")+
+      `<div style="font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:5px">${tag}</div>
+       <div class="row"><div>${n.q}</div><button class="del" title="delete">🗑</button></div>
+       <div class="sub" style="font-family:var(--mono);font-size:10px;color:var(--mute);margin-top:6px">${n.ts}</div>`;
+    c.querySelector(".del").onclick=()=>{ list.splice(i,1); save(); renderNotes(); };
+    box.appendChild(c);
+  });
+}
+
+/* right-click a passage to ask about it */
+document.getElementById("main").addEventListener("contextmenu",e=>{
+  if(!e.target.closest("main")) return;
+  const sel=(window.getSelection && window.getSelection().toString().trim())||"";
+  let ctx=sel;
+  if(!ctx){ ctx=(e.target.textContent||"").trim().replace(/\s+/g," "); }
+  if(!ctx) return;
+  e.preventDefault();
+  pendingCtx = ctx.length>140 ? ctx.slice(0,140)+"…" : ctx;
+  const c=document.getElementById("qctx"); c.textContent=`About: “${pendingCtx}”`; c.style.display="block";
+  openDrawer(true);
+});
+
+(async()=>{
+  await loadFeedback();
+  if(state.pending && feedbackRev>state.pending.sinceRev && FEEDBACK[state.pending.mid]){
+    state.reviewing=state.pending.mid; state.pending=null; save();
+  }
+  if(state.pending) startPoll();
+  render();
+})();
+</script>
+</body>
+</html>

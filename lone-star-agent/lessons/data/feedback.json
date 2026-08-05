@@ -1,0 +1,30 @@
+{
+  "rev": 5,
+  "modules": {
+    "0": {
+      "note": "Nice work getting through the mental model. One thing to sharpen from your written answer:",
+      "corrections": [
+        { "re": "Why don't you need a step to \"turn on\" a tool in eve?",
+          "say": "You wrote that the agent looks at its tools and picks one to use per message. That's true, but it's a different step. That's <b>choosing</b> a tool. The question was about <b>turning one on</b>. In eve you turn a tool on just by making the file in the <code class=\"inline\">tools/</code> folder. eve scans the folder and the file's name becomes the tool. No list to edit. So: making the file = on; the AI picking it per message = use. You described 'use.'" }
+      ]
+    },
+    "1": {
+      "note": "Good stuff. Your open answer nailed skills: on-demand, for long jobs you don't want on every call. The other half to hold onto: instructions.md is the opposite — short, always-on, for who it is and its hard rules. One heads-up: your quiz came through blank this time (submitted from the sidebar before hitting Check answers). No worries — you went 3/3 on it before.",
+      "replies": [
+        { "re": "I'd like to run a /grill-me before we build the agent, to think through the strict guardrails.",
+          "say": "Yes — and it's saved. When we reach <b>Module 5</b> (the first tool that changes real data) I'll raise the guardrails and start <code class=\"inline\">/grill-me</code> myself. You don't have to remember it." },
+        { "re": "What's the standard practice for how much instruction is enough while limiting tokens per call?",
+          "say": "Only put what's <b>always true</b> (identity, tone, hard rules), keep it to about one page, and push long or occasional how-tos into skills. Yours is ~350 words — right in the sweet spot. Shorter also means the model follows the rules more reliably." }
+      ]
+    },
+    "2": {
+      "note": "6 out of 6 on the harder quiz — excellent, including the cross-module one about a publish tool re-running. And your build-prep answer is exactly right: roster_overview needs no input, so its schema is z.object({}) — an empty shape, just like list_artists. You're ready to write it. Say \"let's build\" in the terminal and we'll do it together.",
+      "replies": [
+        { "re": "Is listArtists() a real, written function, or just an idea the agent uses?",
+          "say": "Real, written code — not an idea. It lives in your database file, <code class=\"inline\">agent/lib/lonestar.ts</code>. Open <b>Browse the code</b> → that file and search for <code class=\"inline\">export async function listArtists</code>. You'll see the actual query that asks Supabase for every artist. The tool file just <code class=\"inline\">import</code>s that function and calls it. So the chain is: tool → calls listArtists() → talks to the database → returns rows. The AI never writes that function; it only decides to call the tool that uses it." },
+        { "re": "I don't see ctx in the code.",
+          "say": "Correct — it's not there, on purpose. <code class=\"inline\">execute</code> can take a <b>second</b> argument: <code class=\"inline\">async execute(input, ctx) { ... }</code>. That <code class=\"inline\">ctx</code> is a toolbox eve would hand you (who's asking, a stop signal, the sandbox, etc.). Your three tools only need the <code class=\"inline\">input</code>, so we left the second argument off entirely. It's optional — you add <code class=\"inline\">ctx</code> only when a tool actually needs something from it. We'll likely use it later." }
+      ]
+    }
+  }
+}
