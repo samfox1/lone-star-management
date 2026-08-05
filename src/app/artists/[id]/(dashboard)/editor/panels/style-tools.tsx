@@ -7,8 +7,7 @@ import {
   buildStyleControls,
   readStyleValue,
   type SiteStyleOptions,
-  type StyleControl,
-} from '@/lib/site-editor/style-controls'
+  type StyleControl, sliderSteps } from '@/lib/site-editor/style-controls'
 import {
   SectionRow,
   ControlRow,
@@ -61,24 +60,50 @@ export function StyleControlRow({
     )
   }
   if (control.kind === 'slider') {
-    // Map the current utility to its step index; an off-scale value (or none) falls to the
-    // default `''` step. Dragging emits the step's class through the same onChange.
-    let idx = control.steps.findIndex((s) => s.value === current)
-    if (idx < 0) idx = control.steps.findIndex((s) => s.value === '')
-    if (idx < 0) idx = 0
+    // THE DEFAULT IS NOT A STEP ON THE SCALE.
+    //
+    // It used to be steps[0], which put "whatever the site already uses" at the far LEFT
+    // of an otherwise ascending run. That made the slider non-monotonic and, for any
+    // region whose own size is large, actively backwards: skeen's hero wordmark is
+    // text-[clamp(4rem,18vw,11rem)], so the handle started at the left showing that, and
+    // the first nudge RIGHT jumped to text-sm. Sam reported it as "I move them to the
+    // right and they get smaller", which is exactly what it did.
+    //
+    // The scale is now only real values, low → high. An untouched control sits in the
+    // MIDDLE and reads "Default": mid-scale is honest about "unset" in a way that either
+    // end is not, and it leaves room to drag both ways. Clearing is an explicit button
+    // rather than a hidden position at one end.
+    const steps = sliderSteps(control)
+    const canReset = steps.length !== control.steps.length
+    const currentIdx = steps.findIndex((s) => s.value === current)
+    const isSet = currentIdx >= 0
+    const idx = isSet ? currentIdx : Math.floor((steps.length - 1) / 2)
     return (
       <div className="py-1.5">
         <div className="flex items-center justify-between">
           <span className={CONTROL_LABEL}>{control.label}</span>
-          <span className="font-space text-[11px] text-ink-muted">{control.steps[idx].label}</span>
+          <span className="flex items-center gap-2">
+            <span className="font-space text-[11px] text-ink-muted">
+              {isSet ? steps[idx].label : 'Default'}
+            </span>
+            {canReset && isSet && (
+              <button
+                type="button"
+                onClick={() => onChange('')}
+                className="font-space text-[11px] text-ink-muted underline underline-offset-2 hover:text-ink"
+              >
+                Reset
+              </button>
+            )}
+          </span>
         </div>
         <input
           type="range"
           min={0}
-          max={control.steps.length - 1}
+          max={steps.length - 1}
           value={idx}
           aria-label={aria}
-          onChange={(e) => onChange(control.steps[Number(e.target.value)].value)}
+          onChange={(e) => onChange(steps[Number(e.target.value)].value)}
           className="mt-1 w-full accent-ink"
         />
       </div>

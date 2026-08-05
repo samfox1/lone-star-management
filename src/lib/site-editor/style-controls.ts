@@ -41,7 +41,25 @@ export type StyleControl =
   /** A slider over ORDERED steps (size, transparency). Reads/applies exactly like a select —
    *  one owned utility swapped, the rest preserved — but the manager drags a continuous scale
    *  instead of picking from a menu. `steps` runs low→high; the `''` step is the default. */
-  | { id: string; label: string; kind: 'slider'; steps: StyleOption[]; owns: (token: string) => boolean }
+  | {
+      id: string
+      label: string
+      kind: 'slider'
+      steps: StyleOption[]
+      /**
+       * The `''` step is NOT a point on this scale — it means "whatever the site already
+       * uses", which is an unknown size, not the smallest one. True for text size and
+       * weight; false (default) for border/radius/shadow, where `''` genuinely IS the low
+       * end (0px, square, no shadow), and for scale/opacity/speed, where it is the neutral
+       * value sitting in the MIDDLE of the run.
+       *
+       * Getting this wrong in either direction is a live bug: leaving the default on an
+       * ascending scale made dragging RIGHT shrink the text, and filtering it off a scale
+       * that owns it deletes that scale's zero.
+       */
+      defaultOffScale?: boolean
+      owns: (token: string) => boolean
+    }
   /** A full colour palette (hue slider + saturation/brightness square + hex field). The owned
    *  utility is an arbitrary `border-[#hex]`, so the value is a free hex rather than one of a
    *  fixed option list — which is why this kind carries no `options`/`steps`. */
@@ -247,6 +265,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     label: 'Size',
     kind: 'slider',
     steps: [DEFAULT, ...SIZE_OPTIONS],
+    defaultOffScale: true,
     owns: (t) => SIZES.includes(textSuffix(t)),
   })
   controls.push({
@@ -254,9 +273,27 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     label: 'Thickness',
     kind: 'slider',
     steps: [DEFAULT, ...WEIGHT_OPTIONS],
+    defaultOffScale: true,
     owns: (t) => WEIGHTS.includes(fontSuffix(t)),
   })
   return controls
+}
+
+/**
+ * The steps a slider actually RENDERS: the real values, low → high, with the `''` default
+ * removed.
+ *
+ * The default is not a point on the scale. Leaving it in as steps[0] put "whatever the
+ * site already uses" at the far left of an ascending run, which for a large region (a hero
+ * wordmark at text-[clamp(4rem,18vw,11rem)]) meant dragging RIGHT made the text smaller.
+ *
+ * Exported because the UI and its tests must agree on the indices. They did not: the panel
+ * filtered the default out while the tests indexed into the raw `steps`, so every test
+ * index was off by one.
+ */
+export function sliderSteps(control: StyleControl): StyleOption[] {
+  if (control.kind !== 'slider') return []
+  return control.defaultOffScale ? control.steps.filter((s) => s.value !== '') : control.steps
 }
 
 export function buildItemStyleControls(): StyleControl[] {

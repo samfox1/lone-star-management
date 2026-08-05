@@ -10,8 +10,8 @@
  * the value the inspector holds.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { buildTextItemStyleControls } from '@/lib/site-editor/style-controls'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { buildTextItemStyleControls, sliderSteps } from '@/lib/site-editor/style-controls'
 import { TextTools } from '@/app/artists/[id]/(dashboard)/editor/panels/text-tools'
 import { TextFieldEditor } from '@/app/artists/[id]/(dashboard)/editor/text-field-editor'
 import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
@@ -122,6 +122,58 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(screen.getByDisplayValue('book@example.com')).toBeTruthy()
   })
 
+  it('the size scale runs low → high, with the default OFF the scale', () => {
+    // The bug: the `''` default was steps[0], so the slider's far-left position meant
+    // "whatever the site already uses". For a region whose own size is large — skeen's
+    // hero wordmark is text-[clamp(4rem,18vw,11rem)] — the handle started at the left
+    // showing that, and the first nudge RIGHT dropped it to text-sm. Reported as
+    // "I move them to the right and they get smaller", which is exactly what it did.
+    const size = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
+    const steps = sliderSteps(size)
+    expect(steps.some((s) => s.value === '')).toBe(false)
+    expect(steps.map((s) => s.value)).toEqual([
+      'text-sm',
+      'text-lg',
+      'text-2xl',
+      'text-4xl',
+      'text-6xl',
+    ])
+  })
+
+  it('an untouched slider sits MID-scale and reads Default, not at an end', () => {
+    // Either end would be a lie about an unset control, and the left end was the one that
+    // made dragging right look like shrinking.
+    editor(styled, { hero_title: '' })
+    const size = screen.getByLabelText('Hero title Size') as HTMLInputElement
+    const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
+    expect(size.value).toBe(String(Math.floor((steps.length - 1) / 2)))
+    // Scoped to the Size row: the Font <select> carries a "Default" option too, so a bare
+    // getByText finds two and tells you nothing about this control.
+    // Scoped to this slider's row: the Font <select> carries a "Default" option too, so a
+    // bare getByText matches two and proves nothing about this control.
+    expect(within(size.parentElement!).getByText('Default')).toBeTruthy()
+  })
+
+  it('offers Reset only once a size is actually set', () => {
+    // Clearing used to be a hidden position at one end of the scale, which is how a drag
+    // could blow the size away by accident. It is an explicit button now.
+    //
+    // Driven from the INITIAL styles rather than by dragging: this is a test about the
+    // conditional, and going through a staged change would silently also be testing how
+    // the harness propagates staged state back into `current`.
+    editor(styled, { hero_title: '' })
+    const unset = screen.getByLabelText('Hero title Size') as HTMLInputElement
+    expect(within(unset.parentElement!).queryByText('Reset')).toBeNull()
+    cleanup()
+
+    editor(styled, { hero_title: 'text-2xl' })
+    const set = screen.getByLabelText('Hero title Size') as HTMLInputElement
+    expect(within(set.parentElement!).getByText('Reset')).toBeTruthy()
+    // And the handle sits ON that value, not at an end.
+    const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
+    expect(set.value).toBe(String(steps.findIndex((s) => s.value === 'text-2xl')))
+  })
+
   it('styling reports the REGION key, preserving classes the controls do not own', () => {
     // The region already carries a colour this editor does not offer. Changing the size
     // must not drop it — each control replaces only its own utility.
@@ -130,8 +182,9 @@ describe('TextFieldEditor — one field, full panel', () => {
     // than hardcoded, so re-granulating the scale can't quietly make this test assert
     // some other size.
     const sizeControl = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
-    const steps = sizeControl.kind === 'slider' ? sizeControl.steps : []
-    const idx = steps.findIndex((s) => s.value === 'text-4xl')
+    // sliderSteps, not .steps: the panel renders the scale WITHOUT the `''` default, so
+    // indexing the raw list picked the size one step along from the intended one.
+    const idx = sliderSteps(sizeControl).findIndex((s) => s.value === 'text-4xl')
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(idx) } })
 
     expect(onStyle).toHaveBeenCalledTimes(1)
@@ -151,8 +204,9 @@ describe('TextFieldEditor — one field, full panel', () => {
     editor(styled, { hero_title: '' })
     const size = screen.getByLabelText('Hero title Size') as HTMLInputElement
     const control = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
-    const steps = control.kind === 'slider' ? control.steps : []
-    const target = String(steps.findIndex((s) => s.value === 'text-4xl'))
+    // sliderSteps, not control.steps: the panel renders the scale WITHOUT the `''`
+    // default, so indexing the raw list was off by one against what is on screen.
+    const target = String(sliderSteps(control).findIndex((s) => s.value === 'text-4xl'))
 
     fireEvent.change(size, { target: { value: target } })
 
@@ -168,8 +222,8 @@ describe('TextFieldEditor — one field, full panel', () => {
     const controls = buildTextItemStyleControls(OPTIONS)
     const sizeSteps = controls.find((c) => c.id === 'size')!
     const weightSteps = controls.find((c) => c.id === 'weight')!
-    const sIdx = sizeSteps.kind === 'slider' ? sizeSteps.steps.findIndex((s) => s.value === 'text-4xl') : 0
-    const wIdx = weightSteps.kind === 'slider' ? weightSteps.steps.findIndex((s) => s.value === 'font-bold') : 0
+    const sIdx = sliderSteps(sizeSteps).findIndex((s) => s.value === 'text-4xl')
+    const wIdx = sliderSteps(weightSteps).findIndex((s) => s.value === 'font-bold')
 
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(sIdx) } })
     fireEvent.change(screen.getByLabelText('Hero title Thickness'), { target: { value: String(wIdx) } })
