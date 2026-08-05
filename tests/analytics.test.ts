@@ -2,6 +2,21 @@
  * PHASE 5 (Analytics) — record_event behavior: resolves the artist from the slug,
  * stores a typed event (+ optional target, no PII), and ignores junk (unknown
  * type or unknown slug) rather than erroring.
+ *
+ * EXACT counts, not `>=`. Every test here owns its rows via a unique `p_target`
+ * (or a unique entity id), so the assertion is `toBe(n)`. The `>=` this file used
+ * to carry could not fail: it passed whether record_event inserted one row or ten,
+ * so a door that DOUBLE-COUNTED every event — the plausible regression, since the
+ * insert sits behind a burst cap and a type/slug guard that a rewrite has to
+ * re-thread — would have shipped green.
+ *
+ * `analytics_summary` groups by type with no target filter, so it can't be scoped
+ * that way; it is scoped by TIME instead, from the DB's own clock (`sinceAfter`) —
+ * never `Date.now()`, which is a different clock than the one stamping created_at.
+ *
+ * Teardown removes only the targets and entity ids this file created. It used to
+ * delete every analytics event for artist A, which destroys real history and other
+ * suites' fixtures on the shared hosted project.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -12,85 +27,130 @@ let asA: SupabaseClient
 const svc = serviceClient()
 const anon = anonClient()
 
+/** Every target / entity id this file caused to exist. Nothing else is deleted. */
+const targets: string[] = []
+const entities: string[] = []
+
+/** A target string no other test (or real visitor) can collide with. */
+function ownTarget(name: string): string {
+  const t = `test-${name}-${crypto.randomUUID()}`
+  targets.push(t)
+  return t
+}
+
+function ownEntity(): string {
+  const id = crypto.randomUUID()
+  entities.push(id)
+  return id
+}
+
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
 })
 
 afterAll(async () => {
-  await svc.from('analytics_events').delete().eq('artist_id', artistA)
+  if (targets.length) await svc.from('analytics_events').delete().in('target', targets)
+  if (entities.length) await svc.from('analytics_events').delete().in('entity_id', entities)
 })
 
-async function eventsForA(): Promise<{ type: string; target: string | null }[]> {
-  const { data } = await svc.from('analytics_events').select('type, target').eq('artist_id', artistA)
+/** Rows carrying one of this file's targets — i.e. rows the calling test owns. */
+async function rowsFor(target: string): Promise<{ type: string; target: string | null }[]> {
+  const { data } = await svc.from('analytics_events').select('type, target').eq('target', target)
   return data ?? []
 }
 
+/**
+ * The created_at of the row that target owns — the DB's own clock, used as the
+ * `p_since` boundary. A client-side `new Date()` is a different clock: any skew
+ * either drops the test's own rows out of the window or lets earlier ones in.
+ */
+async function sinceAfter(target: string): Promise<string> {
+  const { data } = await svc
+    .from('analytics_events')
+    .select('created_at')
+    .eq('target', target)
+    .order('created_at')
+    .limit(1)
+    .single()
+  return data!.created_at as string
+}
+
 describe('record_event', () => {
-  it('records a typed event with an optional target', async () => {
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: 'spotify' })
-    const events = await eventsForA()
-    expect(events.some((e) => e.type === 'link_click' && e.target === 'spotify')).toBe(true)
+  it('records exactly one typed event with its target', async () => {
+    const target = ownTarget('link')
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: target })
+    // Exactly one: a door that inserted twice would still satisfy `some(...)`.
+    expect(await rowsFor(target)).toEqual([{ type: 'link_click', target }])
   })
 
   it('ignores an unknown event type (no row, no error)', async () => {
-    const before = (await eventsForA()).length
-    const { error } = await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'definitely_not_a_type' })
+    const target = ownTarget('badtype')
+    const { error } = await anon.rpc('record_event', {
+      p_slug: SEED.artistASlug,
+      p_type: 'definitely_not_a_type',
+      p_target: target,
+    })
     expect(error).toBeNull()
-    expect((await eventsForA()).length).toBe(before)
+    expect(await rowsFor(target)).toEqual([])
   })
 
-  it('ignores an unknown slug (records nothing)', async () => {
-    const before = (await eventsForA()).length
-    await anon.rpc('record_event', { p_slug: 'no-such-artist-slug', p_type: 'view' })
-    expect((await eventsForA()).length).toBe(before)
+  it('ignores an unknown slug (records nothing, for any artist)', async () => {
+    const target = ownTarget('badslug')
+    await anon.rpc('record_event', { p_slug: 'no-such-artist-slug', p_type: 'view', p_target: target })
+    // Unscoped by artist: an unknown slug must not land the row on SOME other artist.
+    expect(await rowsFor(target)).toEqual([])
   })
 
   it('analytics_summary returns exact owner-read counts grouped by type', async () => {
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view' })
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view' })
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play' })
+    const target = ownTarget('summary')
+    // The first event is also the window boundary, so the window holds this test's
+    // rows and nothing earlier.
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view', p_target: target })
+    const since = await sinceAfter(target)
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view', p_target: target })
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target })
 
-    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
     const { data } = await asA.rpc('analytics_summary', { p_artist_id: artistA, p_since: since })
     const counts = Object.fromEntries(
       ((data ?? []) as { type: string; count: number }[]).map((r) => [r.type, Number(r.count)]),
     )
-    expect(counts.view).toBeGreaterThanOrEqual(2)
-    expect(counts.play).toBeGreaterThanOrEqual(1)
+    expect(counts.view).toBe(2)
+    expect(counts.play).toBe(1)
   })
 })
 
 describe('per-item attribution (record_event entity + analytics_by_entity)', () => {
-  const VIDEO = '11111111-1111-1111-1111-111111111111'
-  const MERCH = '22222222-2222-2222-2222-222222222222'
-
-  it('stores entity_id + entity_type and accepts the new video_click type', async () => {
+  it('stores entity_id + entity_type exactly once and accepts the new video_click type', async () => {
+    const video = ownEntity()
     await anon.rpc('record_event', {
       p_slug: SEED.artistASlug,
       p_type: 'video_click',
-      p_target: 'My Video',
-      p_entity_id: VIDEO,
+      p_target: ownTarget('video'),
+      p_entity_id: video,
       p_entity_type: 'video',
     })
     const { data } = await svc
       .from('analytics_events')
       .select('type, entity_id, entity_type')
       .eq('artist_id', artistA)
-      .eq('entity_id', VIDEO)
-    expect((data ?? []).some((e) => e.type === 'video_click' && e.entity_type === 'video')).toBe(true)
+      .eq('entity_id', video)
+    expect(data).toEqual([{ type: 'video_click', entity_id: video, entity_type: 'video' }])
   })
 
-  it('analytics_by_entity groups counts per (entity, type) for the owner', async () => {
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_entity_id: MERCH, p_entity_type: 'merch' })
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_entity_id: MERCH, p_entity_type: 'merch' })
+  it('analytics_by_entity groups exact counts per (entity, type) for the owner', async () => {
+    const merch = ownEntity()
+    const target = ownTarget('merch')
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_target: target, p_entity_id: merch, p_entity_type: 'merch' })
+    const since = await sinceAfter(target)
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_target: target, p_entity_id: merch, p_entity_type: 'merch' })
 
-    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
     const { data } = await asA.rpc('analytics_by_entity', { p_artist_id: artistA, p_since: since })
-    const row = ((data ?? []) as { entity_id: string; type: string; count: number }[]).find(
-      (r) => r.entity_id === MERCH && r.type === 'buy_click',
+    const rows = ((data ?? []) as { entity_id: string; type: string; count: number }[]).filter(
+      (r) => r.entity_id === merch,
     )
-    expect(Number(row?.count)).toBeGreaterThanOrEqual(2)
+    // One row, one type, exactly two events — a double-counting insert reads as 4.
+    expect(rows.map((r) => ({ type: r.type, count: Number(r.count) }))).toEqual([{ type: 'buy_click', count: 2 }])
   })
 
   it('CRITICAL: anon gets zero rows from analytics_by_entity (security invoker + RLS)', async () => {
@@ -101,19 +161,23 @@ describe('per-item attribution (record_event entity + analytics_by_entity)', () 
     expect((data ?? []).length).toBe(0)
   })
 
-  it('analytics_entity_daily sums daily counts across the given entity ids (owner)', async () => {
-    const A = '44444444-4444-4444-4444-444444444444'
-    const B = '55555555-5555-5555-5555-555555555555'
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_entity_id: A, p_entity_type: 'track' })
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_entity_id: B, p_entity_type: 'track' })
+  it('analytics_entity_daily sums exactly the given entity ids (owner)', async () => {
+    const a = ownEntity()
+    const b = ownEntity()
+    const other = ownEntity()
+    const target = ownTarget('daily')
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target, p_entity_id: a, p_entity_type: 'track' })
+    const since = await sinceAfter(target)
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: target, p_entity_id: b, p_entity_type: 'track' })
+    // Not in p_entity_ids: pins that the filter narrows, so a dropped WHERE reads as 3.
+    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target, p_entity_id: other, p_entity_type: 'track' })
 
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data } = await asA.rpc('analytics_entity_daily', { p_artist_id: artistA, p_entity_ids: [A, B], p_since: since })
+    const { data } = await asA.rpc('analytics_entity_daily', { p_artist_id: artistA, p_entity_ids: [a, b], p_since: since })
     const total = ((data ?? []) as { day: string; count: number }[]).reduce((n, r) => n + Number(r.count), 0)
-    expect(total).toBeGreaterThanOrEqual(2) // both entities' events, bucketed by day
+    expect(total).toBe(2)
 
     // anon fails RLS → nothing.
-    const anonRes = await anon.rpc('analytics_entity_daily', { p_artist_id: artistA, p_entity_ids: [A, B], p_since: since })
+    const anonRes = await anon.rpc('analytics_entity_daily', { p_artist_id: artistA, p_entity_ids: [a, b], p_since: since })
     expect((anonRes.data ?? []).length).toBe(0)
   })
 })

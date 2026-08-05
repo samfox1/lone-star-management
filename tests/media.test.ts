@@ -66,7 +66,13 @@ describe('storage path isolation', () => {
     expect(error).toBeNull()
   })
 
-  it('CRITICAL: the media bucket rejects a non-image/video mime (no HTML/SVG XSS)', async () => {
+  // Named "no HTML/SVG XSS" while only ever uploading text/html — the name claimed
+  // coverage this assertion does not have. SVG is the mime the bucket-caps migration
+  // (20260708140000) actually singles out, and it is pinned in
+  // tests/brand.isolation.test.ts with the STRONGER actor (service role: if even the
+  // god key is refused, no session can do better) against this same bucket, so
+  // re-asserting it here would be a pure duplicate. This one owns text/html only.
+  it('CRITICAL: the media bucket rejects text/html (stored XSS on a public bucket)', async () => {
     const { error } = await asA.storage
       .from('media')
       .upload(`${artistA}/hero-videos/xss.html`, Buffer.from('<script>alert(1)</script>'), {

@@ -43,4 +43,31 @@ describe('FilterBar', () => {
     render(<FilterBar chips={CHIPS} active="all" onChip={vi.fn()} />)
     expect(screen.queryByText('A–Z')).not.toBeInTheDocument()
   })
+
+  // The `trailing` slot carries every ACTION on a dashboard grid — Import from Drive,
+  // Sync, the one + button. Dropping `{trailing}` from the render silently removes all
+  // of them from the toolbar while the chips and sort still look right. The consumer
+  // tests notice (music-browser.test.tsx), but they report it as "no Sync button",
+  // which points at MusicBrowser rather than at the slot that stopped rendering.
+  it('renders both slots: leading before the chips, trailing before the sort control', () => {
+    render(
+      <FilterBar
+        leading={<span>LEAD</span>}
+        trailing={<button type="button">Import</button>}
+        chips={CHIPS}
+        active="all"
+        onChip={vi.fn()}
+        sortOptions={SORTS}
+        sort="az"
+        onSort={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument()
+    expect(screen.getByText('LEAD')).toBeInTheDocument()
+  })
+
+  it('renders the trailing slot even with no sort control (the slot is not sort-gated)', () => {
+    render(<FilterBar chips={CHIPS} active="all" onChip={vi.fn()} trailing={<button type="button">Import</button>} />)
+    expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument()
+  })
 })

@@ -9,7 +9,10 @@
  *   - and a non-owner can't get another tenant's working site at all.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { ArtistSite } from '@/components/artist-site'
 import { getPublishedSite, getWorkingSite } from '@/lib/site'
 import { createTrack } from '@/lib/tracks'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
@@ -65,5 +68,66 @@ describe('getPublishedSite (public)', () => {
   it('returns null for an unknown slug', async () => {
     const site = await getPublishedSite(anonClient(), 'no-such-slug-m4')
     expect(site).toBeNull()
+  })
+
+  it('CRITICAL: a BROKEN door throws — it must never read as "no such artist"', async () => {
+    // null and thrown mean opposite things to /[slug]: null renders notFound(). If an rpc
+    // error swallowed to null, an unapplied migration, a revoked grant or a statement
+    // timeout would serve every fan a 404 for a live artist, indistinguishable from a
+    // deleted one and silent in the logs.
+    //
+    // A REAL PostgREST failure, not a stub: a client pointed at a schema the API does not
+    // expose gets the same "this function is not reachable" response as a missing door.
+    const broken = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false }, db: { schema: 'no_such_schema' } },
+    ) as unknown as SupabaseClient
+
+    await expect(getPublishedSite(broken, SEED.artistASlug)).rejects.toThrow(/schema/i)
+  })
+})
+
+/**
+ * A revision is a FROZEN snapshot of the row as it looked on the day it was published.
+ * Columns added since (featured_artists, album_name, source/spotify_id, released) are
+ * simply absent from an older one, and nothing republishes an artist on deploy — the old
+ * shape is what the public door serves until the manager next hits Publish.
+ */
+describe('legacy revisions — a snapshot published before a column existed', () => {
+  const LEGACY_TITLE = 'M4 legacy-shape track'
+  const legacyId = '00000000-0000-4000-8000-00000000a17e'
+
+  beforeAll(async () => {
+    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', legacyId)
+    // Written with the service client BECAUSE it is deliberately malformed by today's
+    // rules: publishContent could not produce this shape any more. No `tracks` row backs
+    // it, which is itself the realistic case (published, later deleted from the library).
+    await svc.from('revisions').insert({
+      artist_id: artistA,
+      entity_type: 'track',
+      entity_id: legacyId,
+      data: { id: legacyId, title: LEGACY_TITLE, sort_order: 9000, cover_url: null, stream_url: null },
+    })
+  })
+
+  afterAll(async () => {
+    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', legacyId)
+  })
+
+  it('CRITICAL: the old shape reaches the door and still renders', async () => {
+    const site = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const track = site!.tracks.find((t) => t.id === legacyId)
+
+    // The door serves `data` wholesale, so the keys really are missing downstream.
+    expect(track).toBeDefined()
+    expect(track).not.toHaveProperty('featured_artists')
+    expect(track).not.toHaveProperty('album_name')
+
+    // The template reads `track.featured_artists ?? []`. Without that fallback this is a
+    // TypeError inside a server component — the whole public site 500s, for every fan,
+    // because of one old row.
+    const html = renderToStaticMarkup(createElement(ArtistSite, { data: site! }))
+    expect(html).toContain(LEGACY_TITLE)
   })
 })

@@ -8,7 +8,6 @@
  * Kept free of React so server actions can import it.
  */
 import type { SiteContent } from '@/lib/site'
-import { safeHref } from '@/lib/url'
 
 export type FieldType = 'text' | 'email'
 
@@ -94,18 +93,21 @@ export function fieldValue(content: SiteContent, template: string, key: string):
 }
 
 /**
- * A SAFE href for an email/url-typed field, or undefined (caller renders no
- * link). The XSS guard for kv site text: a stored `javascript:` never becomes a
- * live link. Text fields don't use this — they render as React-escaped text.
+ * A SAFE href for a link-bearing site-text field, or undefined (caller renders no
+ * link). The XSS guard for kv site text: a stored `javascript:` never becomes a live
+ * link.
+ *
+ * EMAIL is the only link-bearing type. Text fields never reach here — they render as
+ * React-escaped text, not hrefs — and there is no url-typed TEMPLATE_FIELDS entry. A
+ * `safeHref` fallthrough for one lived here and was unreachable: the only value ever
+ * passed in is booking_email, and the SEO_FIELDS url (og_image) is not in
+ * TEMPLATE_FIELDS at all, so it could never resolve here (lib/seo.ts sanitizes it
+ * directly). Adding a url-typed field means adding its safeHref branch back here first.
  */
 export function fieldHref(content: SiteContent, template: string, key: string): string | undefined {
   const field = TEMPLATE_FIELDS[template]?.find((f) => f.key === key)
-  if (!field) return undefined
+  if (field?.type !== 'email') return undefined
   const value = fieldValue(content, template, key)
-  if (!value) return undefined
-  if (field.type === 'email') {
-    // Only a plausible address becomes a mailto; a scheme payload renders no link.
-    return acceptsValue(field, value) ? `mailto:${value}` : undefined
-  }
-  return safeHref(value)
+  // Only a plausible address becomes a mailto; a scheme payload renders no link.
+  return value && acceptsValue(field, value) ? `mailto:${value}` : undefined
 }

@@ -51,8 +51,13 @@ describe('video hero slot', () => {
   })
 
   it('rejects an unknown role at the DB (the CHECK guards junk)', async () => {
+    // Named, not just "some error". `not.toBeNull()` is satisfied by an RLS denial, a
+    // renamed column (PGRST204) or a network blip just as well as by the constraint, so
+    // it stays green while the thing it claims to test is gone — the CHECK could be
+    // replaced by a permissions mistake and nothing here would notice.
     const bad = await asA.from('videos').update({ site_role: 'hero_diagonal' }).eq('id', id).eq('artist_id', artistA)
-    expect(bad.error).not.toBeNull()
+    expect(bad.error?.code).toBe('23514') // check_violation
+    expect(bad.error?.message).toContain('videos_site_role_check')
   })
 
   it('clearing the role takes it off the site', async () => {

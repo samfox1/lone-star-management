@@ -53,14 +53,23 @@ describe('region helpers — emit marker attrs only in edit mode', () => {
   })
 })
 
-describe('manifest — style regions', () => {
-  it('built-in templates ship an (empty) styles list', () => {
-    // Nothing in the built-in DOM is style-tagged yet, so the editor's Style panel
-    // shows its empty state for them. A CUSTOM site's regions never come from here —
-    // it posts its own edit-list on `ready` (SITE_STYLING_PLAN.md D-D), which is why
-    // the manifest-side style lookups had no production caller and were removed.
-    expect(MANIFESTS.classic.styles).toEqual([])
-    expect(MANIFESTS.cinematic.styles).toEqual([])
+describe('manifest — style + link regions', () => {
+  it('every manifest declares both region lists, and each region is addressable', () => {
+    // editor-shell reads `manifest.styles` straight into the Style panel and the editor
+    // saves by region KEY, so a missing list is a crash and a duplicate key makes two
+    // regions fight over one `site_styles` row. Built-in templates declare none today
+    // (their DOM isn't style-tagged; a CUSTOM site posts its own edit-list on `ready`,
+    // SITE_STYLING_PLAN.md D-D) — this holds either way.
+    for (const m of Object.values(MANIFESTS) as TemplateManifest[]) {
+      expect(Array.isArray(m.styles), `${m.template} styles`).toBe(true)
+      expect(Array.isArray(m.links), `${m.template} links`).toBe(true)
+      for (const r of [...m.styles, ...m.links]) {
+        expect(r.key, `${m.template} region key`).toMatch(/^[A-Za-z0-9_]+$/)
+        expect(r.label.length, `${m.template} ${r.key} label`).toBeGreaterThan(0)
+      }
+      const keys = m.styles.map((r) => r.key)
+      expect(new Set(keys).size).toBe(keys.length)
+    }
   })
 })
 
@@ -142,8 +151,10 @@ describe('bridge — versioned, source-discriminated guards', () => {
     expect(isFrameMessage(msg)).toBe(false) // wrong source
   })
 
-  it('is at version 2 and carries the style + data-injection messages', () => {
-    expect(BRIDGE_VERSION).toBe(2)
+  it('carries the style + data-injection messages', () => {
+    // No assertion on the NUMBER: pinning it fails on every legitimate protocol bump
+    // while proving nothing about the wire. What the version has to DO — accept older
+    // senders, refuse newer — is the skeen-mirror rule, covered in site-editor-bridge.
     const style = editorMessage({ type: 'apply-style', key: 'hero_wordmark', className: 'font-momo' })
     expect(isEditorMessage(style)).toBe(true)
     const select = frameMessage({ type: 'select', target: { kind: 'style', key: 'hero_wordmark' }, rect: { x: 0, y: 0, width: 1, height: 1 } })

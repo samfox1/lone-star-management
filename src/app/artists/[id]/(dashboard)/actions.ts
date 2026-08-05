@@ -11,6 +11,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { callerOwns } from './_owns'
 import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
 import { placeInSlot } from '@/lib/site-editor/slots'
@@ -1341,6 +1342,11 @@ async function driveFolderFor(artistId: string): Promise<{ folderId: string } | 
 
 /** Save (or clear) the artist's Drive folder — accepts a pasted share link or a bare id. */
 export async function saveDriveFolderAction(artistId: string, formData: FormData): Promise<{ error?: string }> {
+  // The write underneath is an RLS-scoped UPDATE, which matches zero rows for a
+  // non-manager and returns NO error — so without this the action answers `{}` and a
+  // rejected save is indistinguishable from a successful one. Same wording as
+  // driveFolderFor, so every Drive action fails the same way. See _owns.ts.
+  if (!(await callerOwns(await createClient(), artistId))) return { error: 'Artist not found.' }
   const raw = String(formData.get('drive_folder_id') ?? '').trim()
   if (!raw) return saveArtistField(artistId, 'drive_folder_id', formData) // blank clears
   const folderId = parseDriveFolderId(raw)

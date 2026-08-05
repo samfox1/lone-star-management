@@ -7,6 +7,29 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+// Written via RegExp so the control-char range stays legible as escapes.
+const CONTROL_CHAR = new RegExp('[\\u0000-\\u001f\\u007f]')
+
+/**
+ * `custom_site_url` as a USABLE redirect target, or null.
+ *
+ * The column is manager-supplied free text and `/[slug]` hands it straight to
+ * `permanentRedirect` — a PUBLIC, unauthenticated route. So an unchecked value is an
+ * arbitrary-scheme Location on a fan-facing URL, and a 308 at that: browsers cache it,
+ * so one bad save outlives the fix. http(s) only — deliberately stricter than safeHref,
+ * whose mailto:/tel: are legitimate links but not places a site can be hosted. A
+ * relative or protocol-relative value is refused for the same reason: neither names a
+ * host to send the fan to. Control chars are refused outright — this string becomes a
+ * response header, and a CR/LF in it splits the response.
+ */
+function redirectTarget(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (CONTROL_CHAR.test(trimmed)) return null
+  // `[^\s/]` after the slashes demands a host, so `https:///x` names nowhere to go.
+  return /^https?:\/\/[^\s/]\S*$/i.test(trimmed) ? trimmed : null
+}
+
 /**
  * The external URL a custom-site artist redirects to / is embedded from, or null
  * when the artist uses a built-in template.
@@ -23,10 +46,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  */
 export async function customSiteUrl(supabase: SupabaseClient, slug: string): Promise<string | null> {
   const { data } = await supabase.rpc('public_custom_site', { p_slug: slug })
-  return (data as string | null) ?? null
+  // The door is SECURITY DEFINER and returns the column verbatim, so the scheme check
+  // belongs on this side of it — see redirectTarget.
+  return redirectTarget(data as string | null)
 }
 
-/** Whether a `{ site_kind, custom_site_url }` row is a usable custom site. */
+/** Whether a `{ site_kind, custom_site_url }` row is a usable custom site — same
+ *  http(s) rule the public redirect applies, so the manager-side editor and the fan-side
+ *  route agree on what counts as a site. */
 export function isCustom(row: { site_kind?: string | null; custom_site_url?: string | null } | null): boolean {
-  return !!row && row.site_kind === 'custom' && !!row.custom_site_url
+  return !!row && row.site_kind === 'custom' && redirectTarget(row.custom_site_url) !== null
 }

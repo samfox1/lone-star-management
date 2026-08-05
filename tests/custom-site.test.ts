@@ -9,6 +9,32 @@ describe('isCustom', () => {
     expect(isCustom({ site_kind: 'template', custom_site_url: 'https://x.dev' })).toBe(false)
     expect(isCustom(null)).toBe(false)
   })
+
+  it('CRITICAL: only http(s) counts as a site', () => {
+    // `/[slug]` hands this value straight to permanentRedirect, on a PUBLIC route with no
+    // login. custom_site_url is manager-supplied free text, so anything that is not a web
+    // address here is an arbitrary-scheme Location on a fan-facing URL: a stored open
+    // redirect at best, `javascript:` navigation at worst.
+    for (const url of [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)',
+      '  javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'file:///etc/passwd',
+      'mailto:book@skeen.fm', // a real link, but not somewhere a site is hosted
+      '//evil.example', // protocol-relative — reads as a path, navigates off-origin
+      '/somewhere', // relative — would redirect this route back onto itself
+      'skeen.fm', // no scheme: not a resolvable Location
+      'https://x.dev/\r\nSet-Cookie: a=b', // CR/LF splits the redirect response header
+    ]) {
+      expect(isCustom({ site_kind: 'custom', custom_site_url: url }), url).toBe(false)
+    }
+  })
+
+  it('accepts an ordinary hosted site, trimmed', () => {
+    expect(isCustom({ site_kind: 'custom', custom_site_url: 'http://staging.skeen.fm' })).toBe(true)
+    expect(isCustom({ site_kind: 'custom', custom_site_url: '  https://skeen.fm/  ' })).toBe(true)
+  })
 })
 
 /**
@@ -44,6 +70,17 @@ describe('customSiteUrl — as an ANONYMOUS visitor (the real public path)', () 
   it('anon gets null for a template artist, and for an unknown slug', async () => {
     expect(await customSiteUrl(anonClient(), SEED.artistASlug)).toBeNull()
     expect(await customSiteUrl(anonClient(), 'no-such-artist-slug')).toBeNull()
+  })
+
+  it('CRITICAL: a non-http(s) value stored on the row never reaches the redirect', async () => {
+    // The door is SECURITY DEFINER and returns whatever is in the column, so the scheme
+    // check has to live on THIS side of it — otherwise a typo (or a compromised manager
+    // account) turns the artist's public URL into someone else's landing page, permanently:
+    // /[slug] issues a 308, which browsers cache.
+    const id = await artistIdBySlug(SEED.artistBSlug)
+    await svc.from('artists').update({ site_kind: 'custom', custom_site_url: 'javascript:alert(1)' }).eq('id', id)
+
+    expect(await customSiteUrl(anonClient(), SEED.artistBSlug)).toBeNull()
   })
 
   it('does NOT leak the rest of the artists row to anon', async () => {
