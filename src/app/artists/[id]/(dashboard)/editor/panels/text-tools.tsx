@@ -1,6 +1,7 @@
 import { cx } from '@/lib/cx'
+import { groupByPrefix } from '@/lib/site-editor/manifest'
 import { type EditorTextField } from '../inspector-types'
-import { CONTROL_LABEL, SaveLine, EditButton, type SaveStatus } from '../inspector-shared'
+import { CONTROL_LABEL, GroupLabel, SaveLine, EditButton, type SaveStatus } from '../inspector-shared'
 
 /* ── Text tools: the site's headings, taglines, bio, booking copy ──────────────
  *
@@ -23,7 +24,10 @@ export function TextTools({
 }) {
   return (
     <div className="py-2">
-      {textFields.map((f) => {
+      {groupByPrefix(textFields).map(([heading, group]) => (
+        <div key={heading || '_flat'}>
+          {heading && <GroupLabel>{heading}</GroupLabel>}
+          {group.map((f) => {
         const value = values[f.key] ?? ''
         return (
           <div key={f.key} className="px-5 py-1.5">
@@ -53,8 +57,10 @@ export function TextTools({
                 : value || f.defaultValue || 'Empty'}
             </p>
           </div>
-        )
-      })}
+            )
+          })}
+        </div>
+      ))}
       <SaveLine status={status} />
     </div>
   )

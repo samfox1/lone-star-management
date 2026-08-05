@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
+import { groupByPrefix } from '@/lib/site-editor/manifest'
 import type { ManifestField, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 
 const field = (key: string, label: string): ManifestField => ({
@@ -116,5 +117,38 @@ describe('textPanelEntries', () => {
   it('handles a site that declares neither', () => {
     expect(textPanelEntries([], [])).toEqual([])
     expect(textPanelEntries(undefined, undefined)).toEqual([])
+  })
+})
+
+describe('grouping a long text list', () => {
+  it('CRITICAL: groups by key prefix, so 40 wrapped strings are not one scroll', () => {
+    // Once a site wraps its text rather than declaring it, the panel goes from five rows
+    // to forty. Flat, that is a wall. The prefixes a site already uses (hero_, tour_,
+    // footer_) are the outline it means.
+    const entries = [
+      { key: 'hero_wordmark', label: 'Hero wordmark' },
+      { key: 'hero_tagline', label: 'Hero tagline' },
+      { key: 'tour_heading', label: 'Tour heading' },
+      { key: 'tour_upcoming', label: 'Tour upcoming' },
+      { key: 'footer_line', label: 'Footer line' },
+    ]
+    const grouped = groupByPrefix(entries)
+    expect(grouped.map(([heading]) => heading)).toEqual(['Hero', 'Tour', 'Sections'])
+    expect(grouped[0][1].map((e) => e.key)).toEqual(['hero_wordmark', 'hero_tagline'])
+    // A lone prefix is not a group of one — it falls to the catch-all.
+    expect(grouped[2][1].map((e) => e.key)).toEqual(['footer_line'])
+  })
+
+  it('a short list stays FLAT rather than inventing structure', () => {
+    // Five captions under a heading called "Polaroid" is worse than five captions.
+    const entries = [
+      { key: 'a_one', label: 'One' },
+      { key: 'b_two', label: 'Two' },
+    ]
+    expect(groupByPrefix(entries)).toEqual([['', entries]])
+  })
+
+  it('an empty list groups to nothing', () => {
+    expect(groupByPrefix([])).toEqual([])
   })
 })

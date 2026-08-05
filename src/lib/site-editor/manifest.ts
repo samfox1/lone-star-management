@@ -267,10 +267,10 @@ export function fieldCurrentValue(field: ManifestField, ctx: FieldValueContext):
  * one), returns a single entry with an EMPTY heading — the panel then renders a plain
  * list rather than inventing structure that isn't there.
  */
-export function groupStyleRegions(
-  regions: ManifestStyleRegion[],
+export function groupByPrefix<T extends { key: string; group?: string }>(
+  regions: T[],
   fallback = 'Sections',
-): [string, ManifestStyleRegion[]][] {
+): [string, T[]][] {
   const prefixCount = new Map<string, number>()
   for (const r of regions) {
     if (r.group) continue
@@ -284,7 +284,7 @@ export function groupStyleRegions(
   // Nothing to group by: one unlabelled run, in manifest order.
   if (!declared && !inferred) return regions.length ? [['', regions]] : []
 
-  const out = new Map<string, ManifestStyleRegion[]>()
+  const out = new Map<string, T[]>()
   for (const r of regions) {
     const prefix = r.key.split('_')[0]
     const heading =
@@ -296,3 +296,7 @@ export function groupStyleRegions(
   }
   return [...out.entries()]
 }
+
+/** The style panel's grouping, by its original name. Same function — the Text panel now
+ *  groups the same way, so the two panels can never disagree about a site's outline. */
+export const groupStyleRegions = groupByPrefix
