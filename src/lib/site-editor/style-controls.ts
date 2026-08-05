@@ -219,6 +219,46 @@ const isShadow = (t: string) => t === 'shadow' || /^shadow-(sm|md|lg|xl|2xl|none
  *  (width + colour), corners, shadow. The border colour is any hex the manager picks from the
  *  palette; site-palette border colours (`border-<token>`) are a later addition once the site
  *  safelists them. */
+/**
+ * The controls for ONE text field, in its full-panel editor.
+ *
+ * Same three properties the Style panel offers for a text region, but shaped like the
+ * image and video editors the manager is comparing this to: size and weight are ORDERED
+ * scales, so they are sliders you drag rather than menus you open. Font is a select
+ * because typefaces have no order — the site's own families, plus anything uploaded on
+ * the Brand page.
+ *
+ * The `''` step is the site's own default, first on each scale, so "leave it alone" is
+ * reachable by dragging back rather than by remembering which value was original.
+ */
+export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleControl[] {
+  const controls: StyleControl[] = []
+  if (opts?.fonts?.length) {
+    controls.push({
+      id: 'font',
+      label: 'Font',
+      kind: 'select',
+      options: [DEFAULT, ...opts.fonts],
+      owns: (t) => t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t)),
+    })
+  }
+  controls.push({
+    id: 'size',
+    label: 'Size',
+    kind: 'slider',
+    steps: [DEFAULT, ...SIZE_OPTIONS],
+    owns: (t) => SIZES.includes(textSuffix(t)),
+  })
+  controls.push({
+    id: 'weight',
+    label: 'Thickness',
+    kind: 'slider',
+    steps: [DEFAULT, ...WEIGHT_OPTIONS],
+    owns: (t) => WEIGHTS.includes(fontSuffix(t)),
+  })
+  return controls
+}
+
 export function buildItemStyleControls(): StyleControl[] {
   return [
     { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, owns: (t) => t.startsWith('scale-') },

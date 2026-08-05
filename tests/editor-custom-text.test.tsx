@@ -177,8 +177,9 @@ describe('EditorShell — Text panel on a CUSTOM site', () => {
     frameSays({ type: 'ready', manifest: CUSTOM_MANIFEST }, CUSTOM)
 
     fireEvent.click(screen.getByRole('button', { name: /Text/ }))
-    expect((screen.getByLabelText('Hero caption') as HTMLInputElement).value).toBe('/ backstage /')
-    expect((screen.getByLabelText('Press email') as HTMLInputElement).type).toBe('email')
+    // The list is READ-ONLY now: the copy is shown, and Edit opens it full-panel.
+    expect(screen.getByText('/ backstage /')).toBeTruthy()
+    expect(screen.getByLabelText('Edit Press email')).toBeTruthy()
     // The image field stayed out of the Text panel.
     expect(screen.queryByLabelText('Polaroid 1')).toBeNull()
   })
@@ -201,7 +202,7 @@ describe('EditorShell — Text panel on a CUSTOM site', () => {
     frameSays({ type: 'ready', manifest: CUSTOM_MANIFEST }, CUSTOM)
 
     fireEvent.click(screen.getByRole('button', { name: /Text/ }))
-    expect(screen.getByLabelText('Hero caption')).toBeTruthy()
+    expect(screen.getByLabelText('Edit Hero caption')).toBeTruthy()
     expect(screen.queryByLabelText('Hero tagline')).toBeNull()
   })
 
@@ -221,7 +222,7 @@ describe('EditorShell — a BUILT-IN template is unchanged', () => {
   it('renders the server-resolved fields (page.tsx resolved them from the local manifest)', () => {
     renderShell({ customSiteUrl: null, textFields: SERVER_FIELDS })
     fireEvent.click(screen.getByRole('button', { name: /Text/ }))
-    expect((screen.getByLabelText('Hero tagline') as HTMLInputElement).value).toBe('DJ & Producer')
+    expect(screen.getByText('DJ & Producer')).toBeTruthy()
   })
 
   it('is NOT hijacked by a manifest arriving over the bridge', () => {
@@ -230,7 +231,7 @@ describe('EditorShell — a BUILT-IN template is unchanged', () => {
     renderShell({ customSiteUrl: null, textFields: SERVER_FIELDS })
     frameSays({ type: 'ready', manifest: CUSTOM_MANIFEST }, window.location.origin)
     fireEvent.click(screen.getByRole('button', { name: /Text/ }))
-    expect(screen.getByLabelText('Hero tagline')).toBeTruthy()
+    expect(screen.getByLabelText('Edit Hero tagline')).toBeTruthy()
     expect(screen.queryByLabelText('Hero caption')).toBeNull()
   })
 })

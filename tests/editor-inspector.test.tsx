@@ -409,6 +409,9 @@ describe('EditorInspector — Text component', () => {
       renderInspector([], { textFields: TEXT_FIELDS, onApplyField: onApply })
       fireEvent.click(screen.getByRole('button', { name: /Text/ }))
 
+      // The list is read-only; Edit opens the field full-panel, which is where it is
+      // typed. Going through the button exercises the flow a manager actually has.
+      fireEvent.click(screen.getByLabelText('Edit Hero tagline'))
       const tagline = screen.getByLabelText('Hero tagline') as HTMLInputElement
       expect(tagline.value).toBe('DJ & Producer')
 

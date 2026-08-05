@@ -784,7 +784,6 @@ export function EditorInspector({
           textFields={textFields}
           textValues={textSave.values}
           textStatus={textSave.status}
-          onEditText={textSave.edit}
           onEditTextField={(f) => {
             setEditingItem(null) // one editor in the panel at a time
             setEditingText(f)
@@ -898,7 +897,6 @@ function EditingView({
   textFields,
   textValues,
   textStatus,
-  onEditText,
   onEditTextField,
   links,
   supportLinks,
@@ -950,7 +948,6 @@ function EditingView({
    *  editor), so this view renders it rather than holding it. */
   textValues: Record<string, string>
   textStatus: SaveStatus
-  onEditText: (key: string, value: string) => void
   onEditTextField: (field: EditorTextField) => void
   links: EditorLink[]
   supportLinks: EditorSupportLink[]
@@ -1035,7 +1032,6 @@ function EditingView({
             textFields={textFields}
             values={textValues}
             status={textStatus}
-            onEdit={onEditText}
             onEditField={onEditTextField}
           />
         ) : isLinks ? (

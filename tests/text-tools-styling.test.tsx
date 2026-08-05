@@ -11,6 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { buildTextItemStyleControls } from '@/lib/site-editor/style-controls'
 import { TextTools } from '@/app/artists/[id]/(dashboard)/editor/panels/text-tools'
 import { TextFieldEditor } from '@/app/artists/[id]/(dashboard)/editor/text-field-editor'
 import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
@@ -48,7 +49,6 @@ describe('TextTools — the list', () => {
         textFields={[styled, unstyled]}
         values={{ hero_title: 'Skeen', booking_email: 'book@example.com' }}
         status="idle"
-        onEdit={vi.fn()}
         onEditField={onEditField}
       />,
     )
@@ -58,27 +58,32 @@ describe('TextTools — the list', () => {
     expect(container.querySelectorAll('svg')).toHaveLength(0)
   })
 
-  it('renders the values it is GIVEN — it does not hold its own copy', () => {
-    // Two windows onto one field: if the list kept its own state, opening Edit after
-    // typing would show stale text and both copies would race the debounced save.
-    render(
+  it('CRITICAL: the list is READ-ONLY — nothing here can change the site', () => {
+    // Editing lives behind Edit, in one place. An input in the list is a second
+    // authority over the same field and a way to alter a live site by brushing past a
+    // textarea while scrolling the panel.
+    const { container } = render(
       <TextTools
-        textFields={[styled]}
-        values={{ hero_title: 'Typed elsewhere' }}
+        textFields={[styled, unstyled]}
+        values={{ hero_title: 'Skeen', booking_email: 'book@example.com' }}
         status="idle"
-        onEdit={vi.fn()}
+        onEditField={vi.fn()}
       />,
     )
-    expect(screen.getByDisplayValue('Typed elsewhere')).toBeTruthy()
+    expect(container.querySelectorAll('input, textarea')).toHaveLength(0)
   })
 
-  it('typing reports up rather than saving itself', () => {
-    const onEdit = vi.fn()
+  it('shows the current copy so the list is scannable, and says when a field is empty', () => {
     render(
-      <TextTools textFields={[styled]} values={{ hero_title: 'Skeen' }} status="idle" onEdit={onEdit} />,
+      <TextTools
+        textFields={[styled, unstyled]}
+        values={{ hero_title: 'Typed elsewhere', booking_email: '' }}
+        status="idle"
+        onEditField={vi.fn()}
+      />,
     )
-    fireEvent.change(screen.getByLabelText('Hero title'), { target: { value: 'Skeen Live' } })
-    expect(onEdit).toHaveBeenCalledWith('hero_title', 'Skeen Live')
+    expect(screen.getByText('Typed elsewhere')).toBeTruthy()
+    expect(screen.getByText('Empty')).toBeTruthy()
   })
 })
 
@@ -103,13 +108,16 @@ describe('TextFieldEditor — one field, full panel', () => {
     editor(styled)
     expect(screen.getByLabelText('Hero title Font')).toBeTruthy()
     expect(screen.getByLabelText('Hero title Size')).toBeTruthy()
-    expect(screen.getByLabelText('Hero title Boldness')).toBeTruthy()
+    expect(screen.getByLabelText('Hero title Thickness')).toBeTruthy()
   })
 
-  it('CRITICAL: a field with NO region gets none — not controls that write nowhere', () => {
+  it('CRITICAL: a field with NO region gets none — and SAYS so rather than showing nothing', () => {
+    // Silence is indistinguishable from a broken panel. The manager has no other way to
+    // learn the site never offered this text for styling.
     editor(unstyled)
-    expect(screen.queryByLabelText(/Boldness$/)).toBeNull()
+    expect(screen.queryByLabelText(/Thickness$/)).toBeNull()
     expect(screen.queryByLabelText(/Font$/)).toBeNull()
+    expect(screen.getByText(/hasn't made booking email styleable/i)).toBeTruthy()
     // Still editable — the field is just not styleable.
     expect(screen.getByDisplayValue('book@example.com')).toBeTruthy()
   })
@@ -118,7 +126,13 @@ describe('TextFieldEditor — one field, full panel', () => {
     // The region already carries a colour this editor does not offer. Changing the size
     // must not drop it — each control replaces only its own utility.
     const onStyle = editor(styled, { hero_title: 'text-flash-2 font-bold' })
-    fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: 'text-4xl' } })
+    // Size is a SLIDER: its value is a step INDEX. Derived from the real control rather
+    // than hardcoded, so re-granulating the scale can't quietly make this test assert
+    // some other size.
+    const sizeControl = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!
+    const steps = sizeControl.kind === 'slider' ? sizeControl.steps : []
+    const idx = steps.findIndex((s) => s.value === 'text-4xl')
+    fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(idx) } })
 
     expect(onStyle).toHaveBeenCalledTimes(1)
     const [regionKey, className] = onStyle.mock.calls[0] as unknown as string[]

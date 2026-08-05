@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { applyStyleValue, buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import { applyStyleValue, buildTextItemStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from './inspector-types'
 import { FIELD, SCROLL_BODY, SaveLine, type SaveStatus } from './inspector-shared'
 import { StyleControlRow } from './panels/style-tools'
@@ -40,9 +40,9 @@ export function TextFieldEditor({
   onStyle: (regionKey: string, className: string) => void
   onBack: () => void
 }) {
-  // Type only. Colour, alignment and the rest stay in the Style panel: this editor is
-  // for the words and how they READ.
-  const controls = buildStyleControls(styleOptions).filter((c) => ['font', 'size', 'weight'].includes(c.id))
+  // Sliders for size and thickness, a select for font — shaped like the image and video
+  // editors rather than the Style panel's menus, because this is the same gesture.
+  const controls = buildTextItemStyleControls(styleOptions)
   const region = field.styleRegion
   const cls = region ? (styleValues[region.key] ?? '') : ''
 
@@ -82,22 +82,32 @@ export function TextFieldEditor({
           )}
         </div>
 
-        {/* Type controls, only when the site declares a region for this field. Controls
-            that write to a key nothing renders are worse than none: the manager changes
-            the font, nothing happens, and no error explains it. */}
-        {region && controls.length > 0 && (
-          <div className="mt-5 space-y-1.5 border-t border-hairline-soft px-5 pt-4">
-            {controls.map((control) => (
-              <StyleControlRow
-                key={control.id}
-                regionLabel={field.label}
-                control={control}
-                cls={cls}
-                onChange={(v) => onStyle(region.key, applyStyleValue(cls, control, v))}
-              />
-            ))}
-          </div>
-        )}
+        <div className="mt-5 border-t border-hairline-soft px-5 pt-4">
+          {region ? (
+            // Controls only when the site declares a style region for this field. One
+            // that writes to a key nothing renders is worse than none: the manager
+            // changes the font, nothing happens, and no error explains it.
+            <div className="space-y-1.5">
+              {controls.map((control) => (
+                <StyleControlRow
+                  key={control.id}
+                  regionLabel={field.label}
+                  control={control}
+                  cls={cls}
+                  onChange={(v) => onStyle(region.key, applyStyleValue(cls, control, v))}
+                />
+              ))}
+            </div>
+          ) : (
+            // SAY SO. Silence here is indistinguishable from the panel being broken —
+            // which is exactly how this looked before, and the manager has no way to
+            // know the site never offered this text for styling.
+            <p className="font-space text-[11px] leading-snug text-ink-faint">
+              This site hasn&apos;t made {field.label.toLowerCase()} styleable, so there&apos;s no font, size
+              or thickness to set here. Its appearance comes from the site&apos;s own design.
+            </p>
+          )}
+        </div>)
 
         <div className="px-5">
           <SaveLine status={status} />
