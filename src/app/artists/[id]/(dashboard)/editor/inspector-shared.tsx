@@ -79,11 +79,20 @@ export function runSerialized(
   const prev = saving.current.get(id)
   const settled = Promise.resolve(prev ? prev.then(() => action()) : action())
   saving.current.set(id, settled.catch(() => {}))
-  void settled.then((res) => {
-    if (res && (res as { error?: string }).error) errored.current.add(id)
-    else errored.current.delete(id)
-    setStatus(errored.current.size ? 'error' : 'saved')
-  })
+  // BOTH outcomes must land: an action that REJECTS (network drop, an uncaught server
+  // throw) is not the same as one that resolves `{ error }`. Handling only the resolved
+  // shape leaves the field on "Saving…" forever and the rejection unhandled.
+  void settled.then(
+    (res) => {
+      if (res && (res as { error?: string }).error) errored.current.add(id)
+      else errored.current.delete(id)
+      setStatus(errored.current.size ? 'error' : 'saved')
+    },
+    () => {
+      errored.current.add(id)
+      setStatus('error')
+    },
+  )
 }
 
 /** A collapsible section header — label, optional tag, chevron. No border and no

@@ -9,12 +9,17 @@ import type { CrudEntity } from '@/lib/content'
  * Client delete button for server-rendered lists (content-sections): calls
  * deleteContentAction and confirms with a toast ("{noun} deleted", or the error).
  * Card grids use CardModal's built-in delete; this is for the plain list rows.
+ *
+ * The delete is IRREVERSIBLE — the row is gone, there is no undo and no trash — so it
+ * is gated behind window.confirm, the same gate ActionButton's `confirm` prop applies
+ * to its destructive callers. `confirm` overrides the wording; it can't be waived.
  */
 export function DeleteButton({
   type,
   id,
   artistId,
   noun,
+  confirm,
   className,
   children,
 }: {
@@ -22,6 +27,8 @@ export function DeleteButton({
   id: string
   artistId: string
   noun: string
+  /** Override the confirmation wording. Never optional — only the text is. */
+  confirm?: string
   className?: string
   children: ReactNode
 }) {
@@ -29,6 +36,7 @@ export function DeleteButton({
   const busyRef = useRef(false) // hard re-entry latch (state is a stale closure across fast clicks)
   async function onClick() {
     if (busyRef.current) return
+    if (!window.confirm(confirm ?? `Delete this ${noun.toLowerCase()}? This can't be undone.`)) return
     busyRef.current = true
     setBusy(true)
     try {

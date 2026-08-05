@@ -6,7 +6,7 @@
  * actions are mocked (server-only).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { SectionDiff, UnpublishedDiff } from '@/lib/content'
 import { getUnpublishedDiffAction, publishAllGatedAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { EditorPublish } from '@/app/artists/[id]/(dashboard)/editor/editor-publish'
@@ -53,6 +53,21 @@ function open() {
   fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
 }
 
+const escape = () => fireEvent.keyDown(document, { key: 'Escape' })
+
+/** Open the window on CHANGED, type a password, and start a publish that never
+ *  settles — the window is now mid-flight. Returns the dialog. */
+async function midPublish() {
+  diffMock.mockResolvedValue(CHANGED)
+  publishMock.mockReturnValue(new Promise(() => {})) // never settles
+  open()
+  await screen.findByText(/4 changes/)
+  fireEvent.change(screen.getByPlaceholderText('Your password'), { target: { value: 'hunter2' } })
+  const dialog = screen.getByRole('dialog')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' }))
+  return dialog
+}
+
 describe('EditorPublish', () => {
   it('lists the changed sections with a total', async () => {
     diffMock.mockResolvedValue(CHANGED)
@@ -91,6 +106,50 @@ describe('EditorPublish', () => {
     open()
     expect(await screen.findByText(/nothing to publish/i)).toBeTruthy()
     expect(screen.queryByPlaceholderText('Your password')).toBeNull()
+  })
+
+  it('Escape closes the window', async () => {
+    diffMock.mockResolvedValue(CHANGED)
+    open()
+    await screen.findByText(/4 changes/)
+    escape()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('CRITICAL: Escape can NOT dismiss the window mid-publish', async () => {
+    // Publishing rewrites the whole public site. Dismissing while the request is in
+    // flight leaves the manager with no idea whether it landed — and the obvious next
+    // move is to publish again.
+    await midPublish()
+    escape()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('CRITICAL: an overlay click can NOT dismiss the window mid-publish', async () => {
+    const dialog = await midPublish()
+    fireEvent.click(dialog)
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('latches against a double submit (one publish, not two)', async () => {
+    // Both clicks inside ONE act batch — before React re-renders the button disabled,
+    // which is exactly what a fast double-click hits.
+    diffMock.mockResolvedValue(CHANGED)
+    let resolve!: (v: { ok: boolean }) => void
+    publishMock.mockReturnValue(new Promise((r) => (resolve = r)))
+    open()
+    await screen.findByText(/4 changes/)
+    fireEvent.change(screen.getByPlaceholderText('Your password'), { target: { value: 'hunter2' } })
+    const submit = within(screen.getByRole('dialog')).getByRole('button', { name: 'Publish' })
+
+    await act(async () => {
+      submit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      submit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(publishMock).toHaveBeenCalledTimes(1)
+
+    resolve({ ok: true })
+    await screen.findByText('Your changes are live.')
   })
 
   it('CRITICAL: every publishable section reaches this window', async () => {

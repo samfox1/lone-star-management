@@ -22,5 +22,11 @@ export default defineConfig({
     // database, and that's the cost of testing against the real thing (no .env.test).
     testTimeout: 20_000,
     hookTimeout: 20_000, // beforeAll seeds fixtures over the same wire
+    // Mock state resets between tests as a FLOOR, not per-file bookkeeping. Hand-
+    // maintained clear lists are what leaked call history across tests in 3edb68a: a
+    // mock added later is simply forgotten, and the stale history makes an assertion
+    // pass (or fail) for a reason that has nothing to do with the test.
+    clearMocks: true, // call history + instances
+    restoreMocks: true, // spies handed back to their real implementations
   },
 })

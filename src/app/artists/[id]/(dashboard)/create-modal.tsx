@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
@@ -149,6 +149,9 @@ export function CreateModal({
   const [resolved, setResolved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
+  // Re-entry latch for add(). `pending` is transition state: two fast clicks both read
+  // the pre-update value and the manager gets two identical rows to clean up.
+  const pendingRef = useRef(false)
 
   function reset() {
     setStep(hasChoice ? 'choose' : 'manual')
@@ -188,7 +191,8 @@ export function CreateModal({
   }
 
   function add() {
-    if (pending) return
+    if (pending || pendingRef.current) return
+    pendingRef.current = true
     setError(null)
     const fd = new FormData()
     for (const f of fields) {
@@ -203,14 +207,20 @@ export function CreateModal({
       fd.set(f.name, values[f.name] ?? '')
     }
     start(async () => {
-      const res = (await submit(fd)) as { error?: string } | void
-      if (res && typeof res === 'object' && 'error' in res && res.error) {
-        setError(res.error)
-        return
+      try {
+        const res = (await submit(fd)) as { error?: string } | void
+        if (res && typeof res === 'object' && 'error' in res && res.error) {
+          setError(res.error)
+          return
+        }
+        router.refresh()
+        close()
+        toast(`${kind} added`)
+      } finally {
+        // Released on EVERY exit — an error path that kept the latch would make the
+        // modal permanently unsubmittable after one rejected save.
+        pendingRef.current = false
       }
-      router.refresh()
-      close()
-      toast(`${kind} added`)
     })
   }
 

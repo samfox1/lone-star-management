@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
@@ -51,6 +51,9 @@ export function EditorPublish({ artistId }: { artistId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  // Re-entry latch for submit(). `busy` is state: two fast clicks both read the
+  // pre-update value and publish the whole site twice.
+  const busyRef = useRef(false)
 
   useLockBodyScroll(open)
 
@@ -77,10 +80,12 @@ export function EditorPublish({ artistId }: { artistId: string }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!password || busy) return
+    if (!password || busy || busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setError(null)
     const res = await publishAllGatedAction(artistId, password)
+    busyRef.current = false
     setBusy(false)
     if (res.ok) {
       setPassword('')

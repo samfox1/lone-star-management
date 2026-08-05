@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from './use-lock-body-scroll'
 import { toast } from './toast'
@@ -21,6 +21,7 @@ export function CardModal({
   deleteAction,
   deleteLabel = 'Delete',
   deleteNoun = 'Item',
+  confirmText,
   wide = false,
   footer,
   children,
@@ -30,6 +31,8 @@ export function CardModal({
   deleteAction?: DeleteAction
   deleteLabel?: string
   deleteNoun?: string
+  /** Overrides the confirmation wording. The prompt itself cannot be waived. */
+  confirmText?: string
   /** Wide, two-column card that sizes to its content instead of scrolling. */
   wide?: boolean
   /** Replaces the default Delete / Done footer row (e.g. a single Save button). Pass `null`
@@ -38,6 +41,7 @@ export function CardModal({
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
+  const deletingRef = useRef(false)
   useLockBodyScroll(open)
 
   useEffect(() => {
@@ -48,7 +52,12 @@ export function CardModal({
   }, [open, onClose])
 
   async function del() {
-    if (!deleteAction || deleting) return
+    // `deleting` is STATE: two fast clicks both read the pre-render value and delete
+    // twice. The ref is the actual latch; the state only drives the label.
+    if (!deleteAction || deleting || deletingRef.current) return
+    // Every card grid deletes through this footer, and there is no undo and no trash.
+    if (!window.confirm(confirmText ?? `Delete this ${deleteNoun.toLowerCase()}? This can't be undone.`)) return
+    deletingRef.current = true
     setDeleting(true)
     try {
       const res = await deleteAction()
@@ -61,6 +70,8 @@ export function CardModal({
     } catch {
       toast(`Couldn't delete that ${deleteNoun.toLowerCase()}.`, 'error')
     } finally {
+      // In `finally` so one transient failure doesn't leave the modal permanently dead.
+      deletingRef.current = false
       setDeleting(false)
     }
   }

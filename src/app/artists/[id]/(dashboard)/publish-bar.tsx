@@ -34,7 +34,9 @@ export function PublishBar({
   const [busy, setBusy] = useState(false)
   // close() is captured by the Escape effect (deps [open]); a ref (synced in an
   // effect, never during render) keeps its busy check live so Escape / an overlay
-  // click can't dismiss the modal mid-publish.
+  // click can't dismiss the modal mid-publish. It is ALSO the re-entry latch for
+  // submit(): `busy` is state, so two fast clicks both read the pre-update value and
+  // publish twice.
   const busyRef = useRef(false)
   useEffect(() => {
     busyRef.current = busy
@@ -58,7 +60,8 @@ export function PublishBar({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!password || busy) return
+    if (!password || busy || busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setError(null)
     const res = await onPublish(password)

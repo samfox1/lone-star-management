@@ -28,6 +28,60 @@ describe('runSerialized', () => {
     expect(statuses.at(-1)).toBe('saved') // cleared
   })
 
+  it('a THROWN action ends on "error", not a permanent "saving…"', async () => {
+    // A server action that rejects (network drop, an uncaught server throw) is not the
+    // same as one that resolves `{ error }`. If only the resolved shape is handled the
+    // status callback never fires, the field is stuck on "Saving…" forever, and the
+    // rejection is unhandled.
+    const saving = { current: new Map<string, Promise<unknown>>() }
+    const errored = { current: new Set<string>() }
+    const statuses: string[] = []
+
+    runSerialized(saving, errored, (s) => statuses.push(s), 'A', async () => {
+      throw new Error('network down')
+    })
+    await tick()
+
+    expect(statuses.at(-1)).toBe('error')
+    expect(errored.current.has('A')).toBe(true)
+  })
+
+  it('a throw in one field is not masked by another field’s later success', async () => {
+    const saving = { current: new Map<string, Promise<unknown>>() }
+    const errored = { current: new Set<string>() }
+    const statuses: string[] = []
+    const setStatus = (s: string) => statuses.push(s)
+
+    runSerialized(saving, errored, setStatus, 'A', async () => {
+      throw new Error('network down')
+    })
+    await tick()
+    runSerialized(saving, errored, setStatus, 'B', async () => ({}))
+    await tick()
+    expect(statuses.at(-1)).toBe('error')
+
+    runSerialized(saving, errored, setStatus, 'A', async () => ({}))
+    await tick()
+    expect(statuses.at(-1)).toBe('saved')
+  })
+
+  it('a throw does not wedge the NEXT save of the same field', async () => {
+    // The chain hangs off the stored promise; if a rejection isn't absorbed the next
+    // save of that field never runs at all.
+    const saving = { current: new Map<string, Promise<unknown>>() }
+    const errored = { current: new Set<string>() }
+    const ran: string[] = []
+
+    runSerialized(saving, errored, () => {}, 'A', async () => {
+      throw new Error('boom')
+    })
+    runSerialized(saving, errored, () => {}, 'A', async () => {
+      ran.push('second')
+    })
+    await tick()
+    expect(ran).toEqual(['second'])
+  })
+
   it('chains a second save for the same field behind the first (#6)', async () => {
     const saving = { current: new Map<string, Promise<unknown>>() }
     const errored = { current: new Set<string>() }
