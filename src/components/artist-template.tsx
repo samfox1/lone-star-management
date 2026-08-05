@@ -22,8 +22,8 @@ export function ArtistTemplate({ data, editable = false }: { data: SiteData; edi
   // page, preview, edit frame) pass through — inject anywhere lower and one mode
   // silently loses its fonts. fontStyleCss is the sanitizing gate: everything in the
   // emitted block is allowlisted or dropped, so this dangerouslySetInnerHTML carries
-  // nothing a manager typed. Legacy payloads have no fonts key (`?? []`).
-  const fontCss = fontStyleCss(data.fonts ?? [])
+  // nothing a manager typed. Legacy payloads have neither key (`?? []` / `?? {}`).
+  const fontCss = fontStyleCss(data.fonts ?? [], data.font_slots ?? {})
   const body =
     data.artist.template === 'cinematic' ? (
       <CinematicTemplate data={data} editable={editable} />

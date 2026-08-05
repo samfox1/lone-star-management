@@ -12,7 +12,7 @@
  */
 import { revalidatePath } from 'next/cache'
 import { type BrandPurpose, saveFraming, setBrandAsset } from '@/lib/brand'
-import { type FontRole, removeArtistFont, setArtistFont, setFontRole } from '@/lib/fonts'
+import { type FontSlot, removeArtistFont, setArtistFont, setFontSlot } from '@/lib/fonts'
 import { gcFontObjects } from '@/lib/storage-gc'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from '../_owns'
@@ -87,16 +87,21 @@ export async function removeArtistFontAction(artistId: string, fontId: string): 
   return {}
 }
 
-/** Assign or clear a site-wide role. `role` arrives from the client, so it is checked
- *  against the allowed set in `setFontRole` rather than trusted into an UPDATE. */
-export async function setFontRoleAction(
+/**
+ * Point a site-wide slot at a font, or empty it with `fontId: null`.
+ *
+ * SLOT-keyed, not font-keyed: the same font may fill several slots, so "which font is in
+ * this slot" is the only question with one answer. `slot` arrives from the client and is
+ * checked against FONT_SLOTS inside `setFontSlot` rather than trusted into a write.
+ */
+export async function setFontSlotAction(
   artistId: string,
-  fontId: string,
-  role: FontRole | null,
+  slot: FontSlot,
+  fontId: string | null,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
   if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
-  const res = await setFontRole(supabase, artistId, fontId, role)
+  const res = await setFontSlot(supabase, artistId, slot, fontId)
   if (!res.ok) return { error: res.error ?? 'Could not change that font.' }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}

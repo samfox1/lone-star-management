@@ -23,6 +23,7 @@ function makeData(site_content: Record<string, string>): SiteData {
     site_content,
     styles: {},
     fonts: [],
+    font_slots: {},
   }
 }
 

@@ -96,6 +96,12 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     },
   }
 
+  // Text fields resolved from the LOCAL manifest. These reach the panel only for a
+  // BUILT-IN site: `artists.template` is CHECK-constrained to 'classic'/'cinematic', so a
+  // custom artist (skeen: 'cinematic' + site_kind='custom') resolves a manifest too — one
+  // describing a site nobody is looking at. The shell drops these for a custom site and
+  // uses the frame's runtime manifest instead (see runtimeTextFields), which is why the
+  // custom-ness test lives there rather than being repeated here.
   const textFields: EditorTextField[] = manifest
     ? manifest.fields
         .filter((f) => f.type === 'text' || f.type === 'email')
@@ -256,6 +262,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       photos={photos}
       imageFields={imageFields}
       textFields={textFields}
+      siteContent={siteContent}
       links={links}
       supportLinks={supportLinks}
       linkValues={linkValues}

@@ -3,8 +3,9 @@
 import { useRef, useState } from 'react'
 import {
   type ArtistFont,
-  type FontRole,
+  type FontSlot,
   FONT_FOLDER,
+  FONT_SLOTS,
   FONTS_BUCKET,
   fontFaceCss,
   sanitizeFamily,
@@ -16,7 +17,12 @@ import { inputClass } from '@/components/ui/ui'
 import { FileDropField } from '../file-drop-field'
 import { toast } from '../toast'
 import { useStorageUpload } from '../use-storage-upload'
-import { addArtistFontAction, removeArtistFontAction, setFontRoleAction } from './actions'
+import { addArtistFontAction, removeArtistFontAction, setFontSlotAction } from './actions'
+
+/** The manager-facing spelling of a slot. DERIVED from the slot name, so a sixth slot
+ *  gets a label without anyone remembering to add one — a hand-written map would render
+ *  `undefined` on the button for the slot nobody updated. */
+const slotLabel = (slot: FontSlot) => slot.replace(/_/g, ' ')
 
 /**
  * The artist's uploaded fonts.
@@ -88,17 +94,24 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
     void run(font.id, () => removeArtistFontAction(artistId, font.id), 'Font removed')
   }
 
-  function assign(font: ArtistFont, role: FontRole) {
-    const clearing = font.role === role
-    const incumbent = fonts.find((f) => f.role === role && f.id !== font.id)
-    // Taking a role off another font is a site-wide typeface change made by clicking one
+  /**
+   * Put this font in a slot, or take it out of one.
+   *
+   * A font may hold SEVERAL slots at once (one typeface for headings and body is the
+   * ordinary case), so this toggles one slot at a time and never touches the others.
+   */
+  function assign(font: ArtistFont, slot: FontSlot) {
+    const clearing = font.slots.includes(slot)
+    const incumbent = fonts.find((f) => f.slots.includes(slot) && f.id !== font.id)
+    const name = slotLabel(slot)
+    // Taking a slot off another font is a site-wide typeface change made by clicking one
     // small button, and the button gives no hint that a second font is about to lose it.
-    if (!clearing && incumbent && !window.confirm(`${incumbent.label} is the ${role} font. Use ${font.label} instead?`))
+    if (!clearing && incumbent && !window.confirm(`${incumbent.label} is the ${name} font. Use ${font.label} instead?`))
       return
     void run(
       font.id,
-      () => setFontRoleAction(artistId, font.id, clearing ? null : role),
-      clearing ? `${font.label} is no longer the ${role} font` : `${font.label} is now the ${role} font`,
+      () => setFontSlotAction(artistId, slot, clearing ? null : font.id),
+      clearing ? `${font.label} is no longer the ${name} font` : `${font.label} is now the ${name} font`,
     )
   }
 
@@ -114,46 +127,56 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
           {fonts.map((font) => {
             const rowBusy = busyId === font.id
             return (
-              <li key={font.id} className="flex items-center gap-4 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p
-                    className="truncate text-[19px] leading-tight text-ink"
-                    style={{ fontFamily: `'${sanitizeFamily(font.family)}', sans-serif` }}
-                  >
-                    {font.label}
-                  </p>
-                  <p className="mt-0.5 font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint">
-                    {font.format} &middot; font-{sanitizeFamily(font.family)}
-                  </p>
-                </div>
-
-                <div className="flex flex-none items-center gap-1.5">
-                  {(['primary', 'secondary'] as const).map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => assign(font, role)}
-                      disabled={rowBusy}
-                      aria-pressed={font.role === role}
-                      className={cx(
-                        'rounded-lg border px-2.5 py-1 font-space text-[11px] uppercase tracking-[0.08em] transition-colors disabled:opacity-50',
-                        font.role === role
-                          ? 'border-ink bg-ink text-white'
-                          : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
-                      )}
+              <li key={font.id} className="px-4 py-3">
+                <div className="flex items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="truncate text-[19px] leading-tight text-ink"
+                      style={{ fontFamily: `'${sanitizeFamily(font.family)}', sans-serif` }}
                     >
-                      {role}
-                    </button>
-                  ))}
+                      {font.label}
+                    </p>
+                    <p className="mt-0.5 font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+                      {font.format} &middot; font-{sanitizeFamily(font.family)}
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => remove(font)}
                     disabled={rowBusy}
                     aria-label={`Remove ${font.label}`}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-danger-soft hover:text-accent-red disabled:opacity-50"
+                    className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-danger-soft hover:text-accent-red disabled:opacity-50"
                   >
                     <Icon name="trash" size={15} />
                   </button>
+                </div>
+
+                {/* One chip per slot, DERIVED from FONT_SLOTS — a new slot appears here
+                    without an edit, and cannot be silently missing from the one place a
+                    manager can fill it. Pressed chips are how the list answers "which
+                    slots does this font fill", and a font may fill several. */}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {FONT_SLOTS.map((slot) => {
+                    const held = font.slots.includes(slot)
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => assign(font, slot)}
+                        disabled={rowBusy}
+                        aria-pressed={held}
+                        aria-label={`${slotLabel(slot)} font: ${font.label}`}
+                        className={cx(
+                          'rounded-lg border px-2.5 py-1 font-space text-[11px] uppercase tracking-[0.08em] transition-colors disabled:opacity-50',
+                          held
+                            ? 'border-ink bg-ink text-white'
+                            : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
+                        )}
+                      >
+                        {slotLabel(slot)}
+                      </button>
+                    )
+                  })}
                 </div>
               </li>
             )

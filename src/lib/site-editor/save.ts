@@ -6,26 +6,112 @@
  * (see ./manifest): a `site_content` key (blank clears the override → template
  * default), or an `artist` column (name / bio / hero_image_url). Media fields go
  * through the upload flow, not here yet.
+ *
+ * A CUSTOM site has no local manifest (its edit-list is posted over the bridge at
+ * runtime), so its fields take the `saveCustomField` path below instead. Callers say so
+ * by passing `template: null` — NOT by passing an unknown template string. A custom-site
+ * artist still carries a built-in `template` value (`artists_template_check` allows only
+ * 'classic'/'cinematic', and skeen is 'cinematic' + site_kind='custom'), so
+ * `manifestFor(row.template)` resolves a manifest that has nothing to do with the site
+ * being edited. Deciding custom-ness by "no manifest found" would therefore never fire.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { acceptsValue, fieldsFor, SEO_FIELDS } from '@/lib/site-content-schema'
+import { acceptsValue, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
 import { safeHref } from '@/lib/url'
 
+/**
+ * The `site_content` keys a CUSTOM site's field key may NOT claim.
+ *
+ * A custom field key is client-supplied text that becomes a site_content key, and a few
+ * of those keys are read by features OTHER than the site's own render path — regardless
+ * of the artist's template. Left open, a manifest field named `booking_email` would let
+ * the Text panel silently re-route the artist's enquiries to any address.
+ *
+ *  • booking_email — rung 3 of `resolve_booking_recipient` (20260722130000) and the EPK
+ *    contact fallback (lib/epk.ts) read it for ANY artist. It takes effect without a
+ *    publish, so a bad write is live immediately.
+ *  • the SEO keys — lib/seo.ts reads them for every artist's <head>.
+ *
+ * Every OTHER template key is left available. Those are read only through
+ * `fieldValue(content, template, key)` while RENDERING a built-in template, and a custom
+ * artist's public route redirects to their own site instead — so a collision is inert.
+ * Should they ever revert to a built-in template, a colliding key resurfaces as ordinary
+ * editable site text (a heading), which is cosmetic and visible; that is a different
+ * class from silently redirecting mail or rewriting <head>.
+ *
+ * DERIVED, never hand-listed (AGENTS.md rule 4): an email-typed site-text field IS a
+ * routing address, so a new one is reserved the day it is added to the schema.
+ */
+const RESERVED_CONTENT_KEYS = new Set<string>([
+  ...SEO_FIELDS.map((f) => f.key),
+  ...Object.values(TEMPLATE_FIELDS).flatMap((fields) =>
+    fields.filter((f) => f.type === 'email').map((f) => f.key),
+  ),
+])
+
+/** The shape a CUSTOM site's field key must have to become a site_content key. Mirrors
+ *  the DB's own client-supplied-key constraint (`media.site_role ~ '^[a-z0-9_]{1,64}$'`,
+ *  20260724120000) so the two agree on what a site may name a region. Lowercase
+ *  identifier only: no path, quote, or separator characters can reach the key column. */
+function isContentKeyShape(key: string): boolean {
+  return /^[a-z0-9_]{1,64}$/.test(key)
+}
+
+/**
+ * Write ONE custom-site field to `site_content` (blank clears the row → the site falls
+ * back to whatever it renders for an unset key).
+ *
+ * Deliberately does NOT check manifest membership, for the same reason `saveEditorStyle`
+ * doesn't: a custom site posts its edit-list at RUNTIME over the bridge (D-D), so there
+ * is nothing local to resolve the key against. Before this existed, every custom-site
+ * text save returned 'Unknown field.' and the Text panel was write-only. The key SHAPE
+ * plus the reserved set are what replace manifest membership.
+ */
+async function saveCustomField(
+  supabase: SupabaseClient,
+  artistId: string,
+  fieldKey: string,
+  trimmed: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isContentKeyShape(fieldKey)) return { ok: false, error: 'Unknown field.' }
+  if (RESERVED_CONTENT_KEYS.has(fieldKey)) return { ok: false, error: 'That field name is reserved.' }
+
+  if (trimmed === '') {
+    // DELETE, not an empty string: storing '' would ship a blank override the site can't
+    // tell from a real value, so clearing a caption would never actually clear it.
+    const { error } = await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', fieldKey)
+    return error ? { ok: false, error: error.message } : { ok: true }
+  }
+  const { error } = await supabase
+    .from('site_content')
+    .upsert({ artist_id: artistId, key: fieldKey, value: trimmed }, { onConflict: 'artist_id,key' })
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
 export async function saveEditorField(
   supabase: SupabaseClient,
   artistId: string,
-  template: string,
+  /** The built-in template whose manifest resolves this field, or NULL for a custom
+   *  site, whose manifest the editor only sees at runtime (see the module note). */
+  template: string | null,
   fieldKey: string,
   value: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const manifest = manifestFor(template)
-  const field = manifest ? fieldByKey(manifest, fieldKey) : undefined
-  if (!field) return { ok: false, error: 'Unknown field.' }
+  const manifest = template === null ? undefined : manifestFor(template)
 
+  // The 2000-char cap applies to BOTH paths: a caption longer than its strip is invisible
+  // on the site but still ships in the HTML of every page load.
   const trimmed = value.trim().slice(0, 2000)
+
+  // A custom site's fields arrive over the bridge, so there is nothing to resolve them
+  // against. Route before the membership check, which could only ever refuse them.
+  if (!manifest) return saveCustomField(supabase, artistId, fieldKey, trimmed)
+
+  const field = fieldByKey(manifest, fieldKey)
+  if (!field) return { ok: false, error: 'Unknown field.' }
 
   if (field.target.store === 'site_content') {
     const key = field.target.key
@@ -35,7 +121,9 @@ export async function saveEditorField(
       return { ok: true }
     }
     // Reuse the schema's per-field validation (email fields reject junk).
-    const scField = fieldsFor(template).find((f) => f.key === key) ?? SEO_FIELDS.find((f) => f.key === key)
+    // `manifest.template`, not the argument: identical for a built-in (manifestFor keys on
+    // it) and it keeps the nullable custom-site signal out of the schema lookup.
+    const scField = fieldsFor(manifest.template).find((f) => f.key === key) ?? SEO_FIELDS.find((f) => f.key === key)
     if (scField && !acceptsValue(scField, trimmed)) return { ok: false, error: 'That value looks invalid.' }
     const { error } = await supabase
       .from('site_content')

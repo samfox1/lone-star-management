@@ -112,9 +112,10 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
       <section className="space-y-3 border-t border-hairline pt-8">
         <h2 className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">Fonts</h2>
         <p className="font-space text-xs leading-relaxed text-ink-faint">
-          Upload the fonts the site is set in. Primary is headings and display type,
-          secondary is body text. Any font here can also be picked for one part of the
-          site in the editor. Draft until you publish.
+          Upload the fonts the site is set in, then put them in slots. Primary is headings
+          and display type, secondary is body text, and the custom slots are for whatever
+          else the site asks for. One font can fill several slots. Any font here can also
+          be picked for one part of the site in the editor. Draft until you publish.
         </p>
         <FontManager artistId={id} fonts={fonts} />
       </section>

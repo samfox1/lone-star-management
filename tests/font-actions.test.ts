@@ -12,7 +12,7 @@
  * ownership read after the write.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeArtistFont, setArtistFont, setFontRole } from '@/lib/fonts'
+import { removeArtistFont, setArtistFont, setFontSlot } from '@/lib/fonts'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
@@ -29,14 +29,14 @@ vi.mock('@/lib/fonts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/fonts')>()),
   setArtistFont: vi.fn(async () => ({ ok: true, font: { id: 'f1' } })),
   removeArtistFont: vi.fn(async () => ({ ok: true, storagePath: 'a1/fonts/x.woff2' })),
-  setFontRole: vi.fn(async () => ({ ok: true })),
+  setFontSlot: vi.fn(async () => ({ ok: true })),
 }))
 // The sweep talks to Storage; the actions only have to not depend on its result.
 vi.mock('@/lib/storage-gc', () => ({ gcFontObjects: vi.fn(async () => {}) }))
 
 const mockedAdd = vi.mocked(setArtistFont)
 const mockedRemove = vi.mocked(removeArtistFont)
-const mockedRole = vi.mocked(setFontRole)
+const mockedSlot = vi.mocked(setFontSlot)
 
 const actions = () => import('@/app/artists/[id]/(dashboard)/brand/actions')
 
@@ -61,23 +61,23 @@ describe('the font actions refuse a caller who does not manage the artist', () =
     expect(mockedRemove).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: setFontRoleAction', async () => {
+  it('CRITICAL: setFontSlotAction', async () => {
     visible = false
-    const { setFontRoleAction } = await actions()
-    expect((await setFontRoleAction('a1', 'f1', 'primary')).error).toBe('Not found.')
-    expect(mockedRole).not.toHaveBeenCalled()
+    const { setFontSlotAction } = await actions()
+    expect((await setFontSlotAction('a1', 'primary', 'f1')).error).toBe('Not found.')
+    expect(mockedSlot).not.toHaveBeenCalled()
   })
 })
 
 describe('a manager gets through, and a failure underneath is reported', () => {
   it('writes when the caller manages the artist', async () => {
-    const { addArtistFontAction, removeArtistFontAction, setFontRoleAction } = await actions()
+    const { addArtistFontAction, removeArtistFontAction, setFontSlotAction } = await actions()
     expect((await addArtistFontAction('a1', VALID)).error).toBeUndefined()
     expect((await removeArtistFontAction('a1', 'f1')).error).toBeUndefined()
-    expect((await setFontRoleAction('a1', 'f1', 'primary')).error).toBeUndefined()
+    expect((await setFontSlotAction('a1', 'primary', 'f1')).error).toBeUndefined()
     expect(mockedAdd).toHaveBeenCalledTimes(1)
     expect(mockedRemove).toHaveBeenCalledTimes(1)
-    expect(mockedRole).toHaveBeenCalledTimes(1)
+    expect(mockedSlot).toHaveBeenCalledTimes(1)
   })
 
   it('CRITICAL: passes the underlying error through instead of reporting success', async () => {
@@ -88,9 +88,9 @@ describe('a manager gets through, and a failure underneath is reported', () => {
     expect((await addArtistFontAction('a1', VALID)).error).toBe('That file location is not valid.')
   })
 
-  it('a role clear (null) is a legitimate call, not a missing argument', async () => {
-    const { setFontRoleAction } = await actions()
-    expect((await setFontRoleAction('a1', 'f1', null)).error).toBeUndefined()
-    expect(mockedRole).toHaveBeenCalledWith(expect.anything(), 'a1', 'f1', null)
+  it('emptying a slot (null) is a legitimate call, not a missing argument', async () => {
+    const { setFontSlotAction } = await actions()
+    expect((await setFontSlotAction('a1', 'primary', null)).error).toBeUndefined()
+    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'primary', null)
   })
 })

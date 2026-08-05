@@ -42,6 +42,7 @@ function siteData(): SiteData {
     site_content: {},
     styles: {},
     fonts: [],
+    font_slots: {},
   }
 }
 

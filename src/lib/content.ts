@@ -259,12 +259,20 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     snapshot: ['id', 'region_key', 'class_names'],
     orderBy: ['region_key'],
   },
-  // Fonts publish like styles do: uploading and assigning roles is DRAFT work, and the
-  // fan-facing stylesheet changes only at publish. The revisions entity_type CHECK
-  // already admits 'artist_font' (20260805140000).
+  // Fonts publish like styles do: uploading a font and assigning it to a slot is DRAFT
+  // work, and the fan-facing stylesheet changes only at publish. The revisions
+  // entity_type CHECK already admits 'artist_font' (20260805140000).
+  //
+  // Reads the VIEW, not the table: `slots` (the site-wide slots this font fills) rides
+  // the FONT's snapshot rather than publishing as its own entity type. Publishing is
+  // per-type and sequential, so a separate `artist_font_slot` type would leave a window
+  // where a live slot names a font that is not published yet — a site pointing at a
+  // family with no @font-face. Inside the font's own row that state cannot be expressed.
+  // Writes still go to `artist_fonts` / `artist_font_slots` directly (lib/fonts.ts);
+  // artist_font is not a CrudEntity, so nothing writes through this table name.
   artist_font: {
-    table: 'artist_fonts',
-    snapshot: ['id', 'label', 'family', 'storage_path', 'format', 'role'],
+    table: 'artist_fonts_with_slots',
+    snapshot: ['id', 'label', 'family', 'storage_path', 'format', 'slots'],
     orderBy: ['created_at'],
   },
 }

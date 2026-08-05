@@ -6,9 +6,10 @@
  *      every cross-tenant case below asserts the row STATE with the service client. A
  *      marker is planted first, so "B could not delete it" can never pass vacuously
  *      because there was nothing there to delete.
- *   2. The single-role index. One primary and one secondary per artist is what the
- *      templates read; two rows claiming 'primary' makes the site's heading font depend
- *      on row order.
+ *   2. The slot table's shape. One font per (artist, slot) is what the templates read;
+ *      two rows claiming 'primary' makes the site's heading font depend on row order.
+ *      The composite FK and its cascade are here too: a slot must not be able to name
+ *      another tenant's font, and deleting a font must free the slots it filled.
  *   3. The bucket's allowed_mime_types. The `fonts` bucket is PUBLIC-READ — a fan's
  *      browser fetches the file directly — so an SVG accepted here is stored XSS on the
  *      Supabase origin. The client-side rules are only advice; this is the guard a
@@ -17,7 +18,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { FONTS_BUCKET, listArtistFonts, removeArtistFont, setArtistFont, setFontRole } from '@/lib/fonts'
+import { FONT_SLOTS, FONTS_BUCKET, listArtistFonts, removeArtistFont, setArtistFont, setFontSlot } from '@/lib/fonts'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -31,10 +32,16 @@ let markerId: string
 let markerPath: string
 
 /** Read A's fonts with the god key, so an assertion never depends on the RLS being
- *  tested. Returns rows, not a count — a role or label change has to be visible too. */
-async function rowsOfA(): Promise<{ id: string; family: string; role: string | null; label: string }[]> {
-  const { data } = await svc.from('artist_fonts').select('id, family, role, label').eq('artist_id', artistA)
-  return (data ?? []) as { id: string; family: string; role: string | null; label: string }[]
+ *  tested. Returns rows, not a count — a label change has to be visible too. */
+async function rowsOfA(): Promise<{ id: string; family: string; label: string }[]> {
+  const { data } = await svc.from('artist_fonts').select('id, family, label').eq('artist_id', artistA)
+  return (data ?? []) as { id: string; family: string; label: string }[]
+}
+
+/** A's slots, read with the god key for the same reason. */
+async function slotsOfA(): Promise<{ slot: string; font_id: string }[]> {
+  const { data } = await svc.from('artist_font_slots').select('slot, font_id').eq('artist_id', artistA)
+  return (data ?? []) as { slot: string; font_id: string }[]
 }
 
 const ownedPath = (artistId: string, ext = 'woff2') =>
@@ -93,10 +100,57 @@ describe('artist_fonts is tenant-scoped', () => {
     expect((await rowsOfA()).map((r) => r.id)).toContain(markerId)
   })
 
-  it("CRITICAL: B cannot give A's font a role", async () => {
-    const res = await setFontRole(asB, artistA, markerId, 'primary')
+  it("CRITICAL: B cannot put A's font in a slot", async () => {
+    const res = await setFontSlot(asB, artistA, 'primary', markerId)
     expect(res.ok).toBe(false)
-    expect((await rowsOfA()).find((r) => r.id === markerId)?.role).toBeNull()
+    // The row STATE, not the return value: an RLS-filtered upsert can look like success.
+    expect(await slotsOfA()).toEqual([])
+  })
+
+  it("CRITICAL: B cannot EMPTY a slot A has filled", async () => {
+    // Planted first, so the denial is not vacuously true over an empty table.
+    expect((await setFontSlot(asA, artistA, 'secondary', markerId)).ok).toBe(true)
+    expect((await slotsOfA()).map((s) => s.slot)).toContain('secondary')
+
+    const res = await setFontSlot(asB, artistA, 'secondary', null)
+    expect(res.ok).toBe(false)
+    expect((await slotsOfA()).map((s) => s.slot)).toContain('secondary')
+
+    await svc.from('artist_font_slots').delete().eq('artist_id', artistA)
+  })
+
+  it("CRITICAL: B cannot REPLACE the font in a slot A has already filled", async () => {
+    // The upsert's OTHER half: the conflict-UPDATE, reached only when the slot is already
+    // filled. Planted first so this is not vacuous.
+    //
+    // What it actually does, measured rather than assumed: Postgres raises 42501 here
+    // too, so this denial is an ERROR and not a silent row-filter. That means the
+    // zero-rows guard in setFontSlot's upsert branch cannot be mutation-proven — see the
+    // note on it. The DELETE branch below is the one that really row-filters.
+    expect((await setFontSlot(asA, artistA, 'custom_1', markerId)).ok).toBe(true)
+    const bFont = await svc
+      .from('artist_fonts')
+      .insert({ artist_id: artistB, label: 'B Steal', family: 'slot-probe-steal', storage_path: ownedPath(artistB), format: 'woff2' })
+      .select('id')
+      .single()
+
+    const res = await setFontSlot(asB, artistA, 'custom_1', bFont.data!.id as string)
+    expect(res.ok).toBe(false)
+    // Row STATE, read with the god key: A's font still holds the slot.
+    expect((await slotsOfA()).find((s) => s.slot === 'custom_1')?.font_id).toBe(markerId)
+
+    await svc.from('artist_font_slots').delete().eq('artist_id', artistA)
+    await svc.from('artist_fonts').delete().eq('id', bFont.data!.id)
+  })
+
+  it("CRITICAL: B cannot READ which fonts A has put in slots", async () => {
+    expect((await setFontSlot(asA, artistA, 'primary', markerId)).ok).toBe(true)
+    const { data } = await asB.from('artist_font_slots').select('slot, font_id').eq('artist_id', artistA)
+    expect(data ?? []).toEqual([])
+    // …and the view A reads through is RLS-scoped too (security_invoker), or B would get
+    // the slots back through the door lib/fonts.ts actually uses.
+    expect(await listArtistFonts(asB, artistA)).toEqual([])
+    await svc.from('artist_font_slots').delete().eq('artist_id', artistA)
   })
 
   it('CRITICAL: a font row can only point INSIDE its own artist folder', async () => {
@@ -123,57 +177,99 @@ describe('artist_fonts is tenant-scoped', () => {
 })
 
 describe('the database holds the shape lib/fonts.ts promises', () => {
-  it('CRITICAL: an artist cannot have two primary fonts', async () => {
-    // Service role on purpose: setFontRole vacates the incumbent first, so the index is
-    // only reachable by a writer that skips it — a script, the copilot, a later refactor.
-    const first = await svc
+  it('CRITICAL: a slot holds ONE font — the second claimant is refused, not appended', async () => {
+    // Service role on purpose: setFontSlot upserts, so the primary key is only reachable
+    // by a writer that skips it — a script, the copilot, a later refactor. Two rows for
+    // one slot makes the site's heading font depend on row order.
+    const other = await svc
       .from('artist_fonts')
-      .insert({ artist_id: artistA, label: 'One', family: 'role-probe-one', storage_path: ownedPath(artistA), format: 'woff2', role: 'primary' })
+      .insert({ artist_id: artistA, label: 'Other', family: 'slot-probe-other', storage_path: ownedPath(artistA), format: 'woff2' })
       .select('id')
       .single()
-    expect(first.error).toBeNull()
+    expect(other.error).toBeNull()
 
-    const second = await svc.from('artist_fonts').insert({
-      artist_id: artistA,
-      label: 'Two',
-      family: 'role-probe-two',
-      storage_path: ownedPath(artistA),
-      format: 'woff2',
-      role: 'primary',
-    })
+    expect((await svc.from('artist_font_slots').insert({ artist_id: artistA, slot: 'primary', font_id: markerId })).error).toBeNull()
+    const second = await svc
+      .from('artist_font_slots')
+      .insert({ artist_id: artistA, slot: 'primary', font_id: other.data!.id })
     expect(second.error).not.toBeNull()
-    expect(second.error?.message ?? '').toMatch(/duplicate key|unique/i)
+    // 23505, not just "an error": a test that accepts any failure would pass on a
+    // permission error and never once reach the primary key it is named for.
+    expect(second.error?.code).toBe('23505')
 
-    // …and the same for secondary, which is a separate slot, not a separate rule.
-    expect(
-      (
-        await svc.from('artist_fonts').insert({
-          artist_id: artistA,
-          label: 'Two',
-          family: 'role-probe-three',
-          storage_path: ownedPath(artistA),
-          format: 'woff2',
-          role: 'secondary',
-        })
-      ).error,
-    ).toBeNull()
-    expect(
-      (
-        await svc.from('artist_fonts').insert({
-          artist_id: artistA,
-          label: 'Three',
-          family: 'role-probe-four',
-          storage_path: ownedPath(artistA),
-          format: 'woff2',
-          role: 'secondary',
-        })
-      ).error,
-    ).not.toBeNull()
-
-    await svc.from('artist_fonts').delete().eq('artist_id', artistA).like('family', 'role-probe-%')
+    await svc.from('artist_font_slots').delete().eq('artist_id', artistA)
+    await svc.from('artist_fonts').delete().eq('id', other.data!.id)
   })
 
-  it('MANY fonts with no role are fine — the roles are a shortcut, not a gate', async () => {
+  it('CRITICAL: ONE font fills MANY slots — the thing the old role column could not do', async () => {
+    // The whole point of the table. Under `artist_fonts.role` this required uploading the
+    // same file twice under two names.
+    for (const slot of FONT_SLOTS) {
+      expect(
+        (await svc.from('artist_font_slots').insert({ artist_id: artistA, slot, font_id: markerId })).error,
+        `slot ${slot}`,
+      ).toBeNull()
+    }
+    expect((await slotsOfA()).map((s) => s.slot).sort()).toEqual([...FONT_SLOTS].sort())
+    // And the view hands them all back on the one font, which is what publishes.
+    const [font] = await listArtistFonts(asA, artistA)
+    expect([...font.slots].sort()).toEqual([...FONT_SLOTS].sort())
+
+    await svc.from('artist_font_slots').delete().eq('artist_id', artistA)
+  })
+
+  it('CRITICAL: the slot CHECK refuses a name outside the platform vocabulary', async () => {
+    // The vocabulary is a contract with every consuming site. A slot key nobody on the
+    // other side reads is indistinguishable from a font that failed to load.
+    for (const slot of ['tertiary', 'custom_4', 'Primary', 'custom-1', '']) {
+      const { error } = await svc.from('artist_font_slots').insert({ artist_id: artistA, slot, font_id: markerId })
+      // 23514 = check_violation. Naming the code is what proves the CHECK ran, rather
+      // than the row being turned away by something earlier for some other reason.
+      expect(error?.code, `slot=${slot} must be rejected by the CHECK`).toBe('23514')
+    }
+  })
+
+  it("CRITICAL: a slot cannot name ANOTHER artist's font", async () => {
+    // The composite FK (font_id, artist_id) is the guard. Without it, A could point their
+    // primary slot at B's licensed typeface and serve it from A's public site.
+    const bFont = await svc
+      .from('artist_fonts')
+      .insert({ artist_id: artistB, label: 'B Font', family: 'slot-probe-b', storage_path: ownedPath(artistB), format: 'woff2' })
+      .select('id')
+      .single()
+    expect(bFont.error).toBeNull()
+
+    const { error } = await svc
+      .from('artist_font_slots')
+      .insert({ artist_id: artistA, slot: 'primary', font_id: bFont.data!.id })
+    // 23503 = foreign_key_violation, which is the composite FK and nothing else.
+    expect(error?.code).toBe('23503')
+    expect(await slotsOfA()).toEqual([])
+
+    await svc.from('artist_fonts').delete().eq('id', bFont.data!.id)
+  })
+
+  it('CRITICAL: deleting a font FREES its slots — no slot left naming a missing face', async () => {
+    const doomed = await svc
+      .from('artist_fonts')
+      .insert({ artist_id: artistA, label: 'Doomed', family: 'slot-probe-doomed', storage_path: ownedPath(artistA), format: 'woff2' })
+      .select('id')
+      .single()
+    expect(doomed.error).toBeNull()
+    expect(
+      (await svc.from('artist_font_slots').insert({ artist_id: artistA, slot: 'custom_3', font_id: doomed.data!.id }))
+        .error,
+    ).toBeNull()
+    expect((await slotsOfA()).map((s) => s.slot)).toContain('custom_3')
+
+    // Through the app's own delete path, which is what a manager clicks.
+    expect((await removeArtistFont(asA, artistA, doomed.data!.id)).ok).toBe(true)
+    // A dangling slot would publish a `--font-custom-3` naming a family no @font-face
+    // defines — a site-wide fallback with nothing in the UI to explain it.
+    expect((await slotsOfA()).map((s) => s.slot)).not.toContain('custom_3')
+  })
+
+  it('MANY fonts in no slot at all are fine — a slot is a shortcut, not a gate', async () => {
     for (const family of ['roleless-one', 'roleless-two', 'roleless-three']) {
       expect(
         (

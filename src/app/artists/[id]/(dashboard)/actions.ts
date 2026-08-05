@@ -37,6 +37,7 @@ import {
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
 import { saveEditorField, saveEditorLink, saveEditorStyle, setImageField } from '@/lib/site-editor/save'
+import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
@@ -281,6 +282,12 @@ async function upsertSiteContentFields(
  * `site_content` key (blank clears the override → template default), or an `artist`
  * column (name / bio / hero_image_url). Media (image/video) fields are handled by the
  * upload flow, not here yet. Signed-in + RLS-scoped; draft-only until the next publish.
+ *
+ * A CUSTOM site is passed `template: null`, because its `template` column is vestigial:
+ * `artists_template_check` allows only 'classic'/'cinematic', so a custom artist (skeen
+ * is 'cinematic' + site_kind='custom') still resolves a built-in manifest — one that
+ * describes a site nobody is looking at. Every save of one of the site's OWN fields then
+ * came back 'Unknown field.'
  */
 export async function saveEditorFieldAction(
   artistId: string,
@@ -293,10 +300,15 @@ export async function saveEditorFieldAction(
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not signed in.' }
 
-  const { data: artist } = await supabase.from('artists').select('template').eq('id', artistId).single()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('template, site_kind, custom_site_url')
+    .eq('id', artistId)
+    .single()
   if (!artist) return { ok: false, error: 'Artist not found.' }
 
-  const res = await saveEditorField(supabase, artistId, artist.template as string, fieldKey, value)
+  const template = isCustom(artist) ? null : (artist.template as string)
+  const res = await saveEditorField(supabase, artistId, template, fieldKey, value)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
 }

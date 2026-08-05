@@ -38,6 +38,7 @@ const draft: PublicSitePayload = {
   site_content: {},
   styles: {},
   fonts: [],
+  font_slots: {},
 }
 
 /** A stand-in for the iframe's contentWindow — the thing we postMessage into. */

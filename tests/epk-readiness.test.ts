@@ -40,6 +40,7 @@ function site(over: Partial<SiteData> = {}, artist: Partial<SiteData['artist']> 
     site_content: {},
     styles: {},
     fonts: [],
+    font_slots: {},
     ...over,
   }
 }

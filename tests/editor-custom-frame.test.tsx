@@ -36,6 +36,7 @@ const draft: PublicSitePayload = {
   site_content: {},
   styles: { hero_wordmark: 'text-9xl' },
   fonts: [],
+  font_slots: {},
 }
 
 describe('init-data payload — the wire shape a custom site consumes', () => {

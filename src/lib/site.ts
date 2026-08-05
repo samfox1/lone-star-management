@@ -12,7 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ARTIST_SNAPSHOT, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
-import type { SiteFont } from '@/lib/fonts'
+import { FONT_SLOTS, type FontSlot, type FontSlotMap, type SiteFont } from '@/lib/fonts'
 import { mediaUrl } from '@/lib/storage-url'
 
 export type SiteTrack = {
@@ -147,10 +147,15 @@ export type SiteData = {
   media: SiteMedia[]
   site_content: SiteContent
   styles: SiteStyles
-  /** Published custom fonts (family/label/path/format/role). The renderer feeds these to
+  /** Published custom fonts (family/label/path/format). The renderer feeds these to
    *  `fontStyleCss`, which is the sanitizing gate — the door emits rows verbatim. Absent
    *  on any revision published before 20260805160000, so always read with `?? []`. */
   fonts: SiteFont[]
+  /** slot → family, for the ASSIGNED slots only. A MAP, not a flag on the font, because
+   *  one font may fill several slots — which is exactly what the `role` column this
+   *  replaced could not express (20260805180000). Absent on any revision published
+   *  before 20260805200000, so always read with `?? {}`. */
+  font_slots: FontSlotMap
 }
 
 /**
@@ -191,9 +196,10 @@ export async function getPublishedSite(
   if (error) throw new Error(error.message)
   if (!data) return null
   const site = data as SiteData & { media: { purpose: SiteMedia['purpose']; path: string }[] }
-  // Revisions published before 20260805160000 have no fonts key; a legacy payload must
-  // render, not crash the whole site over a feature it predates.
-  return { ...site, media: toSiteMedia(site.media), fonts: site.fonts ?? [] }
+  // Revisions published before 20260805160000 have no fonts key, and any published before
+  // 20260805200000 has no font_slots key; a legacy payload must render, not crash the
+  // whole site over a feature it predates.
+  return { ...site, media: toSiteMedia(site.media), fonts: site.fonts ?? [], font_slots: site.font_slots ?? {} }
 }
 
 async function workingSection<T>(
@@ -291,8 +297,8 @@ export async function getWorkingSitePayload(
       .eq('artist_id', artistId)
       .then(({ data }) => data ?? []),
     supabase
-      .from('artist_fonts')
-      .select('family, label, storage_path, format, role')
+      .from('artist_fonts_with_slots') // the VIEW: the font plus the slots it fills
+      .select('family, label, storage_path, format, slots')
       .eq('artist_id', artistId)
       .order('family') // matches get_public_site's fonts order
       .then(({ data }) => data ?? []),
@@ -329,6 +335,22 @@ export async function getWorkingSitePayload(
       .map((r) => [r.key, r.value as string]),
   )
 
+  // Invert the fonts' slot lists into the door's slot→family map. Built from the same
+  // rows the `fonts` array comes from, so a slot can never name a font the preview does
+  // not also carry — the same property the published side gets from riding the snapshot.
+  const fontRowList = fontRows as {
+    family: string
+    label: string
+    storage_path: string
+    format: string
+    slots: string[] | null
+  }[]
+  const font_slots: FontSlotMap = {}
+  for (const slot of FONT_SLOTS) {
+    const owner = fontRowList.find((f) => (f.slots ?? []).includes(slot))
+    if (owner) font_slots[slot as FontSlot] = owner.family
+  }
+
   // Same region_key→class_names shape get_public_site's jsonb_object_agg produces
   // (empty/cleared class strings are dropped), so preview matches the public site.
   const styles = Object.fromEntries(
@@ -352,9 +374,16 @@ export async function getWorkingSitePayload(
     styles,
     // Same field names the door's fonts array carries (path, not storage_path), so
     // preview and the custom-site bridge see the published shape.
-    fonts: (fontRows as { family: string; label: string; storage_path: string; format: string; role: SiteFont['role'] }[]).map(
-      (f) => ({ family: f.family, label: f.label, path: f.storage_path, format: f.format, role: f.role }),
-    ),
+    fonts: fontRowList.map((f) => ({
+      family: f.family,
+      label: f.label,
+      path: f.storage_path,
+      format: f.format,
+    })),
+    // Mirrors the door's font_slots: slot → family, assigned slots only, built by
+    // inverting each font's own slot list. Iterated in FONT_SLOTS order so the preview
+    // payload is byte-stable, exactly like the door's ordered aggregate.
+    font_slots: font_slots,
   }
 }
 

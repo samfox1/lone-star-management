@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import type { PublicSitePayload } from '@/lib/site'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
+import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
@@ -18,6 +19,37 @@ import {
   type EditorVideo,
   type GalleryPhoto,
 } from './editor-inspector'
+
+/**
+ * The Text panel's fields for a CUSTOM site — the ones its frame declared over the
+ * bridge. page.tsx cannot produce these: it only knows the built-in MANIFESTS, and the
+ * artist's `template` column names one of those even when the site being edited is the
+ * artist's own. Text was the last category still reading that local manifest, so a custom
+ * site's own headings and captions had no control anywhere in the editor.
+ *
+ * A custom manifest's fields carry no `target`: the field KEY is the site_content key,
+ * so the current value is a plain lookup rather than `fieldCurrentValue` (which reads
+ * `field.target.store` and would throw on a targetless field). Text/email only — an image
+ * field is edited as an image, and a text box holding an image URL is a worse bug than a
+ * missing control. The manifest is untrusted cross-origin JSON, so `fields` may be
+ * absent entirely (older skeen builds announce only `styles`).
+ */
+export function runtimeTextFields(
+  manifest: TemplateManifest | null,
+  values: SiteContent,
+): EditorTextField[] {
+  return (manifest?.fields ?? [])
+    .filter((f) => f.type === 'text' || f.type === 'email')
+    .map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type as 'text' | 'email',
+      value: values[f.key] ?? '',
+      // Same multiline rule the built-in path uses (page.tsx), so a body-copy field gets
+      // a textarea on a custom site too.
+      multiline: f.key === 'artist_bio' || f.key.endsWith('_copy'),
+    }))
+}
 
 /**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
@@ -45,6 +77,7 @@ export function EditorShell({
   photos,
   imageFields,
   textFields,
+  siteContent = {},
   links,
   supportLinks,
   linkValues,
@@ -67,7 +100,13 @@ export function EditorShell({
    *  slots + gallery instead, so it passes []; skeen's hero is a video (Videos panel), not an
    *  image, so there is deliberately no hero-image tile for it. */
   imageFields: EditorImageField[]
+  /** Text fields page.tsx resolved from the artist's LOCAL template manifest. Used only
+   *  for a built-in site: a custom site's are DROPPED in favour of the frame's own
+   *  manifest (see the `fields` memo) — they describe a template it does not render. */
   textFields: EditorTextField[]
+  /** The draft `site_content` map, for pairing a CUSTOM site's runtime manifest fields
+   *  with their current values (a custom field's key IS its site_content key). */
+  siteContent?: SiteContent
   links: EditorLink[]
   supportLinks: EditorSupportLink[]
   /** Current URL for each manifest link region, keyed by its role (from the DB). The
@@ -124,6 +163,17 @@ export function EditorShell({
 
   const view = fitViewport(device, panel.w, panel.h)
 
+  // Text is the last category to read the BRIDGED manifest — styles, links, slots and
+  // components already do (below). `customSiteUrl` is the discriminator, NOT "is there a
+  // local manifest": a custom artist's `template` column still names a built-in one, so a
+  // manifest always resolves and the custom branch would never be taken. Without this the
+  // Text panel shows the built-in template's fields (which this site does not render)
+  // while every field the site DOES declare is unreachable.
+  const fields = useMemo(
+    () => (customSiteUrl ? runtimeTextFields(manifest, siteContent) : textFields),
+    [customSiteUrl, textFields, manifest, siteContent],
+  )
+
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
@@ -131,7 +181,7 @@ export function EditorShell({
         artistId={artistId}
         photos={photos}
         imageFields={imageFields}
-        textFields={textFields}
+        textFields={fields}
         links={links}
         supportLinks={supportLinks}
         videos={videos}

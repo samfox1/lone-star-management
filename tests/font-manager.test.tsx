@@ -18,16 +18,16 @@ import { FontManager } from '@/app/artists/[id]/(dashboard)/brand/font-manager'
 import {
   addArtistFontAction,
   removeArtistFontAction,
-  setFontRoleAction,
+  setFontSlotAction,
 } from '@/app/artists/[id]/(dashboard)/brand/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
-import { sanitizeFamily, type ArtistFont } from '@/lib/fonts'
+import { FONT_SLOTS, sanitizeFamily, type ArtistFont } from '@/lib/fonts'
 import { FONT_UPLOAD_RULES, acceptFor } from '@/lib/upload'
 
 vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
   addArtistFontAction: vi.fn(async () => ({})),
   removeArtistFontAction: vi.fn(async () => ({})),
-  setFontRoleAction: vi.fn(async () => ({})),
+  setFontSlotAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 vi.mock('@/app/artists/[id]/(dashboard)/use-storage-upload', () => ({
@@ -35,7 +35,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/use-storage-upload', () => ({
 }))
 
 const mockedRemove = vi.mocked(removeArtistFontAction)
-const mockedRole = vi.mocked(setFontRoleAction)
+const mockedSlot = vi.mocked(setFontSlotAction)
 const mockedToast = vi.mocked(toast)
 
 const font = (over: Partial<ArtistFont> = {}): ArtistFont => ({
@@ -44,13 +44,13 @@ const font = (over: Partial<ArtistFont> = {}): ArtistFont => ({
   family: 'pp-mori',
   storage_path: 'a1/fonts/11111111-1111-4111-8111-111111111111.woff2',
   format: 'woff2',
-  role: null,
+  slots: [],
   ...over,
 })
 
 const FONTS = [
   font(),
-  font({ id: 'f2', label: 'Bebas Neue', family: 'bebas-neue', role: 'primary', storage_path: 'a1/fonts/22222222-2222-4222-8222-222222222222.otf', format: 'otf' }),
+  font({ id: 'f2', label: 'Bebas Neue', family: 'bebas-neue', slots: ['primary'], storage_path: 'a1/fonts/22222222-2222-4222-8222-222222222222.otf', format: 'otf' }),
 ]
 
 const renderList = (fonts: ArtistFont[] = FONTS) => render(<FontManager artistId="a1" fonts={fonts} />)
@@ -60,7 +60,7 @@ beforeEach(() => {
   confirmed = true
   vi.stubGlobal('confirm', vi.fn(() => confirmed))
   mockedRemove.mockResolvedValue({})
-  mockedRole.mockResolvedValue({})
+  mockedSlot.mockResolvedValue({})
 })
 afterEach(() => {
   cleanup()
@@ -174,48 +174,82 @@ describe('FontManager — removing', () => {
   })
 })
 
-describe('FontManager — roles', () => {
-  it('assigns a free role without a prompt', async () => {
+/** The slot chip on one font's row. Named per-font, so a click can never land on the
+ *  other row's chip for the same slot — which is exactly the assertion these tests make. */
+const chip = (slot: string, label: string) =>
+  screen.getByRole('button', { name: `${slot.replace(/_/g, ' ')} font: ${label}` })
+
+describe('FontManager — slots', () => {
+  it('CRITICAL: offers EVERY slot on every font, derived from FONT_SLOTS', () => {
+    // The Brand page is the only place a slot can be filled. A slot missing from this
+    // list is a slot the payload can carry and no manager can ever set — and nothing
+    // would fail; the site would just never get that font.
+    renderList()
+    for (const slot of FONT_SLOTS) {
+      expect(chip(slot, 'PP Mori'), `slot ${slot}`).toBeInTheDocument()
+      expect(chip(slot, 'Bebas Neue'), `slot ${slot}`).toBeInTheDocument()
+    }
+  })
+
+  it('fills a free slot without a prompt', async () => {
     // Nothing is being taken away, so there is nothing to warn about.
     renderList()
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'secondary' })[0])
+      fireEvent.click(chip('secondary', 'PP Mori'))
     })
-    expect(mockedRole).toHaveBeenCalledWith('a1', 'f1', 'secondary')
+    expect(mockedSlot).toHaveBeenCalledWith('a1', 'secondary', 'f1')
     expect(globalThis.confirm).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: confirms before TAKING a role off another font', async () => {
+  it('CRITICAL: ONE font can fill SEVERAL slots — no slot is vacated behind the manager', async () => {
+    // The whole reason slots left the font row. Filling `custom_1` with the font that is
+    // already `primary` must be one write against one slot, not a move.
+    renderList()
+    await act(async () => {
+      fireEvent.click(chip('custom_1', 'Bebas Neue')) // already the primary font
+    })
+    expect(mockedSlot).toHaveBeenCalledTimes(1)
+    expect(mockedSlot).toHaveBeenCalledWith('a1', 'custom_1', 'f2')
+    // Its existing slot is untouched: nothing was asked to clear `primary`.
+    expect(mockedSlot).not.toHaveBeenCalledWith('a1', 'primary', null)
+  })
+
+  it('CRITICAL: confirms before TAKING a slot off another font', async () => {
     // One small button, and the site's heading typeface changes everywhere. The button
-    // itself gives no hint that a second font is about to lose the role.
+    // itself gives no hint that a second font is about to lose the slot.
     confirmed = false
     renderList()
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'primary' })[0]) // PP Mori's
+      fireEvent.click(chip('primary', 'PP Mori')) // Bebas Neue currently holds primary
     })
     expect(globalThis.confirm).toHaveBeenCalled()
-    expect(mockedRole).not.toHaveBeenCalled()
+    expect(mockedSlot).not.toHaveBeenCalled()
   })
 
-  it('clicking the role a font already holds CLEARS it', async () => {
+  it('clicking a slot the font already holds EMPTIES it', async () => {
     renderList()
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'primary' })[1]) // Bebas', already primary
+      fireEvent.click(chip('primary', 'Bebas Neue'))
     })
-    expect(mockedRole).toHaveBeenCalledWith('a1', 'f2', null)
+    expect(mockedSlot).toHaveBeenCalledWith('a1', 'primary', null)
   })
 
-  it('shows which font holds which role', () => {
-    renderList()
-    expect(screen.getAllByRole('button', { name: 'primary' })[1]).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByRole('button', { name: 'primary' })[0]).toHaveAttribute('aria-pressed', 'false')
+  it('shows which slots each font fills', () => {
+    renderList([
+      font({ slots: ['primary', 'custom_2'] }),
+      font({ id: 'f2', label: 'Bebas Neue', family: 'bebas-neue', slots: [] }),
+    ])
+    expect(chip('primary', 'PP Mori')).toHaveAttribute('aria-pressed', 'true')
+    expect(chip('custom_2', 'PP Mori')).toHaveAttribute('aria-pressed', 'true')
+    expect(chip('secondary', 'PP Mori')).toHaveAttribute('aria-pressed', 'false')
+    expect(chip('primary', 'Bebas Neue')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('a failed role change is surfaced', async () => {
-    mockedRole.mockResolvedValueOnce({ error: 'Not found.' })
+  it('a failed slot change is surfaced', async () => {
+    mockedSlot.mockResolvedValueOnce({ error: 'Not found.' })
     renderList()
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'secondary' })[0])
+      fireEvent.click(chip('secondary', 'PP Mori'))
     })
     expect(mockedToast).toHaveBeenCalledWith('Not found.', 'error')
   })
