@@ -447,3 +447,48 @@ describe('CRITICAL: styling a region must not destroy the site’s own classes',
     expect(className).not.toContain('clamp(4rem,18vw,11rem)')
   })
 })
+
+describe('Reset on a section region restores the SITE’S value, not nothing', () => {
+  const HERO_BASE = 'fx-glitch-mono font-alt text-[clamp(4rem,18vw,11rem)] uppercase leading-none'
+  const heroField: EditorTextField = {
+    ...styled,
+    label: 'Hero wordmark',
+    styleRegion: { key: 'hero_wordmark', label: 'Hero wordmark', base: HERO_BASE },
+  }
+
+  it('CRITICAL: clearing size puts the base’s size back, not no size at all', () => {
+    // The live failure: Reset stored `fx-glitch-mono leading-none uppercase font-alt`
+    // with NO size. A section override replaces the base, so the element ended up with
+    // no font-size rule and rendered at inherited body size — the hero wordmark shrank
+    // to a speck.
+    const onStyle = vi.fn()
+    render(
+      <TextFieldEditor
+        field={heroField}
+        value="SKEEN"
+        status="idle"
+        styleValues={{
+          // The base with its size SWAPPED for a real step — one size token, as the
+          // editor itself would produce.
+          hero_wordmark: HERO_BASE.replace(
+            'text-[clamp(4rem,18vw,11rem)]',
+            sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)[1].value,
+          ),
+        }}
+        styleOptions={OPTIONS}
+        onEdit={vi.fn()}
+        onStyle={onStyle}
+        onBack={vi.fn()}
+      />,
+    )
+    const size = screen.getByLabelText('Hero wordmark Size') as HTMLInputElement
+    fireEvent.click(within(size.parentElement!).getByText('Reset'))
+
+    // Reset rebuilds the base exactly, so the override is DELETED ('') and the site's
+    // own classes apply — size included. The failure this pins is the other outcome:
+    // storing a sizeless string, which replaces the base and leaves the element with no
+    // font-size rule at all.
+    const [, className] = onStyle.mock.calls.at(-1) as unknown as string[]
+    expect(className).toBe('')
+  })
+})

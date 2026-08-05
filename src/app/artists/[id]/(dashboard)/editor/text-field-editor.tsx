@@ -5,6 +5,7 @@ import { cx } from '@/lib/cx'
 import {
   applyStyleValue,
   buildTextItemStyleControls,
+  readStyleValue,
   sameClasses,
   type SiteStyleOptions,
 } from '@/lib/site-editor/style-controls'
@@ -124,7 +125,12 @@ export function TextFieldEditor({
                 control={control}
                 cls={cls}
                 onChange={(v) => {
-                  const next = applyStyleValue(cls, control, v)
+                  // Reset/Default on a SECTION region means "what the site had", NOT
+                  // "no class": the override REPLACES the base, so removing the token
+                  // leaves the element with no rule at all. That is what shrank the hero
+                  // wordmark to body size — its base carried the only font-size it had.
+                  const fallback = readStyleValue(control, region.base ?? '')
+                  const next = applyStyleValue(cls, control, v || fallback)
                   setStaged(next) // the control moves NOW; the save follows
                   // A string equal to the base is not an override: save '' so the row is
                   // DELETED rather than pinning a copy of today's defaults, which would
