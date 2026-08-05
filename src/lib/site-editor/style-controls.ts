@@ -84,6 +84,41 @@ const SIZE_OPTIONS: StyleOption[] = [
   { value: 'text-4xl', label: 'XL' },
   { value: 'text-6xl', label: 'Huge' },
 ]
+/**
+ * LINE HEIGHT, emitted with Tailwind's `!` important prefix.
+ *
+ * Two things fight it otherwise. Tailwind's `text-*` size utilities set font-size AND
+ * line-height together, so picking a Size would silently re-loosen the lines. And a site
+ * may pin a line-height structurally on a parent (skeen's polaroid strip does, at
+ * `.strip > p`, which outranks a plain utility class) precisely so a half-styled caption
+ * cannot come out loose. `!` says the manager's explicit choice beats both — which is the
+ * right precedence, and the only one that makes this control feel like it works.
+ */
+const LEADING_OPTIONS: StyleOption[] = [
+  // Below 1.0 deliberately: a site may set a default tighter than `leading-none`, and a
+  // scale whose tight end is looser than what the page already shows makes the control
+  // feel broken — the manager drags toward "tighter" and the text gets looser.
+  { value: '!leading-[0.85]', label: 'Tightest' },
+  { value: '!leading-none', label: 'Tighter' },
+  { value: '!leading-tight', label: 'Tight' },
+  { value: '!leading-snug', label: 'Snug' },
+  { value: '!leading-normal', label: 'Normal' },
+  { value: '!leading-relaxed', label: 'Loose' },
+]
+
+/** LETTER SPACING. No `!` needed: nothing else in the vocabulary sets letter-spacing, so a
+ *  plain utility already wins over an inherited value from a parent. */
+const TRACKING_OPTIONS: StyleOption[] = [
+  { value: 'tracking-tighter', label: 'Tightest' },
+  { value: 'tracking-tight', label: 'Tight' },
+  { value: 'tracking-normal', label: 'Normal' },
+  { value: 'tracking-wide', label: 'Wide' },
+  { value: 'tracking-wider', label: 'Wider' },
+]
+
+const isLeading = (t: string) => t.startsWith('leading-') || t.startsWith('!leading-')
+const isTracking = (t: string) => t.startsWith('tracking-') || t.startsWith('!tracking-')
+
 const WEIGHT_OPTIONS: StyleOption[] = [
   { value: 'font-normal', label: 'Normal' },
   { value: 'font-semibold', label: 'Semibold' },
@@ -275,6 +310,25 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     steps: [DEFAULT, ...WEIGHT_OPTIONS],
     defaultOffScale: true,
     owns: (t) => WEIGHTS.includes(fontSuffix(t)),
+  })
+  // Sam, 2026-08-05: "allow all text input editor sections to edit these parts" — the gap
+  // between stacked lines and between letters. Both were previously fixed by whatever the
+  // site declared, with no way to adjust them from the editor.
+  controls.push({
+    id: 'leading',
+    label: 'Line spacing',
+    kind: 'slider',
+    steps: [DEFAULT, ...LEADING_OPTIONS],
+    defaultOffScale: true,
+    owns: isLeading,
+  })
+  controls.push({
+    id: 'tracking',
+    label: 'Letter spacing',
+    kind: 'slider',
+    steps: [DEFAULT, ...TRACKING_OPTIONS],
+    defaultOffScale: true,
+    owns: isTracking,
   })
   return controls
 }

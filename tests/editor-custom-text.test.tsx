@@ -71,7 +71,7 @@ const CUSTOM = 'https://skeen-website.vercel.app'
 const CUSTOM_MANIFEST = {
   template: 'skeen',
   fields: [
-    { key: 'hero_caption', label: 'Hero caption', type: 'text' },
+    { key: 'hero_caption', label: 'Hero caption', type: 'text', defaultValue: 'Backstage' },
     { key: 'about_copy', label: 'About copy', type: 'text' },
     { key: 'press_email', label: 'Press email', type: 'email' },
     // An image field must NOT become a text box; skeen edits images via slots.
@@ -146,6 +146,25 @@ describe('runtimeTextFields — deriving Text controls from a BRIDGED manifest',
       type: 'text',
       value: '/ backstage /',
     })
+  })
+
+  it("carries the site's declared default, so an unset field isn't shown as Empty", () => {
+    // A custom site keeps its fallbacks in code — the page shows real words while the row
+    // does not exist. Sam opened the Text panel and every one of these read "Empty", which
+    // is true of the database and useless to someone looking at the page. The manifest now
+    // declares what the site renders and the panel shows that instead.
+    const fields = runtimeTextFields(CUSTOM_MANIFEST, {})
+    expect(fields.find((f) => f.key === 'hero_caption')!.defaultValue).toBe('Backstage')
+    // A field whose manifest declares none is still undefined, not the empty string — the
+    // panel falls through to "Empty" for it, which is then the honest answer.
+    expect(fields.find((f) => f.key === 'about_copy')!.defaultValue).toBeUndefined()
+  })
+
+  it("prefers the manager's stored value over the declared default", () => {
+    const fields = runtimeTextFields(CUSTOM_MANIFEST, { hero_caption: 'Typed by the manager' })
+    const f = fields.find((x) => x.key === 'hero_caption')!
+    expect(f.value).toBe('Typed by the manager')
+    expect(f.defaultValue).toBe('Backstage')
   })
 
   it('renders an unset key as an empty control, not "undefined"', () => {

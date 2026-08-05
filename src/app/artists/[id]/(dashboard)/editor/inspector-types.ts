@@ -33,6 +33,13 @@ export type EditorTextField = {
    *  site's text is this kind, and leaving it out of the panel made the Text panel show
    *  five captions on an eleven-region site. */
   styleOnly?: boolean
+  /** What the SITE renders when this field is unset, as declared in its manifest.
+   *
+   *  A field with no row is genuinely empty in the database, and the panel used to say so —
+   *  which is accurate and useless: the manager is looking at a page full of words being
+   *  told every one of them is "Empty". Custom sites keep their own fallbacks in code, so
+   *  this is the only way we can know what is actually on screen. */
+  defaultValue?: string
   /** The style region dressing this field's element, when the site declares one — the
    *  Text panel offers Font/Size/Boldness against it, so the words and how they look are
    *  edited in one place. Null when the site declares no region for this field, which is

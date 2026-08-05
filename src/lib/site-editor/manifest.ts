@@ -33,6 +33,11 @@ export type FieldTarget =
 
 /** A single editable atom — one `data-lse-field="<key>"` region on the page. */
 export type ManifestField = {
+  /** What the SITE renders when this field has no stored row. Custom sites keep their
+   *  fallbacks in code, so their manifest is the only way we can learn them — the Text
+   *  panel would otherwise list a page full of words as "Empty". Optional: built-in
+   *  templates resolve their defaults from TEMPLATE_FIELDS instead. */
+  defaultValue?: string
   /** Stable id; the DOM marker value and the inspector's handle. */
   key: string
   label: string

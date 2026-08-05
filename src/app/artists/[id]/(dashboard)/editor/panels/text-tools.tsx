@@ -38,12 +38,19 @@ export function TextTools({
             <p
               className={cx(
                 'line-clamp-2 rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-[12px] leading-snug',
-                value && !f.styleOnly ? 'text-ink' : 'italic text-ink-faint',
+                (value || f.defaultValue) && !f.styleOnly
+                  ? 'text-ink'
+                  : 'italic text-ink-faint',
               )}
             >
               {/* A style-only row is an AREA of the site, not a box to type in — say what
                   it is rather than showing a blank that reads as missing content. */}
-              {f.styleOnly ? 'Set by the site — restyle only' : value || 'Empty'}
+              {/* An unset field falls back to what the SITE shows, when its manifest says.
+                  "Empty" is true of the database and useless to someone looking at a page
+                  of words; the manager needs to see the copy they are about to replace. */}
+              {f.styleOnly
+                ? 'Set by the site — restyle only'
+                : value || f.defaultValue || 'Empty'}
             </p>
           </div>
         )

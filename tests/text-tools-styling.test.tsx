@@ -122,6 +122,41 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(screen.getByDisplayValue('book@example.com')).toBeTruthy()
   })
 
+  it('offers Line spacing and Letter spacing, ascending, default off-scale', () => {
+    // Sam could not touch either from the editor: the gap between stacked lines and
+    // between letters was whatever the site declared, full stop.
+    const controls = buildTextItemStyleControls(OPTIONS)
+    for (const id of ['leading', 'tracking']) {
+      const c = controls.find((x) => x.id === id)
+      expect(c, id).toBeTruthy()
+      const steps = sliderSteps(c!)
+      expect(steps.some((s) => s.value === ''), `${id} default off-scale`).toBe(false)
+      expect(steps.length).toBeGreaterThan(2)
+    }
+  })
+
+  it('emits line spacing as !important, so a size class cannot re-loosen it', () => {
+    // Tailwind's text-* utilities set font-size AND line-height together, so a plain
+    // leading class loses to the Size the manager just picked. A site may also pin
+    // line-height on a PARENT at higher specificity (skeen's polaroid strip does) to stop
+    // a half-styled caption coming out loose. `!` beats both, which is the precedence a
+    // manager expects from a control they just moved.
+    const leading = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'leading')!
+    for (const step of sliderSteps(leading))
+      expect(step.value.startsWith('!leading-'), step.value).toBe(true)
+  })
+
+  it('recognises its own tokens, so changing one does not stack duplicates', () => {
+    const controls = buildTextItemStyleControls(OPTIONS)
+    const leading = controls.find((c) => c.id === 'leading')!
+    const tracking = controls.find((c) => c.id === 'tracking')!
+    expect(leading.owns('!leading-tight')).toBe(true)
+    expect(leading.owns('leading-tight')).toBe(true) // a site-authored one, too
+    expect(leading.owns('tracking-tight')).toBe(false)
+    expect(tracking.owns('tracking-wide')).toBe(true)
+    expect(tracking.owns('!leading-none')).toBe(false)
+  })
+
   it('the size scale runs low → high, with the default OFF the scale', () => {
     // The bug: the `''` default was steps[0], so the slider's far-left position meant
     // "whatever the site already uses". For a region whose own size is large — skeen's

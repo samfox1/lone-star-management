@@ -50,6 +50,10 @@ export function runtimeTextFields(
     styleRegion: e.styleRegion ? { key: e.styleRegion.key, label: e.styleRegion.label } : null,
     // A region with no field behind it: restyleable, not retypeable.
     styleOnly: !e.field,
+    // What the SITE renders when the row is unset. A custom site keeps its fallbacks in
+    // code, so its manifest is the only place we can learn them — without this the panel
+    // lists a page full of words as "Empty".
+    defaultValue: e.field?.defaultValue,
   }))
 }
 
