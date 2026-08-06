@@ -289,28 +289,18 @@ export function EditorInspector({
   const isImageRegion = (t: SelectTarget): boolean =>
     t.kind === 'field' ? imageRegionKeys.has(t.key) : t.kind === 'item' && t.assetType === 'image'
 
-  // Frame → editor: a click on an image region opens Images and focuses its tile. Same
-  // render-time "reset state on prop change" pattern as selectedStyle; the nonce lets a
-  // repeat click on the same region re-focus. Non-image selects are ignored here (they
-  // route to Style / Links / Text via their own state above).
-  const [lastRegionNonce, setLastRegionNonce] = useState(0)
-  if (selectedRegion && selectedRegion.nonce !== lastRegionNonce && isImageRegion(selectedRegion.target)) {
-    setLastRegionNonce(selectedRegion.nonce)
-    setActive(COMPONENTS.find((c) => c.kind === 'images') ?? null)
-    setFocused(selectedRegion.target)
-  }
-
-  // Editor → frame: whenever the focused tile changes, outline it in the preview (or clear
-  // it). A real side effect (postMessage), so it lives in an effect, not in render.
+  // Editor → frame: whenever the focused region changes, outline it in the preview (or
+  // clear it). A real side effect (postMessage), so it lives in an effect, not in render.
   useEffect(() => {
     if (focused) onHighlight?.(focused)
     else onClearHighlight?.()
   }, [focused, onHighlight, onClearHighlight])
 
-  // Switching components (or backing out) drops the highlight — it belongs to Images.
+  // Manually switching components (or backing out) drops the highlight — the outline
+  // follows the SELECTION, and a panel change is a deselection of whatever held it.
   function selectComponent(c: Component | null) {
     setActive(c)
-    if (!c || c.kind !== 'images') setFocused(null)
+    setFocused(null)
   }
 
   // The one image/video handed the whole panel for editing (Replace / Remove / styling).
@@ -319,6 +309,49 @@ export function EditorInspector({
   // separately from editingItem because it carries no media and shares none of that
   // editor's Replace/Remove machinery.
   const [editingText, setEditingText] = useState<EditorTextField | null>(null)
+
+  // Which panel owns an ITEM select, by the asset type skeen stamps on the element
+  // (`data-lse-item="track:<id>"`). Images route through isImageRegion instead — they
+  // need the tile-focus machinery, not just a panel. Types with no entry (an asset a
+  // future site marks that this build has no panel for) drop, exactly as before.
+  const PANEL_BY_ASSET: Partial<Record<string, Kind>> = {
+    track: 'music',
+    video: 'videos',
+    tour_date: 'tour',
+    merch: 'merch',
+  }
+
+  // Frame → editor: a click on a marked region opens ITS panel — the same render-time
+  // "reset state on prop change" pattern as selectedStyle; the nonce lets a repeat click
+  // on the same region re-fire. Images focus their tile; a TEXT field opens straight
+  // into its field editor (the panel list alone would leave the manager hunting for the
+  // thing they just pointed at); an item lands on its panel with `focused` carrying the
+  // outline. Style / link selects route via their own state above.
+  const [lastRegionNonce, setLastRegionNonce] = useState(0)
+  if (selectedRegion && selectedRegion.nonce !== lastRegionNonce) {
+    const target = selectedRegion.target
+    const textField =
+      target.kind === 'field' ? textFields.find((f) => f.key === target.key) : undefined
+    const itemPanel = target.kind === 'item' ? PANEL_BY_ASSET[target.assetType] : undefined
+    if (isImageRegion(target)) {
+      setLastRegionNonce(selectedRegion.nonce)
+      setActive(COMPONENTS.find((c) => c.kind === 'images') ?? null)
+      setFocused(target)
+    } else if (textField) {
+      setLastRegionNonce(selectedRegion.nonce)
+      setActive(COMPONENTS.find((c) => c.kind === 'text') ?? null)
+      setEditingItem(null) // one editor in the panel at a time
+      setEditingText(textField)
+      setFocused(target)
+    } else if (itemPanel) {
+      setLastRegionNonce(selectedRegion.nonce)
+      setActive(COMPONENTS.find((c) => c.kind === itemPanel) ?? null)
+      setEditingItem(null)
+      setEditingText(null)
+      setFocused(target)
+    }
+    // else: unroutable — consume nothing, exactly the old behaviour for non-image kinds.
+  }
   // Text values live HERE, above both the list and the editor, so the two windows onto
   // one field can never show different text or race each other's debounced save.
   const textSave = useTextFieldSave(artistId, textFields, onApplyField)
@@ -574,7 +607,10 @@ export function EditorInspector({
         applyItemStyle(regionKey, className)
         saveTextStyle(regionKey, className)
       }}
-      onBack={() => setEditingText(null)}
+      onBack={() => {
+        setEditingText(null)
+        setFocused(null) // closing the editor deselects — the preview outline goes too
+      }}
     />
   ) : null
 
@@ -803,6 +839,9 @@ export function EditorInspector({
           onEditTextField={(f) => {
             setEditingItem(null) // one editor in the panel at a time
             setEditingText(f)
+            // Panel → preview: the outline follows the selection, so opening a field
+            // from the list highlights (and scrolls to) the words it edits.
+            setFocused({ kind: 'field', key: f.key })
           }}
           links={links}
           supportLinks={supportLinks}
@@ -1113,7 +1152,13 @@ function EditingView({
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
         ) : isMusic ? (
-          <MusicTools releases={releases} artistId={artistId} onToggleOnSite={onToggleProjectOnSite} />
+          <MusicTools
+            releases={releases}
+            artistId={artistId}
+            onToggleOnSite={onToggleProjectOnSite}
+            focusedKey={focusedKey}
+            onFocus={onFocus}
+          />
         ) : isStyle ? (
           <StyleTools
             regions={styleRegions}

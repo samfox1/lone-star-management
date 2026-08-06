@@ -375,14 +375,17 @@ describe('EditorInspector — Images: image fields + two-way highlight', () => {
   })
 
   it('a frame click on a NON-image region (a text heading) does NOT hijack the panel to Images', () => {
+    // Until 2026-08-06 this asserted the select was dropped entirely; text-field selects
+    // now route to the TEXT panel (Sam: "when I select the TOUR text, that text should
+    // be selected in the left panel" — editor-select-routing.test.tsx pins that side).
+    // The guard THIS test keeps is the original one: Images must not steal it.
     renderInspector([], {
       imageFields: IMAGE_FIELDS,
       textFields: TEXT_FIELDS,
       selectedRegion: { target: { kind: 'field', key: 'hero_tagline' }, nonce: 1 },
     })
-    // Still on the browse list — Images was not force-opened by a non-image select.
-    expect(screen.queryByText('Set slots')).toBeNull()
-    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('photo')
+    expect(screen.queryByText('Set slots')).toBeNull() // not the Images panel
+    expect(screen.getByRole('heading', { name: /Edit/ })).toBeTruthy() // the text editor
   })
 
   it('a gallery photo card is selectable and rings when it is the focused region', () => {

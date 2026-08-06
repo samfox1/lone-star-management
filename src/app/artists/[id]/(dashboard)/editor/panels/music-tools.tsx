@@ -3,6 +3,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type EditorProject } from '../inspector-types'
+import type { SelectTarget } from '@/lib/site-editor/bridge'
 import { plural, EYEBROW } from '../inspector-shared'
 import { SongThumb, AddFirstLink } from '../inspector-grid'
 
@@ -23,12 +24,33 @@ export function MusicTools({
   releases,
   artistId,
   onToggleOnSite,
+  focusedKey,
+  onFocus,
 }: {
   releases: EditorProject[]
   artistId: string
   onToggleOnSite: (r: EditorProject) => void
+  /** The selected region's stable key (`item:track:<id>` when a song is selected) —
+   *  from a frame click OR a row click below. Drives the ring + auto-expand. */
+  focusedKey?: string | null
+  /** Select a region (a song row): the inspector posts the frame highlight from it. */
+  onFocus?: (target: SelectTarget) => void
 }) {
   const [open, setOpen] = useState<string | null>(null)
+
+  // A song selected in the FRAME (cover-art click) lands here as `item:track:<id>` —
+  // expand the project that owns it, or the "selected song" is invisible behind a closed
+  // card. Render-time reset on prop change (the repo's selectedStyle pattern), so a
+  // manual card toggle afterwards still wins.
+  const focusedSongId = focusedKey?.startsWith('item:track:') ? focusedKey.slice('item:track:'.length) : null
+  const [lastFocusedSong, setLastFocusedSong] = useState<string | null>(null)
+  if (focusedSongId !== lastFocusedSong) {
+    setLastFocusedSong(focusedSongId)
+    if (focusedSongId) {
+      const owner = releases.find((r) => r.songs.some((s) => s.id === focusedSongId))
+      if (owner) setOpen(owner.key)
+    }
+  }
   if (releases.length === 0) {
     return (
       <div className="px-5 py-4">
@@ -111,9 +133,21 @@ export function MusicTools({
                 </div>
                 <ol className="space-y-0.5">
                   {openInRow.songs.map((song, i) => (
-                    <li key={song.id} className="flex items-baseline gap-2 text-[12px] text-ink">
-                      <span className="w-4 flex-none text-right font-space text-[10px] text-ink-faint">{i + 1}</span>
-                      <span className="min-w-0 flex-1 truncate">{song.title}</span>
+                    <li key={song.id}>
+                      {/* A row is a SELECTION, not just a listing: clicking it rings the
+                          row and outlines the song on the site (the inspector posts the
+                          highlight from the target this hands up). */}
+                      <button
+                        type="button"
+                        onClick={() => onFocus?.({ kind: 'item', assetType: 'track', id: song.id })}
+                        className={cx(
+                          'flex w-full items-baseline gap-2 rounded px-1 text-left text-[12px] text-ink',
+                          song.id === focusedSongId ? 'bg-accent-soft ring-1 ring-accent' : 'hover:bg-hairline-soft',
+                        )}
+                      >
+                        <span className="w-4 flex-none text-right font-space text-[10px] text-ink-faint">{i + 1}</span>
+                        <span className="min-w-0 flex-1 truncate">{song.title}</span>
+                      </button>
                     </li>
                   ))}
                 </ol>
