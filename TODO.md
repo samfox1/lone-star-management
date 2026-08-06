@@ -16,7 +16,23 @@ items that were still open inside them:
       `Footer.tsx` (which has the © line + social icons). If it's a social handle,
       leave it: those come from the artist page, and wrapping one makes two sources
       of truth. Ask Sam which element he means.
-- [x] **Asset compression at upload** — BUILT 2026-08-06. skeen declares budgets in the
+- [ ] **Asset compression — the half NOT built.** skeen's own
+      `docs/ASSET_COMPRESSION_BRIEF.md` asks for more than the budget/modal system that
+      shipped, and it is still open. In its order of importance:
+      1. **State the rules ABOVE the drop zone, before a file is picked** — "Photos: any
+         size, we'll shrink it for you". Today the manager learns the rules only after
+         picking, from a modal.
+      2. **Accept HEIC/HEIF.** `IMAGE_UPLOAD_RULES` allows jpg/png/webp/gif only, so a
+         photo straight off an iPhone (or exported from macOS Photos) is REJECTED at the
+         door — before the compressor it would have gone through. iOS Safari often
+         transcodes to JPEG on pick, which is why this has not been reported yet; the
+         camera-roll path that does not is a real dead end.
+      3. **Duration cap on video**, read from metadata and refused early rather than
+         after a long upload.
+      4. **Progress + plain-English narration** while compressing.
+      5. **Post-compression ceiling check** against the bucket's real per-file cap, with
+         a lower-quality pass offered rather than dying at the PUT.
+- [x] **Asset compression at upload** — core BUILT 2026-08-06. skeen declares budgets in the
       manifest (editList assetBudgets); lone-star gates every editor image uploader
       through a compress modal (canvas + quality walk, EXIF-honouring, alpha-preserving)
       and appends export instructions to over-size video/font rejections. Remaining:
