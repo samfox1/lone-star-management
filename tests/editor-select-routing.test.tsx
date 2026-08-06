@@ -220,6 +220,27 @@ describe('a routed select is VISIBLE where it lands', () => {
     expect(scrollSpy).toHaveBeenCalled()
   })
 
+  it('CRITICAL: a social-button select opens Links with ITS row open and current', () => {
+    // Sam, 2026-08-06: "I should also see the editor responding to … the socials
+    // buttons." skeen posts item:link:<label lowercased> — the label, because the row id
+    // never reaches the deployed site; this side re-joins on the identical
+    // normalization, so "Apple Music" finds "apple music" and case never splits them.
+    const { onHighlight } = renderInspector({
+      links: [
+        { id: 'l1', label: 'Instagram', url: 'https://ig', onSite: true },
+        { id: 'l2', label: 'Spotify', url: 'https://sp', onSite: true },
+      ],
+      selectedRegion: select({ kind: 'item', assetType: 'link', id: 'instagram' }),
+    })
+    const row = document.querySelector('[aria-current="true"]')
+    expect(row).not.toBeNull()
+    expect(row!.textContent).toContain('Instagram')
+    expect(row!.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('true')
+    expect(scrollSpy).toHaveBeenCalled()
+    // …and the outline follows: the same target goes back as the highlight.
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'link', id: 'instagram' })
+  })
+
   it('CRITICAL: a video select marks its card current and scrolls to it', () => {
     // The Videos panel had no focus affordance at all — a routed select opened the
     // panel and showed nothing selected.

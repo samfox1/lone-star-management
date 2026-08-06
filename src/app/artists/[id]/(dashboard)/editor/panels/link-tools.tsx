@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/icons'
 import { type ManifestLinkRegion } from '@/lib/site-editor/manifest'
 import { safeHref } from '@/lib/url'
 import { type EditorLink, type EditorSupportLink } from '../inspector-types'
+import { useScrollIntoFocus } from '../inspector-grid'
 import {
   runSerialized,
   SectionRow,
@@ -161,6 +162,24 @@ export function SiteLinkTools({
   )
 }
 /* ── Link tools: edit / reorder / remove the site's outbound links ───────────── */
+/** A link row that shows WHERE a frame click landed: scrolls into view and carries
+ *  aria-current when it is the focused region. A plain div otherwise — every drag
+ *  handler and class passes straight through. */
+function FocusScroll({
+  focused,
+  children,
+  ...rest
+}: { focused: boolean; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement> & {
+  draggable?: boolean
+}) {
+  const ref = useScrollIntoFocus<HTMLDivElement>(focused)
+  return (
+    <div ref={ref} aria-current={focused ? 'true' : undefined} {...rest}>
+      {children}
+    </div>
+  )
+}
+
 export function LinkTools({
   links,
   artistId,
@@ -169,6 +188,7 @@ export function LinkTools({
   onToggleOnSite,
   group,
   showAdd = true,
+  focusedKey,
 }: {
   links: EditorLink[]
   artistId: string
@@ -183,6 +203,11 @@ export function LinkTools({
    *  list — one add affordance per panel, not one per group. */
   showAdd?: boolean
   onToggleOnSite: (l: EditorLink) => void
+  /** The selected region's stable key. A social icon in the frame posts
+   *  `item:link:<label lowercased>` — the LABEL, because the row id never reaches the
+   *  deployed site (socials arrive there as label-mapped config values), and lowercasing
+   *  is the exact normalization that pipeline already joins on. */
+  focusedKey?: string | null
 }) {
   const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
@@ -192,6 +217,18 @@ export function LinkTools({
   // Which row is expanded. Rows collapse to just their label; clicking one opens the
   // edit/remove controls below it (single-open accordion — keeps the list short).
   const [open, setOpen] = useState<string | null>(null)
+
+  // A social selected in the FRAME lands as `item:link:<label lowercased>` — join by the
+  // same normalization and OPEN that row, or the "selected link" is a closed accordion
+  // line indistinguishable from its neighbours. Render-time reset on prop change (the
+  // repo's selectedStyle pattern), so the manager's own accordion clicks still win after.
+  const focusedLabel = focusedKey?.startsWith('item:link:') ? focusedKey.slice('item:link:'.length) : null
+  const focusedRow = focusedLabel != null ? links.find((l) => l.label.trim().toLowerCase() === focusedLabel) : undefined
+  const [lastFocusedLabel, setLastFocusedLabel] = useState<string | null>(null)
+  if (focusedLabel !== lastFocusedLabel) {
+    setLastFocusedLabel(focusedLabel)
+    if (focusedRow) setOpen(focusedRow.id)
+  }
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const saving = useRef<Map<string, Promise<unknown>>>(new Map())
   const errored = useRef<Set<string>>(new Set())
@@ -274,9 +311,11 @@ export function LinkTools({
         const labelBlank = !v.label.trim()
         const urlBlank = !v.url.trim()
         const rowInvalid = invalid.has(l.id)
+        const isFocused = focusedRow?.id === l.id
         return (
-          <div
+          <FocusScroll
             key={l.id}
+            focused={isFocused}
             draggable
             onDragStart={() => (dragFrom.current = i)}
             onDragEnter={() => setDragOver(i)}
@@ -286,7 +325,10 @@ export function LinkTools({
               dragFrom.current = null
               setDragOver(null)
             }}
-            className={cx(dragOver === i && 'ring-2 ring-accent', rowInvalid && 'ring-1 ring-accent-red')}
+            className={cx(
+              (dragOver === i || isFocused) && 'ring-2 ring-accent',
+              rowInvalid && 'ring-1 ring-accent-red',
+            )}
           >
             {/* Collapsed header — the whole row is a button that opens the editor below
                 it. Only the label shows (what the manager named it); an at-a-glance
@@ -355,7 +397,7 @@ export function LinkTools({
                 </div>
               </div>
             )}
-          </div>
+          </FocusScroll>
         )
       })}
 

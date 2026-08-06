@@ -319,6 +319,10 @@ export function EditorInspector({
     video: 'videos',
     tour_date: 'tour',
     merch: 'merch',
+    // A social icon. Its id is the link's LABEL, lowercased — the row id never reaches
+    // the deployed site (socials arrive there as label-mapped config), and the label is
+    // the join key that pipeline already runs on. LinkTools re-joins by it.
+    link: 'links',
   }
 
   // Frame → editor: a click on a marked region opens ITS panel — the same render-time
@@ -1104,6 +1108,7 @@ function EditingView({
               onRemove={onRemoveLink}
               onReorder={onReorderLink}
               onToggleOnSite={onToggleLinkOnSite}
+              focusedKey={focusedKey}
             />
             {/* A booking address is a contact route, not a profile to follow, so it gets
                 its own group instead of sitting among the socials. Split by SCHEME
