@@ -199,6 +199,7 @@ export function EditorShell({
         components={manifest?.components ?? []}
         // The collage exists only if the site declares somewhere to render one.
         showGallery={(manifest?.slots ?? []).some((sl) => sl.accepts === 'image')}
+        assetBudgets={manifest?.assetBudgets}
         styleRegions={manifest?.styles ?? []}
         styleValues={draft?.styles ?? {}}
         styleOptions={withUploadedFonts(manifest?.styleOptions, uploadedFonts)}

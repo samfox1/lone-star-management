@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import type { SiteMedia } from '@/lib/site'
 import { orientationOf, type Orientation } from '@/lib/site-editor/gallery'
 import { IMAGE_UPLOAD_RULES, VIDEO_UPLOAD_RULES } from '@/lib/upload'
+import type { AssetBudget } from '@/lib/site-editor/asset-budget'
+import { useBudgetGate } from './budget-gate'
 import { useStorageUpload } from './use-storage-upload'
 import { FileDropField } from './file-drop-field'
 
@@ -37,6 +39,7 @@ export function MediaUploader({
   folder,
   accept,
   label,
+  budget,
   onUploaded,
 }: {
   artistId: string
@@ -44,6 +47,9 @@ export function MediaUploader({
   folder: string
   accept: string
   label: string
+  /** The site's declared budget for this upload (BRIEF-asset-compression.md), from the
+   *  manifest. Absent = no gate — files upload exactly as picked. */
+  budget?: AssetBudget | null
   /** Fires after the row is written, with the new media id + path (for optimistic UI). */
   onUploaded?: (media: { id: string; storage_path: string }) => void
 }) {
@@ -68,7 +74,24 @@ export function MediaUploader({
     },
   })
 
-  return <FileDropField accept={accept} label={label} busy={busy} error={error} onFile={upload} />
+  // The budget gate sits between the pick and the upload: it resolves with the file to
+  // actually store (original, compressed, or null for cancelled/gated).
+  const gate = useBudgetGate(isVideo ? 'video' : 'image', budget)
+  return (
+    <>
+      <FileDropField
+        accept={accept}
+        label={label}
+        busy={busy}
+        error={error}
+        onFile={async (f) => {
+          const prepared = await gate.prepare(f)
+          if (prepared) await upload(prepared)
+        }}
+      />
+      {gate.modal}
+    </>
+  )
 }
 
 /**
@@ -83,12 +106,15 @@ export function GallerySlotUploader({
   artistId,
   orientation,
   label = 'Drop a photo or click to upload',
+  budget,
   onUploaded,
 }: {
   artistId: string
   /** Fallback orientation if the file's dimensions can't be measured. */
   orientation: Orientation
   label?: string
+  /** The site's declared budget for this slot/kind, from the manifest. Absent = no gate. */
+  budget?: AssetBudget | null
   /** Fires after the row is written, with the new photo's id/path + its orientation. */
   onUploaded?: (media: { id: string; storage_path: string; orientation: Orientation }) => void
 }) {
@@ -122,11 +148,23 @@ export function GallerySlotUploader({
     },
   })
 
+  const gate = useBudgetGate('image', budget)
+
   async function onFile(file: File) {
-    const size = await readImageSize(file)
+    // Gate FIRST, then measure the file we actually store. Compression preserves aspect,
+    // so the orientation would come out the same either way — but measuring the stored
+    // bytes keeps the two facts from ever depending on that.
+    const prepared = await gate.prepare(file)
+    if (!prepared) return
+    const size = await readImageSize(prepared)
     detectedRef.current = size ? orientationOf(size.width, size.height) : null
-    await upload(file)
+    await upload(prepared)
   }
 
-  return <FileDropField accept="image/*" label={label} busy={busy} error={error} onFile={onFile} />
+  return (
+    <>
+      <FileDropField accept="image/*" label={label} busy={busy} error={error} onFile={onFile} />
+      {gate.modal}
+    </>
+  )
 }

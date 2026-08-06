@@ -21,6 +21,7 @@ import {
   useDismiss,
 } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
+import { budgetFor, budgetSlotKey, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import { FileDropField } from '../../file-drop-field'
 import { useStorageUpload } from '../../use-storage-upload'
 import { toast } from '../../toast'
@@ -215,6 +216,7 @@ function ImageUploadModal({
 function ComponentTools({
   components,
   photos,
+  assetBudgets,
   artistId,
   focusedKey,
   onFocus,
@@ -223,6 +225,7 @@ function ComponentTools({
 }: {
   components: ManifestComponent[]
   photos: GalleryPhoto[]
+  assetBudgets?: AssetBudgets
   artistId: string
   focusedKey: string | null
   onFocus: (t: SelectTarget) => void
@@ -255,6 +258,7 @@ function ComponentTools({
                   role={role}
                   placed={placedByRole.get(role) ?? null}
                   library={library}
+                  budget={budgetFor(assetBudgets, 'image', budgetSlotKey(role))}
                   artistId={artistId}
                   focused={focusedKey === selectTargetKey(fieldTarget(role))}
                   onFocus={() => onFocus(fieldTarget(role))}
@@ -278,6 +282,7 @@ function SlotTile({
   role,
   placed,
   library,
+  budget,
   artistId,
   focused,
   onFocus,
@@ -291,6 +296,8 @@ function SlotTile({
   placed: GalleryPhoto | null
   /** The unplaced photos every slot's picker draws from. */
   library: GalleryPhoto[]
+  /** This slot's upload budget (already resolved for its role). */
+  budget?: import('@/lib/site-editor/asset-budget').AssetBudget | null
   artistId: string
   focused: boolean
   onFocus: () => void
@@ -354,6 +361,7 @@ function SlotTile({
               artistId={artistId}
               orientation="horizontal"
               label="Drop an image or click to upload"
+              budget={budget}
               onUploaded={(m) => {
                 onPlaceSlot(role, { ...m, onSite: true, siteRole: role })
                 setPicking(false)
@@ -385,6 +393,7 @@ export function PhotoTools({
   onEditItem,
   components,
   showGallery,
+  assetBudgets,
   artistId,
   onAdd,
   onPlace,
@@ -406,6 +415,8 @@ export function PhotoTools({
    *  not, the orientation groups are hidden: an editor slot with nothing behind it on the
    *  site is a place to put work that never appears (Sam, 2026-07-21). */
   showGallery: boolean
+  /** The site's upload budgets — the compression gate on each uploader below. */
+  assetBudgets?: AssetBudgets
   artistId: string
   onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   onPlace: (p: GalleryPhoto, orientation: Orientation) => void
@@ -439,6 +450,7 @@ export function PhotoTools({
         <ComponentTools
           components={components}
           photos={photos}
+          assetBudgets={assetBudgets}
           artistId={artistId}
           focusedKey={focusedKey}
           onFocus={onFocus}
@@ -468,7 +480,14 @@ export function PhotoTools({
                   No {orientation} photos in your library yet. Upload one below.
                 </p>
               }
-              pickerFooter={<GallerySlotUploader artistId={artistId} orientation={orientation} onUploaded={onAdd} />}
+              pickerFooter={
+                <GallerySlotUploader
+                  artistId={artistId}
+                  orientation={orientation}
+                  budget={budgetFor(assetBudgets, 'image')}
+                  onUploaded={onAdd}
+                />
+              }
               onSetOnSite={(p, next) => (next ? onPlace(p, orientation) : onUnplace(p))}
               select={{
                 onSelect: (p) => onFocus(galleryTarget(p.id)),

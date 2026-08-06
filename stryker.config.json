@@ -24,8 +24,10 @@
     "src/lib/storage-gc.ts",
     "src/lib/upload.ts",
     "src/lib/url.ts",
+    "src/lib/site-editor/asset-budget.ts",
     "src/lib/site-editor/style-apply.ts",
     "src/lib/site-editor/style-controls.ts",
+    "src/lib/site-editor/text-panel.ts",
     "src/lib/site-editor/viewport.ts",
     "supabase/functions/contact/validate.ts"
   ],

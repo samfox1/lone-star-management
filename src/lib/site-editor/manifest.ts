@@ -17,6 +17,7 @@
 import { TEMPLATE_FIELDS, fieldValue, type SiteContentField } from '@/lib/site-content-schema'
 import type { SiteContent } from '@/lib/site'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import type { AssetBudgets } from '@/lib/site-editor/asset-budget'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -150,6 +151,10 @@ export type TemplateManifest = {
    *  panel's dropdowns. Optional — the universal controls (size/weight/align/case) work
    *  without it; colour + font controls only appear when the site declares them. */
   styleOptions?: SiteStyleOptions
+  /** Per-kind / per-slot upload budgets (BRIEF-asset-compression.md, skeen repo). The
+   *  editor's upload gate reads these; absent (older manifests, every built-in
+   *  template) means no gate — accept-anything, the pre-budget behaviour. */
+  assetBudgets?: AssetBudgets
 }
 
 /** Lift the per-template site-text schema into manifest fields (site_content targets). */

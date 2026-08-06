@@ -126,8 +126,27 @@ export function validateUpload(file: { name: string; size: number; type: string 
   if (rules.allowedMime && file.type && !rules.allowedMime.includes(file.type))
     return { ok: false, error: `That file doesn't look like a ${allowed}.` }
   if (file.size > rules.maxBytes)
-    return { ok: false, error: `That file is ${sizeLabel(file.size)} — the limit is ${sizeLabel(rules.maxBytes)}.` }
+    return {
+      ok: false,
+      error: `That file is ${sizeLabel(file.size)} — the limit is ${sizeLabel(rules.maxBytes)}.${oversizeFix(ext)}`,
+    }
   return { ok: true, ext }
+}
+
+/**
+ * The FIX for an over-size file, appended to the rejection (asset-compression brief,
+ * skeen repo). The verdict alone tells a manager they failed; "compress it first"
+ * without HOW is a dead end for someone without the tools. Video and fonts get one
+ * plain-words sentence — the browser can't shrink either well, so instructions ARE the
+ * gate. Images get nothing here: the editor's compression modal does that work FOR the
+ * manager, and instructions would describe work nobody has to do.
+ */
+function oversizeFix(ext: string): string {
+  if (['mp4', 'webm', 'mov'].includes(ext))
+    return ' Export it at 1080p with the H.264 codec (the “YouTube 1080p” preset in most editors; in QuickTime, File → Export As → 1080p) — that usually lands a background clip well under the limit.'
+  if (['ttf', 'otf', 'woff', 'woff2'].includes(ext))
+    return ' Convert it to WOFF2 (search “woff2 converter”) — it typically shrinks a desktop font by 10× with no visual change.'
+  return ''
 }
 
 /**

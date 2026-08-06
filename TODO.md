@@ -16,10 +16,12 @@ items that were still open inside them:
       `Footer.tsx` (which has the © line + social icons). If it's a social handle,
       leave it: those come from the artist page, and wrapping one makes two sources
       of truth. Ask Sam which element he means.
-- [ ] **Asset compression at upload** — new system, spec'd in skeen-website's
-      `BRIEF-asset-compression.md`: sites declare per-slot byte/pixel budgets in the
-      manifest; the editor opens a compress modal for oversized images and a
-      gate-with-instructions for oversized video/fonts.
+- [x] **Asset compression at upload** — BUILT 2026-08-06. skeen declares budgets in the
+      manifest (editList assetBudgets); lone-star gates every editor image uploader
+      through a compress modal (canvas + quality walk, EXIF-honouring, alpha-preserving)
+      and appends export instructions to over-size video/font rejections. Remaining:
+      the round-trip check on the live editor (upload a big photo into a polaroid,
+      publish, confirm the served object is small and looks right).
 
 ## Roadmap decisions — 2026-07-08 deep-dive review
 

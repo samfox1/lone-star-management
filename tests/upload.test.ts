@@ -17,6 +17,7 @@ import {
   isOwnedStoragePath,
   IMAGE_UPLOAD_RULES,
   VIDEO_UPLOAD_RULES,
+  FONT_UPLOAD_RULES,
 } from '@/lib/upload'
 import { videoRenderMode, embedOrStorageValid, publicVideoSrc, isRenderableVideo } from '@/lib/video-render'
 import { collectablePaths } from '@/lib/storage-gc'
@@ -150,6 +151,40 @@ describe('DOCUMENT_UPLOAD_RULES (press-kit PDFs)', () => {
 
   it('sets an explicit application/pdf content type on upload', () => {
     expect(contentTypeFor('pdf')).toBe('application/pdf')
+  })
+})
+
+describe('over-size messages carry the FIX, not just the verdict (asset-compression brief)', () => {
+  // "That file is 200 MB — the limit is 500 MB" tells a manager they failed; it does not
+  // tell them what to do next, and "compress it first" without HOW is a dead end for
+  // someone without the tools. Video and font over-size messages now name the one-time
+  // fix in plain words. Images are absent on purpose: the editor's gate compresses those
+  // FOR the manager, so instructions there would describe work nobody has to do.
+  it('a video over the limit says how to export it smaller', () => {
+    const big = { name: 'clip.mp4', size: VIDEO_UPLOAD_RULES.maxBytes + 1, type: 'video/mp4' }
+    const res = validateUpload(big, VIDEO_UPLOAD_RULES)
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).toMatch(/1080p/i)
+  })
+
+  it('a font over the limit points at WOFF2', () => {
+    const big = { name: 'family.ttf', size: FONT_UPLOAD_RULES.maxBytes + 1, type: 'font/ttf' }
+    const res = validateUpload(big, FONT_UPLOAD_RULES)
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).toMatch(/woff2/i)
+  })
+
+  it('an image over the limit keeps the plain message — the editor compresses those', () => {
+    const big = { name: 'photo.jpg', size: IMAGE_UPLOAD_RULES.maxBytes + 1, type: 'image/jpeg' }
+    const res = validateUpload(big, IMAGE_UPLOAD_RULES)
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).not.toMatch(/1080p|woff2/i)
+  })
+
+  it('…and every over-size message still names both numbers', () => {
+    const big = { name: 'clip.mp4', size: VIDEO_UPLOAD_RULES.maxBytes + 1, type: 'video/mp4' }
+    const res = validateUpload(big, VIDEO_UPLOAD_RULES)
+    if (!res.ok) expect(res.error).toMatch(/limit is/)
   })
 })
 

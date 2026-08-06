@@ -19,6 +19,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import { ItemEditor, type PickCandidate } from './item-editor'
 import { AddFirstLink, CardThumb, PhotoThumb, fileNameOf } from './inspector-grid'
 import { GallerySlotUploader } from '../media-uploader'
+import { budgetFor, budgetSlotKey, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
   PhotoTools,
   TextTools,
@@ -161,6 +162,7 @@ export function EditorInspector({
   tours: initialTours = [],
   components = [],
   showGallery = false,
+  assetBudgets,
   styleRegions = [],
   styleValues = {},
   styleOptions,
@@ -197,6 +199,9 @@ export function EditorInspector({
   /** Does the site declare a photo collage (an image slot)? Defaults FALSE — a group is
    *  shown because the site asked for it, never just because the editor can render one. */
   showGallery?: boolean
+  /** The site's upload budgets (manifest.assetBudgets) — drives the compression gate on
+   *  every image uploader below. Absent = no gate, the pre-budget behaviour. */
+  assetBudgets?: AssetBudgets
   /** Re-styleable regions. Comes from the FRAME's edit-list at runtime for a custom
    *  site (D-D); the built-in manifests declare none yet, so this is [] for them. */
   styleRegions?: ManifestStyleRegion[]
@@ -453,6 +458,9 @@ export function EditorInspector({
             artistId={artistId}
             orientation="horizontal"
             label="Drop an image or click to upload"
+            // The SLOT's budget (`polaroid_1_photo` → `polaroid_photo`), not the general
+            // image one: the site declared a tighter cap because the card renders small.
+            budget={budgetFor(assetBudgets, 'image', budgetSlotKey(item.role))}
             onUploaded={(m) => placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role })}
           />
         ),
@@ -479,7 +487,14 @@ export function EditorInspector({
           if (next) placePhoto(next, item.orientation)
         },
         onRemove: () => unplacePhoto(placed),
-        uploader: <GallerySlotUploader artistId={artistId} orientation={item.orientation} onUploaded={addPhoto} />,
+        uploader: (
+          <GallerySlotUploader
+            artistId={artistId}
+            orientation={item.orientation}
+            budget={budgetFor(assetBudgets, 'image')}
+            onUploaded={addPhoto}
+          />
+        ),
       }
     } else if (item.type === 'videoSlot') {
       const placed = videos.find((v) => v.siteRole === item.role)
@@ -777,6 +792,7 @@ export function EditorInspector({
         <EditingView
           component={active}
           photos={photos}
+          assetBudgets={assetBudgets}
           imageFields={imageFields}
           focusedKey={focused ? selectTargetKey(focused) : null}
           onFocus={setFocused}
@@ -890,6 +906,7 @@ function BrowseView({
 function EditingView({
   component,
   photos,
+  assetBudgets,
   imageFields,
   focusedKey,
   onFocus,
@@ -967,6 +984,7 @@ function EditingView({
   onRemoveTour: (t: EditorTour) => void
   onReorderTour: (fromId: string, toId: string) => void
   components: ManifestComponent[]
+  assetBudgets?: AssetBudgets
   showGallery: boolean
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onRemoveLink: (l: EditorLink) => void
@@ -1020,6 +1038,7 @@ function EditingView({
             onEditItem={onEditItem}
             components={components}
             showGallery={showGallery}
+            assetBudgets={assetBudgets}
             artistId={artistId}
             onAdd={onAddPhoto}
             onPlace={onPlacePhoto}
