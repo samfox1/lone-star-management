@@ -7,7 +7,7 @@
  * injection itself: emitters are covered in tests/fonts.test.ts, but an emitter nobody
  * calls styles nothing — the exact shape the safeHref review found on this same layer.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { ArtistTemplate } from '@/components/artist-template'
 import type { SiteData } from '@/lib/site'
@@ -15,6 +15,14 @@ import type { SiteData } from '@/lib/site'
 vi.mock('@/components/templates/cinematic', () => ({
   CinematicTemplate: () => <div data-testid="cinematic" />,
 }))
+
+// The injected CSS is built from this: `fontFaceCss` resolves each font's URL against
+// NEXT_PUBLIC_SUPABASE_URL and DROPS any font whose URL fails SAFE_URL, so with the
+// variable absent every assertion below reads an empty stylesheet. It passed only
+// because a developer machine has .env.local — CI has no DB secrets by design, which is
+// why this suite (with font-manager) failed every CI mutation run from 2026-08-05 on.
+beforeEach(() => vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://stub.supabase.co'))
+afterEach(() => vi.unstubAllEnvs())
 
 function site(fonts: SiteData['fonts'], font_slots: SiteData['font_slots'] = {}, template = 'classic'): SiteData {
   return {

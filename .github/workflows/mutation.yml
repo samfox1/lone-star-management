@@ -5,17 +5,21 @@ name: Mutation testing
 # "Test discipline" for why this exists: a full audit in Aug 2026 found ten live bugs
 # sitting behind green suites, every one of them behind a test that could not fail.
 #
-# Weekly rather than per-push: the run takes ~20 minutes, and test quality drifts over
-# weeks, not commits. Also runs on demand from the Actions tab.
-# TRIGGERED BY PUSH, NOT A SCHEDULE, and deliberately so: GitHub only fires scheduled
-# workflows from the DEFAULT branch (main), while the work happens on dev — a weekly cron
-# here would have sat silent until a 280-commit merge. A push trigger runs on the branch
-# that was pushed, so this tests dev the moment dev changes.
+# AT MOST ONCE A DAY, PER BRANCH (Sam, 2026-08-06: "have the mutations in github running
+# a lot less. Maybe once a day"). It ran on every push touching src/lib or tests, which
+# on a working day meant several 20-minute runs saying the same thing.
+#
+# The throttle is a dated cache marker rather than a `schedule:` cron, and that is not a
+# preference. GitHub fires scheduled workflows ONLY from the default branch, and this
+# repo's work happens on dev while main sits far behind with no workflows on it at all —
+# a cron here would be silently dead until a merge. A push trigger runs on the branch
+# that actually changed; the marker makes the second and later pushes of the day cheap
+# no-ops. Cost: the run reflects the FIRST relevant push of a day rather than the last.
+# Use "Run workflow" from the Actions tab when you want the current state — a manual
+# dispatch always runs.
 #
 # Path-filtered to the modules stryker.config.json actually mutates, plus the tests and
-# config that decide what "watched" means. A 20-minute job on every commit would be
-# ignored within a fortnight; a job that speaks only when the relevant code moves gets
-# read.
+# config that decide what "watched" means.
 on:
   push:
     branches: [dev, main]
@@ -30,7 +34,56 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Cheap (~10s) and always runs: decides whether the expensive job below is allowed to
+  # start today. Claiming the day BEFORE the run, rather than after, also stops two
+  # pushes a minute apart from both starting a 20-minute job.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Today (UTC)
+        id: day
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # lookup-only: we never want the file, only whether today's key exists.
+      - name: Has this branch already run today?
+        id: marker
+        uses: actions/cache/restore@v4
+        with:
+          path: .mutation-day
+          key: mutation-day-${{ github.ref_name }}-${{ steps.day.outputs.date }}
+          lookup-only: true
+
+      - name: Decide
+        id: decide
+        env:
+          HIT: ${{ steps.marker.outputs.cache-hit }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$MANUAL" = "true" ] || [ "$HIT" != "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Already ran on $(date -u +%F) for ${{ github.ref_name }}. Skipping." >> "$GITHUB_STEP_SUMMARY"
+            echo "Use **Run workflow** on the Actions tab to force one." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Written even for a manual run: a dispatch counts as the day's run too.
+      - name: Claim today
+        if: steps.decide.outputs.run == 'true'
+        run: date -u +%FT%TZ > .mutation-day
+      - name: Save the marker
+        if: steps.decide.outputs.run == 'true'
+        continue-on-error: true # a concurrent push may have claimed the same key first
+        uses: actions/cache/save@v4
+        with:
+          path: .mutation-day
+          key: mutation-day-${{ github.ref_name }}-${{ steps.day.outputs.date }}
+
   mutation:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     # A single slow run should never block a merge; it reports, it doesn't gate a PR.
     timeout-minutes: 60
@@ -48,7 +101,11 @@ jobs:
       # (vitest.mutation.config.ts) once per mutant — thousands of runs. Pointing that at
       # the live hosted project would hammer production and rewrite real rows. If this
       # job ever starts failing because a suite wants a Supabase URL, the fix is to
-      # exclude that suite from the slice, never to add the secret here.
+      # exclude that suite from the slice or stub the variable IN the test, never to add
+      # the secret here. That is not hypothetical: font-manager and font-render read
+      # NEXT_PUBLIC_SUPABASE_URL through fontFaceCss, passed on every developer machine
+      # because .env.local exists, and failed Stryker's dry run here on every single run
+      # from 2026-08-05 until 2026-08-06 — so this job never once reported a score.
       # tests/mutation-config.test.ts guards the same invariant locally.
       - name: Mutation test
         id: mutation

@@ -55,8 +55,28 @@ const FONTS = [
 
 const renderList = (fonts: ArtistFont[] = FONTS) => render(<FontManager artistId="a1" fonts={fonts} />)
 
+/**
+ * The stylesheet THIS component rendered, read from its own container rather than via
+ * `document.querySelector('style')` — the first style tag in the whole document, which
+ * is this component's only as long as nothing else ever puts one there.
+ */
+const styleOf = ({ container }: { container: HTMLElement }): string =>
+  Array.from(container.querySelectorAll('style'))
+    .map((s) => s.innerHTML)
+    .join('')
+
 let confirmed = true
 beforeEach(() => {
+  // THE PREVIEW CSS IS BUILT FROM THIS. `fontFaceCss` resolves each font's URL against
+  // NEXT_PUBLIC_SUPABASE_URL, and a font whose URL fails SAFE_URL is skipped — so with
+  // the variable absent the stylesheet is legitimately '' and the test below fails.
+  //
+  // It passed here only because a developer machine has .env.local and CI does not (the
+  // mutation workflow ships no DB secrets, deliberately). That made this suite the one
+  // that broke every CI mutation run from 2026-08-05 on: Stryker's dry run failed, and
+  // the workflow has never once reported a score. Stubbing pins the test to a value it
+  // controls instead of to whether an env file happens to exist.
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://stub.supabase.co')
   confirmed = true
   vi.stubGlobal('confirm', vi.fn(() => confirmed))
   mockedRemove.mockResolvedValue({})
@@ -65,6 +85,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 const clickRemove = async (name = 'Remove PP Mori') => {
@@ -83,8 +104,7 @@ describe('FontManager — previewing', () => {
   })
 
   it('CRITICAL: injects the @font-face rules, or every preview falls back silently', () => {
-    renderList()
-    const css = document.querySelector('style')?.innerHTML ?? ''
+    const css = styleOf(renderList())
     expect(css).toContain("@font-face{font-family:'pp-mori'")
     expect(css).toContain("format('woff2')")
     expect(css).toContain("format('opentype')") // .otf is NOT 'otf' in a format() hint
@@ -93,8 +113,7 @@ describe('FontManager — previewing', () => {
   it('CRITICAL: a hostile family from the database cannot escape into the page', () => {
     // The component injects this CSS with dangerouslySetInnerHTML. sanitizeFamily is what
     // makes that safe, so it is asserted HERE too and not only in the unit tests.
-    renderList([font({ family: "x'; } body { display:none } .y {" })])
-    const css = document.querySelector('style')?.innerHTML ?? ''
+    const css = styleOf(renderList([font({ family: "x'; } body { display:none } .y {" })]))
     expect(css).not.toContain('body {')
     expect(css).not.toContain('</style')
   })
