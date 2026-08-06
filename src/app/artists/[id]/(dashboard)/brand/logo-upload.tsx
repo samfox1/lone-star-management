@@ -3,9 +3,8 @@
 import { BRAND_FOLDER } from '@/lib/brand'
 import { acceptFor, IMAGE_UPLOAD_RULES } from '@/lib/upload'
 import { buttonClass } from '@/components/ui/ui'
-import { FileDropField } from '../file-drop-field'
+import { UploadField } from '../upload-field'
 import { toast } from '../toast'
-import { useStorageUpload } from '../use-storage-upload'
 import { setBrandAssetAction } from './actions'
 
 /**
@@ -30,15 +29,6 @@ export function LogoUpload({
   hint: string
   currentUrl: string | null
 }) {
-  const { busy, error, upload } = useStorageUpload({
-    bucket: 'media',
-    artistId,
-    category: BRAND_FOLDER,
-    noun: 'logo',
-    rules: IMAGE_UPLOAD_RULES,
-    successMessage: `${label} uploaded`,
-    writeRow: async (path) => (await setBrandAssetAction(artistId, purpose, path)).error ?? null,
-  })
 
   async function clear() {
     // The error was previously discarded, so a Remove blocked by RLS or a dropped
@@ -84,13 +74,18 @@ export function LogoUpload({
       {/* The explicit allowlist, never image/* — the wildcard admits SVG in the picker
           even though validateUpload refuses it, and the picker must not advertise what
           the validator rejects. */}
-      <FileDropField
+      <UploadField
         accept={acceptFor(IMAGE_UPLOAD_RULES)}
         label={currentUrl ? `Replace ${label.toLowerCase()}` : label}
         hint={hint}
-        busy={busy}
-        error={error}
-        onFile={upload}
+        kind="image"
+        bucket="media"
+        artistId={artistId}
+        category={BRAND_FOLDER}
+        noun="logo"
+        rules={IMAGE_UPLOAD_RULES}
+        successMessage={`${label} uploaded`}
+        writeRow={async (path) => (await setBrandAssetAction(artistId, purpose, path)).error ?? null}
       />
     </div>
   )

@@ -3,9 +3,8 @@
 import { DOCUMENTS_BUCKET, DOCUMENTS_FOLDER, type PressDocumentKind } from '@/lib/epk'
 import { DOCUMENT_UPLOAD_RULES } from '@/lib/upload'
 import { buttonClass } from '@/components/ui/ui'
-import { FileDropField } from '../file-drop-field'
+import { UploadField } from '../upload-field'
 import { toast } from '../toast'
-import { useStorageUpload } from '../use-storage-upload'
 import { savePressDocumentAction } from './actions'
 
 /**
@@ -29,15 +28,6 @@ export function DocumentUpload({
   hint: string
   present: boolean
 }) {
-  const { busy, error, upload } = useStorageUpload({
-    bucket: DOCUMENTS_BUCKET,
-    artistId,
-    category: DOCUMENTS_FOLDER,
-    noun: 'document',
-    rules: DOCUMENT_UPLOAD_RULES,
-    successMessage: `${label} uploaded`,
-    writeRow: async (path) => (await savePressDocumentAction(artistId, kind, path)).error ?? null,
-  })
 
   async function clear() {
     const res = await savePressDocumentAction(artistId, kind, null)
@@ -61,13 +51,21 @@ export function DocumentUpload({
           </button>
         </div>
       )}
-      <FileDropField
+      {/* No `kind`/`budget`: a PDF is not something the site's asset budgets describe,
+          and the pair is typed together so neither can arrive alone. Its own byte cap
+          (DOCUMENT_UPLOAD_RULES) still applies. NB this component's `kind` prop is the
+          press-document kind — unrelated to UploadField's gate kind. */}
+      <UploadField
         accept="application/pdf"
         label={present ? `Replace ${label.toLowerCase()}` : label}
         hint={hint}
-        busy={busy}
-        error={error}
-        onFile={upload}
+        bucket={DOCUMENTS_BUCKET}
+        artistId={artistId}
+        category={DOCUMENTS_FOLDER}
+        noun="document"
+        rules={DOCUMENT_UPLOAD_RULES}
+        successMessage={`${label} uploaded`}
+        writeRow={async (path) => (await savePressDocumentAction(artistId, kind, path)).error ?? null}
       />
     </div>
   )

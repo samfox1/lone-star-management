@@ -6,8 +6,7 @@ import { Icon } from '@/components/ui/icons'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { createClient } from '@/lib/supabase/client'
 import { acceptFor, AUDIO_UPLOAD_RULES } from '@/lib/upload'
-import { FileDropField } from './file-drop-field'
-import { useStorageUpload } from './use-storage-upload'
+import { UploadField } from './upload-field'
 import { toast } from './toast'
 
 const PlayIcon = () => (
@@ -65,18 +64,6 @@ export function TrackAudio({
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
 
-  const { busy, error, progress, upload } = useStorageUpload({
-    bucket: 'audio',
-    artistId,
-    category: 'audio',
-    noun: 'audio',
-    rules: AUDIO_UPLOAD_RULES,
-    writeRow: async (path) => {
-      const { error: rowErr } = await createClient().from('tracks').update({ audio_path: path }).eq('id', trackId)
-      return rowErr?.message ?? null
-    },
-    onSuccess: () => setUploadOpen(false),
-  })
 
   useEffect(() => {
     if (!audioPath) return
@@ -170,13 +157,21 @@ export function TrackAudio({
       <AudioUploadModal open={uploadOpen && !hasFile} onClose={() => setUploadOpen(false)}>
         <h3 className="text-lg font-bold tracking-[-0.01em]">Add audio</h3>
         <div className="mt-4">
-          <FileDropField
+          {/* No gate kind: track audio is not something the site's asset budgets
+              describe. AUDIO_UPLOAD_RULES' 30 MB cap is still the guard. */}
+          <UploadField
             accept={acceptFor(AUDIO_UPLOAD_RULES)}
             label="Drop an audio file, or click to upload"
-            busy={busy}
-            progress={progress}
-            error={error}
-            onFile={upload}
+            bucket="audio"
+            artistId={artistId}
+            category="audio"
+            noun="audio"
+            rules={AUDIO_UPLOAD_RULES}
+            writeRow={async (path) => {
+              const { error: rowErr } = await createClient().from('tracks').update({ audio_path: path }).eq('id', trackId)
+              return rowErr?.message ?? null
+            }}
+            onSuccess={() => setUploadOpen(false)}
           />
         </div>
       </AudioUploadModal>

@@ -25,6 +25,7 @@
     "src/lib/upload.ts",
     "src/lib/url.ts",
     "src/lib/site-editor/asset-budget.ts",
+    "src/lib/site-editor/compress-image.ts",
     "src/lib/site-editor/style-apply.ts",
     "src/lib/site-editor/style-controls.ts",
     "src/lib/site-editor/text-panel.ts",

@@ -14,9 +14,8 @@ import { FONT_UPLOAD_RULES, acceptFor } from '@/lib/upload'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { inputClass } from '@/components/ui/ui'
-import { FileDropField } from '../file-drop-field'
+import { UploadField } from '../upload-field'
 import { toast } from '../toast'
-import { useStorageUpload } from '../use-storage-upload'
 import { addArtistFontAction, removeArtistFontAction, setFontSlotAction } from './actions'
 
 /** The manager-facing spelling of a slot. DERIVED from the slot name, so a sixth slot
@@ -52,19 +51,6 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
 
   const named = label.trim()
 
-  const { busy, error, upload } = useStorageUpload({
-    bucket: FONTS_BUCKET,
-    artistId,
-    category: FONT_FOLDER,
-    noun: 'font',
-    rules: FONT_UPLOAD_RULES,
-    successMessage: 'Font uploaded',
-    writeRow: async (path, file) => {
-      const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
-      return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext })).error ?? null
-    },
-    onSuccess: () => setLabel(''),
-  })
 
   /** One writer for both row actions, so the latch and the toasts cannot drift apart. */
   async function run(id: string, work: () => Promise<{ error?: string }>, done: string) {
@@ -198,14 +184,23 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
 
       {/* The explicit allowlist, never a wildcard: the picker must not advertise what
           validateUpload refuses, and an SVG font is a script vector on a public bucket. */}
-      <FileDropField
+      <UploadField
         accept={acceptFor(FONT_UPLOAD_RULES)}
         label={named ? `Upload ${named}` : 'Name the font first'}
         hint="WOFF2, WOFF, TTF or OTF, up to 2 MB. WOFF2 loads fastest."
-        busy={busy}
-        error={error}
         disabled={!named}
-        onFile={upload}
+        kind="font"
+        bucket={FONTS_BUCKET}
+        artistId={artistId}
+        category={FONT_FOLDER}
+        noun="font"
+        rules={FONT_UPLOAD_RULES}
+        successMessage="Font uploaded"
+        writeRow={async (path, file) => {
+          const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
+          return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext })).error ?? null
+        }}
+        onSuccess={() => setLabel('')}
       />
 
       <p className="font-space text-xs leading-relaxed text-ink-faint">

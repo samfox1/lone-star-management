@@ -21,9 +21,8 @@ import {
   useDismiss,
 } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
-import { budgetFor, budgetSlotKey, type AssetBudgets } from '@/lib/site-editor/asset-budget'
-import { FileDropField } from '../../file-drop-field'
-import { useStorageUpload } from '../../use-storage-upload'
+import { budgetFor, budgetSlotKey, type AssetBudget, type AssetBudgets } from '@/lib/site-editor/asset-budget'
+import { UploadField } from '../../upload-field'
 import { toast } from '../../toast'
 import { setImageFieldAction } from '../../actions'
 
@@ -52,12 +51,15 @@ const galleryTarget = (id: string): SelectTarget => ({ kind: 'item', assetType: 
 function ImageFieldTools({
   fields,
   artistId,
+  budget,
   focusedKey,
   onFocus,
   onApplyField,
 }: {
   fields: EditorImageField[]
   artistId: string
+  /** The site's image budget, passed down to each tile's upload modal. */
+  budget?: AssetBudget | null
   focusedKey: string | null
   onFocus: (t: SelectTarget) => void
   onApplyField?: (key: string, value: string) => void
@@ -71,6 +73,7 @@ function ImageFieldTools({
             key={f.key}
             field={f}
             artistId={artistId}
+            budget={budget}
             focused={focusedKey === selectTargetKey(fieldTarget(f.key))}
             onFocus={() => onFocus(fieldTarget(f.key))}
             onApplyField={onApplyField}
@@ -84,12 +87,14 @@ function ImageFieldTools({
 function ImageFieldTile({
   field,
   artistId,
+  budget,
   focused,
   onFocus,
   onApplyField,
 }: {
   field: EditorImageField
   artistId: string
+  budget?: AssetBudget | null
   focused: boolean
   onFocus: () => void
   onApplyField?: (key: string, value: string) => void
@@ -149,6 +154,7 @@ function ImageFieldTile({
           field={field}
           hasCurrent={!!preview}
           artistId={artistId}
+          budget={budget}
           onClose={() => setUploadOpen(false)}
           onSaved={(path) => {
             setUploadOpen(false)
@@ -170,6 +176,7 @@ function ImageUploadModal({
   field,
   hasCurrent,
   artistId,
+  budget,
   onClose,
   onSaved,
 }: {
@@ -177,28 +184,34 @@ function ImageUploadModal({
   /** Whether the field currently shows an image — titles the modal Replace vs Add. */
   hasCurrent: boolean
   artistId: string
+  /** The site's image budget. This modal shipped without one on 2026-08-06 — an
+   *  oversized hero image placed from the editor bypassed compression while the same
+   *  file placed from the Images panel did not. */
+  budget?: AssetBudget | null
   onClose: () => void
   onSaved: (path: string) => void
 }) {
   const title = `${hasCurrent ? 'Replace' : 'Add'} ${field.label}`
-  const { busy, error, upload } = useStorageUpload({
-    bucket: 'media',
-    artistId,
-    category: field.target.store === 'artist' ? 'hero' : 'profile',
-    noun: 'image',
-    rules: IMAGE_UPLOAD_RULES,
-    writeRow: async (path) => {
-      const res = await setImageFieldAction(artistId, field.key, path)
-      if (!res.ok) return res.error ?? 'Save failed'
-      onSaved(path)
-      return null
-    },
-  })
-
   return (
     <PortalModal ariaLabel={title} onClose={onClose}>
       <div className={cx(EYEBROW, 'mb-2 pr-6')}>{title}</div>
-      <FileDropField accept="image/*" label="Drop an image or click to upload" busy={busy} error={error} onFile={upload} />
+      <UploadField
+        accept="image/*"
+        label="Drop an image or click to upload"
+        kind="image"
+        budget={budget}
+        bucket="media"
+        artistId={artistId}
+        category={field.target.store === 'artist' ? 'hero' : 'profile'}
+        noun="image"
+        rules={IMAGE_UPLOAD_RULES}
+        writeRow={async (path) => {
+          const res = await setImageFieldAction(artistId, field.key, path)
+          if (!res.ok) return res.error ?? 'Save failed'
+          onSaved(path)
+          return null
+        }}
+      />
     </PortalModal>
   )
 }
@@ -441,6 +454,7 @@ export function PhotoTools({
         <ImageFieldTools
           fields={imageFields}
           artistId={artistId}
+          budget={budgetFor(assetBudgets, 'image')}
           focusedKey={focusedKey}
           onFocus={onFocus}
           onApplyField={onApplyField}

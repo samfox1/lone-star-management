@@ -20,6 +20,7 @@ import {
   fitWithinEdge,
   walkQuality,
   budgetSlotKey,
+  bytesLabel,
   type AssetBudgets,
 } from '@/lib/site-editor/asset-budget'
 
@@ -118,6 +119,47 @@ describe('budgetVerdict', () => {
     expect(budgetVerdict(img(90_000, 500, 'image/gif'), 'image', BUDGETS.image!)).toEqual({ action: 'upload' })
   })
 
+  it('CRITICAL: EXACTLY at the limit uploads — the budget is a ceiling, not a fence', () => {
+    // `>` vs `>=` is one character and completely invisible: a file at exactly 400,000
+    // bytes would open a modal proposing to shrink a file that already fits.
+    expect(budgetVerdict(img(400_000, 1200), 'image', BUDGETS.slots!.polaroid_photo)).toEqual({ action: 'upload' })
+    expect(budgetVerdict(img(400_001, 1200), 'image', BUDGETS.slots!.polaroid_photo)).toEqual({
+      action: 'compress',
+      mustCompress: false,
+    })
+    // …and the same boundary on the EDGE cap.
+    expect(budgetVerdict(img(100_000, 1201), 'image', BUDGETS.slots!.polaroid_photo)).toEqual({
+      action: 'compress',
+      mustCompress: false,
+    })
+    // Video's gate boundary too, which is a different branch entirely.
+    expect(budgetVerdict({ size: 25_000_000, type: 'video/mp4' }, 'video', BUDGETS.video!)).toEqual({ action: 'upload' })
+    expect(budgetVerdict({ size: 25_000_001, type: 'video/mp4' }, 'video', BUDGETS.video!)).toEqual({ action: 'gate' })
+  })
+
+  it('the mustCompress ceiling is exactly 4×, not 4× minus a byte', () => {
+    const b = BUDGETS.slots!.polaroid_photo
+    expect(budgetVerdict(img(1_600_000, 1100), 'image', b)).toEqual({ action: 'compress', mustCompress: false })
+    expect(budgetVerdict(img(1_600_001, 1100), 'image', b)).toEqual({ action: 'compress', mustCompress: true })
+  })
+
+  it('a budget with only an EDGE cap never gates on bytes', () => {
+    // A legal budget shape the manifest allows and nothing else covered: no maxBytes at
+    // all. Every byte comparison must fall through rather than compare against undefined.
+    const edgeOnly = { maxEdgePx: 1000 }
+    expect(budgetVerdict(img(90_000_000, 500), 'image', edgeOnly)).toEqual({ action: 'upload' })
+    expect(budgetVerdict(img(90_000_000, 1400), 'image', edgeOnly)).toEqual({
+      action: 'compress',
+      // Never mandatory: with no byte ceiling there is no "4× over" to be past.
+      mustCompress: false,
+    })
+  })
+
+  it('a budget with only a BYTE cap ignores dimensions', () => {
+    const bytesOnly = { maxBytes: 500_000 }
+    expect(budgetVerdict(img(400_000, 9000), 'image', bytesOnly)).toEqual({ action: 'upload' })
+  })
+
   it('an image with unknown dimensions is judged on bytes alone', () => {
     // Decode can fail (corrupt file); the byte ceiling still protects storage.
     expect(budgetVerdict(img(300_000, undefined), 'image', BUDGETS.slots!.polaroid_photo)).toEqual({ action: 'upload' })
@@ -125,6 +167,38 @@ describe('budgetVerdict', () => {
       action: 'compress',
       mustCompress: false,
     })
+  })
+})
+
+describe('budgetSlotKey — a placed role maps to its budget key (index widths)', () => {
+  it('CRITICAL: a two-digit instance index still maps', () => {
+    // `/_\d_/` (one digit) reads fine and is wrong the moment a site declares ten
+    // instances: `polaroid_10_photo` would match nothing, silently fall back to the
+    // looser kind budget, and ship 2000px into a 600px card with no error anywhere.
+    expect(budgetSlotKey('polaroid_10_photo')).toBe('polaroid_photo')
+    expect(budgetSlotKey('grid_123_image')).toBe('grid_image')
+  })
+  it('only the FIRST index segment is collapsed', () => {
+    // The role shape is `<component>_<n>_<slot>`; a slot name containing digits must
+    // survive intact rather than being eaten as a second index.
+    expect(budgetSlotKey('polaroid_2_photo_2x')).toBe('polaroid_photo_2x')
+  })
+})
+
+describe('bytesLabel — the number the whole modal is arguing about', () => {
+  it('shows KB below a megabyte, MB at or above', () => {
+    // upload.ts's sizeLabel rounds to whole MB and renders a 310KB result as "0 MB",
+    // which turns the modal's before/after pitch into nonsense. This is why it exists.
+    expect(bytesLabel(310 * 1024)).toBe('310 KB')
+    expect(bytesLabel(1024 * 1024)).toBe('1.0 MB')
+    expect(bytesLabel(4.2 * 1024 * 1024)).toBe('4.2 MB')
+  })
+  it('never renders "0 KB" — a real file always has a size worth showing', () => {
+    expect(bytesLabel(1)).toBe('1 KB')
+    expect(bytesLabel(0)).toBe('1 KB')
+  })
+  it('keeps one decimal on MB, so 4.0 MB does not read as 4 MB of precision', () => {
+    expect(bytesLabel(4 * 1024 * 1024)).toBe('4.0 MB')
   })
 })
 

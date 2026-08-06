@@ -28,7 +28,9 @@ type Pending =
   | { mode: 'gate'; original: File; kind: UploadKind }
 
 export function useBudgetGate(
-  kind: UploadKind,
+  /** Undefined for uploads no budget describes (PDFs, track audio) — the gate is then
+   *  inert, exactly as it is for a declared kind with no budget behind it. */
+  kind: UploadKind | undefined,
   budget: AssetBudget | null | undefined,
 ): { prepare: (file: File) => Promise<File | null>; modal: ReactNode } {
   const [pending, setPending] = useState<Pending | null>(null)
@@ -36,7 +38,7 @@ export function useBudgetGate(
   const resolver = useRef<((f: File | null) => void) | null>(null)
 
   async function prepare(file: File): Promise<File | null> {
-    if (!budget) return file // no budget = no gate: the pre-budget behaviour, verbatim
+    if (!budget || !kind) return file // no budget/kind = no gate: the pre-budget behaviour
 
     // Dimensions matter only for the compress path; a failed decode still gates on bytes.
     const edgePx = kind === 'image' ? await decodeEdgePx(file) : undefined
