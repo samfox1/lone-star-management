@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaThumbUrl, mediaUrl } from '@/lib/site'
@@ -224,6 +224,28 @@ export function TileEditButton({ label, title, onClick }: { label: string; title
  * `children` (a TileEditButton, a CoverEditMenu, a busy overlay). This was hand-rolled
  * per panel — identical ring, aria and hover treatment three times — before it lived here.
  */
+/**
+ * Scroll the element into view when `focused` flips true.
+ *
+ * A frame click routes to the right panel and rings the right tile — but the polaroid
+ * tiles live at the bottom of a long scrolling panel, and a ring below the fold is
+ * indistinguishable from a dropped select (Sam, 2026-08-06: "the images on the polaroid,
+ * when clicked, dont bring it up in the side panel" — they did; nobody could see it).
+ * Fires only on the false→true EDGE: re-scrolling on every render would fight the
+ * manager's own scrolling while they work near a selected tile.
+ */
+export function useScrollIntoFocus<T extends HTMLElement>(focused: boolean): React.RefObject<T | null> {
+  const ref = useRef<T | null>(null)
+  const was = useRef(false)
+  useEffect(() => {
+    // Optional-called: jsdom ships no scrollIntoView, and a missing nicety must never
+    // crash the panel that just routed correctly.
+    if (focused && !was.current) ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+    was.current = focused
+  }, [focused])
+  return ref
+}
+
 export function SelectableTile({
   label,
   focused,
@@ -244,8 +266,11 @@ export function SelectableTile({
   thumb: React.ReactNode
   children?: React.ReactNode
 }) {
+  // A tile focused from the FRAME may sit below the fold — bring it to the manager.
+  const scrollRef = useScrollIntoFocus<HTMLDivElement>(focused)
   return (
     <div
+      ref={scrollRef}
       title={title}
       className={cx(
         'group/slot relative overflow-hidden border transition-shadow',

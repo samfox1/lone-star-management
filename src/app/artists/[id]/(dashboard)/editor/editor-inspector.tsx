@@ -1135,6 +1135,7 @@ function EditingView({
           </>
         ) : isVideos ? (
           <VideoTools
+            focusedKey={focusedKey}
             videos={videos}
             artistId={artistId}
             onToggleOnSite={onToggleVideoOnSite}

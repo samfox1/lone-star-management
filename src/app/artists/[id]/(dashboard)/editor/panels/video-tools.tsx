@@ -2,7 +2,27 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type EditorVideo, type ItemEdit, type SiteVideoRole } from '../inspector-types'
-import { CardThumb, EmptySlot, AddFirstLink, LibraryPicker } from '../inspector-grid'
+import { CardThumb, EmptySlot, AddFirstLink, LibraryPicker, useScrollIntoFocus } from '../inspector-grid'
+
+/**
+ * A video card that shows WHERE a frame click landed: ring + scroll-into-view when it is
+ * the focused region, `aria-current` carrying the state for assistive tech and tests.
+ * The Videos panel had no focus affordance at all — a routed select opened the panel
+ * and visibly selected nothing (Sam, 2026-08-06).
+ */
+function FocusableCard({ focused, label, children }: { focused: boolean; label: string; children: React.ReactNode }) {
+  const ref = useScrollIntoFocus<HTMLDivElement>(focused)
+  return (
+    <div
+      ref={ref}
+      aria-current={focused ? 'true' : undefined}
+      aria-label={label}
+      className={cx('overflow-hidden rounded-lg border', focused ? 'border-accent ring-2 ring-accent' : 'border-hairline')}
+    >
+      {children}
+    </div>
+  )
+}
 import { runSerialized, SlotGroupLabel } from '../inspector-shared'
 import { renameVideoAction } from '../../actions'
 
@@ -34,6 +54,7 @@ export function VideoTools({
   onToggleOnSite,
   onAssignHero,
   onEditItem,
+  focusedKey,
 }: {
   videos: EditorVideo[]
   artistId: string
@@ -41,7 +62,13 @@ export function VideoTools({
   onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
   /** Open one video in the full-panel editor (a tile's Edit button). */
   onEditItem: (item: ItemEdit) => void
+  /** The selected region's stable key (`item:video:<id>` when a frame click selected a
+   *  video — the hero background or an embed tile). Rings + scrolls to its card. */
+  focusedKey?: string | null
 }) {
+  const focusedVideoId = focusedKey?.startsWith('item:video:')
+    ? focusedKey.slice('item:video:'.length)
+    : null
   const [titles, setTitles] = useState<Record<string, string>>(() =>
     Object.fromEntries(videos.map((v) => [v.id, v.title])),
   )
@@ -107,7 +134,7 @@ export function VideoTools({
       <div key={role} className="space-y-1">
         <span className="font-space text-[10px] font-medium uppercase tracking-[0.06em] text-ink-faint">{label}</span>
         {placed ? (
-          <div className="overflow-hidden rounded-lg border border-hairline">
+          <FocusableCard focused={placed.id === focusedVideoId} label={label}>
             <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />
             <div className="px-2 py-1.5">
               <div className="flex items-center gap-1">
@@ -123,7 +150,7 @@ export function VideoTools({
                 </button>
               </div>
             </div>
-          </div>
+          </FocusableCard>
         ) : (
           <EmptySlot label="Pick a video" onClick={() => setPicking(role)} />
         )}
@@ -169,7 +196,7 @@ export function VideoTools({
           const v = bandSlots[i]
           if (!v) return <EmptySlot key={`band-empty-${i}`} label="Pick a YouTube video" onClick={() => setPicking('band')} />
           return (
-            <div key={v.id} className="overflow-hidden rounded-lg border border-hairline">
+            <FocusableCard key={v.id} focused={v.id === focusedVideoId} label={`Video slot ${i + 1}`}>
               <CardThumb poster={v.poster} previewUrl={v.previewUrl} />
               <div className="px-1.5 py-1">
                 <div className="flex items-center gap-0.5">
@@ -191,7 +218,7 @@ export function VideoTools({
                   </button>
                 </div>
               </div>
-            </div>
+            </FocusableCard>
           )
         })}
       </div>

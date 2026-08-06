@@ -17,7 +17,7 @@
  * the return path: selecting in the panel calls onHighlight with the same target the
  * frame would use to find the element.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EditorInspector } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import type {
@@ -194,5 +194,41 @@ describe('panel selection → highlight in the frame', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /All text|Back/i }))
     expect(onClearHighlight).toHaveBeenCalled()
+  })
+})
+
+describe('a routed select is VISIBLE where it lands', () => {
+  // jsdom implements no scrollIntoView; the spy IS the assertion surface.
+  const scrollSpy = vi.fn()
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = scrollSpy
+  })
+
+  it('CRITICAL: a polaroid select scrolls its slot tile into view', () => {
+    // Sam, 2026-08-06: "the images on the polaroid, when clicked, dont bring it up in
+    // the side panel." The tile DID ring — off-screen, at the bottom of a long panel,
+    // where a ring nobody can see is indistinguishable from a dropped select.
+    renderInspector({
+      components: [{ key: 'polaroid', label: 'Polaroid', count: 5, slots: [{ key: 'photo', label: 'Photo' }] }],
+      // The slot must be FILLED: an empty slot renders a drop target with nothing to
+      // ring, and the click Sam described lands on a photo that exists.
+      photos: [{ id: 'p3', storage_path: 'artist-1/gallery/p3.jpg', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_3_photo' }],
+      selectedRegion: select({ kind: 'field', key: 'polaroid_3_photo' }),
+    })
+    // Slots number sequentially across instances: polaroid_3_photo is Slot 3.
+    expect(screen.getByRole('button', { name: 'Select Slot 3' }).getAttribute('aria-pressed')).toBe('true')
+    expect(scrollSpy).toHaveBeenCalled()
+  })
+
+  it('CRITICAL: a video select marks its card current and scrolls to it', () => {
+    // The Videos panel had no focus affordance at all — a routed select opened the
+    // panel and showed nothing selected.
+    renderInspector({ selectedRegion: select({ kind: 'item', assetType: 'video', id: 'v1' }) })
+    const current = document.querySelector('[aria-current="true"]')
+    expect(current).not.toBeNull()
+    // The card's face is a thumbnail + a title INPUT — no text content — so the label
+    // carries its identity.
+    expect(current!.getAttribute('aria-label')).toMatch(/Video slot/)
+    expect(scrollSpy).toHaveBeenCalled()
   })
 })
