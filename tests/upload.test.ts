@@ -55,6 +55,26 @@ describe('validateUpload', () => {
   it('CRITICAL: the IMAGE rules reject SVG — the media bucket is public and an SVG can carry script', () => {
     expect(validateUpload({ name: 'logo.svg', size: 1000, type: 'image/svg+xml' }, IMAGE_UPLOAD_RULES).ok).toBe(false)
   })
+
+  it('CRITICAL: the IMAGE rules accept HEIC/HEIF — the iPhone default was refused at the door', () => {
+    // ASSET_COMPRESSION_BRIEF (skeen repo): "assume camera originals — HEIC from an
+    // iPhone". The compression gate transcodes every HEIC to webp before storage (the
+    // media bucket's allowed_mime_types has no image/heic, deliberately — the raw file
+    // must never land), but the validator ran on the picker's file FIRST in spirit:
+    // .heic was not in allowedExt, so a manager's camera-roll photo was a dead end
+    // before the compressor built to serve it ever saw the bytes.
+    expect(validateUpload({ name: 'IMG_4021.heic', size: 9_000_000, type: 'image/heic' }, IMAGE_UPLOAD_RULES).ok).toBe(true)
+    expect(validateUpload({ name: 'IMG_4021.heif', size: 9_000_000, type: 'image/heif' }, IMAGE_UPLOAD_RULES).ok).toBe(true)
+    // Windows and some share paths report no mime for HEIC at all; ext carries it.
+    expect(validateUpload({ name: 'IMG_4021.heic', size: 9_000_000, type: '' }, IMAGE_UPLOAD_RULES).ok).toBe(true)
+  })
+
+  it('…and the picker advertises what the validator now accepts', () => {
+    // acceptFor derives from the same rules, so this is the pair staying in step.
+    expect(acceptFor(IMAGE_UPLOAD_RULES)).toContain('.heic')
+    expect(acceptFor(IMAGE_UPLOAD_RULES)).toContain('image/heic')
+    expect(acceptFor(IMAGE_UPLOAD_RULES)).not.toContain('svg')
+  })
 })
 
 /**

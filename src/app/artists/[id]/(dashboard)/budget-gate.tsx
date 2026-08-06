@@ -6,6 +6,7 @@ import { buttonClass } from '@/components/ui/ui'
 import {
   budgetVerdict,
   bytesLabel,
+  isHeic,
   withFloor,
   type AssetBudget,
   type UploadKind,
@@ -49,7 +50,8 @@ export function useBudgetGate(
 
     // Dimensions matter only for the compress path; a failed decode still gates on bytes.
     const edgePx = kind === 'image' ? await decodeEdgePx(file) : undefined
-    const verdict = budgetVerdict({ size: file.size, type: file.type, edgePx }, kind, applied)
+    // `name` included so a HEIC with a blank mime (Windows) is still caught by extension.
+    const verdict = budgetVerdict({ size: file.size, type: file.type, name: file.name, edgePx }, kind, applied)
     if (verdict.action === 'upload') return file
 
     return new Promise<File | null>((resolve) => {
@@ -105,6 +107,18 @@ const GATE_COPY: Record<UploadKind, { title: string; body: string }> = {
   },
 }
 
+/** The one gate whose copy is per-FORMAT rather than per-kind: an undecodable HEIC in a
+ *  browser without the codec (everything but Safari). "Would be damaged by re-encoding"
+ *  tells a manager holding an iPhone photo nothing — this names the format and both
+ *  ways forward. */
+const HEIC_GATE_COPY = {
+  title: 'This browser can’t read iPhone photos (HEIC)',
+  body:
+    'Open this page in Safari and the photo will convert automatically when you upload it. ' +
+    'Or export a JPEG first: in the Photos app, select the photo, then File → Export → Export 1 Photo. ' +
+    'On the phone itself, sharing to Files or by AirDrop usually converts it for you.',
+}
+
 function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f: File | null) => void }) {
   // Preview the COMPRESSED bytes, not the original: the question the manager is
   // answering is "is the result good enough", and only the result can answer it.
@@ -125,7 +139,7 @@ function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f
   }, [previewUrl])
 
   if (pending.mode === 'gate') {
-    const copy = GATE_COPY[pending.kind]
+    const copy = pending.kind === 'image' && isHeic(pending.original) ? HEIC_GATE_COPY : GATE_COPY[pending.kind]
     return (
       <CardModal open onClose={() => onSettle(null)} footer={null}>
         <h2 className="font-space text-sm font-semibold uppercase tracking-wide">{copy.title}</h2>

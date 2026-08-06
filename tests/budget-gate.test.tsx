@@ -148,6 +148,54 @@ describe('useBudgetGate', () => {
     await waitFor(() => expect(result()).toBe('null'))
   })
 
+  it('CRITICAL: a within-budget HEIC still opens the proposal, with NO "Upload original"', async () => {
+    // The iPhone default. Size is irrelevant — the media bucket refuses image/heic and
+    // Chrome/Firefox visitors can't render one, so the raw file must never ship. The
+    // manager's only ways out are the converted file or cancel.
+    decodeEdgePx.mockResolvedValue(800)
+    compressImageFile.mockResolvedValue({ file: SMALL_WEBP, width: 800, height: 600, fits: true })
+    render(<Probe kind="image" budget={POLAROID} file={fakeFile(90_000, 'image/heic', 'IMG_4021.heic')} />)
+    pick()
+
+    await screen.findByRole('dialog')
+    expect(screen.queryByRole('button', { name: /original/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /compress/i }))
+    await waitFor(() => expect(result()).toBe('photo.webp'))
+  })
+
+  it('a blank-mime HEIC is caught too — the gate hands the NAME to the verdict', async () => {
+    // Windows reports no mime for .heic. The pure verdict already detects by extension;
+    // this pins that the gate actually passes file.name through, without which that
+    // detection is dead code on the one OS that needs it.
+    decodeEdgePx.mockResolvedValue(800)
+    compressImageFile.mockResolvedValue({ file: SMALL_WEBP, width: 800, height: 600, fits: true })
+    render(<Probe kind="image" budget={POLAROID} file={fakeFile(90_000, '', 'IMG_4021.heic')} />)
+    pick()
+
+    await screen.findByRole('dialog')
+    fireEvent.click(screen.getByRole('button', { name: /compress/i }))
+    await waitFor(() => expect(result()).toBe('photo.webp'))
+  })
+
+  it('CRITICAL: a HEIC this browser cannot decode GATES with the Safari/export fix', async () => {
+    // Chrome and Firefox cannot decode HEIC (Safari can). compressImageFile throws, and
+    // the fallback gate copy must NOT be the GIF/SVG one — "would be damaged by
+    // re-encoding" tells a manager holding an iPhone photo nothing. The copy this pins
+    // names the format and both ways forward: Safari, or export a JPEG from Photos.
+    decodeEdgePx.mockResolvedValue(undefined)
+    compressImageFile.mockRejectedValue(new Error('createImageBitmap: unsupported source'))
+    render(<Probe kind="image" budget={POLAROID} file={fakeFile(9_000_000, 'image/heic', 'IMG_4021.heic')} />)
+    pick()
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(dialog.textContent).toMatch(/HEIC/))
+    expect(dialog.textContent).toMatch(/Safari/)
+    expect(dialog.textContent).toMatch(/JPEG/i)
+    expect(screen.queryByRole('button', { name: /compress/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    await waitFor(() => expect(result()).toBe('null'))
+  })
+
   it('CRITICAL: an oversized video GATES — instructions, no compress button, null', async () => {
     // The browser does not transcode video; pretending otherwise would hang a laptop for
     // minutes and produce something worse than any export tool.

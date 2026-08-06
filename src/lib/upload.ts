@@ -8,13 +8,30 @@
 export type UploadRules = { allowedExt: string[]; maxBytes: number; allowedMime?: string[] }
 export type ValidateResult = { ok: true; ext: string } | { ok: false; error: string }
 
-/** The image/video upload rules, in ONE place — they were copy-pasted per uploader
- *  (media-uploader twice, the editor's Images panel) and would drift the first time one
- *  was edited. Client-side UX only; the bucket's limits are the real guard. */
+/**
+ * The image/video upload rules, in ONE place — they were copy-pasted per uploader
+ * (media-uploader twice, the editor's Images panel) and would drift the first time one
+ * was edited. Client-side UX only; the bucket's limits are the real guard.
+ *
+ * HEIC/HEIF are accepted AT THE DOOR ONLY — they never reach storage. The iPhone shoots
+ * HEIC by default, and refusing it here was a dead end standing in front of the very
+ * compressor built to handle camera originals (TODO 2026-08-06). The budget gate forces
+ * every HEIC through the canvas converter (budgetVerdict treats the format itself as the
+ * reason to compress, whatever the size), so what uploads is the webp; on a browser that
+ * cannot decode HEIC the gate blocks with the Safari/export fix. The media bucket's
+ * allowed_mime_types has no image/heic — the backstop if any future path skips the gate.
+ *
+ * SVG is absent and MUST STAY absent, and that is a separate concern from the HEIC one:
+ * the media bucket is public-read, and an SVG served from the Supabase origin is stored
+ * XSS on that origin. Widening for a camera format does not touch that reasoning.
+ */
 export const IMAGE_UPLOAD_RULES: UploadRules = {
-  allowedExt: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+  allowedExt: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'],
   maxBytes: 26214400,
-  allowedMime: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  // Ext carries HEIC where the OS reports no mime at all (Windows has no registry entry
+  // for it — the same measured reality FONT_UPLOAD_RULES documents), and blank mimes are
+  // tolerated by validateUpload already.
+  allowedMime: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'],
 }
 export const VIDEO_UPLOAD_RULES: UploadRules = {
   allowedExt: ['mp4', 'webm', 'mov'],

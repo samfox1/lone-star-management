@@ -54,7 +54,10 @@ vi.mock('@/lib/site-editor/compress-image', () => ({
 }))
 
 /** Longest edge per fixture, as a real decode would report it. */
-const EDGE_PX: Record<string, number> = { 'IMG_4021.jpg': 4032, 'crop.jpg': 1600 }
+// The heic fixture is SMALL on both axes deliberately: within bytes and edge, only the
+// format rule can force it through the converter, so this test cannot pass by riding the
+// ordinary oversize path.
+const EDGE_PX: Record<string, number> = { 'IMG_4021.jpg': 4032, 'crop.jpg': 1600, 'IMG_4021.heic': 800 }
 
 const SMALL = new File(['small'], 'photo.webp', { type: 'image/webp' })
 
@@ -109,6 +112,22 @@ describe('adding a photo on the PHOTOS page', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Compress & upload/i }))
     await waitFor(() => expect(upload).toHaveBeenCalledWith(SMALL))
+  })
+
+  it('CRITICAL: an iPhone HEIC converts and the WEBP is what reaches storage', async () => {
+    // The full camera-roll path on a browser that can decode HEIC (Safari): the picker
+    // accepts it (IMAGE_UPLOAD_RULES now lists heic/heif), the gate forces conversion,
+    // and the stored file is the webp — the media bucket has no image/heic in its
+    // allowed_mime_types, so the original could never have landed anyway.
+    openPhotosAdd()
+    const f = new File(['x'], 'IMG_4021.heic', { type: 'image/heic' })
+    Object.defineProperty(f, 'size', { value: 90_000 }) // within budget: only the FORMAT forces conversion
+    dropFile(f)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Compress & upload/i }))
+    await waitFor(() => expect(upload).toHaveBeenCalledWith(SMALL))
+    // …and no "Upload original" was ever on the table for it.
+    expect(screen.queryByRole('button', { name: /original/i })).toBeNull()
   })
 
   it('a web-sized photo uploads untouched, with no modal', async () => {

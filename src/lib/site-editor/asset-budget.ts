@@ -138,16 +138,32 @@ const DECLINE_CEILING = 4
 const NON_RASTERIZABLE = new Set(['image/gif', 'image/svg+xml'])
 
 /**
+ * Is this file the iPhone's HEIC/HEIF? By mime OR extension — Windows reports no mime
+ * for HEIC at all (no registry entry, the same measured reality FONT_UPLOAD_RULES
+ * documents), so a type-only check waves through exactly the files it exists to catch.
+ */
+export function isHeic(file: { type: string; name?: string }): boolean {
+  return /^image\/hei[cf]$/.test(file.type) || /\.hei[cf]$/i.test(file.name ?? '')
+}
+
+/**
  * The decision for one picked file. `edgePx` is the file's longest edge when the caller
  * has decoded it; undefined (decode failed, or not an image) judges on bytes alone —
  * the byte ceiling still protects storage when a corrupt file defeats the decoder.
  */
 export function budgetVerdict(
-  file: { size: number; type: string; edgePx?: number },
+  file: { size: number; type: string; name?: string; edgePx?: number },
   kind: UploadKind,
   budget: AssetBudget | null,
 ): BudgetVerdict {
   if (!budget) return { action: 'upload' }
+
+  // HEIC compresses because of what it IS, not how big it is: the media bucket's
+  // allowed_mime_types refuses image/heic, and a fan on Chrome or Firefox cannot render
+  // one — a within-budget 'upload' verdict would ship a file that either bounces at
+  // storage or is invisible to most visitors. mustCompress for the same reason: for
+  // every other format "Upload original" uploads something that works; here it's a trap.
+  if (kind === 'image' && isHeic(file)) return { action: 'compress', mustCompress: true }
 
   const overBytes = budget.maxBytes != null && file.size > budget.maxBytes
   if (kind !== 'image' || NON_RASTERIZABLE.has(file.type)) {

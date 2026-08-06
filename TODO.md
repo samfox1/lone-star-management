@@ -22,11 +22,12 @@ items that were still open inside them:
       1. **State the rules ABOVE the drop zone, before a file is picked** — "Photos: any
          size, we'll shrink it for you". Today the manager learns the rules only after
          picking, from a modal.
-      2. **Accept HEIC/HEIF.** `IMAGE_UPLOAD_RULES` allows jpg/png/webp/gif only, so a
-         photo straight off an iPhone (or exported from macOS Photos) is REJECTED at the
-         door — before the compressor it would have gone through. iOS Safari often
-         transcodes to JPEG on pick, which is why this has not been reported yet; the
-         camera-roll path that does not is a real dead end.
+      2. ~~**Accept HEIC/HEIF.**~~ DONE 2026-08-06. Accepted at the door, NEVER stored:
+         `budgetVerdict` compresses HEIC because of what it IS (any size — the media
+         bucket refuses image/heic and Chrome/Firefox visitors can't render it), with no
+         "Upload original". Caught by mime OR extension (Windows reports none). A browser
+         without the codec (everything but Safari) gates with the Safari/Photos-export
+         fix instead of the GIF/SVG copy. SVG stays out — separate reasoning, untouched.
       3. **Duration cap on video**, read from metadata and refused early rather than
          after a long upload.
       4. **Progress + plain-English narration** while compressing.

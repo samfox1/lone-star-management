@@ -239,6 +239,32 @@ describe('budgetVerdict', () => {
       mustCompress: false,
     })
   })
+
+  it('CRITICAL: HEIC always compresses, even tiny and within every limit', () => {
+    // Size is irrelevant for HEIC: the FORMAT cannot ship. The media bucket's
+    // allowed_mime_types has no image/heic (checked live, deliberate), and a fan on
+    // Chrome or Firefox cannot render one — so a within-budget verdict of 'upload'
+    // would send a file storage refuses, or worse, one visitors can't see. And
+    // mustCompress, so the modal never offers "Upload original": for every other
+    // format that button uploads something that works, for HEIC it's a trap.
+    expect(budgetVerdict(img(90_000, 800, 'image/heic'), 'image', BUDGETS.image!)).toEqual({
+      action: 'compress',
+      mustCompress: true,
+    })
+    expect(budgetVerdict(img(90_000, 800, 'image/heif'), 'image', BUDGETS.image!)).toEqual({
+      action: 'compress',
+      mustCompress: true,
+    })
+  })
+
+  it('CRITICAL: HEIC with a BLANK mime is still caught, by extension', () => {
+    // Windows and some share paths report no mime for HEIC (same reality the font rules
+    // document). Detection on type alone would wave those through to a bucket that
+    // refuses them — the exact dead end this change removes, back again for one OS.
+    expect(
+      budgetVerdict({ size: 90_000, type: '', name: 'IMG_4021.HEIC', edgePx: undefined }, 'image', BUDGETS.image!),
+    ).toEqual({ action: 'compress', mustCompress: true })
+  })
 })
 
 describe('budgetSlotKey — a placed role maps to its budget key (index widths)', () => {
