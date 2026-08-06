@@ -45,6 +45,10 @@ next-env.d.ts
 # Local tooling state. Ignore the CONTENTS, not the directory itself — git never
 # descends into an ignored directory, so a negation inside one can't fire.
 .claude/*
+# The same state under a nested project. The root pattern is anchored, so it does not
+# cover this one, and tdd-guard's generated instructions were committed by a `git add -A`
+# before anyone noticed they were runtime data rather than source.
+*/.claude/
 # …except project skills, which are shared workflow the repo depends on
 # (/test-audit is the periodic test-quality review — see AGENTS.md).
 !.claude/skills/
