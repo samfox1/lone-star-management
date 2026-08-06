@@ -25,6 +25,7 @@ import { describe, expect, it } from 'vitest'
 import { isTextRegion, textPanelEntries } from '@/lib/site-editor/text-panel'
 import { buildTextItemStyleControls, sliderIndex, sliderSteps } from '@/lib/site-editor/style-controls'
 import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { clampMaxRem, clampMinRem } from './helpers/clamp'
 
 /** skeen's real bases, verbatim from its lib/styles.ts. Copied rather than imported (it is
  *  another repo), so each is quoted in full and can be re-checked by eye against source. */
@@ -94,18 +95,17 @@ describe('isTextRegion — a wrapper is not the words', () => {
 describe('the size scale reaches past what the site already uses', () => {
   const size = buildTextItemStyleControls({ fonts: [] }).find((c) => c.id === 'size')!
   const steps = sliderSteps(size)
-  const maxRem = (v: string) => Number(/,\s*([\d.]+)rem\)\]$/.exec(v)![1])
 
   it('CRITICAL: the ceiling is above skeen’s 11rem hero, so it can grow', () => {
     // The complaint: "needs to be able to be a bigger size". At 8rem the biggest offer was
     // a 27% shrink.
-    expect(maxRem(steps[steps.length - 1].value)).toBeGreaterThan(11)
+    expect(clampMaxRem(steps[steps.length - 1].value)).toBeGreaterThan(11)
   })
 
   it('CRITICAL: the hero’s own size is a step, so it opens ON it and can Reset', () => {
     const { idx, exact } = sliderIndex(size, 'text-[clamp(4rem,18vw,11rem)]')
     expect(exact).toBe(true)
-    expect(maxRem(steps[idx].value)).toBe(11)
+    expect(clampMaxRem(steps[idx].value)).toBe(11)
   })
 
   it('there is room to drag UP from the hero, not just down', () => {
@@ -119,10 +119,10 @@ describe('the size scale reaches past what the site already uses', () => {
     // Pinned here as well as in text-tools-styling: adding six steps by hand is exactly
     // where a transposed digit would go unnoticed.
     for (const s of steps) expect(s.value, s.label).toMatch(/^text-\[clamp\([\d.]+rem,[\d.]+vw,[\d.]+rem\)\]$/)
-    const maxes = steps.map((s) => maxRem(s.value))
+    const maxes = steps.map((s) => clampMaxRem(s.value))
     for (let i = 1; i < maxes.length; i++) expect(maxes[i], steps[i].label).toBeGreaterThan(maxes[i - 1])
     // The mobile floor must ascend too, or a bigger choice could render SMALLER on a phone.
-    const mins = steps.map((s) => Number(/clamp\(([\d.]+)rem/.exec(s.value)![1]))
+    const mins = steps.map((s) => clampMinRem(s.value))
     for (let i = 1; i < mins.length; i++) expect(mins[i], steps[i].label).toBeGreaterThanOrEqual(mins[i - 1])
   })
 

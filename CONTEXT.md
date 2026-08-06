@@ -86,7 +86,7 @@ decisions behind them (esp. ADR-0002).
   id/link/source) **OR** the stored `released` flag; **Unreleased** = everything else.
   It's an **organizing label only — it does NOT decide what's on the public site**
   (decoupled 2026-07-10, ADR 0007). Source of truth: `src/lib/music.ts` (library
-  buckets + the release smart-link/EPK doors). See MUSIC_RESTRUCTURE.md.
+  buckets + the release smart-link/EPK doors). See MUSIC_RESTRUCTURE.md (deleted 2026-08-05, in git history).
 - **On-site (`on_site`)** — what's actually on the public site is each item's own
   `on_site` flag, gated by the public doors. It lives on all **7** content tables:
   tracks, videos, merch, tour_dates, releases, links, media. Decoupled from Released

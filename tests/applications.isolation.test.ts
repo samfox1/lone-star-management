@@ -58,7 +58,10 @@ describe('submit_application (public door)', () => {
       p_email: EMAIL,
       p_artist_name: MARKER,
     })
-    expect(error).not.toBeNull()
+    // P0001 (the function's own RAISE), never bare not-null: a bare check passes on
+    // PGRST202 "function does not exist" — i.e. it would stay green with the door gone.
+    expect(error?.code).toBe('P0001')
+    expect(error?.message).toContain('Name and email')
   })
 
   it('rejects an invalid email', async () => {
@@ -67,7 +70,8 @@ describe('submit_application (public door)', () => {
       p_email: 'not-an-email',
       p_artist_name: MARKER,
     })
-    expect(error).not.toBeNull()
+    expect(error?.code).toBe('P0001')
+    expect(error?.message).toContain('valid email')
   })
 })
 

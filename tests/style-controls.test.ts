@@ -4,6 +4,7 @@
  * PRESERVING everything it doesn't own (layout, spacing, z-index).
  */
 import { describe, expect, it } from 'vitest'
+import { clampMaxRem } from './helpers/clamp'
 import {
   applyStyleValue,
   buildItemStyleControls,
@@ -267,7 +268,7 @@ describe('text size is FLUID — it shrinks on a phone', () => {
     // two things at once.
     const maxima = sizeControl()
       .steps.filter((s) => s.value)
-      .map((s) => s.value.match(/,\s*([\d.]+)rem\)\]$/)?.[1])
+      .map((s) => String(clampMaxRem(s.value)))
     const LEGACY = ['0.75', '0.875', '1', '1.125', '1.25', '1.5', '1.875', '2.25', '3', '3.75', '4.5', '6', '8']
     expect(maxima.slice(0, LEGACY.length)).toEqual(LEGACY)
     // …and they are the START of the scale, not scattered through it.
@@ -286,7 +287,7 @@ describe('text size is FLUID — it shrinks on a phone', () => {
   it('the scale ascends, so dragging right always means bigger', () => {
     const maxima = sizeControl()
       .steps.filter((s) => s.value)
-      .map((s) => Number(s.value.match(/,\s*([\d.]+)rem\)\]$/)![1]))
+      .map((s) => clampMaxRem(s.value))
     for (let i = 1; i < maxima.length; i++) expect(maxima[i]).toBeGreaterThan(maxima[i - 1])
   })
 

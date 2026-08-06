@@ -204,7 +204,10 @@ describe('submit_enquiry — sender identity', () => {
     const { error } = await svc
       .from('artist_mail_settings')
       .insert({ artist_id: artistA, from_name: 'Evil\r\nBcc: victim@example.com' })
-    expect(error).not.toBeNull()
+    // 23514 (CHECK violation), not just "an error": anything else — a permission
+    // failure, a typo'd table — would also be non-null and prove nothing about the
+    // header-injection guard this test is named for.
+    expect(error?.code).toBe('23514')
   })
 })
 

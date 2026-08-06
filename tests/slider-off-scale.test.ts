@@ -28,13 +28,12 @@ import {
   sliderSteps,
   type StyleControl,
 } from '@/lib/site-editor/style-controls'
+import { clampMaxRem } from './helpers/clamp'
 
 const OPTIONS = { fonts: [{ value: 'font-alt', label: 'Alt' }] }
 const textControl = (id: string) =>
   buildTextItemStyleControls(OPTIONS).find((c) => c.id === id) as StyleControl
 const itemControl = (id: string) => buildItemStyleControls().find((c) => c.id === id) as StyleControl
-
-const rem = (step: string) => Number(/,\s*([\d.]+)rem\)/.exec(step)?.[1] ?? NaN)
 
 describe('sliderIndex — a value that is not a step', () => {
   it('CRITICAL: a size above the ceiling lands at the TOP of the scale, not the middle', () => {
@@ -56,7 +55,7 @@ describe('sliderIndex — a value that is not a step', () => {
     // A real base from skeen's polaroid captions: 12px = 0.75rem.
     const { idx } = sliderIndex(size, 'text-[12px]')
     const next = steps[Math.min(idx + 1, steps.length - 1)]
-    expect(rem(next.value)).toBeGreaterThanOrEqual(0.75)
+    expect(clampMaxRem(next.value)).toBeGreaterThanOrEqual(0.75)
     // and not a leap: the step below it must still be at or under where we started.
     expect(idx).toBeLessThan(3)
   })
@@ -69,7 +68,7 @@ describe('sliderIndex — a value that is not a step', () => {
     const steps = sliderSteps(size)
     const { idx, exact } = sliderIndex(size, 'text-4xl')
     expect(exact).toBe(false)
-    expect(rem(steps[idx].value)).toBe(2.25)
+    expect(clampMaxRem(steps[idx].value)).toBe(2.25)
   })
 
   it('an exact step still reports exact, so Reset stays available', () => {

@@ -12,6 +12,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { buildTextItemStyleControls, sliderSteps } from '@/lib/site-editor/style-controls'
+import { clampMaxRem } from './helpers/clamp'
 import { TextTools } from '@/app/artists/[id]/(dashboard)/editor/panels/text-tools'
 import { TextFieldEditor } from '@/app/artists/[id]/(dashboard)/editor/text-field-editor'
 import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
@@ -197,7 +198,7 @@ describe('TextFieldEditor — one field, full panel', () => {
     // every time the scale is retuned while proving nothing about the ordering that
     // actually matters.
     expect(steps.length).toBeGreaterThanOrEqual(13)
-    const maxRem = steps.map((s) => Number(s.value.match(/,\s*([\d.]+)rem\)\]$/)![1]))
+    const maxRem = steps.map((s) => clampMaxRem(s.value))
     for (let i = 1; i < maxRem.length; i++) expect(maxRem[i]).toBeGreaterThan(maxRem[i - 1])
   })
 

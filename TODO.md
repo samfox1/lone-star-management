@@ -1,5 +1,26 @@
 # TODO
 
+## Open items from the cross-repo briefs (2026-08-05, briefs since deleted)
+
+The BRIEF-*.md files in skeen-website were removed once implemented; these are the
+items that were still open inside them:
+
+- [ ] **skeen: wrap the Tour + Music nav buttons in `<Text>`** — only Contact is
+      wrapped (`Hero.tsx` `mainLinks`), so those two labels aren't editable yet.
+      Keys: `nav_tour`, `nav_music`; give each a matching style region like the rest.
+- [ ] **skeen: wrap the contact modal's marketing copy** — heading, intro sentence,
+      submit label, success message. Do NOT wrap the form's structural strings
+      (`Booking/Demo/Other` purpose values reach lone-star as an enum; the `sr-only`
+      legend and aria-labels are what a screen reader navigates by).
+- [ ] **"@skeen at the bottom"** — Sam named it as editable text but it isn't in
+      `Footer.tsx` (which has the © line + social icons). If it's a social handle,
+      leave it: those come from the artist page, and wrapping one makes two sources
+      of truth. Ask Sam which element he means.
+- [ ] **Asset compression at upload** — new system, spec'd in skeen-website's
+      `BRIEF-asset-compression.md`: sites declare per-slot byte/pixel budgets in the
+      manifest; the editor opens a compress modal for oversized images and a
+      gate-with-instructions for oversized video/fonts.
+
 ## Roadmap decisions — 2026-07-08 deep-dive review
 
 Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
@@ -53,7 +74,7 @@ Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
    Suite now 70 files / 415 tests, all green. Remaining (optional, lower value —
    thin compositions of already-tested primitives): SyncPanel/ShopifyPanel,
    ReleasesBrowser. Do them if they churn in the restructure.
-4. [x] **Music restructure** — DONE 2026-07-09 (see MUSIC_RESTRUCTURE.md for the
+4. [x] **Music restructure** — DONE 2026-07-09 (see git history for MUSIC_RESTRUCTURE.md and the
    full ledger). One Music surface: **Released** (platform presence, public) vs
    **Unreleased** (uploads/demos, dashboard-only), derived via `lib/music.ts` and
    mirrored by the SQL doors (`20260709120000`, pushed + zero live impact

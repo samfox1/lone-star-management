@@ -3,7 +3,7 @@
  * A release/track is Unreleased iff it has NO platform presence; release membership is
  * widen-only (a song is Released if its own provenance OR its release is Released). This
  * is the single source of truth mirrored by the SQL
- * public doors (Released-only). See MUSIC_RESTRUCTURE.md.
+ * public doors (Released-only). See MUSIC_RESTRUCTURE.md (spec since deleted; git history has it).
  */
 import { describe, expect, it } from 'vitest'
 import { releaseBucket, trackBucket, trackPlatforms, type MusicBucket, type ReleaseProvenance, type TrackProvenance } from '@/lib/music'

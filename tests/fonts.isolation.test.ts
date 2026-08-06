@@ -297,7 +297,10 @@ describe('the database holds the shape lib/fonts.ts promises', () => {
       format: 'woff2',
     }
     expect((await svc.from('artist_fonts').insert(row)).error).toBeNull()
-    expect((await svc.from('artist_fonts').insert({ ...row, storage_path: ownedPath(artistA) })).error).not.toBeNull()
+    // 23505 specifically — any other failure (permissions, a typo'd column) is also
+    // non-null and would keep this green with the unique constraint dropped.
+    const dup = await svc.from('artist_fonts').insert({ ...row, storage_path: ownedPath(artistA) })
+    expect(dup.error?.code).toBe('23505')
     await svc.from('artist_fonts').delete().eq('artist_id', artistA).eq('family', 'collide-probe')
   })
 
