@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { EditorInspector } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import type { EditorImageField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
-import type { AssetBudgets } from '@/lib/site-editor/asset-budget'
+import { DEFAULT_BUDGETS, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
@@ -123,15 +123,18 @@ describe('uploading an image from the EDITOR panel', () => {
     expect(compressImageFile.mock.calls[0][1]).toEqual(BUDGETS.image)
   })
 
-  it('CRITICAL: with no budgets declared it uploads straight through, as before', async () => {
-    // Older skeen builds and every built-in template announce none. A gate that fired
-    // anyway would put a modal in front of managers whose site never asked for one.
+  it('CRITICAL: with no budgets declared the FLOOR applies — it is never ungated', async () => {
+    // This test used to assert the opposite: no declared budgets meant no gate, so an
+    // artist on a built-in template (which declare none, as do older skeen builds) had
+    // no compression anywhere. Sam, 2026-08-06: "every file that we store has been
+    // compressed." The site's own numbers still win where it has them — see the case
+    // above, which passes BUDGETS.image, not the floor.
     renderEditor(undefined)
     openUploadModal()
     dropFile(fatFile())
 
-    await waitFor(() => expect(document.querySelector('input[type="file"]')).toBeTruthy())
-    expect(screen.queryByText(/Make this file site-sized/i)).toBeNull()
-    expect(compressImageFile).not.toHaveBeenCalled()
+    expect(await screen.findByText(/Make this file site-sized/i)).toBeTruthy()
+    await waitFor(() => expect(compressImageFile).toHaveBeenCalled())
+    expect(compressImageFile.mock.calls[0][1]).toEqual(DEFAULT_BUDGETS.image)
   })
 })

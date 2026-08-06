@@ -21,9 +21,13 @@ import type { AssetBudget, UploadKind } from '@/lib/site-editor/asset-budget'
  * (bucket/category/writeRow) and WHAT it may be (rules/budget); it cannot supply "a drop
  * field that skips the gate", because there is no seam to skip it at.
  *
- * `budget` absent or null = no gate, which is the pre-budget behaviour verbatim: the
- * dashboard pages have no site manifest in scope, so they pass nothing and keep their
- * plain byte caps.
+ * `budget` is what the SITE declared for this slot, and it is optional because most
+ * uploaders cannot know one: budgets travel in the site manifest, which arrives over the
+ * editor's frame bridge, so the dashboard pages (Photos, Media, Brand) have none in scope
+ * and every built-in template declares none. For a day that meant those doors were
+ * ungated in practice — Sam uploaded a photo on the Photos page and watched nothing
+ * happen. The gate now falls back to a floor of its own (`withFloor`), so passing a
+ * budget makes an upload better-targeted, and passing none no longer makes it unlimited.
  */
 export function UploadField({
   accept,

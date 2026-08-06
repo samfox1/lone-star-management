@@ -38,6 +38,17 @@ items that were still open inside them:
       and appends export instructions to over-size video/font rejections. Remaining:
       the round-trip check on the live editor (upload a big photo into a polaroid,
       publish, confirm the served object is small and looks right).
+- [x] **Compression on the DASHBOARD pages too** — 2026-08-06, same day, after Sam added a
+      photo on the Photos page and saw nothing happen. Budgets travel in the site
+      manifest and the manifest arrives over the editor's frame bridge, so every door
+      outside the editor (Photos, Media, Brand) passed none and was inert — as was every
+      artist on a built-in template. `withFloor` (asset-budget.ts) now supplies a default
+      image budget (2400px / 1 MB / webp) inside `useBudgetGate` itself, so a declared
+      budget makes an upload better-targeted rather than being the thing that makes it
+      gated at all. IMAGES ONLY, and GIF/SVG are exempt from the FLOOR: the browser
+      cannot shrink video, fonts or an animated GIF, so an invented budget there is a
+      wall in front of an upload that worked yesterday, not a smaller file. A site that
+      wants those gated declares it.
 
 ## Roadmap decisions — 2026-07-08 deep-dive review
 

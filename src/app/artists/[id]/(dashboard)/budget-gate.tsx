@@ -6,6 +6,7 @@ import { buttonClass } from '@/components/ui/ui'
 import {
   budgetVerdict,
   bytesLabel,
+  withFloor,
   type AssetBudget,
   type UploadKind,
 } from '@/lib/site-editor/asset-budget'
@@ -29,8 +30,11 @@ type Pending =
 
 export function useBudgetGate(
   /** Undefined for uploads no budget describes (PDFs, track audio) — the gate is then
-   *  inert, exactly as it is for a declared kind with no budget behind it. */
+   *  inert, and that is the ONLY way to be inert now. */
   kind: UploadKind | undefined,
+  /** What the SITE declared for this slot, when a manifest is in scope. Null/undefined
+   *  is not "no gate": `withFloor` supplies a default for anything a canvas can shrink,
+   *  because the pages where managers actually upload have no manifest to read. */
   budget: AssetBudget | null | undefined,
 ): { prepare: (file: File) => Promise<File | null>; modal: ReactNode } {
   const [pending, setPending] = useState<Pending | null>(null)
@@ -38,11 +42,14 @@ export function useBudgetGate(
   const resolver = useRef<((f: File | null) => void) | null>(null)
 
   async function prepare(file: File): Promise<File | null> {
-    if (!budget || !kind) return file // no budget/kind = no gate: the pre-budget behaviour
+    // Resolved per FILE, not per render: the floor covers only formats a canvas can
+    // actually shrink, which is a property of the picked file rather than the uploader.
+    const applied = withFloor(budget, kind, file.type)
+    if (!applied || !kind) return file
 
     // Dimensions matter only for the compress path; a failed decode still gates on bytes.
     const edgePx = kind === 'image' ? await decodeEdgePx(file) : undefined
-    const verdict = budgetVerdict({ size: file.size, type: file.type, edgePx }, kind, budget)
+    const verdict = budgetVerdict({ size: file.size, type: file.type, edgePx }, kind, applied)
     if (verdict.action === 'upload') return file
 
     return new Promise<File | null>((resolve) => {
@@ -55,7 +62,7 @@ export function useBudgetGate(
       // Compress EAGERLY so the modal can show the real numbers, not an estimate. On
       // failure fall through to the gate copy — a proposal we cannot produce must not
       // strand the promise or fake a result.
-      compressImageFile(file, budget).then(
+      compressImageFile(file, applied).then(
         (proposal) => setPending((p) => (p?.mode === 'compress' && p.original === file ? { ...p, proposal } : p)),
         () => setPending({ mode: 'gate', original: file, kind }),
       )

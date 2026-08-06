@@ -21,6 +21,8 @@ import {
   walkQuality,
   budgetSlotKey,
   bytesLabel,
+  withFloor,
+  DEFAULT_BUDGETS,
   type AssetBudgets,
 } from '@/lib/site-editor/asset-budget'
 
@@ -40,11 +42,80 @@ describe('budgetFor — which budget applies', () => {
     expect(budgetFor(BUDGETS, 'image', 'no_such_slot')?.maxBytes).toBe(800_000)
     expect(budgetFor(BUDGETS, 'image')?.maxBytes).toBe(800_000)
   })
-  it('CRITICAL: no manifest budgets means NO budget — the old behaviour survives', () => {
-    // Older skeen builds announce no assetBudgets; every template site announces none.
-    // A default here would silently start gating uploads on sites that never asked.
+  it('reports only what the SITE declared — null is "no opinion", not "no gate"', () => {
+    // Older skeen builds announce no assetBudgets; every built-in template announces
+    // none. This function stays the DECLARED layer so the two are distinguishable; the
+    // floor under it is withFloor's job, and it is what the door actually applies.
     expect(budgetFor(undefined, 'image', 'polaroid_photo')).toBeNull()
     expect(budgetFor({}, 'video')).toBeNull()
+  })
+})
+
+describe('withFloor — the budget the DOOR applies', () => {
+  it('CRITICAL: an image with no declared budget still gets one', () => {
+    // Sam, 2026-08-06: "every file that we store has been compressed". Compression used
+    // to require the SITE to declare budgets, which arrive only through the editor's
+    // frame bridge — so the dashboard pages (Photos, Media, Brand) and every built-in
+    // template stored 12MB phone photos whole. The floor is what makes the door apply
+    // everywhere rather than only inside the editor of one custom site.
+    const floor = withFloor(null, 'image')
+    expect(floor).not.toBeNull()
+    expect(floor!.maxBytes).toBeGreaterThan(0)
+    expect(floor!.maxEdgePx).toBeGreaterThan(0)
+    // WebP, because the floor exists to make files small; re-encoding a 12MB JPEG to
+    // JPEG throws away the single biggest win available.
+    expect(floor!.mime).toBe('image/webp')
+    expect(withFloor(undefined, 'image')).toEqual(floor)
+  })
+
+  it('CRITICAL: the floor bites a phone photo and leaves a web-sized one alone', () => {
+    // A floor nobody can feel is decoration; a floor that fires on a 240KB hero crop is
+    // a modal in front of every upload. Both halves are the actual contract.
+    const floor = withFloor(null, 'image')
+    expect(budgetVerdict({ size: 12_000_000, type: 'image/jpeg', edgePx: 4032 }, 'image', floor).action).toBe('compress')
+    expect(budgetVerdict({ size: 240_000, type: 'image/jpeg', edgePx: 1600 }, 'image', floor).action).toBe('upload')
+  })
+
+  it('CRITICAL: video and fonts get NO floor — there a budget is a wall, not a shrink', () => {
+    // The browser cannot transcode video or subset a font, so an invented budget for
+    // either can only REJECT uploads that succeed today (the gate copy tells the manager
+    // to go and re-export). Their existing hard caps stay the only limit; a site that
+    // wants tighter declares it, and then the gate is its choice rather than ours.
+    expect(withFloor(null, 'video')).toBeNull()
+    expect(withFloor(null, 'font')).toBeNull()
+    expect(DEFAULT_BUDGETS.video).toBeUndefined()
+    expect(DEFAULT_BUDGETS.font).toBeUndefined()
+  })
+
+  it('CRITICAL: a site’s own declaration always wins over the floor', () => {
+    // The site knows how the slot renders; the floor only covers the case where nobody
+    // said. A floor that overrode a declared budget would silently ship 2400px into a
+    // 600px polaroid — the exact waste the budgets were declared to stop.
+    expect(withFloor(BUDGETS.slots!.polaroid_photo, 'image')).toEqual(BUDGETS.slots!.polaroid_photo)
+    expect(withFloor(BUDGETS.image!, 'image')).toEqual(BUDGETS.image)
+  })
+
+  it('CRITICAL: the floor never applies to a GIF — there it would be a wall', () => {
+    // A canvas re-encode of an animated GIF keeps ONE frame, so budgetVerdict gates it
+    // rather than compressing. Under an invented budget that turns into a hard block on
+    // a file that uploaded fine yesterday, with no way forward from the UI — the same
+    // objection that keeps video and fonts out of DEFAULT_BUDGETS.
+    expect(withFloor(null, 'image', 'image/gif')).toBeNull()
+    expect(withFloor(null, 'image', 'image/svg+xml')).toBeNull()
+    // A photo is unaffected, and a DECLARED budget still gates the gif: the site asked
+    // for that, and its manager can be told to ship an mp4 instead.
+    expect(withFloor(null, 'image', 'image/jpeg')).toEqual(DEFAULT_BUDGETS.image)
+    expect(withFloor(BUDGETS.image!, 'image', 'image/gif')).toEqual(BUDGETS.image)
+  })
+
+  it('no kind means no gate — PDFs and track audio are not images', () => {
+    // The EPK's rider and a song's master have no rasterizable form; the floor must not
+    // leak into an uploader that passes no kind at all.
+    expect(withFloor(undefined, undefined)).toBeNull()
+    expect(withFloor(null, undefined)).toBeNull()
+    // …and a budget arriving WITHOUT a kind is refused rather than honoured: nothing can
+    // interpret it, and acting on it would mean running the photo pipeline over a PDF.
+    expect(withFloor(BUDGETS.image!, undefined)).toBeNull()
   })
 })
 

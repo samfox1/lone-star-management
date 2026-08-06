@@ -63,6 +63,62 @@ export function budgetFor(
   return (slotKey ? budgets.slots?.[slotKey] : undefined) ?? budgets[kind] ?? null
 }
 
+/**
+ * The FLOOR under every upload, applied when nobody declared anything.
+ *
+ * `budgetFor` deliberately answers null for an undeclared budget, and for a day that
+ * meant no compression at all outside one custom site's editor: budgets travel in the
+ * site manifest, the manifest arrives over the editor's frame bridge, and the dashboard
+ * pages where managers actually upload (Photos, Media, Brand) have no manifest in scope.
+ * Every built-in template declares none either. So a 12MB phone photo went to storage
+ * whole and shipped to every visitor forever. Sam, 2026-08-06: "every file that we store
+ * has been compressed."
+ *
+ * IMAGES ONLY, and that is the whole design. A canvas can genuinely shrink an image, so a
+ * default there is a smaller file; the browser cannot transcode video or subset a font, so
+ * a default for either could only REJECT uploads that work today (the gate's answer is
+ * "go and re-export it"), which is not ours to impose on a site that never asked. Their
+ * existing hard caps (VIDEO_UPLOAD_RULES / FONT_UPLOAD_RULES) remain the only limit.
+ *
+ * The numbers are deliberately looser than any single site's own: 2400px covers a
+ * full-bleed band on a 1200px retina layout, so the floor never degrades a site it knows
+ * nothing about, and a site that renders smaller says so in its manifest and wins. It
+ * still cuts a 12MB camera-roll JPEG by an order of magnitude, which is the case this
+ * exists for. WebP because re-encoding a photo to JPEG throws away the largest single win
+ * available, and it keeps the alpha a logo depends on.
+ */
+export const DEFAULT_BUDGETS: AssetBudgets = {
+  image: { maxEdgePx: 2400, maxBytes: 1_000_000, mime: 'image/webp' },
+}
+
+/**
+ * The budget the DOOR applies to THIS file: what the site declared, else the floor.
+ *
+ * Takes the file's type because the floor is only defensible where a canvas can act. A
+ * declared budget gates an oversized GIF (the site asked, and its manager can be told to
+ * ship an mp4 instead); an invented one would block a file that uploaded fine yesterday
+ * with no way forward in the UI. Same reasoning that keeps video and fonts out of
+ * DEFAULT_BUDGETS, applied one level down to a format rather than a kind.
+ *
+ * The gate calls this itself rather than trusting callers to resolve it — the call sites
+ * are exactly where this went wrong before.
+ */
+export function withFloor(
+  budget: AssetBudget | null | undefined,
+  kind: UploadKind | undefined,
+  /** The picked file's mime. Defaulted rather than optional so the membership test below
+   *  is the whole condition: an unknown type is judged on bytes, like everywhere else. */
+  fileType: string = '',
+): AssetBudget | null {
+  // No kind = an upload no budget can describe (a PDF rider, a song master). Nothing
+  // gates those, INCLUDING a budget handed over by mistake — without a kind there is no
+  // way to honour one, and acting on it would mean running a photo pipeline over a PDF.
+  if (!kind) return null
+  if (budget) return budget
+  if (NON_RASTERIZABLE.has(fileType)) return null
+  return DEFAULT_BUDGETS[kind] ?? null
+}
+
 export type BudgetVerdict =
   | { action: 'upload' }
   | {

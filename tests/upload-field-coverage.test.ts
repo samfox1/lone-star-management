@@ -89,6 +89,16 @@ describe('every upload path goes through UploadField', () => {
     expect(composer).toContain('await gate.prepare')
   })
 
+  it('CRITICAL: the gate applies the FLOOR itself — no caller can produce an ungated door', () => {
+    // Every dashboard uploader passes no budget (no manifest is in scope outside the
+    // editor), so a gate that fired only on a supplied budget was inert on the Photos,
+    // Media and Brand pages — which is where managers actually upload. Resolving the
+    // floor inside the gate rather than at each call site is what makes "every stored
+    // file is compressed" a property of the code instead of seven remembered props.
+    const gate = files.find((f) => f.name === 'budget-gate.tsx')!.src
+    expect(gate).toContain('withFloor(')
+  })
+
   it('every editor image uploader is handed a budget', () => {
     // The gate is inert without one, so an uploader inside the editor — where the
     // manifest IS in scope — that forgets `budget=` is ungated in practice even though

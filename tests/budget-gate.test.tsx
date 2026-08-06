@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useBudgetGate } from '@/app/artists/[id]/(dashboard)/budget-gate'
-import type { AssetBudget, UploadKind } from '@/lib/site-editor/asset-budget'
+import { DEFAULT_BUDGETS, type AssetBudget, type UploadKind } from '@/lib/site-editor/asset-budget'
 
 // The DOM pipeline is mocked — jsdom has no canvas or createImageBitmap. Its real
 // behaviour is covered by the pure geometry/walk tests; HERE the subject is the flow.
@@ -73,10 +73,33 @@ describe('useBudgetGate', () => {
     expect(compressImageFile).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: no budget means no gate at all — the old behaviour', async () => {
+  it('CRITICAL: no budget falls back to the FLOOR — an image is never ungated', async () => {
+    // This asserted the reverse until 2026-08-06: no budget, no gate. Since budgets only
+    // reach the app through the editor's frame bridge, that left every dashboard door
+    // (Photos, Media, Brand) and every built-in template storing originals. Sam noticed
+    // by uploading a photo and watching nothing happen.
+    decodeEdgePx.mockResolvedValue(4000)
+    compressImageFile.mockResolvedValue({ file: SMALL_WEBP, width: 2400, height: 1800, fits: true })
     render(<Probe kind="image" budget={null} file={fakeFile(50_000_000)} />)
     pick()
+
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    await waitFor(() => expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), DEFAULT_BUDGETS.image))
+  })
+
+  it('CRITICAL: the floor still leaves the un-shrinkable alone', async () => {
+    // No kind at all (a PDF rider, a song master) and formats the canvas would damage
+    // (an animated GIF keeps one frame) must pass straight through. A floor that blocked
+    // either would be a wall in front of an upload that worked yesterday, and the modal's
+    // only advice would be "make it smaller yourself".
+    render(<Probe kind={undefined as unknown as UploadKind} budget={null} file={fakeFile(50_000_000)} />)
+    pick()
     await waitFor(() => expect(result()).toBe('photo.jpg'))
+
+    cleanup()
+    render(<Probe kind="image" budget={null} file={fakeFile(9_000_000, 'image/gif', 'loop.gif')} />)
+    pick()
+    await waitFor(() => expect(result()).toBe('loop.gif'))
     expect(decodeEdgePx).not.toHaveBeenCalled()
   })
 
