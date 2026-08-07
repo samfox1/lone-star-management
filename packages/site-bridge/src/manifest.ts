@@ -201,7 +201,10 @@ export type TemplateManifest = {
   assetBudgets?: AssetBudgets
 }
 
-/** Field keys the manifest declares as TEXT. `editList` is deliberately `unknown` here —
+/** Field keys the manifest declares as TEXT. NOTE (2026-08-07 review): only
+ *  `type === 'text'` counts. `email` rides the image-guess path harmlessly (an email
+ *  never matches looksLikeUrl), but when the `richtext` v2 seed becomes real it MUST be
+ *  added here — a rich value starting with `/` would hit swapForImage otherwise. `editList` is deliberately `unknown` here —
  *  the bridge only forwards it — so this reads defensively instead of typing it. */
 export function textFieldKeys(editList: unknown): Set<string> {
   const fields = (editList as { fields?: unknown } | null | undefined)?.fields;

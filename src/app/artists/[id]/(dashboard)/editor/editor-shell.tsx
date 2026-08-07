@@ -182,6 +182,16 @@ export function EditorShell({
     [customSiteUrl, textFields, manifest, siteContent],
   )
 
+  // The ANNOUNCED manifest is authoritative only for a CUSTOM site. Since the built-in
+  // frame consolidated onto the package (2026-08-07), built-ins announce their local
+  // manifest too — it exists so the FRAME's apply-field can tell text from images, and
+  // it must not become a second editor-side source: every panel prop below reads the
+  // null-gated alias, so a built-in keeps resolving from page.tsx's local props exactly
+  // as before. Phase 4 (declared defaults for built-ins) picks ONE source per category
+  // BEFORE widening the built-in manifests; until then this gate is what keeps the two
+  // sources from feeding the same panels.
+  const announced = customSiteUrl ? manifest : null
+
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
@@ -196,15 +206,15 @@ export function EditorShell({
         merch={merch}
         releases={releases}
         tours={tours}
-        components={manifest?.components ?? []}
+        components={announced?.components ?? []}
         // The collage exists only if the site declares somewhere to render one.
         showGallery={(manifest?.slots ?? []).some((sl) => sl.accepts === 'image')}
-        assetBudgets={manifest?.assetBudgets}
-        styleRegions={manifest?.styles ?? []}
+        assetBudgets={announced?.assetBudgets}
+        styleRegions={announced?.styles ?? []}
         styleValues={draft?.styles ?? {}}
-        styleOptions={withUploadedFonts(manifest?.styleOptions, uploadedFonts)}
+        styleOptions={withUploadedFonts(announced?.styleOptions, uploadedFonts)}
         selectedStyle={selectedStyle}
-        linkRegions={manifest?.links ?? []}
+        linkRegions={announced?.links ?? []}
         linkValues={linkValues}
         selectedLink={selectedLink}
         selectedRegion={selectedRegion}

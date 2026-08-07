@@ -222,3 +222,57 @@ actual imports):
    every match; blank link URLs remove `href` (inert) instead of setting `""`.
 7. **Gate**: skeen suite + `npm run test:build` green, then a manual editor session
    against a Vercel PREVIEW deploy before promoting. BRIDGE_VERSION does not move.
+
+---
+
+## Amendments from the second multi-agent review (2026-08-07, evening)
+
+**Publish naming (BLOCKER, decision pending):** the `@lone-star` npm org exists and is
+someone else's (verified against the registry — it owns an unrelated package). Rename
+BEFORE skeen migrates, while it is a one-repo find-replace: unscoped
+`lone-star-site-bridge` is free; the `@lone-star-management` scope is unclaimed.
+package.json gained publishConfig/license/repository either way.
+
+**Auto-keys (amends §3, decision #3):** collisions are a DEV-TIME ERROR, never a
+mount-order suffix — on a windowed site the public render can suffix the duplicates in
+a different order than /edit did, re-orphaning by position through the back door.
+`auditMarkers()` and the dev overlay demand an explicit `k` on collision (or an
+`<EditSurface id>` scope wrapper making derivation local). Keys derive from STATIC
+PROPS at render — never from the DOM, which after the first apply-field contains the
+STORED value and would re-key the field mid-session. Non-text primitives
+(EditableImage/Video) have no children to slug: `k` (or `label`) is a TYPE-LEVEL
+requirement for them.
+
+**Re-announce (amends §3 / P1):** the package hands `onMounted({ announce })` to the
+site and nothing more — the P1 "net" is phase-3 work, spelled out: EditModeProvider
+owns the handle; primitives register on mount; the provider diffs against the
+last-announced key set and re-announces DEBOUNCED — every `ready` triggers a full-draft
+init-data re-send from the editor, so N window-opens without a debounce is N complete
+payload round-trips. Termination depends on the stable-keys rule above.
+
+**Runbook step notes:** steps 3+4 are ONE commit — retargeting the mount cannot
+typecheck until the retype lands (`onInitData` is typed on the package payload).
+Step 3 also retargets `TEXT_ATTR` (skeen's editList defines its own copy; it becomes a
+re-export). SITE_INTEGRATION.md states the support tier plainly: Next + bundler
+moduleResolution + transpilePackages; plain tsc/Node consumers are out of scope until
+the package ships compiled output.
+
+**Editor-side guard landed with this review:** built-in frames announce a manifest
+since the consolidation (it exists for the frame's own text-vs-image routing); the
+editor now reads announced manifests through a `customSiteUrl`-gated alias
+(editor-shell.tsx), so built-ins keep resolving from local props. Phase 4 must pick ONE
+manifest source per category BEFORE giving built-ins declared defaults.
+
+**Architecture deepening queue (from the improve-codebase-architecture pass):**
+1. Kill the frame's module globals: per-mount applier construction
+   (`createApplier({ regionBase })`), delete `setRegionBaseLookup` — makes the
+   ordering invariant impossible rather than documented. Do with 2.
+2. `bindSiteRegistry({ regionBase })` returning pre-bound
+   `{ regionProps, splitItemProps, mountFrameBridge }` — a site binds its registry
+   ONCE; today it binds twice (render wrapper + mount option), two homes for one fact.
+3. Move the style-vocabulary TABLES into the package (`vocabulary.ts`, data only) —
+   tokens.css is append-only-forever contract and its source belongs beside it; the
+   editor imports the tables and adds control machinery. Before phase 3.
+4. Retire the pure pass-through shim (site-editor/bridge.ts) and the bridge-client
+   wrapper (or type it Omit<PackageOptions,'onInitData'> so options flow through by
+   construction) — phase-2 cleanup.

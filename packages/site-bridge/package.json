@@ -40,5 +40,14 @@
   "files": [
     "src",
     "tokens.css"
-  ]
+  ],
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samfox1/lone-star-management.git",
+    "directory": "packages/site-bridge"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
