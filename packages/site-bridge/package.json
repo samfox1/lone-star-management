@@ -22,6 +22,18 @@
     "./protocol": {
       "types": "./src/protocol.ts",
       "default": "./src/protocol.ts"
+    },
+    "./markers": {
+      "types": "./src/markers.ts",
+      "default": "./src/markers.ts"
+    },
+    "./styles": {
+      "types": "./src/styles.ts",
+      "default": "./src/styles.ts"
+    },
+    "./frame": {
+      "types": "./src/frame.ts",
+      "default": "./src/frame.ts"
     }
   },
   "files": [

@@ -196,3 +196,21 @@ export type TemplateManifest = {
    *  (older manifests) means no gate beyond the editor's own floor. */
   assetBudgets?: AssetBudgets
 }
+
+/** Field keys the manifest declares as TEXT. `editList` is deliberately `unknown` here —
+ *  the bridge only forwards it — so this reads defensively instead of typing it. */
+export function textFieldKeys(editList: unknown): Set<string> {
+  const fields = (editList as { fields?: unknown } | null | undefined)?.fields;
+  if (!Array.isArray(fields)) return new Set();
+  const keys = fields
+    .filter(
+      (f): f is { key: string } =>
+        !!f &&
+        typeof f === "object" &&
+        (f as { type?: unknown }).type === "text" &&
+        typeof (f as { key?: unknown }).key === "string",
+    )
+    .map((f) => f.key);
+  return new Set(keys);
+}
+
