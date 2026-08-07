@@ -24,27 +24,10 @@
  * between geometry and drawing.
  */
 
-/** What a slot needs from an uploaded file. All fields optional; absent means "no
- *  opinion". Mirrors skeen's `AssetBudget` — the manifest is the contract. */
-export type AssetBudget = {
-  /** Longest-edge pixels the slot can usefully display (2× render size, for retina).
-   *  Downscale target only — never upscale. Images only. */
-  maxEdgePx?: number
-  /** Hard ceiling on stored bytes. Images tune quality to land under it; video/fonts
-   *  gate on it. */
-  maxBytes?: number
-  /** Re-encode target for images (`image/webp`). Never set on video/fonts. */
-  mime?: string
-}
-
-/** A site's declared budgets: per upload kind, with per-slot overrides keyed
- *  `<component>_<slot>` (`polaroid_photo`). */
-export type AssetBudgets = {
-  image?: AssetBudget
-  video?: AssetBudget
-  font?: AssetBudget
-  slots?: Record<string, AssetBudget>
-}
+// AssetBudget/AssetBudgets MOVED to @lone-star/site-bridge — they ride the manifest.
+// Re-exported from their historical home; imported for local use.
+export type { AssetBudget, AssetBudgets } from '@lone-star/site-bridge/manifest'
+import type { AssetBudget, AssetBudgets } from '@lone-star/site-bridge/manifest'
 
 export type UploadKind = 'image' | 'video' | 'font'
 

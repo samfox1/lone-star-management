@@ -16,38 +16,10 @@
  */
 import { colorToken } from '@/lib/site-editor/style-apply'
 
-export type StyleOption = {
-  value: string
-  label: string
-  /** For a COLOUR option, the hex it renders as. The value is a class (`text-flash-1`)
-   *  whose colour lives in the site's own CSS, so the editor can't know what it looks
-   *  like — a site that declares this gets its palette offered as real swatches in the
-   *  colour picker. Optional: a site that omits it simply isn't offered there. */
-  hex?: string
-}
-
-/** A site's declared design palette (from its manifest). Colours + fonts are the site's
- *  OWN tokens (skeen: `bg-flash-1`, `font-momo`), so the dropdowns offer real, compiled
- *  classes rather than generic guesses. */
-export type SiteStyleOptions = {
-  fonts?: StyleOption[]
-  textColors?: StyleOption[]
-  bgColors?: StyleOption[]
-  /**
-   * The FONT SIZES this site can actually render, low → high.
-   *
-   * Sizes used to be this module's business alone, and three times on 2026-08-05 the
-   * editor offered one the site could not compile: Tailwind builds only the classes it can
-   * see, so the class landed on the element with no CSS behind it and the text did not
-   * move. Two lists in two repositories with nothing joining them — every step added here
-   * broke silently until someone noticed a slider doing nothing.
-   *
-   * The site is the authority, so its list is NOT filtered against the one below. Omitted
-   * or empty falls back to SIZE_OPTIONS, which keeps older builds and lone-star's own
-   * templates working unchanged.
-   */
-  textSizes?: StyleOption[]
-}
+// MOVED to @lone-star/site-bridge (they ride the manifest — a site declares its palette
+// through them). Re-exported from their historical home; imported for local use.
+export type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
+import type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
 
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean }

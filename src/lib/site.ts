@@ -12,175 +12,62 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ARTIST_SNAPSHOT, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
-import { FONT_SLOTS, type FontSlot, type FontSlotMap, type SiteFont } from '@/lib/fonts'
+import { FONT_SLOTS, type FontSlot, type FontSlotMap } from '@/lib/fonts'
 import { mediaUrl } from '@/lib/storage-url'
 
-export type SiteTrack = {
-  id: string
-  title: string
-  cover_url: string | null
-  stream_url: string | null
-  /** Link-out URL for sources that don't host audio (e.g. Deezer). */
-  provider_url: string | null
-  /** Apple/iTunes store link (union model) — can't be rebuilt from apple_id, so
-   *  it's stored and threaded to the public link chain. */
-  apple_url: string | null
-  /** Whether this track has gated hosted audio. The raw path never leaves the
-   *  server; the player streams it via the signed-URL route (slug + track id). */
-  has_audio: boolean
-  /** Collaborators (primary artist excluded), from Spotify sync. May be absent
-   *  on revisions published before the feature — render with `?? []`. */
-  featured_artists: string[]
-  /** The release the track belongs to, from Spotify sync. May be absent on older
-   *  revisions — render with `?? null`. */
-  album_name: string | null
-  /** The release this track is assigned to (umbrella membership), or null. */
-  release_id: string | null
-  sort_order: number
-  /** Provenance (who created the row + which platforms carry it). Rides the
-   *  snapshot for the doors' Released/Unreleased gate; public-safe (the ids are
-   *  platform-URL components). Absent on revisions published before the union
-   *  model — render with `?? null`. */
-  source: string | null
-  spotify_id: string | null
-  apple_id: string | null
-  deezer_id: string | null
-  /** SoundCloud link (union model — stored, no id column). */
-  soundcloud_url: string | null
-  /** The manual "this song is released" flag (public even with no platform link). */
-  released: boolean | null
-}
-
-export type SiteTourDate = {
-  id: string
-  date: string
-  venue: string | null
-  city: string | null
-  country: string | null
-  ticket_url: string | null
-}
-
-export type SiteMerch = {
-  id: string
-  title: string
-  image_url: string | null
-  // Postgres `numeric` serializes as a string over JSON to preserve precision,
-  // so price is a string at runtime (both published and working paths).
-  price: number | string | null
-  url: string | null
-}
-
-export type SiteLink = {
-  id: string
-  label: string
-  url: string
-  sort_order: number
-}
-
-export type SiteVideo = {
-  id: string
-  title: string
-  provider: 'youtube' | 'soundcloud' | 'uploaded'
-  /** Set for embeds (youtube/soundcloud); null for an uploaded (self-hosted) video. */
-  embed_url: string | null
-  /** Set for uploaded videos (path in the public `videos` bucket); null for embeds. */
-  storage_path: string | null
-  is_short?: boolean
-  sort_order: number
-}
-
-export type MediaPurpose =
-  | 'hero_video'
-  | 'profile_photo'
-  | 'gallery_image'
-  | 'bio_video'
-  // Brand (20260804160000). `favicon` is derived from `logo_primary`, not uploaded — see
-  // lib/brand.ts for why the framing has to be baked into the pixels.
-  | 'logo_primary'
-  | 'logo_secondary'
-  | 'favicon'
+/**
+ * The wire types MOVED to `@lone-star/site-bridge` (SITE_BRIDGE_PLAN.md phase 1) — the
+ * payload is the contract a connected site imports rather than mirrors. Re-exported
+ * here because this is where the app's importers have always found them. `SiteData`
+ * below now DERIVES from the wire type (media paths swapped for resolved URLs), so the
+ * two can never drift: the package is the single source.
+ */
+export type {
+  SiteTrack,
+  SiteTourDate,
+  SiteMerch,
+  SiteLink,
+  SiteVideo,
+  MediaPurpose,
+  SiteContent,
+  SiteStyles,
+} from '@lone-star/site-bridge/payload'
+// Imported AGAIN for local use: `export type ... from` re-exports without binding names
+// in this module's scope, and the query builders below reference them directly.
+import type {
+  MediaPurpose,
+  PublicSitePayload,
+  SiteTrack,
+  SiteTourDate,
+  SiteMerch,
+  SiteLink,
+  SiteVideo,
+  SiteContent,
+  SiteStyles,
+} from '@lone-star/site-bridge/payload'
 
 export type SiteMedia = {
   purpose: MediaPurpose
   url: string
 }
 
-/** Editable site text as key → override value (published or working). Absent
- *  keys fall back to the template default (see lib/site-content-schema). */
-export type SiteContent = Record<string, string>
-
-/** Per-region class-name overrides as region_key → class string (published or
- *  working). Section regions use a plain key (e.g. 'hero_wordmark'); per-item
- *  regions use '<slot>:<itemId>'. Absent/empty keys fall back to the region's
- *  base classes (see SITE_STYLING_PLAN.md). */
-export type SiteStyles = Record<string, string>
-
 // The URL builders live in lib/storage-url (a leaf module) so light modules like
 // site-editor/save can share them without pulling in this server-heavy builder;
 // re-exported here because this is where consumers historically found them.
 export { mediaUrl, mediaThumbUrl } from '@/lib/storage-url'
 
-export type SiteData = {
-  artist: {
-    id: string
-    slug: string
-    name: string
-    bio: string | null
-    hero_image_url: string | null
-    template: string
-    spotify_artist_id: string | null
-    /** Press-kit fields. Optional because every revision published before
-     *  20260804120000 lacks them — run `press_quotes` through `parsePressQuotes`
-     *  (lib/epk.ts) rather than casting it. */
-    press_pitch?: string | null
-    press_quotes?: unknown
-    /** Paths into the PRIVATE `documents` bucket — not URLs, and not resolvable by a
-     *  fan. Only the EPK PDF builder reads them, server-side. */
-    tech_rider_path?: string | null
-    stage_plot_path?: string | null
-  }
-  tracks: SiteTrack[]
-  tour_dates: SiteTourDate[]
-  merch: SiteMerch[]
-  links: SiteLink[]
-  videos: SiteVideo[]
+/**
+ * The RENDER-side shape: the wire payload with media paths resolved to URLs (built with
+ * lone-star's own NEXT_PUBLIC_SUPABASE_URL, for rendering a built-in template). Derived
+ * from `PublicSitePayload` — the package owns the contract; this is the one divergence.
+ */
+export type SiteData = Omit<PublicSitePayload, 'media'> & {
   media: SiteMedia[]
-  site_content: SiteContent
-  styles: SiteStyles
-  /** Published custom fonts (family/label/path/format). The renderer feeds these to
-   *  `fontStyleCss`, which is the sanitizing gate — the door emits rows verbatim. Absent
-   *  on any revision published before 20260805160000, so always read with `?? []`. */
-  fonts: SiteFont[]
-  /** slot → family, for the ASSIGNED slots only. A MAP, not a flag on the font, because
-   *  one font may fill several slots — which is exactly what the `role` column this
-   *  replaced could not express (20260805180000). Absent on any revision published
-   *  before 20260805200000, so always read with `?? {}`. */
-  font_slots: FontSlotMap
 }
 
-/**
- * The WIRE shape — exactly what `get_public_site` returns, before this module
- * resolves media paths to URLs. This is the contract a CUSTOM site speaks: it
- * receives the draft over the bridge's `init-data` and maps the payload itself
- * (skeen's `mapSite`), resolving `path` against ITS OWN Supabase URL.
- *
- * The only divergence from `SiteData` is media: `SiteData.media` carries a
- * resolved `url` (built with lone-star's NEXT_PUBLIC_SUPABASE_URL, for rendering
- * a built-in template), while the wire carries the raw `path`. Posting `SiteData`
- * to a custom site would hand it `path: undefined` and silently blank every hero
- * clip and gallery image — so the bridge carries THIS type, not `SiteData`.
- */
-export type PublicSitePayload = Omit<SiteData, 'media'> & {
-  // orientation + site_role ride the wire so a custom site can lay out gallery photos by
-  // shape and read component-slot photos (polaroids) by role — exactly the fields
-  // get_public_site's media branch emits, so the draft preview matches the public site.
-  media: {
-    purpose: SiteMedia['purpose']
-    path: string
-    orientation?: 'horizontal' | 'vertical' | null
-    site_role?: string | null
-  }[]
-}
+/** The WIRE shape — what `get_public_site` returns and `init-data` carries. Owned by
+ *  `@lone-star/site-bridge` now; re-exported from this module's historical home. */
+export type { PublicSitePayload } from '@lone-star/site-bridge/payload'
 
 /** Map the rpc's media ({purpose, path}) to public URLs. */
 function toSiteMedia(raw: { purpose: SiteMedia['purpose']; path: string }[]): SiteMedia[] {

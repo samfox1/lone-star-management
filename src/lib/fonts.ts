@@ -60,8 +60,13 @@ export type FontFormat = (typeof FONT_FORMATS)[number]
  * here. RESERVED_FAMILIES derives from it, so a new slot reserves its own class token
  * automatically — the two can never drift.
  */
-export const FONT_SLOTS = ['primary', 'secondary', 'custom_1', 'custom_2', 'custom_3'] as const
-export type FontSlot = (typeof FONT_SLOTS)[number]
+// MOVED to @lone-star/site-bridge (the slot names are wire contract — a connected site
+// reads `font_slots` keys against exactly this list). Re-exported from their historical
+// home; imported below for this module's own use.
+export { FONT_SLOTS } from '@lone-star/site-bridge/payload'
+export type { FontSlot, FontSlotMap, SiteFont } from '@lone-star/site-bridge/payload'
+import { FONT_SLOTS } from '@lone-star/site-bridge/payload'
+import type { FontSlot, FontSlotMap, SiteFont } from '@lone-star/site-bridge/payload'
 
 /**
  * How many fonts one artist may upload.
@@ -90,7 +95,6 @@ export type ArtistFont = {
 /** slot → family. Only ASSIGNED slots are present: an absent key means "this site has no
  *  font for that slot", which is not the same as a slot set to nothing. This is the shape
  *  the payload carries and the shape a consuming site iterates to set its CSS variables. */
-export type FontSlotMap = Partial<Record<FontSlot, string>>
 
 /* ── The family token ─────────────────────────────────────────────────────── */
 
@@ -310,12 +314,6 @@ export function fontFaceCss(
  *  working-payload mirror). `path` is the storage path; the renderer resolves it.
  *  NO slot field: a font does not know what it is used for — `font_slots` says that, and
  *  it is a map precisely so one font can appear in several slots. */
-export type SiteFont = {
-  family: string
-  label: string
-  path: string
-  format: string
-}
 
 /** The CSS custom property for a slot, spelled in ONE place. `custom_1` is
  *  `--font-custom-1`: the variable is CSS, so it wears the sanitized spelling, not the

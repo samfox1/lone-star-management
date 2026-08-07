@@ -1,0 +1,173 @@
+/**
+ * The WIRE PAYLOAD — exactly what `get_public_site` returns and what the bridge's
+ * `init-data` message carries. This is the contract a CUSTOM site speaks: it receives
+ * the draft over the bridge and maps the payload itself (skeen's `mapSite`), resolving
+ * media `path`s against ITS OWN Supabase URL.
+ *
+ * MOVED here from lone-star's `src/lib/site.ts` (SITE_BRIDGE_PLAN.md phase 1) so the
+ * type has ONE home: lone-star derives its render-side `SiteData` FROM this type
+ * (swapping wire media paths for resolved URLs), and a connected site imports it
+ * instead of hand-mirroring it — skeen's `PublicSite` in `lib/backend.ts` was the
+ * mirror this move retires.
+ *
+ * EVOLUTION RULE: additive only. Deployed sites pin old versions of this package
+ * forever; a removed or narrowed field here silently blanks regions on every site that
+ * still reads it. New fields arrive optional, with the "absent on revisions published
+ * before <migration>" comment style the fields below already carry.
+ */
+
+export type SiteTrack = {
+  id: string
+  title: string
+  cover_url: string | null
+  stream_url: string | null
+  /** Link-out URL for sources that don't host audio (e.g. Deezer). */
+  provider_url: string | null
+  /** Apple/iTunes store link (union model) — can't be rebuilt from apple_id, so
+   *  it's stored and threaded to the public link chain. */
+  apple_url: string | null
+  /** Whether this track has gated hosted audio. The raw path never leaves the
+   *  server; the player streams it via the signed-URL route (slug + track id). */
+  has_audio: boolean
+  /** Collaborators (primary artist excluded), from Spotify sync. May be absent
+   *  on revisions published before the feature — render with `?? []`. */
+  featured_artists: string[]
+  /** The release the track belongs to, from Spotify sync. May be absent on older
+   *  revisions — render with `?? null`. */
+  album_name: string | null
+  /** The release this track is assigned to (umbrella membership), or null. */
+  release_id: string | null
+  sort_order: number
+  /** Provenance (who created the row + which platforms carry it). Rides the
+   *  snapshot for the doors' Released/Unreleased gate; public-safe (the ids are
+   *  platform-URL components). Absent on revisions published before the union
+   *  model — render with `?? null`. */
+  source: string | null
+  spotify_id: string | null
+  apple_id: string | null
+  deezer_id: string | null
+  /** SoundCloud link (union model — stored, no id column). */
+  soundcloud_url: string | null
+  /** The manual "this song is released" flag (public even with no platform link). */
+  released: boolean | null
+}
+
+export type SiteTourDate = {
+  id: string
+  date: string
+  venue: string | null
+  city: string | null
+  country: string | null
+  ticket_url: string | null
+}
+
+export type SiteMerch = {
+  id: string
+  title: string
+  image_url: string | null
+  // Postgres `numeric` serializes as a string over JSON to preserve precision,
+  // so price is a string at runtime (both published and working paths).
+  price: number | string | null
+  url: string | null
+}
+
+export type SiteLink = {
+  id: string
+  label: string
+  url: string
+  sort_order: number
+}
+
+export type SiteVideo = {
+  id: string
+  title: string
+  provider: 'youtube' | 'soundcloud' | 'uploaded'
+  /** Set for embeds (youtube/soundcloud); null for an uploaded (self-hosted) video. */
+  embed_url: string | null
+  /** Set for uploaded videos (path in the public `videos` bucket); null for embeds. */
+  storage_path: string | null
+  is_short?: boolean
+  sort_order: number
+}
+
+export type MediaPurpose =
+  | 'hero_video'
+  | 'profile_photo'
+  | 'gallery_image'
+  | 'bio_video'
+  // Brand (20260804160000). `favicon` is derived from `logo_primary`, not uploaded — see
+  // lone-star's lib/brand.ts for why the framing has to be baked into the pixels.
+  | 'logo_primary'
+  | 'logo_secondary'
+  | 'favicon'
+
+/** Editable site text as key → override value (published or working). Absent
+ *  keys fall back to the template default. */
+export type SiteContent = Record<string, string>
+
+/** Per-region class-name overrides as region_key → class string (published or
+ *  working). Section regions use a plain key (e.g. 'hero_wordmark'); per-item
+ *  regions use '<slot>:<itemId>'. Absent/empty keys fall back to the region's
+ *  base classes (SITE_STYLING_PLAN.md). */
+export type SiteStyles = Record<string, string>
+
+/** One published custom font: the sanitized family token, the manager's label, the
+ *  storage path in lone-star's public `fonts` bucket, and its format hint. */
+export type SiteFont = {
+  family: string
+  label: string
+  path: string
+  format: string
+}
+
+/** The named font slots a site can bind (`--font-primary` etc.). The VALUE list is
+ *  contract: a connected site reads `font_slots` keys against exactly these names. */
+export const FONT_SLOTS = ['primary', 'secondary', 'custom_1', 'custom_2', 'custom_3'] as const
+export type FontSlot = (typeof FONT_SLOTS)[number]
+export type FontSlotMap = Partial<Record<FontSlot, string>>
+
+/** One media row as it rides the wire: the raw storage `path` (never a resolved URL —
+ *  the receiving site builds URLs against its own Supabase origin), plus orientation and
+ *  component-slot role so gallery layouts and placed components render from the draft
+ *  exactly as they will from the published site. */
+export type WireMedia = {
+  purpose: MediaPurpose
+  path: string
+  orientation?: 'horizontal' | 'vertical' | null
+  site_role?: string | null
+}
+
+export type PublicSitePayload = {
+  artist: {
+    id: string
+    slug: string
+    name: string
+    bio: string | null
+    hero_image_url: string | null
+    template: string
+    spotify_artist_id: string | null
+    /** Press-kit fields. Optional because every revision published before
+     *  20260804120000 lacks them — run `press_quotes` through `parsePressQuotes`
+     *  rather than casting it. */
+    press_pitch?: string | null
+    press_quotes?: unknown
+    /** Paths into the PRIVATE `documents` bucket — not URLs, and not resolvable by a
+     *  fan. Only the EPK PDF builder reads them, server-side. */
+    tech_rider_path?: string | null
+    stage_plot_path?: string | null
+  }
+  tracks: SiteTrack[]
+  tour_dates: SiteTourDate[]
+  merch: SiteMerch[]
+  links: SiteLink[]
+  videos: SiteVideo[]
+  media: WireMedia[]
+  site_content: SiteContent
+  styles: SiteStyles
+  /** Published custom fonts (family/label/path/format). Absent on any revision
+   *  published before 20260805160000, so always read with `?? []`. */
+  fonts: SiteFont[]
+  /** Which uploaded font fills each named slot. Absent before 20260805200000 —
+   *  read with `?? {}`. */
+  font_slots: FontSlotMap
+}
