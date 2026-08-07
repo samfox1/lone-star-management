@@ -41,3 +41,28 @@ describe('the generated token sheet', () => {
     expect(vocab.some((t) => /^speed-/.test(t))).toBe(false)
   })
 })
+
+describe('the append-only ratchet (P5) — enforcement, not documentation', () => {
+  const BASELINE = join(process.cwd(), 'tests/fixtures/bridge-token-baseline.json')
+
+  it('CRITICAL: no token ever shipped may leave the sheet', () => {
+    // The 2026-08-07 review confirmed the FOREVER rule had no teeth: remove a control
+    // option, regenerate, and the file and generator shrank in lockstep, suite green.
+    // The committed baseline is a union the generator only grows — a removal leaves the
+    // token here, this test goes red, and only a hand edit can silence it.
+    const baseline: string[] = JSON.parse(readFileSync(BASELINE, 'utf8'))
+    const current = new Set(classVocabulary())
+    expect(
+      baseline.filter((t) => !current.has(t)),
+      'removed tokens orphan stored styles on every deployed site at its next build',
+    ).toEqual([])
+  })
+
+  it('new tokens are recorded in the baseline, so THEIR future removal is caught', () => {
+    const baseline = new Set<string>(JSON.parse(readFileSync(BASELINE, 'utf8')))
+    expect(
+      classVocabulary().filter((t) => !baseline.has(t)),
+      'run npm run tokens to append these to the baseline',
+    ).toEqual([])
+  })
+})

@@ -10,17 +10,18 @@
 import { describe, expect, it } from 'vitest'
 
 describe('site-bridge is importable where no DOM exists', () => {
-  it('CRITICAL: every module imports in a bare node environment', async () => {
-    // Dynamic imports so a throw is a test failure here, not a suite-load crash.
-    const mods = await Promise.all([
-      import('@lone-star/site-bridge'),
-      import('@lone-star/site-bridge/protocol'),
-      import('@lone-star/site-bridge/payload'),
-      import('@lone-star/site-bridge/manifest'),
-      import('@lone-star/site-bridge/markers'),
-      import('@lone-star/site-bridge/styles'),
-      import('@lone-star/site-bridge/frame'),
-    ])
+  it('CRITICAL: every exported module imports in a bare node environment', async () => {
+    // The list is DERIVED from the package's exports map (AGENTS.md rule 4: a
+    // hand-written list silently omits every future member — the 2026-08-07 review
+    // caught this one as exactly that shape). Dynamic imports so a throw is a test
+    // failure here, not a suite-load crash.
+    const { readFileSync } = await import('node:fs')
+    const pkg = JSON.parse(readFileSync('packages/site-bridge/package.json', 'utf8'))
+    const entries = Object.keys(pkg.exports).filter((e) => !e.endsWith('.css'))
+    expect(entries.length).toBeGreaterThan(3) // the sweep found the exports map
+    const mods = await Promise.all(
+      entries.map((e) => import('@lone-star/site-bridge' + e.slice(1))),
+    )
     expect(mods.every((m) => typeof m === 'object')).toBe(true)
     expect(typeof window).toBe('undefined') // prove this really is node
   })

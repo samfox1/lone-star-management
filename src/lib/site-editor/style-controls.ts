@@ -20,6 +20,7 @@ import { colorToken } from '@/lib/site-editor/style-apply'
 // through them). Re-exported from their historical home; imported for local use.
 export type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
 import type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
+import { TEXT_SIZES } from '@lone-star/site-bridge/styles'
 
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean }
@@ -107,38 +108,15 @@ const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 //
 // SAFELIST: like everything else here, the SITE must safelist these or Tailwind compiles
 // nothing and the slider silently does nothing. See the header.
-const SIZE_OPTIONS: StyleOption[] = [
-  { value: 'text-[clamp(0.7rem,1.6vw,0.75rem)]', label: '12px' },
-  { value: 'text-[clamp(0.78rem,1.9vw,0.875rem)]', label: '14px' },
-  { value: 'text-[clamp(0.85rem,2.2vw,1rem)]', label: '16px' },
-  { value: 'text-[clamp(0.95rem,2.6vw,1.125rem)]', label: '18px' },
-  { value: 'text-[clamp(1rem,3vw,1.25rem)]', label: '20px' },
-  { value: 'text-[clamp(1.15rem,3.6vw,1.5rem)]', label: '24px' },
-  { value: 'text-[clamp(1.3rem,4.4vw,1.875rem)]', label: '30px' },
-  { value: 'text-[clamp(1.5rem,5.2vw,2.25rem)]', label: '36px' },
-  { value: 'text-[clamp(1.75rem,6.5vw,3rem)]', label: '48px' },
-  { value: 'text-[clamp(2rem,8vw,3.75rem)]', label: '60px' },
-  { value: 'text-[clamp(2.25rem,9.5vw,4.5rem)]', label: '72px' },
-  { value: 'text-[clamp(2.6rem,12vw,6rem)]', label: '96px' },
-  { value: 'text-[clamp(3rem,15vw,8rem)]', label: '128px' },
-  // DISPLAY sizes, above anything Tailwind names. Sam, 2026-08-05: "the header text needs
-  // to start at a bigger size and be able to be a bigger size."
-  //
-  // The scale used to stop at 8rem while skeen's hero is 11rem, so the LARGEST size the
-  // editor could offer was a 27% shrink and there was no way back up. A scale whose
-  // ceiling sits below the thing it styles is not a scale.
-  //
-  // 11rem is skeen's own `text-[clamp(4rem,18vw,11rem)]`, character for character, so the
-  // hero opens on an exact step rather than beside one — it can be Reset, and its label is
-  // not an approximation. The neighbours are built around it at its own ratio.
-  //
-  { value: 'text-[clamp(3.2rem,16vw,9rem)]', label: '144px' },
-  { value: 'text-[clamp(3.5rem,17vw,10rem)]', label: '160px' },
-  { value: 'text-[clamp(4rem,18vw,11rem)]', label: '176px' },
-  { value: 'text-[clamp(4.2rem,19vw,12rem)]', label: '192px' },
-  { value: 'text-[clamp(4.6rem,21vw,14rem)]', label: '224px' },
-  { value: 'text-[clamp(5rem,23vw,16rem)]', label: '256px' },
-]
+/**
+ * The size ladder IS the package's TEXT_SIZES — one list, shared with every site
+ * (skeen's textSizes.ts carried a character-identical copy until the 2026-08-07
+ * extraction; tokens.css generates from the same source). The editor's SIZE_OPTIONS
+ * name survives for its many readers below. The DISPLAY tail's reasoning (Sam,
+ * 2026-08-05: "the header text needs to start at a bigger size") lives with the
+ * ladder in @lone-star/site-bridge/styles.
+ */
+const SIZE_OPTIONS: StyleOption[] = TEXT_SIZES
 /**
  * LINE HEIGHT, emitted with Tailwind's `!` important prefix.
  *

@@ -85,8 +85,12 @@ export function fluidizeSizes(override: string): string {
     .split(/\s+/)
     .map((token) => {
       const at = token.lastIndexOf(":") + 1;
-      const mapped = LEGACY_TO_FLUID[token.slice(at)];
-      return mapped ? token.slice(0, at) + mapped : token;
+      // Strip an important prefix for the lookup, keep it on the result — `!text-4xl`
+      // is just as fixed as `text-4xl`, one modifier later (2026-08-07 review).
+      const bare = token.slice(at);
+      const bang = bare.startsWith("!") ? "!" : "";
+      const mapped = LEGACY_TO_FLUID[bang ? bare.slice(1) : bare];
+      return mapped ? token.slice(0, at) + bang + mapped : token;
     })
     .join(" ");
 }
@@ -348,7 +352,10 @@ export function slotRegion(role: string): string {
 /** Overlay tokens that must sit on the window to be visible. On the item inside an
  *  `overflow-hidden` wrapper they apply but can't be SEEN: corners and borders are
  *  clipped square again by the wrapper, and a shadow is cut off entirely. */
-const WINDOW_TOKEN = /^(rounded|border|shadow)(-|$)/;
+// `!?` — the important prefix is an established editor convention (the leading
+// controls); a future `!rounded-*` routed to the clipped inner element would be a
+// silent visual no-op (2026-08-07 review, latent edge).
+const WINDOW_TOKEN = /^!?(rounded|border|shadow)(-|$)/;
 
 /**
  * Split a per-item overlay between the item and its window.

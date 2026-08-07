@@ -54,13 +54,6 @@ export const READY_RETRY_MS = 300;
 export const READY_RETRIES = 33;
 
 /**
- * The site's region-base lookup, INJECTED rather than imported: `applyStylePart`
- * snapshots an element's declared base before the first override lands, and the
- * declared bases live in the site's own registry — design, not contract. A site sets
- * this once via `mountFrameBridge({ regionBase })` (or directly for tests). The default
- * returns '' — the pre-registry behaviour: snapshot the element's live class attribute.
- */
-/**
  * An editor message as the frame actually receives it: the protocol's union, WIDENED
  * with an unknown-type arm. The runtime guard checks source/version/type-is-string, so
  * a NEWER editor's unknown message types still arrive here — the additive-protocol
@@ -79,6 +72,17 @@ function strField(msg: InboundEditorMessage, field: string): string | null {
 }
 
 
+/**
+ * The site's region-base lookup, INJECTED rather than imported: `applyStylePart`
+ * snapshots an element's declared base before the first override lands, and the
+ * declared bases live in the site's own registry — design, not contract. A site passes
+ * `regionBase` to `mountFrameBridge`, which binds it BEFORE any listener is wired —
+ * order matters, because the snapshot is cached per element on first touch, and a
+ * lookup set after the editor's first apply-style would cache the wrong base for the
+ * element's lifetime (the hero `opacity-0` incident, made intermittent). The setter
+ * exists for tests and for callers that never mount the full bridge. The default
+ * returns '' — the pre-registry behaviour: snapshot the live class attribute.
+ */
 let regionBaseLookup: (key: string) => string = () => "";
 export function setRegionBaseLookup(lookup: (key: string) => string): void {
   regionBaseLookup = lookup;
@@ -415,7 +419,14 @@ export function mountFrameBridge(options: {
    * with more confidence.
    */
   onMounted?: (handle: { announce: () => void }) => void;
+  /** The site's region registry lookup (its `regionBase`). Bound synchronously before
+   *  any listener attaches — see the ordering note on `regionBaseLookup`. */
+  regionBase?: (key: string) => string;
 }): () => void {
+  // FIRST, before any listener can deliver an apply-style: the base snapshot is cached
+  // per element on first touch, and caching against the default '' lookup is the
+  // intermittent hero-clip failure the regionBaseLookup docblock describes.
+  if (options.regionBase) setRegionBaseLookup(options.regionBase);
   const target = options.target ?? window.parent;
   const manifest = () =>
     typeof options.editList === "function"

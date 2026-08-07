@@ -50,7 +50,7 @@ function ShowRow({ show, past, editable = false }: { show: SiteTourDate; past?: 
       className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-5"
     >
       <div className="flex items-baseline gap-6">
-        <span className="font-display text-sm tabular-nums text-muted">{formatDate(show.date)}</span>
+        <span className="font-display text-sm tabular-nums text-muted">{show.date ? formatDate(show.date) : 'TBA'}</span>
         <div>
           <p className="font-display text-lg font-bold uppercase">{show.venue ?? 'TBA'}</p>
           <p className="text-sm text-muted">
@@ -286,8 +286,12 @@ export function CinematicTemplate({ data, editable = false }: { data: SiteData; 
     safeHref(media.find((m) => m.purpose === 'profile_photo')?.url ?? artist.hero_image_url) ?? null
 
   const today = new Date().toISOString().slice(0, 10)
-  const upcoming = tour_dates.filter((d) => d.date >= today)
-  const past = tour_dates.filter((d) => d.date < today).reverse()
+  // An UNDATED show (date null — announced, date TBA) counts as upcoming: the wire has
+  // always allowed null here, and the old `d.date >= today` comparison only worked by
+  // the accident of a too-narrow type (null >= string is false, silently hiding the
+  // show entirely). Undated rows already sort last on the wire.
+  const upcoming = tour_dates.filter((d) => d.date === null || d.date >= today)
+  const past = tour_dates.filter((d) => d.date !== null && d.date < today).reverse()
 
   // Work tabs from backend data: Spotify catalog + SoundCloud (if linked).
   const tabs: WorkTab[] = []

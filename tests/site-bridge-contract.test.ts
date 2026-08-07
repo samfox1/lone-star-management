@@ -36,10 +36,13 @@ describe('single source — the shims re-export the package, never redefine it',
     // package, these assignments stop typechecking. (Runtime body is trivially true —
     // the assertions are the type annotations.)
     const wire = null as unknown as PublicSitePayload
-    const shim: ShimPayload = wire // identical types or this line errors
+    const shim: ShimPayload = wire // package assignable to shim…
+    // …AND the reverse (2026-08-07 review: one direction alone lets the shim silently
+    // re-WIDEN — extra optional fields, unknown-typed members — and still compile).
+    const back: PublicSitePayload = null as unknown as ShimPayload
     const derived: Omit<SiteData, 'media'> = wire // everything but media flows through
     const media: SiteMedia = { purpose: 'gallery_image', url: 'https://x/y.jpg' }
-    expect([shim, derived, media].length).toBe(3)
+    expect([shim, back, derived, media].length).toBe(4)
   })
 })
 

@@ -920,3 +920,34 @@ describe("highlight marks EVERY match (SITE_BRIDGE_PLAN.md P8 — the port's one
     expect(document.querySelectorAll("[data-lse-highlight]").length).toBe(0);
   });
 });
+
+describe("mountFrameBridge({ regionBase }) — the documented injection path", () => {
+  it("CRITICAL: the option binds the lookup before any message can apply a style", () => {
+    // The review of 2026-08-07 found the docblock promising this option while only the
+    // bare setter existed — and the setter is ORDER-SENSITIVE: an apply-style landing
+    // before it caches the wrong base per element for the session (the hero opacity-0
+    // incident, made intermittent). This proves the option alone is enough.
+    setRegionBaseLookup(() => ""); // wipe any lookup earlier tests installed
+    document.body.innerHTML = `<section data-lse-style="work_section" class="relative z-0 opacity-0" id="s"></section>`;
+    // Minimal editor stand-in: the shared fakeEditor helper is scoped to its own
+    // describe; all this test needs is a postMessage sink.
+    const editor = { target: { postMessage: () => {} } as unknown as Window };
+    const teardown = mountFrameBridge({
+      editorOrigin: "http://localhost:3000",
+      onInitData: () => {},
+      editList: EDIT_LIST,
+      target: editor.target,
+      regionBase, // the option under test — no setRegionBaseLookup call anywhere here
+    });
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: "http://localhost:3000",
+        data: { v: BRIDGE_VERSION, source: "lse-editor", type: "apply-style", key: "work_section", className: "" },
+      }),
+    );
+    // A reset restores the DECLARED base — not the live class list with its transient
+    // opacity-0 — which is only possible if the option installed the lookup in time.
+    expect(document.getElementById("s")!.getAttribute("class")).toBe("relative z-0");
+    teardown();
+  });
+});

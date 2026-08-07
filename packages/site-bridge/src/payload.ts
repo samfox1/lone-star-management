@@ -4,6 +4,10 @@
  * the draft over the bridge and maps the payload itself (skeen's `mapSite`), resolving
  * media `path`s against ITS OWN Supabase URL.
  *
+ * DERIVED FROM THE SNAPSHOT LISTS in lone-star's lib/content.ts (the RPC serves
+ * `data` wholesale, so those lists ARE the wire), not from any consumer's view — the
+ * 2026-08-07 review caught the first cut copying lone-star's internal type, which
+ * omitted fields skeen reads (tour support acts, link roles, video site_role).
  * MOVED here from lone-star's `src/lib/site.ts` (SITE_BRIDGE_PLAN.md phase 1) so the
  * type has ONE home: lone-star derives its render-side `SiteData` FROM this type
  * (swapping wire media paths for resolved URLs), and a connected site imports it
@@ -54,11 +58,25 @@ export type SiteTrack = {
 
 export type SiteTourDate = {
   id: string
-  date: string
+  /** Null for an UNDATED show (announced, date TBA) — the wire has carried null since
+   *  dates became clearable; undated rows sort last, sequenced by sort_order. */
+  date: string | null
   venue: string | null
   city: string | null
+  /** Two-letter US state code. Absent on revisions published before the column. */
+  state?: string | null
   country: string | null
   ticket_url: string | null
+  /** The support acts' NAMES, in bill order (20260717140000). Absent on older
+   *  revisions — read with `?? []`. */
+  support?: string[] | null
+  /** Per-act name → outbound URL (edited in the editor's Links panel). Rides beside
+   *  `support` so a site can zip them into linked support acts. */
+  support_urls?: Record<string, string> | null
+  /** The manager's "already played" flag, distinct from date math. */
+  is_past?: boolean | null
+  /** Tie-break for UNDATED shows only (20260723120000) — dated shows sort by date. */
+  sort_order?: number | null
 }
 
 export type SiteMerch = {
@@ -69,6 +87,8 @@ export type SiteMerch = {
   // so price is a string at runtime (both published and working paths).
   price: number | string | null
   url: string | null
+  /** Rides the snapshot as the sort key; sites rarely read it. */
+  created_at?: string | null
 }
 
 export type SiteLink = {
@@ -76,6 +96,10 @@ export type SiteLink = {
   label: string
   url: string
   sort_order: number
+  /** Binds this link to a manifest link-region (USB / Merch button) by KEY, so a site
+   *  maps it authoritatively instead of by label. Null for ordinary social links;
+   *  absent on revisions published before bind-by-key. */
+  role?: string | null
 }
 
 export type SiteVideo = {
@@ -86,8 +110,12 @@ export type SiteVideo = {
   embed_url: string | null
   /** Set for uploaded videos (path in the public `videos` bucket); null for embeds. */
   storage_path: string | null
-  is_short?: boolean
+  is_short?: boolean | null
   sort_order: number
+  /** Places this video in a named background slot (`hero_landscape` /
+   *  `hero_portrait` / `bio_background`), or null for the band/library
+   *  (20260716200000). How a site picks its hero clip. */
+  site_role?: string | null
 }
 
 export type MediaPurpose =

@@ -24,42 +24,61 @@
  * and diffs the committed file, so a vocabulary change that forgets to regenerate is a
  * red build, not a manager staring at a slider that does nothing.
  */
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   buildStyleControls,
   buildTextItemStyleControls,
   buildItemStyleControls,
   buildVideoItemStyleControls,
 } from '@/lib/site-editor/style-controls'
-import { LEGACY_TO_FLUID, resolveStyle } from '@lone-star/site-bridge/styles'
+import { LEGACY_TO_FLUID, resolveRegionStyle, resolveStyle } from '@lone-star/site-bridge/styles'
 
-/** Every class token the editor can emit, from its own control definitions. */
-function emittedTokens(): string[] {
-  const controls = [
-    ...buildStyleControls(),
-    ...buildTextItemStyleControls(),
-    ...buildItemStyleControls(),
-    ...buildVideoItemStyleControls('embed'),
-    ...buildVideoItemStyleControls('file'),
+type Origin = 'section' | 'item'
+
+/** Every class token the editor can emit, TAGGED with the context it applies in —
+ *  section overrides lift only colours to inline style, item overlays lift the whole
+ *  owned vocabulary, so the same token can need CSS in one context and none in the
+ *  other (2026-08-07 review: a shadow option added to a SECTION control would have
+ *  been dropped from the sheet while sections kept it as an uncompiled class). */
+function emittedTokens(): [string, Origin][] {
+  const tagged: [ReturnType<typeof buildStyleControls>, Origin][] = [
+    [buildStyleControls(), 'section'],
+    [buildTextItemStyleControls(), 'item'],
+    [buildItemStyleControls(), 'item'],
+    [buildVideoItemStyleControls('embed'), 'item'],
+    [buildVideoItemStyleControls('file'), 'item'],
   ]
-  const tokens = new Set<string>()
-  for (const c of controls) {
-    if ('options' in c) for (const o of c.options) if (o.value) tokens.add(o.value)
-    if ('steps' in c) for (const s of c.steps) if (s.value) tokens.add(s.value)
-    if ('onClass' in c && c.onClass) tokens.add(c.onClass)
+  const out = new Map<string, Origin>()
+  for (const [controls, origin] of tagged) {
+    for (const c of controls) {
+      const values: string[] = []
+      if ('options' in c) for (const o of c.options) if (o.value) values.push(o.value)
+      if ('steps' in c) for (const s of c.steps) if (s.value) values.push(s.value)
+      if ('onClass' in c && c.onClass) values.push(c.onClass)
+      // A token used in BOTH contexts keeps 'section' — the stricter judge (less lifts).
+      for (const v of values) if (out.get(v) !== 'section') out.set(v, origin)
+    }
   }
-  return [...tokens]
+  return [...out.entries()]
+}
+
+/** Does this token survive AS A CLASS in the context it is emitted for? */
+function survivesAsClass(token: string, origin: Origin): boolean {
+  if (origin === 'item') return resolveStyle(token).className === token
+  // The section path: a plain (colon-free) key routes through merge + the colour-only
+  // lift — exactly what a site's server render does with a stored section override.
+  return resolveRegionStyle('generator_probe', '', token).className === token
 }
 
 /** The tokens that survive resolution AS CLASSES — the set a site must compile. */
 export function classVocabulary(): string[] {
   const vocab = new Set<string>()
-  for (const token of emittedTokens()) {
+  for (const [token, origin] of emittedTokens()) {
     // Multi-class values (none today) split defensively; each part judged alone.
     for (const part of token.split(/\s+/).filter(Boolean)) {
-      const r = resolveStyle(part)
-      if (r.className === part) vocab.add(part)
+      if (survivesAsClass(part, origin)) vocab.add(part)
     }
   }
   for (const legacy of Object.keys(LEGACY_TO_FLUID)) vocab.add(legacy)
@@ -68,7 +87,13 @@ export function classVocabulary(): string[] {
 
 /** The generated stylesheet, deterministic for the sync test. */
 export function buildTokensCss(): string {
-  const lines = classVocabulary().map((t) => `@source inline("${t}");`)
+  const vocab = classVocabulary()
+  for (const t of vocab) {
+    // @source inline() treats {} as brace expansion and the value is double-quoted —
+    // a token containing either would emit a malformed or silently-expanding line.
+    if (/["{}]/.test(t)) throw new Error(`token not representable in @source inline(): ${t}`)
+  }
+  const lines = vocab.map((t) => `@source inline("${t}");`)
   return `/*
  * GENERATED — do not edit. \`npm run tokens\` in the lone-star repo rebuilds this from
  * the editor's own control definitions (scripts/generate-bridge-tokens.ts explains how).
@@ -93,10 +118,30 @@ ${lines.join('\n')}
 `
 }
 
-// CLI entry: regenerate the committed file.
+/** Repo root, from THIS file's location — `process.cwd()` writes to the wrong place
+ *  when tsx is invoked from a subdirectory. */
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+export const BASELINE_PATH = join(ROOT, 'tests/fixtures/bridge-token-baseline.json')
+
+/**
+ * The ratchet baseline: every token EVER shipped, as a committed union. The union is
+ * the load-bearing detail — rebuilt from the current vocabulary alone, a regeneration
+ * would launder a removal straight into the baseline and the append-only test could
+ * never fire. As written, removing a token leaves it in the baseline and the test goes
+ * red; only a hand edit (a deliberate, reviewable act) can silence it.
+ */
+export function unionedBaseline(): string[] {
+  const prior: string[] = existsSync(BASELINE_PATH)
+    ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+    : []
+  return [...new Set([...prior, ...classVocabulary()])].sort()
+}
+
+// CLI entry: regenerate the committed file AND grow (never shrink) the baseline.
 const isMain = process.argv[1]?.endsWith('generate-bridge-tokens.ts')
 if (isMain) {
-  const dest = join(process.cwd(), 'packages/site-bridge/tokens.css')
+  const dest = join(ROOT, 'packages/site-bridge/tokens.css')
   writeFileSync(dest, buildTokensCss())
-  console.log(`wrote ${dest} (${classVocabulary().length} tokens)`)
+  writeFileSync(BASELINE_PATH, JSON.stringify(unionedBaseline(), null, 2) + '\n')
+  console.log(`wrote ${dest} (${classVocabulary().length} tokens; baseline ${unionedBaseline().length})`)
 }
