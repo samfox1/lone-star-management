@@ -53,8 +53,12 @@ export type ManifestField = {
   styleKey?: string
 }
 
-/** The library asset types a slot can hold. Mirrors the content entities. */
-export type LibraryAsset = 'track' | 'video' | 'image' | 'merch' | 'tour_date' | 'link'
+/** The library asset types a slot can hold, AS A VALUE — so item-marker parsers can
+ *  validate against the registry instead of hand-listing it (AGENTS.md rule 4: a
+ *  hand-written list silently omits every future member; lone-star's markers.ts had
+ *  exactly that copy). Mirrors the content entities. */
+export const LIBRARY_ASSETS = ['track', 'video', 'image', 'merch', 'tour_date', 'link'] as const
+export type LibraryAsset = (typeof LIBRARY_ASSETS)[number]
 
 /** A section that holds a reorderable list of library items — one
  *  `data-lse-slot="<key>"` region, with `data-lse-item="<asset>:<id>"` per item. */

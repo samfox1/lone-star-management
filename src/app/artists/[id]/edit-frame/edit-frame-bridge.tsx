@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { mountFrameBridge } from '@/lib/site-editor/bridge-client'
+import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**
  * Mounts the frame side of the editor bridge inside the edit-mode site frame
@@ -10,7 +11,12 @@ import { mountFrameBridge } from '@/lib/site-editor/bridge-client'
  * served by this app; phase 2 passes the editor's origin explicitly. Renders
  * nothing.
  */
-export function EditFrameBridge() {
-  useEffect(() => mountFrameBridge({ editorOrigin: window.location.origin }), [])
+export function EditFrameBridge({ editList }: { editList?: TemplateManifest }) {
+  // The template's local manifest rides along so apply-field knows TEXT from image —
+  // a caption whose words look like a URL must never be swapped for an <img>.
+  useEffect(
+    () => mountFrameBridge({ editorOrigin: window.location.origin, editList }),
+    [editList],
+  )
   return null
 }

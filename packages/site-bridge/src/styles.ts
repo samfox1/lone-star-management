@@ -255,6 +255,36 @@ function resolveTokens(classString: string, liftAll: boolean): ResolvedStyle {
   };
 }
 
+/* ── The token GRAMMAR, exported for the EDITOR side (moved from lone-star's
+ * style-apply.ts, 2026-08-07): everything that reads or writes the arbitrary-colour
+ * and speed tokens — `owns` matchers in the style controls, the item editor's
+ * constructor — goes through these instead of re-spelling the regexes. The same
+ * regexes drive the lift above, so the writer and the resolver can never disagree. */
+
+/** The CSS property one of the editor's managed colour tokens sets (camelCase — the
+ *  editor compares against these; the DOM clear-list MANAGED_STYLE_PROPS is the
+ *  kebab-case twin used with style.setProperty/removeProperty). */
+export type ManagedColorProp = "borderColor" | "color" | "backgroundColor";
+
+/** `<prefix>-[#hex]` → its CSS property + hex, or null if not an arbitrary colour. */
+export function colorToken(token: string): { prop: ManagedColorProp; value: string } | null {
+  const m = token.match(/^([a-z]+)-\[(#[0-9a-fA-F]{3,8})\]$/);
+  const prop = m ? COLOR_PROPS[m[1]] : undefined;
+  return m && prop ? { prop, value: m[2] } : null;
+}
+
+/** The arbitrary-colour utility for a prefix — the write half of `colorToken`. */
+export function colorClass(prefix: "border" | "text" | "bg", hex: string): string {
+  return `${prefix}-[${hex}]`;
+}
+
+/** `speed-[<rate>x]` → the playback rate it sets, or null (malformed or outside what a
+ *  media element accepts — an out-of-range token stays an inert class rather than
+ *  throwing mid-apply). The write half is the editor's own template literal. */
+export function speedToken(token: string): number | null {
+  return speedRate(token);
+}
+
 /** Full lift — for a string the MANAGER authored (an item overlay). */
 export function resolveStyle(classString: string): ResolvedStyle {
   return resolveTokens(classString, true);

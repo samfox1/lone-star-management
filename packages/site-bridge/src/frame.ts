@@ -123,7 +123,9 @@ export function targetOf(marked: Element): SelectTarget | null {
   return null;
 }
 
-function rectOf(el: Element): Rect {
+/** Exported (unlike skeen's original private copy): the editor-side wrapper re-exports
+ *  it, and a site may want the same viewport box for its own overlays. */
+export function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect();
   return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
@@ -335,7 +337,14 @@ export function applyLinkToDom(
   url: string,
 ): void {
   const el = root.querySelector(attrSelector(LINK_ATTR, key));
-  if (el) el.setAttribute("href", url);
+  if (!el) return;
+  // A BLANK url removes the attribute: an <a href=""> is a live link to the current
+  // page, and with target="_blank" it opens a second copy of the whole site (the exact
+  // trap skeen's footer USB documents). No href = an inert element — what "cleared"
+  // should mean. (Unified from lone-star's copy in the 2026-08-07 consolidation; the
+  // original here set href unconditionally.)
+  if (url) el.setAttribute("href", url);
+  else el.removeAttribute("href");
 }
 
 /** The attribute selector that finds a SelectTarget's marked element — the inverse of

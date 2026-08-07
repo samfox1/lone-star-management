@@ -191,9 +191,13 @@ describe('style regions — resolve + optimistic restyle', () => {
     expect((document.querySelector('[data-lse-field="polaroid_1_photo"]') as HTMLImageElement).src).toBe('https://x/new.jpg')
     applyImageToDom(document, 'hero_image', 'https://x/new2.jpg')
     expect((document.getElementById('inner') as HTMLImageElement).src).toBe('https://x/new2.jpg')
-    // Never writes text — a URL as textContent is worse than no repaint.
+    // The placeholder SWAPS for a real <img> (unified with skeen's frame, 2026-08-07):
+    // the old copy no-opped here, so the manager's first drop showed nothing until a
+    // reload. The marker crosses over, so later edits address the new element.
     applyImageToDom(document, 'empty_slot', 'https://x/new3.jpg')
-    expect(document.querySelector('[data-lse-field="empty_slot"]')!.textContent).toBe('Add photo')
+    const swapped = document.querySelector('[data-lse-field="empty_slot"]')!
+    expect(swapped.tagName).toBe('IMG')
+    expect((swapped as HTMLImageElement).src).toBe('https://x/new3.jpg')
     // '' (a cleared slot) is left to the init-data refresh.
     applyImageToDom(document, 'polaroid_1_photo', '')
     expect((document.querySelector('[data-lse-field="polaroid_1_photo"]') as HTMLImageElement).src).toBe('https://x/new.jpg')

@@ -1,57 +1,53 @@
 /**
- * DOM MARKER convention for the editable-regions rulebook (SITE_EDITOR_PLAN.md).
- *
- * A site in EDIT MODE tags its editable regions with these `data-lse-*`
- * attributes; the bridge (./bridge) reads them on click and reports the target to
- * the editor. The attribute VALUES are manifest keys (see ./manifest) — the editor
- * maps a clicked marker back to a ManifestField / ManifestSlot / library item.
- *
- *   data-lse-field="hero_tagline"   → an editable atom (text / image field)
- *   data-lse-slot="tracks"          → a section that accepts library items
- *   data-lse-item="track:<uuid>"    → one placed item inside a slot
- *
- * Pure string helpers only — no DOM access here, so this is safe to import
- * server-side (the template emits the attributes) and in tests.
+ * DOM markers for the editor — the ATTRIBUTES are the contract and live in
+ * `@lone-star/site-bridge` (one spelling for every site and this editor); re-exported
+ * here because this is where the templates have always found them. What stays local is
+ * lone-star sugar: the `*Region` attribute-spread helpers the built-in templates render
+ * with, and the item-marker pair bound to the package's asset REGISTRY.
  */
-import type { LibraryAsset } from '@/lib/site-editor/manifest'
+import { ITEM_ATTR, LIBRARY_ASSETS, type LibraryAsset } from '@lone-star/site-bridge'
 
-export const FIELD_ATTR = 'data-lse-field'
-export const SLOT_ATTR = 'data-lse-slot'
-export const ITEM_ATTR = 'data-lse-item'
-export const STYLE_ATTR = 'data-lse-style'
-/** A link-powered <a> whose href the editor sets by KEY (manifest `links`). */
-export const LINK_ATTR = 'data-lse-link'
-/** Transient marker the editor sets on the ONE region it's highlighting (editor →
- *  frame `highlight`). Carries no value; the frame styles `[data-lse-highlight]`. */
-export const HIGHLIGHT_ATTR = 'data-lse-highlight'
+export {
+  FIELD_ATTR,
+  SLOT_ATTR,
+  ITEM_ATTR,
+  STYLE_ATTR,
+  LINK_ATTR,
+  HIGHLIGHT_ATTR,
+  WINDOW_ATTR,
+  TEXT_ATTR,
+  IMG_CLASS_ATTR,
+  SHIELD_ATTR,
+  MARKED,
+} from '@lone-star/site-bridge'
+import { FIELD_ATTR, SLOT_ATTR, LINK_ATTR } from '@lone-star/site-bridge'
 
-/** Build a `data-lse-item` value. Asset ids are UUIDs (no colon), and the asset
- *  type has no colon, so the first colon is an unambiguous separator. */
+/** `track:<id>` — one placed library item's marker value. */
 export function itemMarker(assetType: LibraryAsset, id: string): string {
   return `${assetType}:${id}`
 }
 
-const ASSET_TYPES: readonly LibraryAsset[] = ['track', 'video', 'image', 'merch', 'tour_date', 'link']
-
-/** Parse a `data-lse-item` value back into its parts, or null if malformed /
- *  unknown asset type. */
+/**
+ * Parse an item marker, validating the asset type against the package REGISTRY —
+ * `LIBRARY_ASSETS`, not a local list (the 2026-08-07 review found a hand copy here that
+ * would have silently dropped clicks on any future asset type in the built-in frame
+ * only). Unknown types return null: this parser feeds EDITOR lookups that need a known
+ * type; the frame side deliberately forwards unknowns instead (the editor filters).
+ */
 export function parseItemMarker(value: string): { assetType: LibraryAsset; id: string } | null {
   const sep = value.indexOf(':')
   if (sep <= 0 || sep === value.length - 1) return null
-  const assetType = value.slice(0, sep) as LibraryAsset
-  const id = value.slice(sep + 1)
-  if (!ASSET_TYPES.includes(assetType)) return null
-  return { assetType, id }
+  const assetType = value.slice(0, sep)
+  if (!(LIBRARY_ASSETS as readonly string[]).includes(assetType)) return null
+  return { assetType: assetType as LibraryAsset, id: value.slice(sep + 1) }
 }
 
-/**
- * Region attribute spreads for a template to emit in EDIT MODE only. A template
- * threads its `editable` flag and spreads these onto the region element:
- *   <h2 {...fieldRegion(editable, 'shows_heading')}>…</h2>
- *   <section {...slotRegion(editable, 'shows')}> … {shows.map((s) =>
- *     <div {...itemRegion(editable, 'tour_date', s.id)}> … </div>)} </section>
- * Off edit mode they return `{}` — the public site carries no markers.
- */
+/* ── Attribute spreads for the built-in templates (edit mode only; the public site
+ * carries no markers). Note the naming trap the review flagged: the PACKAGE's
+ * `slotRegion`/`itemRegion` (styles module) build per-item style KEYS — these build
+ * attribute SPREADS. Both are importable in editor code; these keep their historical
+ * names because every built-in template calls them. ── */
+
 export function fieldRegion(editable: boolean, key: string): Record<string, string> {
   return editable ? { [FIELD_ATTR]: key } : {}
 }
