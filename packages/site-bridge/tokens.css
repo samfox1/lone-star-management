@@ -1,0 +1,88 @@
+/*
+ * GENERATED — do not edit. `npm run tokens` in the lone-star repo rebuilds this from
+ * the editor's own control definitions (scripts/generate-bridge-tokens.ts explains how).
+ *
+ * WHAT THIS IS: every class the lone-star editor can apply to a region at runtime, as
+ * `@source inline()` directives. A site imports this file in its main CSS —
+ *   @import "@lone-star/site-bridge/tokens.css";
+ * — so Tailwind v4 compiles the whole editor vocabulary. Without it, an applied class
+ * has no CSS behind it and silently no-ops (the drift bug of 2026-08-05, three times).
+ *
+ * NOT INCLUDED, deliberately: the site's OWN fonts and colours (declared via
+ * styleOptions — the site's markup or safelist already compiles them) and every token
+ * the bridge lifts to inline style (arbitrary colours, scale, opacity, px borders,
+ * corners, shadows, playback speed), which need no CSS at all.
+ *
+ * APPEND-ONLY, FOREVER (SITE_BRIDGE_PLAN.md P5): stored styles reference these tokens
+ * at runtime, but sites compile CSS at build time. Removing a line orphans every stored
+ * style using it, on every site, at that site's next build. A control may leave the
+ * editor; its token never leaves this file.
+ */
+@source inline("!leading-[0.85]");
+@source inline("!leading-[0.8]");
+@source inline("!leading-[0.95]");
+@source inline("!leading-[0.9]");
+@source inline("!leading-[1.1]");
+@source inline("!leading-loose");
+@source inline("!leading-none");
+@source inline("!leading-normal");
+@source inline("!leading-relaxed");
+@source inline("!leading-snug");
+@source inline("!leading-tight");
+@source inline("font-black");
+@source inline("font-bold");
+@source inline("font-extrabold");
+@source inline("font-extralight");
+@source inline("font-light");
+@source inline("font-medium");
+@source inline("font-normal");
+@source inline("font-semibold");
+@source inline("font-thin");
+@source inline("italic");
+@source inline("text-2xl");
+@source inline("text-3xl");
+@source inline("text-4xl");
+@source inline("text-5xl");
+@source inline("text-6xl");
+@source inline("text-7xl");
+@source inline("text-8xl");
+@source inline("text-9xl");
+@source inline("text-[clamp(0.78rem,1.9vw,0.875rem)]");
+@source inline("text-[clamp(0.7rem,1.6vw,0.75rem)]");
+@source inline("text-[clamp(0.85rem,2.2vw,1rem)]");
+@source inline("text-[clamp(0.95rem,2.6vw,1.125rem)]");
+@source inline("text-[clamp(1.15rem,3.6vw,1.5rem)]");
+@source inline("text-[clamp(1.3rem,4.4vw,1.875rem)]");
+@source inline("text-[clamp(1.5rem,5.2vw,2.25rem)]");
+@source inline("text-[clamp(1.75rem,6.5vw,3rem)]");
+@source inline("text-[clamp(1rem,3vw,1.25rem)]");
+@source inline("text-[clamp(2.25rem,9.5vw,4.5rem)]");
+@source inline("text-[clamp(2.6rem,12vw,6rem)]");
+@source inline("text-[clamp(2rem,8vw,3.75rem)]");
+@source inline("text-[clamp(3.2rem,16vw,9rem)]");
+@source inline("text-[clamp(3.5rem,17vw,10rem)]");
+@source inline("text-[clamp(3rem,15vw,8rem)]");
+@source inline("text-[clamp(4.2rem,19vw,12rem)]");
+@source inline("text-[clamp(4.6rem,21vw,14rem)]");
+@source inline("text-[clamp(4rem,18vw,11rem)]");
+@source inline("text-[clamp(5rem,23vw,16rem)]");
+@source inline("text-base");
+@source inline("text-center");
+@source inline("text-left");
+@source inline("text-lg");
+@source inline("text-right");
+@source inline("text-sm");
+@source inline("text-xl");
+@source inline("text-xs");
+@source inline("tracking-[-0.01em]");
+@source inline("tracking-[-0.03em]");
+@source inline("tracking-[-0.04em]");
+@source inline("tracking-[-0.06em]");
+@source inline("tracking-[-0.08em]");
+@source inline("tracking-normal");
+@source inline("tracking-tight");
+@source inline("tracking-tighter");
+@source inline("tracking-wide");
+@source inline("tracking-wider");
+@source inline("tracking-widest");
+@source inline("uppercase");

@@ -20,7 +20,8 @@
     "fn:secrets": "supabase secrets list",
     "db:seed": "tsx scripts/seed.ts",
     "make:admin": "tsx scripts/make-admin.ts",
-    "site:custom": "tsx scripts/set-custom-site.ts"
+    "site:custom": "tsx scripts/set-custom-site.ts",
+    "tokens": "tsx scripts/generate-bridge-tokens.ts"
   },
   "dependencies": {
     "@lone-star/music-rules": "*",

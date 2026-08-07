@@ -34,9 +34,11 @@
     "./frame": {
       "types": "./src/frame.ts",
       "default": "./src/frame.ts"
-    }
+    },
+    "./tokens.css": "./tokens.css"
   },
   "files": [
-    "src"
+    "src",
+    "tokens.css"
   ]
 }
