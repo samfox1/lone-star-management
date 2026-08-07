@@ -181,3 +181,44 @@ surface. Budget a shakeout pass, and never run the skeen seed scripts against Fr
 Unchanged from v1: no editor-owned rendering, no block editor, no stega/source-map
 identity yet, no multi-artist single-deploy tenancy. Add: no layout editing (P10), no
 folder curation until it's a dashboard feature (phase 7).
+
+---
+
+## Phase 2 runbook — refined by the four-agent review (2026-08-07)
+
+Package-side prerequisites, DONE during the review: the payload extended to the TRUE
+wire shape (tour support/state/is_past/sort_order + nullable date, link `role`, video
+`site_role` — derived from lib/content.ts's snapshot lists, which ARE the wire);
+`mountFrameBridge({ regionBase })`; the token-grammar exports; LIBRARY_ASSETS registry;
+the append-only ratchet; lone-star's own edit-frame consolidated onto the package.
+
+Skeen migration, in order (each step verified by the dry-run agent against skeen's
+actual imports):
+
+1. **Dependency**: publish `@lone-star/site-bridge` to npm (drop `private`; CI-on-tag
+   per P6) — a `file:` path cannot reach Vercel. Interim fallback if publish waits: a
+   committed `npm pack` tarball in skeen. Add the package to skeen's
+   `transpilePackages` (it ships raw TS) and Vitest `server.deps.inline`.
+2. **lib/styles.ts**: keep the REGISTRY (STYLE_REGIONS, REGION, captionRegion,
+   regionBase, StyleRegionDef) + a `regionProps` wrapper defaulting
+   `base = regionBase(key)`; RE-EXPORT the machinery from the package's `/styles`
+   subpath (NOT the root — root `export *` collides FONT_SLOTS/SiteFont with
+   lib/fonts.ts). Delete lib/textSizes.ts; editList + its test read the package ladder.
+3. **Delete lib/frameBridge.ts + lib/editMarkers.ts** (+ their test files — lone-star's
+   ported suites already pin the machinery). Retarget app/edit/page.tsx (wire
+   `regionBase` into the mount options), bridgeManifest.test, and the seven
+   marker-importing components.
+4. **Retype onto the payload**: drop `PublicSite` from lib/backend.ts; update mapSite +
+   fixtures (a spread helper for the newly-required track fields). **Fix the fonts
+   binding while there**: skeen's mapFonts still reads `fonts[].role`, which migration
+   20260805200000 REMOVED from the wire — custom font slot binding is dead on the live
+   site today and switches to `font_slots` here.
+5. **globals.css**: replace ONLY the editor-vocabulary `@source` lines with
+   `@import "@lone-star/site-bridge/tokens.css"`. KEEP the site-own lines: font slots
+   (`font-{primary,…}` — load-bearing, built dynamically, compiled nowhere else),
+   bundled fonts, the palette, and the plain (non-`!`) `leading-*` belt. Update
+   editList.test's safelist proof to also read the imported tokens.css.
+6. **Behavior deltas to expect in the manual gate** (all deliberate): highlight marks
+   every match; blank link URLs remove `href` (inert) instead of setting `""`.
+7. **Gate**: skeen suite + `npm run test:build` green, then a manual editor session
+   against a Vercel PREVIEW deploy before promoting. BRIDGE_VERSION does not move.
