@@ -21,6 +21,22 @@ import { colorToken } from '@/lib/site-editor/style-apply'
 export type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
 import type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
 import { TEXT_SIZES } from '@lone-star/site-bridge/styles'
+// The option TABLES live in the package's vocabulary module (2026-08-07 deepening):
+// they generate tokens.css, which is append-only contract, so the vocabulary lives
+// beside the sheet it produces. This module adds the editor machinery on top.
+import {
+  ALIGN_OPTIONS,
+  BORDER_WIDTH_STEPS,
+  CASE_TOGGLE_CLASS,
+  ITALIC_TOGGLE_CLASS,
+  LEADING_OPTIONS,
+  OPACITY_STEPS,
+  RADIUS_STEPS,
+  SCALE_STEPS,
+  SHADOW_STEPS,
+  TRACKING_OPTIONS,
+  WEIGHT_OPTIONS,
+} from '@lone-star/site-bridge/vocabulary'
 
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean }
@@ -117,75 +133,6 @@ const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
  * ladder in @lone-star/site-bridge/styles.
  */
 const SIZE_OPTIONS: StyleOption[] = TEXT_SIZES
-/**
- * LINE HEIGHT, emitted with Tailwind's `!` important prefix.
- *
- * Two things fight it otherwise. Tailwind's `text-*` size utilities set font-size AND
- * line-height together, so picking a Size would silently re-loosen the lines. And a site
- * may pin a line-height structurally on a parent (skeen's polaroid strip does, at
- * `.strip > p`, which outranks a plain utility class) precisely so a half-styled caption
- * cannot come out loose. `!` says the manager's explicit choice beats both — which is the
- * right precedence, and the only one that makes this control feel like it works.
- */
-const LEADING_OPTIONS: StyleOption[] = [
-  // The bottom four are arbitrary values, and deliberately BELOW 1.0: a site may default
-  // tighter than `leading-none`, and a scale whose tight end is looser than what the page
-  // already shows reads as broken — the manager drags toward "tighter" and it loosens.
-  //
-  // Every value here must be safelisted by the rendering site (skeen does, in globals.css)
-  // or the class compiles to nothing and the slider silently does nothing.
-  { value: '!leading-[0.8]', label: '0.8' },
-  { value: '!leading-[0.85]', label: '0.85' },
-  { value: '!leading-[0.9]', label: '0.9' },
-  { value: '!leading-[0.95]', label: '0.95' },
-  { value: '!leading-none', label: '1.0' },
-  { value: '!leading-[1.1]', label: '1.1' },
-  { value: '!leading-tight', label: '1.25' },
-  { value: '!leading-snug', label: '1.375' },
-  { value: '!leading-normal', label: '1.5' },
-  { value: '!leading-relaxed', label: '1.625' },
-  { value: '!leading-loose', label: '2.0' },
-]
-
-/** LETTER SPACING. No `!` needed: nothing else in the vocabulary sets letter-spacing, so a
- *  plain utility already wins over an inherited value from a parent. */
-const TRACKING_OPTIONS: StyleOption[] = [
-  // Named Tailwind steps interleaved with arbitrary em values, so the gaps between the
-  // named ones — which are wide — become adjustable. Same safelist requirement as leading.
-  { value: 'tracking-[-0.08em]', label: '-0.08' },
-  { value: 'tracking-[-0.06em]', label: '-0.06' },
-  { value: 'tracking-tighter', label: '-0.05' },
-  { value: 'tracking-[-0.04em]', label: '-0.04' },
-  { value: 'tracking-[-0.03em]', label: '-0.03' },
-  { value: 'tracking-tight', label: '-0.025' },
-  { value: 'tracking-[-0.01em]', label: '-0.01' },
-  { value: 'tracking-normal', label: '0' },
-  { value: 'tracking-wide', label: '0.025' },
-  { value: 'tracking-wider', label: '0.05' },
-  { value: 'tracking-widest', label: '0.1' },
-]
-
-const isLeading = (t: string) => t.startsWith('leading-') || t.startsWith('!leading-')
-const isTracking = (t: string) => t.startsWith('tracking-') || t.startsWith('!tracking-')
-
-/* ── Measuring an owned token ────────────────────────────────────────────────────────
- * Each `rank` turns a class into a number on its own scale, so sliderIndex can place a
- * value the scale does not literally contain. They are deliberately conservative: an
- * unrecognised shape returns null and the slider falls back to its resting position
- * rather than guessing a position that would be wrong in an invisible way.
- */
-
-/** A CSS length in rem. px is divided by 16 (the browser default and skeen's root size);
- *  anything relative to the viewport or wrapped in calc() is unmeasurable here. */
-function lengthRem(raw: string): number | null {
-  const s = raw.trim()
-  const m = /^(-?[\d.]+)(rem|em|px)$/.exec(s)
-  if (!m) return null
-  const n = Number(m[1])
-  if (!Number.isFinite(n)) return null
-  return m[2] === 'px' ? n / 16 : n
-}
-
 /** Tailwind's named font sizes, in rem — the same numbers the fluid steps use as their
  *  MAX, which is what makes a legacy `text-4xl` land beside its clamp replacement. */
 const SIZE_REM: Record<string, number> = {
@@ -265,24 +212,6 @@ const SHADOW_RANK: Record<string, number> = {
 }
 const shadowRank = (t: string): number | null => SHADOW_RANK[t] ?? null
 
-// Every Tailwind weight, not four. A variable font renders the in-between ones properly,
-// and on a slider the missing stops are exactly where a manager wants to sit.
-const WEIGHT_OPTIONS: StyleOption[] = [
-  { value: 'font-thin', label: 'Thin' },
-  { value: 'font-extralight', label: 'Extra light' },
-  { value: 'font-light', label: 'Light' },
-  { value: 'font-normal', label: 'Normal' },
-  { value: 'font-medium', label: 'Medium' },
-  { value: 'font-semibold', label: 'Semibold' },
-  { value: 'font-bold', label: 'Bold' },
-  { value: 'font-extrabold', label: 'Extra bold' },
-  { value: 'font-black', label: 'Black' },
-]
-const ALIGN_OPTIONS: StyleOption[] = [
-  { value: 'text-left', label: 'Left' },
-  { value: 'text-center', label: 'Center' },
-  { value: 'text-right', label: 'Right' },
-]
 const DEFAULT: StyleOption = { value: '', label: 'Default' }
 
 /**
@@ -317,6 +246,28 @@ export function withUploadedFonts(
  *  should get a working slider, not one with nothing on it. */
 const sizeScale = (opts?: SiteStyleOptions): StyleOption[] =>
   opts?.textSizes?.length ? opts.textSizes : SIZE_OPTIONS
+
+const isLeading = (t: string) => t.startsWith('leading-') || t.startsWith('!leading-')
+const isTracking = (t: string) => t.startsWith('tracking-') || t.startsWith('!tracking-')
+
+/* ── Measuring an owned token ────────────────────────────────────────────────────────
+ * Each `rank` turns a class into a number on its own scale, so sliderIndex can place a
+ * value the scale does not literally contain. They are deliberately conservative: an
+ * unrecognised shape returns null and the slider falls back to its resting position
+ * rather than guessing a position that would be wrong in an invisible way.
+ */
+
+/** A CSS length in rem. px is divided by 16 (the browser default and skeen's root size);
+ *  anything relative to the viewport or wrapped in calc() is unmeasurable here. */
+function lengthRem(raw: string): number | null {
+  const s = raw.trim()
+  const m = /^(-?[\d.]+)(rem|em|px)$/.exec(s)
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isFinite(n)) return null
+  return m[2] === 'px' ? n / 16 : n
+}
+
 
 export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   const controls: StyleControl[] = []
@@ -372,8 +323,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     options: [DEFAULT, ...ALIGN_OPTIONS],
     owns: (t) => ALIGNS.includes(textSuffix(t)),
   })
-  controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: 'uppercase', owns: (t) => t === 'uppercase' })
-  controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: 'italic', owns: (t) => t === 'italic' })
+  controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: CASE_TOGGLE_CLASS, owns: (t) => t === CASE_TOGGLE_CLASS })
+  controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: ITALIC_TOGGLE_CLASS, owns: (t) => t === ITALIC_TOGGLE_CLASS })
   return controls
 }
 
@@ -383,40 +334,6 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
  * model + read/apply logic as the text controls — different owned utilities. Every option
  * VALUE is a literal here so Tailwind compiles it (the panel preview renders them live); the
  * SITE must safelist the same set for them to show on the published page. */
-/** A percentage slider scale in `step`% increments, low → high, with 100% as the DEFAULT
- *  (`''` — no class). Values are safelisted in globals.css (@source inline), so they compile
- *  even though they're built here rather than written as literals. */
-function pctSteps(prefix: string, from: number, to: number, step: number): StyleOption[] {
-  const out: StyleOption[] = []
-  for (let n = from; n <= to; n += step) {
-    out.push({ value: n === 100 ? '' : `${prefix}-${n}`, label: `${n}%` })
-  }
-  return out
-}
-// Size runs 50%→150% (100% in the MIDDLE — drag left to shrink, right to grow); transparency
-// runs 5%→100% (solid at the RIGHT end). Both in 5% steps.
-const SCALE_STEPS = pctSteps('scale', 50, 150, 5)
-const OPACITY_STEPS = pctSteps('opacity', 5, 100, 5)
-/** A px slider scale in `step`px increments, `''` (off) first, then arbitrary-value classes
- *  (`border-[3px]`, `rounded-[6px]`). Arbitrary values give every-1/2px granularity the named
- *  Tailwind widths/radii don't; they're safelisted in globals.css so the preview compiles. */
-function pxSteps(prefix: string, from: number, to: number, step: number, zeroLabel: string, extra: StyleOption[] = []): StyleOption[] {
-  const out: StyleOption[] = [{ value: '', label: zeroLabel }]
-  for (let n = from; n <= to; n += step) out.push({ value: `${prefix}-[${n}px]`, label: `${n}px` })
-  return [...out, ...extra]
-}
-// Border width every 1px (0→12); corners every 2px (0→24) plus a Circle at the end.
-const BORDER_WIDTH_STEPS = pxSteps('border', 1, 12, 1, 'None')
-const RADIUS_STEPS = pxSteps('rounded', 2, 24, 2, 'Square', [{ value: 'rounded-full', label: 'Circle' }])
-const SHADOW_STEPS: StyleOption[] = [
-  { value: '', label: 'None' },
-  { value: 'shadow-sm', label: 'XS' },
-  { value: 'shadow', label: 'S' },
-  { value: 'shadow-md', label: 'M' },
-  { value: 'shadow-lg', label: 'L' },
-  { value: 'shadow-xl', label: 'XL' },
-  { value: 'shadow-2xl', label: 'XXL' },
-]
 // `border` width vs `border-<color>`: a width is bare `border` or `border-<0|2|4|8>`; a colour
 // is `border-<name>`. Split by shape so neither control eats the other's token.
 // Width vs colour: `border`, `border-<0|2|4|8>`, or an arbitrary `border-[3px]` is a WIDTH;

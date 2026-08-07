@@ -9,7 +9,7 @@
  *
  *   1. The protocol block (versions, sources, message types, guards) is DELETED here —
  *      ./protocol owns it, and this module imports it. skeen's copy was the mirror.
- *   2. `regionBase` is INJECTED (`setRegionBaseLookup` / mountFrameBridge's option) —
+ *   2. `regionBase` is INJECTED (`createStyleApplier` / mountFrameBridge's option) —
  *      the registry it reads is site design, not contract (the registry inversion).
  *   3. `applyHighlightToDom` marks EVERY match, not the first (plan P8): markers can
  *      legitimately repeat (socials render in hero AND footer), and applyStyleToDom
@@ -73,19 +73,42 @@ function strField(msg: InboundEditorMessage, field: string): string | null {
 
 
 /**
- * The site's region-base lookup, INJECTED rather than imported: `applyStylePart`
- * snapshots an element's declared base before the first override lands, and the
- * declared bases live in the site's own registry — design, not contract. A site passes
- * `regionBase` to `mountFrameBridge`, which binds it BEFORE any listener is wired —
- * order matters, because the snapshot is cached per element on first touch, and a
- * lookup set after the editor's first apply-style would cache the wrong base for the
- * element's lifetime (the hero `opacity-0` incident, made intermittent). The setter
- * exists for tests and for callers that never mount the full bridge. The default
- * returns '' — the pre-registry behaviour: snapshot the live class attribute.
+ * A STYLE APPLIER instance: the site's region-base lookup plus the per-element base
+ * snapshots, constructed together (2026-08-07 deepening — this replaced a module-level
+ * `let` + setter whose interface included an invisible ordering invariant: a lookup set
+ * after the editor's first apply-style cached the wrong base for the element's
+ * lifetime, the hero `opacity-0` incident made intermittent. Construction makes that
+ * bug class impossible: the binding exists before the instance can be used, and a
+ * remount gets a fresh snapshot cache instead of a stale module WeakMap).
+ *
+ * `regionBase` returns the DECLARED base classes for a region key ('' when the site
+ * declares none — the snapshot then falls back to the element's live class attribute,
+ * the pre-registry behaviour). The registry itself is site design, not contract.
  */
-let regionBaseLookup: (key: string) => string = () => "";
-export function setRegionBaseLookup(lookup: (key: string) => string): void {
-  regionBaseLookup = lookup;
+export type StyleApplier = {
+  applyStyleToDom: (root: ParentNode, key: string, className: string) => void;
+};
+
+export function createStyleApplier(
+  options: { regionBase?: (key: string) => string } = {},
+): StyleApplier {
+  const regionBase = options.regionBase ?? (() => "");
+  /** Each styled element's ORIGINAL classes, captured on first touch — the per-item
+   *  overlay merges onto THIS, never the previous overlay's result. Instance-lived:
+   *  it dies with the applier, not the module. */
+  const baseCache = new WeakMap<Element, string>();
+  return {
+    applyStyleToDom: (root, key, className) =>
+      applyStyleWith(regionBase, baseCache, root, key, className),
+  };
+}
+
+/** A bare-function convenience for callers with no registry (tests, one-off applies):
+ *  a lazily-shared no-registry instance. Its cache is module-lived — a caller that
+ *  needs remount-fresh snapshots constructs its own applier. */
+const defaultApplier = createStyleApplier();
+export function applyStyleToDom(root: ParentNode, key: string, className: string): void {
+  defaultApplier.applyStyleToDom(root, key, className);
 }
 
 /** The nearest ancestor (or self) carrying any `data-lse-*` marker, or null. */
@@ -130,10 +153,7 @@ export function rectOf(el: Element): Rect {
   return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
 
-/** Each styled element's ORIGINAL classes, captured the first time the editor touches it.
- *  A per-item overlay merges onto THIS, never onto the previous overlay's result — else
- *  every keystroke would compound and the class list would grow without bound. */
-const BASE_CLASSES = new WeakMap<Element, string>();
+
 
 /** Region keys reach us over postMessage and originate in lone-star's DB (`image:<uuid>`,
  *  `slot:<role>`), so they are NOT a closed vocabulary. Unescaped, a key carrying a quote
@@ -156,7 +176,9 @@ function attrSelector(attr: string, value: string): string {
  * inline style, and every MANAGED_STYLE_PROPS entry is cleared before re-apply, so
  * removing any control in the editor removes its effect here.
  */
-export function applyStyleToDom(
+function applyStyleWith(
+  regionBaseLookup: (key: string) => string,
+  BASE_CLASSES: WeakMap<Element, string>,
   root: ParentNode,
   key: string,
   className: string,
@@ -178,11 +200,18 @@ export function applyStyleToDom(
   const parts = windowEls.length
     ? splitItemOverlay(className)
     : { window: "", inner: className };
-  for (const el of els) applyStylePart(el, key, parts.inner);
-  for (const windowEl of windowEls) applyStylePart(windowEl, key, parts.window);
+  for (const el of els) applyStylePart(regionBaseLookup, BASE_CLASSES, el, key, parts.inner);
+  for (const windowEl of windowEls)
+    applyStylePart(regionBaseLookup, BASE_CLASSES, windowEl, key, parts.window);
 }
 
-function applyStylePart(el: Element, key: string, className: string): void {
+function applyStylePart(
+  regionBaseLookup: (key: string) => string,
+  BASE_CLASSES: WeakMap<Element, string>,
+  el: Element,
+  key: string,
+  className: string,
+): void {
   if (!BASE_CLASSES.has(el)) {
     // The DECLARED base wins over the live class attribute, because the live one is
     // time-varying: Hero appends `opacity-0` to the hero clip until `canplay`. Snapshot
@@ -432,10 +461,11 @@ export function mountFrameBridge(options: {
    *  any listener attaches — see the ordering note on `regionBaseLookup`. */
   regionBase?: (key: string) => string;
 }): () => void {
-  // FIRST, before any listener can deliver an apply-style: the base snapshot is cached
-  // per element on first touch, and caching against the default '' lookup is the
-  // intermittent hero-clip failure the regionBaseLookup docblock describes.
-  if (options.regionBase) setRegionBaseLookup(options.regionBase);
+  // The applier is CONSTRUCTED from the option — no setter, no module state, so the
+  // "bound before any listener" invariant holds by construction (2026-08-07 deepening;
+  // the old setter's ordering hazard was the intermittent hero-clip failure the
+  // StyleApplier docblock describes).
+  const styler = createStyleApplier({ regionBase: options.regionBase });
   const target = options.target ?? window.parent;
   const manifest = () =>
     typeof options.editList === "function"
@@ -492,7 +522,7 @@ export function mountFrameBridge(options: {
     if (msg.type === "apply-style") {
       const className = strField(msg, "className");
       if (key !== null && className !== null)
-        applyStyleToDom(document, key, className);
+        styler.applyStyleToDom(document, key, className);
     }
     // apply-image has its OWN helper. It used to share applyFieldToDom, which writes
     // textContent for a non-URL value — so a cleared slot would have blanked the

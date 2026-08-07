@@ -20,7 +20,7 @@
  * against its own copy, so it passed regardless of what the shell did; it's gone.
  */
 import { describe, expect, it } from 'vitest'
-import { BRIDGE_VERSION, EDITOR_SOURCE, FRAME_SOURCE, editorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
+import { BRIDGE_VERSION, EDITOR_SOURCE, FRAME_SOURCE, editorMessage, isFrameMessage } from '@lone-star/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
 
 /** A frame `ready` announcement, as skeen's mountFrameBridge posts it. */

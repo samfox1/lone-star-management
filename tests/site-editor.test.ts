@@ -22,7 +22,7 @@ import {
   frameMessage,
   isEditorMessage,
   isFrameMessage,
-} from '@/lib/site-editor/bridge'
+} from '@lone-star/site-bridge/protocol'
 
 const ASSET_TYPES: LibraryAsset[] = ['track', 'video', 'image', 'merch', 'tour_date', 'link']
 

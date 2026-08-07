@@ -19,8 +19,8 @@ import {
   highlightSelector,
   markedAncestor,
   targetOf,
-} from '@/lib/site-editor/bridge-client'
-import { BRIDGE_VERSION, isEditorMessage, isFrameMessage } from '@/lib/site-editor/bridge'
+} from '@lone-star/site-bridge/frame'
+import { BRIDGE_VERSION, isEditorMessage, isFrameMessage } from '@lone-star/site-bridge/protocol'
 
 describe('bridge-client — resolve a clicked element to a target', () => {
   it('resolves the NEAREST marker (an item beats its enclosing slot)', () => {
@@ -325,7 +325,7 @@ describe('mountFrameBridge — the ready handshake', () => {
     }
   }
   const mount = (editor: ReturnType<typeof fakeEditor>) =>
-    mountFrameBridge({ editorOrigin: 'http://localhost:3000', target: editor.target })
+    mountFrameBridge({ onInitData: () => {}, editorOrigin: 'http://localhost:3000', target: editor.target })
 
   it('announces ready to the editor origin, never to "*"', () => {
     const editor = fakeEditor()
@@ -412,7 +412,7 @@ describe('hello — the editor asks the frame to announce', () => {
     vi.useFakeTimers()
     try {
       const editor = fakeEditor()
-      const teardown = mountFrameBridge({ editorOrigin: 'http://localhost:3000', target: editor.target })
+      const teardown = mountFrameBridge({ onInitData: () => {}, editorOrigin: 'http://localhost:3000', target: editor.target })
       // Spend every announcement into the void, as when the editor mounts late.
       vi.advanceTimersByTime(READY_RETRY_MS * (READY_RETRIES + 5))
       const spent = editor.readyCount()
@@ -426,7 +426,7 @@ describe('hello — the editor asks the frame to announce', () => {
 
   it('answers every hello, so a re-mounted editor can always reconnect', () => {
     const editor = fakeEditor()
-    const teardown = mountFrameBridge({ editorOrigin: 'http://localhost:3000', target: editor.target })
+    const teardown = mountFrameBridge({ onInitData: () => {}, editorOrigin: 'http://localhost:3000', target: editor.target })
     const before = editor.readyCount()
     hello()
     hello()
@@ -436,7 +436,7 @@ describe('hello — the editor asks the frame to announce', () => {
 
   it('ignores a hello from any other origin', () => {
     const editor = fakeEditor()
-    const teardown = mountFrameBridge({ editorOrigin: 'http://localhost:3000', target: editor.target })
+    const teardown = mountFrameBridge({ onInitData: () => {}, editorOrigin: 'http://localhost:3000', target: editor.target })
     const before = editor.readyCount()
     window.dispatchEvent(
       new MessageEvent('message', {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { mountFrameBridge } from '@/lib/site-editor/bridge-client'
+import { mountFrameBridge } from '@lone-star/site-bridge/frame'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**
@@ -12,10 +12,19 @@ import type { TemplateManifest } from '@/lib/site-editor/manifest'
  * nothing.
  */
 export function EditFrameBridge({ editList }: { editList?: TemplateManifest }) {
-  // The template's local manifest rides along so apply-field knows TEXT from image —
-  // a caption whose words look like a URL must never be swapped for an <img>.
+  // Straight onto the package (2026-08-07: the bridge-client wrapper was one seam with
+  // a hand-narrowed option list — it withheld onStatus/onMounted/regionBase by
+  // omission, a shape that drifts). The built-in frame server-renders its draft under
+  // RLS, so init-data is acknowledged and dropped; the template's local manifest rides
+  // along so apply-field knows TEXT from image — a caption whose words look like a URL
+  // must never be swapped for an <img>.
   useEffect(
-    () => mountFrameBridge({ editorOrigin: window.location.origin, editList }),
+    () =>
+      mountFrameBridge({
+        editorOrigin: window.location.origin,
+        onInitData: () => {},
+        editList,
+      }),
     [editList],
   )
   return null

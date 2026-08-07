@@ -9,7 +9,8 @@
  * "keep this list in sync" comment, and it had already drifted: the weight slider
  * offers nine weights, skeen compiled six, and the three light ones silently no-opped.
  *
- * HOW IT DERIVES THE LIST — nothing here is hand-written:
+ * HOW IT DERIVES THE LIST — nothing here is hand-written (post-deepening, the tables
+ * live in the package's vocabulary module; the editor's controls BUILD from them):
  *   1. Ask the editor's own control builders for every option/step/toggle they emit
  *      (with no site styleOptions, so site-declared fonts/colours — the SITE's own
  *      vocabulary, its own safelisting duty — are excluded).
@@ -27,62 +28,16 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  buildStyleControls,
-  buildTextItemStyleControls,
-  buildItemStyleControls,
-  buildVideoItemStyleControls,
-} from '@/lib/site-editor/style-controls'
-import { LEGACY_TO_FLUID, resolveRegionStyle, resolveStyle } from '@lone-star/site-bridge/styles'
+// The derivation lives IN the package now (vocabulary.ts, the 2026-08-07 deepening):
+// the tables that generate an append-only-forever artifact belong beside it, versioned
+// with it. This script is the CLI shell — @source wrapping, the baseline ratchet, file
+// writes — around the package's own classVocabulary().
+import { classVocabulary as packageVocabulary } from '@lone-star/site-bridge/vocabulary'
+import { LEGACY_TO_FLUID } from '@lone-star/site-bridge/styles'
 
-type Origin = 'section' | 'item'
-
-/** Every class token the editor can emit, TAGGED with the context it applies in —
- *  section overrides lift only colours to inline style, item overlays lift the whole
- *  owned vocabulary, so the same token can need CSS in one context and none in the
- *  other (2026-08-07 review: a shadow option added to a SECTION control would have
- *  been dropped from the sheet while sections kept it as an uncompiled class). */
-function emittedTokens(): [string, Origin][] {
-  const tagged: [ReturnType<typeof buildStyleControls>, Origin][] = [
-    [buildStyleControls(), 'section'],
-    [buildTextItemStyleControls(), 'item'],
-    [buildItemStyleControls(), 'item'],
-    [buildVideoItemStyleControls('embed'), 'item'],
-    [buildVideoItemStyleControls('file'), 'item'],
-  ]
-  const out = new Map<string, Origin>()
-  for (const [controls, origin] of tagged) {
-    for (const c of controls) {
-      const values: string[] = []
-      if ('options' in c) for (const o of c.options) if (o.value) values.push(o.value)
-      if ('steps' in c) for (const s of c.steps) if (s.value) values.push(s.value)
-      if ('onClass' in c && c.onClass) values.push(c.onClass)
-      // A token used in BOTH contexts keeps 'section' — the stricter judge (less lifts).
-      for (const v of values) if (out.get(v) !== 'section') out.set(v, origin)
-    }
-  }
-  return [...out.entries()]
-}
-
-/** Does this token survive AS A CLASS in the context it is emitted for? */
-function survivesAsClass(token: string, origin: Origin): boolean {
-  if (origin === 'item') return resolveStyle(token).className === token
-  // The section path: a plain (colon-free) key routes through merge + the colour-only
-  // lift — exactly what a site's server render does with a stored section override.
-  return resolveRegionStyle('generator_probe', '', token).className === token
-}
-
-/** The tokens that survive resolution AS CLASSES — the set a site must compile. */
+/** The compilable class set: the package's derivation plus the legacy-size belt. */
 export function classVocabulary(): string[] {
-  const vocab = new Set<string>()
-  for (const [token, origin] of emittedTokens()) {
-    // Multi-class values (none today) split defensively; each part judged alone.
-    for (const part of token.split(/\s+/).filter(Boolean)) {
-      if (survivesAsClass(part, origin)) vocab.add(part)
-    }
-  }
-  for (const legacy of Object.keys(LEGACY_TO_FLUID)) vocab.add(legacy)
-  return [...vocab].sort()
+  return packageVocabulary(Object.keys(LEGACY_TO_FLUID))
 }
 
 /** The generated stylesheet, deterministic for the sync test. */

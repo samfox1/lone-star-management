@@ -10,21 +10,24 @@
  */
 import { describe, expect, it } from 'vitest'
 import * as pkg from '@lone-star/site-bridge'
-import * as protocolShim from '@/lib/site-editor/bridge'
 import { FONT_SLOTS as fontsShimSlots } from '@/lib/fonts'
+import * as markersShim from '@/lib/site-editor/markers'
+import * as styleApplyShim from '@/lib/site-editor/style-apply'
 import type { PublicSitePayload } from '@lone-star/site-bridge/payload'
 import type { PublicSitePayload as ShimPayload, SiteData, SiteMedia } from '@/lib/site'
 
 describe('single source — the shims re-export the package, never redefine it', () => {
-  it('CRITICAL: the protocol reached through @/lib/site-editor/bridge IS the package’s', () => {
+  it('CRITICAL: the surviving shims re-export the package by IDENTITY', () => {
     // Identity, not shape: a hand-copied guard would be equal by behavior today and
-    // free to drift tomorrow — the exact disease the package exists to cure.
-    expect(protocolShim.isFrameMessage).toBe(pkg.isFrameMessage)
-    expect(protocolShim.isEditorMessage).toBe(pkg.isEditorMessage)
-    expect(protocolShim.frameMessage).toBe(pkg.frameMessage)
-    expect(protocolShim.editorMessage).toBe(pkg.editorMessage)
-    expect(protocolShim.selectTargetKey).toBe(pkg.selectTargetKey)
-    expect(protocolShim.BRIDGE_VERSION).toBe(pkg.BRIDGE_VERSION)
+    // free to drift tomorrow — the exact disease the package exists to cure. (The
+    // protocol shim itself was retired in the 2026-08-07 deepening — its importers
+    // reach the package directly now — so this pins the shims that remain because
+    // they carry real local content beside the re-exports.)
+    expect(markersShim.FIELD_ATTR).toBe(pkg.FIELD_ATTR)
+    expect(markersShim.MARKED).toBe(pkg.MARKED)
+    expect(styleApplyShim.colorToken).toBe(pkg.colorToken)
+    expect(styleApplyShim.resolveRegionStyle).toBe(pkg.resolveRegionStyle)
+    expect(styleApplyShim.MANAGED_STYLE_PROPS).toBe(pkg.MANAGED_STYLE_PROPS)
   })
 
   it('CRITICAL: FONT_SLOTS reached through @/lib/fonts IS the package’s value', () => {

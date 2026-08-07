@@ -8,32 +8,27 @@
 import { describe, expect, it } from "vitest";
 import {
   MANAGED_STYLE_PROPS,
+  bindSiteRegistry,
   isItemKey,
   itemRegion,
   mergeStyle,
-  regionProps as bridgeRegionProps,
   resolveRegionStyle,
   resolveStyle,
   slotRegion,
   splitItemOverlay,
   splitItemProps,
   styleClass,
-  type SiteStyles,
 } from "@lone-star/site-bridge";
 
-// The package takes a site's registry by INJECTION (the registry inversion): a site
-// binds its own bases in a wrapper exactly like this one. WORK_BASE is skeen's real
-// work_section base, kept so the ported assertions read unchanged.
+// The package's OWN binding (bindSiteRegistry) — this block used to hand-write the
+// wrapper the old docblock prescribed; after the 2026-08-07 deepening the binding IS
+// package interface, so the test exercises the export a real site uses. WORK_BASE is
+// skeen's real work_section base, kept so the ported assertions read unchanged.
 const WORK_BASE = "relative z-0 bg-background text-foreground";
 const REGION = { workSection: "work_section" } as const;
 const TEST_BASES: Record<string, string> = { [REGION.workSection]: WORK_BASE };
-const regionBase = (key: string): string => TEST_BASES[key] ?? "";
-const regionProps = (
-  styles: SiteStyles | undefined,
-  key: string,
-  editable = false,
-  base = regionBase(key),
-) => bridgeRegionProps(styles, key, editable, base);
+const bound = bindSiteRegistry({ regionBase: (key) => TEST_BASES[key] ?? "" });
+const { regionBase, regionProps } = bound;
 import { TEXT_SIZES } from "@lone-star/site-bridge";
 
 describe("regionBase injection (the registry inversion)", () => {

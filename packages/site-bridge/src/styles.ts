@@ -336,13 +336,12 @@ export function resolveRegionStyle(
  * `data-lse-style` marker in edit mode only (so the public site carries no tags):
  *   <section {...regionProps(styles, REGION.workSection, editable, myBase)}>
  *
- * `base` is REQUIRED here, and that is the package's one deliberate signature change
- * from skeen's original (SITE_BRIDGE_PLAN.md, the registry inversion): skeen defaulted
- * it from its OWN region registry (`base = regionBase(key)`), but the registry is site
- * design, not contract — a package default would smuggle one site's look into every
- * site. A site keeps a two-line wrapper that binds its registry:
- *   const regionProps = (styles, key, editable, base = regionBase(key)) =>
- *     bridgeRegionProps(styles, key, editable, base)
+ * `base` is REQUIRED here — the registry is site design, not contract, and a package
+ * default would smuggle one site's look into every site. Sites do not call this raw
+ * form: `bindSiteRegistry({ regionBase })` (./bind) returns it pre-bound, alongside
+ * the frame mount, so the registry is bound exactly ONCE (the 2026-08-07 deepening —
+ * this docblock used to print a wrapper recipe for each site to hand-write, which was
+ * shipping instructions where an interface belonged).
  */
 export function regionProps(
   styles: SiteStyles | undefined,

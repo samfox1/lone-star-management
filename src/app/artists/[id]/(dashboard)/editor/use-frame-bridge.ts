@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
-import { editorMessage, isFrameMessage, type SelectTarget } from '@/lib/site-editor/bridge'
+import { editorMessage, isFrameMessage, type SelectTarget } from '@lone-star/site-bridge/protocol'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**

@@ -35,7 +35,15 @@
       "types": "./src/frame.ts",
       "default": "./src/frame.ts"
     },
-    "./tokens.css": "./tokens.css"
+    "./tokens.css": "./tokens.css",
+    "./bind": {
+      "types": "./src/bind.ts",
+      "default": "./src/bind.ts"
+    },
+    "./vocabulary": {
+      "types": "./src/vocabulary.ts",
+      "default": "./src/vocabulary.ts"
+    }
   },
   "files": [
     "src",

@@ -22,7 +22,7 @@ import {
   targetOf,
   textFieldKeys,
 } from "@lone-star/site-bridge";
-import { setRegionBaseLookup, type TemplateManifest } from "@lone-star/site-bridge";
+import { createStyleApplier, type TemplateManifest } from "@lone-star/site-bridge";
 
 // A minimal edit list in the PACKAGE's shape. skeen's tests pinned its real EDIT_LIST —
 // its design; those assertions stayed there. What the bridge owes any site is that the
@@ -44,7 +44,10 @@ const EDIT_LIST = {
   styleOptions: { textColors: [{ value: "text-flash-1", label: "Flash", hex: "#2563eb" }] },
 } satisfies TemplateManifest & { styleOptions: { textColors: { hex: string }[] } };
 
-// The registry inversion: the bridge takes the site's base lookup by injection.
+// The registry inversion, post-deepening: no setter exists — a test (like a site)
+// CONSTRUCTS its binding. Bare applyStyleToDom calls below that need the registry use
+// this instance; mount-driven tests pass `regionBase` as the option. No module state,
+// no cross-test wipe lines (both existed here before 2026-08-07, and were the smell).
 const TEST_BASES: Record<string, string> = {
   work_section: "relative z-0",
   // A DECLARED base for the hero clip, so the reset test can prove the snapshot comes
@@ -53,7 +56,7 @@ const TEST_BASES: Record<string, string> = {
   hero_video: "absolute inset-0 h-full w-full object-cover",
 };
 const regionBase = (key: string): string => TEST_BASES[key] ?? "";
-setRegionBaseLookup(regionBase);
+const boundApplier = createStyleApplier({ regionBase });
 
 describe("frameBridge protocol", () => {
   it("mirrors lone-star's bridge version (2)", () => {
@@ -802,7 +805,10 @@ describe("the two regions that share the hero clip", () => {
     // which React can never take back. The clip went invisible for the whole session.
     document.body.innerHTML = `<video data-lse-style="hero_video" class="absolute inset-0 h-full w-full object-cover opacity-0"></video>`;
     const clip = document.querySelector("video") as HTMLVideoElement;
-    applyStyleToDom(document, "hero_video", "");
+    // The BOUND applier: bare applyStyleToDom carries no registry by design (the
+    // 2026-08-07 deepening) — a caller that wants declared-base snapshots constructs
+    // the binding, exactly as mountFrameBridge does from its option.
+    boundApplier.applyStyleToDom(document, "hero_video", "");
     expect(clip.style.opacity).toBe("");
     // The DECLARED base, read from STYLE_REGIONS rather than restated — it gained a
     // mobile zoom on 2026-08-06 and a literal here would have to be edited every time the
@@ -927,7 +933,6 @@ describe("mountFrameBridge({ regionBase }) — the documented injection path", (
     // bare setter existed — and the setter is ORDER-SENSITIVE: an apply-style landing
     // before it caches the wrong base per element for the session (the hero opacity-0
     // incident, made intermittent). This proves the option alone is enough.
-    setRegionBaseLookup(() => ""); // wipe any lookup earlier tests installed
     document.body.innerHTML = `<section data-lse-style="work_section" class="relative z-0 opacity-0" id="s"></section>`;
     // Minimal editor stand-in: the shared fakeEditor helper is scoped to its own
     // describe; all this test needs is a postMessage sink.
