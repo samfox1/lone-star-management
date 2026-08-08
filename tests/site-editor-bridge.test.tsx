@@ -19,8 +19,8 @@ import {
   highlightSelector,
   markedAncestor,
   targetOf,
-} from '@lone-star/site-bridge/frame'
-import { BRIDGE_VERSION, isEditorMessage, isFrameMessage } from '@lone-star/site-bridge/protocol'
+} from '@samfox1/site-bridge/frame'
+import { BRIDGE_VERSION, isEditorMessage, isFrameMessage } from '@samfox1/site-bridge/protocol'
 
 describe('bridge-client — resolve a clicked element to a target', () => {
   it('resolves the NEAREST marker (an item beats its enclosing slot)', () => {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { cx } from '@/lib/cx'
 import { plural, GroupLabel, EYEBROW, SCROLL_BODY, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
-import { type SelectTarget, selectTargetKey } from '@lone-star/site-bridge/protocol'
+import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import {
   componentSlotRole,
   type ManifestComponent,

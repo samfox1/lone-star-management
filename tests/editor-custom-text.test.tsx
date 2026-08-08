@@ -24,7 +24,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EditorShell, runtimeTextFields } from '@/app/artists/[id]/(dashboard)/editor/editor-shell'
 import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
-import { BRIDGE_VERSION, FRAME_SOURCE } from '@lone-star/site-bridge/protocol'
+import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({

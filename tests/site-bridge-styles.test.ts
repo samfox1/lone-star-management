@@ -18,7 +18,7 @@ import {
   splitItemOverlay,
   splitItemProps,
   styleClass,
-} from "@lone-star/site-bridge";
+} from "@samfox1/site-bridge";
 
 // The package's OWN binding (bindSiteRegistry) — this block used to hand-write the
 // wrapper the old docblock prescribed; after the 2026-08-07 deepening the binding IS
@@ -29,7 +29,7 @@ const REGION = { workSection: "work_section" } as const;
 const TEST_BASES: Record<string, string> = { [REGION.workSection]: WORK_BASE };
 const bound = bindSiteRegistry({ regionBase: (key) => TEST_BASES[key] ?? "" });
 const { regionBase, regionProps } = bound;
-import { TEXT_SIZES } from "@lone-star/site-bridge";
+import { TEXT_SIZES } from "@samfox1/site-bridge";
 
 describe("regionBase injection (the registry inversion)", () => {
   // The registry-CONTENT tests (skeen's declared bases, key uniqueness) stayed in

@@ -17,7 +17,7 @@
 import { TEMPLATE_FIELDS, fieldValue, type SiteContentField } from '@/lib/site-content-schema'
 import type { SiteContent } from '@/lib/site'
 
-// The manifest SCHEMA moved to @lone-star/site-bridge (SITE_BRIDGE_PLAN.md phase 1):
+// The manifest SCHEMA moved to @samfox1/site-bridge (SITE_BRIDGE_PLAN.md phase 1):
 // a connected site imports the same shape it announces instead of mirroring it. This
 // module keeps what is LONE-STAR's — the built-in template MANIFESTS and the role/key
 // helpers — and re-exports the schema from its historical home.
@@ -32,8 +32,8 @@ export type {
   ManifestComponent,
   ComponentSlot,
   TemplateManifest,
-} from '@lone-star/site-bridge/manifest'
-import type { ManifestField, ManifestStyleRegion, TemplateManifest } from '@lone-star/site-bridge/manifest'
+} from '@samfox1/site-bridge/manifest'
+import type { ManifestField, ManifestStyleRegion, TemplateManifest } from '@samfox1/site-bridge/manifest'
 
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {

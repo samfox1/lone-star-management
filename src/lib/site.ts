@@ -16,7 +16,7 @@ import { FONT_SLOTS, type FontSlot, type FontSlotMap } from '@/lib/fonts'
 import { mediaUrl } from '@/lib/storage-url'
 
 /**
- * The wire types MOVED to `@lone-star/site-bridge` (SITE_BRIDGE_PLAN.md phase 1) — the
+ * The wire types MOVED to `@samfox1/site-bridge` (SITE_BRIDGE_PLAN.md phase 1) — the
  * payload is the contract a connected site imports rather than mirrors. Re-exported
  * here because this is where the app's importers have always found them. `SiteData`
  * below now DERIVES from the wire type (media paths swapped for resolved URLs), so the
@@ -31,7 +31,7 @@ export type {
   MediaPurpose,
   SiteContent,
   SiteStyles,
-} from '@lone-star/site-bridge/payload'
+} from '@samfox1/site-bridge/payload'
 // Imported AGAIN for local use: `export type ... from` re-exports without binding names
 // in this module's scope, and the query builders below reference them directly.
 import type {
@@ -44,7 +44,7 @@ import type {
   SiteVideo,
   SiteContent,
   SiteStyles,
-} from '@lone-star/site-bridge/payload'
+} from '@samfox1/site-bridge/payload'
 
 export type SiteMedia = {
   purpose: MediaPurpose
@@ -66,8 +66,8 @@ export type SiteData = Omit<PublicSitePayload, 'media'> & {
 }
 
 /** The WIRE shape — what `get_public_site` returns and `init-data` carries. Owned by
- *  `@lone-star/site-bridge` now; re-exported from this module's historical home. */
-export type { PublicSitePayload } from '@lone-star/site-bridge/payload'
+ *  `@samfox1/site-bridge` now; re-exported from this module's historical home. */
+export type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 
 /** Map the rpc's media ({purpose, path}) to public URLs. */
 function toSiteMedia(raw: { purpose: SiteMedia['purpose']; path: string }[]): SiteMedia[] {

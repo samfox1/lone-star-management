@@ -21,8 +21,8 @@ import {
   markedAncestor,
   targetOf,
   textFieldKeys,
-} from "@lone-star/site-bridge";
-import { createStyleApplier, type TemplateManifest } from "@lone-star/site-bridge";
+} from "@samfox1/site-bridge";
+import { createStyleApplier, type TemplateManifest } from "@samfox1/site-bridge";
 
 // A minimal edit list in the PACKAGE's shape. skeen's tests pinned its real EDIT_LIST —
 // its design; those assertions stayed there. What the bridge owes any site is that the

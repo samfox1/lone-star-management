@@ -3,7 +3,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type EditorProject } from '../inspector-types'
-import type { SelectTarget } from '@lone-star/site-bridge/protocol'
+import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { plural, EYEBROW } from '../inspector-shared'
 import { SongThumb, AddFirstLink } from '../inspector-grid'
 

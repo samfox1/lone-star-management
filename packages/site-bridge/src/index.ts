@@ -1,5 +1,5 @@
 /**
- * @lone-star/site-bridge — the contract between the lone-star editor and a connected
+ * @samfox1/site-bridge — the contract between the lone-star editor and a connected
  * site (SITE_BRIDGE_PLAN.md). Three modules, one import surface:
  *
  *   payload   — the wire shape `get_public_site` returns and `init-data` carries

@@ -27,7 +27,7 @@ import {
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
-import type { SelectTarget } from '@lone-star/site-bridge/protocol'
+import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import type {
   EditorImageField,
   EditorLink,

@@ -24,10 +24,10 @@
  * between geometry and drawing.
  */
 
-// AssetBudget/AssetBudgets MOVED to @lone-star/site-bridge — they ride the manifest.
+// AssetBudget/AssetBudgets MOVED to @samfox1/site-bridge — they ride the manifest.
 // Re-exported from their historical home; imported for local use.
-export type { AssetBudget, AssetBudgets } from '@lone-star/site-bridge/manifest'
-import type { AssetBudget, AssetBudgets } from '@lone-star/site-bridge/manifest'
+export type { AssetBudget, AssetBudgets } from '@samfox1/site-bridge/manifest'
+import type { AssetBudget, AssetBudgets } from '@samfox1/site-bridge/manifest'
 
 export type UploadKind = 'image' | 'video' | 'font'
 

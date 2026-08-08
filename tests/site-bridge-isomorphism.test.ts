@@ -20,14 +20,14 @@ describe('site-bridge is importable where no DOM exists', () => {
     const entries = Object.keys(pkg.exports).filter((e) => !e.endsWith('.css'))
     expect(entries.length).toBeGreaterThan(3) // the sweep found the exports map
     const mods = await Promise.all(
-      entries.map((e) => import('@lone-star/site-bridge' + e.slice(1))),
+      entries.map((e) => import('@samfox1/site-bridge' + e.slice(1))),
     )
     expect(mods.every((m) => typeof m === 'object')).toBe(true)
     expect(typeof window).toBe('undefined') // prove this really is node
   })
 
   it('server-safe machinery WORKS without a DOM, not merely loads', async () => {
-    const { resolveRegionStyle, regionProps } = await import('@lone-star/site-bridge/styles')
+    const { resolveRegionStyle, regionProps } = await import('@samfox1/site-bridge/styles')
     // The exact call skeen makes during SSR.
     const r = resolveRegionStyle('work_section', 'relative z-0', 'bg-black')
     expect(r.className).toBe('bg-black')

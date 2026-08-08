@@ -16,11 +16,11 @@
  */
 import { colorToken } from '@/lib/site-editor/style-apply'
 
-// MOVED to @lone-star/site-bridge (they ride the manifest — a site declares its palette
+// MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
-export type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
-import type { StyleOption, SiteStyleOptions } from '@lone-star/site-bridge/manifest'
-import { TEXT_SIZES } from '@lone-star/site-bridge/styles'
+export type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
+import type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
+import { TEXT_SIZES } from '@samfox1/site-bridge/styles'
 // The option TABLES live in the package's vocabulary module (2026-08-07 deepening):
 // they generate tokens.css, which is append-only contract, so the vocabulary lives
 // beside the sheet it produces. This module adds the editor machinery on top.
@@ -36,7 +36,7 @@ import {
   SHADOW_STEPS,
   TRACKING_OPTIONS,
   WEIGHT_OPTIONS,
-} from '@lone-star/site-bridge/vocabulary'
+} from '@samfox1/site-bridge/vocabulary'
 
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean }
@@ -130,7 +130,7 @@ const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
  * extraction; tokens.css generates from the same source). The editor's SIZE_OPTIONS
  * name survives for its many readers below. The DISPLAY tail's reasoning (Sam,
  * 2026-08-05: "the header text needs to start at a bigger size") lives with the
- * ladder in @lone-star/site-bridge/styles.
+ * ladder in @samfox1/site-bridge/styles.
  */
 const SIZE_OPTIONS: StyleOption[] = TEXT_SIZES
 /** Tailwind's named font sizes, in rem — the same numbers the fluid steps use as their

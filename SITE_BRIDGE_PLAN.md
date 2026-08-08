@@ -44,7 +44,7 @@ component-generated identity. Decision #7 mirrors Storyblok/Sanity's starter tem
 lone-star (editor, dashboard, DB)
    │  get_public_site (content)  +  postMessage bridge (editing)
    ▼
-@lone-star/site-bridge        the CONTRACT: protocol, markers, style resolution,
+@samfox1/site-bridge        the CONTRACT: protocol, markers, style resolution,
  (framework-free core)        manifest+payload types, tokens.css, validateEditList
    ▲ imports
 @lone-star/site-kit           the STANDARD PARTS (React): EditableText/Image/Video,
@@ -100,7 +100,7 @@ keep working during migration).
 
 | # | Work | Size | Gate |
 | --- | --- | --- | --- |
-| 1 | `@lone-star/site-bridge`: scaffold package; move protocol/payload types from lone-star (re-export shims); port skeen's frameBridge/editMarkers/style-resolution WHOLESALE (its comments are a year of incident fixes — reviewed as a move, not a rewrite); generate tokens.css from style-controls' tables; contract-fixture tests | M | lone-star + package suites green; zero behavior change |
+| 1 | `@samfox1/site-bridge`: scaffold package; move protocol/payload types from lone-star (re-export shims); port skeen's frameBridge/editMarkers/style-resolution WHOLESALE (its comments are a year of incident fixes — reviewed as a move, not a rewrite); generate tokens.css from style-controls' tables; contract-fixture tests | M | lone-star + package suites green; zero behavior change |
 | 2 | Skeen migrates: delete mirrors, import the SDK, `@import` tokens.css; its own region registry (site design) stays | M | skeen suite green + manual editor session against a Vercel preview BEFORE promoting; BRIDGE_VERSION unmoved |
 | 3 | `@lone-star/site-kit`: EditableText (moved from skeen) + EditableImage/Video + EditModeProvider + auto-key machinery + generalized discovery; SongGrid/SongCard with skeen's grouping logic inside | L | skeen adopts the kit for text + music (proves headless on the existing design) |
 | 4 | Editor de-hardcoding: `videoSlots` + `gallery` + `manifestVersion` in the manifest; Videos panel + `assignHeroSlotAction` + gallery groups render/validate from declarations (built-ins get today's values as declared defaults) | M | editor pixel-identical for skeen |
@@ -195,7 +195,7 @@ the append-only ratchet; lone-star's own edit-frame consolidated onto the packag
 Skeen migration, in order (each step verified by the dry-run agent against skeen's
 actual imports):
 
-1. **Dependency**: publish `@lone-star/site-bridge` to npm (drop `private`; CI-on-tag
+1. **Dependency**: publish `@samfox1/site-bridge` to npm (drop `private`; CI-on-tag
    per P6) — a `file:` path cannot reach Vercel. Interim fallback if publish waits: a
    committed `npm pack` tarball in skeen. Add the package to skeen's
    `transpilePackages` (it ships raw TS) and Vitest `server.deps.inline`.
@@ -214,7 +214,7 @@ actual imports):
    20260805200000 REMOVED from the wire — custom font slot binding is dead on the live
    site today and switches to `font_slots` here.
 5. **globals.css**: replace ONLY the editor-vocabulary `@source` lines with
-   `@import "@lone-star/site-bridge/tokens.css"`. KEEP the site-own lines: font slots
+   `@import "@samfox1/site-bridge/tokens.css"`. KEEP the site-own lines: font slots
    (`font-{primary,…}` — load-bearing, built dynamically, compiled nowhere else),
    bundled fonts, the palette, and the plain (non-`!`) `leading-*` belt. Update
    editList.test's safelist proof to also read the imported tokens.css.
@@ -276,3 +276,62 @@ manifest source per category BEFORE giving built-ins declared defaults.
 4. Retire the pure pass-through shim (site-editor/bridge.ts) and the bridge-client
    wrapper (or type it Omit<PackageOptions,'onInitData'> so options flow through by
    construction) — phase-2 cleanup.
+
+---
+
+## Distribution decision — 2026-08-08 (RESOLVES the publish-naming blocker)
+
+**Decision (Sam): GitHub Packages.** Package renamed to `@samfox1/site-bridge` —
+GitHub Packages requires the npm scope to equal the GitHub owner, so the name is
+forced, and the `@lone-star` collision question dissolves with it.
+
+### The scenario
+
+The package must be fetchable by skeen's Vercel builds. skeen-website is a separate
+repo; Vercel builds it on cloud machines that have only skeen's checkout. A `file:`
+path into this repo works on the Mac and nowhere else. So the package needs a home
+that `npm install` can reach from any build machine. Local development is unaffected
+by this choice: skeen can iterate against the folder via `file:`/`npm link`; the
+registry copy is consulted at deploy time.
+
+### Options considered
+
+| Option | Cost | Per-change friction | Visibility | Notes |
+| --- | --- | --- | --- | --- |
+| Public npm | free | `npm publish` + bump | public | Simplest forever; code visible; versions immutable after 72h |
+| Private npm | ~$7/mo | same + one-time token | private | Paid plan for a package with one consumer |
+| **GitHub Packages** | **free** | **same + one-time token** | **private** | Token needed even to INSTALL (GitHub npm registry always requires auth) |
+| Committed tarball in skeen | free | `npm pack` + copy + commit, by hand | private | The plan's old interim fallback; manual mirror step = the drift disease again |
+| Monorepo merge | free | zero | private | Deepest fix, far bigger move than phase 2 needs |
+
+### Why GitHub Packages
+
+1. **Free and private.** The contract code isn't secret, but there's no reason to
+   publish it, and no reason to pay npm $7/mo to avoid publishing it.
+2. **No manual mirror step.** The tarball fallback reintroduces exactly the failure
+   mode the extraction exists to kill: a human copying an artifact between repos on
+   every change. Rejected on principle.
+3. **Everything already lives on GitHub** under the same account, same auth story.
+4. **Reversible.** If token management ever annoys, switching to public npm later is
+   a rename + republish; nothing in the package couples to the registry.
+
+### The costs, named
+
+- **Auth on install, not just publish.** GitHub's npm registry demands a token even
+  for public packages. skeen needs an `.npmrc` (`@samfox1:registry=` +
+  `_authToken=${NPM_TOKEN}`) and Vercel needs an `NPM_TOKEN` env var (classic PAT,
+  `read:packages`). Publishing from this repo needs `write:packages`. One-time setup,
+  two tokens (or one PAT with both scopes).
+- **Version bumps are real.** Each package change consumed by skeen = version bump +
+  publish + skeen lockfile update. During active migration, skeen develops against
+  `file:` and only the deploy gate needs a published version.
+
+### Runbook amendments
+
+- Rename `@lone-star/site-bridge` → `@samfox1/site-bridge` everywhere (one-repo
+  find-replace, per the blocker's own instruction) BEFORE skeen migrates.
+- package.json: `publishConfig.registry = https://npm.pkg.github.com`, `repository`
+  pointing at this repo (GitHub Packages links the package to the repo through it),
+  drop `private: true` at publish time.
+- Phase-2 runbook step 1 changes: skeen installs `@samfox1/site-bridge` from GitHub
+  Packages (with the `.npmrc` above) instead of the tarball fallback.

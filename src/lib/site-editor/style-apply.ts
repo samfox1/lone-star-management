@@ -1,7 +1,7 @@
 /**
  * The editor's style helpers — WHAT REMAINS after the 2026-08-07 consolidation.
  *
- * The resolution machinery and the token grammar moved to `@lone-star/site-bridge`
+ * The resolution machinery and the token grammar moved to `@samfox1/site-bridge`
  * (this file's own comment used to say its semantics "mirror skeen's — change them in
  * both repos or the preview and the live site disagree"; the package IS that shared
  * home now, and the five documented divergences between the two copies died with the
@@ -11,8 +11,8 @@
  * and its saved styles — panel furniture, not contract.
  */
 import { canonicalHex } from '@/lib/color'
-import type { SiteStyleOptions } from '@lone-star/site-bridge/manifest'
-import { colorToken } from '@lone-star/site-bridge/styles'
+import type { SiteStyleOptions } from '@samfox1/site-bridge/manifest'
+import { colorToken } from '@samfox1/site-bridge/styles'
 
 export {
   MANAGED_STYLE_PROPS,
@@ -25,10 +25,10 @@ export {
   resolveRegionStyle,
   type ManagedColorProp,
   type ResolvedStyle,
-} from '@lone-star/site-bridge/styles'
+} from '@samfox1/site-bridge/styles'
 
 /** Historical alias: this module named the colour-prop union ManagedStyleProp. */
-export type { ManagedColorProp as ManagedStyleProp } from '@lone-star/site-bridge/styles'
+export type { ManagedColorProp as ManagedStyleProp } from '@samfox1/site-bridge/styles'
 
 /**
  * The site's OWN declared colours, as hexes.

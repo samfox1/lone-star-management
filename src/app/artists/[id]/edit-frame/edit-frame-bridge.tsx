@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { mountFrameBridge } from '@lone-star/site-bridge/frame'
+import { mountFrameBridge } from '@samfox1/site-bridge/frame'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**

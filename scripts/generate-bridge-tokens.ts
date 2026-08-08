@@ -32,8 +32,8 @@ import { fileURLToPath } from 'node:url'
 // the tables that generate an append-only-forever artifact belong beside it, versioned
 // with it. This script is the CLI shell — @source wrapping, the baseline ratchet, file
 // writes — around the package's own classVocabulary().
-import { classVocabulary as packageVocabulary } from '@lone-star/site-bridge/vocabulary'
-import { LEGACY_TO_FLUID } from '@lone-star/site-bridge/styles'
+import { classVocabulary as packageVocabulary } from '@samfox1/site-bridge/vocabulary'
+import { LEGACY_TO_FLUID } from '@samfox1/site-bridge/styles'
 
 /** The compilable class set: the package's derivation plus the legacy-size belt. */
 export function classVocabulary(): string[] {
@@ -55,7 +55,7 @@ export function buildTokensCss(): string {
  *
  * WHAT THIS IS: every class the lone-star editor can apply to a region at runtime, as
  * \`@source inline()\` directives. A site imports this file in its main CSS —
- *   @import "@lone-star/site-bridge/tokens.css";
+ *   @import "@samfox1/site-bridge/tokens.css";
  * — so Tailwind v4 compiles the whole editor vocabulary. Without it, an applied class
  * has no CSS behind it and silently no-ops (the drift bug of 2026-08-05, three times).
  *

@@ -19,7 +19,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { frameOrigin, frameSrc, useFrameBridge, HELLO_RETRY_MS, HELLO_TIMEOUT_MS } from '@/app/artists/[id]/(dashboard)/editor/use-frame-bridge'
-import { BRIDGE_VERSION, FRAME_SOURCE } from '@lone-star/site-bridge/protocol'
+import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
 
 const CUSTOM = 'https://skeen-website.vercel.app'

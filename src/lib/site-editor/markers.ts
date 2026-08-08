@@ -1,11 +1,11 @@
 /**
  * DOM markers for the editor — the ATTRIBUTES are the contract and live in
- * `@lone-star/site-bridge` (one spelling for every site and this editor); re-exported
+ * `@samfox1/site-bridge` (one spelling for every site and this editor); re-exported
  * here because this is where the templates have always found them. What stays local is
  * lone-star sugar: the `*Region` attribute-spread helpers the built-in templates render
  * with, and the item-marker pair bound to the package's asset REGISTRY.
  */
-import { ITEM_ATTR, LIBRARY_ASSETS, type LibraryAsset } from '@lone-star/site-bridge'
+import { ITEM_ATTR, LIBRARY_ASSETS, type LibraryAsset } from '@samfox1/site-bridge'
 
 export {
   FIELD_ATTR,
@@ -19,8 +19,8 @@ export {
   IMG_CLASS_ATTR,
   SHIELD_ATTR,
   MARKED,
-} from '@lone-star/site-bridge'
-import { FIELD_ATTR, SLOT_ATTR, LINK_ATTR } from '@lone-star/site-bridge'
+} from '@samfox1/site-bridge'
+import { FIELD_ATTR, SLOT_ATTR, LINK_ATTR } from '@samfox1/site-bridge'
 
 /** `track:<id>` — one placed library item's marker value. */
 export function itemMarker(assetType: LibraryAsset, id: string): string {

@@ -60,13 +60,13 @@ export type FontFormat = (typeof FONT_FORMATS)[number]
  * here. RESERVED_FAMILIES derives from it, so a new slot reserves its own class token
  * automatically — the two can never drift.
  */
-// MOVED to @lone-star/site-bridge (the slot names are wire contract — a connected site
+// MOVED to @samfox1/site-bridge (the slot names are wire contract — a connected site
 // reads `font_slots` keys against exactly this list). Re-exported from their historical
 // home; imported below for this module's own use.
-export { FONT_SLOTS } from '@lone-star/site-bridge/payload'
-export type { FontSlot, FontSlotMap, SiteFont } from '@lone-star/site-bridge/payload'
-import { FONT_SLOTS } from '@lone-star/site-bridge/payload'
-import type { FontSlot, FontSlotMap, SiteFont } from '@lone-star/site-bridge/payload'
+export { FONT_SLOTS } from '@samfox1/site-bridge/payload'
+export type { FontSlot, FontSlotMap, SiteFont } from '@samfox1/site-bridge/payload'
+import { FONT_SLOTS } from '@samfox1/site-bridge/payload'
+import type { FontSlot, FontSlotMap, SiteFont } from '@samfox1/site-bridge/payload'
 
 /**
  * How many fonts one artist may upload.

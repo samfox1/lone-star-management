@@ -26,7 +26,7 @@ import type {
   EditorTour,
   EditorVideo,
 } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
-import type { SelectTarget } from '@lone-star/site-bridge/protocol'
+import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),

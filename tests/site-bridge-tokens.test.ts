@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildTokensCss, classVocabulary } from '../scripts/generate-bridge-tokens'
-import { TEXT_SIZES } from '@lone-star/site-bridge/styles'
+import { TEXT_SIZES } from '@samfox1/site-bridge/styles'
 
 const committed = () =>
   readFileSync(join(process.cwd(), 'packages/site-bridge/tokens.css'), 'utf8')

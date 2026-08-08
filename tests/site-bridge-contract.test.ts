@@ -1,7 +1,7 @@
 /**
  * THE CONTRACT PACKAGE IS THE CONTRACT (SITE_BRIDGE_PLAN.md phase 1).
  *
- * `@lone-star/site-bridge` owns what the editor and every connected site must agree on:
+ * `@samfox1/site-bridge` owns what the editor and every connected site must agree on:
  * the protocol, the wire payload, and the manifest schema. This suite pins two things —
  * that the package really is the single source (the editor's historical import paths
  * are shims onto it, not copies beside it), and the protocol fixtures a site's own
@@ -9,11 +9,11 @@
  * a change that breaks this file is a change every deployed site will feel.
  */
 import { describe, expect, it } from 'vitest'
-import * as pkg from '@lone-star/site-bridge'
+import * as pkg from '@samfox1/site-bridge'
 import { FONT_SLOTS as fontsShimSlots } from '@/lib/fonts'
 import * as markersShim from '@/lib/site-editor/markers'
 import * as styleApplyShim from '@/lib/site-editor/style-apply'
-import type { PublicSitePayload } from '@lone-star/site-bridge/payload'
+import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import type { PublicSitePayload as ShimPayload, SiteData, SiteMedia } from '@/lib/site'
 
 describe('single source — the shims re-export the package, never redefine it', () => {
