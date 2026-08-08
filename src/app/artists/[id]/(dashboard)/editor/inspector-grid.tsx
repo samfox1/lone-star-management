@@ -106,10 +106,17 @@ export function EmptySlot({
   ariaLabel,
   title,
   stretch = false,
+  focused = false,
 }: {
   label: string
   onClick: () => void
   aspect?: string
+  /** Selected from the FRAME. An empty slot is exactly when a manager needs telling
+   *  WHICH slot they clicked — there is no thumbnail to recognize it by — and it was
+   *  the one tile that could not say so (Sam, 2026-08-08, the skeen migration gate).
+   *  `aria-current`, not `aria-pressed`: this button ADDS a photo, it does not toggle
+   *  a selection, and pressed-state on it would lie to a screen reader. */
+  focused?: boolean
   /** Grow to the grid row's height (the gallery grid, where a placed card is taller than
    *  its thumbnail). OFF by default: where a cell also holds a caption or hint below the
    *  slot, stretching fights that text for the row and it overflows into the next card. */
@@ -120,14 +127,19 @@ export function EmptySlot({
   /** Hover text — the site's description of the slot, kept off the card face. */
   title?: string
 }) {
+  const scrollRef = useScrollIntoFocus<HTMLButtonElement>(focused)
   return (
     <button
+      ref={scrollRef}
       type="button"
       onClick={onClick}
       aria-label={ariaLabel ?? label}
+      aria-current={focused ? 'true' : undefined}
       title={title}
       className={cx(
-        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-hairline px-2 text-center text-ink-muted hover:border-accent hover:text-accent',
+        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed px-2 text-center hover:border-accent hover:text-accent',
+        // Dashed stays: it still reads as EMPTY. The ring is what says "this one".
+        focused ? 'border-accent text-accent ring-2 ring-accent' : 'border-hairline text-ink-muted',
         stretch && 'h-full',
         aspect,
       )}

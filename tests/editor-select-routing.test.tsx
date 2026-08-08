@@ -220,6 +220,27 @@ describe('a routed select is VISIBLE where it lands', () => {
     expect(scrollSpy).toHaveBeenCalled()
   })
 
+  it('CRITICAL: an EMPTY polaroid slot rings and scrolls too', () => {
+    // Sam, 2026-08-08 (the site-bridge migration gate, clicking skeen's preview):
+    // "it doesnt add a blue border around the image slot in the left panel until that
+    // image has been added. it still redirects to the image panel, but doesnt specify
+    // which slot it is." The select routes and `focused` is computed correctly — it is
+    // handed to EmptySlot, which had no `focused` prop and so could not ring. The
+    // sibling test above deliberately FILLS the slot, so this path never ran; the empty
+    // slot is the one a manager clicks BEFORE there is anything there, which is exactly
+    // when they need to be told which slot they hit.
+    renderInspector({
+      components: [{ key: 'polaroid', label: 'Polaroid', count: 5, slots: [{ key: 'photo', label: 'Photo' }] }],
+      photos: [],
+      selectedRegion: select({ kind: 'field', key: 'polaroid_3_photo' }),
+    })
+    // `aria-current`, not `aria-pressed`: the empty tile's button ADDS a photo, so
+    // pressed-state would misdescribe it. Same marking the Videos and Links panels use
+    // for "this is the one you selected".
+    expect(screen.getByRole('button', { name: 'Slot 3' }).getAttribute('aria-current')).toBe('true')
+    expect(scrollSpy).toHaveBeenCalled()
+  })
+
   it('CRITICAL: a social-button select opens Links with ITS row open and current', () => {
     // Sam, 2026-08-06: "I should also see the editor responding to … the socials
     // buttons." skeen posts item:link:<label lowercased> — the label, because the row id
