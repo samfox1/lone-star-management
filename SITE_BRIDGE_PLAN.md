@@ -421,3 +421,113 @@ Support tier the throwaways must match (from skeen, the reference consumer): Nex
 React 19 + Tailwind 4, `transpilePackages: ["@samfox1/site-bridge"]` (the package ships
 raw TS), bundler moduleResolution, and an `.npmrc` mapping `@samfox1` to GitHub Packages
 with the token supplied by the environment (local `~/.npmrc`; Vercel `NPM_RC`).
+
+#### Throwaway #1 — "Juniper Hale" (`~/Desktop/ls-throwaway-1`), 2026-08-08
+
+Light editorial, single column, serif, no video hero — chosen to share nothing with
+skeen's design so the standard is tested rather than re-skinned. Renders ONLY from the
+payload; `/` is the same body with an empty payload, which makes the no-hardcoded-content
+rule visible as a live page.
+
+**Cold-start time: 7 minutes**, empty directory → `next build` green with a mounted
+bridge, a declared manifest, and every editable category marked. No package bugs; the
+SDK installed and ran first try.
+
+**What worked.** `bindSiteRegistry` — one binding, no ordering hazard to reason about.
+The `tokens.css` import made the whole Style vocabulary compile in one line. Types
+caught three wrong guesses at compile time (`accepts` not `assetType`, `textColors` not
+`colors`, no `multiline` on a field), which is the package's type surface doing exactly
+its job. And the separation held: this site invented its own regions, layout and palette
+and lone-star needed no knowledge of any of it.
+
+**Friction — each one a kit/package item.** In rough priority:
+
+1. **No README, no `SITE_INTEGRATION.md`.** The API was learned by reading ~2,000 lines
+   of package source. The docblocks are excellent, which is the only reason 7 minutes was
+   possible — but a consumer should not have to read the implementation. Phase 5 lists
+   the doc; this raises its priority to "before throwaway #2".
+2. **Per-item style regions silently lose their design.** `regionBase` resolves declared
+   keys only, so `song_title:<id>` returns `''` — and because `base` is a DEFAULTED
+   parameter, forgetting to pass the parent's base yields correct markers with no classes
+   at all. It cost me a real bug in this site. skeen's own `regionBase` admits it in a
+   comment (`'' if unknown — e.g. a per-item key`). **Fix:** resolve `parent:id` to the
+   parent's base inside the binding, so the trap is unexpressible. Note the risk — this
+   changes behaviour for skeen too, so it needs a test pinning both shapes first.
+3. **`textFieldsFromDom` is not in the package.** DOM text discovery — the mechanism the
+   whole "the markup IS the list" design rests on — lives in skeen and was rewritten from
+   scratch here. Export it.
+4. **No media URL resolver.** The wire carries storage paths (correct), but every site
+   must independently learn lone-star's storage origin AND its bucket names (`media`,
+   `videos`) by reading skeen's `mapSite.ts`. A wrong bucket renders a broken image with
+   no error. **Fix:** `createMediaResolver({ origin })` in the package.
+5. **Labels are guessed from keys.** `hero_tagline` → "Hero tagline" is a stopgap the
+   MANAGER reads. The kit's `<EditableText label="…">` should carry it.
+6. **The re-announce dance is hand-written.** Every site must know to re-announce after
+   `init-data` paints, or its Text panel stays empty forever. Phase 3's
+   `EditModeProvider` already owns this; confirmed here that a cold site gets it wrong
+   without being told.
+7. **`FieldTarget`'s media purposes are a closed two-item union** (`hero_video`,
+   `profile_photo`). This site's "hero portrait" had to borrow `profile_photo`. A site
+   wanting three distinct named images has no vocabulary for them — the component-slot
+   mechanism (`media.site_role`) is the escape hatch, but it is heavier than the need.
+8. **No `validateEditList()`.** A malformed manifest is caught only by TypeScript, so a
+   JS consumer, or a runtime-built manifest, fails silently.
+
+**Edge cases confirmed.** An empty image field must still carry its marker or the manager
+can never fill it (gate finding 1's cousin — the kit must make this the default, not a
+thing each site remembers). And the DECLARED link region (`linkProps` + a manifest entry)
+is editable with no row behind it, while the socials-as-items shape is not — which makes
+the declared-region path the answer to gate finding 4, not a parallel option.
+
+---
+
+## Proposals — giving a manager more of the site to make their own
+
+PROPOSALS, not decisions (Sam's standing ask, 2026-08-08: pitch new customizable
+surfaces every time). Every one obeys decision #1 — site-agnostic mechanism, DECLARED by
+the site, never lone-star tailored to one site. Ordered by manager value ÷ mechanism cost.
+
+**P-A · Section order and visibility.** The single biggest jump in perceived ownership
+for the smallest mechanism. The site declares its sections as an ordered list
+(`sections: [{key, label, removable?}]`); the manager drags to reorder and toggles
+visibility; the stored value is an array of keys. The site keeps rendering every section
+exactly as it does today — it just maps over the declared order instead of hardcoding it.
+Nothing about layout leaks into lone-star. Suggested for phase 4, alongside the editor
+de-hardcoding already scheduled there.
+
+**P-B · Layout variants per section.** The multiplier for "unique". A site declares what
+its own Music section can BE — `variants: ['list', 'grid', 'shelf']` — and the manager
+picks one; the site implements them. Two sites offer completely different vocabularies
+and the editor stays generic, because it only ever stores a chosen key. This is the
+cheapest way to make one starter template feel like many sites, and it composes with
+templates later: a template ships variants instead of forks.
+
+**P-C · Per-breakpoint style overrides.** Today a stored override is ONE class string, so
+a manager cannot make the phone differ from the desktop — and the phone is where most
+fans are. Store `{ base, sm?, md?, lg? }` and let the Style panel expose a breakpoint
+switcher. The applier already owns one string per region; this makes it a small map.
+Biggest single gap in the Style panel as it stands.
+
+**P-D · Declared themes.** The site ships two or three complete named looks
+(`themes: [{key, label}]`), the manager picks one, and per-region overrides layer on top.
+Cheap for the site (it already has the classes), dramatic for the manager, and it gives a
+safe "put it back" — a theme switch is reversible in a way thirty individual overrides
+are not.
+
+**P-E · Background media on any declared region.** Only skeen's hero can hold a clip, and
+only because skeen coded it. Let a style region declare `acceptsBackground: 'image' |
+'video'` and the manager drops media behind any declared block. Reuses the existing media
+slot machinery; mostly an editor-side affordance.
+
+**P-F · Link regions on any element.** `linkProps` presumes an `<a>`. Letting a card, an
+image, or a whole section declare itself link-powered turns "make this clickable" into a
+declaration rather than a site code change — and the declared-region shape is already the
+one that works with no row behind it (gate finding 4).
+
+**P-G · A declared spacing ladder**, exactly like `textSizes`. Tailwind compiles only
+what it can see, so rhythm is currently untouchable for the same reason sizes were before
+the site declared them. Same mechanism, already proven.
+
+Sequencing note: P-A and P-B want the component kit to exist first (a section is a kit
+concept), P-C and P-G are pure Style-panel work and could land sooner, and P-E/P-F are
+editor affordances over machinery that already exists.
