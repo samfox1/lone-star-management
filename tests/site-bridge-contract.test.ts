@@ -49,6 +49,28 @@ describe('single source — the shims re-export the package, never redefine it',
   })
 })
 
+describe('the highlight style is the package’s, and paints only the region', () => {
+  it('CRITICAL: no page-wide wash — a marked region paints INSIDE its own box', () => {
+    // Sam, 2026-08-08, clicking a social icon in skeen's preview: "this weird container
+    // opens below". The shells' hand-mirrored rule carried
+    // `box-shadow:0 0 0 9999px rgba(37,99,235,.06)` to dim the page. That only ever
+    // worked for an element with no clipping ancestor, and `applyHighlightToDom` marks
+    // EVERY match: skeen's socials render in the hero AND the footer, so the hero's
+    // wash was clipped to nothing by `overflow-hidden` while the footer's painted an
+    // edged grey rectangle across the page. Any future marker rendered twice would
+    // bring it back, which is why this is pinned and not merely deleted.
+    expect(pkg.HIGHLIGHT_CSS).not.toMatch(/box-shadow/)
+    // A spread that big is the specific shape of the bug, whatever property carries it.
+    expect(pkg.HIGHLIGHT_CSS).not.toMatch(/9999px/)
+  })
+
+  it('targets the marker attribute it is built from, and still rings', () => {
+    // Built from the constant, so a rename cannot leave a stale selector behind.
+    expect(pkg.HIGHLIGHT_CSS).toContain(`[${pkg.HIGHLIGHT_ATTR}]`)
+    expect(pkg.HIGHLIGHT_CSS).toMatch(/outline:3px solid/)
+  })
+})
+
 describe('protocol fixtures — what every connected site can also pin', () => {
   it('stamps and accepts its own messages, both directions', () => {
     const fromFrame = pkg.frameMessage({ type: 'select', target: { kind: 'field', key: 'k' }, rect: { x: 0, y: 0, width: 1, height: 1 } })

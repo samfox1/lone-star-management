@@ -17,9 +17,27 @@ export const FIELD_ATTR = "data-lse-field";
 export const SLOT_ATTR = "data-lse-slot";
 export const ITEM_ATTR = "data-lse-item";
 export const LINK_ATTR = "data-lse-link";
-/** Transient marker the editor sets on the ONE region it's highlighting (editor →
- *  frame `highlight`). Carries no value; the edit shell styles `[data-lse-highlight]`. */
+/** Transient marker the editor sets on the regions it's highlighting (editor →
+ *  frame `highlight`). Carries no value; `HIGHLIGHT_CSS` styles it. */
 export const HIGHLIGHT_ATTR = "data-lse-highlight";
+
+/**
+ * How a highlighted region LOOKS. Every edit shell injects this verbatim; it is built
+ * from `HIGHLIGHT_ATTR` so a rename cannot leave a stale selector behind.
+ *
+ * It lives here because it was the LAST hand mirror: byte-identical copies sat in
+ * lone-star's built-in edit-frame and in skeen's /edit route (whose comment admitted
+ * it "mirrors lone-star's"), so a fix had to be applied twice by memory.
+ *
+ * NO PAGE-WIDE WASH. The mirrors carried `box-shadow:0 0 0 9999px rgba(37,99,235,.06)`
+ * to dim the rest of the page, which only ever worked when the marked element had no
+ * clipping ancestor. `applyHighlightToDom` marks EVERY match, and skeen renders its
+ * socials in both the hero and the footer: the hero's wash was clipped away by
+ * `overflow-hidden` while the footer's painted an edged grey rectangle across the page
+ * — reported as "this weird container opens below" (Sam, 2026-08-08). The outline
+ * carries the affordance on its own, and the editor scrolls the selection into view.
+ */
+export const HIGHLIGHT_CSS = `[${HIGHLIGHT_ATTR}]{outline:3px solid #2563eb!important;outline-offset:3px;border-radius:2px}`;
 
 /**
  * Attribute spread for a slot SECTION, in EDIT MODE only:

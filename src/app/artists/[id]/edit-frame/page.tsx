@@ -6,7 +6,7 @@ import { EditFrameBridge } from './edit-frame-bridge'
 import { manifestFor } from '@/lib/site-editor/manifest'
 import {
   FIELD_ATTR,
-  HIGHLIGHT_ATTR,
+  HIGHLIGHT_CSS,
   ITEM_ATTR,
   LINK_ATTR,
   MARKED,
@@ -44,9 +44,10 @@ export default async function EditFramePage({ params }: { params: Promise<{ id: 
         ${MARKED}{cursor:pointer}
         [${FIELD_ATTR}]:hover,[${ITEM_ATTR}]:hover,[${STYLE_ATTR}]:hover,[${LINK_ATTR}]:hover{outline:2px solid #2563eb;outline-offset:2px;border-radius:2px}
         [${SLOT_ATTR}]:hover{outline:2px dashed rgba(37,99,235,.5);outline-offset:6px}
-        /* The region the editor is highlighting (a tile click in the inspector). A solid
-           ring + soft wash so it reads as "this one" even mid-scroll. */
-        [${HIGHLIGHT_ATTR}]{outline:3px solid #2563eb!important;outline-offset:3px;border-radius:2px;box-shadow:0 0 0 9999px rgba(37,99,235,.06)}
+        /* The region the editor is highlighting (a tile click in the inspector). From the
+           package, so this shell and every connected site ring identically — the copy
+           that used to sit here was mirrored by hand into skeen. */
+        ${HIGHLIGHT_CSS}
       `}</style>
       <ArtistTemplate data={site} editable />
       <EditFrameBridge editList={manifestFor(site.artist.template)} />
