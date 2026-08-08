@@ -398,3 +398,26 @@ story, so its retirement needs the empty states designed first.
 Editor-side gaps 1 and 3 were invisible to five months of built-in templates and cost
 one afternoon to find with a real cross-origin site. That is the argument for doing the
 cold-connect test before the kit, not after.
+
+### Phase 2.5 — throwaway sites first, templates after (Sam, 2026-08-08)
+
+"Lets build a couple throwaways to dial in the editor and then we can work on the first
+starter templates."
+
+A throwaway is a stopwatch and a notebook, not a deliverable. Its job is to be built
+COLD against the published SDK and to surface what a second site has to hand-write.
+Deliberately NOT a skeen clone: skeen was built alongside the bridge and knows too much
+about it, so it cannot report friction honestly. Design care is deferred — a template
+built before the kit exists would be hand-rolled markup that becomes debt the moment
+phase 3 lands.
+
+**Every throwaway ends with three outputs, not one** (Sam's standing ask): what worked;
+friction + edge cases, each written as a concrete improvement; and at least one
+unprompted proposal for a NEW element or dimension a manager could customize. The
+durable ones land in this file. Constraint on every proposal: site-agnostic and DECLARED
+by the site — never lone-star tailored to one site (decision #1).
+
+Support tier the throwaways must match (from skeen, the reference consumer): Next 16 +
+React 19 + Tailwind 4, `transpilePackages: ["@samfox1/site-bridge"]` (the package ships
+raw TS), bundler moduleResolution, and an `.npmrc` mapping `@samfox1` to GitHub Packages
+with the token supplied by the environment (local `~/.npmrc`; Vercel `NPM_RC`).
