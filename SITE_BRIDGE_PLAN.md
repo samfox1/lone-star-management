@@ -349,3 +349,44 @@ New order: **publish → phase 2 (skeen) → minimal new site as consumer #2, ha
 primitives, run the checklist → THEN phase 3 (kit)**. The test tells us which kit
 pieces are load-bearing before we build them; expect it to flunk "repeatable for many
 sites" — that measured gap becomes the phase 3+5 backlog, which is the point.
+
+### Gate findings — the manual editor session (2026-08-08)
+
+Sam drove the editor against skeen's Vercel PREVIEW through a throwaway custom-site
+artist (`bridge-test`), never the live Skeen row — `custom_site_url` also drives the
+fan-facing 308, which browsers cache, so a preview URL there outlives the fix.
+
+Content round-tripped: text, images, styles, links, saves. **Phase 2 passes.** Four
+findings, none of them the contract:
+
+1. **Empty image slot could not say which slot it was** — fixed (`4add610`). Editor-side
+   and NOT a migration regression: filled and empty slots render as different components
+   and only the filled one could ring. The sibling test excused the empty path in a
+   comment; its twin now covers it.
+2. **The highlight's page-wide wash** — fixed (`fc7f370`). A real regression: the package
+   marks EVERY match where the mirror marked the first, and skeen's socials render in
+   hero AND footer, so the footer copy's `0 0 0 9999px` shadow painted an edged rectangle.
+   Retired rather than scoped — any twice-rendered marker would bring it back. The rule
+   moved into the package as `HIGHLIGHT_CSS`, killing the LAST hand mirror.
+   **Note: this was NOT what Sam was seeing** — see 3. Diagnosis was accepted too early
+   from a subagent whose report was internally consistent but never matched against the
+   screenshot's actual appearance (a blurred gradient, not a flat tint).
+3. **A cross-origin site's video can never play in the editor** — fixed (`f673286`).
+   THE finding of the gate: the `autoplay` permission policy defaults to `self`, so
+   built-in SAME-ORIGIN frames inherited it for five months while the first cross-origin
+   site could not autoplay. skeen's hero holds its `<video>` at opacity 0 until `canplay`
+   over a blurred still, so it rested on the placeholder forever — the "weird container".
+   It read as opening on click because `highlight` scrolls its first match to
+   `block:center`, and the socials' first match is the hero copy.
+4. **A site element with no row behind it is a dead end** — OPEN, phase 3/4. skeen marks
+   socials `item:link:<label>` and renders its own FALLBACK icons when the payload has
+   none, so on a fresh artist every social click routes to Links and selects nothing.
+   Sam's expectation is the right one: "it should point to a link input box where I can
+   add a link." The declared-region path (`linkProps`) already models this; library items
+   do not. Decide in phase 4 whether an unmatched item offers to CREATE its row, and
+   whether a connected site should fall back to its own hardcoded content at all — a
+   fallback the editor cannot edit is indistinguishable from a broken bind.
+
+Editor-side gaps 1 and 3 were invisible to five months of built-in templates and cost
+one afternoon to find with a real cross-origin site. That is the argument for doing the
+cold-connect test before the kit, not after.
