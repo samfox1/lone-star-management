@@ -273,6 +273,12 @@ export function EditorShell({
                 ref={frameRef}
                 src={frameSrc}
                 title="Site editor"
+                // The `autoplay` permission policy defaults to `self`, which a
+                // SAME-ORIGIN built-in frame inherits and a cross-origin custom site does
+                // not — so a connected site's hero clip could never start, and skeen sat
+                // behind its own blurred placeholder in the preview (Sam, 2026-08-08).
+                // Granted narrowly: autoplay only, and only to whatever this frame loads.
+                allow="autoplay"
                 className="absolute left-0 top-0 border-0"
                 style={{
                   width: view.width,

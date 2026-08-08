@@ -233,6 +233,25 @@ describe('EditorShell — Text panel on a CUSTOM site', () => {
   })
 })
 
+describe('the preview frame can play a cross-origin site’s video', () => {
+  it('CRITICAL: the iframe GRANTS autoplay', () => {
+    // Sam, 2026-08-08, connecting skeen through the migration gate: below the socials sat
+    // a blurred grey panel where the hero clip belongs. Not an overlay — skeen's hero
+    // holds its `<video>` at `opacity: 0` until `canplay`, over an inlined blurred still,
+    // and "failing to reveal at all leaves the blurred still up" (Hero.tsx). The clip
+    // never revealed because the `autoplay` permission policy defaults to `self`: a
+    // SAME-ORIGIN built-in frame inherits it, a cross-origin site does not, so every
+    // connected site's video was frozen behind its own placeholder.
+    //
+    // What this can and cannot prove: jsdom has no permission policy and no media stack,
+    // so it pins the GRANT, not the playback. The behaviour itself is a manual check
+    // against a real deploy.
+    renderShell({ customSiteUrl: 'https://site.example' })
+    const frame = screen.getByTitle('Site editor')
+    expect(frame.getAttribute('allow') ?? '').toContain('autoplay')
+  })
+})
+
 describe('EditorShell — a BUILT-IN template is unchanged', () => {
   const SERVER_FIELDS: EditorTextField[] = [
     { key: 'hero_tagline', label: 'Hero tagline', type: 'text', value: 'DJ & Producer', multiline: false },
