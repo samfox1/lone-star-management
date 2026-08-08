@@ -378,14 +378,22 @@ findings, none of them the contract:
    over a blurred still, so it rested on the placeholder forever — the "weird container".
    It read as opening on click because `highlight` scrolls its first match to
    `block:center`, and the socials' first match is the hero copy.
-4. **A site element with no row behind it is a dead end** — OPEN, phase 3/4. skeen marks
-   socials `item:link:<label>` and renders its own FALLBACK icons when the payload has
-   none, so on a fresh artist every social click routes to Links and selects nothing.
-   Sam's expectation is the right one: "it should point to a link input box where I can
-   add a link." The declared-region path (`linkProps`) already models this; library items
-   do not. Decide in phase 4 whether an unmatched item offers to CREATE its row, and
-   whether a connected site should fall back to its own hardcoded content at all — a
-   fallback the editor cannot edit is indistinguishable from a broken bind.
+4. **A site element with no row behind it is a dead end** — RESOLVED BY DECISION, below.
+   skeen marks socials `item:link:<label>` and renders its own FALLBACK icons when the
+   payload has none, so on the fresh `bridge-test` artist every social click routed to
+   Links and selected nothing. The row was missing, not the binding: seeding the six
+   link rows made the select land correctly.
+
+**Sam's decision (2026-08-08): no hardcoded content on a connected site.** "Moving
+forward, I wont be hardcoding this information." A fallback the editor cannot edit is
+indistinguishable, from the manager's side, from a broken bind — they click something
+the site is plainly showing and nothing happens. So the standard is: what a connected
+site renders comes from the payload, and an empty payload renders an EMPTY state, not
+invented content. This is a scaffold + kit rule (phases 3/5): the primitives render
+nothing (or a marked placeholder that IS selectable) rather than a default the editor
+has no row for. skeen's `data/site.ts` FALLBACK becomes migration debt to retire, not a
+pattern to copy — with the caveat that it currently doubles as the offline/first-paint
+story, so its retirement needs the empty states designed first.
 
 Editor-side gaps 1 and 3 were invisible to five months of built-in templates and cost
 one afternoon to find with a real cross-origin site. That is the argument for doing the
