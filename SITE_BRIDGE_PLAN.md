@@ -335,3 +335,17 @@ registry copy is consulted at deploy time.
   drop `private: true` at publish time.
 - Phase-2 runbook step 1 changes: skeen installs `@samfox1/site-bridge` from GitHub
   Packages (with the `.npmrc` above) instead of the tarball fallback.
+
+### Phase reorder — the cold-connect test moves before the kit (2026-08-08)
+
+Sam's external review (ChatGPT) reached the same destination as phase 5's gate — prove
+the architecture by connecting a completely new artist site with no site-specific
+hacks — but pulls it earlier. Adopted, with one guard: skeen still migrates FIRST,
+because a never-consumed package + a never-connected site tested together makes every
+failure ambiguous about which side broke, and skeen's migration deletes the mirrors
+(the designed completeness proof) while fixing the live fonts-binding bug.
+
+New order: **publish → phase 2 (skeen) → minimal new site as consumer #2, hand-written
+primitives, run the checklist → THEN phase 3 (kit)**. The test tells us which kit
+pieces are load-bearing before we build them; expect it to flunk "repeatable for many
+sites" — that measured gap becomes the phase 3+5 backlog, which is the point.
