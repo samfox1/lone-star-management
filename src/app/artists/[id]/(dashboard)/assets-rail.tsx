@@ -8,7 +8,10 @@ type AssetKind = 'music' | 'photos' | 'videos'
 
 const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = [
   { key: 'music', label: 'Music', seg: 'music', icon: 'tracks' },
-  { key: 'photos', label: 'Photos', seg: 'images', icon: 'photo' },
+  // "Images", not "Photos" (Sam, 2026-08-09): the tab holds logos, artwork and covers,
+  // not only photographs, and its route has always been /images. The KEY stays `photos`
+  // — callers pass it as `current` — so this is a label change, not a route change.
+  { key: 'photos', label: 'Images', seg: 'images', icon: 'photo' },
   { key: 'videos', label: 'Videos', seg: 'videos', icon: 'videos' },
 ]
 

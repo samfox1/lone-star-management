@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
@@ -19,7 +20,8 @@ import {
   PANEL_BODY,
   type SaveStatus,
 } from '../inspector-shared'
-import { saveEditorLinkAction, setSupportUrlAction, updateContentAction } from '../../actions'
+import { addContentAction, saveEditorLinkAction, setSupportUrlAction, updateContentAction } from '../../actions'
+import { AddSocialModal } from '../add-social-modal'
 
 /* ── Site-link tools: set the href for each manifest-declared link button ────────────
  * Mirrors StyleTools (manifest-driven, Phase 2): the site declares its link-powered
@@ -213,6 +215,8 @@ export function LinkTools({
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
   )
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [adding, setAdding] = useState(false)
+  const router = useRouter()
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   // Which row is expanded. Rows collapse to just their label; clicking one opens the
   // edit/remove controls below it (single-open accordion — keeps the list short).
@@ -402,13 +406,37 @@ export function LinkTools({
       })}
 
       {showAdd && (
-        <Link
-          href={`/artists/${artistId}/links`}
-          className="flex items-center gap-2.5 px-5 py-2.5 text-accent hover:bg-surface-hover"
+        // A BUTTON, not a link out. The old footer navigated to /artists/[id]/links,
+        // which threw away the whole editor session — frame, scroll, open panel — to
+        // type one URL (Sam, 2026-08-09). The new row joins THIS list, so it lands in
+        // the site's socials container and the row re-centres itself.
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-accent hover:bg-surface-hover"
         >
           <Icon name="plus" size={16} />
-          <span className="text-[13px]">Add link</span>
-        </Link>
+          <span className="text-[13px]">Add social</span>
+        </button>
+      )}
+
+      {adding && (
+        <AddSocialModal
+          existingLabels={links.map((l) => l.label)}
+          onCancel={() => setAdding(false)}
+          onAdd={async (label, url) => {
+            const fd = new FormData()
+            fd.set('label', label)
+            fd.set('url', url)
+            // The generic content path, so a social added here is the same row shape as
+            // one added anywhere else — no second creation story to keep in step.
+            const res = await addContentAction('link', artistId, fd)
+            if (res?.error) return res.error
+            setAdding(false)
+            router.refresh()
+            return null
+          }}
+        />
       )}
 
       <SaveLine status={status} />

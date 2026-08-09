@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
+  addContentAction,
   deleteContentAction,
   deleteMediaAction,
   renameVideoAction,
@@ -56,6 +57,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   assignComponentSlotAction: vi.fn(async () => ({})),
   setSongsOnSiteAction: vi.fn(async () => ({})),
   setImageFieldAction: vi.fn(async () => ({ ok: true })),
+  addContentAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
@@ -89,6 +91,7 @@ const saveMock = vi.mocked(saveEditorFieldAction)
 const updateContentMock = vi.mocked(updateContentAction)
 const deleteContentMock = vi.mocked(deleteContentAction)
 const reorderContentMock = vi.mocked(reorderContentAction)
+const addContentMock = vi.mocked(addContentAction)
 const renameVideoMock = vi.mocked(renameVideoAction)
 const setOnSiteMock = vi.mocked(setOnSiteAction)
 const placePhotoMock = vi.mocked(placeGalleryPhotoAction)
@@ -473,6 +476,60 @@ describe('EditorInspector — Links component', () => {
     fireEvent.click(screen.getByRole('button', { name }))
   }
 
+  it('CRITICAL: Add opens a MODAL — the editor session is never navigated away', () => {
+    // Sam, 2026-08-09: "when they hit the add social button, a modal should come up
+    // instead of redirecting the user to another page. They should stay on the editor
+    // page." The footer was a <Link> to /artists/[id]/links, which discarded the frame,
+    // the scroll position and the open panel to type one URL. An anchor with an href is
+    // the failure — assert on the ROLE, since a button cannot navigate.
+    openLinks()
+    const add = screen.getByRole('button', { name: /Add social/i })
+    expect(add.getAttribute('href')).toBeNull()
+    fireEvent.click(add)
+    expect(screen.getByRole('dialog', { name: /Add a social link/i })).toBeTruthy()
+  })
+
+  it('CRITICAL: the modal offers the shared platform list, so the label is one a site knows', () => {
+    // The label IS the join key a connected site maps its icon by (`item:link:instagram`).
+    // Free text lands "insta" in the payload and renders as an unrecognized link, so the
+    // picker exists to make the recognizable spelling the easy path.
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
+    for (const label of ['Instagram', 'TikTok', 'Substack']) {
+      expect(screen.getByRole('button', { name: label })).toBeTruthy()
+    }
+    // …and an artist's own oddity is still reachable.
+    expect(screen.getByRole('button', { name: /Something else/i })).toBeTruthy()
+  })
+
+  it('a platform already on the site cannot be added twice', () => {
+    // LINKS carries Spotify and Instagram. A second Instagram row renders a second
+    // identical icon in the socials row, which the manager cannot tell apart.
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
+    expect((screen.getByRole('button', { name: /Instagram \(already added\)/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'TikTok' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('picking a platform prefills its URL, and adding writes ONE link row', async () => {
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }))
+    const url = screen.getByLabelText('Link URL') as HTMLInputElement
+    expect(url.value).toBe('https://tiktok.com/@')
+
+    fireEvent.change(url, { target: { value: 'https://tiktok.com/@juniper' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add to the site/i }))
+    })
+    expect(addContentMock).toHaveBeenCalledTimes(1)
+    const [entity, artistId, fd] = addContentMock.mock.calls[0]
+    expect(entity).toBe('link')
+    expect(artistId).toBe('artist-1')
+    expect((fd as FormData).get('label')).toBe('TikTok')
+    expect((fd as FormData).get('url')).toBe('https://tiktok.com/@juniper')
+  })
+
   it('shows the real link count in browse', () => {
     renderInspector([], { links: LINKS })
     expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('2 of 3 on site')
@@ -508,9 +565,13 @@ describe('EditorInspector — Links component', () => {
     expect(screen.getByRole('button', { name: /^Spotify/ }).textContent).not.toContain('Off')
   })
 
-  it('has an add-link out to the links page', () => {
+  it('the add affordance stays IN the editor (was a link out until 2026-08-09)', () => {
+    // This pinned `<Link href="/artists/artist-1/links">` — leaving the editor to add a
+    // URL. Sam: "they should stay on the editor page." Rewritten rather than deleted, so
+    // the regression it guards against is still named: no anchor, and no navigation.
     openLinks()
-    expect(screen.getByRole('link', { name: /Add link/ }).getAttribute('href')).toBe('/artists/artist-1/links')
+    expect(screen.queryByRole('link', { name: /Add (link|social)/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Add social/ })).toBeTruthy()
   })
 
   it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
@@ -614,7 +675,9 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
       .filter((t) => t === 'Socials' || t === 'Contact')
     expect(headings).toEqual(['Socials', 'Contact'])
     // One add affordance for the whole panel, not one per group.
-    expect(screen.getAllByRole('link', { name: /Add link/ }).length).toBe(1)
+    // ONE add affordance per panel, not one per group — Contact is a slice of the
+    // same list. (A button since 2026-08-09; it opens the modal in place.)
+    expect(screen.getAllByRole('button', { name: /Add social/ }).length).toBe(1)
   })
 
   it('gives Socials and Contact rows DISTINCT accessible names', () => {
