@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '@samfox1/site-bridge/social'
+import { socialIcon } from '@samfox1/site-bridge/social-icons'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { EYEBROW, FIELD } from './inspector-shared'
 import { useLockBodyScroll } from '../use-lock-body-scroll'
@@ -113,9 +114,7 @@ export function AddSocialModal({
                       : 'border-hairline hover:border-accent hover:text-accent',
                   )}
                 >
-                  {/* One neutral glyph for now. The registry is the contract; per-platform
-                      brand marks are an asset job, and a WRONG mark is worse than none. */}
-                  <Icon name="links" size={14} />
+                  <SocialMark slug={p.slug} />
                   <span className="truncate">{p.label}</span>
                 </button>
               )
@@ -132,7 +131,7 @@ export function AddSocialModal({
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-[13px]">
-              <Icon name="links" size={14} />
+              {picked === 'other' ? <Icon name="links" size={14} /> : <SocialMark slug={picked.slug} />}
               <span>{picked === 'other' ? 'Something else' : picked.label}</span>
               <button
                 type="button"
@@ -186,5 +185,22 @@ export function AddSocialModal({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * A platform's brand mark, drawn MONOCHROME so it inherits the button's colour and
+ * disabled/hover states like every other glyph in the inspector. The registry carries
+ * each brand's own hex, but sixteen brand colours in one grid reads as a sticker sheet,
+ * and the editor's chrome is deliberately achromatic (the dashboard's whole design).
+ * A connected SITE is free to use the hex — that is its call, not the editor's.
+ */
+function SocialMark({ slug }: { slug: string }) {
+  const icon = socialIcon(slug)
+  if (!icon) return <Icon name="links" size={14} />
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden className="flex-none">
+      <path d={icon.path} />
+    </svg>
   )
 }

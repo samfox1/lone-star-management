@@ -46,6 +46,10 @@
     "./social": {
       "types": "./src/social.ts",
       "default": "./src/social.ts"
+    },
+    "./social-icons": {
+      "types": "./src/social-icons.ts",
+      "default": "./src/social-icons.ts"
     }
   },
   "files": [
