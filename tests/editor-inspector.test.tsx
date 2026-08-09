@@ -405,6 +405,37 @@ describe('EditorInspector — Text component', () => {
     expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
   })
 
+  it('CRITICAL: an unset field opens holding the site’s OWN words, editable', () => {
+    // Sam, 2026-08-09, on throwaway #1: "for the text, I want there to be actual text
+    // here not just the placeholder text." The site's fallback was the input's
+    // PLACEHOLDER, which looks right and cannot be edited: changing one word of a
+    // sentence already on the page meant retyping the whole sentence from memory.
+    //
+    // Seeded, not saved. Opening a field must not write a row the manager never typed —
+    // that would make "unset" unreachable and stamp defaults across the site by browsing.
+    renderInspector([], {
+      textFields: [{ key: 'hero_tagline', label: 'Hero tagline', type: 'text', value: '', multiline: false, defaultValue: 'Songs from the flood year' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+    fireEvent.click(screen.getByLabelText('Edit Hero tagline'))
+    const input = screen.getByLabelText('Hero tagline') as HTMLInputElement
+    expect(input.value).toBe('Songs from the flood year')
+    expect(saveMock).not.toHaveBeenCalled()
+  })
+
+  it('a seeded field can still be CLEARED — the site falls back on its own', () => {
+    // The seed must behave like typed text, or clearing it would snap straight back and
+    // the manager could never empty a field.
+    renderInspector([], {
+      textFields: [{ key: 'hero_tagline', label: 'Hero tagline', type: 'text', value: '', multiline: false, defaultValue: 'Songs from the flood year' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+    fireEvent.click(screen.getByLabelText('Edit Hero tagline'))
+    const input = screen.getByLabelText('Hero tagline') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '' } })
+    expect(input.value).toBe('')
+  })
+
   it('edits a field: optimistic live-preview immediately, debounced save', () => {
     vi.useFakeTimers()
     try {

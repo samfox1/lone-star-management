@@ -5,6 +5,7 @@ import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
+import { mediaUrl } from '@/lib/storage-url'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
@@ -60,6 +61,52 @@ export function runtimeTextFields(
 }
 
 /**
+ * The Images panel's single-occupancy slots for a CUSTOM site — the twin of
+ * `runtimeTextFields`, and added for the same reason one category later.
+ *
+ * Sam, 2026-08-09, clicking the portrait on a throwaway site: "I click on the portrait
+ * image and it doesnt take me to any image slot in the left editor." Styles, links,
+ * slots and components all read the announced manifest; text was wired in 2026-08-05;
+ * images alone still read the SERVER-resolved prop, which is necessarily empty for a
+ * custom site because `manifestFor` only knows the built-in templates. So the click
+ * routed to a panel with nothing in it.
+ *
+ * The preview comes from the DRAFT the editor already holds — a custom site's media
+ * rows ride `init-data`, so no extra fetch is needed. Same two targets page.tsx accepts,
+ * because those are the only single-occupancy image homes the wire models; anything else
+ * a site declares is a component slot and belongs to that machinery.
+ */
+export function runtimeImageFields(
+  manifest: TemplateManifest | null,
+  draft: PublicSitePayload | null,
+): EditorImageField[] {
+  const profilePath = draft?.media?.find((m) => m.purpose === 'profile_photo')?.path
+  const out: EditorImageField[] = []
+  for (const f of manifest?.fields ?? []) {
+    if (f.type !== 'image' || !f.target) continue
+    // The target literals are rebuilt rather than passed through: the manifest is
+    // untrusted cross-origin JSON typed with the WIDER FieldTarget union (`column` may
+    // be name/bio), and EditorImageField accepts only the two save targets that exist.
+    if (f.target.store === 'artist' && f.target.column === 'hero_image_url') {
+      out.push({
+        key: f.key,
+        label: f.label,
+        previewUrl: draft?.artist?.hero_image_url ?? null,
+        target: { store: 'artist', column: 'hero_image_url' },
+      })
+    } else if (f.target.store === 'media' && f.target.purpose === 'profile_photo') {
+      out.push({
+        key: f.key,
+        label: f.label,
+        previewUrl: profilePath ? mediaUrl(profilePath) : null,
+        target: { store: 'media', purpose: 'profile_photo' },
+      })
+    }
+  }
+  return out
+}
+
+/**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
  * dashboard nav: the LEFT inspector (component browser + tools) and the artist's
  * real site in an embedded frame. The frame's controls — device, save status,
@@ -103,10 +150,11 @@ export function EditorShell({
   draft?: PublicSitePayload | null
   photos: GalleryPhoto[]
   /** Single-occupancy image fields (hero image, profile photo) — the "Set slots" group.
-   *  BUILT-IN templates only: page.tsx resolves them with a save target. A custom site
-   *  (skeen) declares its images without a lone-star target and edits them via the component
-   *  slots + gallery instead, so it passes []; skeen's hero is a video (Videos panel), not an
-   *  image, so there is deliberately no hero-image tile for it. */
+   *  BUILT-IN templates only: page.tsx resolves them from the local manifest. A CUSTOM
+   *  site's are rebuilt from its ANNOUNCED manifest instead (`runtimeImageFields`), the
+   *  same discriminator the Text panel uses — page.tsx cannot produce them, since
+   *  `manifestFor` only knows the built-in templates. skeen declares none and passes []
+   *  either way: its images are component slots + gallery, and its hero is a video. */
   imageFields: EditorImageField[]
   /** Text fields page.tsx resolved from the artist's LOCAL template manifest. Used only
    *  for a built-in site: a custom site's are DROPPED in favour of the frame's own
@@ -192,13 +240,20 @@ export function EditorShell({
   // sources from feeding the same panels.
   const announced = customSiteUrl ? manifest : null
 
+  // Same discriminator the Text panel uses: a CUSTOM site's image slots are declared by
+  // its frame, never by `manifestFor`, which only knows the built-in templates.
+  const resolvedImageFields = useMemo(
+    () => (customSiteUrl ? runtimeImageFields(manifest, draft ?? null) : imageFields),
+    [customSiteUrl, manifest, draft, imageFields],
+  )
+
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
       <EditorInspector
         artistId={artistId}
         photos={photos}
-        imageFields={imageFields}
+        imageFields={resolvedImageFields}
         textFields={fields}
         links={links}
         supportLinks={supportLinks}

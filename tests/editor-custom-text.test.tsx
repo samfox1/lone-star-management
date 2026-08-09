@@ -233,6 +233,34 @@ describe('EditorShell — Text panel on a CUSTOM site', () => {
   })
 })
 
+describe('IMAGE fields ride the bridged manifest too', () => {
+  it('CRITICAL: a custom site’s declared image field reaches the Images panel', () => {
+    // Sam, 2026-08-09, clicking the portrait on throwaway #1: "I click on the portrait
+    // image and it doesnt take me to any image slot in the left editor."
+    //
+    // This is THE SAME DEFECT this file was opened for, one category over. Text was
+    // wired to the bridged manifest in 2026-08-05; styles, links, slots and components
+    // all read `announced`. Images alone still reads the SERVER-resolved prop, which is
+    // empty for a custom site because `manifestFor` returns nothing — so the panel has
+    // no slot to select and the click lands nowhere.
+    //
+    // Declared with the same target skeen's profile photo uses, since that is the only
+    // single-occupancy portrait purpose the wire models.
+    const manifest = {
+      ...CUSTOM_MANIFEST,
+      fields: [
+        ...CUSTOM_MANIFEST.fields,
+        { key: 'hero_portrait', label: 'Hero portrait', type: 'image', target: { store: 'media', purpose: 'profile_photo' } },
+      ],
+    } as unknown as TemplateManifest
+
+    renderShell({ customSiteUrl: 'https://site.example', draft })
+    frameSays({ type: 'ready', manifest }, 'https://site.example')
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    expect(screen.getByLabelText('Hero portrait')).toBeTruthy()
+  })
+})
+
 describe('the preview frame can play a cross-origin site’s video', () => {
   it('CRITICAL: the iframe GRANTS autoplay', () => {
     // Sam, 2026-08-08, connecting skeen through the migration gate: below the socials sat

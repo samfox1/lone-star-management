@@ -49,6 +49,14 @@ export function TextFieldEditor({
   // Sliders for size and thickness, a select for font — shaped like the image and video
   // editors rather than the Style panel's menus, because this is the same gesture.
   const controls = buildTextItemStyleControls(styleOptions)
+
+  // What the box SHOWS: the stored value, or — the first time an unset field is opened —
+  // the site's own fallback, so the manager edits real words instead of retyping them.
+  // Latched at mount: once the manager has touched the field, `value` is the only truth,
+  // including when they clear it to empty (which must stay empty, not snap back).
+  const [defaultSeed] = useState(() => (value === '' ? (field.defaultValue ?? '') : ''))
+  const [touched, setTouched] = useState(false)
+  const shown = touched || value !== '' ? value : defaultSeed
   const region = field.styleRegion
 
   // STAGED LOCALLY, like StyleTools and ItemEditor. Reading the class string straight
@@ -86,26 +94,28 @@ export function TextFieldEditor({
         </p>
       ) : (
       <div className="px-5 pt-4">
-        {/* The site's own fallback as the PLACEHOLDER, so opening an untouched field
-            shows the words that are actually on the page rather than an empty box that
-            reads as missing content. Typing replaces it; clearing brings it back. */}
+        {/* SEEDED with the site's own words, not merely hinted at by a placeholder.
+            A placeholder looked right and could not be edited: changing one word of a
+            sentence already on the page meant retyping it from memory (Sam, 2026-08-09).
+
+            Seeded for DISPLAY only — `onEdit` is not called, so opening a field writes
+            nothing. Stamping defaults into site_content by browsing would make "unset"
+            unreachable and freeze copy the site should still be free to change. */}
         {field.multiline ? (
           <textarea
             autoFocus
-            value={value}
-            onChange={(e) => onEdit(e.target.value)}
+            value={shown}
+            onChange={(e) => { setTouched(true); onEdit(e.target.value) }}
             aria-label={field.label}
-            placeholder={field.defaultValue ?? ''}
             className={cx(FIELD, 'min-h-32 resize-y leading-relaxed')}
           />
         ) : (
           <input
             autoFocus
             type={field.type === 'email' ? 'email' : 'text'}
-            value={value}
-            onChange={(e) => onEdit(e.target.value)}
+            value={shown}
+            onChange={(e) => { setTouched(true); onEdit(e.target.value) }}
             aria-label={field.label}
-            placeholder={field.defaultValue ?? ''}
             className={FIELD}
           />
         )}

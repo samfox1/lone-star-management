@@ -376,26 +376,34 @@ describe('TextFieldEditor — one field, full panel', () => {
 })
 
 describe('the site’s own fallback is visible, not just absent', () => {
-  it('CRITICAL: an untouched field shows the site’s words as its placeholder', () => {
+  it('CRITICAL: an untouched field opens HOLDING the site’s words, editable', () => {
     // A custom site keeps its fallbacks in code, so a field with no stored row is empty
     // in the database while the page shows real words. Opening it to a blank box reads
     // as missing content — the manager is looking at "SKEEN" on screen and an empty
     // input in the panel.
+    //
+    // Was a PLACEHOLDER until 2026-08-09. Sam, on throwaway #1: "I want there to be
+    // actual text here not just the placeholder text." A placeholder looked right and
+    // could not be edited — changing one word meant retyping the sentence from memory.
+    // Seeded for display only: `onEdit` stays unfired, so browsing a field writes no row.
+    const onEdit = vi.fn()
     render(
       <TextFieldEditor
         field={{ ...styled, value: '', defaultValue: 'SKEEN' }}
         value=""
         status="idle"
         styleValues={{}}
-        onEdit={vi.fn()}
+        onEdit={onEdit}
         onStyle={vi.fn()}
         onBack={vi.fn()}
       />,
     )
-    expect((screen.getByLabelText('Hero title') as HTMLInputElement).placeholder).toBe('SKEEN')
+    const input = screen.getByLabelText('Hero title') as HTMLInputElement
+    expect(input.value).toBe('SKEEN')
+    expect(onEdit).not.toHaveBeenCalled()
   })
 
-  it('a stored value wins over the placeholder', () => {
+  it('a stored value wins over the seeded default', () => {
     render(
       <TextFieldEditor
         field={{ ...styled, defaultValue: 'SKEEN' }}
