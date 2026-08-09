@@ -2,7 +2,7 @@
 // (editor-inspector.tsx) dispatches to these; each declares its own narrow props.
 export { PhotoTools } from './photo-tools'
 export { TextTools } from './text-tools'
-export { LinkTools, SiteLinkTools, SupportLinkTools } from './link-tools'
+export { LinkTools, SiteLinkTools } from './link-tools'
 export { StyleTools } from './style-tools'
 export { VideoTools } from './video-tools'
 export { TourTools } from './tour-tools'

@@ -17,6 +17,12 @@ function tourDateLabel(date: string | null): string {
 
 const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
+/** How a show is named once it is OUT of the list — in the editor header, where the date
+ *  column and the venue line are no longer beside each other to say it. */
+export function showLabel(t: EditorTour): string {
+  return [tourDateLabel(t.date), t.venue || 'Untitled venue'].join(' · ')
+}
+
 /**
  * The tour-date library, each with a LIVE on-site toggle (ADR 0009): this is where a
  * manager picks which dates the site shows, and the toggle takes effect without a
@@ -39,6 +45,7 @@ export function TourTools({
   onRemove,
   onReorder,
   onToggleOnSite,
+  onEditTour,
 }: {
   tours: EditorTour[]
   artistId: string
@@ -46,6 +53,9 @@ export function TourTools({
   /** Reorder by ID. Only undated shows participate — see `draggable` below. */
   onReorder: (fromId: string, toId: string) => void
   onToggleOnSite: (t: EditorTour) => void
+  /** Open this show full-panel — where its supporting acts are linked. The links used
+   *  to live in the LINKS panel as a flat list across every date (Sam, 2026-08-09). */
+  onEditTour: (t: EditorTour, label: string) => void
 }) {
   const dragFrom = useRef<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
@@ -107,6 +117,15 @@ export function TourTools({
             )}
             <OnSiteToggle on={t.onSite} onToggle={() => onToggleOnSite(t)} />
           </div>
+          <button
+            type="button"
+            aria-label={`Edit ${t.venue || 'date'}`}
+            title="Supporting acts and their links"
+            onClick={() => onEditTour(t, showLabel(t))}
+            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-surface hover:text-ink"
+          >
+            <Icon name="edit" size={15} />
+          </button>
           <button
             type="button"
             aria-label={`Remove ${t.venue || 'date'}`}

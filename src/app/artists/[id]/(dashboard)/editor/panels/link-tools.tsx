@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type ManifestLinkRegion } from '@/lib/site-editor/manifest'
 import { safeHref } from '@/lib/url'
-import { type EditorLink, type EditorSupportLink } from '../inspector-types'
+import { type EditorLink } from '../inspector-types'
 import { useScrollIntoFocus } from '../inspector-grid'
 import {
   runSerialized,
-  SectionRow,
   FieldRow,
   SaveLine,
   OnSiteToggle,
@@ -20,7 +18,7 @@ import {
   PANEL_BODY,
   type SaveStatus,
 } from '../inspector-shared'
-import { addContentAction, saveEditorLinkAction, setSupportUrlAction, updateContentAction } from '../../actions'
+import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
 import { AddSocialModal } from '../add-social-modal'
 
 /* ── Site-link tools: set the href for each manifest-declared link button ────────────
@@ -140,10 +138,13 @@ export function SiteLinkTools({
     <div className="pb-2 pt-1">
       {regions.map((r) => (
         <div key={r.key} className="px-5">
-          <FieldRow icon="bolt" label={r.label}>
-            {r.description && (
-              <span className="mb-1.5 block text-[11px] leading-snug text-ink-faint">Powers: {r.description}</span>
-            )}
+          {/* The label alone names the button. A site's `description` used to render as
+              a "Powers: …" line under it, which restated the label in a longer sentence
+              and pushed every input down a row (Sam, 2026-08-09). The field stays in the
+              manifest — a site is free to say more than a label can — but it rides the
+              row's TITLE now, where it explains on hover without costing vertical space
+              in a panel that is mostly inputs. */}
+          <FieldRow icon="bolt" label={r.label} title={r.description}>
             <input
               ref={(el) => {
                 fieldRefs.current.set(r.key, el)
@@ -438,134 +439,6 @@ export function LinkTools({
           }}
         />
       )}
-
-      <SaveLine status={status} />
-    </div>
-  )
-}
-/** Row identity for a support act = the two columns that key `support_urls`. A name can
- *  repeat across dates, so the tour date is part of the key. Module-level so it never
- *  enters an effect's dependency set. */
-const supportKey = (l: EditorSupportLink) => `${l.tourDateId}::${l.name}`
-
-/* ── Tour-support links: an outbound URL for each "+ act" across the tour dates ──────
- * The act NAMES are edited on the Tour page (tour_dates.support); here the manager only
- * sets each act's link (tour_dates.support_urls[name]), where they manage every other
- * link. Debounced autosave per row, mirroring LinkTools; no add/remove/reorder — the
- * acts come from the tour dates. */
-export function SupportLinkTools({
-  supportLinks,
-  artistId,
-}: {
-  supportLinks: EditorSupportLink[]
-  artistId: string
-}) {
-  const [urls, setUrls] = useState<Record<string, string>>(() =>
-    Object.fromEntries(supportLinks.map((l) => [supportKey(l), l.url])),
-  )
-  const [open, setOpen] = useState<string | null>(null)
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Set<string>>(new Set())
-  // Latest urls + acts, so the unmount flush reads current values without either being
-  // an effect dependency (same pattern as LinkTools' valuesRef).
-  const urlsRef = useRef(urls)
-  useEffect(() => {
-    urlsRef.current = urls
-  }, [urls])
-  const linksRef = useRef(supportLinks)
-  useEffect(() => {
-    linksRef.current = supportLinks
-  }, [supportLinks])
-
-  const persist = useCallback(
-    (l: EditorSupportLink, url: string) => {
-      pending.current.delete(supportKey(l))
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, supportKey(l), () =>
-        setSupportUrlAction(artistId, l.tourDateId, l.name, url),
-      )
-    },
-    [artistId],
-  )
-
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingSet = pending.current
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingSet.forEach((id) => {
-        const l = linksRef.current.find((x) => supportKey(x) === id)
-        if (l) void setSupportUrlAction(artistId, l.tourDateId, l.name, urlsRef.current[id] ?? '')
-      })
-    }
-  }, [artistId])
-
-  function edit(l: EditorSupportLink, url: string) {
-    const id = supportKey(l)
-    setUrls((u) => ({ ...u, [id]: url }))
-    const existing = timers.current.get(id)
-    if (existing) clearTimeout(existing)
-    pending.current.add(id)
-    timers.current.set(
-      id,
-      setTimeout(() => {
-        timers.current.delete(id)
-        persist(l, url)
-      }, 500),
-    )
-  }
-
-  if (supportLinks.length === 0) {
-    return (
-      <p className="px-5 pb-4 pt-1 text-xs leading-relaxed text-ink-faint">
-        Add supporting acts to your tour dates on the{' '}
-        <Link href={`/artists/${artistId}/tour`} className="text-accent hover:underline">
-          Tour page
-        </Link>{' '}
-        to give each one an outbound link here.
-      </p>
-    )
-  }
-
-  return (
-    <div className="pb-2 pt-1">
-      {supportLinks.map((l) => {
-        const id = supportKey(l)
-        const url = urls[id] ?? ''
-        const isOpen = open === id
-        return (
-          <div key={id}>
-            {/* Collapsed: the act name (the "+ Gudfella" text) + whether it links out. */}
-            <SectionRow
-              label={l.name}
-              open={isOpen}
-              tag={<span className={cx(EYEBROW, 'flex-none')}>{url.trim() ? 'Linked' : 'No link'}</span>}
-              onClick={() => setOpen(isOpen ? null : id)}
-            />
-            {isOpen && (
-              <div className={PANEL_BODY}>
-                {/* Names the exact credit this link attaches to, and which show. */}
-                <p className="pb-1 text-[11px] leading-relaxed text-ink-muted">
-                  Links the <span className="font-medium text-ink">“{l.name}”</span> credit on {l.show}.
-                </p>
-                <FieldRow icon="links" label="URL">
-                  <input
-                    aria-label={`Link for ${l.name} at ${l.show}`}
-                    type="url"
-                    value={url}
-                    onChange={(e) => edit(l, e.target.value)}
-                    placeholder="https://…  (blank = no link)"
-                    className={FIELD_ON_TINT}
-                  />
-                </FieldRow>
-              </div>
-            )}
-          </div>
-        )
-      })}
 
       <SaveLine status={status} />
     </div>

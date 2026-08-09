@@ -659,10 +659,15 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
   }
 
-  it('groups the panel into "Socials" and "Tour support"', () => {
+  it('groups the panel into "Socials" and "Buttons" — tour support has MOVED', () => {
+    // Support-act links lived here as a flat list across every date, each row captioned
+    // with the show it belonged to. They moved into the Tour panel's per-date editor
+    // (Sam, 2026-08-09), where the act names already are. Asserting their ABSENCE keeps
+    // the move honest: a stray re-add would put the same fact in two places.
     openLinks()
     expect(screen.getByText('Socials')).toBeTruthy()
-    expect(screen.getByText('Tour support')).toBeTruthy()
+    expect(screen.queryByText('Tour support')).toBeNull()
+    expect(screen.queryByLabelText(/Link for Gudfella/)).toBeNull()
   })
 
   it('routes a mailto:/tel: link out of Socials into its own "Contact" group', () => {
@@ -712,47 +717,6 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     fireEvent.drop(rows[1])
     expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l1', 'l3', 'l9'])
   })
-
-  it('lists each support act by name, collapsed, with its link status', () => {
-    openLinks()
-    // Both acts show as collapsed rows; Arlo has a URL, Gudfella does not.
-    expect(screen.getByRole('button', { name: /^Gudfella/ }).textContent).toContain('No link')
-    expect(screen.getByRole('button', { name: /^Arlo/ }).textContent).toContain('Linked')
-    // Collapsed: no URL field yet.
-    expect(screen.queryByLabelText(/Link for Gudfella/)).toBeNull()
-  })
-
-  it('expands a support act to show which credit + show it links, and the URL field', () => {
-    openLinks()
-    fireEvent.click(screen.getByRole('button', { name: /^Gudfella/ }))
-    // Names the credit it attaches to and the show it's on.
-    expect(screen.getByText(/Links the/).textContent).toContain('Gudfella')
-    expect(screen.getByText(/Links the/).textContent).toContain('Mohawk')
-    expect(screen.getByLabelText('Link for Gudfella at Mohawk')).toBeTruthy()
-  })
-
-  it('debounce-saves a support act URL via setSupportUrlAction (by tour date + name)', () => {
-    vi.useFakeTimers()
-    try {
-      openLinks()
-      fireEvent.click(screen.getByRole('button', { name: /^Gudfella/ }))
-      fireEvent.change(screen.getByLabelText('Link for Gudfella at Mohawk'), {
-        target: { value: 'https://gudfella.example' },
-      })
-      expect(setSupportUrlMock).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(500)
-      expect(setSupportUrlMock).toHaveBeenCalledWith('artist-1', 't1', 'Gudfella', 'https://gudfella.example')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('shows a Tour-page hint when there are no support acts', () => {
-    openLinks({ supportLinks: [] })
-    // The "Tour support" header is still there, followed by a guiding link out.
-    expect(screen.getByText('Tour support')).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Tour page/ }).getAttribute('href')).toBe('/artists/artist-1/tour')
-  })
 })
 
 describe('EditorInspector — Buttons group inside the Links panel (manifest-declared)', () => {
@@ -766,17 +730,21 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
   }
 
-  it('shows the Buttons group alongside Socials + Tour support in one panel', () => {
+  it('shows the Buttons group alongside Socials in one panel', () => {
     openSiteLinks()
     expect(screen.getByText('Socials')).toBeTruthy()
-    expect(screen.getByText('Tour support')).toBeTruthy()
     expect(screen.getByText('Buttons')).toBeTruthy()
   })
 
-  it('lists each declared button by label + what it powers, with a URL field each', () => {
+  it('lists each declared button by label, with a URL field each', () => {
     openSiteLinks({ linkValues: { usb: 'https://open.spotify.com/playlist/usb' } })
-    expect(screen.getByText('USB button')).toBeTruthy()
-    expect(screen.getByText(/Powers: Disco-ball playlist link/)).toBeTruthy()
+    // The label alone names the button. A "Powers: …" line under it restated the label
+    // in a longer sentence and pushed every input down a row (Sam, 2026-08-09); the
+    // site's description rides the label's hover text instead of costing a row.
+    const label = screen.getByText('USB button')
+    expect(label).toBeTruthy()
+    expect(screen.queryByText(/^Powers:/)).toBeNull()
+    expect(label.getAttribute('title')).toBe('Disco-ball playlist link (Videos band)')
     // USB has a URL; Merch is declared but UNSET → an empty, visible row (not invisible).
     expect((screen.getByLabelText('USB button URL') as HTMLInputElement).value).toBe('https://open.spotify.com/playlist/usb')
     expect((screen.getByLabelText('Merch button URL') as HTMLInputElement).value).toBe('')
@@ -1395,6 +1363,62 @@ const TOURS: EditorTour[] = [
   { id: 't2', date: '2026-10-02', venue: 'Empty Bottle', city: 'Chicago', state: 'IL', country: null, support: [], onSite: false },
   { id: 't3', date: null, venue: 'TBA', city: null, state: null, country: null, support: [], onSite: false },
 ]
+
+describe('EditorInspector — a show’s supporting acts are linked ON the show', () => {
+  // MOVED from the Links panel (Sam, 2026-08-09): "Those should just be added on the
+  // tour dates section. There should be an edit button for the specific tour show and in
+  // that should have the support section where you add the supporting artist's website
+  // link." The old home was a flat list of every act across every date, each row
+  // captioned with which show it belonged to — a fact about a show, filed away from it.
+  const openShow = (opts: { support?: EditorSupportLink[] } = {}) => {
+    renderInspector([], { tours: TOURS, supportLinks: opts.support ?? SUPPORT })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+  }
+
+  it('CRITICAL: every show has an Edit button that opens it full-panel', () => {
+    renderInspector([], { tours: TOURS, supportLinks: SUPPORT })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    // Headed by the show, since the date column and venue line are no longer beside it.
+    expect(screen.getByRole('heading', { name: /12 SEP 26 · Mohawk/ })).toBeTruthy()
+    expect(screen.getByText('Supporting acts')).toBeTruthy()
+  })
+
+  it('CRITICAL: lists THIS show’s acts only, each with its own URL field', () => {
+    // t1 carries Arlo + "Crosby, Stills & Nash"; t2 and t3 carry none. A panel that
+    // leaked the other dates' acts would be the flat list again, one level down.
+    openShow()
+    expect(screen.getByLabelText('Link for Arlo')).toBeTruthy()
+    expect(screen.getByLabelText('Link for Crosby, Stills & Nash')).toBeTruthy()
+    // Arlo's stored URL is seeded from the payload, not blank.
+    expect((screen.getByLabelText('Link for Arlo') as HTMLInputElement).value).toBe('https://arlo.example')
+  })
+
+  it('CRITICAL: debounce-saves by tour date + act name', () => {
+    // The behaviour the old panel guarded, kept verbatim through the move — the write
+    // is keyed by (tourDateId, name), which is what `support_urls` is keyed by.
+    vi.useFakeTimers()
+    try {
+      openShow()
+      fireEvent.change(screen.getByLabelText('Link for Arlo'), { target: { value: 'https://arlo.band' } })
+      expect(setSupportUrlMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(setSupportUrlMock).toHaveBeenCalledWith('artist-1', 't1', 'Arlo', 'https://arlo.band')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says so when a show has no supporting acts', () => {
+    // A blank panel is indistinguishable from a broken one, and the acts are entered
+    // elsewhere — so the empty state has to point there.
+    renderInspector([], { tours: TOURS, supportLinks: [] })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Empty Bottle/ }))
+    expect(screen.getByText(/No supporting acts on this show yet/i)).toBeTruthy()
+  })
+})
 
 describe('EditorInspector — tour tools', () => {
   const openTour = () => {

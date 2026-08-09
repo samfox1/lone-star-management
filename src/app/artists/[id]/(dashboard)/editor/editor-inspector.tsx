@@ -25,7 +25,6 @@ import {
   TextTools,
   LinkTools,
   SiteLinkTools,
-  SupportLinkTools,
   StyleTools,
   VideoTools,
   TourTools,
@@ -48,6 +47,7 @@ import { useSessionJournal } from './use-session-journal'
 import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
+import { TourDateEditor } from './tour-date-editor'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -309,6 +309,10 @@ export function EditorInspector({
   // separately from editingItem because it carries no media and shares none of that
   // editor's Replace/Remove machinery.
   const [editingText, setEditingText] = useState<EditorTextField | null>(null)
+  // The one TOUR DATE handed the whole panel (its supporting acts and their links). A
+  // third state rather than a branch of ItemEdit: that union is media-shaped —
+  // preview, Replace, Remove — and a show has none of those.
+  const [editingTour, setEditingTour] = useState<{ tour: EditorTour; label: string } | null>(null)
 
   // Which panel owns an ITEM select, by the asset type skeen stamps on the element
   // (`data-lse-item="track:<id>"`). Images route through isImageRegion instead — they
@@ -594,6 +598,19 @@ export function EditorInspector({
     )
   }
   const itemEditor = editingItem ? buildItemEditor(editingItem) : null
+  // Same panel slot as the other two, and mutually exclusive with them. Seeded with THIS
+  // date's act URLs only — the flat cross-date list is exactly what this replaced.
+  const tourEditor = editingTour ? (
+    <TourDateEditor
+      tour={editingTour.tour}
+      label={editingTour.label}
+      urls={Object.fromEntries(
+        supportLinks.filter((l) => l.tourDateId === editingTour.tour.id).map((l) => [l.name, l.url]),
+      )}
+      artistId={artistId}
+      onBack={() => setEditingTour(null)}
+    />
+  ) : null
   // Same panel slot as the item editor, and mutually exclusive with it: opening one
   // closes the other, so the panel is never showing two things at once.
   const textEditor = editingText ? (
@@ -828,6 +845,8 @@ export function EditorInspector({
         itemEditor
       ) : textEditor ? (
         textEditor
+      ) : tourEditor ? (
+        tourEditor
       ) : active ? (
         <EditingView
           component={active}
@@ -842,13 +861,18 @@ export function EditorInspector({
           textStatus={textSave.status}
           onEditTextField={(f) => {
             setEditingItem(null) // one editor in the panel at a time
+            setEditingTour(null)
             setEditingText(f)
             // Panel → preview: the outline follows the selection, so opening a field
             // from the list highlights (and scrolls to) the words it edits.
             setFocused({ kind: 'field', key: f.key })
           }}
+          onEditTour={(t) => {
+            setEditingItem(null) // one editor in the panel at a time
+            setEditingText(null)
+            setEditingTour(t)
+          }}
           links={links}
-          supportLinks={supportLinks}
           videos={videos}
           merch={merch}
           releases={releases}
@@ -890,7 +914,7 @@ export function EditorInspector({
           back in one click. Hidden at zero — an inert Revert would only raise "revert
           to what?" — and hidden while the ITEM editor is open, whose own Revert/Save
           pair owns that surface (two Revert buttons at once, Sam 2026-08-03). */}
-      {!itemEditor && !textEditor && journal.count > 0 && (
+      {!itemEditor && !textEditor && !tourEditor && journal.count > 0 && (
         <div className="border-t border-hairline px-4 py-2.5">
           <button
             type="button"
@@ -959,7 +983,7 @@ function EditingView({
   textStatus,
   onEditTextField,
   links,
-  supportLinks,
+  onEditTour,
   videos,
   merch,
   releases,
@@ -1010,7 +1034,8 @@ function EditingView({
   textStatus: SaveStatus
   onEditTextField: (field: EditorTextField) => void
   links: EditorLink[]
-  supportLinks: EditorSupportLink[]
+  /** Open one show full-panel (its supporting acts and their links). */
+  onEditTour: (t: { tour: EditorTour; label: string }) => void
   videos: EditorVideo[]
   merch: EditorMerch[]
   releases: EditorProject[]
@@ -1127,8 +1152,10 @@ function EditingView({
                 />
               </>
             )}
-            <GroupLabel>Tour support</GroupLabel>
-            <SupportLinkTools supportLinks={supportLinks} artistId={artistId} />
+            {/* "Tour support" lived here as a flat list of every act across every date,
+                each row captioned with which show it belonged to — a fact about a show,
+                filed away from the show. It moved into the Tour panel's per-date editor
+                (Sam, 2026-08-09), where the act names already are. */}
             <GroupLabel>Buttons</GroupLabel>
             <SiteLinkTools
               regions={linkRegions}
@@ -1154,6 +1181,7 @@ function EditingView({
             onRemove={onRemoveTour}
             onReorder={onReorderTour}
             onToggleOnSite={onToggleTourOnSite}
+            onEditTour={(t, label) => onEditTour({ tour: t, label })}
           />
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />

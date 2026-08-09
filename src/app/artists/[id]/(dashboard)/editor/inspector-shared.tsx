@@ -141,6 +141,7 @@ export function FieldRow({
   icon,
   label,
   action,
+  title,
   children,
 }: {
   /** Optional: a column of text fields reads better without one glyph per row. */
@@ -148,6 +149,9 @@ export function FieldRow({
   label: string
   /** Trailing control on the label line (an Edit button). */
   action?: React.ReactNode
+  /** Hover text on the label — a longer explanation that would cost a whole row if it
+   *  were rendered as a line of its own. */
+  title?: string
   children: React.ReactNode
 }) {
   return (
@@ -162,7 +166,7 @@ export function FieldRow({
           makes the label ambiguous to assistive tech, which then reads two controls. */}
       <div className="min-w-0">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className={CONTROL_LABEL}>{label}</span>
+          <span className={CONTROL_LABEL} title={title}>{label}</span>
           {action}
         </div>
         <label className="block">{children}</label>
