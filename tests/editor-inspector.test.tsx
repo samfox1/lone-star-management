@@ -498,8 +498,12 @@ describe('EditorInspector — Links component', () => {
     for (const label of ['Instagram', 'TikTok', 'Substack']) {
       expect(screen.getByRole('button', { name: label })).toBeTruthy()
     }
-    // …and an artist's own oddity is still reachable.
-    expect(screen.getByRole('button', { name: /Something else/i })).toBeTruthy()
+    // …and NOTHING else. The vocabulary is closed (Sam, 2026-08-10): a free-text escape
+    // hatch produced a label no site can map to a mark, which rendered as raw text in a
+    // row of glyphs. `createContent` refuses one on the write side too, so this is the
+    // affordance rather than the enforcement.
+    expect(screen.queryByRole('button', { name: /Something else/i })).toBeNull()
+    expect(screen.queryByLabelText('Link name')).toBeNull()
   })
 
   it('a platform already on the site cannot be added twice', () => {

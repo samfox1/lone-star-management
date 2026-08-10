@@ -37,6 +37,7 @@ import {
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
 import { saveEditorField, saveEditorLink, saveEditorStyle, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
+import { linkAddError } from '@/lib/site-editor/link-vocabulary'
 import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
@@ -74,6 +75,23 @@ export async function addContentAction(
   const input = extractFields(type, formData)
   if (Object.keys(input).length === 0) return { error: 'Fill in at least one field.' }
   const supabase = await createClient()
+
+  // A LINK's label is the ADDRESS a connected site maps its mark by, so it must name a
+  // platform we know and must not repeat. Checked HERE — the user-facing door both the
+  // editor's picker and the /links page form come through — rather than in
+  // `createContent`, which is also how fixtures and sync write rows (see
+  // lib/site-editor/link-vocabulary.ts for why that distinction matters).
+  if (type === 'link') {
+    const { data: rows, error: readErr } = await supabase.from('links').select('label').eq('artist_id', artistId)
+    if (readErr) return { error: readErr.message }
+    const problem = linkAddError(
+      (rows ?? []).map((r) => r.label as string),
+      typeof input.label === 'string' ? input.label : '',
+      typeof input.url === 'string' ? input.url : '',
+    )
+    if (problem) return { error: problem }
+  }
+
   try {
     await createContent(supabase, type, artistId, input)
   } catch (e) {

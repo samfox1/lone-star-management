@@ -21,12 +21,17 @@ import { useLockBodyScroll } from '../use-lock-body-scroll'
  * editor session — the frame, the scroll position, the panel you were in — to type one
  * URL. Two steps here instead: pick the platform, paste the URL.
  *
- * PICKING A PLATFORM IS THE POINT. A free-text label lands in the payload as whatever
- * was typed, and a connected site maps its icon by that label — so "insta" or "IG"
- * silently renders as an unrecognized link. Choosing from `SOCIAL_PLATFORMS` (the
- * package's shared vocabulary) means the label the site joins on is always one the site
- * can recognize. "Something else" stays, because an artist will always have somewhere we
- * have not heard of; it just renders as a plain labelled link.
+ * THE VOCABULARY IS CLOSED (Sam, 2026-08-10): "I would remove the possibility for an
+ * unknown platform to be added. I dont want text to be on the site as a fallback with no
+ * known site." Only `SOCIAL_PLATFORMS` can be added, so every social row carries a label
+ * a site can map to a mark. The free-text escape hatch is gone with it — an unknown
+ * platform had nothing to draw, so it rendered as the raw label sitting in a row of
+ * icons, which is exactly the thing this row must never look like.
+ *
+ * The label IS the join key a connected site maps its icon by (`item:link:instagram`),
+ * so a typed "insta" was never a lesser version of Instagram — it was a different,
+ * unrenderable platform. `createContent` refuses one on the write side too; this picker
+ * is the affordance, not the enforcement.
  */
 export function AddSocialModal({
   existingLabels,
@@ -48,8 +53,7 @@ export function AddSocialModal({
   }, [onCancel])
 
   const taken = new Set(existingLabels.map((l) => l.trim().toLowerCase()))
-  const [picked, setPicked] = useState<SocialPlatform | 'other' | null>(null)
-  const [label, setLabel] = useState('')
+  const [picked, setPicked] = useState<SocialPlatform | null>(null)
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,7 +63,7 @@ export function AddSocialModal({
   // the URL field is a second door into the same race.
   const busyRef = useRef(false)
 
-  const effectiveLabel = picked === 'other' ? label.trim() : (picked?.label ?? '')
+  const effectiveLabel = picked?.label ?? ''
 
   async function submit() {
     if (busyRef.current) return
@@ -69,7 +73,7 @@ export function AddSocialModal({
     // A picked platform prefills its `urlHint`, which is a bare platform root — non-empty,
     // so the check above waves it through and the site ships a link to instagram.com with
     // no handle on it. The manager has to have actually pasted something.
-    if (picked !== 'other' && picked !== null && trimmed === picked.urlHint) {
+    if (picked !== null && trimmed === picked.urlHint) {
       return setError('Add the rest of the link — that’s just the site’s address.')
     }
     busyRef.current = true
@@ -133,20 +137,12 @@ export function AddSocialModal({
                 </button>
               )
             })}
-            <button
-              type="button"
-              onClick={() => setPicked('other')}
-              className="flex items-center gap-2 rounded-lg border border-dashed border-hairline px-3 py-2.5 text-left text-[13px] hover:border-accent hover:text-accent"
-            >
-              <Icon name="plus" size={14} />
-              <span className="truncate">Something else</span>
-            </button>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-[13px]">
-              {picked === 'other' ? <Icon name="links" size={14} /> : <SocialMark slug={picked.slug} />}
-              <span>{picked === 'other' ? 'Something else' : picked.label}</span>
+              <SocialMark slug={picked.slug} />
+              <span>{picked.label}</span>
               <button
                 type="button"
                 onClick={() => {
@@ -159,24 +155,10 @@ export function AddSocialModal({
               </button>
             </div>
 
-            {picked === 'other' && (
-              <label className="block">
-                <span className={EYEBROW}>Name</span>
-                <input
-                  autoFocus
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  aria-label="Link name"
-                  placeholder="Newsletter"
-                  className={cx(FIELD, 'mt-1')}
-                />
-              </label>
-            )}
-
             <label className="block">
               <span className={EYEBROW}>URL</span>
               <input
-                autoFocus={picked !== 'other'}
+                autoFocus
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && submit()}

@@ -80,15 +80,8 @@ const created: { table: string; id: string }[] = []
 /** Create a row that this test OWNS. Each `it` makes its own: a fixture shared through a
  *  `let` written by the first test can't be run alone, and its later assertions read a row
  *  an earlier test already renamed. */
-let linkSeq = 0
 async function ownRow(c: Case) {
-  // A LINK's label must be unique per artist (2026-08-10): it is the address the frame
-  // uses for a social (`item:link:instagram`), so two rows sharing one would render two
-  // identical icons and make the frame→panel select ambiguous. createContent enforces
-  // that now, and these tests each make their own row — so each needs its own label.
-  // The marker assertions are substring checks, so the suffix rides along harmlessly.
-  const create = c.type === 'link' ? { ...c.create, label: `${c.create.label} ${++linkSeq}` } : c.create
-  const row = await createContent(asA, c.type, artistA, create)
+  const row = await createContent(asA, c.type, artistA, c.create)
   created.push({ table: c.table, id: row.id as string })
   return row
 }
