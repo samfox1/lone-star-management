@@ -43,6 +43,7 @@ import {
   type EditorMessage,
   type Rect,
   type SelectTarget,
+  type FrameMode,
 } from "./protocol";
 import type { PublicSitePayload } from "./payload";
 import type { LibraryAsset } from "./manifest";
@@ -460,12 +461,18 @@ export function mountFrameBridge(options: {
   /** The site's region registry lookup (its `regionBase`). Bound synchronously before
    *  any listener attaches — see the ordering note on `regionBaseLookup`. */
   regionBase?: (key: string) => string;
+  /** Told when the editor switches between selecting regions and working the site, so a
+   *  site can show its own affordance (dim the chrome, drop a hover outline). Optional:
+   *  the mode works without it. */
+  onModeChange?: (mode: FrameMode) => void;
 }): () => void {
   // The applier is CONSTRUCTED from the option — no setter, no module state, so the
   // "bound before any listener" invariant holds by construction (2026-08-07 deepening;
   // the old setter's ordering hazard was the intermittent hero-clip failure the
   // StyleApplier docblock describes).
   const styler = createStyleApplier({ regionBase: options.regionBase });
+  // Starts in `edit`, so a frame that never hears `set-mode` behaves exactly as before.
+  let mode: FrameMode = "edit";
   const target = options.target ?? window.parent;
   const manifest = () =>
     typeof options.editList === "function"
@@ -492,6 +499,11 @@ export function mountFrameBridge(options: {
   };
 
   const onClick = (e: MouseEvent) => {
+    // BROWSE: the frame keeps its hands off entirely — no select, no deselect, no
+    // preventDefault — so the site works the way a fan's does. The listener stays
+    // attached rather than being removed and re-added, so there is no window in which a
+    // mode change races a click.
+    if (mode === "browse") return;
     const el = e.target as Element | null;
     const marked = el && markedAncestor(el);
     if (!marked) return post(stamp({ type: "deselect" }));
@@ -545,6 +557,13 @@ export function mountFrameBridge(options: {
         block: "center",
       });
     else if (msg.type === "clear-highlight") clearHighlightFromDom(document);
+    else if (msg.type === "set-mode" && "mode" in msg) {
+      mode = msg.mode === "browse" ? "browse" : "edit";
+      // Leaving edit mode drops the outline with it: a ring around something the manager
+      // is now just looking at reads as a selection they cannot clear.
+      if (mode === "browse") clearHighlightFromDom(document);
+      options.onModeChange?.(mode);
+    }
     else options.onEditorMessage?.(msg);
   };
 

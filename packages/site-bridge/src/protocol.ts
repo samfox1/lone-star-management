@@ -77,6 +77,10 @@ export type FrameMessage =
  *  stay deleted: the viewport-scaling frame resizes the iframe itself and reflows.
  *
  *  Like FrameMessage, this is exactly what is SENT today. */
+/** What a click in the frame DOES. Additive to the protocol: a frame that predates this
+ *  message ignores it and stays in `edit`, which is the old behaviour exactly. */
+export type FrameMode = 'edit' | 'browse'
+
 export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-field'; key: string; value: string }
   /** Repaint ONE image region (a slot placement) without waiting on the revalidate →
@@ -90,6 +94,22 @@ export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'highlight'; target: SelectTarget }
   /** Drop the current highlight (the tile was deselected). */
   | { v: number; source: typeof EDITOR_SOURCE; type: 'clear-highlight' }
+  /**
+   * Whether a click in the frame SELECTS a region or works the site.
+   *
+   * In `edit` (the default) the frame swallows clicks on marked elements — capture
+   * phase, preventDefault and stopImmediatePropagation — so selecting a region never
+   * also fires the app underneath it. That was right for a single scrolling page and
+   * wrong the moment a site has navigation: on a tabbed site (throwaway #2, 2026-08-10)
+   * every click hit the tab BUTTON's style region and the manager could not reach their
+   * own other tabs.
+   *
+   * `browse` stops the interception entirely, so the site behaves exactly as a fan sees
+   * it — menus, multi-step flows and forms included. Deliberately a MODE rather than a
+   * per-click prompt: a chooser would add a click to every selection, need the site to
+   * declare which elements navigate, and still not carry anyone through a two-step flow.
+   */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'set-mode'; mode: FrameMode }
   /**
    * "I'm listening — announce yourself." The editor sends this once the iframe has
    * loaded, and the frame answers with `ready`.
