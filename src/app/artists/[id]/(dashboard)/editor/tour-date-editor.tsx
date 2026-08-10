@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type EditorTour } from './inspector-types'
+import { Icon } from '@/components/ui/icons'
 import { FIELD, FieldRow, runSerialized, SaveLine, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { setSupportUrlAction, updateContentAction } from '../actions'
@@ -61,6 +62,48 @@ export function TourDateEditor({
    * `router.refresh()` afterwards re-fetches the draft, whose new identity re-sends
    * init-data to the frame: that is what updates the window, not a special message.
    */
+  /**
+   * The acts themselves, editable here (Sam, 2026-08-10: "Allow to add supporting acts
+   * (multiple need be) and their links in the side panel"). Owned as state because adds
+   * and removes render immediately; the save posts the WHOLE array — that is the
+   * column's write shape (`tour_dates.support` text[], read via getAll). Removing the
+   * last act posts the blank SENTINEL: extractUpdate skips absent fields, so an empty
+   * FormData would silently keep the old list (content-form.ts documents this).
+   */
+  const router = useRouter()
+  const [acts, setActs] = useState<string[]>(tour.support)
+  const [actDraft, setActDraft] = useState('')
+  const [actError, setActError] = useState<string | null>(null)
+
+  const saveActs = useCallback(
+    (next: string[]) => {
+      setActs(next)
+      setStatus('saving')
+      runSerialized(saving, errored, setStatus, 'acts', async () => {
+        const fd = new FormData()
+        if (next.length === 0) fd.append('support', '')
+        for (const name of next) fd.append('support', name)
+        const res = await updateContentAction('tour_date', tour.id, artistId, fd)
+        if (!res?.error) router.refresh()
+        return res
+      })
+    },
+    [artistId, tour.id, router],
+  )
+
+  function addAct() {
+    const name = actDraft.trim()
+    if (!name) return
+    // support_urls is KEYED BY NAME, so two acts spelled the same would share one link
+    // row and one remove button. Same normalization the key join uses.
+    if (acts.some((a) => a.trim().toLowerCase() === name.toLowerCase())) {
+      return setActError(`${name} is already on this show.`)
+    }
+    setActError(null)
+    setActDraft('')
+    saveActs([...acts, name])
+  }
+
   const [details, setDetails] = useState<Record<string, string>>({
     date: tour.date ?? '',
     venue: tour.venue ?? '',
@@ -72,7 +115,6 @@ export function TourDateEditor({
   useEffect(() => {
     detailsRef.current = details
   }, [details])
-  const router = useRouter()
 
   const persistDetail = useCallback(
     (field: string, value: string) => {
@@ -172,17 +214,29 @@ export function TourDateEditor({
         </div>
 
         <h3 className="pt-3 font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Supporting acts</h3>
-        {tour.support.length === 0 ? (
-          // SAY SO. A blank panel is indistinguishable from a broken one, and the acts
-          // are entered elsewhere, so the manager needs telling where.
+        {acts.length === 0 && (
           <p className="pt-2 text-[11px] leading-relaxed text-ink-faint">
-            No supporting acts on this show yet. Add them on the Tour page and they&apos;ll
-            appear here to link.
+            No supporting acts on this show yet.
           </p>
-        ) : (
+        )}
+        {acts.length > 0 && (
           <div className="pt-1">
-            {tour.support.map((name) => (
-              <FieldRow key={name} icon="links" label={name}>
+            {acts.map((name) => (
+              <FieldRow
+                key={name}
+                icon="links"
+                label={name}
+                action={
+                  <button
+                    type="button"
+                    aria-label={`Remove ${name}`}
+                    onClick={() => saveActs(acts.filter((a) => a !== name))}
+                    className="rounded-md p-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                }
+              >
                 <input
                   aria-label={`Link for ${name}`}
                   type="url"
@@ -195,6 +249,29 @@ export function TourDateEditor({
             ))}
           </div>
         )}
+
+        {/* Adding is a discrete action, not a debounce: a name is complete when the
+            manager says so, and half-typed names must never save. */}
+        <div className="flex items-end gap-2 pt-2">
+          <label className="min-w-0 flex-1">
+            <input
+              aria-label="Add a supporting act"
+              value={actDraft}
+              onChange={(e) => setActDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addAct()}
+              placeholder="Act name"
+              className={FIELD}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={addAct}
+            className="flex-none rounded-lg border border-hairline px-3 py-2 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink hover:border-accent hover:text-accent"
+          >
+            Add act
+          </button>
+        </div>
+        {actError && <p className="pt-1 text-[11px] text-accent-red">{actError}</p>}
       </div>
       <SaveLine status={status} />
     </EditorPanel>

@@ -1519,6 +1519,65 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
     }
   })
 
+  it('CRITICAL: an act can be ADDED here, and the whole list saves', async () => {
+    // Sam, 2026-08-10: "Allow to add supporting acts (multiple need be) and their links
+    // in the side panel." Acts were entered only on the Tour page; this panel could just
+    // link them. The save posts the WHOLE array — that is the column's write shape
+    // (tour_dates.support text[], extracted via getAll).
+    openShow()
+    fireEvent.change(screen.getByLabelText('Add a supporting act'), { target: { value: 'Gudfella' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add act/i }))
+    })
+    expect(updateContentMock).toHaveBeenCalledTimes(1)
+    const [type, id, , fd] = updateContentMock.mock.calls[0]
+    expect(type).toBe('tour_date')
+    expect(id).toBe('t1')
+    expect((fd as FormData).getAll('support')).toEqual(['Arlo', 'Crosby, Stills & Nash', 'Gudfella'])
+    // …and the new act immediately has its own link field.
+    expect(screen.getByLabelText('Link for Gudfella')).toBeTruthy()
+  })
+
+  it('CRITICAL: removing an act saves the remaining list', async () => {
+    openShow()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Arlo' }))
+    })
+    const [, , , fd] = updateContentMock.mock.calls[0]
+    expect((fd as FormData).getAll('support')).toEqual(['Crosby, Stills & Nash'])
+    expect(screen.queryByLabelText('Link for Arlo')).toBeNull()
+  })
+
+  it('removing the LAST act posts the blank sentinel, so the column actually clears', async () => {
+    // extractUpdate only writes fields present in the FormData; with zero entries the
+    // field would be absent and the old list silently kept (content-form.ts's own
+    // comment). The blank entry is the documented sentinel: getAll → trim → filter →
+    // [], which the NOT NULL column stores as empty.
+    renderInspector([], {
+      tours: [{ ...TOURS[0], id: 't9', venue: 'Solo Room', support: ['Only Act'] }],
+      supportLinks: [],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Solo Room/ }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Only Act' }))
+    })
+    const [, , , fd] = updateContentMock.mock.calls[0]
+    expect((fd as FormData).getAll('support')).toEqual([''])
+  })
+
+  it('a duplicate act name is refused — support_urls is keyed by name', async () => {
+    // Two acts named "Arlo" would share one link row and one remove button; the second
+    // is a mistake, not a lineup.
+    openShow()
+    fireEvent.change(screen.getByLabelText('Add a supporting act'), { target: { value: '  arlo ' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add act/i }))
+    })
+    expect(updateContentMock).not.toHaveBeenCalled()
+    expect(screen.getByText(/already on this show/i)).toBeTruthy()
+  })
+
   it('says so when a show has no supporting acts', () => {
     // A blank panel is indistinguishable from a broken one, and the acts are entered
     // elsewhere — so the empty state has to point there.
