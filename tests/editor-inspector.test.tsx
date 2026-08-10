@@ -1498,6 +1498,36 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
   })
 })
 
+describe('EditorInspector — a single-song project card IS its song', () => {
+  it('CRITICAL: clicking a single’s card selects its one song — not just expands', () => {
+    // Sam, 2026-08-10, OPERATOR: "clicking songs in the left panel doesnt highlight them
+    // in the right." He was clicking song-titled CARDS — every track was a single, so
+    // each card held exactly one song — and the card's only behaviour was expanding a
+    // one-row tracklist. The [panel] click log never fired: the row he read as a song
+    // was a container. When a card has ONE song there is no ambiguity about which song
+    // the manager means, so the click selects it as well as expanding.
+    const onHighlight = vi.fn()
+    renderInspector([], {
+      releases: [{ key: 'r9', title: 'Signal Lost', cover_url: null, kind: 'single', onSite: true, songs: [{ id: 's9', title: 'Signal Lost' }] }],
+      onHighlight,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Signal Lost — / }))
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'track', id: 's9' })
+  })
+
+  it('a MULTI-song card still only expands — which song is meant is genuinely unknown', () => {
+    const onHighlight = vi.fn()
+    renderInspector([], {
+      releases: [{ key: 'r1', title: 'Neon Nights', cover_url: null, kind: 'album', onSite: true, songs: [{ id: 's1', title: 'A' }, { id: 's2', title: 'B' }] }],
+      onHighlight,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Neon Nights — / }))
+    expect(onHighlight).not.toHaveBeenCalled()
+  })
+})
+
 describe('EditorInspector — tour tools', () => {
   const openTour = () => {
     renderInspector([], { tours: TOURS })

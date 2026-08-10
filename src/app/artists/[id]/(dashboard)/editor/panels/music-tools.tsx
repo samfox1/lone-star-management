@@ -94,7 +94,17 @@ export function MusicTools({
                       type="button"
                       aria-expanded={isOpen}
                       aria-label={`${r.title || 'Untitled'} — ${plural(r.songs.length, 'song')}`}
-                      onClick={() => setOpen(isOpen ? null : r.key)}
+                      onClick={() => {
+                        setOpen(isOpen ? null : r.key)
+                        // A SINGLE's card is its song, as far as anyone reading the panel
+                        // can tell — the card carries the song's own title. Expanding a
+                        // one-row tracklist was its only behaviour, so clicking it did
+                        // nothing visible and panel→preview selection read as broken
+                        // (Sam, 2026-08-10, on a site of singles). One song = no
+                        // ambiguity about which is meant; multi-song cards still only
+                        // expand, because there it is genuinely unknown.
+                        if (r.songs.length === 1) onFocus?.({ kind: 'item', assetType: 'track', id: r.songs[0].id })
+                      }}
                       className="block w-full text-left"
                     >
                       <div className={cx('relative', dim)}>
