@@ -8,6 +8,8 @@ import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
+import type { FrameMode } from '@samfox1/site-bridge/protocol'
+import { cx } from '@/lib/cx'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
 import {
@@ -178,6 +180,9 @@ export function EditorShell({
   uploadedFonts?: { family: string; label: string }[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
+  // EDIT is the default: a manager opens this to change things, and browse is the escape
+  // hatch for reaching a part of the site their clicks cannot otherwise get to.
+  const [frameMode, setFrameModeState] = useState<FrameMode>('edit')
   const panelRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState({ w: 0, h: 0 })
 
@@ -194,6 +199,7 @@ export function EditorShell({
     applyLink,
     applyHighlight,
     clearHighlight,
+    setMode,
     manifest,
     selectedStyle,
     selectedLink,
@@ -226,6 +232,15 @@ export function EditorShell({
   // invisible until somebody clicked: text was the category left out in 2026-08-05,
   // images in 2026-08-09. The registry there makes a new category a compile error until
   // it names a consumer, and tests/panel-inputs.test.ts proves none of them resolve empty.
+  /** Switch modes: tell the frame, and drop the editor's own selection on the way out —
+   *  a panel still showing a selected region while clicks work the site reads as a
+   *  control that has stopped responding. */
+  const setFrameMode = (m: FrameMode) => {
+    setFrameModeState(m)
+    setMode(m)
+    if (m === 'browse') clearHighlight()
+  }
+
   const panels = useMemo(
     () =>
       resolvePanelInputs({
@@ -288,6 +303,27 @@ export function EditorShell({
               <option value="desktop">Desktop</option>
               <option value="mobile">Mobile</option>
             </select>
+
+            {/* EDIT vs BROWSE. Every click on a marked region is swallowed in edit mode so
+                selecting never also fires the app underneath — which left a site with
+                NAVIGATION unbrowsable: on a tabbed site each click just selected the tab
+                button (Sam, 2026-08-10). Browse hands the site back its own clicks. */}
+            <div className="flex overflow-hidden rounded-lg border border-hairline">
+              {(['edit', 'browse'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setFrameMode(m)}
+                  aria-pressed={frameMode === m}
+                  className={cx(
+                    'px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em]',
+                    frameMode === m ? 'bg-ink text-paper' : 'bg-paper text-ink-faint hover:text-ink',
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
 
             {/* The canvas is a real 1440px desktop window drawn smaller, so say so —
                 otherwise a zoomed-out site reads as "the text is broken". */}

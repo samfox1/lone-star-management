@@ -536,6 +536,11 @@ editor affordances over machinery that already exists.
 
 ## Shipping compiled JS from the package — plan of record (2026-08-10)
 
+> **DEFERRED (Sam, 2026-08-10).** Not now — skeen's `--webpack` flag holds dev together
+> and the plan below is ready to execute when it is worth the interruption. Do it BEFORE
+> the scaffold ships (phase 5), because that is the moment a per-site `next.config.ts`
+> workaround starts being copied into every new artist site.
+
 **The trigger.** Next 16 runs `next dev` on Turbopack, and Turbopack refuses a `.ts` file
 inside `node_modules` no matter what `transpilePackages` says — "Unknown module type".
 Skeen's dev server has been dead on it. `next build` uses a different path, which is why

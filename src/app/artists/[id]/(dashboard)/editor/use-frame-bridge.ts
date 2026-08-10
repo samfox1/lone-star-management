@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
-import { editorMessage, isFrameMessage, type SelectTarget } from '@samfox1/site-bridge/protocol'
+import { editorMessage, isFrameMessage, type FrameMode, type SelectTarget } from '@samfox1/site-bridge/protocol'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**
@@ -66,6 +66,8 @@ export type FrameBridge = {
   applyHighlight: (target: SelectTarget) => void
   /** Drop the frame's current highlight (the tile was deselected). */
   clearHighlight: () => void
+  /** Switch the frame between selecting regions and working the site (`set-mode`). */
+  setMode: (mode: FrameMode) => void
   /** A custom site's own edit-list, received on `ready` (D-D). Null for a built-in
    *  template, which has none to send. */
   manifest: TemplateManifest | null
@@ -121,6 +123,9 @@ export function useFrameBridge({
   const applyLink = useCallback((key: string, url: string) => post({ type: 'apply-link', key, url }), [post])
   const applyHighlight = useCallback((target: SelectTarget) => post({ type: 'highlight', target }), [post])
   const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
+  /** Whether a click in the frame SELECTS a region or works the site. See the protocol's
+   *  `set-mode`: a site with navigation is unbrowsable while every click is swallowed. */
+  const setMode = useCallback((mode: FrameMode) => post({ type: 'set-mode', mode }), [post])
 
   /** The draft last handed to the frame, so the `ready` handler and the connected
    *  effect below (either of which may fire first) don't each post the largest message
@@ -215,6 +220,7 @@ export function useFrameBridge({
     applyLink,
     applyHighlight,
     clearHighlight,
+    setMode,
     manifest,
     selectedStyle,
     selectedLink,

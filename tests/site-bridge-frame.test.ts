@@ -23,6 +23,17 @@ import {
   textFieldKeys,
 } from "@samfox1/site-bridge";
 import { createStyleApplier, type TemplateManifest } from "@samfox1/site-bridge";
+import { FIELD_ATTR, HIGHLIGHT_ATTR } from "@samfox1/site-bridge/markers";
+
+/** Post an editor message at the frame, the way the real editor does. */
+function editorSays(msg: Record<string, unknown>) {
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      origin: "https://editor.test",
+      data: { v: BRIDGE_VERSION, source: EDITOR_SOURCE, ...msg },
+    }),
+  );
+}
 
 // A minimal edit list in the PACKAGE's shape. skeen's tests pinned its real EDIT_LIST —
 // its design; those assertions stayed there. What the bridge owes any site is that the
@@ -956,3 +967,87 @@ describe("mountFrameBridge({ regionBase }) — the documented injection path", (
     teardown();
   });
 });
+
+describe('browse mode hands the site back its own clicks', () => {
+  it('CRITICAL: in browse, a click on a marked element is NOT intercepted', () => {
+    // Sam, 2026-08-10, on the tabbed throwaway: "I cant click through the site on the
+    // editor. It just pulls up the tab button in the left panel." Edit mode swallows
+    // every click on a marked element — capture phase, preventDefault,
+    // stopImmediatePropagation — which is right for selecting and fatal for a site with
+    // navigation.
+    const posted: unknown[] = []
+    const target = { postMessage: (m: unknown) => posted.push(m) } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target })
+
+    const el = document.createElement('button')
+    el.setAttribute(FIELD_ATTR, 'hero')
+    document.body.appendChild(el)
+
+    editorSays({ type: 'set-mode', mode: 'browse' })
+    posted.length = 0
+
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
+    el.dispatchEvent(ev)
+
+    expect(ev.defaultPrevented, 'browse must not preventDefault').toBe(false)
+    expect(posted.filter((m) => (m as { type?: string }).type === 'select')).toHaveLength(0)
+    stop()
+    el.remove()
+  })
+
+  it('CRITICAL: edit mode still intercepts — the negative above needs its opposite', () => {
+    const posted: unknown[] = []
+    const target = { postMessage: (m: unknown) => posted.push(m) } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target })
+
+    const el = document.createElement('button')
+    el.setAttribute(FIELD_ATTR, 'hero')
+    document.body.appendChild(el)
+
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
+    el.dispatchEvent(ev)
+
+    expect(ev.defaultPrevented).toBe(true)
+    expect(posted.filter((m) => (m as { type?: string }).type === 'select')).toHaveLength(1)
+    stop()
+    el.remove()
+  })
+
+  it('switching back to edit restores interception', () => {
+    // A one-way door would strand the manager in a site they can no longer edit.
+    const posted: unknown[] = []
+    const target = { postMessage: (m: unknown) => posted.push(m) } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target })
+
+    const el = document.createElement('button')
+    el.setAttribute(FIELD_ATTR, 'hero')
+    document.body.appendChild(el)
+
+    editorSays({ type: 'set-mode', mode: 'browse' })
+    editorSays({ type: 'set-mode', mode: 'edit' })
+    posted.length = 0
+
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
+    el.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(posted.filter((m) => (m as { type?: string }).type === 'select')).toHaveLength(1)
+    stop()
+    el.remove()
+  })
+
+  it('entering browse drops the highlight — a ring you cannot clear is worse than none', () => {
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target })
+
+    const el = document.createElement('div')
+    el.setAttribute(FIELD_ATTR, 'hero')
+    document.body.appendChild(el)
+
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'hero' } })
+    expect(el.hasAttribute(HIGHLIGHT_ATTR)).toBe(true)
+    editorSays({ type: 'set-mode', mode: 'browse' })
+    expect(el.hasAttribute(HIGHLIGHT_ATTR)).toBe(false)
+    stop()
+    el.remove()
+  })
+})
