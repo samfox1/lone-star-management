@@ -22,7 +22,8 @@
     "make:admin": "tsx scripts/make-admin.ts",
     "site:custom": "tsx scripts/set-custom-site.ts",
     "tokens": "tsx scripts/generate-bridge-tokens.ts",
-    "social-icons": "tsx scripts/generate-social-icons.ts"
+    "social-icons": "tsx scripts/generate-social-icons.ts",
+    "mutation:changed": "tsx scripts/mutation-changed.ts"
   },
   "dependencies": {
     "@lone-star/music-rules": "*",

@@ -85,6 +85,24 @@ The `break` threshold is a RATCHET. Raise it as the score rises; never lower it 
 a red build green. A drop means a new line went unwatched or an existing test stopped
 biting.
 
+WHEN TO RUN WHICH. The full sweep is ~29 minutes, which is a check you MEAN to run;
+`npm run mutation:changed` is the one you actually run. It diffs against the merge-base
+with `origin/main` (committed changes, working tree, and untracked files), intersects
+that with the `mutate` slice, and reports what it dropped and why — so a src file left
+out is a line of output, not a silent gap. Seconds to a couple of minutes.
+
+  npm run mutation:changed              # this branch
+  npm run mutation:changed -- --base HEAD~3
+  npm run mutation:changed -- --all     # the whole slice, no diff
+
+So: **targeted on every change**, once the suite is green. **Full run before a release
+or after a large feature**, then ratchet `break` to just under the new score. And when a
+new module gains DB-FREE tests, add it to `mutate` — a module that is not on that list is
+never looked at, which is the one way this whole apparatus can quietly stop working.
+
+Neither replaces the per-test habit — delete the guard, watch it go red — because that is
+the only check that happens WHILE the test is being written, when fixing it is free.
+
 **`/test-audit`** (`.claude/skills/test-audit/`) is the periodic adversarial review:
 fan out agents that read each implementation before judging its test, and prove findings
 by deleting the guard and watching the suite stay green. Run it before a release or
