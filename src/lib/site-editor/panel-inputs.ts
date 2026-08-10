@@ -122,8 +122,18 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
   }
 }
 
-/** Whether a resolved input carries anything — the shape-agnostic "did this category
- *  reach a panel" check the coverage test asserts with. */
+/**
+ * Whether a resolved input carries anything — the shape-agnostic "did this category reach
+ * a panel" check the coverage test asserts with. LOAD-BEARING: if this said yes to
+ * everything, that test would pass with every panel empty.
+ *
+ * Two Stryker mutants survive here and are EQUIVALENT, recorded so the next reader does
+ * not spend an afternoon on them: deleting the `Array.isArray` line changes nothing,
+ * because `Object.keys([x]).length` answers identically for a dense array. The branch
+ * stays for the reader — an array is not an object to most people — and because a sparse
+ * array would diverge. The other lives on `?? []` in `showGallery` above: any junk
+ * default answers `false` to the same `.some()`.
+ */
 export function inputIsPopulated(value: PanelInputs[keyof PanelInputs]): boolean {
   if (value === undefined || value === null) return false
   if (typeof value === 'boolean') return value

@@ -47,9 +47,18 @@ export function linkAddError(existingLabels: readonly string[], label: string, u
   return null
 }
 
-/** A bare email address typed where a URL was expected. Deliberately loose: this only
- *  decides "not a social", and a false positive here just means the vocabulary rule
- *  stays out of the way — the URL columns and `safeHref` still judge the value itself. */
+/**
+ * A bare email address typed where a URL was expected.
+ *
+ * SLASHES ARE EXCLUDED, and that is the whole subtlety: an anchored
+ * `^[^\s@]+@[^\s@]+\.[^\s@]+$` also matches
+ * `https://zine.example/contact@x.com`, because a URL contains no spaces and often
+ * exactly one `@` — so any link with an address in its path would have slipped through
+ * the vocabulary rule as if it were a booking address. An email has no `/`.
+ *
+ * Still deliberately loose beyond that: this only decides "not a social", and the URL
+ * columns and `safeHref` judge the value itself.
+ */
 function looksLikeEmail(url: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url.trim())
+  return /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(url.trim())
 }

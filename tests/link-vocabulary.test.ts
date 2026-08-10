@@ -25,6 +25,13 @@ describe('only a KNOWN platform can be added', () => {
     expect(linkAddError([], 'Fred’s Zine', 'https://zine')).toMatch(/isn’t a platform we know/i)
   })
 
+  it('the message quotes the label TRIMMED — it is read by the person who typed it', () => {
+    // Stryker survivor (2026-08-10): dropping `.trim()` here changed no test, because
+    // every assertion used a tidy label. The message quotes user input straight back, so
+    // the padding would be visible inside the quotes.
+    expect(linkAddError([], '  Fred’s Zine  ', 'https://zine')).toContain('“Fred’s Zine”')
+  })
+
   it('CRITICAL: every platform the picker offers is accepted', () => {
     // Derived from the registry (AGENTS.md rule 4), so a platform added tomorrow is
     // proven addable the moment it exists. The two lists disagreeing would mean an
@@ -43,12 +50,27 @@ describe('only a KNOWN platform can be added', () => {
     // 2026-08-10), and `isContactLink` only knows the mailto:/tel: schemes — so without
     // this a manager retyping their booking email would be told it is not a platform.
     expect(linkAddError([], 'Booking email', 'ross@everesttm.com')).toBeNull()
+    // …and padded, the way a paste arrives.
+    expect(linkAddError([], 'Booking email', '  ross@everesttm.com  ')).toBeNull()
+  })
+
+  it('a URL that merely CONTAINS an address is still a social, and still refused', () => {
+    // The email test is anchored on purpose (Stryker survivors, 2026-08-10: dropping ^
+    // or $ changed no test). Without the anchors, any link with an @ in its path would
+    // slip through the vocabulary rule as if it were a booking address.
+    expect(linkAddError([], 'Fred’s Zine', 'https://zine.example/contact@x.com')).toMatch(/isn’t a platform/i)
+    expect(linkAddError([], 'Fred’s Zine', 'mail@x.com/not-really')).toMatch(/isn’t a platform/i)
   })
 })
 
 describe('a social cannot be added to the same site twice', () => {
   it('CRITICAL: a duplicate is refused', () => {
     expect(linkAddError(['Instagram'], 'Instagram', 'https://ig/2')).toMatch(/already on this site/i)
+  })
+
+  it('its message quotes the label TRIMMED too', () => {
+    // Same Stryker survivor, other branch.
+    expect(linkAddError(['Instagram'], '  Instagram  ', 'https://ig/2')).toBe('Instagram is already on this site.')
   })
 
   it('CRITICAL: compared on the SAME normalization the frame joins on', () => {

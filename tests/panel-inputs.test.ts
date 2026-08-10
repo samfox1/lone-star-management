@@ -89,6 +89,52 @@ describe('a connected site’s declared categories all reach a panel', () => {
   })
 })
 
+describe('the gallery appears only where a site declares one', () => {
+  it('a custom site whose slots hold no IMAGE slot gets no collage', () => {
+    // The positive alone would pass if the predicate ignored `accepts` entirely — a
+    // surviving mutant said so (Stryker, 2026-08-10: replacing the empty-slots default
+    // with a junk array changed nothing, because nothing asserted the FALSE case).
+    const noImages = { ...FULL, slots: [{ key: 'music', label: 'Music', accepts: 'track' }] } as unknown as TemplateManifest
+    expect(resolve({ manifest: noImages }).showGallery).toBe(false)
+    expect(resolve().showGallery).toBe(true)
+  })
+
+  it('a custom site that declares NO slots at all gets no collage', () => {
+    const none = { ...FULL, slots: [] } as unknown as TemplateManifest
+    expect(resolve({ manifest: none }).showGallery).toBe(false)
+  })
+})
+
+describe('inputIsPopulated — the predicate the coverage test leans on', () => {
+  // LOAD-BEARING. If this said "yes" to everything, the category-coverage test above
+  // would pass with every panel empty — a green suite proving nothing. Stryker found it
+  // untested: mutating each branch changed no test's result.
+  it('CRITICAL: nothing counts as populated', () => {
+    expect(inputIsPopulated(undefined)).toBe(false)
+    // `null` too. The types say a panel input is never null, but the guard reads it and
+    // an unasserted branch is an unwatched one (Stryker survivor, 2026-08-10).
+    expect(inputIsPopulated(null as never)).toBe(false)
+    expect(inputIsPopulated([])).toBe(false)
+    expect(inputIsPopulated(false)).toBe(false)
+    expect(inputIsPopulated({} as never)).toBe(false)
+  })
+
+  it('an EMPTY array is not populated, while a non-empty one is', () => {
+    // Pins the array branch itself: without it, `[]` still answered false via the
+    // object-keys fallback below, so deleting the branch changed nothing.
+    expect(inputIsPopulated([] as never)).toBe(false)
+    expect(inputIsPopulated([{ key: 'only' }] as never)).toBe(true)
+    // A non-empty array whose entries are falsy still counts — length is the question.
+    expect(inputIsPopulated([undefined] as never)).toBe(true)
+  })
+
+  it('CRITICAL: something counts as populated', () => {
+    expect(inputIsPopulated([{ key: 'x' }] as never)).toBe(true)
+    expect(inputIsPopulated(true)).toBe(true)
+    expect(inputIsPopulated({ fonts: [] } as never)).toBe(true)
+  })
+})
+
 describe('a BUILT-IN template is not fed by what its frame announces', () => {
   it('CRITICAL: an announced manifest is ignored; the local props win', () => {
     // Built-ins announce a manifest too (it exists so the frame's apply-field can tell
