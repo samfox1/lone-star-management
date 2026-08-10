@@ -262,6 +262,24 @@ describe('a routed select is VISIBLE where it lands', () => {
     expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'link', id: 'instagram' })
   })
 
+  it('CRITICAL: a tour-date select marks its row current and scrolls to it', () => {
+    // Sam, 2026-08-10: "clicking on specific tour rows doesnt highlight the specific row
+    // clicked in the editor, and vice versa." Tour was the last item panel with no focus
+    // affordance in either direction — the routed select opened it and showed nothing.
+    renderInspector({ selectedRegion: select({ kind: 'item', assetType: 'tour_date', id: 'td1' }) })
+    const current = document.querySelector('[aria-current="true"]')
+    expect(current).not.toBeNull()
+    expect(current!.textContent).toContain('Mohawk')
+    expect(scrollSpy).toHaveBeenCalled()
+  })
+
+  it('CRITICAL: clicking a tour row posts its item highlight', () => {
+    const { onHighlight } = renderInspector()
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Select Mohawk/ }))
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'tour_date', id: 'td1' })
+  })
+
   it('CRITICAL: a video select marks its card current and scrolls to it', () => {
     // The Videos panel had no focus affordance at all — a routed select opened the
     // panel and showed nothing selected.

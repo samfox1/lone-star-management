@@ -1199,6 +1199,8 @@ function EditingView({
             onReorder={onReorderTour}
             onToggleOnSite={onToggleTourOnSite}
             onEditTour={(t, label) => onEditTour({ tour: t, label })}
+            focusedKey={focusedKey}
+            onFocus={onFocus}
           />
         ) : isMerch ? (
           <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
