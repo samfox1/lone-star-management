@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { type EditorTour } from './inspector-types'
 import { FIELD, FieldRow, runSerialized, SaveLine, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
-import { setSupportUrlAction } from '../actions'
+import { setSupportUrlAction, updateContentAction } from '../actions'
+import { useRouter } from 'next/navigation'
 
 /**
- * ONE tour date, opened full-panel — currently its supporting acts and where each one
- * links to.
+ * ONE tour date, opened full-panel — its own details, and its supporting acts and where
+ * each one links to.
  *
  * Sam, 2026-08-09: "I want to change the format of the links for the tour support. Those
  * should just be added on the tour dates section. There should be an edit button for the
@@ -53,6 +54,56 @@ export function TourDateEditor({
     urlsRef.current = urls
   }, [urls])
 
+  /**
+   * The show's own fields, editable in place (Sam, 2026-08-10: "you should be able to
+   * edit some of the info right there and it updates in the tour dates section").
+   * Saved through the SAME generic CRUD the Tour page uses — one write path — and
+   * `router.refresh()` afterwards re-fetches the draft, whose new identity re-sends
+   * init-data to the frame: that is what updates the window, not a special message.
+   */
+  const [details, setDetails] = useState<Record<string, string>>({
+    date: tour.date ?? '',
+    venue: tour.venue ?? '',
+    city: tour.city ?? '',
+    state: tour.state ?? '',
+    country: tour.country ?? '',
+  })
+  const detailsRef = useRef(details)
+  useEffect(() => {
+    detailsRef.current = details
+  }, [details])
+  const router = useRouter()
+
+  const persistDetail = useCallback(
+    (field: string, value: string) => {
+      pending.current.delete(`detail:${field}`)
+      setStatus('saving')
+      runSerialized(saving, errored, setStatus, `detail:${field}`, async () => {
+        const fd = new FormData()
+        fd.set(field, value)
+        const res = await updateContentAction('tour_date', tour.id, artistId, fd)
+        if (!res?.error) router.refresh()
+        return res
+      })
+    },
+    [artistId, tour.id, router],
+  )
+
+  function editDetail(field: string, value: string) {
+    setDetails((d) => ({ ...d, [field]: value }))
+    const key = `detail:${field}`
+    const existing = timers.current.get(key)
+    if (existing) clearTimeout(existing)
+    pending.current.add(key)
+    timers.current.set(
+      key,
+      setTimeout(() => {
+        timers.current.delete(key)
+        persistDetail(field, value)
+      }, 500),
+    )
+  }
+
   const persist = useCallback(
     (name: string, url: string) => {
       pending.current.delete(name)
@@ -71,7 +122,14 @@ export function TourDateEditor({
     return () => {
       timersMap.forEach((t) => clearTimeout(t))
       pendingSet.forEach((name) => {
-        void setSupportUrlAction(artistId, tourId, name, urlsRef.current[name] ?? '')
+        if (name.startsWith('detail:')) {
+          const field = name.slice('detail:'.length)
+          const fd = new FormData()
+          fd.set(field, detailsRef.current[field] ?? '')
+          void updateContentAction('tour_date', tourId, artistId, fd)
+        } else {
+          void setSupportUrlAction(artistId, tourId, name, urlsRef.current[name] ?? '')
+        }
       })
     }
   }, [artistId, tour.id])
@@ -93,7 +151,27 @@ export function TourDateEditor({
   return (
     <EditorPanel label={label} onBack={onBack}>
       <div className="px-5 pt-4">
-        <h3 className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Supporting acts</h3>
+        <div className="pb-1">
+          <FieldRow label="Date">
+            <input type="date" aria-label="Date" value={details.date} onChange={(e) => editDetail('date', e.target.value)} className={FIELD} />
+          </FieldRow>
+          <FieldRow label="Venue">
+            <input aria-label="Venue" value={details.venue} onChange={(e) => editDetail('venue', e.target.value)} className={FIELD} />
+          </FieldRow>
+          <FieldRow label="City">
+            <input aria-label="City" value={details.city} onChange={(e) => editDetail('city', e.target.value)} className={FIELD} />
+          </FieldRow>
+          <div className="grid grid-cols-2 gap-2">
+            <FieldRow label="State">
+              <input aria-label="State" value={details.state} onChange={(e) => editDetail('state', e.target.value)} placeholder="TX" className={FIELD} />
+            </FieldRow>
+            <FieldRow label="Country">
+              <input aria-label="Country" value={details.country} onChange={(e) => editDetail('country', e.target.value)} className={FIELD} />
+            </FieldRow>
+          </div>
+        </div>
+
+        <h3 className="pt-3 font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Supporting acts</h3>
         {tour.support.length === 0 ? (
           // SAY SO. A blank panel is indistinguishable from a broken one, and the acts
           // are entered elsewhere, so the manager needs telling where.

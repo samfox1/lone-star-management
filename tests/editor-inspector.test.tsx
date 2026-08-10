@@ -1488,6 +1488,37 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
     expect(screen.queryByText('Supporting acts')).toBeNull()
   })
 
+  it('CRITICAL: the show’s own details are editable right here', () => {
+    // Sam, 2026-08-10: "There is no way to edit these tour dates in the left editing
+    // panel. You should be able to edit some of the info right there and it updates in
+    // the tour dates section." The editor's job was placement-only; a wrong venue meant
+    // leaving for the Tour page. The fields save through the SAME generic CRUD the Tour
+    // page uses, so there is one write path, and the refreshed draft re-sends init-data
+    // — which is what updates the window.
+    openShow()
+    expect((screen.getByLabelText('Venue') as HTMLInputElement).value).toBe('Mohawk')
+    expect((screen.getByLabelText('City') as HTMLInputElement).value).toBe('Austin')
+    expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('2026-09-12')
+  })
+
+  it('CRITICAL: editing a detail debounce-saves via the generic CRUD', () => {
+    vi.useFakeTimers()
+    try {
+      openShow()
+      fireEvent.change(screen.getByLabelText('Venue'), { target: { value: 'Hotel Vegas' } })
+      expect(updateContentMock).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(500)
+      expect(updateContentMock).toHaveBeenCalledTimes(1)
+      const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+      expect(type).toBe('tour_date')
+      expect(id).toBe('t1')
+      expect(artistId).toBe('artist-1')
+      expect((fd as FormData).get('venue')).toBe('Hotel Vegas')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('says so when a show has no supporting acts', () => {
     // A blank panel is indistinguishable from a broken one, and the acts are entered
     // elsewhere — so the empty state has to point there.
