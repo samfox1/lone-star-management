@@ -81,4 +81,53 @@ describe('setImageField', () => {
     expect(await setImageField(client, 'a1', TEMPLATE, 'profile_photo', null)).toEqual({ ok: true })
     expect(ops.map((o) => [o.table, o.type])).toEqual([['media', 'delete']])
   })
+
+  it('CRITICAL: a CUSTOM site’s declared image field saves — its key is in no local manifest', async () => {
+    // 2026-08-09 review. runtimeImageFields started rendering tiles for a custom site's
+    // declared images, but this write still resolved the field through
+    // manifestFor(template) — and a custom artist keeps whatever `template` column it
+    // had, so a frame-declared key like `hero_portrait` is never in it. Every upload AND
+    // every remove returned "Unknown image field."; only the TILE was pinned, not the
+    // round trip. Text already had the branch (saveEditorField takes template=null and
+    // routes to saveCustomField); images did not.
+    const { client, ops } = fakeClient()
+    const res = await setImageField(client, 'a1', null, 'hero_portrait', 'a1/profile/33333333-3333-4333-8333-333333333333.jpg', {
+      store: 'media',
+      purpose: 'profile_photo',
+    })
+    expect(res).toEqual({ ok: true })
+    expect(ops.map((o) => [o.table, o.type])).toEqual([
+      ['media', 'delete'],
+      ['media', 'insert'],
+    ])
+  })
+
+  it('CRITICAL: a custom site cannot name a target outside the closed set', async () => {
+    // The target arrives from the CLIENT for a custom site, because the server has no
+    // manifest to look it up in. It is therefore validated, not trusted: the union is
+    // exactly the two single-occupancy homes the wire models, so a request naming
+    // anything else writes nowhere.
+    const { client, ops } = fakeClient()
+    const res = await setImageField(client, 'a1', null, 'hero_portrait', 'a1/profile/44444444-4444-4444-8444-444444444444.jpg', {
+      store: 'artist',
+      column: 'bio',
+    } as never)
+    expect(res.ok).toBe(false)
+    expect(ops).toHaveLength(0)
+  })
+
+  it('a custom site with NO target given is refused rather than guessed', async () => {
+    const { client, ops } = fakeClient()
+    expect((await setImageField(client, 'a1', null, 'hero_portrait', null)).ok).toBe(false)
+    expect(ops).toHaveLength(0)
+  })
+
+  it('a BUILT-IN template ignores a client-supplied target', async () => {
+    // Belt: the manifest is authoritative where one exists, so a crafted target cannot
+    // redirect a built-in template's write.
+    const { client, ops } = fakeClient()
+    const res = await setImageField(client, 'a1', TEMPLATE, 'profile_photo', null, { store: 'artist', column: 'hero_image_url' })
+    expect(res).toEqual({ ok: true })
+    expect(ops.map((o) => [o.table, o.type])).toEqual([['media', 'delete']])
+  })
 })

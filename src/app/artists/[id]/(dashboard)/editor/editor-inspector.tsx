@@ -149,6 +149,12 @@ export function countLabel(kind: Kind, c: KindCount): string {
  * panel never showed presence at all, only the header count. Giving merch a real
  * toggle means moving it to LIVE_TOGGLE (lib/content.ts) first. */
 
+/** A STABLE empty default for `styleValues`. Written inline (`= {}`) it was a fresh
+ *  object on every render, and the identity guard below (`seenStyleValues !== styleValues`)
+ *  then fired forever — any caller that simply omitted the optional prop crashed the
+ *  inspector with "Too many re-renders". Found while fixing the 2026-08-09 review. */
+const NO_STYLES: Record<string, string> = {}
+
 export function EditorInspector({
   artistId,
   photos: initial,
@@ -164,7 +170,7 @@ export function EditorInspector({
   showGallery = false,
   assetBudgets,
   styleRegions = [],
-  styleValues = {},
+  styleValues = NO_STYLES,
   styleOptions,
   selectedStyle = null,
   linkRegions = [],
@@ -341,21 +347,32 @@ export function EditorInspector({
     const textField =
       target.kind === 'field' ? textFields.find((f) => f.key === target.key) : undefined
     const itemPanel = target.kind === 'item' ? PANEL_BY_ASSET[target.assetType] : undefined
+    // A routed select DISMISSES whatever full-panel editor is open, in every branch,
+    // before opening what it asked for. Clearing them per-branch is how editingTour got
+    // missed when it was added (2026-08-09 review): the tour editor renders ABOVE
+    // `active`, so a stale one made every preview click look dead — the panel behind it
+    // changed and the manager saw none of it. One place to close them all, so the next
+    // editor added here cannot repeat it.
+    const closeEditors = () => {
+      setEditingItem(null)
+      setEditingText(null)
+      setEditingTour(null)
+    }
     if (isImageRegion(target)) {
       setLastRegionNonce(selectedRegion.nonce)
+      closeEditors()
       setActive(COMPONENTS.find((c) => c.kind === 'images') ?? null)
       setFocused(target)
     } else if (textField) {
       setLastRegionNonce(selectedRegion.nonce)
+      closeEditors()
       setActive(COMPONENTS.find((c) => c.kind === 'text') ?? null)
-      setEditingItem(null) // one editor in the panel at a time
-      setEditingText(textField)
+      setEditingText(textField) // …then open the one this select asked for
       setFocused(target)
     } else if (itemPanel) {
       setLastRegionNonce(selectedRegion.nonce)
+      closeEditors()
       setActive(COMPONENTS.find((c) => c.kind === itemPanel) ?? null)
-      setEditingItem(null)
-      setEditingText(null)
       setFocused(target)
     }
     // else: unroutable — consume nothing, exactly the old behaviour for non-image kinds.

@@ -530,6 +530,39 @@ describe('EditorInspector — Links component', () => {
     expect((fd as FormData).get('url')).toBe('https://tiktok.com/@juniper')
   })
 
+  it('CRITICAL: two fast clicks add ONE link, not two', () => {
+    // AGENTS.md rule 5: the latch is a REF. `disabled={saving}` only applies after React
+    // re-renders, and both clicks read pre-render state — so a state-only guard inserted
+    // the social twice (2026-08-09 review, verified at two onAdd calls).
+    //
+    // BOTH clicks are dispatched inside ONE act() batch. Dispatching them separately
+    // pins nothing: after the first, React has already disabled the button and the second
+    // click never fires.
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }))
+    fireEvent.change(screen.getByLabelText('Link URL'), { target: { value: 'https://tiktok.com/@juniper' } })
+    const add = screen.getByRole('button', { name: /Add to the site/i })
+    act(() => {
+      fireEvent.click(add)
+      fireEvent.click(add)
+    })
+    expect(addContentMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('CRITICAL: the prefilled platform root alone is not a link', () => {
+    // Picking Substack fills the box with `https://substack.com/@`. That is non-empty,
+    // so the blank check waved it through and a social pointing at the platform's front
+    // page shipped to the site (2026-08-09 review). (Substack, not Instagram: the
+    // fixture already carries Instagram, so its tile is disabled and never opens.)
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Substack' }))
+    fireEvent.click(screen.getByRole('button', { name: /Add to the site/i }))
+    expect(addContentMock).not.toHaveBeenCalled()
+    expect(screen.getByText(/just the site’s address/i)).toBeTruthy()
+  })
+
   it('shows the real link count in browse', () => {
     renderInspector([], { links: LINKS })
     expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('2 of 3 on site')
@@ -745,6 +778,13 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     expect(label).toBeTruthy()
     expect(screen.queryByText(/^Powers:/)).toBeNull()
     expect(label.getAttribute('title')).toBe('Disco-ball playlist link (Videos band)')
+    // …and it is not POINTER-ONLY. `title` never reaches a keyboard or screen-reader
+    // user, and the description was the only text saying what a declared button powers,
+    // so it is also the input's accessible description (2026-08-09 review).
+    const input = screen.getByLabelText('USB button URL')
+    const describedBy = input.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Disco-ball playlist link (Videos band)')
     // USB has a URL; Merch is declared but UNSET → an empty, visible row (not invisible).
     expect((screen.getByLabelText('USB button URL') as HTMLInputElement).value).toBe('https://open.spotify.com/playlist/usb')
     expect((screen.getByLabelText('Merch button URL') as HTMLInputElement).value).toBe('')
@@ -1408,6 +1448,40 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('CRITICAL: a frame click DISMISSES the show editor — the panel is never stuck', () => {
+    // 2026-08-09 review. The frame-select router cleared editingItem/editingText but not
+    // the new editingTour, and the tour editor sits ABOVE `active` in the render. So with
+    // a show open, every click in the preview looked dead: the panel behind it changed
+    // and the manager saw none of it.
+    //
+    // Routed to an ITEM deliberately. A text select opens the TEXT editor, which renders
+    // ABOVE the tour editor and masks it — so that version of this test passed with the
+    // bug still in place (caught by deleting the guard and watching it stay green). An
+    // item select opens no editor at all, so a stale tour panel has nothing hiding it.
+    const { rerender } = renderInspector([], { tours: TOURS, supportLinks: SUPPORT, videos: VIDEOS })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    expect(screen.getByText('Supporting acts')).toBeTruthy()
+
+    rerender(
+      <EditorInspector
+        artistId="artist-1"
+        photos={[]}
+        imageFields={[]}
+        selectedRegion={{ target: { kind: 'item', assetType: 'video', id: 'v1' }, nonce: 7 }}
+        textFields={[]}
+        links={[]}
+        supportLinks={SUPPORT}
+        linkValues={{}}
+        videos={VIDEOS}
+        merch={[]}
+        releases={[]}
+        tours={TOURS}
+      />,
+    )
+    expect(screen.queryByText('Supporting acts')).toBeNull()
   })
 
   it('says so when a show has no supporting acts', () => {

@@ -36,7 +36,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
-import { saveEditorField, saveEditorLink, saveEditorStyle, setImageField } from '@/lib/site-editor/save'
+import { saveEditorField, saveEditorLink, saveEditorStyle, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
 import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
@@ -323,6 +323,9 @@ export async function setImageFieldAction(
   artistId: string,
   fieldKey: string,
   storagePath: string | null,
+  /** Where to write, for a CUSTOM site whose fields no local manifest declares. Validated
+   *  against a closed set inside setImageField — passed, not trusted. */
+  declaredTarget?: ImageFieldTarget,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const {
@@ -330,10 +333,17 @@ export async function setImageFieldAction(
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not signed in.' }
 
-  const { data: artist } = await supabase.from('artists').select('template').eq('id', artistId).single()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('template, site_kind, custom_site_url')
+    .eq('id', artistId)
+    .single()
   if (!artist) return { ok: false, error: 'Artist not found.' }
 
-  const res = await setImageField(supabase, artistId, artist.template as string, fieldKey, storagePath)
+  // The same discriminator saveEditorFieldAction uses: a custom artist keeps whatever
+  // `template` column it had, so the column alone would resolve the WRONG manifest.
+  const template = isCustom(artist) ? null : (artist.template as string)
+  const res = await setImageField(supabase, artistId, template, fieldKey, storagePath, declaredTarget)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
 }

@@ -15,8 +15,18 @@ import { SOCIAL_ICONS, socialIcon } from '@samfox1/site-bridge/social-icons'
 
 const committed = () => readFileSync(join(process.cwd(), 'packages/site-bridge/src/social-icons.ts'), 'utf8')
 
+/** The pin the byte-exact diff above depends on. Stated here so loosening it to a range
+ *  fails THIS test with an explanation, rather than the diff test failing later with a
+ *  wall of SVG and no clue why. */
+const PINNED_SIMPLE_ICONS = '16.28.0'
+
 describe('the generated social marks', () => {
   it('CRITICAL: the committed file matches a fresh generation', () => {
+    // Byte-exact, which is only safe because `simple-icons` is pinned to an EXACT
+    // version in package.json (2026-08-09 review): on a caret range, an upstream artwork
+    // tweak would turn an unrelated `npm install` into a red build with a several-KB
+    // string diff and no bug behind it. Bumping the pin and re-running
+    // `npm run social-icons` is then a deliberate, reviewable change.
     expect(committed()).toBe(buildSocialIcons())
   })
 
@@ -29,6 +39,11 @@ describe('the generated social marks', () => {
       expect(icon!.path.length, p.slug).toBeGreaterThan(20)
       expect(icon!.hex, p.slug).toMatch(/^#[0-9A-Fa-f]{6}$/)
     }
+  })
+
+  it('CRITICAL: simple-icons is pinned exactly — the diff guard depends on it', () => {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
+    expect(pkg.devDependencies['simple-icons']).toBe(PINNED_SIMPLE_ICONS)
   })
 
   it('carries no marks for platforms it does not offer', () => {

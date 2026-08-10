@@ -115,7 +115,9 @@ function ImageFieldTile({
 
   async function remove() {
     setRemoving(true)
-    const res = await setImageFieldAction(artistId, field.key, null)
+    // The field's target rides along: for a CUSTOM site the server has no manifest to
+    // look it up in (it is validated there, not trusted).
+    const res = await setImageFieldAction(artistId, field.key, null, field.target)
     setRemoving(false)
     setEditing(false)
     if (!res.ok) return toast(res.error ?? 'Could not remove the image.', 'error')
@@ -206,7 +208,7 @@ function ImageUploadModal({
         noun="image"
         rules={IMAGE_UPLOAD_RULES}
         writeRow={async (path) => {
-          const res = await setImageFieldAction(artistId, field.key, path)
+          const res = await setImageFieldAction(artistId, field.key, path, field.target)
           if (!res.ok) return res.error ?? 'Save failed'
           onSaved(path)
           return null

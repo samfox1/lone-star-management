@@ -144,6 +144,22 @@ export async function saveEditorField(
   return { ok: false, error: 'Image editing is coming soon.' }
 }
 
+/** The only two homes a single-occupancy image has on the wire. Named as a type so the
+ *  validator below and the editor's EditorImageField cannot drift apart. */
+export type ImageFieldTarget =
+  | { store: 'artist'; column: 'hero_image_url' }
+  | { store: 'media'; purpose: 'profile_photo' }
+
+/** A client-supplied target, or null. The union is closed and checked member by member —
+ *  an allowlist, so a new store or column added upstream is refused here until someone
+ *  decides it should be writable from a cross-origin manifest. */
+function validImageTarget(t: ImageFieldTarget | undefined): ImageFieldTarget | null {
+  if (!t) return null
+  if (t.store === 'artist' && t.column === 'hero_image_url') return { store: 'artist', column: 'hero_image_url' }
+  if (t.store === 'media' && t.purpose === 'profile_photo') return { store: 'media', purpose: 'profile_photo' }
+  return null
+}
+
 /**
  * Replace (or clear) a single-occupancy IMAGE field from the visual editor — the hero
  * image or the profile photo. `storagePath` is a freshly-uploaded media object, or null
@@ -156,18 +172,33 @@ export async function saveEditorField(
  *    purpose, then insert the new one. A media row references the object, so GC keeps it;
  *    the replaced object drops out of `referenced` and the next publish sweeps it.
  *
+ * A CUSTOM site has no local manifest to look the field up in — its images are declared
+ * by the frame at runtime — so `template` is null there and the caller passes the target
+ * it read from the announced manifest. That target is VALIDATED, never trusted: it must
+ * be one of the two single-occupancy homes the wire models, so a crafted request writes
+ * nowhere. (Text has had this shape since 2026-08-05, via saveCustomField; images were
+ * left behind, so every custom-site upload AND remove failed with "Unknown image field."
+ * — found in the 2026-08-09 review, after the panel had started offering the tiles.)
+ *
  * RLS scopes every write to the caller's tenant; the action wrapper adds auth + revalidate.
  */
 export async function setImageField(
   supabase: SupabaseClient,
   artistId: string,
-  template: string,
+  /** The built-in template whose manifest declares this field, or null for a custom site. */
+  template: string | null,
   fieldKey: string,
   storagePath: string | null,
+  /** Where to write, for a CUSTOM site only. Ignored when a manifest resolves the field:
+   *  where the server can look the answer up, it does not take the client's word for it. */
+  declaredTarget?: ImageFieldTarget,
 ): Promise<{ ok: boolean; error?: string }> {
-  const manifest = manifestFor(template)
-  const field = manifest ? fieldByKey(manifest, fieldKey) : undefined
-  if (!field || field.type !== 'image') return { ok: false, error: 'Unknown image field.' }
+  const manifest = template === null ? undefined : manifestFor(template)
+  const declared = manifest ? fieldByKey(manifest, fieldKey) : undefined
+  const target =
+    manifest === undefined ? validImageTarget(declaredTarget) : declared?.type === 'image' ? declared.target : null
+  if (!target) return { ok: false, error: 'Unknown image field.' }
+  const field = { target } as { target: ImageFieldTarget }
 
   // Same client-supplied-path guard as setBrandAsset (lib/brand.ts). This is the older of
   // the two write paths and carried the gap first.

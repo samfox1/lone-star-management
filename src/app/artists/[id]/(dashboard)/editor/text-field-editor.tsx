@@ -52,10 +52,23 @@ export function TextFieldEditor({
 
   // What the box SHOWS: the stored value, or — the first time an unset field is opened —
   // the site's own fallback, so the manager edits real words instead of retyping them.
-  // Latched at mount: once the manager has touched the field, `value` is the only truth,
-  // including when they clear it to empty (which must stay empty, not snap back).
-  const [defaultSeed] = useState(() => (value === '' ? (field.defaultValue ?? '') : ''))
+  // Once the manager has touched the field, `value` is the only truth, including when
+  // they clear it to empty (which must stay empty, not snap back).
+  //
+  // RE-SEEDED WHEN THE FIELD CHANGES, not merely latched at mount. This editor is NOT
+  // remounted per field — a preview click swaps `field` on the same instance — so a
+  // mount-only latch showed field B holding field A's default, and typing then saved A's
+  // words under B's key (2026-08-09 review). Deriving from `field.key` here makes that
+  // unexpressible however the parent renders us; the same shape the style staging below
+  // already uses for its region.
+  const [defaultSeed, setDefaultSeed] = useState(() => (value === '' ? (field.defaultValue ?? '') : ''))
   const [touched, setTouched] = useState(false)
+  const [seededKey, setSeededKey] = useState(field.key)
+  if (seededKey !== field.key) {
+    setSeededKey(field.key)
+    setDefaultSeed(value === '' ? (field.defaultValue ?? '') : '')
+    setTouched(false)
+  }
   const shown = touched || value !== '' ? value : defaultSeed
   const region = field.styleRegion
 

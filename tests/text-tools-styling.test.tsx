@@ -403,6 +403,43 @@ describe('the site’s own fallback is visible, not just absent', () => {
     expect(onEdit).not.toHaveBeenCalled()
   })
 
+  it('CRITICAL: switching fields re-seeds — one field’s default never lands under another’s key', () => {
+    // 2026-08-09 review. The seed latches at MOUNT, and the editor is rendered without a
+    // `key`, so clicking a different text region in the preview swaps `field` on the SAME
+    // instance: the latch survived and field B rendered field A's default. Typing then
+    // saved A's words under B's key. The mirror case is just as bad — after touching A,
+    // B opened EMPTY and lost the feature entirely.
+    //
+    // Deliberately rendered with NO React `key`: a key would remount and reset the latch,
+    // which pins React's behaviour rather than this component's. The seed must re-derive
+    // from `field.key` itself, so the parent cannot get it wrong.
+    const { rerender } = render(
+      <TextFieldEditor
+        field={{ ...styled, key: 'hero_title', label: 'Hero title', value: '', defaultValue: 'AAA-default' }}
+        value=""
+        status="idle"
+        styleValues={{}}
+        onEdit={vi.fn()}
+        onStyle={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    expect((screen.getByLabelText('Hero title') as HTMLInputElement).value).toBe('AAA-default')
+
+    rerender(
+      <TextFieldEditor
+        field={{ ...styled, key: 'tour_heading', label: 'Tour heading', value: '', defaultValue: 'BBB-default' }}
+        value=""
+        status="idle"
+        styleValues={{}}
+        onEdit={vi.fn()}
+        onStyle={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    expect((screen.getByLabelText('Tour heading') as HTMLInputElement).value).toBe('BBB-default')
+  })
+
   it('a stored value wins over the seeded default', () => {
     render(
       <TextFieldEditor

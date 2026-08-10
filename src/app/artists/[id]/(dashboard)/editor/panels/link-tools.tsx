@@ -141,11 +141,12 @@ export function SiteLinkTools({
           {/* The label alone names the button. A site's `description` used to render as
               a "Powers: …" line under it, which restated the label in a longer sentence
               and pushed every input down a row (Sam, 2026-08-09). The field stays in the
-              manifest — a site is free to say more than a label can — but it rides the
-              row's TITLE now, where it explains on hover without costing vertical space
-              in a panel that is mostly inputs. */}
+              manifest — a site is free to say more than a label can — but it now rides
+              the row's hover title AND the input's accessible description, so the
+              explanation survives for anyone not using a pointer. */}
           <FieldRow icon="bolt" label={r.label} title={r.description}>
             <input
+              aria-describedby={r.description ? `link-desc-${r.key}` : undefined}
               ref={(el) => {
                 fieldRefs.current.set(r.key, el)
               }}
@@ -157,6 +158,11 @@ export function SiteLinkTools({
               placeholder="https://…  (blank = no link)"
               className={cx(FIELD, invalid.has(r.key) && INVALID_FIELD)}
             />
+            {r.description && (
+              <span id={`link-desc-${r.key}`} className="sr-only">
+                {r.description}
+              </span>
+            )}
           </FieldRow>
         </div>
       ))}

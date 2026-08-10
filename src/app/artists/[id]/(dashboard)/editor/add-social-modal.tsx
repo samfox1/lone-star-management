@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '@samfox1/site-bridge/social'
@@ -53,16 +53,30 @@ export function AddSocialModal({
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // THE LATCH IS A REF, not the `saving` state (AGENTS.md rule 5). Two fast clicks both
+  // read pre-render state, and `disabled={saving}` only applies after React re-renders —
+  // so a state-only guard let both through and inserted the link twice. The Enter key on
+  // the URL field is a second door into the same race.
+  const busyRef = useRef(false)
 
   const effectiveLabel = picked === 'other' ? label.trim() : (picked?.label ?? '')
 
   async function submit() {
-    if (saving) return
+    if (busyRef.current) return
     if (!effectiveLabel) return setError('Give this link a name.')
-    if (!url.trim()) return setError('Paste the link’s URL.')
+    const trimmed = url.trim()
+    if (!trimmed) return setError('Paste the link’s URL.')
+    // A picked platform prefills its `urlHint`, which is a bare platform root — non-empty,
+    // so the check above waves it through and the site ships a link to instagram.com with
+    // no handle on it. The manager has to have actually pasted something.
+    if (picked !== 'other' && picked !== null && trimmed === picked.urlHint) {
+      return setError('Add the rest of the link — that’s just the site’s address.')
+    }
+    busyRef.current = true
     setSaving(true)
     setError(null)
-    const err = await onAdd(effectiveLabel, url.trim())
+    const err = await onAdd(effectiveLabel, trimmed)
+    busyRef.current = false
     setSaving(false)
     if (err) setError(err)
   }
