@@ -7,6 +7,7 @@ import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
+import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
 import {
@@ -220,31 +221,22 @@ export function EditorShell({
   const view = fitViewport(device, panel.w, panel.h)
 
   // Text is the last category to read the BRIDGED manifest — styles, links, slots and
-  // components already do (below). `customSiteUrl` is the discriminator, NOT "is there a
-  // local manifest": a custom artist's `template` column still names a built-in one, so a
-  // manifest always resolves and the custom branch would never be taken. Without this the
-  // Text panel shows the built-in template's fields (which this site does not render)
-  // while every field the site DOES declare is unreachable.
-  const fields = useMemo(
-    () => (customSiteUrl ? runtimeTextFields(manifest, siteContent) : textFields),
-    [customSiteUrl, textFields, manifest, siteContent],
-  )
-
-  // The ANNOUNCED manifest is authoritative only for a CUSTOM site. Since the built-in
-  // frame consolidated onto the package (2026-08-07), built-ins announce their local
-  // manifest too — it exists so the FRAME's apply-field can tell text from images, and
-  // it must not become a second editor-side source: every panel prop below reads the
-  // null-gated alias, so a built-in keeps resolving from page.tsx's local props exactly
-  // as before. Phase 4 (declared defaults for built-ins) picks ONE source per category
-  // BEFORE widening the built-in manifests; until then this gate is what keeps the two
-  // sources from feeding the same panels.
-  const announced = customSiteUrl ? manifest : null
-
-  // Same discriminator the Text panel uses: a CUSTOM site's image slots are declared by
-  // its frame, never by `manifestFor`, which only knows the built-in templates.
-  const resolvedImageFields = useMemo(
-    () => (customSiteUrl ? runtimeImageFields(manifest, draft ?? null) : imageFields),
-    [customSiteUrl, manifest, draft, imageFields],
+  // EVERY panel's manifest-derived input, resolved in ONE place (lib/site-editor/
+  // panel-inputs.ts). Each category used to be wired here by hand, and each miss was
+  // invisible until somebody clicked: text was the category left out in 2026-08-05,
+  // images in 2026-08-09. The registry there makes a new category a compile error until
+  // it names a consumer, and tests/panel-inputs.test.ts proves none of them resolve empty.
+  const panels = useMemo(
+    () =>
+      resolvePanelInputs({
+        customSiteUrl,
+        manifest,
+        draft: draft ?? null,
+        siteContent,
+        local: { textFields, imageFields },
+        derive: { textFields: runtimeTextFields, imageFields: runtimeImageFields },
+      }),
+    [customSiteUrl, manifest, draft, siteContent, textFields, imageFields],
   )
 
   return (
@@ -253,23 +245,22 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         photos={photos}
-        imageFields={resolvedImageFields}
-        textFields={fields}
+        imageFields={panels.imageFields}
+        textFields={panels.textFields}
         links={links}
         supportLinks={supportLinks}
         videos={videos}
         merch={merch}
         releases={releases}
         tours={tours}
-        components={announced?.components ?? []}
-        // The collage exists only if the site declares somewhere to render one.
-        showGallery={(manifest?.slots ?? []).some((sl) => sl.accepts === 'image')}
-        assetBudgets={announced?.assetBudgets}
-        styleRegions={announced?.styles ?? []}
+        components={panels.components}
+        showGallery={panels.showGallery}
+        assetBudgets={panels.assetBudgets}
+        styleRegions={panels.styleRegions}
         styleValues={draft?.styles ?? {}}
-        styleOptions={withUploadedFonts(announced?.styleOptions, uploadedFonts)}
+        styleOptions={withUploadedFonts(panels.styleOptions, uploadedFonts)}
         selectedStyle={selectedStyle}
-        linkRegions={announced?.links ?? []}
+        linkRegions={panels.linkRegions}
         linkValues={linkValues}
         selectedLink={selectedLink}
         selectedRegion={selectedRegion}

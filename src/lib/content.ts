@@ -11,6 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { releaseBucket, type ReleaseProvenance } from '@/lib/music'
 import { safeHref } from '@/lib/url'
+import { socialSlug } from '@samfox1/site-bridge/social'
 
 /** The columns reconcileOnSite reads (superset: provenance only for releases). */
 type OnSiteRow = {
@@ -373,6 +374,29 @@ export async function createContent(
   artistId: string,
   input: Record<string, unknown>,
 ): Promise<ContentRow> {
+  // ONE LINK PER PLATFORM (Sam, 2026-08-10). The editor's picker disables a platform
+  // already added, but that is presentation: it reads a list rendered a moment ago, and
+  // a second tab, a stale panel or a direct call all walk straight past it. Two rows
+  // labelled "Instagram" render two identical icons in the socials row that a manager
+  // cannot tell apart, and the frame addresses socials BY LABEL (`item:link:instagram`)
+  // — so a duplicate makes the select ambiguous as well as the row.
+  //
+  // Compared on the same normalization the marker join uses, so "instagram" and
+  // "Instagram " are the same platform here exactly as they are there.
+  if (type === 'link') {
+    const label = typeof input.label === 'string' ? input.label : ''
+    const slug = socialSlug(label)
+    if (slug) {
+      const { data: existing, error: readErr } = await supabase
+        .from('links')
+        .select('label')
+        .eq('artist_id', artistId)
+      if (readErr) throw new Error(readErr.message)
+      if ((existing ?? []).some((r) => socialSlug(r.label as string) === slug)) {
+        throw new Error(`${label} is already on this site.`)
+      }
+    }
+  }
   const offSite = INSERT_OFF_SITE.includes(type) ? { on_site: false } : {}
   const { data, error } = await supabase
     .from(PUBLISHABLE[type].table)
