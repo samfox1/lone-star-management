@@ -52,6 +52,11 @@ import { textFieldKeys } from "./manifest";
 /** How often the frame re-announces `ready`, and how many times, before giving up
  *  (~10s). See the handshake note in `mountFrameBridge`. */
 export const READY_RETRY_MS = 300;
+
+/** How long the frame waits for a revealed region to mount before giving up. A reveal is
+ *  a click's worth of work — a tab switch, an accordion — so this is generous, not a
+ *  budget. Exported so a site's tests can wait the same amount rather than guessing. */
+export const REVEAL_TIMEOUT_MS = 2000;
 export const READY_RETRIES = 33;
 
 /**
@@ -465,6 +470,15 @@ export function mountFrameBridge(options: {
    *  site can show its own affordance (dim the chrome, drop a hover outline). Optional:
    *  the mode works without it. */
   onModeChange?: (mode: FrameMode) => void;
+  /**
+   * Bring a region into view — open its tab, expand its section, scroll its carousel.
+   *
+   * Called ONLY when a `highlight` finds nothing on the page, so a site whose content is
+   * all mounted at once never needs it. The site does whatever it takes and returns; the
+   * frame then waits for the element to appear and highlights it. A site that implements
+   * nothing keeps today's behaviour exactly (the highlight is simply dropped).
+   */
+  onReveal?: (target: SelectTarget) => void;
 }): () => void {
   // The applier is CONSTRUCTED from the option — no setter, no module state, so the
   // "bound before any listener" invariant holds by construction (2026-08-07 deepening;
@@ -520,6 +534,57 @@ export function mountFrameBridge(options: {
     if (sel) post(stamp({ type: "select", target: sel, rect: rectOf(marked) }));
   };
 
+  /**
+   * Highlight a region, ASKING THE SITE TO SHOW IT FIRST if it is not on the page.
+   *
+   * Panel → preview selection silently did nothing whenever the target sat behind a
+   * closed tab, an unexpanded section, or an off-screen slide: the editor cannot know
+   * the region is hidden, and the site cannot know the manager just clicked its row
+   * (throwaway #2, 2026-08-10 — every windowed site has this, ftbk included).
+   *
+   * Deliberately NOT a new protocol message. Handling it inside `highlight` means the
+   * editor sends exactly what it always sent, and a site that implements nothing behaves
+   * exactly as before — the reveal is a capability a site opts into, not a handshake
+   * both halves must agree on.
+   */
+  const revealAndHighlight = (target: SelectTarget) => {
+    const found = applyHighlightToDom(document, target);
+    if (found) return found.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Nothing matched. If the site can show it, ask — then wait for it to arrive.
+    if (!options.onReveal) return;
+    options.onReveal(target);
+    // Check again FIRST. A site that reveals synchronously — appending the element, or
+    // any non-React site — has already put it on the page, and a MutationObserver only
+    // fires on FUTURE mutations, so observing first would wait out the timeout for an
+    // element sitting right there. (Found by the test, 2026-08-10.)
+    const now = applyHighlightToDom(document, target);
+    if (now) return now.scrollIntoView({ behavior: "smooth", block: "center" });
+    waitForRegion(target);
+  };
+
+  /** Wait for a revealed region to mount, then highlight it. Gives up quietly: a site
+   *  may legitimately have no such region, and a spinner over someone's page for a
+   *  region that is never coming is worse than the silence it replaced. */
+  const waitForRegion = (target: SelectTarget) => {
+    if (typeof MutationObserver === "undefined") return;
+    let settled = false;
+    const finish = (el: Element | null) => {
+      if (settled) return;
+      settled = true;
+      observer.disconnect();
+      clearTimeout(timer);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    const observer = new MutationObserver(() => {
+      const el = applyHighlightToDom(document, target);
+      if (el) finish(el);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    // A reveal is a click's worth of work — a tab switch, an accordion. Anything slower
+    // than this is a site doing something the manager will not connect to their click.
+    const timer = setTimeout(() => finish(null), REVEAL_TIMEOUT_MS);
+  };
+
   const onMessage = (e: MessageEvent) => {
     if (e.origin !== options.editorOrigin || !isEditorMessage(e.data)) return;
     stopAnnouncing(); // any reply proves the editor is listening
@@ -551,11 +616,7 @@ export function mountFrameBridge(options: {
       if (key !== null && url !== null) applyLinkToDom(document, key, url);
     } else if (msg.type === "init-data" && "site" in msg)
       options.onInitData(msg.site);
-    else if (msg.type === "highlight" && "target" in msg)
-      applyHighlightToDom(document, msg.target)?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+    else if (msg.type === "highlight" && "target" in msg) revealAndHighlight(msg.target);
     else if (msg.type === "clear-highlight") clearHighlightFromDom(document);
     else if (msg.type === "set-mode" && "mode" in msg) {
       mode = msg.mode === "browse" ? "browse" : "edit";

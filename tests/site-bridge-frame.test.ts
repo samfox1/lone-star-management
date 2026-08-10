@@ -17,6 +17,7 @@ import {
   EDITOR_SOURCE,
   READY_RETRIES,
   READY_RETRY_MS,
+  REVEAL_TIMEOUT_MS,
   highlightSelector,
   markedAncestor,
   targetOf,
@@ -1049,5 +1050,117 @@ describe('browse mode hands the site back its own clicks', () => {
     expect(el.hasAttribute(HIGHLIGHT_ATTR)).toBe(false)
     stop()
     el.remove()
+  })
+})
+
+describe('reveal — highlighting a region that is not on the page', () => {
+  it('CRITICAL: a missing region asks the SITE to show it, then highlights', async () => {
+    // Panel → preview selection silently did nothing whenever the target sat behind a
+    // closed tab (throwaway #2, 2026-08-10). The editor cannot know it is hidden; the
+    // site cannot know the manager clicked its row.
+    const target = { postMessage: () => {} } as unknown as Window
+    let revealed: unknown = null
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      target,
+      onReveal: (t) => {
+        revealed = t
+        // ASYNC on purpose: a React site re-renders after its state change, so the
+        // element lands on a later tick. The synchronous case is covered below — it
+        // needed its own code path, because an observer only sees FUTURE mutations.
+        setTimeout(() => {
+          const el = document.createElement('div')
+          el.id = 'late'
+          el.setAttribute(FIELD_ATTR, 'buried')
+          document.body.appendChild(el)
+        }, 0)
+      },
+    })
+
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'buried' } })
+    expect(revealed).toEqual({ kind: 'field', key: 'buried' })
+
+    // The frame watches for it and highlights once it lands.
+    await vi.waitFor(() => {
+      expect(document.getElementById('late')?.hasAttribute(HIGHLIGHT_ATTR)).toBe(true)
+    })
+    stop()
+    document.getElementById('late')?.remove()
+  })
+
+  it('CRITICAL: a SYNCHRONOUS reveal is highlighted too', async () => {
+    // The first cut observed before re-checking, so a site that revealed synchronously
+    // waited out the whole timeout with the element sitting right there.
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      target,
+      onReveal: () => {
+        const el = document.createElement('div')
+        el.id = 'sync'
+        el.setAttribute(FIELD_ATTR, 'instant')
+        document.body.appendChild(el)
+      },
+    })
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'instant' } })
+    expect(document.getElementById('sync')?.hasAttribute(HIGHLIGHT_ATTR)).toBe(true)
+    stop()
+    document.getElementById('sync')?.remove()
+  })
+
+  it('CRITICAL: a region already ON the page is highlighted WITHOUT asking', () => {
+    // The reveal must be the exception. Asking every time would make a site re-open tabs
+    // under a manager who is already looking at the thing they clicked.
+    const target = { postMessage: () => {} } as unknown as Window
+    let asked = 0
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      target,
+      onReveal: () => { asked += 1 },
+    })
+
+    const el = document.createElement('div')
+    el.setAttribute(FIELD_ATTR, 'present')
+    document.body.appendChild(el)
+
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'present' } })
+    expect(el.hasAttribute(HIGHLIGHT_ATTR)).toBe(true)
+    expect(asked).toBe(0)
+    stop()
+    el.remove()
+  })
+
+  it('a site that implements no reveal behaves exactly as before', () => {
+    // The capability is opt-in. Without it a missing target is dropped silently, which
+    // is today's behaviour and must not become a crash.
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target })
+    expect(() => editorSays({ type: 'highlight', target: { kind: 'field', key: 'nowhere' } })).not.toThrow()
+    stop()
+  })
+
+  it('gives up quietly when the region never arrives', async () => {
+    // A site may legitimately have no such region. Waiting forever would leave an
+    // observer attached to the page for the rest of the session.
+    vi.useFakeTimers()
+    try {
+      const target = { postMessage: () => {} } as unknown as Window
+      const stop = mountFrameBridge({
+        editorOrigin: 'https://editor.test',
+        onInitData: () => {},
+        target,
+        onReveal: () => {},
+      })
+      editorSays({ type: 'highlight', target: { kind: 'field', key: 'never' } })
+      vi.advanceTimersByTime(REVEAL_TIMEOUT_MS + 100)
+      // Nothing marked, nothing thrown, and the observer is disconnected.
+      expect(document.querySelectorAll(`[${HIGHLIGHT_ATTR}]`).length).toBe(0)
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
