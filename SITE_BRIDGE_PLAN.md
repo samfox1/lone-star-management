@@ -479,6 +479,43 @@ thing each site remembers). And the DECLARED link region (`linkProps` + a manife
 is editable with no row behind it, while the socials-as-items shape is not — which makes
 the declared-region path the answer to gate finding 4, not a parallel option.
 
+#### Throwaway #2 — "OPERATOR" (`~/Desktop/ls-throwaway-2`), 2026-08-10
+
+A tabbed console where only the OPEN section is mounted. Hostile in structure rather
+than pixels — the shape ftbk will have, and the shape the standard had never been tested
+against.
+
+**Cold start: 3 minutes** (vs 7 for #1). The whole difference is that `<Text>` and the
+media resolver were COPIED from #1 rather than rederived. Three sites now carry the same
+two files, which is the kit's business case in one number.
+
+**What it broke, and what came of it.**
+
+1. **A site with navigation was unbrowsable.** Every click on a marked element is
+   swallowed so selecting never also fires the app underneath; on a tabbed site that
+   meant each click selected the tab BUTTON and the other tabs were unreachable. FIXED:
+   `set-mode` + an Edit/Browse toggle (2026-08-10). Sam's other idea — a per-click
+   "navigate or edit" chooser — was declined: it adds a click to every selection, needs
+   the site to declare which elements navigate, and cannot carry anyone through a
+   two-step flow.
+2. **DOM-derived discovery only sees what is mounted.** The mechanism the whole "your
+   markup IS the field list" design rests on cannot answer for a closed tab. This site's
+   workaround is to hand-list its text keys and let the DOM supply only DEFAULTS — which
+   works and throws away the drift-proofness that made discovery attractive. The real
+   answer is phase 3: primitives that REGISTER AT MOUNT instead of being scanned for.
+3. **A field in a closed tab arrives with no default text.** The control exists, the
+   preview of it does not.
+4. **`highlight` can target an element that is not on the page** — nothing handles it
+   today. See P-H below.
+
+**P-H · `reveal` — ask the site to bring a region into view before highlighting.** The
+editor cannot know that a region lives behind a closed tab, and the site cannot know the
+manager just clicked its row in the panel. A `reveal` message (editor → frame, additive)
+lets the frame do whatever it takes — open the tab, expand the accordion, scroll the
+carousel — and answer when the region is mounted; `highlight` then lands. Without it,
+panel→preview selection silently does nothing on any site whose content is not all on
+screen at once, which is every windowed or tabbed site including ftbk.
+
 ---
 
 ## Proposals — giving a manager more of the site to make their own
