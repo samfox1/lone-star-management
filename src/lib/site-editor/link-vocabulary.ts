@@ -37,9 +37,19 @@ export function linkAddError(existingLabels: readonly string[], label: string, u
   // A blank label is a column constraint, not a vocabulary problem. Answering here would
   // turn a NOT NULL violation into a confusing "already on this site".
   if (!slug) return null
-  if (isContactLink(url)) return null
+  // A booking address is not a social. `isContactLink` only knows the mailto:/tel:
+  // SCHEMES, and the live data has a booking row whose url is a bare address
+  // ("ross.guignon@…"), which a manager will type again — so a bare email counts too.
+  if (isContactLink(url) || looksLikeEmail(url)) return null
 
   if (!socialPlatform(label)) return `“${label.trim()}” isn’t a platform we know. Pick one from the list.`
   if (existingLabels.some((l) => socialSlug(l) === slug)) return `${label.trim()} is already on this site.`
   return null
+}
+
+/** A bare email address typed where a URL was expected. Deliberately loose: this only
+ *  decides "not a social", and a false positive here just means the vocabulary rule
+ *  stays out of the way — the URL columns and `safeHref` still judge the value itself. */
+function looksLikeEmail(url: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url.trim())
 }

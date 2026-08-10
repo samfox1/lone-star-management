@@ -39,6 +39,10 @@ describe('only a KNOWN platform can be added', () => {
     // renders in the socials row. Refusing it would break the contact ladder.
     expect(linkAddError([], 'Bookings', 'mailto:book@x.com')).toBeNull()
     expect(linkAddError([], 'Call us', 'tel:+15125550100')).toBeNull()
+    // A BARE address too. The live data already holds one (skeen's booking row, audited
+    // 2026-08-10), and `isContactLink` only knows the mailto:/tel: schemes — so without
+    // this a manager retyping their booking email would be told it is not a platform.
+    expect(linkAddError([], 'Booking email', 'ross@everesttm.com')).toBeNull()
   })
 })
 
