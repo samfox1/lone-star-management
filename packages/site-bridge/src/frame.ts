@@ -39,6 +39,7 @@ import {
   BRIDGE_VERSION,
   EDITOR_SOURCE,
   FRAME_SOURCE,
+  frameMessage,
   isEditorMessage,
   type EditorMessage,
   type Rect,
@@ -47,7 +48,7 @@ import {
 } from "./protocol";
 import type { PublicSitePayload } from "./payload";
 import { applyCursor, cursorSettingsFrom, normalizeCursorSettings } from "./cursor";
-import type { LibraryAsset } from "./manifest";
+import type { LibraryAsset, TemplateManifest } from "./manifest";
 import { textFieldKeys } from "./manifest";
 
 /** How often the frame re-announces `ready`, and how many times, before giving up
@@ -155,7 +156,7 @@ export function targetOf(marked: Element): SelectTarget | null {
 
 /** Exported (unlike skeen's original private copy): the editor-side wrapper re-exports
  *  it, and a site may want the same viewport box for its own overlays. */
-export function rectOf(el: Element): Rect {
+function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect();
   return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
@@ -489,10 +490,13 @@ export function mountFrameBridge(options: {
   // Starts in `edit`, so a frame that never hears `set-mode` behaves exactly as before.
   let mode: FrameMode = "edit";
   const target = options.target ?? window.parent;
+  // Cast, not validated: the edit-list is site-supplied and travels opaquely — the
+  // EDITOR validates it on receipt. The cast is what lets `ready` ride the typed
+  // frameMessage stamper instead of a loose local one.
   const manifest = () =>
-    typeof options.editList === "function"
+    (typeof options.editList === "function"
       ? (options.editList as () => unknown)()
-      : options.editList;
+      : options.editList) as TemplateManifest | undefined;
   // Read once: the manifest is a module constant, and this decides how every inbound
   // `apply-field` is written to the DOM.
   // Recomputed per message rather than captured: the DOM-derived text fields are not
@@ -500,11 +504,9 @@ export function mountFrameBridge(options: {
   // field — which is exactly the value-shape guessing this replaced.
   const textKeysNow = () => textFieldKeys(manifest());
   const post = (msg: object) => target.postMessage(msg, options.editorOrigin);
-  const stamp = (msg: object) => ({
-    ...msg,
-    v: BRIDGE_VERSION,
-    source: FRAME_SOURCE,
-  });
+  // The protocol's own stamper — duplicating the v/source spread here was the one
+  // way this file could drift from the wire contract it implements.
+  const stamp = frameMessage;
 
   let announce: ReturnType<typeof setInterval> | null = null;
   let attempts = 0;

@@ -17,7 +17,6 @@ import { EYEBROW } from './inspector-shared'
  * The vocabulary:
  *  • thumbnails (PhotoThumb / CardThumb / SongThumb) — one item's face at its aspect;
  *  • EmptySlot — the dashed Add/pick tile that opens a picker;
- *  • EditMenu — the Replace/Remove menu a filled slot opens;
  *  • AddFirstLink — the "add your first item" link when the library is empty;
  *  • LibraryPicker<T> — the modal grid of candidates to place;
  *  • MediaGrid<T> — an open collection as on-site cards + an Add tile, wired to the
@@ -150,32 +149,9 @@ export function EmptySlot({
   )
 }
 
-/** The little Replace / Remove menu a filled slot's edit button opens. Replace opens
- *  the picker; Remove empties the slot. */
-export function EditMenu({ onReplace, onRemove }: { onReplace: () => void; onRemove: () => void }) {
-  return (
-    <div data-edit-menu className="flex w-full gap-1">
-      <button
-        type="button"
-        onClick={onReplace}
-        className="flex-1 rounded-md border border-hairline px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-accent hover:text-accent"
-      >
-        Replace
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="flex-1 rounded-md border border-hairline px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.06em] text-accent-red hover:bg-danger-soft"
-      >
-        Remove
-      </button>
-    </div>
-  )
-}
-
 /** A Replace / Remove menu that COVERS the thumbnail — two stacked, full-height rows,
  *  opened by a tile's edit button. For tiles that are just an image with no caption row to
- *  hold a side-by-side EditMenu (the image slots, gallery cards, image fields). Sits over a
+ *  hold a side-by-side menu (the image slots, gallery cards, image fields). Sits over a
  *  `relative` thumbnail wrapper; tag `data-edit-menu` so an outside-click can dismiss it.
  *  `replaceAria` / `removeAria` name the buttons where several tiles share the panel. */
 export function CoverEditMenu({
@@ -299,7 +275,7 @@ export function SelectableTile({
 }
 
 /** Close an open edit menu when the pointer goes down outside any `data-edit-menu`
- *  element (CoverEditMenu / EditMenu tag themselves — the attribute contract lives in
+ *  element (CoverEditMenu tags itself — the attribute contract lives in
  *  this file, so its dismiss does too). The edit button that OPENS a menu fires on
  *  click, after this mousedown, so it never self-closes. */
 export function useDismiss(open: boolean, onClose: () => void) {

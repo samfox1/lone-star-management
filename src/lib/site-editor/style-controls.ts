@@ -694,7 +694,7 @@ const tiltControl = (): StyleControl =>
  *  as a PAIR of colour controls sharing one token. Each reads its half out of the
  *  stored string and writes the whole token back; clearing either end clears the
  *  gradient (half a gradient is not a thing). */
-function gradientPair(prefix: 'textgrad' | 'bggrad', fromLabel: string, toLabel: string): StyleControl[] {
+function gradientPair(prefix: 'bggrad', fromLabel: string, toLabel: string): StyleControl[] {
   const RE = new RegExp(`^${prefix}-\\[(#[0-9a-fA-F]{3,8})_(#[0-9a-fA-F]{3,8})\\]$`)
   const owns = (t: string) => t.startsWith(`${prefix}-[`)
   const halves = (cls: string): [string, string] | null => {

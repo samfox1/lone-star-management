@@ -232,13 +232,13 @@ export const DECO_OFFSET_STEPS: StyleOption[] = Array.from({ length: 33 }, (_, i
   const n = i - 16
   return { value: n === 0 ? '' : `underoffset-[${n}px]`, label: n === 0 ? 'Auto' : `${n}px` }
 })
-export const DECO_COLOR_PROBE: StyleOption[] = [{ value: 'decocolor-[#ff0000]', label: 'probe' }]
+const DECO_COLOR_PROBE: StyleOption[] = [{ value: 'decocolor-[#ff0000]', label: 'probe' }]
 
 /** Freeform two-hex gradients (`textgrad-[#a_#b]`, `bggrad-[#a_#b]`) — like the colour
  *  tokens, no build can compile 16.7M pairs, so they were never classes. The single
  *  options below exist for the isomorphism probe, not as a menu. */
-export const TEXT_GRADIENT_PROBE: StyleOption[] = [{ value: 'textgrad-[#ff0000_#0000ff]', label: 'probe' }]
-export const BG_GRADIENT_PROBE: StyleOption[] = [{ value: 'bggrad-[#ff0000_#0000ff]', label: 'probe' }]
+const TEXT_GRADIENT_PROBE: StyleOption[] = [{ value: 'textgrad-[#ff0000_#0000ff]', label: 'probe' }]
+const BG_GRADIENT_PROBE: StyleOption[] = [{ value: 'bggrad-[#ff0000_#0000ff]', label: 'probe' }]
 
 /** pctSteps with ZERO as the resting default ('' — no token), for effects that are off
  *  until asked for (B&W, sepia), unlike scale/opacity whose neutral is 100%. */

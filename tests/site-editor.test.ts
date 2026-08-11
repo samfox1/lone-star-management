@@ -15,7 +15,7 @@ import {
   type LibraryAsset,
   type TemplateManifest,
 } from '@/lib/site-editor/manifest'
-import { fieldRegion, itemMarker, itemRegion, parseItemMarker, slotRegion } from '@/lib/site-editor/markers'
+import { fieldRegion, itemMarker, itemRegion, slotRegion } from '@/lib/site-editor/markers'
 import {
   BRIDGE_VERSION,
   editorMessage,
@@ -31,19 +31,13 @@ import {
 
 const ASSET_TYPES: LibraryAsset[] = ['track', 'video', 'image', 'merch', 'tour_date', 'link']
 
-describe('markers — data-lse-item round-trip', () => {
-  it('builds and parses an item marker (uuid ids survive the colon split)', () => {
+describe('markers — data-lse-item format', () => {
+  // Parsing lives frame-side in the package (`targetOf`, pinned in site-bridge-frame);
+  // the editor only BUILDS markers. parseItemMarker was deleted with its round-trip
+  // cases when the 2026-08-11 dead-code sweep found no production caller.
+  it('builds an item marker (uuid ids survive the colon in the format)', () => {
     const id = '3f1e2d4c-5b6a-7890-abcd-ef0123456789'
-    const marker = itemMarker('track', id)
-    expect(marker).toBe(`track:${id}`)
-    expect(parseItemMarker(marker)).toEqual({ assetType: 'track', id })
-  })
-
-  it('rejects malformed markers', () => {
-    expect(parseItemMarker('nocolon')).toBeNull()
-    expect(parseItemMarker('track:')).toBeNull() // empty id
-    expect(parseItemMarker(':abc')).toBeNull() // empty type
-    expect(parseItemMarker('bogus:abc')).toBeNull() // unknown asset type
+    expect(itemMarker('track', id)).toBe(`track:${id}`)
   })
 })
 

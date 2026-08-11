@@ -1,4 +1,4 @@
-import type { ManifestField, ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { styleRegionForField, type ManifestField, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { isTextSize } from '@/lib/site-editor/style-controls'
 
 /**
@@ -86,7 +86,7 @@ export function textPanelEntries(
   const claimed = new Set<string>()
   for (const f of fields ?? []) {
     if (f.type !== 'text' && f.type !== 'email') continue
-    const region = byKey.get(f.styleKey ?? f.key) ?? null
+    const region = styleRegionForField(f, allRegions)
     if (region) claimed.add(region.key)
     entries.push({ key: f.key, label: f.label, field: f, styleRegion: region })
   }
