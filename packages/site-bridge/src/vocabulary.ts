@@ -217,8 +217,21 @@ export const PAD_STEPS = pxSteps('pad', 2, 64, 2, 'None')
  *  width/distance between word, and thickness"). Applies to underline AND
  *  strikethrough — one decoration, one dressing. Offset moves an underline away from
  *  the word; browsers ignore it for line-through, harmlessly. */
-export const DECO_THICKNESS_STEPS = pxSteps('decothick', 1, 12, 1, 'Auto')
-export const DECO_OFFSET_STEPS = pxSteps('underoffset', 1, 16, 1, 'Auto')
+/** Both ladders centre their Auto step, like Size and Tilt (Sam, 2026-08-11: "Line
+ *  thickness should start in the middle, same with distance"). Left of centre is a
+ *  real value: sub-pixel thickness draws a hairline, a negative offset pulls the line
+ *  up into the word. Auto ranks ~2px in the editor, between the two halves. */
+const THIN_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75]
+const THICK_STEPS = [3, 4, 5, 6, 8, 10, 12]
+export const DECO_THICKNESS_STEPS: StyleOption[] = [
+  ...THIN_STEPS.map((n) => ({ value: `decothick-[${n}px]`, label: `${n}px` })),
+  { value: '', label: 'Auto' },
+  ...THICK_STEPS.map((n) => ({ value: `decothick-[${n}px]`, label: `${n}px` })),
+]
+export const DECO_OFFSET_STEPS: StyleOption[] = Array.from({ length: 33 }, (_, i) => {
+  const n = i - 16
+  return { value: n === 0 ? '' : `underoffset-[${n}px]`, label: n === 0 ? 'Auto' : `${n}px` }
+})
 export const DECO_COLOR_PROBE: StyleOption[] = [{ value: 'decocolor-[#ff0000]', label: 'probe' }]
 
 /** Freeform two-hex gradients (`textgrad-[#a_#b]`, `bggrad-[#a_#b]`) — like the colour

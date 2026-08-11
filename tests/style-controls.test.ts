@@ -412,6 +412,33 @@ describe('the line dressing implies a line (2026-08-11)', () => {
   })
 })
 
+describe('the dressing sliders start in the middle (2026-08-11)', () => {
+  // Sam: "Line thickness should start in the middle, same with distance." Like Size
+  // and Tilt: the untouched '' step sits at the CENTRE of the ladder, so left of it
+  // is thinner/closer than Auto and right is thicker/farther. The monotonic-rank
+  // invariant above already proves the ranks agree with that ordering.
+  const textControls = buildTextItemStyleControls(PALETTE)
+
+  it.each(['decoThickness', 'decoOffset'])('CRITICAL: %s centres its Auto step', (id) => {
+    const c = textControls.find((x) => x.id === id)
+    if (!c || c.kind !== 'slider') throw new Error(id)
+    const idx = c.steps.findIndex((s) => s.value === '')
+    expect(idx, `${id} has an Auto step`).toBeGreaterThan(0)
+    expect(idx, `${id} Auto sits mid-ladder`).toBe(Math.floor(c.steps.length / 2))
+  })
+
+  it('distance goes negative and thickness goes sub-pixel left of centre', () => {
+    const offset = textControls.find((x) => x.id === 'decoOffset')
+    const thickness = textControls.find((x) => x.id === 'decoThickness')
+    if (offset?.kind !== 'slider' || thickness?.kind !== 'slider') throw new Error('sliders')
+    expect(offset.steps.some((s) => /underoffset-\[-\d+px\]/.test(s.value))).toBe(true)
+    expect(thickness.steps.some((s) => /decothick-\[0\.\d+px\]/.test(s.value))).toBe(true)
+    // And the rank fn actually reads them — a regex still integer-only returns null.
+    expect(offset.rank('underoffset-[-6px]')).toBeLessThan(offset.rank('')!)
+    expect(thickness.rank('decothick-[0.5px]')).toBeLessThan(thickness.rank('')!)
+  })
+})
+
 describe('Font color in the text-field editor (2026-08-11)', () => {
   // Sam: "I would rather just add an option to change the color of the font" — the
   // gradient pair left these surfaces for it. The swatch row is siteSwatches at the

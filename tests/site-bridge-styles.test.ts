@@ -582,6 +582,18 @@ describe('decoration dressing (2026-08-11)', () => {
     expect(r.style.textUnderlineOffset).toBe('6px')
   })
 
+  it('the centred ladders lift below Auto — negative offset, sub-pixel thickness', () => {
+    // Sam (2026-08-11): both sliders start in the MIDDLE, like Size and Tilt. Left of
+    // centre is a real value, not a dead zone: a negative offset pulls the line up
+    // into the word, a fractional thickness draws a hairline. If the parser stays
+    // integer-only these tokens silently no-op on every deployed site.
+    expect(resolveStyle('underoffset-[-6px]').style.textUnderlineOffset).toBe('-6px')
+    expect(resolveStyle('decothick-[0.5px]').style.textDecorationThickness).toBe('0.5px')
+    const r = resolveRegionStyle('hero_name', '', 'underline decothick-[1.25px] underoffset-[-2px]')
+    expect(r.style.textDecorationThickness).toBe('1.25px')
+    expect(r.style.textUnderlineOffset).toBe('-2px')
+  })
+
   it('CRITICAL: strikethrough reaches a real ELEMENT through the live applier', () => {
     // The whole chain the editor drives — createStyleApplier → resolve → inline write —
     // against an actual DOM node, because Sam reported the line not painting and every

@@ -290,9 +290,10 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   }
   m = token.match(/^decocolor-\[(#[0-9a-fA-F]{3,8})\]$/);
   if (m) return { textDecorationColor: m[1] };
-  m = token.match(/^decothick-\[(\d{1,2})px\]$/);
+  // Sub-pixel thickness and negative offset are the LEFT half of the centred sliders.
+  m = token.match(/^decothick-\[(\d{1,2}(?:\.\d{1,2})?)px\]$/);
   if (m) return { textDecorationThickness: `${m[1]}px` };
-  m = token.match(/^underoffset-\[(\d{1,2})px\]$/);
+  m = token.match(/^underoffset-\[(-?\d{1,2})px\]$/);
   if (m) return { textUnderlineOffset: `${m[1]}px` };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };

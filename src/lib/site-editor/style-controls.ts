@@ -242,10 +242,14 @@ const RADIUS_PX: Record<string, number> = {
 /** A px scale. `''` is the off/zero end for both border width and corner radius. */
 const pxRank = (named: Record<string, number>) => (t: string): number | null => {
   if (t === '') return 0
-  const arb = /-\[(\d+)px\]$/.exec(t)
+  const arb = /-\[(-?\d+(?:\.\d+)?)px\]$/.exec(t)
   if (arb) return Number(arb[1])
   return named[t] ?? null
 }
+
+// The centred dressing sliders: Auto sits mid-ladder and ranks like ~2px (a browser's
+// usual auto thickness), so sub-pixel steps sort left of it and 3px+ right of it.
+const thicknessRank = (t: string): number | null => (t === '' ? 2 : pxRank({})(t))
 
 const SHADOW_RANK: Record<string, number> = {
   '': 0, 'shadow-none': 0, 'shadow-sm': 1, shadow: 2, 'shadow-md': 3,
@@ -393,7 +397,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
   // underline sits from the word. One dressing serves both decorations.
   controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
-  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('decothick-[') })
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-[') })
   controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
@@ -548,7 +552,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
   // underline sits from the word. One dressing serves both decorations.
   controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
-  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('decothick-[') })
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-[') })
   controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
   return controls
 }
