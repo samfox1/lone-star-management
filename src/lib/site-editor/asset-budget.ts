@@ -187,7 +187,10 @@ const Q_CEILING = 0.92
 const Q_FLOOR = 0.5
 /** Each probe is a full canvas re-encode of the image; bound the work. Six bisections
  *  resolve the range to ~0.007, finer than any encoder's visible steps. */
-const MAX_PROBES = 6
+// 3, down from 6 (2026-08-11): each probe is a full-size main-thread encode — the
+// gate's "long spinner" — and 3 already lands within ~5% quality of the boundary,
+// which no eye can tell apart. The boundary-closeness test pins that precision.
+const MAX_PROBES = 3
 
 /**
  * The HIGHEST quality in [0.5, 0.92] whose encoding fits `maxBytes`, by binary search

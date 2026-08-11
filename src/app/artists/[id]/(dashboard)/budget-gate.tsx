@@ -11,7 +11,7 @@ import {
   type AssetBudget,
   type UploadKind,
 } from '@/lib/site-editor/asset-budget'
-import { compressImageFile, decodeEdgePx, type CompressedImage } from '@/lib/site-editor/compress-image'
+import { compressImageFile, decodeImageBitmap, type CompressedImage } from '@/lib/site-editor/compress-image'
 
 /**
  * The gate a picked file passes through before upload (BRIEF-asset-compression.md,
@@ -48,23 +48,31 @@ export function useBudgetGate(
     const applied = withFloor(budget, kind, file.type)
     if (!applied || !kind) return file
 
-    // Dimensions matter only for the compress path; a failed decode still gates on bytes.
-    const edgePx = kind === 'image' ? await decodeEdgePx(file) : undefined
+    // Decode ONCE and keep the bitmap: measuring and compressing each paid for their
+    // own full decode of the same file, which for a 20MP photo was seconds of the
+    // "long spinner" (Sam, 2026-08-11). A failed decode still gates on bytes.
+    const bmp = kind === 'image' ? await decodeImageBitmap(file) : null
+    const edgePx = bmp ? Math.max(bmp.width, bmp.height) : undefined
     // `name` included so a HEIC with a blank mime (Windows) is still caught by extension.
     const verdict = budgetVerdict({ size: file.size, type: file.type, name: file.name, edgePx }, kind, applied)
-    if (verdict.action === 'upload') return file
+    if (verdict.action === 'upload') {
+      bmp?.close()
+      return file
+    }
 
     return new Promise<File | null>((resolve) => {
       resolver.current = resolve
       if (verdict.action === 'gate') {
+        bmp?.close()
         setPending({ mode: 'gate', original: file, kind })
         return
       }
       setPending({ mode: 'compress', original: file, mustCompress: verdict.mustCompress, proposal: null })
-      // Compress EAGERLY so the modal can show the real numbers, not an estimate. On
-      // failure fall through to the gate copy — a proposal we cannot produce must not
-      // strand the promise or fake a result.
-      compressImageFile(file, applied).then(
+      // Compress EAGERLY so the modal can show the real numbers, not an estimate. The
+      // bitmap's ownership transfers — compressImageFile closes it. On failure fall
+      // through to the gate copy — a proposal we cannot produce must not strand the
+      // promise or fake a result.
+      compressImageFile(file, applied, bmp ?? undefined).then(
         (proposal) => setPending((p) => (p?.mode === 'compress' && p.original === file ? { ...p, proposal } : p)),
         () => setPending({ mode: 'gate', original: file, kind }),
       )

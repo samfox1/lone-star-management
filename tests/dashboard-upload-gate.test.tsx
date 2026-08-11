@@ -39,7 +39,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
 // jsdom has no canvas; compress-image.test.ts covers the real pipeline. Here the subject
 // is whether it is CALLED, and with what budget.
-const compressImageFile = vi.fn<(f: File, b: unknown) => Promise<unknown>>(async () => ({
+const compressImageFile = vi.fn<(f: File, b: unknown, pre?: unknown) => Promise<unknown>>(async () => ({
   file: SMALL,
   width: 2400,
   height: 1800,
@@ -49,8 +49,9 @@ vi.mock('@/lib/site-editor/compress-image', () => ({
   // Per FILE, not a constant: the fixtures differ in dimensions as well as bytes, and a
   // fixed 4032 here would make the "web-sized photo passes untouched" case impossible to
   // write — every photo would be over the edge cap.
-  decodeEdgePx: async (f: File) => EDGE_PX[f.name],
-  compressImageFile: (f: File, b: unknown) => compressImageFile(f, b),
+  decodeImageBitmap: async (f: File) =>
+    EDGE_PX[f.name] === undefined ? null : { width: EDGE_PX[f.name], height: Math.round(EDGE_PX[f.name] * 0.75), close: () => {} },
+  compressImageFile: (f: File, b: unknown, pre?: unknown) => compressImageFile(f, b, pre),
 }))
 
 /** Longest edge per fixture, as a real decode would report it. */
@@ -154,6 +155,6 @@ describe('uploading a logo on the BRAND page', () => {
     dropFile(phonePhoto())
 
     expect(await screen.findByText(/Make this file site-sized/i)).toBeTruthy()
-    await waitFor(() => expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), DEFAULT_BUDGETS.image))
+    await waitFor(() => expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), DEFAULT_BUDGETS.image, expect.anything()))
   })
 })

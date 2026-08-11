@@ -6,18 +6,17 @@
 import { fitWithinEdge, walkQuality, type AssetBudget } from '@/lib/site-editor/asset-budget'
 
 /**
- * The file's longest edge in pixels, or undefined when it cannot be decoded. Orientation
- * comes from EXIF (`from-image`) — without it every sideways phone photo would measure,
- * and later upload, rotated.
+ * Decode a file once, or null when it cannot be decoded. Orientation comes from EXIF
+ * (`from-image`) — without it every sideways phone photo would measure, and later
+ * upload, rotated. The CALLER owns the bitmap: measure it, hand it to
+ * compressImageFile (which closes what it is given), or close it — decoding a 20MP
+ * photo twice was half the gate's "long spinner" (Sam, 2026-08-11).
  */
-export async function decodeEdgePx(file: File): Promise<number | undefined> {
+export async function decodeImageBitmap(file: File): Promise<ImageBitmap | null> {
   try {
-    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' })
-    const edge = Math.max(bmp.width, bmp.height)
-    bmp.close()
-    return edge
+    return await createImageBitmap(file, { imageOrientation: 'from-image' })
   } catch {
-    return undefined
+    return null
   }
 }
 
@@ -48,8 +47,14 @@ function renamed(name: string, mime: string): string {
  * PNG is lossless and `toBlob` ignores the quality argument for it, so walking would be
  * six wasted encodes converging on nothing.
  */
-export async function compressImageFile(file: File, budget: AssetBudget): Promise<CompressedImage> {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' })
+export async function compressImageFile(
+  file: File,
+  budget: AssetBudget,
+  /** A bitmap the caller already decoded (the gate measures before it compresses).
+   *  Ownership transfers: it is closed here either way. */
+  pre?: ImageBitmap,
+): Promise<CompressedImage> {
+  const bmp = pre ?? (await createImageBitmap(file, { imageOrientation: 'from-image' }))
   try {
     const { width, height } = fitWithinEdge(bmp.width, bmp.height, budget.maxEdgePx)
     const canvas = document.createElement('canvas')

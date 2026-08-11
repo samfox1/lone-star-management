@@ -17,11 +17,19 @@ import { DEFAULT_BUDGETS, type AssetBudget, type UploadKind } from '@/lib/site-e
 
 // The DOM pipeline is mocked — jsdom has no canvas or createImageBitmap. Its real
 // behaviour is covered by the pure geometry/walk tests; HERE the subject is the flow.
-const decodeEdgePx = vi.fn<(f: File) => Promise<number | undefined>>()
+// A fake ImageBitmap whose only jobs are to carry dimensions and count closes —
+// the gate measures the edge itself now (decode-once, 2026-08-11).
+let closedBitmaps = 0
+const fakeBitmap = (edge: number) => ({ width: edge, height: Math.round(edge * 0.75), close: () => { closedBitmaps += 1 } })
+const decodeImageBitmap = vi.fn<(f: File) => Promise<ReturnType<typeof fakeBitmap> | null>>()
+/** The old mock's shape, kept as the tests' vocabulary: an edge, or undefined for a
+ *  failed decode. */
+const decodeEdgePx = { mockResolvedValue: (edge: number | undefined) =>
+  decodeImageBitmap.mockResolvedValue(edge === undefined ? null : fakeBitmap(edge)) }
 const compressImageFile = vi.fn()
 vi.mock('@/lib/site-editor/compress-image', () => ({
-  decodeEdgePx: (f: File) => decodeEdgePx(f),
-  compressImageFile: (f: File, b: AssetBudget) => compressImageFile(f, b),
+  decodeImageBitmap: (f: File) => decodeImageBitmap(f),
+  compressImageFile: (f: File, b: AssetBudget, pre?: unknown) => compressImageFile(f, b, pre),
 }))
 
 afterEach(() => {
@@ -84,7 +92,7 @@ describe('useBudgetGate', () => {
     pick()
 
     expect(await screen.findByRole('dialog')).toBeTruthy()
-    await waitFor(() => expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), DEFAULT_BUDGETS.image))
+    await waitFor(() => expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), DEFAULT_BUDGETS.image, expect.objectContaining({ width: expect.any(Number) })))
   })
 
   it('CRITICAL: the floor still leaves the un-shrinkable alone', async () => {
@@ -100,7 +108,7 @@ describe('useBudgetGate', () => {
     render(<Probe kind="image" budget={null} file={fakeFile(9_000_000, 'image/gif', 'loop.gif')} />)
     pick()
     await waitFor(() => expect(result()).toBe('loop.gif'))
-    expect(decodeEdgePx).not.toHaveBeenCalled()
+    expect(decodeImageBitmap).not.toHaveBeenCalled()
   })
 
   it('an oversized image opens the proposal; accepting resolves the COMPRESSED file', async () => {
@@ -115,7 +123,7 @@ describe('useBudgetGate', () => {
     expect(dialog.textContent).toContain('1200')
     fireEvent.click(screen.getByRole('button', { name: /compress/i }))
     await waitFor(() => expect(result()).toBe('photo.webp'))
-    expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), POLAROID)
+    expect(compressImageFile).toHaveBeenCalledWith(expect.anything(), POLAROID, expect.objectContaining({ width: expect.any(Number) }))
   })
 
   it('declining uploads the ORIGINAL — the budget is a default, not a cage', async () => {

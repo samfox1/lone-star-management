@@ -37,15 +37,15 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 // jsdom has no canvas; the compressor's own behaviour is covered in compress-image.test.
-const compressImageFile = vi.fn<(f: File, b: unknown) => Promise<unknown>>(async () => ({
+const compressImageFile = vi.fn<(f: File, b: unknown, pre?: unknown) => Promise<unknown>>(async () => ({
   file: new File(['small'], 'photo.webp', { type: 'image/webp' }),
   width: 1200,
   height: 900,
   fits: true,
 }))
 vi.mock('@/lib/site-editor/compress-image', () => ({
-  decodeEdgePx: async () => 4000,
-  compressImageFile: (f: File, b: unknown) => compressImageFile(f, b),
+  decodeImageBitmap: async () => ({ width: 4000, height: 3000, close: () => {} }),
+  compressImageFile: (f: File, b: unknown, pre?: unknown) => compressImageFile(f, b, pre),
 }))
 
 afterEach(() => {

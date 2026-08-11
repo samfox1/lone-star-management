@@ -16,7 +16,7 @@
  *   • the bitmap is released on EVERY path, including the throwing one.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { compressImageFile, decodeEdgePx } from '@/lib/site-editor/compress-image'
+import { compressImageFile, decodeImageBitmap } from '@/lib/site-editor/compress-image'
 import type { AssetBudget } from '@/lib/site-editor/asset-budget'
 
 type BitmapCall = { file: unknown; opts?: { imageOrientation?: string } }
@@ -85,30 +85,34 @@ afterEach(() => {
 const file = (name = 'photo.jpg', type = 'image/jpeg') => new File(['src'], name, { type })
 const WEBP: AssetBudget = { maxEdgePx: 1200, maxBytes: 400_000, mime: 'image/webp' }
 
-describe('decodeEdgePx', () => {
-  it('CRITICAL: decodes with EXIF orientation applied', () => {
+describe('decodeImageBitmap', () => {
+  it('CRITICAL: decodes with EXIF orientation applied', async () => {
     // Without `from-image` a photo taken sideways measures (and later uploads) rotated —
     // and the manager has no way to correct it from the editor.
-    return decodeEdgePx(file()).then((edge) => {
-      expect(edge).toBe(4000)
-      expect(calls.bitmap[0].opts?.imageOrientation).toBe('from-image')
-    })
+    const bmp = await decodeImageBitmap(file())
+    expect(bmp?.width).toBe(4000)
+    expect(bmp?.height).toBe(3000)
+    expect(calls.bitmap[0].opts?.imageOrientation).toBe('from-image')
   })
 
-  it('returns the LONGEST edge, whichever way round the photo is', async () => {
-    source = { width: 3000, height: 4000 }
-    expect(await decodeEdgePx(file())).toBe(4000)
-  })
-
-  it('a file it cannot decode measures undefined rather than throwing', async () => {
+  it('a file it cannot decode yields null rather than throwing', async () => {
     // A corrupt file must not blow up the picker; the byte ceiling still applies.
     decodeFails = true
-    expect(await decodeEdgePx(file())).toBeUndefined()
+    expect(await decodeImageBitmap(file())).toBeNull()
   })
 
-  it('releases the bitmap — these are large and not GC-cheap', async () => {
-    await decodeEdgePx(file())
-    expect(calls.closed).toBe(1)
+  it('does NOT close the bitmap — the caller owns it (the gate measures, then hands it on)', async () => {
+    await decodeImageBitmap(file())
+    expect(calls.closed).toBe(0)
+  })
+
+  it('CRITICAL: compressImageFile reuses a pre-decoded bitmap — no second decode, still closed', async () => {
+    // The double decode WAS the bug: measure decoded once, compress decoded again.
+    const bmp = await decodeImageBitmap(file())
+    calls.bitmap = []
+    await compressImageFile(file(), WEBP, bmp!)
+    expect(calls.bitmap).toHaveLength(0) // reused, not re-decoded
+    expect(calls.closed).toBe(1) // ownership transferred and honoured
   })
 })
 
