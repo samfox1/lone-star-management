@@ -196,6 +196,7 @@ export function EditorShell({
     applyStyle,
     applyLink,
     applyCursor,
+    replayMotion,
     applyHighlight,
     clearHighlight,
     setMode,
@@ -332,6 +333,17 @@ export function EditorShell({
                 </button>
               ))}
             </div>
+
+            {/* Entrances play ONCE, so "what does my page load look like" needs a
+                button — the alternative was hunting for a reload (Sam, 2026-08-11:
+                "having a hard time testing these animations on load"). */}
+            <button
+              type="button"
+              onClick={replayMotion}
+              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
+            >
+              Replay motion
+            </button>
 
             {/* The canvas is a real 1440px desktop window drawn smaller, so say so —
                 otherwise a zoomed-out site reads as "the text is broken". */}

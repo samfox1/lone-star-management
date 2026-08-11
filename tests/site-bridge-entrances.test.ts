@@ -74,6 +74,19 @@ describe('effectsCss — the derived rules', () => {
     }
   })
 
+  it('CRITICAL: on TEXT elements, Lift shadows the glyphs, not the container', () => {
+    // A box-shadow around a heading draws a floating rectangle (Sam, 2026-08-11:
+    // "It should be around the text when its applied to text").
+    const css = effectsCss()
+    const textRule = css.split('\n').find((l) => l.startsWith(':where(') && l.includes('.hover-lift:hover'))
+    expect(textRule).toBeTruthy()
+    expect(textRule).toContain('box-shadow:none')
+    expect(textRule).toContain('text-shadow:')
+    // Source order is the tiebreak (:where keeps specificity equal) — the text
+    // override must come AFTER the box rule or it never wins.
+    expect(css.indexOf(textRule!)).toBeGreaterThan(css.indexOf('.hover-lift:hover{'))
+  })
+
   it('every hover option has a :hover rule, and speed rides the custom property', () => {
     const css = effectsCss()
     for (const o of HOVER_OPTIONS) {
@@ -147,6 +160,32 @@ describe('mountEntrances — the runtime', () => {
     replayEntrances(document, '[data-lse-style="hero_name"]')
     expect(target.hasAttribute(ENTERED_ATTR)).toBe(false)
     expect(io.observed.has(target)).toBe(true)
+  })
+})
+
+describe('the frame replays ALL entrances on replay-entrances', () => {
+  it('CRITICAL: the toolbar message re-hides and re-arms every entranced element', () => {
+    withIO()
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => (cb(0), 0))
+    const a = el('enter-rise')
+    const b = el('enter-fade')
+    a.setAttribute(ENTERED_ATTR, '')
+    b.setAttribute(ENTERED_ATTR, '')
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      editList: { fields: [], slots: [], styles: [], links: [] },
+      target: { postMessage: () => {} } as unknown as Window,
+    })
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://editor.test',
+        data: { v: BRIDGE_VERSION, source: EDITOR_SOURCE, type: 'replay-entrances' },
+      }),
+    )
+    expect(a.hasAttribute(ENTERED_ATTR)).toBe(false)
+    expect(b.hasAttribute(ENTERED_ATTR)).toBe(false)
+    stop()
   })
 })
 

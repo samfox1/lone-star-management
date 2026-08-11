@@ -91,6 +91,15 @@ export function mountEntrances(doc: Document): Teardown {
 }
 
 /**
+ * Replay EVERY entrance on the document — the editor's "Replay motion" button:
+ * entrances play once, so without this there is no way to re-watch what a fan sees
+ * on page load short of reloading the frame.
+ */
+export function replayAllEntrances(doc: Document): void {
+  replayEntrances(doc, ENTRANCE_SELECTOR)
+}
+
+/**
  * Replay the entrance of every element matching `selector` (the editor's preview:
  * picking "Rise" should SHOW the rise, not silently mark the region entered). No-op
  * on a document with no mounted runtime.

@@ -311,6 +311,15 @@ const HOVER_RULE: Record<string, string> = {
   'hover-glow': 'filter:drop-shadow(0 0 10px currentColor)',
 }
 
+/** Text elements override: a box-shadow around a heading's CONTAINER draws a floating
+ *  rectangle, not a lifted word (Sam, 2026-08-11) — on text the lift shadows the
+ *  GLYPHS. `:where()` keeps specificity identical so source order decides, and the
+ *  element list is how CSS can tell "text" with no runtime help. */
+const TEXT_ELEMENTS = 'h1,h2,h3,h4,h5,h6,p,span,a,em,strong,blockquote,li,figcaption'
+const HOVER_TEXT_RULE: Record<string, string> = {
+  'hover-lift': 'box-shadow:none;text-shadow:0 12px 18px rgb(0 0 0 / 0.3)',
+}
+
 /**
  * The effects stylesheet, derived from the option tables above. THROWS on an option
  * with no rule — an entrance in the panel whose CSS never shipped would be a select
@@ -334,9 +343,11 @@ export function effectsCss(): string {
     const rule = HOVER_RULE[o.value]
     if (!rule) throw new Error(`hover option without CSS: ${o.value}`)
     out.push(
-      `.${o.value}{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}`,
+      `.${o.value}{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}`,
       `.${o.value}:hover{${rule}}`,
     )
+    const textRule = HOVER_TEXT_RULE[o.value]
+    if (textRule) out.push(`:where(${TEXT_ELEMENTS}).${o.value}:hover{${textRule}}`)
   }
   return out.join('\n')
 }

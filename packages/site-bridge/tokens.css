@@ -119,15 +119,16 @@ html[data-lse-entrances] .enter-slide-right:not([data-lse-entered]){opacity:0;tr
 html[data-lse-entrances] .enter-zoom:not([data-lse-entered]){opacity:0;transform:scale(0.9)}
 .enter-blur{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
 html[data-lse-entrances] .enter-blur:not([data-lse-entered]){opacity:0;filter:blur(10px)}
-.hover-grow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-grow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-grow:hover{transform:scale(1.05)}
-.hover-shrink{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-shrink{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-shrink:hover{transform:scale(0.95)}
-.hover-lift{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-lift{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-lift:hover{transform:translateY(-6px);box-shadow:0 14px 28px rgb(0 0 0 / 0.18)}
-.hover-tilt{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+:where(h1,h2,h3,h4,h5,h6,p,span,a,em,strong,blockquote,li,figcaption).hover-lift:hover{box-shadow:none;text-shadow:0 12px 18px rgb(0 0 0 / 0.3)}
+.hover-tilt{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-tilt:hover{transform:rotate(2deg) scale(1.02)}
-.hover-brighten{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-brighten{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-brighten:hover{filter:brightness(1.15)}
-.hover-glow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-glow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-glow:hover{filter:drop-shadow(0 0 10px currentColor)}

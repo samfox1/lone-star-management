@@ -48,7 +48,7 @@ import {
 } from "./protocol";
 import type { PublicSitePayload } from "./payload";
 import { applyCursor, cursorSettingsFrom, normalizeCursorSettings } from "./cursor";
-import { mountEntrances, replayEntrances } from "./entrances";
+import { mountEntrances, replayAllEntrances, replayEntrances } from "./entrances";
 import type { LibraryAsset, TemplateManifest } from "./manifest";
 import { textFieldKeys } from "./manifest";
 
@@ -641,6 +641,7 @@ export function mountFrameBridge(options: {
     // The cursor isn't a marked DOM region, so it gets its own applier rather than a
     // silent fall-through in applyFieldToDom. Normalized on receipt: the guard checks
     // the envelope, not payload interiors.
+    else if (msg.type === "replay-entrances") replayAllEntrances(document);
     else if (msg.type === "apply-cursor" && "settings" in msg)
       applyCursor(document, normalizeCursorSettings(msg.settings));
     else if (msg.type === "init-data" && "site" in msg) {

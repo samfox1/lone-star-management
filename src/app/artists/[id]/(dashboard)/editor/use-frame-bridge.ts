@@ -65,6 +65,8 @@ export type FrameBridge = {
   applyLink: (key: string, url: string) => void
   /** Repaint the site-wide cursor + trail in the frame (Site panel), before the save. */
   applyCursor: (settings: CursorSettings) => void
+  /** Replay every entrance animation in the frame (the toolbar's "Replay motion"). */
+  replayMotion: () => void
   /** Outline + scroll a region into view in the frame (a tile click in the inspector). */
   applyHighlight: (target: SelectTarget) => void
   /** Drop the frame's current highlight (the tile was deselected). */
@@ -137,6 +139,9 @@ export function useFrameBridge({
     (settings: CursorSettings) => post({ type: 'apply-cursor', settings }),
     [post],
   )
+  /** Replay every entrance in the frame — entrances play once, so testing "what does
+   *  my page load look like" needs a button, not a hunt for the reload gesture. */
+  const replayMotion = useCallback(() => post({ type: 'replay-entrances' }), [post])
   const applyHighlight = useCallback((target: SelectTarget) => post({ type: 'highlight', target }), [post])
   const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
   /** Whether a click in the frame SELECTS a region or works the site. See the protocol's
@@ -249,6 +254,7 @@ export function useFrameBridge({
     applyStyle,
     applyLink,
     applyCursor,
+    replayMotion,
     applyHighlight,
     clearHighlight,
     setMode,

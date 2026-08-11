@@ -90,6 +90,9 @@ export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-image'; key: string; url: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-link'; key: string; url: string }
+  /** Replay every entrance animation in the frame — the toolbar's "Replay motion".
+   *  ADDITIVE: an older frame ignores it; the manager just reloads instead. */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'replay-entrances' }
   /** Re-apply the site-wide cursor (image / click image / trail) live in the preview.
    *  ADDITIVE: the four values are ordinary site_content keys, so a frame that predates
    *  this message still gets the cursor on the next init-data — this just skips the
