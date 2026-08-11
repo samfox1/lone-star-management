@@ -201,6 +201,15 @@ const pctRank = (prefix: string) => (t: string): number | null => {
   const m = new RegExp(`^${prefix}-(\\d+)$`).exec(t)
   return m ? Number(m[1]) : null
 }
+/** pctRank for the zero-resting families (B&W, sepia): their '' means 0%, not 100%.
+ *  With the 100 default an untouched image RANKED as fully filtered — the thumb sat at
+ *  the far end of a slider whose effect was off (found by the monotonicity invariant,
+ *  2026-08-11). */
+const pctRank0 = (prefix: string) => (t: string): number | null => {
+  if (t === '') return 0
+  const m = new RegExp(`^${prefix}-(\\d+)$`).exec(t)
+  return m ? Number(m[1]) : null
+}
 
 const BORDER_PX: Record<string, number> = { border: 1, 'border-0': 0, 'border-2': 2, 'border-4': 4, 'border-8': 8 }
 const RADIUS_PX: Record<string, number> = {
@@ -574,8 +583,8 @@ export function buildItemStyleControls(): StyleControl[] {
  */
 function filterControls(): StyleControl[] {
   return [
-    { id: 'grayscale', label: 'Black & white', kind: 'slider', steps: GRAYSCALE_STEPS, rank: pctRank('bw'), owns: (t) => /^bw-\d/.test(t) },
-    { id: 'sepia', label: 'Sepia', kind: 'slider', steps: SEPIA_STEPS, rank: pctRank('sepia'), owns: (t) => /^sepia-\d/.test(t) },
+    { id: 'grayscale', label: 'Black & white', kind: 'slider', steps: GRAYSCALE_STEPS, rank: pctRank0('bw'), owns: (t) => /^bw-\d/.test(t) },
+    { id: 'sepia', label: 'Sepia', kind: 'slider', steps: SEPIA_STEPS, rank: pctRank0('sepia'), owns: (t) => /^sepia-\d/.test(t) },
     { id: 'brightness', label: 'Brightness', kind: 'slider', steps: BRIGHTNESS_STEPS, rank: pctRank('brightness'), owns: (t) => /^brightness-\d/.test(t) },
     { id: 'contrast', label: 'Contrast', kind: 'slider', steps: CONTRAST_STEPS, rank: pctRank('contrast'), owns: (t) => /^contrast-\d/.test(t) },
     { id: 'saturate', label: 'Saturation', kind: 'slider', steps: SATURATE_STEPS, rank: pctRank('saturate'), owns: (t) => /^saturate-\d/.test(t) },
@@ -605,8 +614,11 @@ const strokeRank = (t: string): number | null => {
   return m ? Number(m[1]) : null
 }
 
-/** Tilt ranks by DEGREES, signed — 0° sits mid-slider like Size's 100%. */
+/** Tilt ranks by DEGREES, signed — 0° sits mid-slider like Size's 100%, and '' IS 0°
+ *  (found by the monotonicity invariant: a null rank for the resting value left the
+ *  thumb unplaced on an untouched image). */
 const tiltRank = (t: string): number | null => {
+  if (t === '') return 0
   const m = t.match(/^tilt-\[(-?\d{1,2})deg\]$/)
   return m ? Number(m[1]) : null
 }

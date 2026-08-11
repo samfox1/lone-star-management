@@ -310,3 +310,63 @@ describe('text size is FLUID — it shrinks on a phone', () => {
     expect(c.owns('text-foreground')).toBe(false)
   })
 })
+
+describe('every slider is internally consistent — derived from the builders, never hand-listed', () => {
+  // AGENTS.md rule 4 applied to the control registry itself: iterate what the builders
+  // actually emit, so a family added tomorrow is checked the moment it exists. Kills the
+  // mutant class Stryker found clustering here (2026-08-11): a swapped regex, a wrong
+  // rank parse, or a reordered steps array all break one of these invariants.
+  const sliderSteps = (c: StyleControl) => (c.kind === 'slider' ? c.steps : [])
+  const surfaces: [string, StyleControl[]][] = [
+    ['image', buildItemStyleControls()],
+    ['embed', buildVideoItemStyleControls('embed')],
+    ['file', buildVideoItemStyleControls('file')],
+    ['textItem', buildTextItemStyleControls(PALETTE)],
+    ['section', buildStyleControls(PALETTE)],
+  ]
+
+  it('CRITICAL: each slider OWNS every one of its own step values', () => {
+    for (const [surface, controls] of surfaces) {
+      for (const c of controls) {
+        if (c.kind !== 'slider') continue
+        for (const step of sliderSteps(c)) {
+          if (step.value === '') continue
+          expect(c.owns(step.value), `${surface}/${c.id} should own ${step.value}`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('CRITICAL: no step value is claimed by TWO controls on one surface', () => {
+    // Two owners corrupt each other on write: each strips the other's token as "its own
+    // old value" when the manager moves either slider.
+    for (const [surface, controls] of surfaces) {
+      for (const c of controls) {
+        if (c.kind !== 'slider') continue
+        for (const step of sliderSteps(c)) {
+          if (step.value === '') continue
+          const owners = controls.filter((o) => o.owns(step.value)).map((o) => o.id)
+          expect(owners, `${surface}: ${step.value}`).toEqual([c.id])
+        }
+      }
+    }
+  })
+
+  it('CRITICAL: rank is defined and strictly increasing along each slider', () => {
+    // The rank maps a stored token back to a thumb position; non-monotonic rank makes
+    // the slider jump backwards as the manager drags forwards.
+    for (const [surface, controls] of surfaces) {
+      for (const c of controls) {
+        if (c.kind !== 'slider' || !c.rank) continue
+        let prev: number | null = null
+        for (const step of sliderSteps(c)) {
+          if (step.value === '' && c.defaultOffScale) continue
+          const r = c.rank(step.value)
+          expect(r, `${surface}/${c.id} rank(${step.value || "''"})`).not.toBeNull()
+          if (prev != null) expect(r!, `${surface}/${c.id} monotonic at ${step.value}`).toBeGreaterThan(prev)
+          prev = r
+        }
+      }
+    }
+  })
+})
