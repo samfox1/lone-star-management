@@ -26,6 +26,11 @@ import {
 import { createStyleApplier, type TemplateManifest } from "@samfox1/site-bridge";
 import { FIELD_ATTR, HIGHLIGHT_ATTR } from "@samfox1/site-bridge/markers";
 
+// jsdom implements no layout, so Element has no scrollIntoView — but frame.ts calls it
+// on every successful highlight, and the uncaught TypeError fails the run even though
+// every assertion passes. Stub the whole prototype once for this file.
+Element.prototype.scrollIntoView = vi.fn();
+
 /** Post an editor message at the frame, the way the real editor does. */
 function editorSays(msg: Record<string, unknown>) {
   window.dispatchEvent(
