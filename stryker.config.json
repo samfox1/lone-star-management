@@ -13,7 +13,7 @@
   },
   "coverageAnalysis": "perTest",
   "_mutate_comment": "ONLY modules whose behaviour is pinned by DB-FREE tests (vitest.mutation.config.ts). A module tested solely through the live-DB suites would report false survivors here and teach everyone to ignore the report. Grow this list when a module gains DB-free coverage; do not grow it to chase a number.",
-  "_workspace_caveat": "packages/music-rules is DELIBERATELY absent. npm workspaces symlink it into node_modules, and Stryker's sandbox resolves that symlink back to the REAL file \u2014 so it mutates a copy nothing loads and reports 0%/all-no-coverage for code tests/music.test.ts genuinely covers. A knowingly false number teaches everyone to ignore the report, so the module is excluded until the resolution is fixed; its rules stay pinned by music.test.ts and the TS-vs-SQL mirror test.",
+  "_workspace_caveat": "packages/music-rules is DELIBERATELY absent. npm workspaces symlink it into node_modules, and Stryker's sandbox resolves that symlink back to the REAL file \u2014 so it mutates a copy nothing loads and reports 0%/all-no-coverage for code tests/music.test.ts genuinely covers. A knowingly false number teaches everyone to ignore the report, so the module is excluded until the resolution is fixed; its rules stay pinned by music.test.ts and the TS-vs-SQL mirror test. packages/site-bridge is absent for the SAME reason \u2014 its cursor/styles/frame rules stay pinned by the site-bridge-*.test.ts suites.",
   "mutate": [
     "src/lib/color.ts",
     "src/lib/content-form.ts",
@@ -23,6 +23,7 @@
     "src/lib/epk-pdf.ts",
     "src/lib/http.ts",
     "src/lib/og.ts",
+    "src/lib/site-content-schema.ts",
     "src/lib/seo.ts",
     "src/lib/song-merge.ts",
     "src/lib/storage-gc.ts",

@@ -11,6 +11,7 @@ import {
   CURSOR_TRAIL_STYLES,
   applyCursor,
   cursorSettingsFrom,
+  needsDownscale,
   normalizeCursorSettings,
   type CursorSettings,
 } from '@samfox1/site-bridge/cursor'
@@ -70,6 +71,28 @@ describe('applyCursor — the DOM contract', () => {
     expect(document.documentElement.style.cursor).toContain('c.png')
   })
 
+  it('pointercancel and window blur ALSO restore the resting cursor', () => {
+    // A touch-scroll fires pointercancel, dragging out of the window fires blur —
+    // without these two the click cursor sticks permanently after either.
+    const settings = { ...NONE, image: 'https://x.test/c.png', clickImage: 'https://x.test/k.png' }
+    applyCursor(document, settings)
+    document.dispatchEvent(new Event('pointerdown'))
+    document.dispatchEvent(new Event('pointercancel'))
+    expect(document.documentElement.style.cursor).toContain('c.png')
+    document.dispatchEvent(new Event('pointerdown'))
+    window.dispatchEvent(new Event('blur'))
+    expect(document.documentElement.style.cursor).toContain('c.png')
+  })
+
+  it('CRITICAL: teardown removes the click listeners, not just the layers', () => {
+    // The idempotency promise is about LISTENERS too: a stale pointerdown handler from
+    // a previous mount would write its old clickValue over whatever is applied now.
+    applyCursor(document, { ...NONE, image: 'https://x.test/c.png', clickImage: 'https://x.test/k.png' })
+    applyCursor(document, NONE)
+    document.dispatchEvent(new Event('pointerdown'))
+    expect(document.documentElement.style.cursor).toBe('')
+  })
+
   it('CRITICAL: a dots trail spawns fading nodes as the pointer moves', () => {
     applyCursor(document, { ...NONE, trail: 'dots', trailColor: '#00ff00' })
     const layer = document.querySelector('[data-lse-cursor-trail="dots"]')
@@ -90,6 +113,17 @@ describe('applyCursor — the DOM contract', () => {
     expect(document.querySelector('[data-lse-cursor-trail]')).toBeNull()
   })
 
+  it('CRITICAL: a STALE teardown handle cannot unregister the current mount', () => {
+    // t1 belongs to a mount that was already replaced. If calling it deletes the
+    // CURRENT registration, the next applyCursor finds nothing to tear down and the
+    // replaced mount's layer + listeners leak forever.
+    const t1 = applyCursor(document, { ...NONE, trail: 'dots' })
+    applyCursor(document, { ...NONE, trail: 'sparkles' })
+    t1() // stale — its cleanups already ran; it must not touch the registry
+    applyCursor(document, NONE)
+    expect(document.querySelector('[data-lse-cursor-trail]')).toBeNull()
+  })
+
   it('an image trail with no cursor image degrades to no trail at all', () => {
     applyCursor(document, { ...NONE, trail: 'image' })
     expect(document.querySelector('[data-lse-cursor-trail]')).toBeNull()
@@ -101,6 +135,16 @@ describe('applyCursor — the DOM contract', () => {
     const canvas = document.querySelector('canvas[data-lse-cursor-trail="line"]')
     expect(canvas).not.toBeNull()
     expect(() => document.dispatchEvent(at(10, 10))).not.toThrow()
+  })
+
+  it('the downscale decision: anything over 64px on either edge gets redrawn', () => {
+    // Only the PURE half is pinnable: jsdom's Image never fires onload, so the loader
+    // around it (fittedCursorUrl — canvas redraw, taint fallback, the !pressed
+    // re-apply guard) runs untested here. Browsers ignore cursor images past ~128px
+    // and often cap at 32, so a wrong decision means a silent default arrow.
+    expect(needsDownscale(64, 64)).toBe(false)
+    expect(needsDownscale(65, 64)).toBe(true)
+    expect(needsDownscale(32, 200)).toBe(true)
   })
 
   it('every declared trail style actually mounts something', () => {
@@ -151,7 +195,9 @@ describe('cursorValueError — the write gate', () => {
   it('CRITICAL: only an https URL can become a cursor image', () => {
     // These strings end up inside `cursor: url("…")` on the artist's site.
     expect(cursorValueError(CURSOR_CONTENT_KEYS.image, 'https://x.test/c.png')).toBeNull()
-    for (const bad of ['javascript:alert(1)', 'data:image/png;base64,AAAA', 'ftp://x/c.png', 'https://x.test/a b', 'https://x.test/",evil']) {
+    // http:// included: mixed content on an https site is silently dropped by the
+    // browser, so letting it store would ship an invisible failure.
+    for (const bad of ['javascript:alert(1)', 'data:image/png;base64,AAAA', 'ftp://x/c.png', 'http://x.test/c.png', 'https://x.test/a b', 'https://x.test/",evil']) {
       expect(cursorValueError(CURSOR_CONTENT_KEYS.image, bad), bad).not.toBeNull()
       expect(cursorValueError(CURSOR_CONTENT_KEYS.click, bad), bad).not.toBeNull()
     }

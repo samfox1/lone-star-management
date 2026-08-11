@@ -102,7 +102,7 @@ keep working during migration).
 | --- | --- | --- | --- |
 | 1 | `@samfox1/site-bridge`: scaffold package; move protocol/payload types from lone-star (re-export shims); port skeen's frameBridge/editMarkers/style-resolution WHOLESALE (its comments are a year of incident fixes — reviewed as a move, not a rewrite); generate tokens.css from style-controls' tables; contract-fixture tests | M | lone-star + package suites green; zero behavior change |
 | 2 | Skeen migrates: delete mirrors, import the SDK, `@import` tokens.css; its own region registry (site design) stays | M | skeen suite green + manual editor session against a Vercel preview BEFORE promoting; BRIDGE_VERSION unmoved |
-| 3 | `@lone-star/site-kit`: EditableText (moved from skeen) + EditableImage/Video + EditModeProvider + auto-key machinery + generalized discovery; SongGrid/SongCard with skeen's grouping logic inside | L | skeen adopts the kit for text + music (proves headless on the existing design) |
+| 3 | `@lone-star/site-kit`: EditableText (moved from skeen) + EditableImage/Video + EditModeProvider + auto-key machinery + generalized discovery; SongGrid/SongCard with skeen's grouping logic inside; CursorLayer (the 5-line useEffect wrapper over `applyCursor` currently copy-pasted into all three sites, 2026-08-11) | L | skeen adopts the kit for text + music (proves headless on the existing design) |
 | 4 | Editor de-hardcoding: `videoSlots` + `gallery` + `manifestVersion` in the manifest; Videos panel + `assignHeroSlotAction` + gallery groups render/validate from declarations (built-ins get today's values as declared defaults) | M | editor pixel-identical for skeen |
 | 5 | `create-lone-star-site` scaffold + `SITE_INTEGRATION.md` + `validateEditList()` + `auditMarkers()` dev helper; the scaffold IS `examples/minimal-site` grown up | M | a cold session connects a fresh scaffold clone in under a day |
 | 6 | ftbk conforms (its repo only): payload→DesktopContent mapping (its content.ts anticipated exactly this), kit primitives replace hand-rendered content in the app windows, `/edit` route, CSP frame-ancestors; Fred becomes an artist row; content-only scope | M | ftbk editable in the lone-star editor |
@@ -128,7 +128,9 @@ being read — orphans are visible, not silent.
 
 **P3. Isomorphism.** Kit and bridge must import cleanly server-side (skeen calls
 `regionProps` in server components). Framework-free core enforced by a node-env import
-smoke test; DOM code confined to `frame.ts`; React confined to site-kit.
+smoke test; DOM code never RUNS at import time (the isomorphism test enforces this) and
+lives only in `frame.ts` and `cursor.ts` — the cursor applier must be importable by
+deployed sites that never mount the frame; React confined to site-kit.
 
 **P4. The two-repo skew window** (phases 1–2). The editor loads the DEPLOYED site;
 extraction must be behavior-identical and skeen's migration goes out as one PR gated on

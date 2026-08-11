@@ -398,6 +398,13 @@ describe('the line dressing implies a line (2026-08-11)', () => {
     expect(next.split(/\s+/)).toContain('decothick-[4px]')
   })
 
+  it('CRITICAL: so does the line COLOR — all three dressings imply, not just two', () => {
+    // A single-element removal from DRESSING survives both the sibling tests and
+    // Stryker's whole-array mutant, so each dressing pins its own membership.
+    const next = applyStyleValue('font-serif', byId('decoColor'), 'decocolor-[#ff0000]')
+    expect(next.split(/\s+/)).toContain('underline')
+  })
+
   it('a line already present is kept, not doubled — strikethrough stays strikethrough', () => {
     const next = applyStyleValue('line-through', byId('decoOffset'), 'underoffset-[6px]')
     const tokens = next.split(/\s+/)
@@ -409,6 +416,22 @@ describe('the line dressing implies a line (2026-08-11)', () => {
     const next = applyStyleValue('underline decothick-[4px]', byId('decoThickness'), '')
     expect(next.split(/\s+/)).toContain('underline')
     expect(next).not.toContain('decothick')
+  })
+
+  it('CRITICAL: turning the LAST line off sweeps the dressing with it', () => {
+    // The mirror rule. Without it, toggling Underline off leaves dead decothick/
+    // decocolor tokens stored, and the sliders are back to "not working" — the exact
+    // symptom the implication fixed, one toggle away (review, 2026-08-11).
+    const next = applyStyleValue('font-serif underline decothick-[4px] decocolor-[#ff0000]', byId('underline'), '')
+    expect(next).not.toContain('decothick')
+    expect(next).not.toContain('decocolor')
+    expect(next.split(/\s+/)).toContain('font-serif')
+  })
+
+  it('switching line KINDS keeps the dressing — only losing the last line sweeps', () => {
+    const next = applyStyleValue('underline line-through decothick-[4px]', byId('underline'), '')
+    expect(next.split(/\s+/)).toContain('line-through')
+    expect(next.split(/\s+/)).toContain('decothick-[4px]')
   })
 })
 

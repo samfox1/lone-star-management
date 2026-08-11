@@ -82,15 +82,28 @@ async function saveCustomField(
   if (!isContentKeyShape(fieldKey)) return { ok: false, error: 'Unknown field.' }
   if (RESERVED_CONTENT_KEYS.has(fieldKey)) return { ok: false, error: 'That field name is reserved.' }
 
+  return writeSiteContentValue(supabase, artistId, fieldKey, trimmed)
+}
+
+/**
+ * The one site_content write: DELETE on blank, upsert otherwise. Every validated path
+ * (custom field, cursor field, template field) ends here, so the blank-clears rule
+ * cannot drift between them. DELETE, not an empty string: storing '' would ship a blank
+ * override the site can't tell from a real value, so clearing would never really clear.
+ */
+async function writeSiteContentValue(
+  supabase: SupabaseClient,
+  artistId: string,
+  key: string,
+  trimmed: string,
+): Promise<{ ok: boolean; error?: string }> {
   if (trimmed === '') {
-    // DELETE, not an empty string: storing '' would ship a blank override the site can't
-    // tell from a real value, so clearing a caption would never actually clear it.
-    const { error } = await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', fieldKey)
+    const { error } = await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', key)
     return error ? { ok: false, error: error.message } : { ok: true }
   }
   const { error } = await supabase
     .from('site_content')
-    .upsert({ artist_id: artistId, key: fieldKey, value: trimmed }, { onConflict: 'artist_id,key' })
+    .upsert({ artist_id: artistId, key, value: trimmed }, { onConflict: 'artist_id,key' })
   return error ? { ok: false, error: error.message } : { ok: true }
 }
 
@@ -109,14 +122,7 @@ export async function saveCursorField(
   const trimmed = value.trim()
   const invalid = cursorValueError(key, trimmed)
   if (invalid) return { ok: false, error: invalid }
-  if (trimmed === '') {
-    const { error } = await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', key)
-    return error ? { ok: false, error: error.message } : { ok: true }
-  }
-  const { error } = await supabase
-    .from('site_content')
-    .upsert({ artist_id: artistId, key, value: trimmed }, { onConflict: 'artist_id,key' })
-  return error ? { ok: false, error: error.message } : { ok: true }
+  return writeSiteContentValue(supabase, artistId, key, trimmed)
 }
 
 export async function saveEditorField(
@@ -143,21 +149,15 @@ export async function saveEditorField(
 
   if (field.target.store === 'site_content') {
     const key = field.target.key
-    if (trimmed === '') {
-      const { error } = await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', key)
-      if (error) return { ok: false, error: error.message }
-      return { ok: true }
+    // Reuse the schema's per-field validation (email fields reject junk) — blank skips
+    // it, blank means clear. `manifest.template`, not the argument: identical for a
+    // built-in (manifestFor keys on it) and it keeps the nullable custom-site signal
+    // out of the schema lookup.
+    if (trimmed !== '') {
+      const scField = fieldsFor(manifest.template).find((f) => f.key === key) ?? SEO_FIELDS.find((f) => f.key === key)
+      if (scField && !acceptsValue(scField, trimmed)) return { ok: false, error: 'That value looks invalid.' }
     }
-    // Reuse the schema's per-field validation (email fields reject junk).
-    // `manifest.template`, not the argument: identical for a built-in (manifestFor keys on
-    // it) and it keeps the nullable custom-site signal out of the schema lookup.
-    const scField = fieldsFor(manifest.template).find((f) => f.key === key) ?? SEO_FIELDS.find((f) => f.key === key)
-    if (scField && !acceptsValue(scField, trimmed)) return { ok: false, error: 'That value looks invalid.' }
-    const { error } = await supabase
-      .from('site_content')
-      .upsert({ artist_id: artistId, key, value: trimmed }, { onConflict: 'artist_id,key' })
-    if (error) return { ok: false, error: error.message }
-    return { ok: true }
+    return writeSiteContentValue(supabase, artistId, key, trimmed)
   }
 
   if (field.target.store === 'artist') {

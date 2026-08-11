@@ -236,7 +236,9 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
 
   describe('saveCursorField — the one path that CAN write a cursor key', () => {
     afterAll(async () => {
-      await svc.from('site_content').delete().eq('artist_id', artistA).in('key', [...CURSOR_KEYS])
+      // BOTH artists: if the non-owner denial below ever breaks, its write to artistB
+      // succeeds — the teardown must not leave that evidence rotting in the live DB.
+      await svc.from('site_content').delete().in('artist_id', [artistA, artistB]).in('key', [...CURSOR_KEYS])
     })
 
     it('CRITICAL: stores a valid https cursor image and deletes it on blank', async () => {

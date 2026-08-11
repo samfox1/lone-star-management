@@ -76,11 +76,15 @@ const cursorValue = (url: string) => `url("${url.replace(/"/g, "%22")}") 4 4, au
  *  load failure just keeps the raw URL. */
 const CURSOR_MAX_NATIVE = 64;
 const CURSOR_DRAW_SIZE = 32;
+/** The pure half of the downscale decision, exported so it can be pinned directly —
+ *  jsdom's Image never fires onload, so the loader around it is untestable there. */
+export const needsDownscale = (w: number, h: number): boolean =>
+  w > CURSOR_MAX_NATIVE || h > CURSOR_MAX_NATIVE;
 function fittedCursorUrl(doc: Document, url: string, cb: (fitted: string) => void): void {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.onload = () => {
-    if (img.naturalWidth <= CURSOR_MAX_NATIVE && img.naturalHeight <= CURSOR_MAX_NATIVE) return;
+    if (!needsDownscale(img.naturalWidth, img.naturalHeight)) return;
     try {
       const canvas = doc.createElement("canvas");
       canvas.width = CURSOR_DRAW_SIZE;
@@ -117,9 +121,17 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
   const root = doc.documentElement;
   const win = doc.defaultView;
   const cleanups: Teardown[] = [];
+  // `disposed` neutralizes the async image-fit callbacks below: they may resolve after
+  // this mount was replaced, and writing a stale cursor onto the shared documentElement
+  // would show cursor A while the panel and DB say B (found in review, 2026-08-11).
+  let disposed = false;
   const teardown = () => {
+    disposed = true;
     for (const fn of cleanups.splice(0)) fn();
-    MOUNTED.delete(doc);
+    // Only unregister OURSELVES. A stale handle held by a caller must not delete the
+    // registration of whatever mount replaced us — the next applyCursor would then
+    // find nothing to tear down and the replacement's listeners would leak forever.
+    if (MOUNTED.get(doc) === teardown) MOUNTED.delete(doc);
   };
   MOUNTED.set(doc, teardown);
 
@@ -133,6 +145,7 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
   cleanups.push(() => root.style.removeProperty("cursor"));
   if (settings.image)
     fittedCursorUrl(doc, settings.image, (fitted) => {
+      if (disposed) return;
       restingValue = cursorValue(fitted);
       if (!pressed) setResting();
     });
@@ -141,6 +154,7 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
   if (settings.clickImage && win) {
     let clickValue = cursorValue(settings.clickImage);
     fittedCursorUrl(doc, settings.clickImage, (fitted) => {
+      if (disposed) return;
       clickValue = cursorValue(fitted);
       if (pressed) root.style.cursor = clickValue;
     });

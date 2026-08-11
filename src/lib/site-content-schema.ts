@@ -8,6 +8,7 @@
  * Kept free of React so server actions can import it.
  */
 import type { SiteContent } from '@/lib/site'
+import { CURSOR_CONTENT_KEYS, CURSOR_TRAIL_STYLES } from '@samfox1/site-bridge/cursor'
 
 export type FieldType = 'text' | 'email'
 
@@ -84,11 +85,12 @@ export const SEO_FIELDS: SiteContentField[] = [
  * DERIVED from the package's constants (AGENTS.md rule 4): the editor, the wire message,
  * and the site applier can never disagree on a key name.
  */
-import { CURSOR_CONTENT_KEYS, CURSOR_TRAIL_STYLES } from '@samfox1/site-bridge/cursor'
-
 export const CURSOR_KEYS: readonly string[] = Object.values(CURSOR_CONTENT_KEYS)
 
-const CURSOR_URL_RE = /^https?:\/\/[^\s"'\\]+$/i
+// httpS only — media URLs come from Supabase storage, which is always https, and an
+// http cursor on an https site is mixed content the browser silently drops (the artist
+// would just see a default arrow, with nothing to debug).
+const CURSOR_URL_RE = /^https:\/\/[^\s"'\\]+$/i
 const HEX_RE = /^#[0-9a-fA-F]{3,8}$/
 
 /** Why a cursor value can't persist, or null when it can. '' always clears. */

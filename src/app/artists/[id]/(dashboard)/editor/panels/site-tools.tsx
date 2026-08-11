@@ -9,7 +9,7 @@
  * `apply-cursor` message. The labels/options derive from the package's constants —
  * the panel can't offer a trail the site applier doesn't know.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   CURSOR_CONTENT_KEYS,
   CURSOR_TRAIL_STYLES,
@@ -20,7 +20,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
-import { ControlRow, GroupLabel, PANEL_BODY, SaveLine, type SaveStatus } from '../inspector-shared'
+import { ControlRow, GroupLabel, PANEL_BODY, runSerialized, SaveLine, type SaveStatus } from '../inspector-shared'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
 import type { GalleryPhoto } from '../inspector-types'
@@ -51,21 +51,37 @@ export function SiteTools({
 }) {
   const [vals, setVals] = useState<Record<string, string>>(initial)
   const [status, setStatus] = useState<SaveStatus>('idle')
+  // The house save machinery (review #6/#8): per-key serialization so an older click
+  // can't land after a newer one, and an errored set so one key's failure isn't masked
+  // by another key's later success. The first draft hand-rolled a `.then` and had all
+  // three of those bugs (2026-08-11 review).
+  const saving = useRef(new Map<string, Promise<unknown>>())
+  const errored = useRef(new Set<string>())
+  // What the panel last painted, so a failed save reverts THIS key only — snapshotting
+  // the whole `vals` object rolled back concurrent keys that had already committed.
+  const latest = useRef<Record<string, string>>(initial)
 
   const save = (key: string, value: string) => {
-    const prev = vals
-    const next = { ...vals, [key]: value }
-    setVals(next)
-    onApplyCursor?.(cursorSettingsFrom(next))
+    const before = latest.current[key] ?? ''
+    latest.current = { ...latest.current, [key]: value }
+    setVals(latest.current)
+    onApplyCursor?.(cursorSettingsFrom(latest.current))
     setStatus('saving')
-    saveCursorFieldAction(artistId, key, value).then((res) => {
-      if (res.ok) return setStatus('saved')
-      // Revert BOTH the panel and the frame — an optimistic cursor the save refused
-      // would look applied right up until the next full refresh dropped it.
-      setVals(prev)
-      onApplyCursor?.(cursorSettingsFrom(prev))
-      setStatus('error')
-    })
+    runSerialized(saving, errored, setStatus, key, () =>
+      saveCursorFieldAction(artistId, key, value).then((res) => {
+        if (res.ok) return
+        // Revert the ONE key, in the panel and the frame — an optimistic cursor the
+        // save refused would look applied until the next full refresh dropped it. Only
+        // if a newer click hasn't already replaced this value (serialized per key, but
+        // the map must not travel back in time).
+        if (latest.current[key] === value) {
+          latest.current = { ...latest.current, [key]: before }
+          setVals(latest.current)
+          onApplyCursor?.(cursorSettingsFrom(latest.current))
+        }
+        return { error: res.error }
+      }),
+    )
   }
 
   const trail = vals[CURSOR_CONTENT_KEYS.trail] ?? ''
@@ -73,7 +89,6 @@ export function SiteTools({
 
   return (
     <>
-      <SaveLine status={status} />
       <GroupLabel>Cursor</GroupLabel>
       <div className={PANEL_BODY}>
         <CursorImageRow
@@ -101,13 +116,15 @@ export function SiteTools({
       <GroupLabel>Cursor trail</GroupLabel>
       <div className={PANEL_BODY}>
         <ControlRow label="Style">
-          <span className="flex flex-wrap justify-end gap-1" role="radiogroup" aria-label="Trail style">
+          {/* aria-pressed pills, not radio roles: radios promise arrow-key movement
+              these independent buttons don't have (the frame-mode toggle precedent). */}
+          <span className="flex flex-wrap justify-end gap-1">
             {TRAIL_OPTIONS.map((o) => (
               <button
                 key={o.value || 'off'}
                 type="button"
-                role="radio"
-                aria-checked={trail === o.value}
+                aria-pressed={trail === o.value}
+                aria-label={`Trail style: ${o.label}`}
                 onClick={() => save(CURSOR_CONTENT_KEYS.trail, o.value)}
                 className={cx(
                   'rounded-md border px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.06em] transition-colors',
@@ -138,6 +155,8 @@ export function SiteTools({
           </ControlRow>
         )}
       </div>
+      {/* The mono status line every panel ENDS with — same placement as the siblings. */}
+      <SaveLine status={status} />
     </>
   )
 }

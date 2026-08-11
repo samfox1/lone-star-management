@@ -59,8 +59,8 @@ import {
 } from '@samfox1/site-bridge/vocabulary'
 
 export type StyleControl =
-  | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean }
-  | { id: string; label: string; kind: 'toggle'; onClass: string; owns: (token: string) => boolean }
+  | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean }
+  | { id: string; label: string; kind: 'toggle'; onClass: string; owns: (token: string) => boolean; impliesLine?: boolean }
   /** A hex picker. The plain form (border colour) is special-cased where it renders; a
    *  control that sets `hexOf`/`toToken` is GENERIC — the row reads the current hex out
    *  of the class string and writes a whole replacement token, which lets two pickers
@@ -72,6 +72,10 @@ export type StyleControl =
       owns: (token: string) => boolean
       hexOf?: (classString: string) => string
       toToken?: (hex: string, classString: string) => string
+      /** A decoration DRESSING: writing a value also switches a line on if none is set
+       *  (see applyStyleValue). Declared at the control's definition, not inferred from
+       *  its tokens, so a new dressing can't miss the rule. */
+      impliesLine?: boolean
     }
   /** A slider over ORDERED steps (size, transparency). Reads/applies exactly like a select —
    *  one owned utility swapped, the rest preserved — but the manager drags a continuous scale
@@ -107,6 +111,8 @@ export type StyleControl =
        */
       rank?: (token: string) => number | null
       owns: (token: string) => boolean
+      /** See the color variant's note — a dressing slider (thickness, distance). */
+      impliesLine?: boolean
     }
   /** A full colour palette (hue slider + saturation/brightness square + hex field). The owned
    *  utility is an arbitrary `border-[#hex]`, so the value is a free hex rather than one of a
@@ -396,9 +402,9 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
   // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
   // underline sits from the word. One dressing serves both decorations.
-  controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
-  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-[') })
-  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
+  controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
+  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
     id: 'frost',
@@ -551,9 +557,9 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
   // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
   // underline sits from the word. One dressing serves both decorations.
-  controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
-  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-[') })
-  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
+  controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
+  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   return controls
 }
 
@@ -810,10 +816,23 @@ export function readStyleValue(control: StyleControl, classString: string): stri
 /** A new class string with this control set to `value`: every token the control owns is
  *  removed, then the new one appended. Non-owned tokens (layout, spacing, …) are kept in
  *  place. A '' value (Default) or 'off' toggle just removes the owned tokens. */
+/** The decoration dressings' token prefixes — ONE list (AGENTS.md rule 4). The three
+ *  controls mark themselves `impliesLine` where they are DEFINED; this list exists only
+ *  for the sweep below, which has no control in hand for the tokens it must strip. */
+const DRESSING_PREFIXES = ['decocolor-[', 'decothick-[', 'underoffset-[']
+const isDressing = (t: string) => DRESSING_PREFIXES.some((p) => t.startsWith(p))
+
 export function applyStyleValue(classString: string, control: StyleControl, value: string): string {
   const kept = classString.split(/\s+/).filter(Boolean).filter((t) => !control.owns(t))
+  const hasLine = () => kept.includes(UNDERLINE_TOGGLE) || kept.includes(STRIKE_TOGGLE)
   if (control.kind === 'toggle') {
     if (value === 'on') kept.push(control.onClass)
+    // Turning the LAST line off sweeps its dressing with it — dead decothick/decocolor
+    // tokens would otherwise sit stored drawing nothing, and the sliders go back to
+    // "not working" one toggle later (review, 2026-08-11). Switching between line
+    // KINDS keeps the dressing: one decoration, one dressing.
+    const isLineToggle = control.onClass === UNDERLINE_TOGGLE || control.onClass === STRIKE_TOGGLE
+    if (isLineToggle && !hasLine()) return kept.filter((t) => !isDressing(t)).join(' ')
   } else if (value) {
     kept.push(value)
     // The decoration DRESSING implies a decoration LINE. text-decoration-thickness with
@@ -821,10 +840,9 @@ export function applyStyleValue(classString: string, control: StyleControl, valu
     // toggles off watched a slider that "wasn't working" (Sam, 2026-08-11). Underline is
     // the default line; an existing line — either kind — is respected, and clearing the
     // dressing never touches the line (the empty-value branch above skips this).
-    const DRESSING = ['decocolor-[', 'decothick-[', 'underoffset-[']
-    if (DRESSING.some((p) => value.startsWith(p)) && !kept.includes('underline') && !kept.includes('line-through')) {
-      kept.push('underline')
-    }
+    // `impliesLine` is set where each dressing control is DEFINED, so a fourth dressing
+    // cannot join the panel and miss this rule.
+    if (control.impliesLine && !hasLine()) kept.push(UNDERLINE_TOGGLE)
   }
   return kept.join(' ')
 }
