@@ -43,6 +43,8 @@ export type IconName =
   | 'note'
   | 'grip'
   | 'minus'
+  | 'play'
+  | 'pause'
   // Typography controls (the editor's Style panel) — one per style control row.
   | 'fontSize'
   | 'bold'
@@ -211,6 +213,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   minus: <path d="M5 12h14" />,
+  play: <path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor" stroke="none" />,
+  pause: (
+    <>
+      <path d="M8.5 5.5v13" strokeWidth={2.4} />
+      <path d="M15.5 5.5v13" strokeWidth={2.4} />
+    </>
+  ),
   grip: (
     <>
       <circle cx="9" cy="6" r="1.3" fill="currentColor" stroke="none" />

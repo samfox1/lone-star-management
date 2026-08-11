@@ -11,6 +11,7 @@ import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
 import { CURSOR_KEYS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
+import { Icon } from '@/components/ui/icons'
 import { EditorPublish } from './editor-publish'
 import { useFrameBridge } from './use-frame-bridge'
 import {
@@ -310,7 +311,7 @@ export function EditorShell({
               id="editor-device"
               value={device}
               onChange={(e) => setDevice(e.target.value as Device)}
-              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink-faint"
+              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint outline-none hover:text-ink focus:border-ink-faint"
             >
               <option value="desktop">Desktop</option>
               <option value="mobile">Mobile</option>
@@ -351,18 +352,21 @@ export function EditorShell({
             {/* One switch for every playing video in the preview — background clips
                 loop loudly under the whole editing session otherwise. State lives
                 here, not in the frame: a reloaded frame starts playing again, and the
-                label following the editor's own last request is the honest one. */}
+                icon following the editor's own last request is the honest one. Icon
+                shows the ACTION (pause while playing), like every media player. */}
             <button
               type="button"
               aria-pressed={!mediaPlaying}
+              aria-label={mediaPlaying ? 'Pause all videos' : 'Play all videos'}
+              title={mediaPlaying ? 'Pause all videos' : 'Play all videos'}
               onClick={() => {
                 const next = !mediaPlaying
                 setMediaPlaying(next)
                 setPlayback(next)
               }}
-              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-hairline bg-paper text-ink-faint hover:text-ink"
             >
-              {mediaPlaying ? 'Pause media' : 'Play media'}
+              <Icon name={mediaPlaying ? 'pause' : 'play'} size={13} />
             </button>
 
             {/* The canvas is a real 1440px desktop window drawn smaller, so say so —

@@ -102,7 +102,13 @@ export function EditorPublish({ artistId }: { artistId: string }) {
 
   return (
     <>
-      <button type="button" onClick={openWindow} className={buttonClass('accent')}>
+      {/* Dressed as the toolbar family (font-space caps, rounded-lg) but SOLID — the
+          one primary action in a row of quiet controls (Sam, 2026-08-11). */}
+      <button
+        type="button"
+        onClick={openWindow}
+        className="rounded-lg border border-ink bg-ink px-3 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-paper transition-opacity hover:opacity-85"
+      >
         Publish
       </button>
 
