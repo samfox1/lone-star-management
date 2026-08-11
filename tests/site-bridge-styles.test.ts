@@ -6,6 +6,7 @@
 // registry by injection, so the tests inject one too.
 
 import { describe, expect, it } from "vitest";
+import { createStyleApplier } from "@samfox1/site-bridge/frame";
 import {
   MANAGED_STYLE_PROPS,
   bindSiteRegistry,
@@ -569,5 +570,30 @@ describe('slice-2 visual effects (2026-08-11)', () => {
     expect(resolveStyle('brightness-175').style.filter).toBe('brightness(175%)')
     expect(resolveStyle('soften-[16px]').style.filter).toBe('blur(16px)')
     expect(resolveStyle('textstroke-[6px]').style.WebkitTextStroke).toBe('6px currentColor')
+  })
+})
+
+describe('decoration dressing (2026-08-11)', () => {
+  it('CRITICAL: colour, thickness and offset lift — in section context', () => {
+    const r = resolveRegionStyle('hero_name', '', 'underline decocolor-[#9c4221] decothick-[3px] underoffset-[6px]')
+    expect(r.style.textDecorationLine).toBe('underline')
+    expect(r.style.textDecorationColor).toBe('#9c4221')
+    expect(r.style.textDecorationThickness).toBe('3px')
+    expect(r.style.textUnderlineOffset).toBe('6px')
+  })
+
+  it('CRITICAL: strikethrough reaches a real ELEMENT through the live applier', () => {
+    // The whole chain the editor drives — createStyleApplier → resolve → inline write —
+    // against an actual DOM node, because Sam reported the line not painting and every
+    // string-level test was green (2026-08-11).
+    const el = document.createElement('h1')
+    el.setAttribute('data-lse-style', 'hero_name')
+    document.body.appendChild(el)
+    const applier = createStyleApplier({ regionBase: () => 'font-serif' })
+    applier.applyStyleToDom(document, 'hero_name', 'font-serif line-through decocolor-[#ff0000]')
+    expect(el.style.getPropertyValue('text-decoration-line')).toBe('line-through')
+    expect(el.style.getPropertyValue('text-decoration-color')).toBe('rgb(255, 0, 0)') // jsdom normalizes hex
+    expect(el.getAttribute('class')).toContain('font-serif')
+    el.remove()
   })
 })

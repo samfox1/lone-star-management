@@ -213,6 +213,14 @@ export const FROST_STEPS = pxSteps('frost', 1, 24, 1, 'None')
 /** Breathing room inside a region — the matte around an image, the inset of a bar. */
 export const PAD_STEPS = pxSteps('pad', 2, 64, 2, 'None')
 
+/** Decoration dressing (Sam, 2026-08-11: "customize the color of the line and the
+ *  width/distance between word, and thickness"). Applies to underline AND
+ *  strikethrough — one decoration, one dressing. Offset moves an underline away from
+ *  the word; browsers ignore it for line-through, harmlessly. */
+export const DECO_THICKNESS_STEPS = pxSteps('decothick', 1, 12, 1, 'Auto')
+export const DECO_OFFSET_STEPS = pxSteps('underoffset', 1, 16, 1, 'Auto')
+export const DECO_COLOR_PROBE: StyleOption[] = [{ value: 'decocolor-[#ff0000]', label: 'probe' }]
+
 /** Freeform two-hex gradients (`textgrad-[#a_#b]`, `bggrad-[#a_#b]`) — like the colour
  *  tokens, no build can compile 16.7M pairs, so they were never classes. The single
  *  options below exist for the isomorphism probe, not as a menu. */
@@ -267,6 +275,9 @@ export const VOCABULARY: { id: string; origin: "section" | "item"; options: Styl
   { id: "underline", origin: "section", options: [{ value: UNDERLINE_TOGGLE, label: "Underline" }] },
   { id: "strike", origin: "section", options: [{ value: STRIKE_TOGGLE, label: "Strikethrough" }] },
   { id: "textGradient", origin: "section", options: TEXT_GRADIENT_PROBE },
+  { id: "decoColor", origin: "section", options: DECO_COLOR_PROBE },
+  { id: "decoThickness", origin: "section", options: DECO_THICKNESS_STEPS },
+  { id: "decoOffset", origin: "section", options: DECO_OFFSET_STEPS },
   { id: "bgGradient", origin: "section", options: BG_GRADIENT_PROBE },
   { id: "frost", origin: "section", options: FROST_STEPS },
   { id: "pad", origin: "section", options: PAD_STEPS },

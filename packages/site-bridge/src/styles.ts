@@ -288,6 +288,12 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
     if (!pair) return null;
     return { backgroundImage: `linear-gradient(135deg, ${pair[1]}, ${pair[2]})` };
   }
+  m = token.match(/^decocolor-\[(#[0-9a-fA-F]{3,8})\]$/);
+  if (m) return { textDecorationColor: m[1] };
+  m = token.match(/^decothick-\[(\d{1,2})px\]$/);
+  if (m) return { textDecorationThickness: `${m[1]}px` };
+  m = token.match(/^underoffset-\[(\d{1,2})px\]$/);
+  if (m) return { textUnderlineOffset: `${m[1]}px` };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
@@ -329,6 +335,9 @@ export const MANAGED_STYLE_PROPS = [
   "text-shadow",
   "-webkit-text-stroke",
   "text-decoration-line",
+  "text-decoration-color",
+  "text-decoration-thickness",
+  "text-underline-offset",
   "background-image",
   "-webkit-background-clip",
   "background-clip",

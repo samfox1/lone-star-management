@@ -48,6 +48,8 @@ import {
   FEATHER_STEPS,
   FROST_STEPS,
   PAD_STEPS,
+  DECO_THICKNESS_STEPS,
+  DECO_OFFSET_STEPS,
   TEXT_STROKE_STEPS,
   RADIUS_STEPS,
   SCALE_STEPS,
@@ -388,6 +390,11 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   })
   controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
   controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
+  // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
+  // underline sits from the word. One dressing serves both decorations.
+  controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('decothick-[') })
+  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
   controls.push(...gradientPair('textgrad', 'Gradient start', 'Gradient end'))
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
@@ -520,6 +527,11 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   })
   controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
   controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
+  // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
+  // underline sits from the word. One dressing serves both decorations.
+  controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('decothick-[') })
+  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
   controls.push(...gradientPair('textgrad', 'Gradient start', 'Gradient end'))
   return controls
 }
@@ -677,6 +689,21 @@ function gradientPair(prefix: 'textgrad' | 'bggrad', fromLabel: string, toLabel:
     },
   })
   return [make(`${prefix}From`, fromLabel, 0), make(`${prefix}To`, toLabel, 1)]
+}
+
+/** A single-hex colour control over one `<prefix>-[#hex]` token — the generic cousin of
+ *  the gradient halves, for tokens that carry exactly one colour. */
+function hexControl(prefix: string, id: string, label: string): StyleControl {
+  const RE = new RegExp(`^${prefix}-\\[(#[0-9a-fA-F]{3,8})\\]$`)
+  const owns = (t: string) => t.startsWith(`${prefix}-[`)
+  return {
+    id,
+    label,
+    kind: 'color',
+    owns,
+    hexOf: (cls) => cls.split(/\s+/).find(owns)?.match(RE)?.[1] ?? '',
+    toToken: (hex) => (hex ? `${prefix}-[${hex}]` : ''),
+  }
 }
 
 /** Stroke ranks by px, decimals included — pxRank's regex is integer-only. */

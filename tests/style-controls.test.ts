@@ -47,7 +47,8 @@ describe('buildStyleControls', () => {
     // gradient pairs, frost and padding — all inline-lifted, so none need a palette.
     expect(bare).toEqual([
       'size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow',
-      'underline', 'strike', 'textgradFrom', 'textgradTo', 'bggradFrom', 'bggradTo',
+      'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
+      'textgradFrom', 'textgradTo', 'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
     ])
   })
