@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
+import { siteSwatches } from '@/lib/site-editor/style-apply'
 import {
   applyStyleValue,
   buildTextItemStyleControls,
@@ -147,6 +148,7 @@ export function TextFieldEditor({
                 regionLabel={field.label}
                 control={control}
                 cls={cls}
+                swatches={siteSwatches(styleOptions, styleValues)}
                 onChange={(v) => {
                   // Reset/Default on a SECTION region means "what the site had", NOT
                   // "no class": the override REPLACES the base, so removing the token

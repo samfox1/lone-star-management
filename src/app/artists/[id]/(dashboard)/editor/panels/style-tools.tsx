@@ -27,11 +27,14 @@ export function StyleControlRow({
   control,
   cls,
   onChange,
+  swatches,
 }: {
   regionLabel: string
   control: StyleControl
   cls: string
   onChange: (value: string) => void
+  /** Site palette + already-used colours, for generic colour controls' swatch row. */
+  swatches?: string[]
 }) {
   const current = readStyleValue(control, cls)
   const aria = `${regionLabel} ${control.label}`
@@ -124,7 +127,7 @@ export function StyleControlRow({
           label=""
           aria={`${regionLabel} ${control.label}`}
           value={control.hexOf(cls)}
-          used={[]}
+          used={swatches ?? []}
           onChange={(hex) => onChange(control.toToken!(hex, cls))}
         />
       </ControlRow>

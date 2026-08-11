@@ -14,7 +14,7 @@
  *
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
-import { colorToken } from '@/lib/site-editor/style-apply'
+import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -395,7 +395,6 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('decothick-[') })
   controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
-  controls.push(...gradientPair('textgrad', 'Gradient start', 'Gradient end'))
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
     id: 'frost',
@@ -525,6 +524,25 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     rank: (t) => { const m = t.match(/^textglow-([1-9]|1[0-2])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
     owns: (t) => /^textglow-([1-9]|1[0-2])$/.test(t),
   })
+  // Font colour, with the SITE'S OWN colours offered as swatches (Sam, 2026-08-11:
+  // "I want to have a selector for colors that already are used on the site" — the
+  // swatch row comes from siteSwatches at the render site). Replaces the gradient
+  // pair, which he judged not worth its two rows here; the textgrad tokens still
+  // resolve, so anything stored keeps rendering.
+  controls.push({
+    id: 'textColor',
+    label: 'Font color',
+    kind: 'color',
+    owns: (t) => colorToken(t)?.prop === 'color',
+    hexOf: (cls) => {
+      for (const t of cls.split(/\s+/)) {
+        const c = colorToken(t)
+        if (c?.prop === 'color') return c.value
+      }
+      return ''
+    },
+    toToken: (hex) => (hex ? colorClass('text', hex) : ''),
+  })
   controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
   controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
   // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
@@ -532,7 +550,6 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   controls.push(hexControl('decocolor', 'decoColor', 'Line color'))
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('decothick-[') })
   controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-[') })
-  controls.push(...gradientPair('textgrad', 'Gradient start', 'Gradient end'))
   return controls
 }
 
@@ -795,6 +812,15 @@ export function applyStyleValue(classString: string, control: StyleControl, valu
     if (value === 'on') kept.push(control.onClass)
   } else if (value) {
     kept.push(value)
+    // The decoration DRESSING implies a decoration LINE. text-decoration-thickness with
+    // no text-decoration-line draws nothing, so a manager dragging Thickness with both
+    // toggles off watched a slider that "wasn't working" (Sam, 2026-08-11). Underline is
+    // the default line; an existing line — either kind — is respected, and clearing the
+    // dressing never touches the line (the empty-value branch above skips this).
+    const DRESSING = ['decocolor-[', 'decothick-[', 'underoffset-[']
+    if (DRESSING.some((p) => value.startsWith(p)) && !kept.includes('underline') && !kept.includes('line-through')) {
+      kept.push('underline')
+    }
   }
   return kept.join(' ')
 }

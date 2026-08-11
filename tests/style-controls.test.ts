@@ -48,7 +48,7 @@ describe('buildStyleControls', () => {
     expect(bare).toEqual([
       'size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow',
       'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
-      'textgradFrom', 'textgradTo', 'bggradFrom', 'bggradTo',
+      'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
     ])
   })
@@ -376,6 +376,61 @@ describe('every slider is internally consistent — derived from the builders, n
           prev = r
         }
       }
+    }
+  })
+})
+
+describe('the line dressing implies a line (2026-08-11)', () => {
+  // Sam: "Line distance and line thickness aren't working." They were — on a line that
+  // was not there. text-decoration-thickness with no text-decoration-line draws
+  // nothing, so dragging either slider with both toggles off did nothing visible.
+  // Writing any dressing now switches Underline on unless a line already exists.
+  const textControls = buildTextItemStyleControls(PALETTE)
+  const byId = (id: string) => {
+    const c = textControls.find((x) => x.id === id)
+    if (!c) throw new Error(id)
+    return c
+  }
+
+  it('CRITICAL: setting thickness with no line turns underline on', () => {
+    const next = applyStyleValue('font-serif', byId('decoThickness'), 'decothick-[4px]')
+    expect(next.split(/\s+/)).toContain('underline')
+    expect(next.split(/\s+/)).toContain('decothick-[4px]')
+  })
+
+  it('a line already present is kept, not doubled — strikethrough stays strikethrough', () => {
+    const next = applyStyleValue('line-through', byId('decoOffset'), 'underoffset-[6px]')
+    const tokens = next.split(/\s+/)
+    expect(tokens).toContain('line-through')
+    expect(tokens).not.toContain('underline')
+  })
+
+  it('clearing the dressing never removes the line itself', () => {
+    const next = applyStyleValue('underline decothick-[4px]', byId('decoThickness'), '')
+    expect(next.split(/\s+/)).toContain('underline')
+    expect(next).not.toContain('decothick')
+  })
+})
+
+describe('Font color in the text-field editor (2026-08-11)', () => {
+  // Sam: "I would rather just add an option to change the color of the font" — the
+  // gradient pair left these surfaces for it. The swatch row is siteSwatches at the
+  // render site; this pins the control itself: read and write over text-[#hex].
+  const control = buildTextItemStyleControls(PALETTE).find((c) => c.id === 'textColor')
+
+  it('CRITICAL: round-trips a hex through the stored string', () => {
+    if (!control || control.kind !== 'color') throw new Error('textColor should be a color control')
+    const written = applyStyleValue('font-serif underline', control, control.toToken!('#9c4221', ''))
+    expect(written.split(/\s+/)).toContain('text-[#9c4221]')
+    expect(control.hexOf!(written)).toBe('#9c4221')
+    // Clearing removes the colour and nothing else.
+    const cleared = applyStyleValue(written, control, '')
+    expect(cleared.split(/\s+/).sort()).toEqual(['font-serif', 'underline'])
+  })
+
+  it('the gradient pair is gone from BOTH text surfaces', () => {
+    for (const controls of [buildTextItemStyleControls(PALETTE), buildStyleControls(PALETTE)]) {
+      expect(controls.map((c) => c.id)).not.toContain('textgradFrom')
     }
   })
 })
