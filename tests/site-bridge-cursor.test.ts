@@ -143,6 +143,28 @@ describe('applyCursor — the DOM contract', () => {
     expect(dot.style.left).toBe('40px')
   })
 
+  it('CRITICAL: a slow pointer does not stack sprites — spawning is distance-gated', () => {
+    // Gated only by TIME, a pointer moving a few px per frame drops every sprite on
+    // the same spot: visually ONE flickering unit glued to the cursor's hotspot
+    // instead of a trail (Sam, 2026-08-11, the editor's scaled frame). A new sprite
+    // requires real travel; jitter under the gate must not spawn.
+    vi.useFakeTimers()
+    try {
+      applyCursor(document, { ...NONE, trail: 'dots' })
+      const layer = document.querySelector('[data-lse-cursor-trail="dots"]')!
+      document.dispatchEvent(at(40, 30))
+      expect(layer.childElementCount).toBe(1)
+      vi.advanceTimersByTime(50) // past the time gap — distance alone must gate now
+      document.dispatchEvent(at(43, 32)) // ~3.6px of travel: a slow hand, not a trail
+      expect(layer.childElementCount).toBe(1)
+      vi.advanceTimersByTime(50)
+      document.dispatchEvent(at(80, 60)) // real travel spawns the next sprite
+      expect(layer.childElementCount).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('re-applying replaces the mount — one layer, never a stack', () => {
     applyCursor(document, { ...NONE, trail: 'dots' })
     applyCursor(document, { ...NONE, trail: 'sparkles' })

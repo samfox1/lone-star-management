@@ -115,6 +115,10 @@ function fittedCursorUrl(doc: Document, url: string, cb: (fitted: string) => voi
 const TRAIL_FALLBACK_COLOR = "#111111";
 const TRAIL_NODE_CAP = 48;
 const TRAIL_SPAWN_GAP_MS = 24;
+/** Minimum pointer travel between sprites. Time-gating alone stacks a slow pointer's
+ *  sprites onto one spot — visually a single flickering unit glued to the cursor's
+ *  hotspot instead of a trail (the editor's scaled frame made this the common case). */
+const TRAIL_SPAWN_MIN_DIST = 14;
 const TRAIL_NODE_LIFE_MS = 650;
 const LINE_POINT_LIFE_MS = 400;
 
@@ -276,11 +280,18 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
   layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483646;";
   doc.body.appendChild(layer);
   let lastSpawn = 0;
+  let lastX = Infinity;
+  let lastY = Infinity;
   const move = (e: PointerEvent) => {
     const now = Date.now();
     if (now - lastSpawn < TRAIL_SPAWN_GAP_MS || layer.childElementCount >= TRAIL_NODE_CAP)
       return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    if (dx * dx + dy * dy < TRAIL_SPAWN_MIN_DIST * TRAIL_SPAWN_MIN_DIST) return;
     lastSpawn = now;
+    lastX = e.clientX;
+    lastY = e.clientY;
     let node: HTMLElement;
     if (trail === "image") {
       const img = doc.createElement("img");
