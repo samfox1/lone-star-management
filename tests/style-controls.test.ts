@@ -43,7 +43,13 @@ describe('buildStyleControls', () => {
     const bare = buildStyleControls().map((c) => c.id)
     // Slice-1 (2026-08-10) added shadow + outline to the universal set: they lift
     // inline, so they need no site palette and no compiled classes.
-    expect(bare).toEqual(['size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow', 'uppercase', 'italic'])
+    // Slice-2 (2026-08-11) widened the universal set again: decorations, the two
+    // gradient pairs, frost and padding — all inline-lifted, so none need a palette.
+    expect(bare).toEqual([
+      'size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow',
+      'underline', 'strike', 'textgradFrom', 'textgradTo', 'bggradFrom', 'bggradTo',
+      'frost', 'pad', 'uppercase', 'italic',
+    ])
   })
 })
 
@@ -57,6 +63,7 @@ describe('buildItemStyleControls (per-image/video)', () => {
     expect(item.map((c) => c.id)).toEqual([
       'size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow',
       'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
+      'shape', 'feather', 'pad',
     ])
   })
 
@@ -80,14 +87,15 @@ describe('buildItemStyleControls (per-image/video)', () => {
     expect(color.owns('border-red-500')).toBe(false) // a named token, not ours
   })
 
-  it('size steps run 50%→150% in 5% increments, 100% as the default (no class)', () => {
+  it('size steps run 25%→175% in 5% increments, 100% as the default (no class)', () => {
+    // Widened from 50–150 on 2026-08-11 (Sam: "larger and more precise").
     const size = itemById('size')
     if (size.kind !== 'slider') throw new Error('size should be a slider')
-    expect(size.steps).toHaveLength(21) // (150-50)/5 + 1
-    expect(size.steps[0]).toEqual({ value: 'scale-50', label: '50%' })
-    expect(size.steps[10]).toEqual({ value: '', label: '100%' }) // 100% → no class
-    expect(size.steps[12]).toEqual({ value: 'scale-110', label: '110%' })
-    expect(size.steps[20]).toEqual({ value: 'scale-150', label: '150%' })
+    expect(size.steps).toHaveLength(31) // (175-25)/5 + 1
+    expect(size.steps[0]).toEqual({ value: 'scale-25', label: '25%' })
+    expect(size.steps[15]).toEqual({ value: '', label: '100%' }) // 100% → no class
+    expect(size.steps[17]).toEqual({ value: 'scale-110', label: '110%' })
+    expect(size.steps[30]).toEqual({ value: 'scale-175', label: '175%' })
   })
 
   it('each control owns ONLY its own utilities — border WIDTH vs border COLOUR (arbitrary hex) do not collide', () => {

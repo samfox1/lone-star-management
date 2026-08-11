@@ -469,18 +469,28 @@ export async function publishContent(
   const rows = await listContent(supabase, type, artistId)
   const liveIds = new Set(rows.map((row) => row.id))
 
-  // entity_ids already published for this (artist, type). RLS scopes this read
-  // to the caller's own artist (revisions_rw policy).
-  const { data: published, error: pubErr } = await supabase
-    .from('revisions')
-    .select('entity_id')
-    .eq('artist_id', artistId)
-    .eq('entity_type', type)
-    .not('entity_id', 'is', null)
+  // What is CURRENTLY live in the log, via the same server-side latest-per-entity RPC
+  // the diff reads (uncapped). The raw `select entity_id from revisions` this replaced
+  // had two compounding faults (2026-08-11): every id ever published — tombstoned or
+  // not — counted as needing a tombstone, so each publish RE-tombstoned every
+  // historical row and the log grew by its own dead weight (the seed artist reached
+  // 1,711 tour revisions); and PostgREST silently caps an unlimited select at 1,000
+  // rows, so past that the sweep started MISSING ids — a deleted show could stay on
+  // the live site because its tombstone was never written. Found because the publish
+  // diff (which uses the uncapped RPC) kept reporting deletions the sweep could not
+  // see.
+  const { data: latest, error: pubErr } = await supabase.rpc('latest_revisions', { p_artist_id: artistId })
   if (pubErr) throw new Error(pubErr.message)
 
-  const publishedIds = new Set((published ?? []).map((r) => r.entity_id as string))
-  const tombstoneIds = [...publishedIds].filter((id) => !liveIds.has(id))
+  const tombstoneIds = ((latest ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[])
+    .filter(
+      (r) =>
+        r.entity_type === type &&
+        r.entity_id !== null &&
+        r.data._deleted !== true && // already tombstoned — writing another is the growth spiral
+        !liveIds.has(r.entity_id),
+    )
+    .map((r) => r.entity_id as string)
 
   const revisions = [
     ...rows.map((row) => ({

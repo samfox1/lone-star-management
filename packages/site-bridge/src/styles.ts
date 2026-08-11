@@ -231,10 +231,67 @@ function textGlowDepth(n: number): string {
  *  `text-shadow` property, which takes a list — so like the filters, they are collected
  *  and COMPOSED, never assigned over each other. */
 function textShadowPart(token: string): string | null {
-  let m = token.match(/^textshadow-([1-8])$/);
+  let m = token.match(/^textshadow-([1-9]|1[0-2])$/);
   if (m) return textShadowDepth(Number(m[1]));
-  m = token.match(/^textglow-([1-8])$/);
+  m = token.match(/^textglow-([1-9]|1[0-2])$/);
   if (m) return textGlowDepth(Number(m[1]));
+  return null;
+}
+
+const CLIP_SHAPES: Record<string, string> = {
+  "shape-circle": "circle(50% at 50% 50%)",
+  "shape-arch": "inset(0 round 999px 999px 0 0)",
+  "shape-pill": "inset(0 round 999px)",
+  "shape-diagonal": "polygon(0 0, 100% 6%, 100% 100%, 0 94%)",
+};
+
+/** Slice-2 ITEM lifts: cutout shapes and feathered edges. */
+function shapeToken(token: string): Record<string, string> | null {
+  if (token in CLIP_SHAPES) return { clipPath: CLIP_SHAPES[token] };
+  const m = token.match(/^feather-(\d{1,2})$/);
+  if (m) {
+    // A mask that holds full ink until (100-N)% of the way out, then fades — reads as
+    // the photo dissolving into the page. Both spellings: Safari still prefixes.
+    const mask = `radial-gradient(closest-side, #000 ${100 - Number(m[1])}%, transparent 100%)`;
+    return { maskImage: mask, WebkitMaskImage: mask };
+  }
+  return null;
+}
+
+const HEX_PAIR = /^\[(#[0-9a-fA-F]{3,8})_(#[0-9a-fA-F]{3,8})\]$/;
+
+/**
+ * Slice-2 SECTION-safe lifts: decorations, gradients, frost, padding. Section context
+ * included for the same reason as the text effects — these tokens are editor-invented,
+ * so left as classes they would be silent no-ops everywhere.
+ */
+function sectionEffectStyle(token: string): Record<string, string> | null {
+  if (token === "underline" || token === "line-through")
+    return { textDecorationLine: token }; // composed below — the two can coexist
+  let m = token.match(/^textgrad-(.+)$/);
+  if (m) {
+    const pair = m[1].match(HEX_PAIR);
+    if (!pair) return null;
+    // Clip the gradient to the glyphs. `color: transparent` lets it show through;
+    // WebkitTextFillColor beats any inherited fill on WebKit.
+    return {
+      backgroundImage: `linear-gradient(135deg, ${pair[1]}, ${pair[2]})`,
+      WebkitBackgroundClip: "text",
+      backgroundClip: "text",
+      color: "transparent",
+      WebkitTextFillColor: "transparent",
+    };
+  }
+  m = token.match(/^bggrad-(.+)$/);
+  if (m) {
+    const pair = m[1].match(HEX_PAIR);
+    if (!pair) return null;
+    return { backgroundImage: `linear-gradient(135deg, ${pair[1]}, ${pair[2]})` };
+  }
+  m = token.match(/^frost-\[(\d{1,2})px\]$/);
+  if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
+  m = token.match(/^pad-\[(\d{1,3})px\]$/);
+  if (m) return { padding: `${m[1]}px` };
   return null;
 }
 
@@ -271,6 +328,17 @@ export const MANAGED_STYLE_PROPS = [
   "object-position",
   "text-shadow",
   "-webkit-text-stroke",
+  "text-decoration-line",
+  "background-image",
+  "-webkit-background-clip",
+  "background-clip",
+  "-webkit-text-fill-color",
+  "clip-path",
+  "mask-image",
+  "-webkit-mask-image",
+  "backdrop-filter",
+  "-webkit-backdrop-filter",
+  "padding",
 ] as const;
 
 export type ResolvedStyle = {
@@ -325,16 +393,20 @@ function resolveTokens(classString: string, liftAll: boolean): ResolvedStyle {
   const style: Record<string, string> = {};
   const filters: string[] = [];
   const textShadows: string[] = [];
+  const decorations: string[] = [];
   let playbackRate: number | undefined;
   for (const token of classString.split(/\s+/).filter(Boolean)) {
+    const decoration = token === "underline" || token === "line-through" ? token : null;
     const inline =
       colorStyle(token) ??
       textEffectStyle(token) ??
-      (liftAll ? (inlineToken(token) ?? mediaToken(token)) : null);
+      (decoration ? null : sectionEffectStyle(token)) ??
+      (liftAll ? (inlineToken(token) ?? mediaToken(token) ?? shapeToken(token)) : null);
     const shadowLayer = textShadowPart(token); // both contexts — sections carry these too
     const filter = liftAll ? filterPart(token) : null;
     const speed = liftAll ? speedRate(token) : null;
-    if (inline) Object.assign(style, inline);
+    if (decoration) decorations.push(decoration);
+    else if (inline) Object.assign(style, inline);
     else if (shadowLayer) textShadows.push(shadowLayer);
     else if (filter) filters.push(filter);
     else if (speed != null) playbackRate = speed;
@@ -344,6 +416,8 @@ function resolveTokens(classString: string, liftAll: boolean): ResolvedStyle {
   // assignment would keep only whichever token happened to be written down first.
   if (filters.length) style.filter = filters.join(" ");
   if (textShadows.length) style.textShadow = textShadows.join(", ");
+  // Underline and strikethrough COEXIST in the one property, space-separated.
+  if (decorations.length) style.textDecorationLine = decorations.join(" ");
   return {
     className: classes.join(" "),
     style,

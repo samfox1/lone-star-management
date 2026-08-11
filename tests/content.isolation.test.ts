@@ -97,6 +97,33 @@ describe.each(DENY)('write isolation: $type', (c) => {
 })
 
 describe('publishAll', () => {
+  it('CRITICAL: a dead row is tombstoned ONCE — never re-tombstoned on later publishes', async () => {
+    // 2026-08-11. The sweep used to count every id ever published as needing a
+    // tombstone, so each publish re-tombstoned every historical row: the log grew by
+    // its own dead weight (1,711 tour revisions on the seed artist), and past
+    // PostgREST's silent 1,000-row cap the sweep started MISSING ids — a deleted show
+    // could stay live forever. This pins both halves: exactly one tombstone appears,
+    // and a further publish adds nothing for the dead id.
+    const row = await createContent(asA, 'tour_date', artistA, { date: '2026-06-06', venue: 'ISO-A tombstone-once venue' })
+    await publishAll(asA, artistA)
+    await deleteContent(asA, 'tour_date', row.id)
+    await publishAll(asA, artistA) // writes THE tombstone
+    await publishAll(asA, artistA) // must write nothing more for this id
+
+    const { data: revs } = await svc
+      .from('revisions')
+      .select('data')
+      .eq('artist_id', artistA)
+      .eq('entity_type', 'tour_date')
+      .eq('entity_id', row.id)
+    const tombs = (revs ?? []).filter((r) => (r.data as { _deleted?: boolean })._deleted === true)
+    expect((revs ?? []).length, 'snapshot + one tombstone, nothing else').toBe(2)
+    expect(tombs.length).toBe(1)
+    // Scoped teardown: this test's revisions are its own.
+    await svc.from('revisions').delete().eq('entity_id', row.id)
+  })
+
+
   it('publishes every content type in one call; all appear on the public read path', async () => {
     const markers = {
       track: 'ISO-A pub track',

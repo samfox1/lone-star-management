@@ -50,7 +50,16 @@ function stubClient(failOn?: string) {
     })
     return q
   }
-  return { client: { from } as unknown as SupabaseClient, writes }
+  return {
+    client: {
+      from,
+      // The tombstone sweep reads the log through the latest_revisions RPC now
+      // (uncapped, 2026-08-11). An empty log: this suite pins WRITE ordering, and a
+      // sweep with nothing published tombstones nothing.
+      rpc: async () => ({ data: [], error: null }),
+    } as unknown as SupabaseClient,
+    writes,
+  }
 }
 
 describe('publishAll ordering', () => {

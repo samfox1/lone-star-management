@@ -113,7 +113,7 @@ function pctSteps(prefix: string, from: number, to: number, step: number): Style
 // Size runs 50%→150% (100% in the MIDDLE — drag left to shrink, right to grow); transparency
 // runs 5%→100% (solid at the RIGHT end). Both in 5% steps.
 
-export const SCALE_STEPS = pctSteps('scale', 50, 150, 5)
+export const SCALE_STEPS = pctSteps('scale', 25, 175, 5)
 export const OPACITY_STEPS = pctSteps('opacity', 5, 100, 5)
 /** A px slider scale in `step`px increments, `''` (off) first, then arbitrary-value classes
  *  (`border-[3px]`, `rounded-[6px]`). Arbitrary values give every-1/2px granularity the named
@@ -124,8 +124,8 @@ function pxSteps(prefix: string, from: number, to: number, step: number, zeroLab
   return [...out, ...extra]
 }
 // Border width every 1px (0→12); corners every 2px (0→24) plus a Circle at the end.
-export const BORDER_WIDTH_STEPS = pxSteps('border', 1, 12, 1, 'None')
-export const RADIUS_STEPS = pxSteps('rounded', 2, 24, 2, 'Square', [{ value: 'rounded-full', label: 'Circle' }])
+export const BORDER_WIDTH_STEPS = pxSteps('border', 1, 16, 1, 'None')
+export const RADIUS_STEPS = pxSteps('rounded', 2, 48, 2, 'Square', [{ value: 'rounded-full', label: 'Circle' }])
 /* ── Slice-1 visual effects (2026-08-10, Sam: "more features for text, images,
  * videos"). ALL of these lift to inline style, which is the point: they work on every
  * already-deployed site the moment the editor offers them, with nothing to recompile.
@@ -133,17 +133,17 @@ export const RADIUS_STEPS = pxSteps('rounded', 2, 24, 2, 'Square', [{ value: 'ro
 
 /** Filter families: token `<prefix>-N` → `fn(N%)`. 100 is the no-op for the three that
  *  have one; grayscale/sepia/blur rest at zero, expressed as '' (no token). */
-export const GRAYSCALE_STEPS = pctSteps0('bw', 0, 100, 10)
-export const SEPIA_STEPS = pctSteps0('sepia', 0, 100, 10)
-export const BRIGHTNESS_STEPS = pctSteps('brightness', 50, 150, 5)
-export const CONTRAST_STEPS = pctSteps('contrast', 50, 150, 5)
-export const SATURATE_STEPS = pctSteps('saturate', 0, 200, 10)
-export const BLUR_STEPS = pxSteps('soften', 1, 12, 1, 'None')
+export const GRAYSCALE_STEPS = pctSteps0('bw', 0, 100, 5)
+export const SEPIA_STEPS = pctSteps0('sepia', 0, 100, 5)
+export const BRIGHTNESS_STEPS = pctSteps('brightness', 25, 175, 5)
+export const CONTRAST_STEPS = pctSteps('contrast', 25, 175, 5)
+export const SATURATE_STEPS = pctSteps('saturate', 0, 200, 5)
+export const BLUR_STEPS = pxSteps('soften', 1, 16, 1, 'None')
 
 /** Tilt: a few degrees either way — scattered-polaroid energy, not rotation as layout.
  *  0° sits in the MIDDLE, like Size. Negative degrees need the bracket form. */
-export const TILT_STEPS: StyleOption[] = Array.from({ length: 17 }, (_, i) => {
-  const deg = (i - 8) * 2
+export const TILT_STEPS: StyleOption[] = Array.from({ length: 31 }, (_, i) => {
+  const deg = i - 15
   return { value: deg === 0 ? '' : `tilt-[${deg}deg]`, label: `${deg}°` }
 })
 
@@ -169,25 +169,55 @@ export const FIT_POSITIONS: StyleOption[] = [
  *  text-shadow takes a list. */
 export const TEXT_SHADOW_STEPS: StyleOption[] = [
   { value: '', label: 'None' },
-  ...Array.from({ length: 8 }, (_, i) => ({ value: `textshadow-${i + 1}`, label: `${i + 1}` })),
+  ...Array.from({ length: 12 }, (_, i) => ({ value: `textshadow-${i + 1}`, label: `${i + 1}` })),
 ]
 
 /** Glow: a currentColor halo that follows the text's own colour — the dark-site
  *  counterpart to the black drop shadow. Its own family, its own slider. */
 export const TEXT_GLOW_STEPS: StyleOption[] = [
   { value: '', label: 'None' },
-  ...Array.from({ length: 8 }, (_, i) => ({ value: `textglow-${i + 1}`, label: `${i + 1}` })),
+  ...Array.from({ length: 12 }, (_, i) => ({ value: `textglow-${i + 1}`, label: `${i + 1}` })),
 ]
 
 /** Outline text: a stroke around the letters, riding the text colour. Half-pixel steps
  *  — strokes are a continuum, and 0.5px renders distinctly on every modern display. */
 export const TEXT_STROKE_STEPS: StyleOption[] = [
   { value: '', label: 'None' },
-  ...Array.from({ length: 8 }, (_, i) => {
+  ...Array.from({ length: 12 }, (_, i) => {
     const px = (i + 1) / 2
     return { value: `textstroke-[${px}px]`, label: `${px}px` }
   }),
 ]
+
+/* ── Slice-2 (2026-08-11): decoration toggles, gradients, shapes, feather, frost,
+ * padding. Still ALL inline-lift — no site recompiles anything. */
+
+export const UNDERLINE_TOGGLE = 'underline'
+export const STRIKE_TOGGLE = 'line-through'
+
+/** Image (and embed-box) cutout shapes — clip-path presets. */
+export const SHAPE_STEPS: StyleOption[] = [
+  { value: '', label: 'None' },
+  { value: 'shape-circle', label: 'Circle' },
+  { value: 'shape-arch', label: 'Arch' },
+  { value: 'shape-pill', label: 'Pill' },
+  { value: 'shape-diagonal', label: 'Diagonal' },
+]
+
+/** Feathered edges: N is how much of the image fades out at the rim (a mask). */
+export const FEATHER_STEPS = pctSteps0('feather', 0, 60, 5)
+
+/** Frosted glass: blur whatever is BEHIND the region (bars, overlays). */
+export const FROST_STEPS = pxSteps('frost', 1, 24, 1, 'None')
+
+/** Breathing room inside a region — the matte around an image, the inset of a bar. */
+export const PAD_STEPS = pxSteps('pad', 2, 64, 2, 'None')
+
+/** Freeform two-hex gradients (`textgrad-[#a_#b]`, `bggrad-[#a_#b]`) — like the colour
+ *  tokens, no build can compile 16.7M pairs, so they were never classes. The single
+ *  options below exist for the isomorphism probe, not as a menu. */
+export const TEXT_GRADIENT_PROBE: StyleOption[] = [{ value: 'textgrad-[#ff0000_#0000ff]', label: 'probe' }]
+export const BG_GRADIENT_PROBE: StyleOption[] = [{ value: 'bggrad-[#ff0000_#0000ff]', label: 'probe' }]
 
 /** pctSteps with ZERO as the resting default ('' — no token), for effects that are off
  *  until asked for (B&W, sepia), unlike scale/opacity whose neutral is 100%. */
@@ -234,6 +264,14 @@ export const VOCABULARY: { id: string; origin: "section" | "item"; options: Styl
   { id: "fitPosition", origin: "item", options: FIT_POSITIONS },
   { id: "textShadow", origin: "section", options: TEXT_SHADOW_STEPS },
   { id: "textGlow", origin: "section", options: TEXT_GLOW_STEPS },
+  { id: "underline", origin: "section", options: [{ value: UNDERLINE_TOGGLE, label: "Underline" }] },
+  { id: "strike", origin: "section", options: [{ value: STRIKE_TOGGLE, label: "Strikethrough" }] },
+  { id: "textGradient", origin: "section", options: TEXT_GRADIENT_PROBE },
+  { id: "bgGradient", origin: "section", options: BG_GRADIENT_PROBE },
+  { id: "frost", origin: "section", options: FROST_STEPS },
+  { id: "pad", origin: "section", options: PAD_STEPS },
+  { id: "shape", origin: "item", options: SHAPE_STEPS },
+  { id: "feather", origin: "item", options: FEATHER_STEPS },
   { id: "textStroke", origin: "section", options: TEXT_STROKE_STEPS },
 ];
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { cx } from '@/lib/cx'
+import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
 import { groupStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import {
@@ -112,10 +113,23 @@ export function StyleControlRow({
       </div>
     )
   }
-  // Colour controls are rendered by the item editor's own ColorPalette, never here — this
-  // row handles selects/toggles/sliders. The guard also narrows `control` to a select for
-  // the rest of the function.
-  if (control.kind === 'color') return null
+  // A GENERIC colour control (one that knows how to read and write its own token —
+  // the gradient ends) renders a palette right here. The plain border-colour control
+  // stays the item editor's special case, exactly as before.
+  if (control.kind === 'color') {
+    if (!control.hexOf || !control.toToken) return null
+    return (
+      <ControlRow label={control.label}>
+        <ColorPalette
+          label=""
+          aria={`${regionLabel} ${control.label}`}
+          value={control.hexOf(cls)}
+          used={[]}
+          onChange={(hex) => onChange(control.toToken!(hex, cls))}
+        />
+      </ControlRow>
+    )
+  }
   // Show the current value even when it's a class the site declared no option for (e.g. a
   // base class), so nothing is silently dropped or mislabelled as Default.
   const options =

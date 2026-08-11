@@ -1005,8 +1005,8 @@ describe('EditorInspector — Videos component', () => {
     renderInspector([], { videos: VIDEOS, onApplyStyle })
     fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
     fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
-    // Size slider index 12 = scale-110 (same scale as the image item editor).
-    fireEvent.change(screen.getByLabelText('Video slot 1 Size'), { target: { value: '12' } })
+    // Size slider index 17 = scale-110 on the widened 25–175% ladder (2026-08-11).
+    fireEvent.change(screen.getByLabelText('Video slot 1 Size'), { target: { value: '17' } })
     expect(onApplyStyle).toHaveBeenCalledWith('video:v2', 'scale-110')
     expect(saveStyleMock).not.toHaveBeenCalled()
     await act(async () => {

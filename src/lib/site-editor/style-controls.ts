@@ -42,6 +42,12 @@ import {
   FIT_POSITIONS,
   TEXT_SHADOW_STEPS,
   TEXT_GLOW_STEPS,
+  UNDERLINE_TOGGLE,
+  STRIKE_TOGGLE,
+  SHAPE_STEPS,
+  FEATHER_STEPS,
+  FROST_STEPS,
+  PAD_STEPS,
   TEXT_STROKE_STEPS,
   RADIUS_STEPS,
   SCALE_STEPS,
@@ -53,6 +59,18 @@ import {
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean }
   | { id: string; label: string; kind: 'toggle'; onClass: string; owns: (token: string) => boolean }
+  /** A hex picker. The plain form (border colour) is special-cased where it renders; a
+   *  control that sets `hexOf`/`toToken` is GENERIC — the row reads the current hex out
+   *  of the class string and writes a whole replacement token, which lets two pickers
+   *  share one token (a gradient's ends). '' from the picker clears the token. */
+  | {
+      id: string
+      label: string
+      kind: 'color'
+      owns: (token: string) => boolean
+      hexOf?: (classString: string) => string
+      toToken?: (hex: string, classString: string) => string
+    }
   /** A slider over ORDERED steps (size, transparency). Reads/applies exactly like a select —
    *  one owned utility swapped, the rest preserved — but the manager drags a continuous scale
    *  instead of picking from a menu. `steps` runs low→high; the `''` step is the default. */
@@ -91,7 +109,7 @@ export type StyleControl =
   /** A full colour palette (hue slider + saturation/brightness square + hex field). The owned
    *  utility is an arbitrary `border-[#hex]`, so the value is a free hex rather than one of a
    *  fixed option list — which is why this kind carries no `options`/`steps`. */
-  | { id: string; label: string; kind: 'color'; owns: (token: string) => boolean }
+
 
 // Tailwind's fixed scales, used to tell text-* size from text-* colour from text-* align
 // (all three share the `text-` prefix), and font-* weight from font-* family.
@@ -365,8 +383,28 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     label: 'Glow',
     kind: 'slider',
     steps: TEXT_GLOW_STEPS,
-    rank: (t) => { const m = t.match(/^textglow-([1-8])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
-    owns: (t) => /^textglow-[1-8]$/.test(t),
+    rank: (t) => { const m = t.match(/^textglow-([1-9]|1[0-2])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
+    owns: (t) => /^textglow-([1-9]|1[0-2])$/.test(t),
+  })
+  controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
+  controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
+  controls.push(...gradientPair('textgrad', 'Gradient start', 'Gradient end'))
+  controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
+  controls.push({
+    id: 'frost',
+    label: 'Frosted glass',
+    kind: 'slider',
+    steps: FROST_STEPS,
+    rank: pxRank({}),
+    owns: (t) => t.startsWith('frost-['),
+  })
+  controls.push({
+    id: 'pad',
+    label: 'Padding',
+    kind: 'slider',
+    steps: PAD_STEPS,
+    rank: pxRank({}),
+    owns: (t) => t.startsWith('pad-['),
   })
   controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: CASE_TOGGLE_CLASS, owns: (t) => t === CASE_TOGGLE_CLASS })
   controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: ITALIC_TOGGLE_CLASS, owns: (t) => t === ITALIC_TOGGLE_CLASS })
@@ -477,9 +515,12 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     label: 'Glow',
     kind: 'slider',
     steps: TEXT_GLOW_STEPS,
-    rank: (t) => { const m = t.match(/^textglow-([1-8])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
-    owns: (t) => /^textglow-[1-8]$/.test(t),
+    rank: (t) => { const m = t.match(/^textglow-([1-9]|1[0-2])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
+    owns: (t) => /^textglow-([1-9]|1[0-2])$/.test(t),
   })
+  controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
+  controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
+  controls.push(...gradientPair('textgrad', 'Gradient start', 'Gradient end'))
   return controls
 }
 
@@ -573,6 +614,9 @@ export function buildItemStyleControls(): StyleControl[] {
     ...filterControls(),
     tiltControl(),
     ...cropControls(),
+    { id: 'shape', label: 'Shape', kind: 'select', options: SHAPE_STEPS, owns: (t) => t.startsWith('shape-') },
+    { id: 'feather', label: 'Feather', kind: 'slider', steps: FEATHER_STEPS, rank: pctRank0('feather'), owns: (t) => /^feather-\d/.test(t) },
+    { id: 'pad', label: 'Matte', kind: 'slider', steps: PAD_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('pad-[') },
   ]
 }
 
@@ -606,6 +650,34 @@ function cropControls(): StyleControl[] {
 
 const tiltControl = (): StyleControl =>
   ({ id: 'tilt', label: 'Tilt', kind: 'slider', steps: TILT_STEPS, rank: tiltRank, owns: (t) => t.startsWith('tilt-[') })
+
+/** The two ends of a two-hex gradient token (`textgrad-[#a_#b]` / `bggrad-[#a_#b]`),
+ *  as a PAIR of colour controls sharing one token. Each reads its half out of the
+ *  stored string and writes the whole token back; clearing either end clears the
+ *  gradient (half a gradient is not a thing). */
+function gradientPair(prefix: 'textgrad' | 'bggrad', fromLabel: string, toLabel: string): StyleControl[] {
+  const RE = new RegExp(`^${prefix}-\\[(#[0-9a-fA-F]{3,8})_(#[0-9a-fA-F]{3,8})\\]$`)
+  const owns = (t: string) => t.startsWith(`${prefix}-[`)
+  const halves = (cls: string): [string, string] | null => {
+    const tok = cls.split(/\s+/).find(owns)
+    const m = tok?.match(RE)
+    return m ? [m[1], m[2]] : null
+  }
+  const make = (id: string, label: string, idx: 0 | 1): StyleControl => ({
+    id,
+    label,
+    kind: 'color',
+    owns,
+    hexOf: (cls) => halves(cls)?.[idx] ?? '',
+    toToken: (hex, cls) => {
+      if (!hex) return '' // either end cleared → the whole gradient goes
+      const other = halves(cls)?.[idx === 0 ? 1 : 0] ?? hex
+      const pair = idx === 0 ? [hex, other] : [other, hex]
+      return `${prefix}-[${pair[0]}_${pair[1]}]`
+    },
+  })
+  return [make(`${prefix}From`, fromLabel, 0), make(`${prefix}To`, toLabel, 1)]
+}
 
 /** Stroke ranks by px, decimals included — pxRank's regex is integer-only. */
 const strokeRank = (t: string): number | null => {
@@ -670,9 +742,12 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
     // Filters + tilt act on the embed's BOX, which browsers style happily. No crop:
-    // object-fit cannot reach inside an iframe (see cropControls).
+    // object-fit cannot reach inside an iframe (see cropControls). Shape and feather
+    // DO work — clip-path and mask cut the box itself.
     ...filterControls(),
     tiltControl(),
+    { id: 'shape', label: 'Shape', kind: 'select', options: SHAPE_STEPS, owns: (t) => t.startsWith('shape-') },
+    { id: 'feather', label: 'Feather', kind: 'slider', steps: FEATHER_STEPS, rank: pctRank0('feather'), owns: (t) => /^feather-\d/.test(t) },
   ]
 }
 

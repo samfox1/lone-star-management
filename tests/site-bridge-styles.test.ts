@@ -519,3 +519,55 @@ describe('slice-1 visual effects (2026-08-10)', () => {
     expect(resolveStyle('tilt-[200deg]').className).toBe('tilt-[200deg]')
   })
 })
+
+describe('slice-2 visual effects (2026-08-11)', () => {
+  it('CRITICAL: underline and strikethrough COEXIST — one property, composed', () => {
+    const r = resolveStyle('underline line-through')
+    expect(r.style.textDecorationLine).toBe('underline line-through')
+    expect(r.className).toBe('')
+  })
+
+  it('CRITICAL: gradient text clips to the glyphs and clears both fills', () => {
+    // Without color:transparent AND WebkitTextFillColor the gradient paints the box
+    // behind the letters instead of the letters.
+    const r = resolveStyle('textgrad-[#ff0055_#00ccff]')
+    expect(r.style.backgroundImage).toBe('linear-gradient(135deg, #ff0055, #00ccff)')
+    expect(r.style.WebkitBackgroundClip).toBe('text')
+    expect(r.style.color).toBe('transparent')
+    expect(r.style.WebkitTextFillColor).toBe('transparent')
+  })
+
+  it('a region background gradient lifts in SECTION context', () => {
+    const r = resolveRegionStyle('masthead', '', 'flex bggrad-[#0b1210_#5f7a5f]')
+    expect(r.style.backgroundImage).toContain('linear-gradient')
+    expect(r.className).toBe('flex')
+  })
+
+  it('frost and padding lift in section context too', () => {
+    const r = resolveRegionStyle('masthead', '', 'frost-[8px] pad-[24px]')
+    expect(r.style.backdropFilter).toBe('blur(8px)')
+    expect(r.style.WebkitBackdropFilter).toBe('blur(8px)')
+    expect(r.style.padding).toBe('24px')
+  })
+
+  it('shapes and feather are ITEM lifts, with both mask spellings', () => {
+    const r = resolveStyle('shape-arch feather-30')
+    expect(r.style.clipPath).toBe('inset(0 round 999px 999px 0 0)')
+    expect(r.style.maskImage).toContain('70%')
+    expect(r.style.WebkitMaskImage).toBe(r.style.maskImage)
+  })
+
+  it('a malformed gradient stays a class rather than half-applying', () => {
+    expect(resolveStyle('textgrad-[red_blue]').className).toBe('textgrad-[red_blue]')
+    expect(resolveStyle('bggrad-[#abc]').className).toBe('bggrad-[#abc]')
+  })
+
+  it('the widened ladders resolve at their new extremes', () => {
+    expect(resolveStyle('textshadow-12').style.textShadow).toContain('12px')
+    expect(resolveStyle('textglow-12').style.textShadow).toContain('currentColor')
+    expect(resolveStyle('tilt-[15deg]').style.rotate).toBe('15deg')
+    expect(resolveStyle('brightness-175').style.filter).toBe('brightness(175%)')
+    expect(resolveStyle('soften-[16px]').style.filter).toBe('blur(16px)')
+    expect(resolveStyle('textstroke-[6px]').style.WebkitTextStroke).toBe('6px currentColor')
+  })
+})
