@@ -31,6 +31,18 @@ import {
   ITALIC_TOGGLE_CLASS,
   LEADING_OPTIONS,
   OPACITY_STEPS,
+  GRAYSCALE_STEPS,
+  SEPIA_STEPS,
+  BRIGHTNESS_STEPS,
+  CONTRAST_STEPS,
+  SATURATE_STEPS,
+  BLUR_STEPS,
+  TILT_STEPS,
+  FIT_STEPS,
+  FIT_POSITIONS,
+  TEXT_SHADOW_STEPS,
+  TEXT_GLOW_STEPS,
+  TEXT_STROKE_STEPS,
   RADIUS_STEPS,
   SCALE_STEPS,
   SHADOW_STEPS,
@@ -323,6 +335,30 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     options: [DEFAULT, ...ALIGN_OPTIONS],
     owns: (t) => ALIGNS.includes(textSuffix(t)),
   })
+  controls.push({
+    id: 'textShadow',
+    label: 'Text shadow',
+    kind: 'slider',
+    steps: TEXT_SHADOW_STEPS,
+    rank: (t) => { const i = TEXT_SHADOW_STEPS.findIndex((o) => o.value === t); return i === -1 ? null : i },
+    owns: (t) => t.startsWith('textshadow-'),
+  })
+  controls.push({
+    id: 'textStroke',
+    label: 'Outline',
+    kind: 'slider',
+    steps: TEXT_STROKE_STEPS,
+    rank: strokeRank,
+    owns: (t) => t.startsWith('textstroke-['),
+  })
+  controls.push({
+    id: 'textGlow',
+    label: 'Glow',
+    kind: 'slider',
+    steps: TEXT_GLOW_STEPS,
+    rank: (t) => { const m = t.match(/^textglow-([1-8])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
+    owns: (t) => /^textglow-[1-8]$/.test(t),
+  })
   controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: CASE_TOGGLE_CLASS, owns: (t) => t === CASE_TOGGLE_CLASS })
   controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: ITALIC_TOGGLE_CLASS, owns: (t) => t === ITALIC_TOGGLE_CLASS })
   return controls
@@ -408,6 +444,32 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     defaultOffScale: true,
     rank: trackingRank,
     owns: isTracking,
+  })
+  // Slice-1 text effects — in BOTH text surfaces (this per-field editor and the Style
+  // panel's section controls), so a shadow set in one place is adjustable in the other.
+  controls.push({
+    id: 'textShadow',
+    label: 'Text shadow',
+    kind: 'slider',
+    steps: TEXT_SHADOW_STEPS,
+    rank: (t) => { const i = TEXT_SHADOW_STEPS.findIndex((o) => o.value === t); return i === -1 ? null : i },
+    owns: (t) => t.startsWith('textshadow-'),
+  })
+  controls.push({
+    id: 'textStroke',
+    label: 'Outline',
+    kind: 'slider',
+    steps: TEXT_STROKE_STEPS,
+    rank: strokeRank,
+    owns: (t) => t.startsWith('textstroke-['),
+  })
+  controls.push({
+    id: 'textGlow',
+    label: 'Glow',
+    kind: 'slider',
+    steps: TEXT_GLOW_STEPS,
+    rank: (t) => { const m = t.match(/^textglow-([1-8])$/); return t === '' ? 0 : m ? Number(m[1]) : null },
+    owns: (t) => /^textglow-[1-8]$/.test(t),
   })
   return controls
 }
@@ -497,7 +559,56 @@ export function buildItemStyleControls(): StyleControl[] {
     { id: 'borderColor', label: 'Border color', kind: 'color', owns: (t) => colorToken(t)?.prop === 'borderColor' },
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
+    // Slice-1 effects (2026-08-10). All lift inline, so they work on every deployed
+    // site with nothing recompiled; the six filters COMPOSE (styles.ts).
+    ...filterControls(),
+    tiltControl(),
+    ...cropControls(),
   ]
+}
+
+/**
+ * The photographic FILTERS — shared by images, video embeds AND uploaded background
+ * clips, because a filter acts on whatever pixels are in the box; a full-bleed hero
+ * video dims and desaturates exactly like an image does (Sam, 2026-08-10).
+ */
+function filterControls(): StyleControl[] {
+  return [
+    { id: 'grayscale', label: 'Black & white', kind: 'slider', steps: GRAYSCALE_STEPS, rank: pctRank('bw'), owns: (t) => /^bw-\d/.test(t) },
+    { id: 'sepia', label: 'Sepia', kind: 'slider', steps: SEPIA_STEPS, rank: pctRank('sepia'), owns: (t) => /^sepia-\d/.test(t) },
+    { id: 'brightness', label: 'Brightness', kind: 'slider', steps: BRIGHTNESS_STEPS, rank: pctRank('brightness'), owns: (t) => /^brightness-\d/.test(t) },
+    { id: 'contrast', label: 'Contrast', kind: 'slider', steps: CONTRAST_STEPS, rank: pctRank('contrast'), owns: (t) => /^contrast-\d/.test(t) },
+    { id: 'saturate', label: 'Saturation', kind: 'slider', steps: SATURATE_STEPS, rank: pctRank('saturate'), owns: (t) => /^saturate-\d/.test(t) },
+    { id: 'soften', label: 'Soften', kind: 'slider', steps: BLUR_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('soften-[') },
+  ]
+}
+
+/** Box-level media controls. CROP IS IMAGE/VIDEO-ELEMENT ONLY: `object-fit` does not
+ *  reach inside an iframe, so on a YouTube embed the control would move and nothing
+ *  would change — the silent no-op this panel must never offer (Sam, 2026-08-10:
+ *  "I cant edit the youtube video via css if its just an embedding" — half right; the
+ *  BOX styles work, the crop does not). */
+function cropControls(): StyleControl[] {
+  return [
+    { id: 'fit', label: 'Crop', kind: 'select', options: FIT_STEPS, owns: (t) => t === 'fit-cover' || t === 'fit-contain' },
+    { id: 'fitPosition', label: 'Crop anchor', kind: 'select', options: FIT_POSITIONS, owns: (t) => /^fit-(top|bottom|left|right)$/.test(t) },
+  ]
+}
+
+const tiltControl = (): StyleControl =>
+  ({ id: 'tilt', label: 'Tilt', kind: 'slider', steps: TILT_STEPS, rank: tiltRank, owns: (t) => t.startsWith('tilt-[') })
+
+/** Stroke ranks by px, decimals included — pxRank's regex is integer-only. */
+const strokeRank = (t: string): number | null => {
+  if (t === '') return 0
+  const m = t.match(/^textstroke-\[(\d(?:\.5)?)px\]$/)
+  return m ? Number(m[1]) : null
+}
+
+/** Tilt ranks by DEGREES, signed — 0° sits mid-slider like Size's 100%. */
+const tiltRank = (t: string): number | null => {
+  const m = t.match(/^tilt-\[(-?\d{1,2})deg\]$/)
+  return m ? Number(m[1]) : null
 }
 
 /** Playback-speed steps, Normal (1×, the `''` default) in the middle of a slow→fast run.
@@ -535,6 +646,10 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
     return [
       { id: 'speed', label: 'Speed', kind: 'slider', steps: SPEED_STEPS, rank: speedRank, owns: (t) => t.startsWith('speed-') },
       opacity,
+      // A full-bleed background still has PIXELS — dim it, desaturate it, soften it
+      // under the text. What it lacks is a visible BOX, so size/corners/shadow/tilt
+      // stay out (Sam, 2026-08-10: these slots had "only speed and transparency").
+      ...filterControls(),
     ]
   }
   return [
@@ -542,6 +657,10 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
     opacity,
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
+    // Filters + tilt act on the embed's BOX, which browsers style happily. No crop:
+    // object-fit cannot reach inside an iframe (see cropControls).
+    ...filterControls(),
+    tiltControl(),
   ]
 }
 

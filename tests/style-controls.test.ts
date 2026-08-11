@@ -41,7 +41,9 @@ describe('buildStyleControls', () => {
     expect(ids).toEqual(expect.arrayContaining(['size', 'weight', 'align', 'uppercase', 'italic', 'font', 'textColor', 'bgColor']))
     // No palette → no font/colour controls.
     const bare = buildStyleControls().map((c) => c.id)
-    expect(bare).toEqual(['size', 'weight', 'align', 'uppercase', 'italic'])
+    // Slice-1 (2026-08-10) added shadow + outline to the universal set: they lift
+    // inline, so they need no site palette and no compiled classes.
+    expect(bare).toEqual(['size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow', 'uppercase', 'italic'])
   })
 })
 
@@ -49,8 +51,13 @@ describe('buildItemStyleControls (per-image/video)', () => {
   const item = buildItemStyleControls()
   const itemById = (id: string) => item.find((c) => c.id === id)!
 
-  it('offers exactly the visual controls: size, transparency, border, border colour, corners, shadow', () => {
-    expect(item.map((c) => c.id)).toEqual(['size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow'])
+  it('offers exactly the visual controls, effects included', () => {
+    // Extended 2026-08-10 (slice 1): the photographic effects + crop. The exact-list
+    // form stays — a control appearing or vanishing must be a decision, not drift.
+    expect(item.map((c) => c.id)).toEqual([
+      'size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow',
+      'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
+    ])
   })
 
   it('size, transparency, border, corners + shadow are SLIDERS; border colour is a palette', () => {

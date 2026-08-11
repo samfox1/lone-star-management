@@ -450,3 +450,72 @@ describe("resolveStyle — every owned token has an inline meaning", () => {
       expect(MANAGED_STYLE_PROPS).toContain(kebab(prop));
   });
 });
+
+describe('slice-1 visual effects (2026-08-10)', () => {
+  it('CRITICAL: filter families COMPOSE into one value — assignment would keep only the last', () => {
+    // Six families share the one `filter` property. This is the composition bug the
+    // feature was designed around; a per-token Object.assign passes every single-filter
+    // test and silently drops all but one the moment a manager stacks two.
+    const r = resolveStyle('bw-50 contrast-120 soften-[4px]')
+    expect(r.style.filter).toBe('grayscale(50%) contrast(120%) blur(4px)')
+    expect(r.className).toBe('')
+  })
+
+  it('tilt and size never fight — rotate and scale are separate CSS properties', () => {
+    const r = resolveStyle('scale-110 tilt-[-6deg]')
+    expect(r.style.scale).toBe('1.1')
+    expect(r.style.rotate).toBe('-6deg')
+  })
+
+  it('crop fit lifts to objectFit / objectPosition', () => {
+    const r = resolveStyle('fit-cover fit-top')
+    expect(r.style.objectFit).toBe('cover')
+    expect(r.style.objectPosition).toBe('top')
+  })
+
+  it('CRITICAL: text shadow and stroke lift in SECTION context too', () => {
+    // The section path lifts colours only — its vocabulary is the site's own compiled
+    // classes. These tokens are editor-invented: no site compiles `textshadow-soft`, so
+    // left as a class it would be a silent no-op on every text region.
+    // A section override REPLACES the base (D-B), and the editor seeds it from the
+    // base — so a real stored string carries the site's classes plus the effect.
+    const r = resolveRegionStyle('hero_title', 'font-serif text-4xl', 'font-serif text-4xl textshadow-6 textstroke-[1.5px]')
+    expect(r.style.textShadow).toBe('0 6px 12px rgb(0 0 0 / 0.78)') // the strengthened curve
+    expect(r.style.WebkitTextStroke).toBe('1.5px currentColor')
+    expect(r.className).toContain('font-serif') // the site's classes stay CLASSES
+    expect(r.className).not.toContain('textshadow') // the effect lifts out
+  })
+
+  it('the glow follows the text colour (currentColor, never a baked hex)', () => {
+    expect(resolveStyle('textglow-4').style.textShadow).toContain('currentColor')
+    // The one-day 0.5.0 token still resolves, as glow 5 — stored strings keep their look.
+    expect(resolveStyle('textshadow-glow').style.textShadow).toContain('currentColor')
+  })
+
+  it('CRITICAL: shadow and glow COMPOSE — text-shadow takes a list', () => {
+    // Sam split them into two sliders (2026-08-10); both write the ONE property, so
+    // like the filters they collect into a comma list. Assignment would keep only the
+    // slider the manager touched second.
+    const r = resolveStyle('textshadow-4 textglow-2')
+    expect(r.style.textShadow).toContain('rgb(0 0 0')
+    expect(r.style.textShadow).toContain('currentColor')
+    expect(r.style.textShadow).toContain(', ')
+  })
+
+  it('sections compose them too — these families lift on every text region', () => {
+    const r = resolveRegionStyle('hero_title', '', 'font-serif textshadow-2 textglow-6')
+    expect(r.style.textShadow?.split(',').length).toBeGreaterThanOrEqual(3) // 1 shadow + 2 glow layers
+    expect(r.className).toBe('font-serif')
+  })
+
+  it('every new managed property is in the DOM clear-list — removal must remove the effect', () => {
+    for (const prop of ['filter', 'rotate', 'object-fit', 'object-position', 'text-shadow', '-webkit-text-stroke']) {
+      expect(MANAGED_STYLE_PROPS as readonly string[], prop).toContain(prop)
+    }
+  })
+
+  it('an out-of-range or misspelled token stays a class, exactly like every family', () => {
+    expect(resolveStyle('bw-fifty').className).toBe('bw-fifty')
+    expect(resolveStyle('tilt-[200deg]').className).toBe('tilt-[200deg]')
+  })
+})

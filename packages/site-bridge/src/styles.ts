@@ -176,6 +176,83 @@ function inlineToken(token: string): Record<string, string> | null {
   return null;
 }
 
+/* ── Slice-1 visual effects (2026-08-10). All lift inline, so every already-deployed
+ * site gets them the moment the editor offers them. The six FILTER families share one
+ * CSS property, so they return PARTS that resolveTokens composes into a single
+ * `filter` value — Object.assign would keep only the last one. */
+
+/** `<token>` → a filter function, or null. Order of application follows token order in
+ *  the stored string, which is stable: the editor rewrites the whole string per change. */
+function filterPart(token: string): string | null {
+  let m = token.match(/^bw-(\d{1,3})$/);
+  if (m) return `grayscale(${Math.min(100, Number(m[1]))}%)`;
+  m = token.match(/^sepia-(\d{1,3})$/);
+  if (m) return `sepia(${Math.min(100, Number(m[1]))}%)`;
+  m = token.match(/^brightness-(\d{1,3})$/);
+  if (m) return `brightness(${m[1]}%)`;
+  m = token.match(/^contrast-(\d{1,3})$/);
+  if (m) return `contrast(${m[1]}%)`;
+  m = token.match(/^saturate-(\d{1,3})$/);
+  if (m) return `saturate(${m[1]}%)`;
+  m = token.match(/^soften-\[(\d{1,2})px\]$/);
+  if (m) return `blur(${m[1]}px)`;
+  return null;
+}
+
+/** Tilt and crop-fit — single-property lifts. `rotate` and `scale` are their own CSS
+ *  properties (not `transform`), so Size and Tilt never fight over one value. */
+function mediaToken(token: string): Record<string, string> | null {
+  const m = token.match(/^tilt-\[(-?\d{1,2})deg\]$/);
+  if (m) return { rotate: `${m[1]}deg` };
+  if (token === "fit-cover") return { objectFit: "cover" };
+  if (token === "fit-contain") return { objectFit: "contain" };
+  if (token === "fit-top") return { objectPosition: "top" };
+  if (token === "fit-bottom") return { objectPosition: "bottom" };
+  if (token === "fit-left") return { objectPosition: "left" };
+  if (token === "fit-right") return { objectPosition: "right" };
+  return null;
+}
+
+/** Depth n (1–8) → a black shadow growing in offset, blur and weight together, so the
+ *  slider reads as "more" in one direction. Deliberately assertive at the top end —
+ *  the first curve maxed at an alpha a light page barely showed (Sam, 2026-08-10:
+ *  "I dont see the text shadow doing anything"). */
+function textShadowDepth(n: number): string {
+  return `0 ${n}px ${n * 2}px rgb(0 0 0 / ${(0.3 + n * 0.08).toFixed(2)})`;
+}
+
+/** Glow n (1–8) → a two-layer currentColor halo; the second layer is what makes the
+ *  high end read as bloom rather than blur. */
+function textGlowDepth(n: number): string {
+  return `0 0 ${n * 2}px currentColor, 0 0 ${n * 6}px currentColor`;
+}
+
+/** A text-shadow LAYER for one token, or null. Shadow and glow both live in the one
+ *  `text-shadow` property, which takes a list — so like the filters, they are collected
+ *  and COMPOSED, never assigned over each other. */
+function textShadowPart(token: string): string | null {
+  let m = token.match(/^textshadow-([1-8])$/);
+  if (m) return textShadowDepth(Number(m[1]));
+  m = token.match(/^textglow-([1-8])$/);
+  if (m) return textGlowDepth(Number(m[1]));
+  return null;
+}
+
+/**
+ * Text-effect tokens — shadow and stroke. Lifted in BOTH contexts, sections included:
+ * the section path otherwise lifts colours only (its vocabulary is the site's own
+ * compiled classes), but these tokens are editor-invented — no site compiles
+ * `textshadow-soft` — so left as classes they would be silent no-ops on every region.
+ */
+function textEffectStyle(token: string): Record<string, string> | null {
+  // The legacy single glow stop (shipped for a day in 0.5.0) resolves as glow 5, so a
+  // stored string from that build keeps its look instead of going dark.
+  if (token === "textshadow-glow") return { textShadow: textGlowDepth(5) };
+  const m = token.match(/^textstroke-\[(\d(?:\.5)?)px\]$/);
+  if (m) return { WebkitTextStroke: `${m[1]}px currentColor` };
+  return null;
+}
+
 /** Every inline property the editor may write — the clear list a live re-apply resets
  *  before setting the current overlay, so removing a control removes its effect. */
 export const MANAGED_STYLE_PROPS = [
@@ -188,6 +265,12 @@ export const MANAGED_STYLE_PROPS = [
   "border-style",
   "border-radius",
   "box-shadow",
+  "filter",
+  "rotate",
+  "object-fit",
+  "object-position",
+  "text-shadow",
+  "-webkit-text-stroke",
 ] as const;
 
 export type ResolvedStyle = {
@@ -240,14 +323,27 @@ function speedRate(token: string): number | null {
 function resolveTokens(classString: string, liftAll: boolean): ResolvedStyle {
   const classes: string[] = [];
   const style: Record<string, string> = {};
+  const filters: string[] = [];
+  const textShadows: string[] = [];
   let playbackRate: number | undefined;
   for (const token of classString.split(/\s+/).filter(Boolean)) {
-    const inline = colorStyle(token) ?? (liftAll ? inlineToken(token) : null);
+    const inline =
+      colorStyle(token) ??
+      textEffectStyle(token) ??
+      (liftAll ? (inlineToken(token) ?? mediaToken(token)) : null);
+    const shadowLayer = textShadowPart(token); // both contexts — sections carry these too
+    const filter = liftAll ? filterPart(token) : null;
     const speed = liftAll ? speedRate(token) : null;
     if (inline) Object.assign(style, inline);
+    else if (shadowLayer) textShadows.push(shadowLayer);
+    else if (filter) filters.push(filter);
     else if (speed != null) playbackRate = speed;
     else classes.push(token);
   }
+  // Composed LAST: each of these families shares one property, and per-token
+  // assignment would keep only whichever token happened to be written down first.
+  if (filters.length) style.filter = filters.join(" ");
+  if (textShadows.length) style.textShadow = textShadows.join(", ");
   return {
     className: classes.join(" "),
     style,

@@ -23,6 +23,11 @@ import {
   isEditorMessage,
   isFrameMessage,
 } from '@samfox1/site-bridge/protocol'
+import {
+  buildItemStyleControls,
+  buildTextItemStyleControls,
+  buildVideoItemStyleControls,
+} from '@/lib/site-editor/style-controls'
 
 const ASSET_TYPES: LibraryAsset[] = ['track', 'video', 'image', 'merch', 'tour_date', 'link']
 
@@ -166,5 +171,55 @@ describe('bridge — versioned, source-discriminated guards', () => {
     expect(isFrameMessage({ v: BRIDGE_VERSION, source: 'evil', type: 'ready' })).toBe(false)
     expect(isFrameMessage(null)).toBe(false)
     expect(isFrameMessage('lse-frame')).toBe(false)
+  })
+})
+
+describe('slice-1 effect controls reach both item panels (2026-08-10)', () => {
+  it('CRITICAL: the FILTERS reach all three media surfaces; box controls only where they act', () => {
+    // One builder feeds the filters everywhere (filterControls) — a filter acts on
+    // whatever pixels are in the box, full-bleed hero video included (Sam, 2026-08-10:
+    // those slots had "only speed and transparency"). Crop is image/video-element only:
+    // object-fit cannot reach inside an iframe, so offering it on an embed is the
+    // silent no-op this panel must never contain.
+    const imageIds = buildItemStyleControls().map((c) => c.id)
+    const embedIds = buildVideoItemStyleControls('embed').map((c) => c.id)
+    const fileIds = buildVideoItemStyleControls('file').map((c) => c.id)
+    for (const id of ['grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften']) {
+      expect(imageIds, `image ${id}`).toContain(id)
+      expect(embedIds, `embed ${id}`).toContain(id)
+      expect(fileIds, `file ${id}`).toContain(id)
+    }
+    // Crop: images only. Tilt: anything with a visible box — not the full-bleed file.
+    expect(imageIds).toContain('fit')
+    expect(embedIds).not.toContain('fit')
+    expect(embedIds).not.toContain('fitPosition')
+    expect(fileIds).not.toContain('fit')
+    expect(imageIds).toContain('tilt')
+    expect(embedIds).toContain('tilt')
+    expect(fileIds).not.toContain('tilt')
+    // And speed stays impossible on an embed — CSS has no reach into YouTube's player.
+    expect(embedIds).not.toContain('speed')
+  })
+
+  it('text panels offer shadow and outline', () => {
+    const ids = buildTextItemStyleControls().map((c) => c.id)
+    expect(ids).toContain('textShadow')
+    expect(ids).toContain('textStroke')
+    expect(ids).toContain('textGlow')
+  })
+
+  it('every effect control OWNS its tokens and only its tokens', () => {
+    // `owns` is how a control finds its value in the stored string and how Reset knows
+    // what to strip; two controls claiming one token corrupt each other on write.
+    const all = [...buildItemStyleControls(), ...buildTextItemStyleControls()]
+    const probes: Record<string, string> = {
+      grayscale: 'bw-50', sepia: 'sepia-30', brightness: 'brightness-120', contrast: 'contrast-80',
+      saturate: 'saturate-150', soften: 'soften-[4px]', tilt: 'tilt-[-6deg]',
+      fit: 'fit-cover', fitPosition: 'fit-top', textShadow: 'textshadow-6', textStroke: 'textstroke-[2px]', textGlow: 'textglow-3',
+    }
+    for (const [id, token] of Object.entries(probes)) {
+      const owners = all.filter((c) => c.owns(token)).map((c) => c.id)
+      expect(owners, token).toEqual([id])
+    }
   })
 })

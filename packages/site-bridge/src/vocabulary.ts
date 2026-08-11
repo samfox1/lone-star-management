@@ -126,6 +126,79 @@ function pxSteps(prefix: string, from: number, to: number, step: number, zeroLab
 // Border width every 1px (0→12); corners every 2px (0→24) plus a Circle at the end.
 export const BORDER_WIDTH_STEPS = pxSteps('border', 1, 12, 1, 'None')
 export const RADIUS_STEPS = pxSteps('rounded', 2, 24, 2, 'Square', [{ value: 'rounded-full', label: 'Circle' }])
+/* ── Slice-1 visual effects (2026-08-10, Sam: "more features for text, images,
+ * videos"). ALL of these lift to inline style, which is the point: they work on every
+ * already-deployed site the moment the editor offers them, with nothing to recompile.
+ * Filters share ONE CSS property, so the resolver composes them (see styles.ts). */
+
+/** Filter families: token `<prefix>-N` → `fn(N%)`. 100 is the no-op for the three that
+ *  have one; grayscale/sepia/blur rest at zero, expressed as '' (no token). */
+export const GRAYSCALE_STEPS = pctSteps0('bw', 0, 100, 10)
+export const SEPIA_STEPS = pctSteps0('sepia', 0, 100, 10)
+export const BRIGHTNESS_STEPS = pctSteps('brightness', 50, 150, 5)
+export const CONTRAST_STEPS = pctSteps('contrast', 50, 150, 5)
+export const SATURATE_STEPS = pctSteps('saturate', 0, 200, 10)
+export const BLUR_STEPS = pxSteps('soften', 1, 12, 1, 'None')
+
+/** Tilt: a few degrees either way — scattered-polaroid energy, not rotation as layout.
+ *  0° sits in the MIDDLE, like Size. Negative degrees need the bracket form. */
+export const TILT_STEPS: StyleOption[] = Array.from({ length: 17 }, (_, i) => {
+  const deg = (i - 8) * 2
+  return { value: deg === 0 ? '' : `tilt-[${deg}deg]`, label: `${deg}°` }
+})
+
+/** Crop fit: how the media fills its frame, and which edge survives a crop. */
+export const FIT_STEPS: StyleOption[] = [
+  { value: '', label: 'Default' },
+  { value: 'fit-cover', label: 'Fill the frame' },
+  { value: 'fit-contain', label: 'Fit inside' },
+]
+export const FIT_POSITIONS: StyleOption[] = [
+  { value: '', label: 'Center' },
+  { value: 'fit-top', label: 'Top' },
+  { value: 'fit-bottom', label: 'Bottom' },
+  { value: 'fit-left', label: 'Left' },
+  { value: 'fit-right', label: 'Right' },
+]
+
+/** Text shadow as a DEPTH ladder (1–8, each a computed offset+blur). A ladder, not
+ *  named presets, because every text slider owes ≥9 stops (Sam's granularity rule,
+ *  pinned in text-tools-styling). The shadow is BLACK: on a dark site it reads subtle
+ *  to invisible by physics, which is what Glow is for — the two are separate sliders
+ *  (Sam, 2026-08-10: "glow should be its own slider") and they COMPOSE, since CSS
+ *  text-shadow takes a list. */
+export const TEXT_SHADOW_STEPS: StyleOption[] = [
+  { value: '', label: 'None' },
+  ...Array.from({ length: 8 }, (_, i) => ({ value: `textshadow-${i + 1}`, label: `${i + 1}` })),
+]
+
+/** Glow: a currentColor halo that follows the text's own colour — the dark-site
+ *  counterpart to the black drop shadow. Its own family, its own slider. */
+export const TEXT_GLOW_STEPS: StyleOption[] = [
+  { value: '', label: 'None' },
+  ...Array.from({ length: 8 }, (_, i) => ({ value: `textglow-${i + 1}`, label: `${i + 1}` })),
+]
+
+/** Outline text: a stroke around the letters, riding the text colour. Half-pixel steps
+ *  — strokes are a continuum, and 0.5px renders distinctly on every modern display. */
+export const TEXT_STROKE_STEPS: StyleOption[] = [
+  { value: '', label: 'None' },
+  ...Array.from({ length: 8 }, (_, i) => {
+    const px = (i + 1) / 2
+    return { value: `textstroke-[${px}px]`, label: `${px}px` }
+  }),
+]
+
+/** pctSteps with ZERO as the resting default ('' — no token), for effects that are off
+ *  until asked for (B&W, sepia), unlike scale/opacity whose neutral is 100%. */
+function pctSteps0(prefix: string, from: number, to: number, step: number): StyleOption[] {
+  const out: StyleOption[] = []
+  for (let n = from; n <= to; n += step) {
+    out.push({ value: n === 0 ? '' : `${prefix}-${n}`, label: `${n}%` })
+  }
+  return out
+}
+
 export const SHADOW_STEPS: StyleOption[] = [
   { value: '', label: 'None' },
   { value: 'shadow-sm', label: 'XS' },
@@ -150,6 +223,18 @@ export const VOCABULARY: { id: string; origin: "section" | "item"; options: Styl
   { id: "borderWidth", origin: "item", options: BORDER_WIDTH_STEPS },
   { id: "radius", origin: "item", options: RADIUS_STEPS },
   { id: "shadow", origin: "item", options: SHADOW_STEPS },
+  { id: "grayscale", origin: "item", options: GRAYSCALE_STEPS },
+  { id: "sepia", origin: "item", options: SEPIA_STEPS },
+  { id: "brightness", origin: "item", options: BRIGHTNESS_STEPS },
+  { id: "contrast", origin: "item", options: CONTRAST_STEPS },
+  { id: "saturate", origin: "item", options: SATURATE_STEPS },
+  { id: "soften", origin: "item", options: BLUR_STEPS },
+  { id: "tilt", origin: "item", options: TILT_STEPS },
+  { id: "fit", origin: "item", options: FIT_STEPS },
+  { id: "fitPosition", origin: "item", options: FIT_POSITIONS },
+  { id: "textShadow", origin: "section", options: TEXT_SHADOW_STEPS },
+  { id: "textGlow", origin: "section", options: TEXT_GLOW_STEPS },
+  { id: "textStroke", origin: "section", options: TEXT_STROKE_STEPS },
 ];
 
 /** Does this token survive AS A CLASS in the context it is emitted for? Section
