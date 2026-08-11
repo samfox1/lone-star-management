@@ -21,6 +21,7 @@
  */
 import type { LibraryAsset, TemplateManifest } from './manifest'
 import type { PublicSitePayload } from './payload'
+import type { CursorSettings } from './cursor'
 
 /** Bump when the message shape changes incompatibly; both sides pin to it. */
 export const BRIDGE_VERSION = 2
@@ -89,6 +90,11 @@ export type EditorMessage =
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-image'; key: string; url: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-style'; key: string; className: string }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-link'; key: string; url: string }
+  /** Re-apply the site-wide cursor (image / click image / trail) live in the preview.
+   *  ADDITIVE: the four values are ordinary site_content keys, so a frame that predates
+   *  this message still gets the cursor on the next init-data — this just skips the
+   *  round trip. Settings are normalized on receipt (normalizeCursorSettings). */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'apply-cursor'; settings: CursorSettings }
   | { v: number; source: typeof EDITOR_SOURCE; type: 'init-data'; site: PublicSitePayload }
   /** Outline + scroll a marked region into view in the frame (editor → frame). */
   | { v: number; source: typeof EDITOR_SOURCE; type: 'highlight'; target: SelectTarget }

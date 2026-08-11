@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
 import { editorMessage, isFrameMessage, type FrameMode, type SelectTarget } from '@samfox1/site-bridge/protocol'
+import type { CursorSettings } from '@samfox1/site-bridge/cursor'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**
@@ -62,6 +63,8 @@ export type FrameBridge = {
   applyStyle: (key: string, className: string) => void
   /** Optimistically set a link-powered element's href in the frame, before the save. */
   applyLink: (key: string, url: string) => void
+  /** Repaint the site-wide cursor + trail in the frame (Site panel), before the save. */
+  applyCursor: (settings: CursorSettings) => void
   /** Outline + scroll a region into view in the frame (a tile click in the inspector). */
   applyHighlight: (target: SelectTarget) => void
   /** Drop the frame's current highlight (the tile was deselected). */
@@ -129,6 +132,11 @@ export function useFrameBridge({
     [post],
   )
   const applyLink = useCallback((key: string, url: string) => post({ type: 'apply-link', key, url }), [post])
+  /** Repaint the site-wide cursor (Site panel) without waiting on the revalidate. */
+  const applyCursor = useCallback(
+    (settings: CursorSettings) => post({ type: 'apply-cursor', settings }),
+    [post],
+  )
   const applyHighlight = useCallback((target: SelectTarget) => post({ type: 'highlight', target }), [post])
   const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
   /** Whether a click in the frame SELECTS a region or works the site. See the protocol's
@@ -240,6 +248,7 @@ export function useFrameBridge({
     applyImage,
     applyStyle,
     applyLink,
+    applyCursor,
     applyHighlight,
     clearHighlight,
     setMode,

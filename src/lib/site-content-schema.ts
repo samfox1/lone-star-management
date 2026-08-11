@@ -75,6 +75,33 @@ export const SEO_FIELDS: SiteContentField[] = [
   { key: 'og_image', label: 'Social preview image URL', type: 'text', default: '' },
 ]
 
+/**
+ * Site-wide cursor settings (Sam, 2026-08-11). Ordinary `site_content` keys — they
+ * publish and reach a connected site with no migration — but they are NOT SiteContentField
+ * text: two are URLs that end up inside a `cursor: url("…")` CSS value on the site, one
+ * is a closed enum, one is a hex. So they get their own registry + validator instead of
+ * widening FieldType (see the fieldHref docblock below for why url-typed text is a trap).
+ * DERIVED from the package's constants (AGENTS.md rule 4): the editor, the wire message,
+ * and the site applier can never disagree on a key name.
+ */
+import { CURSOR_CONTENT_KEYS, CURSOR_TRAIL_STYLES } from '@samfox1/site-bridge/cursor'
+
+export const CURSOR_KEYS: readonly string[] = Object.values(CURSOR_CONTENT_KEYS)
+
+const CURSOR_URL_RE = /^https?:\/\/[^\s"'\\]+$/i
+const HEX_RE = /^#[0-9a-fA-F]{3,8}$/
+
+/** Why a cursor value can't persist, or null when it can. '' always clears. */
+export function cursorValueError(key: string, value: string): string | null {
+  if (!CURSOR_KEYS.includes(key)) return 'Unknown cursor field.'
+  if (value === '') return null
+  if (key === CURSOR_CONTENT_KEYS.image || key === CURSOR_CONTENT_KEYS.click)
+    return CURSOR_URL_RE.test(value) ? null : 'Cursor image must be an https URL.'
+  if (key === CURSOR_CONTENT_KEYS.trail)
+    return (CURSOR_TRAIL_STYLES as readonly string[]).includes(value) ? null : 'Unknown trail style.'
+  return HEX_RE.test(value) ? null : 'Trail color must be a hex value.'
+}
+
 const EMAIL_RE = /^[^\s:@]+@[^\s:@]+\.[^\s:@]+$/
 
 /** Whether a raw value is acceptable to persist for a field (write-side guard;

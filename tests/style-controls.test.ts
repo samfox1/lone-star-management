@@ -434,8 +434,8 @@ describe('the dressing sliders start in the middle (2026-08-11)', () => {
     expect(offset.steps.some((s) => /underoffset-\[-\d+px\]/.test(s.value))).toBe(true)
     expect(thickness.steps.some((s) => /decothick-\[0\.\d+px\]/.test(s.value))).toBe(true)
     // And the rank fn actually reads them — a regex still integer-only returns null.
-    expect(offset.rank('underoffset-[-6px]')).toBeLessThan(offset.rank('')!)
-    expect(thickness.rank('decothick-[0.5px]')).toBeLessThan(thickness.rank('')!)
+    expect(offset.rank!('underoffset-[-6px]')).toBeLessThan(offset.rank!('')!)
+    expect(thickness.rank!('decothick-[0.5px]')).toBeLessThan(thickness.rank!('')!)
   })
 })
 

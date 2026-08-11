@@ -37,7 +37,9 @@ import {
   TourTools,
   MerchTools,
   MusicTools,
+  SiteTools,
 } from './panels'
+import type { CursorSettings } from '@samfox1/site-bridge/cursor'
 import {
   assignComponentSlotAction,
   setSongsOnSiteAction,
@@ -99,7 +101,7 @@ export type {
 
 // One Links panel holds every link kind as its own group: Socials + Tour support
 // (outbound links) AND the manifest-declared link buttons (USB / Merch).
-type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'tour' | 'merch' | 'style'
+type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'tour' | 'merch' | 'style' | 'site'
 type Component = { kind: Kind; icon: IconName; label: string }
 
 const COMPONENTS: Component[] = [
@@ -111,6 +113,9 @@ const COMPONENTS: Component[] = [
   { kind: 'tour', icon: 'tour', label: 'Tour' },
   { kind: 'merch', icon: 'merch', label: 'Merch' },
   { kind: 'style', icon: 'bolt', label: 'Style' },
+  // Site-WIDE settings (the cursor, and whatever joins it) — things that belong to no
+  // single region, so no other panel could honestly hold them.
+  { kind: 'site', icon: 'settings', label: 'Site' },
 ]
 
 /** What a component counts. `onSite` is null for kinds that have no on-site concept
@@ -130,6 +135,7 @@ const COUNT_NOUN: Record<Kind, string> = {
   tour: 'date',
   merch: 'product',
   style: 'region',
+  site: 'setting',
 }
 
 /**
@@ -184,10 +190,12 @@ export function EditorInspector({
   linkValues = {},
   selectedLink = null,
   selectedRegion = null,
+  cursorValues = NO_STYLES,
   onApplyField,
   onApplyImage,
   onApplyStyle,
   onApplyLink,
+  onApplyCursor,
   onHighlight,
   onClearHighlight,
 }: {
@@ -235,6 +243,8 @@ export function EditorInspector({
   /** Image region (field / slot / gallery item) the frame reported a click on — opens the
    *  Images panel and focuses the matching tile. Bumped `nonce` re-fires on a repeat click. */
   selectedRegion?: { target: SelectTarget; nonce: number } | null
+  /** Current cursor settings from the draft's site_content (Site panel). */
+  cursorValues?: Record<string, string>
   onApplyField?: (key: string, value: string) => void
   /** Optimistically repaint ONE image region in the frame (a slot placement) — the
    *  init-data refresh stays as the consistency backstop, not the only path. */
@@ -242,6 +252,8 @@ export function EditorInspector({
   onApplyStyle?: (key: string, className: string) => void
   /** Optimistically set a link's href in the frame before the debounced save. */
   onApplyLink?: (key: string, url: string) => void
+  /** Repaint the frame's site-wide cursor live (Site panel). */
+  onApplyCursor?: (settings: CursorSettings) => void
   /** Outline + scroll a region into view in the frame (a tile click). */
   onHighlight?: (target: SelectTarget) => void
   /** Drop the frame's highlight (left the Images panel). */
@@ -861,6 +873,8 @@ export function EditorInspector({
     tour: { total: tours.length, onSite: onSite(tours, (t) => t.onSite) },
     merch: { total: merch.length, onSite: onSite(merch, (m) => m.onSite) },
     style: { total: styleRegions.length, onSite: null },
+    // How many site-wide settings are actually SET — "0 settings" reads as untouched.
+    site: { total: Object.values(cursorValues).filter(Boolean).length, onSite: null },
   }
 
   return (
@@ -925,9 +939,11 @@ export function EditorInspector({
           linkRegions={linkRegions}
           linkValues={linkValues}
           selectedLink={selectedLink}
+          cursorValues={cursorValues}
           onApplyField={paintField}
           onApplyStyle={paintStyle}
           onApplyLink={paintLink}
+          onApplyCursor={onApplyCursor}
           onBack={() => selectComponent(null)}
           onSwitch={selectComponent}
         />
@@ -1036,9 +1052,11 @@ function EditingView({
   linkRegions,
   linkValues,
   selectedLink,
+  cursorValues,
   onApplyField,
   onApplyStyle,
   onApplyLink,
+  onApplyCursor,
   onBack,
   onSwitch,
 }: {
@@ -1089,9 +1107,11 @@ function EditingView({
   linkRegions: ManifestLinkRegion[]
   linkValues: Record<string, string>
   selectedLink: string | null
+  cursorValues: Record<string, string>
   onApplyField?: (key: string, value: string) => void
   onApplyStyle?: (key: string, className: string) => void
   onApplyLink?: (key: string, url: string) => void
+  onApplyCursor?: (settings: CursorSettings) => void
   onBack: () => void
   onSwitch: (c: Component) => void
 }) {
@@ -1103,6 +1123,7 @@ function EditingView({
   const isMusic = component.kind === 'music'
   const isTour = component.kind === 'tour'
   const isStyle = component.kind === 'style'
+  const isSite = component.kind === 'site'
   return (
     <>
       {/* Minimal header: back on the left, the component's icon on the right. */}
@@ -1227,6 +1248,14 @@ function EditingView({
             selected={selectedStyle}
             artistId={artistId}
             onApplyStyle={onApplyStyle}
+          />
+        ) : isSite ? (
+          <SiteTools
+            artistId={artistId}
+            photos={photos}
+            values={cursorValues}
+            swatches={siteSwatches(styleOptions, styleValues)}
+            onApplyCursor={onApplyCursor}
           />
         ) : (
           <p className="px-5 py-6 text-sm text-ink-muted">

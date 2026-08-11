@@ -36,7 +36,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
-import { saveEditorField, saveEditorLink, saveEditorStyle, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
+import { saveCursorField, saveEditorField, saveEditorLink, saveEditorStyle, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
 import { linkAddError } from '@/lib/site-editor/link-vocabulary'
 import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
@@ -327,6 +327,32 @@ export async function saveEditorFieldAction(
 
   const template = isCustom(artist) ? null : (artist.template as string)
   const res = await saveEditorField(supabase, artistId, template, fieldKey, value)
+  if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
+  return res
+}
+
+/**
+ * Save one site-wide cursor setting from the editor's Site panel (cursor image, click
+ * image, trail style, trail color). Auth + owner-scoped like every editor save; the
+ * value gate lives in saveCursorField (an https URL / known trail / hex, or blank to
+ * clear). Site-kind-agnostic: the keys are plain site_content, inert on a template
+ * that never reads them.
+ */
+export async function saveCursorFieldAction(
+  artistId: string,
+  key: string,
+  value: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+
+  const res = await saveCursorField(supabase, artistId, key, value)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
 }

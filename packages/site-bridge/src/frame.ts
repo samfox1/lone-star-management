@@ -46,6 +46,7 @@ import {
   type FrameMode,
 } from "./protocol";
 import type { PublicSitePayload } from "./payload";
+import { applyCursor, cursorSettingsFrom, normalizeCursorSettings } from "./cursor";
 import type { LibraryAsset } from "./manifest";
 import { textFieldKeys } from "./manifest";
 
@@ -629,8 +630,19 @@ export function mountFrameBridge(options: {
     } else if (msg.type === "apply-link") {
       const url = strField(msg, "url");
       if (key !== null && url !== null) applyLinkToDom(document, key, url);
-    } else if (msg.type === "init-data" && "site" in msg)
+    }
+    // The cursor isn't a marked DOM region, so it gets its own applier rather than a
+    // silent fall-through in applyFieldToDom. Normalized on receipt: the guard checks
+    // the envelope, not payload interiors.
+    else if (msg.type === "apply-cursor" && "settings" in msg)
+      applyCursor(document, normalizeCursorSettings(msg.settings));
+    else if (msg.type === "init-data" && "site" in msg) {
+      // The cursor rides site_content, but rendering it is imperative (listeners +
+      // overlay), not declarative — so the frame applies it here rather than hoping
+      // every site's onInitData remembers to.
+      applyCursor(document, cursorSettingsFrom(msg.site?.site_content ?? {}));
       options.onInitData(msg.site);
+    }
     else if (msg.type === "highlight" && "target" in msg) revealAndHighlight(msg.target);
     else if (msg.type === "clear-highlight") {
       // A deselect also abandons any reveal in flight — the wait belongs to a selection

@@ -6,8 +6,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { saveEditorField } from '@/lib/site-editor/save'
+import { saveCursorField, saveEditorField } from '@/lib/site-editor/save'
 import { manifestFor } from '@/lib/site-editor/manifest'
+import { CURSOR_KEYS } from '@/lib/site-content-schema'
+import { CURSOR_CONTENT_KEYS } from '@samfox1/site-bridge/cursor'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -221,6 +223,63 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
     for (const key of ['seo_title', 'seo_description', 'og_image']) {
       expect((await saveEditorField(asA, artistA, CUSTOM, key, 'x')).ok).toBe(false)
     }
+  })
+
+  it('REFUSES the cursor keys — they carry URLs into a CSS url() sink, so only the validated path writes them', async () => {
+    for (const key of CURSOR_KEYS) {
+      expect(await saveEditorField(asA, artistA, CUSTOM, key, 'javascript:alert(1)')).toEqual({
+        ok: false,
+        error: 'That field name is reserved.',
+      })
+    }
+  })
+
+  describe('saveCursorField — the one path that CAN write a cursor key', () => {
+    afterAll(async () => {
+      await svc.from('site_content').delete().eq('artist_id', artistA).in('key', [...CURSOR_KEYS])
+    })
+
+    it('CRITICAL: stores a valid https cursor image and deletes it on blank', async () => {
+      const key = CURSOR_CONTENT_KEYS.image
+      expect((await saveCursorField(asA, artistA, key, 'https://x.test/cursor.png')).ok).toBe(true)
+      const { data } = await svc
+        .from('site_content').select('value').eq('artist_id', artistA).eq('key', key)
+        .maybeSingle<{ value: string }>()
+      expect(data?.value).toBe('https://x.test/cursor.png')
+      expect((await saveCursorField(asA, artistA, key, '')).ok).toBe(true)
+      const { data: gone } = await svc
+        .from('site_content').select('value').eq('artist_id', artistA).eq('key', key).maybeSingle()
+      expect(gone).toBeNull()
+    })
+
+    it('CRITICAL: refuses a scheme payload BEFORE it reaches the row', async () => {
+      // Plant a witness so "the bad value did not store" is not vacuously true.
+      await svc.from('site_content').upsert(
+        { artist_id: artistA, key: CURSOR_CONTENT_KEYS.image, value: 'https://x.test/real.png' },
+        { onConflict: 'artist_id,key' },
+      )
+      const res = await saveCursorField(asA, artistA, CURSOR_CONTENT_KEYS.image, 'javascript:alert(1)')
+      expect(res.ok).toBe(false)
+      const { data } = await svc
+        .from('site_content').select('value').eq('artist_id', artistA).eq('key', CURSOR_CONTENT_KEYS.image)
+        .maybeSingle<{ value: string }>()
+      expect(data?.value).toBe('https://x.test/real.png') // witness intact
+    })
+
+    it('refuses an undeclared trail style and a non-hex color', async () => {
+      expect((await saveCursorField(asA, artistA, CURSOR_CONTENT_KEYS.trail, 'confetti')).ok).toBe(false)
+      expect((await saveCursorField(asA, artistA, CURSOR_CONTENT_KEYS.trailColor, 'red')).ok).toBe(false)
+      expect((await saveCursorField(asA, artistA, CURSOR_CONTENT_KEYS.trail, 'dots')).ok).toBe(true)
+    })
+
+    it("CRITICAL: a non-owner's cursor write does not take effect", async () => {
+      // RLS makes the denied upsert look like success — assert the ROW, not the result.
+      await saveCursorField(asA, artistB, CURSOR_CONTENT_KEYS.image, 'https://x.test/hacked.png')
+      const { data } = await svc
+        .from('site_content').select('value').eq('artist_id', artistB).eq('key', CURSOR_CONTENT_KEYS.image)
+        .maybeSingle()
+      expect(data).toBeNull()
+    })
   })
 
   it("CRITICAL: a non-owner's custom-field save does not take effect", async () => {

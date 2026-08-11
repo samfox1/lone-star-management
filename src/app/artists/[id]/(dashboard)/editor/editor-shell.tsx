@@ -8,6 +8,7 @@ import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
+import { CURSOR_KEYS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
 import { EditorPublish } from './editor-publish'
@@ -194,6 +195,7 @@ export function EditorShell({
     applyImage,
     applyStyle,
     applyLink,
+    applyCursor,
     applyHighlight,
     clearHighlight,
     setMode,
@@ -238,6 +240,13 @@ export function EditorShell({
     if (m === 'browse') clearHighlight()
   }
 
+  // The Site panel's current values, straight off the draft's site_content — the same
+  // map the frame renders from, so the panel and the preview can't disagree on mount.
+  const cursorValues = useMemo(() => {
+    const content = (draft?.site_content ?? siteContent ?? {}) as Record<string, string>
+    return Object.fromEntries(CURSOR_KEYS.map((k) => [k, content[k] ?? '']))
+  }, [draft, siteContent])
+
   const panels = useMemo(
     () =>
       resolvePanelInputs({
@@ -276,10 +285,12 @@ export function EditorShell({
         linkValues={linkValues}
         selectedLink={selectedLink}
         selectedRegion={selectedRegion}
+        cursorValues={cursorValues}
         onApplyField={applyField}
         onApplyImage={applyImage}
         onApplyStyle={applyStyle}
         onApplyLink={applyLink}
+        onApplyCursor={applyCursor}
         onHighlight={applyHighlight}
         onClearHighlight={clearHighlight}
       />

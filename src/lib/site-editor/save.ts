@@ -16,7 +16,7 @@
  * being edited. Deciding custom-ness by "no manifest found" would therefore never fire.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { acceptsValue, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
+import { acceptsValue, CURSOR_KEYS, cursorValueError, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
@@ -50,6 +50,9 @@ const RESERVED_CONTENT_KEYS = new Set<string>([
   ...Object.values(TEMPLATE_FIELDS).flatMap((fields) =>
     fields.filter((f) => f.type === 'email').map((f) => f.key),
   ),
+  // Cursor keys carry URLs into a CSS `url()` sink on the site, so they only write
+  // through saveCursorField's validator — never as a runtime-manifest text field.
+  ...CURSOR_KEYS,
 ])
 
 /** The shape a CUSTOM site's field key must have to become a site_content key. Mirrors
@@ -88,6 +91,31 @@ async function saveCustomField(
   const { error } = await supabase
     .from('site_content')
     .upsert({ artist_id: artistId, key: fieldKey, value: trimmed }, { onConflict: 'artist_id,key' })
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+/**
+ * Write ONE cursor setting. The only path that can touch a CURSOR_KEYS row: the keys
+ * are reserved out of the custom-field path above, and the validator here is the write
+ * gate for the CSS `url()` sink — an https URL, a known trail style, or a hex, nothing
+ * else persists. Blank deletes the row, same semantics as every other site_content key.
+ */
+export async function saveCursorField(
+  supabase: SupabaseClient,
+  artistId: string,
+  key: string,
+  value: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = value.trim()
+  const invalid = cursorValueError(key, trimmed)
+  if (invalid) return { ok: false, error: invalid }
+  if (trimmed === '') {
+    const { error } = await supabase.from('site_content').delete().eq('artist_id', artistId).eq('key', key)
+    return error ? { ok: false, error: error.message } : { ok: true }
+  }
+  const { error } = await supabase
+    .from('site_content')
+    .upsert({ artist_id: artistId, key, value: trimmed }, { onConflict: 'artist_id,key' })
   return error ? { ok: false, error: error.message } : { ok: true }
 }
 
