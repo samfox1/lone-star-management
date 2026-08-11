@@ -22,6 +22,7 @@ import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
 import { ControlRow, GroupLabel, PANEL_BODY, SaveLine, type SaveStatus } from '../inspector-shared'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
+import { GallerySlotUploader } from '../../media-uploader'
 import type { GalleryPhoto } from '../inspector-types'
 import { saveCursorFieldAction } from '../../actions'
 
@@ -80,6 +81,7 @@ export function SiteTools({
           hint="Shown everywhere on the site"
           value={vals[CURSOR_CONTENT_KEYS.image] ?? ''}
           photos={photos}
+          artistId={artistId}
           onChange={(url) => save(CURSOR_CONTENT_KEYS.image, url)}
         />
         <CursorImageRow
@@ -87,6 +89,7 @@ export function SiteTools({
           hint="Swapped in while the mouse is down"
           value={vals[CURSOR_CONTENT_KEYS.click] ?? ''}
           photos={photos}
+          artistId={artistId}
           onChange={(url) => save(CURSOR_CONTENT_KEYS.click, url)}
         />
         <p className="pt-1 text-[10px] leading-snug text-ink-faint">
@@ -139,18 +142,23 @@ export function SiteTools({
   )
 }
 
-/** One cursor slot: a small preview of the chosen PNG, Choose (library picker), Remove. */
+/** One cursor slot: a small preview of the chosen PNG, Choose (library picker), Remove.
+ *  The picker's footer is the same uploader the image slots use, so a cursor PNG that
+ *  isn't in the library yet is one drop away — and it lands in the Images library too,
+ *  which is where Sam said cursor files should live. */
 function CursorImageRow({
   label,
   hint,
   value,
   photos,
+  artistId,
   onChange,
 }: {
   label: string
   hint: string
   value: string
   photos: GalleryPhoto[]
+  artistId: string
   onChange: (url: string) => void
 }) {
   const [picking, setPicking] = useState(false)
@@ -197,8 +205,19 @@ function CursorImageRow({
           renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
           empty={
             <p className="py-2 text-center text-xs text-ink-muted">
-              No images in your library yet — upload a PNG on the Images panel first.
+              No images in your library yet — drop a PNG below.
             </p>
+          }
+          footer={
+            <GallerySlotUploader
+              artistId={artistId}
+              orientation="horizontal"
+              label="Drop a cursor PNG or click to upload"
+              onUploaded={(m) => {
+                onChange(mediaUrl(m.storage_path))
+                setPicking(false)
+              }}
+            />
           }
           onPick={(p) => {
             onChange(mediaUrl(p.storage_path))
