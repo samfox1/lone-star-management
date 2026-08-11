@@ -295,6 +295,10 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   if (m) return { textDecorationThickness: `${m[1]}px` };
   m = token.match(/^underoffset-\[(-?\d{1,2})px\]$/);
   if (m) return { textUnderlineOffset: `${m[1]}px` };
+  // Entrance speed rides a custom property the effects rules read — the class stays
+  // compiled CSS, the knob lifts inline like every other slider.
+  m = token.match(/^enterdur-\[(\d{3,4})ms\]$/);
+  if (m) return { "--lse-enter-duration": `${m[1]}ms` };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
@@ -349,6 +353,7 @@ export const MANAGED_STYLE_PROPS = [
   "backdrop-filter",
   "-webkit-backdrop-filter",
   "padding",
+  "--lse-enter-duration",
 ] as const;
 
 export type ResolvedStyle = {

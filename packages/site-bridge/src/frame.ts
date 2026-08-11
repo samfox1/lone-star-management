@@ -48,6 +48,7 @@ import {
 } from "./protocol";
 import type { PublicSitePayload } from "./payload";
 import { applyCursor, cursorSettingsFrom, normalizeCursorSettings } from "./cursor";
+import { mountEntrances, replayEntrances } from "./entrances";
 import type { LibraryAsset, TemplateManifest } from "./manifest";
 import { textFieldKeys } from "./manifest";
 
@@ -616,8 +617,12 @@ export function mountFrameBridge(options: {
     const key = strField(msg, "key");
     if (msg.type === "apply-style") {
       const className = strField(msg, "className");
-      if (key !== null && className !== null)
+      if (key !== null && className !== null) {
         styler.applyStyleToDom(document, key, className);
+        // Picking an entrance should SHOW it — replay the animation for the region(s)
+        // just styled (a key is [A-Za-z0-9_], safe to interpolate).
+        replayEntrances(document, `[data-lse-style="${key}"]`);
+      }
     }
     // apply-image has its OWN helper. It used to share applyFieldToDom, which writes
     // textContent for a non-URL value — so a cleared slot would have blanked the
@@ -675,6 +680,10 @@ export function mountFrameBridge(options: {
    */
   document.addEventListener("click", onClick, true);
   window.addEventListener("message", onMessage);
+  // The preview animates like the live site: regions with a stored entrance class
+  // play as they scroll into view. Idempotent — a site that mounted its own runtime
+  // (SiteEffects) is simply re-armed.
+  const unmountEntrances = mountEntrances(document);
   const announceOnce = () => {
     post(stamp({ type: "ready", manifest: manifest() }));
     // Counted OUTSIDE the optional call: `options.onStatus?.({ n: ++attempts })` skips
@@ -700,6 +709,7 @@ export function mountFrameBridge(options: {
   return () => {
     stopAnnouncing();
     cancelWait?.(); // a reveal in flight must not outlive the bridge it belongs to
+    unmountEntrances();
     document.removeEventListener("click", onClick, true);
     window.removeEventListener("message", onMessage);
   };

@@ -54,6 +54,10 @@
     "./cursor": {
       "types": "./src/cursor.ts",
       "default": "./src/cursor.ts"
+    },
+    "./entrances": {
+      "types": "./src/entrances.ts",
+      "default": "./src/entrances.ts"
     }
   },
   "files": [

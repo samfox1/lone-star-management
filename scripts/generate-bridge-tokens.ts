@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 // the tables that generate an append-only-forever artifact belong beside it, versioned
 // with it. This script is the CLI shell — @source wrapping, the baseline ratchet, file
 // writes — around the package's own classVocabulary().
-import { classVocabulary as packageVocabulary } from '@samfox1/site-bridge/vocabulary'
+import { classVocabulary as packageVocabulary, effectsCss } from '@samfox1/site-bridge/vocabulary'
 import { LEGACY_TO_FLUID } from '@samfox1/site-bridge/styles'
 
 /** The compilable class set: the package's derivation plus the legacy-size belt. */
@@ -70,6 +70,13 @@ export function buildTokensCss(): string {
  * editor; its token never leaves this file.
  */
 ${lines.join('\n')}
+
+/* ── Effects (slice 3) — REAL rules, not @source safelisting: entrances and hover
+ * states need CSS no utility framework compiles (keyframe-free transitions gated on
+ * html[data-lse-entrances], :hover rules). Derived from the same vocabulary module
+ * (effectsCss) and under the same append-only contract as the lines above. Entrances
+ * only hide anything while the runtime (entrances.ts) has armed the document. */
+${effectsCss()}
 `
 }
 

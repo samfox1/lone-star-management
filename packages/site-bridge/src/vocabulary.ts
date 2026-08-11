@@ -250,6 +250,97 @@ function pctSteps0(prefix: string, from: number, to: number, step: number): Styl
   return out
 }
 
+/* ── Slice-3: entrance animations + hover states (2026-08-11, Sam: "Lets move to
+ * slice 3"). Neither can lift to inline style — no inline `:hover`, no inline
+ * keyframes — so these are REAL CSS classes: effectsCss() below generates their rules
+ * and the tokens.css generator appends the block to the same file every site already
+ * imports. Entrances additionally need the runtime (entrances.ts): the hidden state is
+ * guarded by `html[data-lse-entrances]`, which only the runtime sets — a site that
+ * never mounts it shows everything, instead of hiding content forever. */
+
+export const ENTRANCE_OPTIONS: StyleOption[] = [
+  { value: '', label: 'None' },
+  { value: 'enter-fade', label: 'Fade in' },
+  { value: 'enter-rise', label: 'Rise' },
+  { value: 'enter-fall', label: 'Drop' },
+  { value: 'enter-slide-left', label: 'From the left' },
+  { value: 'enter-slide-right', label: 'From the right' },
+  { value: 'enter-zoom', label: 'Zoom' },
+  { value: 'enter-blur', label: 'Focus' },
+]
+
+export const HOVER_OPTIONS: StyleOption[] = [
+  { value: '', label: 'None' },
+  { value: 'hover-grow', label: 'Grow' },
+  { value: 'hover-shrink', label: 'Shrink' },
+  { value: 'hover-lift', label: 'Lift' },
+  { value: 'hover-tilt', label: 'Tilt' },
+  { value: 'hover-brighten', label: 'Brighten' },
+  { value: 'hover-glow', label: 'Glow' },
+]
+
+/** Entrance speed: `enterdur-[Nms]` lifts to the `--lse-enter-duration` custom
+ *  property inline, which the entrance rules read — so speed works on deployed sites
+ *  without recompiling, like every other slider. `''` (the 0.7s default) sits at its
+ *  own position on the scale, like Tilt's 0°. */
+export const ENTRANCE_SPEED_STEPS: StyleOption[] = Array.from({ length: 19 }, (_, i) => {
+  const ms = 200 + i * 100
+  return { value: ms === 700 ? '' : `enterdur-[${ms}ms]`, label: `${(ms / 1000).toFixed(1)}s` }
+})
+
+/** The hidden ("from") state of each entrance; the entered state is the element's own. */
+const ENTRANCE_HIDDEN: Record<string, string> = {
+  'enter-fade': 'opacity:0',
+  'enter-rise': 'opacity:0;transform:translateY(28px)',
+  'enter-fall': 'opacity:0;transform:translateY(-28px)',
+  'enter-slide-left': 'opacity:0;transform:translateX(-36px)',
+  'enter-slide-right': 'opacity:0;transform:translateX(36px)',
+  'enter-zoom': 'opacity:0;transform:scale(0.9)',
+  'enter-blur': 'opacity:0;filter:blur(10px)',
+}
+
+/** What each hover class does while hovered. `filter`-based ones lose to an INLINE
+ *  filter from the effect sliders (inline always wins) — a real edge, chosen over
+ *  `!important`, which would break the sliders the other way round. */
+const HOVER_RULE: Record<string, string> = {
+  'hover-grow': 'transform:scale(1.05)',
+  'hover-shrink': 'transform:scale(0.95)',
+  'hover-lift': 'transform:translateY(-6px);box-shadow:0 14px 28px rgb(0 0 0 / 0.18)',
+  'hover-tilt': 'transform:rotate(2deg) scale(1.02)',
+  'hover-brighten': 'filter:brightness(1.15)',
+  'hover-glow': 'filter:drop-shadow(0 0 10px currentColor)',
+}
+
+/**
+ * The effects stylesheet, derived from the option tables above. THROWS on an option
+ * with no rule — an entrance in the panel whose CSS never shipped would be a select
+ * that silently does nothing, which is the exact drift tokens.css exists to prevent.
+ * Same append-only contract as the @source lines: rules may be added, never removed.
+ */
+export function effectsCss(): string {
+  const out: string[] = []
+  const durations = 'var(--lse-enter-duration, 0.7s)'
+  for (const o of ENTRANCE_OPTIONS) {
+    if (o.value === '') continue
+    const hidden = ENTRANCE_HIDDEN[o.value]
+    if (!hidden) throw new Error(`entrance option without CSS: ${o.value}`)
+    out.push(
+      `.${o.value}{transition:opacity ${durations} ease,transform ${durations} ease,filter ${durations} ease}`,
+      `html[data-lse-entrances] .${o.value}:not([data-lse-entered]){${hidden}}`,
+    )
+  }
+  for (const o of HOVER_OPTIONS) {
+    if (o.value === '') continue
+    const rule = HOVER_RULE[o.value]
+    if (!rule) throw new Error(`hover option without CSS: ${o.value}`)
+    out.push(
+      `.${o.value}{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}`,
+      `.${o.value}:hover{${rule}}`,
+    )
+  }
+  return out.join('\n')
+}
+
 export const SHADOW_STEPS: StyleOption[] = [
   { value: '', label: 'None' },
   { value: 'shadow-sm', label: 'XS' },
@@ -297,6 +388,12 @@ export const VOCABULARY: { id: string; origin: "section" | "item"; options: Styl
   { id: "shape", origin: "item", options: SHAPE_STEPS },
   { id: "feather", origin: "item", options: FEATHER_STEPS },
   { id: "textStroke", origin: "section", options: TEXT_STROKE_STEPS },
+  // Slice-3 classes must survive the FULL lift (the stricter context — the section
+  // colour-lift can't touch them either way); enterdur lifts inline, so its tokens
+  // drop out of tokens.css automatically.
+  { id: "entrance", origin: "item", options: ENTRANCE_OPTIONS },
+  { id: "hover", origin: "item", options: HOVER_OPTIONS },
+  { id: "entranceSpeed", origin: "item", options: ENTRANCE_SPEED_STEPS },
 ];
 
 /** Does this token survive AS A CLASS in the context it is emitted for? Section

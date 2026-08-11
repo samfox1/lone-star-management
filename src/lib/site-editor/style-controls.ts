@@ -50,6 +50,9 @@ import {
   PAD_STEPS,
   DECO_THICKNESS_STEPS,
   DECO_OFFSET_STEPS,
+  ENTRANCE_OPTIONS,
+  ENTRANCE_SPEED_STEPS,
+  HOVER_OPTIONS,
   TEXT_STROKE_STEPS,
   RADIUS_STEPS,
   SCALE_STEPS,
@@ -424,6 +427,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   })
   controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: CASE_TOGGLE_CLASS, owns: (t) => t === CASE_TOGGLE_CLASS })
   controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: ITALIC_TOGGLE_CLASS, owns: (t) => t === ITALIC_TOGGLE_CLASS })
+  controls.push(...motionControls())
   return controls
 }
 
@@ -560,6 +564,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
   controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
+  controls.push(...motionControls())
   return controls
 }
 
@@ -640,6 +645,25 @@ export function sliderIndex(
   return { idx: middle, label: 'Default', exact: false }
 }
 
+/** Entrance-speed tokens measure in ms; '' is the CSS default (700ms), a real point
+ *  on the scale like Tilt's 0. */
+const msRank = (t: string): number | null => {
+  if (t === '') return 700
+  const m = /-\[(\d+)ms\]$/.exec(t)
+  return m ? Number(m[1]) : null
+}
+
+/** Slice-3 motion (2026-08-11): entrance + its speed + hover, on every styleable
+ *  surface. The classes are compiled CSS (tokens.css effects block), the speed lifts
+ *  inline — see vocabulary.ts. */
+function motionControls(): StyleControl[] {
+  return [
+    { id: 'entrance', label: 'Entrance', kind: 'select', options: ENTRANCE_OPTIONS, owns: (t) => t.startsWith('enter-') },
+    { id: 'entranceSpeed', label: 'Entrance speed', kind: 'slider', steps: ENTRANCE_SPEED_STEPS, rank: msRank, owns: (t) => t.startsWith('enterdur-[') },
+    { id: 'hover', label: 'On hover', kind: 'select', options: HOVER_OPTIONS, owns: (t) => t.startsWith('hover-') },
+  ]
+}
+
 export function buildItemStyleControls(): StyleControl[] {
   return [
     { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') },
@@ -656,6 +680,7 @@ export function buildItemStyleControls(): StyleControl[] {
     { id: 'shape', label: 'Shape', kind: 'select', options: SHAPE_STEPS, owns: (t) => t.startsWith('shape-') },
     { id: 'feather', label: 'Feather', kind: 'slider', steps: FEATHER_STEPS, rank: pctRank0('feather'), owns: (t) => /^feather-\d/.test(t) },
     { id: 'pad', label: 'Matte', kind: 'slider', steps: PAD_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('pad-[') },
+    ...motionControls(),
   ]
 }
 
@@ -787,6 +812,8 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
       // A full-bleed background still has PIXELS — dim it, desaturate it, soften it
       // under the text. What it lacks is a visible BOX, so size/corners/shadow/tilt
       // stay out (Sam, 2026-08-10: these slots had "only speed and transparency").
+      // Motion stays out too: nothing hovers a full-bleed background, and an
+      // entrance on the page's backdrop reads as a broken load, not a reveal.
       ...filterControls(),
     ]
   }
@@ -802,6 +829,7 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
     tiltControl(),
     { id: 'shape', label: 'Shape', kind: 'select', options: SHAPE_STEPS, owns: (t) => t.startsWith('shape-') },
     { id: 'feather', label: 'Feather', kind: 'slider', steps: FEATHER_STEPS, rank: pctRank0('feather'), owns: (t) => /^feather-\d/.test(t) },
+    ...motionControls(),
   ]
 }
 

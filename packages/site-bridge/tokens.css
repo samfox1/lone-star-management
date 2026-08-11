@@ -29,6 +29,13 @@
 @source inline("!leading-relaxed");
 @source inline("!leading-snug");
 @source inline("!leading-tight");
+@source inline("enter-blur");
+@source inline("enter-fade");
+@source inline("enter-fall");
+@source inline("enter-rise");
+@source inline("enter-slide-left");
+@source inline("enter-slide-right");
+@source inline("enter-zoom");
 @source inline("font-black");
 @source inline("font-bold");
 @source inline("font-extrabold");
@@ -38,6 +45,12 @@
 @source inline("font-normal");
 @source inline("font-semibold");
 @source inline("font-thin");
+@source inline("hover-brighten");
+@source inline("hover-glow");
+@source inline("hover-grow");
+@source inline("hover-lift");
+@source inline("hover-shrink");
+@source inline("hover-tilt");
 @source inline("italic");
 @source inline("text-2xl");
 @source inline("text-3xl");
@@ -86,3 +99,35 @@
 @source inline("tracking-wider");
 @source inline("tracking-widest");
 @source inline("uppercase");
+
+/* ── Effects (slice 3) — REAL rules, not @source safelisting: entrances and hover
+ * states need CSS no utility framework compiles (keyframe-free transitions gated on
+ * html[data-lse-entrances], :hover rules). Derived from the same vocabulary module
+ * (effectsCss) and under the same append-only contract as the lines above. Entrances
+ * only hide anything while the runtime (entrances.ts) has armed the document. */
+.enter-fade{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-fade:not([data-lse-entered]){opacity:0}
+.enter-rise{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-rise:not([data-lse-entered]){opacity:0;transform:translateY(28px)}
+.enter-fall{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-fall:not([data-lse-entered]){opacity:0;transform:translateY(-28px)}
+.enter-slide-left{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-slide-left:not([data-lse-entered]){opacity:0;transform:translateX(-36px)}
+.enter-slide-right{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-slide-right:not([data-lse-entered]){opacity:0;transform:translateX(36px)}
+.enter-zoom{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-zoom:not([data-lse-entered]){opacity:0;transform:scale(0.9)}
+.enter-blur{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
+html[data-lse-entrances] .enter-blur:not([data-lse-entered]){opacity:0;filter:blur(10px)}
+.hover-grow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-grow:hover{transform:scale(1.05)}
+.hover-shrink{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-shrink:hover{transform:scale(0.95)}
+.hover-lift{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-lift:hover{transform:translateY(-6px);box-shadow:0 14px 28px rgb(0 0 0 / 0.18)}
+.hover-tilt{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-tilt:hover{transform:rotate(2deg) scale(1.02)}
+.hover-brighten{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-brighten:hover{filter:brightness(1.15)}
+.hover-glow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease}
+.hover-glow:hover{filter:drop-shadow(0 0 10px currentColor)}

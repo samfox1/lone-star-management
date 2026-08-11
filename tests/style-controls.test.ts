@@ -45,11 +45,14 @@ describe('buildStyleControls', () => {
     // inline, so they need no site palette and no compiled classes.
     // Slice-2 (2026-08-11) widened the universal set again: decorations, the two
     // gradient pairs, frost and padding — all inline-lifted, so none need a palette.
+    // Slice-3 (2026-08-11) adds motion: entrance/hover ride tokens.css's effects
+    // block (compiled everywhere tokens.css is), speed lifts inline — still no palette.
     expect(bare).toEqual([
       'size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow',
       'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
       'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
+      'entrance', 'entranceSpeed', 'hover',
     ])
   })
 })
@@ -65,6 +68,7 @@ describe('buildItemStyleControls (per-image/video)', () => {
       'size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow',
       'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
       'shape', 'feather', 'pad',
+      'entrance', 'entranceSpeed', 'hover',
     ])
   })
 
