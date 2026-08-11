@@ -180,9 +180,6 @@ export function EditorShell({
   uploadedFonts?: { family: string; label: string }[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
-  // EDIT is the default: a manager opens this to change things, and browse is the escape
-  // hatch for reaching a part of the site their clicks cannot otherwise get to.
-  const [frameMode, setFrameModeState] = useState<FrameMode>('edit')
   const panelRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState({ w: 0, h: 0 })
 
@@ -200,6 +197,7 @@ export function EditorShell({
     applyHighlight,
     clearHighlight,
     setMode,
+    frameMode,
     manifest,
     selectedStyle,
     selectedLink,
@@ -236,8 +234,7 @@ export function EditorShell({
    *  a panel still showing a selected region while clicks work the site reads as a
    *  control that has stopped responding. */
   const setFrameMode = (m: FrameMode) => {
-    setFrameModeState(m)
-    setMode(m)
+    setMode(m) // the hook owns the state — it must survive frame reloads (see the hook)
     if (m === 'browse') clearHighlight()
   }
 

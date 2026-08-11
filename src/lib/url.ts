@@ -73,3 +73,21 @@ export function isContactLink(url: string | null | undefined): boolean {
   const scheme = url.trim().replace(CONTROL_AND_SPACE, '').toLowerCase()
   return scheme.startsWith('mailto:') || scheme.startsWith('tel:')
 }
+
+/**
+ * A bare email address typed where a URL was expected — a contact address the manager
+ * did not think to prefix with `mailto:` (the live data already holds one: skeen's
+ * booking row, audited 2026-08-10).
+ *
+ * SLASHES ARE EXCLUDED, and that is the whole subtlety: an anchored
+ * `^[^\s@]+@[^\s@]+\.[^\s@]+$` also matches `https://zine.example/contact@x.com`,
+ * because a URL contains no spaces and often exactly one `@`. An email has no `/`.
+ *
+ * Lives beside `isContactLink` because the two must be consulted TOGETHER wherever
+ * "is this row a contact, not a social" is asked — the add rule and the panel grouping
+ * answering differently strands a row in a group no site renders.
+ */
+export function looksLikeEmail(url: string | null | undefined): boolean {
+  if (typeof url !== 'string') return false
+  return /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(url.trim())
+}

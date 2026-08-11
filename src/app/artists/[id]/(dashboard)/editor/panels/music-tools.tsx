@@ -103,7 +103,10 @@ export function MusicTools({
                         // (Sam, 2026-08-10, on a site of singles). One song = no
                         // ambiguity about which is meant; multi-song cards still only
                         // expand, because there it is genuinely unknown.
-                        if (r.songs.length === 1) onFocus?.({ kind: 'item', assetType: 'track', id: r.songs[0].id })
+                        // Only when OPENING. The same click collapses an open card, and
+                        // re-highlighting a song the manager is putting away reads as
+                        // the panel refusing to let go (2026-08-10 review).
+                        if (!isOpen && r.songs.length === 1) onFocus?.({ kind: 'item', assetType: 'track', id: r.songs[0].id })
                       }}
                       className="block w-full text-left"
                     >

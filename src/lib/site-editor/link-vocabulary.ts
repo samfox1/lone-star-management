@@ -24,7 +24,7 @@
  * page's form) without constraining the primitive.
  */
 import { socialPlatform, socialSlug } from '@samfox1/site-bridge/social'
-import { isContactLink } from '@/lib/url'
+import { isContactLink, looksLikeEmail } from '@/lib/url'
 
 /**
  * Why this link may not be added, or null when it may.
@@ -37,9 +37,8 @@ export function linkAddError(existingLabels: readonly string[], label: string, u
   // A blank label is a column constraint, not a vocabulary problem. Answering here would
   // turn a NOT NULL violation into a confusing "already on this site".
   if (!slug) return null
-  // A booking address is not a social. `isContactLink` only knows the mailto:/tel:
-  // SCHEMES, and the live data has a booking row whose url is a bare address
-  // ("ross.guignon@…"), which a manager will type again — so a bare email counts too.
+  // A booking address is not a social — schemes AND bare addresses (see looksLikeEmail
+  // in lib/url.ts, which also explains the slash rule).
   if (isContactLink(url) || looksLikeEmail(url)) return null
 
   if (!socialPlatform(label)) return `“${label.trim()}” isn’t a platform we know. Pick one from the list.`
@@ -47,18 +46,3 @@ export function linkAddError(existingLabels: readonly string[], label: string, u
   return null
 }
 
-/**
- * A bare email address typed where a URL was expected.
- *
- * SLASHES ARE EXCLUDED, and that is the whole subtlety: an anchored
- * `^[^\s@]+@[^\s@]+\.[^\s@]+$` also matches
- * `https://zine.example/contact@x.com`, because a URL contains no spaces and often
- * exactly one `@` — so any link with an address in its path would have slipped through
- * the vocabulary rule as if it were a booking address. An email has no `/`.
- *
- * Still deliberately loose beyond that: this only decides "not a social", and the URL
- * columns and `safeHref` judge the value itself.
- */
-function looksLikeEmail(url: string): boolean {
-  return /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(url.trim())
-}

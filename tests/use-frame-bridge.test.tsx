@@ -297,3 +297,29 @@ describe('hello — the editor asks until the frame answers', () => {
     expect(posted(frame, 'init-data')[0][1]).toBe(CUSTOM)
   })
 })
+
+describe('the editor’s mode survives a frame reload', () => {
+  const CUSTOM_SITE = 'https://site.example'
+
+  it('CRITICAL: a fresh `ready` re-asserts browse — the toolbar and the frame cannot split', () => {
+    // 2026-08-10 review. The frame resets to `edit` whenever its page reloads, and in
+    // browse mode every NAVIGATION is a reload. Without the re-send, the toolbar said
+    // Browse while every click selected regions — the exact confusion the toggle exists
+    // to prevent.
+    const { result, frame } = mount({ customSiteUrl: CUSTOM_SITE })
+    act(() => result.current.setMode('browse'))
+    expect(posted(frame, 'set-mode')).toHaveLength(1)
+
+    // The site navigates; the new page announces itself.
+    frameSays({ type: 'ready' }, CUSTOM_SITE)
+    const modes = posted(frame, 'set-mode')
+    expect(modes).toHaveLength(2)
+    expect((modes[1][0] as { mode?: string }).mode).toBe('browse')
+  })
+
+  it('in edit mode a fresh `ready` sends nothing extra — edit is the frame’s own default', () => {
+    const { frame } = mount({ customSiteUrl: CUSTOM_SITE })
+    frameSays({ type: 'ready' }, CUSTOM_SITE)
+    expect(posted(frame, 'set-mode')).toHaveLength(0)
+  })
+})

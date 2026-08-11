@@ -707,6 +707,20 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     expect(screen.queryByLabelText(/Link for Gudfella/)).toBeNull()
   })
 
+  it('a BARE-email link routes to Contact too — the add rule and the grouping agree', () => {
+    // 2026-08-10 review. linkAddError exempts bare addresses (skeen's live booking row
+    // has one), but the grouping only knew the mailto:/tel: SCHEMES — so a bare-email
+    // row was allowed in and then filed under Socials, which every site filters to
+    // icons it can draw. Allowed in and rendered nowhere is the worst of both rules.
+    const bare: EditorLink = { id: 'l8', label: 'Booking email', url: 'ross@everesttm.com', onSite: true }
+    openLinks({ links: [...LINKS, bare] })
+    expect(screen.getByText('Contact')).toBeTruthy()
+    const headings = [...document.querySelectorAll('aside span')]
+      .map((sp) => sp.textContent)
+      .filter((t) => t === 'Socials' || t === 'Contact')
+    expect(headings).toEqual(['Socials', 'Contact'])
+  })
+
   it('routes a mailto:/tel: link out of Socials into its own "Contact" group', () => {
     const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
     openLinks({ links: [...LINKS, booking] })
@@ -1604,6 +1618,19 @@ describe('EditorInspector — a single-song project card IS its song', () => {
     fireEvent.click(screen.getByRole('button', { name: /Music/ }))
     fireEvent.click(screen.getByRole('button', { name: /Signal Lost — / }))
     expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'track', id: 's9' })
+  })
+
+  it('collapsing an open single does NOT re-select — the click is a put-away', () => {
+    const onHighlight = vi.fn()
+    renderInspector([], {
+      releases: [{ key: 'r9', title: 'Signal Lost', cover_url: null, kind: 'single', onSite: true, songs: [{ id: 's9', title: 'Signal Lost' }] }],
+      onHighlight,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+    const card = screen.getByRole('button', { name: /Signal Lost — / })
+    fireEvent.click(card) // open + select
+    fireEvent.click(card) // close — must not select again
+    expect(onHighlight).toHaveBeenCalledTimes(1)
   })
 
   it('a MULTI-song card still only expands — which song is meant is genuinely unknown', () => {

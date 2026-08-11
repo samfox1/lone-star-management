@@ -14,7 +14,14 @@ import {
 import { buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mediaUrl } from '@/lib/storage-url'
-import { isContactLink } from '@/lib/url'
+import { isContactLink, looksLikeEmail } from '@/lib/url'
+
+/** One row is a CONTACT — a booking address, not a social — whether it was typed with a
+ *  scheme or as a bare address. The add rule (linkAddError) exempts the same pair, so a
+ *  row it lets in always has a group that renders it; splitting the two predicates is
+ *  how a bare-email row ended up filed under Socials, which no site draws
+ *  (2026-08-10 review). */
+const isContactish = (url: string) => isContactLink(url) || looksLikeEmail(url)
 import { Icon, type IconName } from '@/components/ui/icons'
 import { ItemEditor, type PickCandidate } from './item-editor'
 import { AddFirstLink, CardThumb, PhotoThumb, fileNameOf } from './inspector-grid'
@@ -1144,7 +1151,7 @@ function EditingView({
           <>
             <GroupLabel>Socials</GroupLabel>
             <LinkTools
-              links={links.filter((l) => !isContactLink(l.url))}
+              links={links.filter((l) => !isContactish(l.url))}
               group="Social"
               artistId={artistId}
               onRemove={onRemoveLink}
@@ -1155,11 +1162,11 @@ function EditingView({
             {/* A booking address is a contact route, not a profile to follow, so it gets
                 its own group instead of sitting among the socials. Split by SCHEME
                 (mailto:/tel:), not by label — the link says what it is. */}
-            {links.some((l) => isContactLink(l.url)) && (
+            {links.some((l) => isContactish(l.url)) && (
               <>
                 <GroupLabel>Contact</GroupLabel>
                 <LinkTools
-                  links={links.filter((l) => isContactLink(l.url))}
+                  links={links.filter((l) => isContactish(l.url))}
                   group="Contact"
                   artistId={artistId}
                   onRemove={onRemoveLink}

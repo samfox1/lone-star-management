@@ -547,7 +547,15 @@ export function mountFrameBridge(options: {
    * exactly as before — the reveal is a capability a site opts into, not a handshake
    * both halves must agree on.
    */
+  /** The one pending reveal wait, if any. ONE, not a list: a wait belongs to the
+   *  manager's LATEST selection, and an older one completing later would re-ring a
+   *  region they have already moved on from (2026-08-10 review — the tab's content
+   *  mounting for any reason at all would have stolen the ring back). */
+  let cancelWait: (() => void) | null = null;
+
   const revealAndHighlight = (target: SelectTarget) => {
+    // Whatever was being waited for, this selection supersedes it.
+    cancelWait?.();
     const found = applyHighlightToDom(document, target);
     if (found) return found.scrollIntoView({ behavior: "smooth", block: "center" });
     // Nothing matched. If the site can show it, ask — then wait for it to arrive.
@@ -571,6 +579,7 @@ export function mountFrameBridge(options: {
     const finish = (el: Element | null) => {
       if (settled) return;
       settled = true;
+      cancelWait = null;
       observer.disconnect();
       clearTimeout(timer);
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -583,6 +592,12 @@ export function mountFrameBridge(options: {
     // A reveal is a click's worth of work — a tab switch, an accordion. Anything slower
     // than this is a site doing something the manager will not connect to their click.
     const timer = setTimeout(() => finish(null), REVEAL_TIMEOUT_MS);
+    cancelWait = () => {
+      settled = true;
+      cancelWait = null;
+      observer.disconnect();
+      clearTimeout(timer);
+    };
   };
 
   const onMessage = (e: MessageEvent) => {
@@ -617,7 +632,12 @@ export function mountFrameBridge(options: {
     } else if (msg.type === "init-data" && "site" in msg)
       options.onInitData(msg.site);
     else if (msg.type === "highlight" && "target" in msg) revealAndHighlight(msg.target);
-    else if (msg.type === "clear-highlight") clearHighlightFromDom(document);
+    else if (msg.type === "clear-highlight") {
+      // A deselect also abandons any reveal in flight — the wait belongs to a selection
+      // that no longer exists.
+      cancelWait?.();
+      clearHighlightFromDom(document);
+    }
     else if (msg.type === "set-mode" && "mode" in msg) {
       mode = msg.mode === "browse" ? "browse" : "edit";
       // Leaving edit mode drops the outline with it: a ring around something the manager
@@ -665,6 +685,7 @@ export function mountFrameBridge(options: {
 
   return () => {
     stopAnnouncing();
+    cancelWait?.(); // a reveal in flight must not outlive the bridge it belongs to
     document.removeEventListener("click", onClick, true);
     window.removeEventListener("message", onMessage);
   };

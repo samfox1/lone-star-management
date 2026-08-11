@@ -68,6 +68,8 @@ export type FrameBridge = {
   clearHighlight: () => void
   /** Switch the frame between selecting regions and working the site (`set-mode`). */
   setMode: (mode: FrameMode) => void
+  /** The mode as the editor last set it — the toolbar's source of truth. */
+  frameMode: FrameMode
   /** A custom site's own edit-list, received on `ready` (D-D). Null for a built-in
    *  template, which has none to send. */
   manifest: TemplateManifest | null
@@ -99,6 +101,12 @@ export function useFrameBridge({
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
   const [selectedRegion, setSelectedRegion] = useState<{ target: SelectTarget; nonce: number } | null>(null)
+  /** Whether a click in the frame SELECTS a region or works the site. Owned HERE, not in
+   *  the shell, because the FRAME resets to `edit` whenever its page reloads — and in
+   *  browse mode every navigation is a reload. The `ready` handler below re-sends the
+   *  current mode so the frame and the toolbar cannot disagree (2026-08-10 review). */
+  const [frameMode, setFrameModeState] = useState<FrameMode>('edit')
+  const frameModeRef = useRef<FrameMode>('edit')
 
   // Resolved lazily: `window` only exists in the browser, and every caller below
   // runs client-side.
@@ -125,7 +133,14 @@ export function useFrameBridge({
   const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
   /** Whether a click in the frame SELECTS a region or works the site. See the protocol's
    *  `set-mode`: a site with navigation is unbrowsable while every click is swallowed. */
-  const setMode = useCallback((mode: FrameMode) => post({ type: 'set-mode', mode }), [post])
+  const setMode = useCallback(
+    (mode: FrameMode) => {
+      frameModeRef.current = mode
+      setFrameModeState(mode)
+      post({ type: 'set-mode', mode })
+    },
+    [post],
+  )
 
   /** The draft last handed to the frame, so the `ready` handler and the connected
    *  effect below (either of which may fire first) don't each post the largest message
@@ -145,6 +160,13 @@ export function useFrameBridge({
       if (msg.type === 'ready') {
         // `ready`, not the iframe's `load`: load can fire before the frame's bridge
         // has mounted its listener, and the draft would land in the void.
+        //
+        // A fresh `ready` can also mean the frame RELOADED — in browse mode every
+        // navigation is one — and a reloaded frame starts back in `edit`. Re-assert the
+        // editor's mode, or the toolbar says Browse while clicks select (via the ref:
+        // this listener must not re-subscribe per mode change).
+        if (frameModeRef.current !== 'edit')
+          frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'set-mode', mode: frameModeRef.current }), origin)
         if (msg.manifest) setManifest(msg.manifest)
         if (draft) {
           deliveredDraft.current = draft
@@ -221,6 +243,7 @@ export function useFrameBridge({
     applyHighlight,
     clearHighlight,
     setMode,
+    frameMode,
     manifest,
     selectedStyle,
     selectedLink,

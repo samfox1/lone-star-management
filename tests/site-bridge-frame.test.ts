@@ -1164,3 +1164,61 @@ describe('reveal — highlighting a region that is not on the page', () => {
     }
   })
 })
+
+describe('a pending reveal belongs to the LATEST selection only', () => {
+  it('CRITICAL: a newer highlight cancels an older wait — the ring never travels back', async () => {
+    // 2026-08-10 review. Waits used to accumulate: select hidden A, then select mounted
+    // B — when A's tab content later mounted for ANY reason, A's observer fired and
+    // applyHighlightToDom(A) cleared B's ring. The manager's current selection lost its
+    // outline to one they had abandoned.
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      target,
+      onReveal: () => {}, // reveals nothing yet — A stays hidden
+    })
+
+    const b = document.createElement('div')
+    b.setAttribute(FIELD_ATTR, 'b-present')
+    document.body.appendChild(b)
+
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'a-hidden' } }) // wait starts
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'b-present' } }) // supersedes it
+    expect(b.hasAttribute(HIGHLIGHT_ATTR)).toBe(true)
+
+    // A's element arrives late. The cancelled wait must NOT steal the ring.
+    const a = document.createElement('div')
+    a.id = 'late-a'
+    a.setAttribute(FIELD_ATTR, 'a-hidden')
+    document.body.appendChild(a)
+    await new Promise((r) => setTimeout(r, 50)) // let any observer fire
+    expect(b.hasAttribute(HIGHLIGHT_ATTR), 'B keeps its ring').toBe(true)
+    expect(a.hasAttribute(HIGHLIGHT_ATTR), 'A must not ring').toBe(false)
+
+    stop()
+    a.remove()
+    b.remove()
+  })
+
+  it('CRITICAL: clear-highlight abandons the wait too', async () => {
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      target,
+      onReveal: () => {},
+    })
+    editorSays({ type: 'highlight', target: { kind: 'field', key: 'gone' } })
+    editorSays({ type: 'clear-highlight' })
+
+    const el = document.createElement('div')
+    el.id = 'late-gone'
+    el.setAttribute(FIELD_ATTR, 'gone')
+    document.body.appendChild(el)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(el.hasAttribute(HIGHLIGHT_ATTR)).toBe(false)
+    stop()
+    el.remove()
+  })
+})
