@@ -176,14 +176,17 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
   };
   setResting();
   cleanups.push(() => root.style.removeProperty("cursor"));
+  // Declared BEFORE the loader call: fittedCursorUrl calls back synchronously when its
+  // cache is warm (every apply after the first), and the callback reads `pressed` —
+  // declared after, that read is a temporal-dead-zone crash that took down the whole
+  // edit frame (Juniper, 2026-08-11).
+  let pressed = false;
   if (settings.image)
     fittedCursorUrl(doc, settings.image, (fitted) => {
       if (disposed) return;
       restingValue = cursorValue(fitted);
       if (!pressed) setResting();
     });
-
-  let pressed = false;
   if (settings.clickImage && win) {
     let clickValue = cursorValue(settings.clickImage);
     fittedCursorUrl(doc, settings.clickImage, (fitted) => {

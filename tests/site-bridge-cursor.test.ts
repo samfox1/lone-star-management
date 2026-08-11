@@ -5,7 +5,7 @@
  * the frame's `apply-cursor` / `init-data` routing, and the editor-side value gate
  * (cursorValueError) that stands between the Site panel and the CSS url() sink.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CURSOR_CONTENT_KEYS,
   CURSOR_TRAIL_STYLES,
@@ -91,6 +91,45 @@ describe('applyCursor — the DOM contract', () => {
     applyCursor(document, NONE)
     document.dispatchEvent(new Event('pointerdown'))
     expect(document.documentElement.style.cursor).toBe('')
+  })
+
+  it('CRITICAL: re-applying a cached (fitted) image does not crash the apply', () => {
+    // fittedCursorUrl calls back SYNCHRONOUSLY once its cache is warm — which is every
+    // apply after the first, i.e. the editor's second init-data. jsdom's Image never
+    // fires onload, so stand in a deferrable Image and a working canvas: apply once,
+    // let the "download" land (warming the cache with a fitted value), tear down, apply
+    // again. The second apply's callback fired in `pressed`'s temporal dead zone before
+    // the fix ("Cannot access 'f' before initialization") and took the edit frame down.
+    // The first-apply sync path won't do: the loader's canvas try/catch swallows it.
+    const loads: (() => void)[] = []
+    class DeferredImage {
+      naturalWidth = 128
+      naturalHeight = 128
+      crossOrigin = ''
+      onload: (() => void) | null = null
+      set src(_v: string) {
+        loads.push(() => this.onload?.())
+      }
+    }
+    vi.stubGlobal('Image', DeferredImage)
+    const proto = HTMLCanvasElement.prototype
+    const getContext = proto.getContext
+    const toDataURL = proto.toDataURL
+    proto.getContext = (() => ({ drawImage() {} })) as never
+    proto.toDataURL = () => 'data:image/png;base64,fitted'
+    try {
+      const settings = { ...NONE, image: 'https://x.test/big-cursor.png' }
+      applyCursor(document, settings)
+      loads.splice(0).forEach((fire) => fire()) // the image arrives; the cache warms
+      applyCursor(document, NONE) // teardown, as a fresh init-data causes
+      expect(() => applyCursor(document, settings)).not.toThrow()
+      // and the fitted (downscaled) value is what actually landed, synchronously
+      expect(document.documentElement.style.cursor).toContain('data:image/png')
+    } finally {
+      vi.unstubAllGlobals()
+      proto.getContext = getContext
+      proto.toDataURL = toDataURL
+    }
   })
 
   it('CRITICAL: a dots trail spawns fading nodes as the pointer moves', () => {
