@@ -344,9 +344,11 @@ export function EditorShell({
             <button
               type="button"
               onClick={replayMotion}
-              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
+              aria-label="Replay motion"
+              title="Replay motion"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-hairline bg-paper text-ink-faint hover:text-ink"
             >
-              Replay motion
+              <Icon name="replay" size={13} />
             </button>
 
             {/* One switch for every playing video in the preview — background clips
