@@ -23,6 +23,7 @@ import { ColorPalette } from '../color-picker'
 import { ControlRow, GroupLabel, PANEL_BODY, runSerialized, SaveLine, type SaveStatus } from '../inspector-shared'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
+import type { AssetBudget } from '@/lib/site-editor/asset-budget'
 import type { GalleryPhoto } from '../inspector-types'
 import { saveCursorFieldAction } from '../../actions'
 
@@ -37,6 +38,7 @@ export function SiteTools({
   photos,
   values: initial,
   swatches = [],
+  budget = null,
   onApplyCursor,
 }: {
   artistId: string
@@ -46,6 +48,8 @@ export function SiteTools({
   values: Record<string, string>
   /** Site palette + already-used colours for the trail colour picker. */
   swatches?: string[]
+  /** The site's image budget — the cursor uploader compresses like every other slot. */
+  budget?: AssetBudget | null
   /** Live-preview hook: repaint the frame's cursor without waiting on the save. */
   onApplyCursor?: (settings: CursorSettings) => void
 }) {
@@ -97,6 +101,7 @@ export function SiteTools({
           value={vals[CURSOR_CONTENT_KEYS.image] ?? ''}
           photos={photos}
           artistId={artistId}
+          budget={budget}
           onChange={(url) => save(CURSOR_CONTENT_KEYS.image, url)}
         />
         <CursorImageRow
@@ -105,6 +110,7 @@ export function SiteTools({
           value={vals[CURSOR_CONTENT_KEYS.click] ?? ''}
           photos={photos}
           artistId={artistId}
+          budget={budget}
           onChange={(url) => save(CURSOR_CONTENT_KEYS.click, url)}
         />
         <p className="pt-1 text-[10px] leading-snug text-ink-faint">
@@ -171,6 +177,7 @@ function CursorImageRow({
   value,
   photos,
   artistId,
+  budget = null,
   onChange,
 }: {
   label: string
@@ -178,6 +185,8 @@ function CursorImageRow({
   value: string
   photos: GalleryPhoto[]
   artistId: string
+  /** The site's image budget, for the drop-a-PNG uploader in the picker. */
+  budget?: AssetBudget | null
   onChange: (url: string) => void
 }) {
   const [picking, setPicking] = useState(false)
@@ -231,6 +240,7 @@ function CursorImageRow({
             <GallerySlotUploader
               artistId={artistId}
               orientation="horizontal"
+              budget={budget}
               label="Drop a cursor PNG or click to upload"
               onUploaded={(m) => {
                 onChange(mediaUrl(m.storage_path))

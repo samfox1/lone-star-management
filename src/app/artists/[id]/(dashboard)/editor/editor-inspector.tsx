@@ -1255,6 +1255,7 @@ function EditingView({
             photos={photos}
             values={cursorValues}
             swatches={siteSwatches(styleOptions, styleValues)}
+            budget={budgetFor(assetBudgets, 'image')}
             onApplyCursor={onApplyCursor}
           />
         ) : (
