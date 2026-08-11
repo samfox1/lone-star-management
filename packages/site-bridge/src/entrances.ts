@@ -54,8 +54,16 @@ export function mountEntrances(doc: Document): Teardown {
     (entries) => {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
-        e.target.setAttribute(ENTERED_ATTR, "");
         io.unobserve(e.target);
+        // Release AFTER the hidden state has painted. The observer's initial callback
+        // fires in the same frame as observe() — flip the attribute there and the
+        // "from" state never reaches the screen, so there is nothing to transition
+        // FROM and the element just pops in (Sam, 2026-08-11: "they just kind of
+        // flash"). Two frames guarantees one painted hidden frame.
+        const target = e.target;
+        win.requestAnimationFrame(() =>
+          win.requestAnimationFrame(() => target.setAttribute(ENTERED_ATTR, "")),
+        );
       }
     },
     // Fire when a sliver is really on screen — 0 fires for offscreen-but-adjacent.

@@ -54,7 +54,13 @@ afterEach(() => {
   document.documentElement.removeAttribute(ENTRANCES_ROOT_ATTR)
 })
 
-const withIO = () => vi.stubGlobal('IntersectionObserver', FakeIO)
+// rAF stubbed synchronous alongside: the runtime releases an element two frames after
+// it intersects (so the hidden state PAINTS first — the anti-flash rule); tests want
+// the outcome, not the frame timing.
+const withIO = () => {
+  vi.stubGlobal('IntersectionObserver', FakeIO)
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => (cb(0), 0))
+}
 const el = (cls: string) => {
   const d = document.createElement('div')
   d.className = cls
@@ -106,6 +112,22 @@ describe('effectsCss — the derived rules', () => {
 })
 
 describe('mountEntrances — the runtime', () => {
+  it('CRITICAL: the release is DEFERRED past a paint — sync release means no transition', () => {
+    // The flash bug (Sam, 2026-08-11): the observer's initial callback fires in the
+    // same frame as observe(); setting data-lse-entered there means the hidden state
+    // never paints and the element pops instead of animating. The attribute must NOT
+    // appear until the queued frames run.
+    vi.stubGlobal('IntersectionObserver', FakeIO)
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => (frames.push(cb), frames.length))
+    const target = el('enter-rise')
+    teardown = mountEntrances(document)
+    FakeIO.instances[0].reveal(target)
+    expect(target.hasAttribute(ENTERED_ATTR)).toBe(false) // still hidden this frame
+    while (frames.length) frames.shift()!(0)
+    expect(target.hasAttribute(ENTERED_ATTR)).toBe(true)
+  })
+
   it('CRITICAL: arms the document, releases an element when it intersects, once', () => {
     withIO()
     const target = el('enter-rise')

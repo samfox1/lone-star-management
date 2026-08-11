@@ -181,6 +181,8 @@ export function EditorShell({
   uploadedFonts?: { family: string; label: string }[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
+  // The pause/play toggle's own belief; the frame is told, never asked (see the button).
+  const [mediaPlaying, setMediaPlaying] = useState(true)
   const panelRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState({ w: 0, h: 0 })
 
@@ -197,6 +199,7 @@ export function EditorShell({
     applyLink,
     applyCursor,
     replayMotion,
+    setPlayback,
     applyHighlight,
     clearHighlight,
     setMode,
@@ -343,6 +346,23 @@ export function EditorShell({
               className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
             >
               Replay motion
+            </button>
+
+            {/* One switch for every playing video in the preview — background clips
+                loop loudly under the whole editing session otherwise. State lives
+                here, not in the frame: a reloaded frame starts playing again, and the
+                label following the editor's own last request is the honest one. */}
+            <button
+              type="button"
+              aria-pressed={!mediaPlaying}
+              onClick={() => {
+                const next = !mediaPlaying
+                setMediaPlaying(next)
+                setPlayback(next)
+              }}
+              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
+            >
+              {mediaPlaying ? 'Pause media' : 'Play media'}
             </button>
 
             {/* The canvas is a real 1440px desktop window drawn smaller, so say so —

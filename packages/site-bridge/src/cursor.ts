@@ -81,10 +81,20 @@ const CURSOR_DRAW_SIZE = 32;
 export const needsDownscale = (w: number, h: number): boolean =>
   w > CURSOR_MAX_NATIVE || h > CURSOR_MAX_NATIVE;
 function fittedCursorUrl(doc: Document, url: string, cb: (fitted: string) => void): void {
+  const cached = FITTED_CACHE.get(url);
+  if (cached !== undefined) {
+    // Synchronous on purpose: the caller sets the cursor ONCE, with the final value —
+    // no raw→fitted swap a second mount would flash through.
+    if (cached !== url) cb(cached);
+    return;
+  }
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.onload = () => {
-    if (!needsDownscale(img.naturalWidth, img.naturalHeight)) return;
+    if (!needsDownscale(img.naturalWidth, img.naturalHeight)) {
+      FITTED_CACHE.set(url, url); // "fits as-is" is also worth remembering
+      return;
+    }
     try {
       const canvas = doc.createElement("canvas");
       canvas.width = CURSOR_DRAW_SIZE;
@@ -92,9 +102,11 @@ function fittedCursorUrl(doc: Document, url: string, cb: (fitted: string) => voi
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(img, 0, 0, CURSOR_DRAW_SIZE, CURSOR_DRAW_SIZE);
-      cb(canvas.toDataURL("image/png"));
+      const fitted = canvas.toDataURL("image/png");
+      FITTED_CACHE.set(url, fitted);
+      cb(fitted);
     } catch {
-      /* tainted canvas — keep the raw URL and let the browser decide */
+      FITTED_CACHE.set(url, url); // tainted canvas — the raw URL is the answer
     }
   };
   img.src = url;
@@ -108,6 +120,14 @@ const LINE_POINT_LIFE_MS = 400;
 
 type Teardown = () => void;
 const MOUNTED = new WeakMap<Document, Teardown>();
+/** What each document currently has applied, so an IDENTICAL re-apply is a no-op.
+ *  Every editor save triggers an init-data refresh, and each one re-applied the
+ *  cursor — teardown, style clear, re-set, async re-fit — which read as the cursor
+ *  flashing on every save (Sam, 2026-08-11). */
+const APPLIED = new WeakMap<Document, string>();
+/** Fitted (downscaled) cursor URLs by source URL — a re-mount reuses the data URL
+ *  instead of re-loading and re-drawing, which was the raw→fitted double swap. */
+const FITTED_CACHE = new Map<string, string>();
 
 /**
  * Apply (or clear) the cursor settings on a document. Safe to call on every
@@ -115,8 +135,18 @@ const MOUNTED = new WeakMap<Document, Teardown>();
  * Returns a teardown, though callers that just re-apply never need it.
  */
 export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
+  // An identical re-apply keeps the CURRENT mount — its listeners, its trail layer,
+  // its already-fitted cursor — instead of flashing through a teardown/remount.
+  const signature = JSON.stringify(settings);
+  const current = MOUNTED.get(doc);
+  if (current && APPLIED.get(doc) === signature) return current;
+
+  // Tear the old mount down BEFORE recording the new signature — its teardown clears
+  // the memo (a real teardown must), so recording first would be recording into a
+  // slot the next line wipes.
   MOUNTED.get(doc)?.();
   MOUNTED.delete(doc);
+  APPLIED.set(doc, signature);
 
   const root = doc.documentElement;
   const win = doc.defaultView;
@@ -131,7 +161,10 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
     // Only unregister OURSELVES. A stale handle held by a caller must not delete the
     // registration of whatever mount replaced us — the next applyCursor would then
     // find nothing to tear down and the replacement's listeners would leak forever.
-    if (MOUNTED.get(doc) === teardown) MOUNTED.delete(doc);
+    if (MOUNTED.get(doc) === teardown) {
+      MOUNTED.delete(doc);
+      APPLIED.delete(doc); // a real teardown means the next apply must mount, even if identical
+    }
   };
   MOUNTED.set(doc, teardown);
 

@@ -67,6 +67,8 @@ export type FrameBridge = {
   applyCursor: (settings: CursorSettings) => void
   /** Replay every entrance animation in the frame (the toolbar's "Replay motion"). */
   replayMotion: () => void
+  /** Pause (false) / resume (true) every playing video in the frame. */
+  setPlayback: (playing: boolean) => void
   /** Outline + scroll a region into view in the frame (a tile click in the inspector). */
   applyHighlight: (target: SelectTarget) => void
   /** Drop the frame's current highlight (the tile was deselected). */
@@ -142,6 +144,8 @@ export function useFrameBridge({
   /** Replay every entrance in the frame — entrances play once, so testing "what does
    *  my page load look like" needs a button, not a hunt for the reload gesture. */
   const replayMotion = useCallback(() => post({ type: 'replay-entrances' }), [post])
+  /** Pause / resume every playing video in the frame (the toolbar toggle). */
+  const setPlayback = useCallback((playing: boolean) => post({ type: 'set-playback', playing }), [post])
   const applyHighlight = useCallback((target: SelectTarget) => post({ type: 'highlight', target }), [post])
   const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
   /** Whether a click in the frame SELECTS a region or works the site. See the protocol's
@@ -255,6 +259,7 @@ export function useFrameBridge({
     applyLink,
     applyCursor,
     replayMotion,
+    setPlayback,
     applyHighlight,
     clearHighlight,
     setMode,

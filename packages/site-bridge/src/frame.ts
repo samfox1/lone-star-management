@@ -49,6 +49,7 @@ import {
 import type { PublicSitePayload } from "./payload";
 import { applyCursor, cursorSettingsFrom, normalizeCursorSettings } from "./cursor";
 import { mountEntrances, replayAllEntrances, replayEntrances } from "./entrances";
+import { setVideosPlaying } from "./playback";
 import type { LibraryAsset, TemplateManifest } from "./manifest";
 import { textFieldKeys } from "./manifest";
 
@@ -642,6 +643,8 @@ export function mountFrameBridge(options: {
     // silent fall-through in applyFieldToDom. Normalized on receipt: the guard checks
     // the envelope, not payload interiors.
     else if (msg.type === "replay-entrances") replayAllEntrances(document);
+    else if (msg.type === "set-playback" && "playing" in msg)
+      setVideosPlaying(document, msg.playing === true);
     else if (msg.type === "apply-cursor" && "settings" in msg)
       applyCursor(document, normalizeCursorSettings(msg.settings));
     else if (msg.type === "init-data" && "site" in msg) {

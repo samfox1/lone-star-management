@@ -93,6 +93,9 @@ export type EditorMessage =
   /** Replay every entrance animation in the frame — the toolbar's "Replay motion".
    *  ADDITIVE: an older frame ignores it; the manager just reloads instead. */
   | { v: number; source: typeof EDITOR_SOURCE; type: 'replay-entrances' }
+  /** Pause (false) / resume (true) every playing video in the frame — the toolbar's
+   *  pause/play toggle. ADDITIVE like its siblings. */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'set-playback'; playing: boolean }
   /** Re-apply the site-wide cursor (image / click image / trail) live in the preview.
    *  ADDITIVE: the four values are ordinary site_content keys, so a frame that predates
    *  this message still gets the cursor on the next init-data — this just skips the
