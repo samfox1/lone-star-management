@@ -465,10 +465,10 @@ describe('EditorInspector — Links component', () => {
     renderInspector([], { links: LINKS })
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
   }
-  // Rows collapse to just their label; the label input etc. only mount once the row
-  // is expanded, so most assertions open the row first.
-  function expandLink(name: RegExp) {
-    fireEvent.click(screen.getByRole('button', { name }))
+  // Rows show label + URL as plain text; the inputs mount only once the pencil opens
+  // the row (version A, 2026-08-12). Open by the row index (1-based).
+  function expandLink(n: number) {
+    fireEvent.click(screen.getByRole('button', { name: `Edit social link ${n}` }))
   }
 
   it('CRITICAL: Add opens a MODAL — the editor session is never navigated away', () => {
@@ -490,9 +490,13 @@ describe('EditorInspector — Links component', () => {
     // picker exists to make the recognizable spelling the easy path.
     openLinks()
     fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
-    for (const label of ['Instagram', 'TikTok', 'Substack']) {
+    // Addable platforms are plain tiles; Instagram is already on the fixture, so its
+    // tile is the disabled "(already added)" form. (Before version A this line matched
+    // the collapsed ROW button named "Instagram" by accident — the row is plain text now.)
+    for (const label of ['TikTok', 'Substack']) {
       expect(screen.getByRole('button', { name: label })).toBeTruthy()
     }
+    expect(screen.getByRole('button', { name: /Instagram \(already added\)/i })).toBeTruthy()
     // …and NOTHING else. The vocabulary is closed (Sam, 2026-08-10): a free-text escape
     // hatch produced a label no site can map to a mark, which rendered as raw text in a
     // row of glyphs. `createContent` refuses one on the write side too, so this is the
@@ -562,13 +566,14 @@ describe('EditorInspector — Links component', () => {
     expect(screen.getByText(/just the site’s address/i)).toBeTruthy()
   })
 
-  it('collapses rows to just the label and expands the editor on click', () => {
+  it('shows label + URL as plain text; the pencil opens the editor', () => {
     openLinks()
-    // Collapsed: the label shows, the inputs do not.
-    expect(screen.getByRole('button', { name: /^Spotify/ })).toBeTruthy()
+    // Plain text: the label and its URL show, no inputs yet.
+    expect(screen.getByText('Spotify')).toBeTruthy()
+    expect(screen.getByText('https://open.spotify.com/x')).toBeTruthy()
     expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-    // Click the row → the edit controls appear.
-    expandLink(/^Spotify/)
+    // Pencil → the edit controls appear.
+    expandLink(1)
     expect((screen.getByLabelText('Social link 1 label') as HTMLInputElement).value).toBe('Spotify')
     expect((screen.getByLabelText('Social link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
     expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
@@ -576,20 +581,19 @@ describe('EditorInspector — Links component', () => {
 
   it('is single-open: expanding another row collapses the first', () => {
     openLinks()
-    expandLink(/^Spotify/)
+    expandLink(1)
     expect(screen.queryByLabelText('Social link 1 URL')).not.toBeNull()
-    expandLink(/^Instagram/)
+    expandLink(2)
     // Spotify's editor is gone; Instagram's is open.
     expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
     expect((screen.getByLabelText('Social link 2 URL') as HTMLInputElement).value).toBe('https://instagram.com/x')
   })
 
-  it('flags an off-site link with an "Off" tag while collapsed', () => {
+  it('flags an off-site link with an "Off" tag on the row', () => {
     openLinks()
-    // l3 (Bandcamp) is the only off-site link; its collapsed header carries the tag.
-    expect(screen.getByRole('button', { name: /^Bandcamp/ }).textContent).toContain('Off')
-    // On-site rows do not.
-    expect(screen.getByRole('button', { name: /^Spotify/ }).textContent).not.toContain('Off')
+    // l3 (Bandcamp) is the only off-site link; exactly one "Off" tag shows.
+    expect(screen.getByText('Bandcamp')).toBeTruthy()
+    expect(screen.getAllByText('Off')).toHaveLength(1)
   })
 
   it('the add affordance stays IN the editor (was a link out until 2026-08-09)', () => {
@@ -603,14 +607,14 @@ describe('EditorInspector — Links component', () => {
 
   it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
     openLinks()
-    expandLink(/^Spotify/) // l1 is on-site → its toggle offers to take it off.
+    expandLink(1) // l1 (Spotify) is on-site → its toggle offers to take it off.
     fireEvent.click(screen.getByRole('button', { name: /On the site/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l1', 'artist-1', false)
   })
 
   it('puts an off-site link back ON the site', () => {
     openLinks()
-    expandLink(/^Bandcamp/) // l3 is the only off-site link.
+    expandLink(3) // l3 (Bandcamp) is the only off-site link.
     fireEvent.click(screen.getByRole('button', { name: /Off the site/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l3', 'artist-1', true)
   })
@@ -619,7 +623,7 @@ describe('EditorInspector — Links component', () => {
     vi.useFakeTimers()
     try {
       openLinks()
-      expandLink(/^Spotify/)
+      expandLink(1)
       fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: '' } })
       vi.advanceTimersByTime(500)
       expect(updateContentMock).not.toHaveBeenCalled()
@@ -633,7 +637,7 @@ describe('EditorInspector — Links component', () => {
     vi.useFakeTimers()
     try {
       openLinks()
-      expandLink(/^Spotify/)
+      expandLink(1)
       fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: 'Listen' } })
       expect(updateContentMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
@@ -651,12 +655,13 @@ describe('EditorInspector — Links component', () => {
     vi.useFakeTimers()
     try {
       openLinks()
-      expandLink(/^Spotify/)
+      expandLink(1)
       fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: 'Listen' } })
-      // Collapse and confirm the header shows the new label, not the old one.
-      fireEvent.click(screen.getByRole('button', { name: /^Listen/ }))
+      // Close the box; the row shows the new label as plain text, not the old one.
+      expandLink(1)
       expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-      expect(screen.queryByRole('button', { name: /^Spotify/ })).toBeNull()
+      expect(screen.getByText('Listen')).toBeTruthy()
+      expect(screen.queryByText('Spotify')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
@@ -664,10 +669,10 @@ describe('EditorInspector — Links component', () => {
 
   it('removes a link optimistically via deleteContentAction', () => {
     openLinks()
-    expandLink(/^Spotify/)
+    expandLink(1)
     fireEvent.click(screen.getByRole('button', { name: 'Remove social link 1' }))
     expect(deleteContentMock).toHaveBeenCalledWith('link', 'l1', 'artist-1')
-    expect(screen.queryByRole('button', { name: /^Spotify/ })).toBeNull()
+    expect(screen.queryByText('Spotify')).toBeNull()
   })
 
   it('reorders links via drag and persists the new order', () => {
@@ -732,8 +737,8 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     // appeared, which is ambiguous to a screen reader and to getByLabelText.
     const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
     openLinks({ links: [...LINKS, booking] })
-    fireEvent.click(screen.getByRole('button', { name: /^Spotify/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Bookings/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit social link 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact link 1' }))
     // Both rows are open at once; each name must resolve to exactly one element.
     expect(screen.getByLabelText('Social link 1 label')).toBeTruthy()
     expect(screen.getByLabelText('Contact link 1 label')).toBeTruthy()

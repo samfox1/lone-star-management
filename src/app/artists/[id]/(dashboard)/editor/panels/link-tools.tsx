@@ -10,6 +10,7 @@ import {
   runSerialized,
   FieldRow,
   EditRow,
+  CONTROL_LABEL,
   SaveLine,
   OnSiteToggle,
   EYEBROW,
@@ -367,30 +368,34 @@ export function LinkTools({
               rowInvalid && 'ring-1 ring-accent-red',
             )}
           >
-            {/* Collapsed header — the whole row is a button that opens the editor below
-                it. Only the label shows (what the manager named it); an at-a-glance
-                "Off" tag flags a link that isn't on the site. The grip sits INSIDE the
-                row (no border to hang it off), so drag-to-reorder stays discoverable. */}
-            <button
-              type="button"
-              onClick={() => setOpen(isOpen ? null : l.id)}
-              aria-expanded={isOpen}
-              className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left hover:bg-surface-hover"
-            >
-              <span className="flex-none cursor-grab text-ink-faint" aria-hidden>
+            {/* Version-A row (Sam, 2026-08-12): the label over its URL as PLAIN TEXT,
+                a drag grip that appears on hover (the reorder handle — the whole row
+                still drags), and a bare hover pencil that reveals the edit box below.
+                An "Off" tag flags a link that isn't on the site. Nothing looks editable
+                until the pencil is pressed. */}
+            <div className="group flex items-center gap-2 px-4 py-2.5 hover:bg-surface">
+              <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
                 <Icon name="grip" size={16} />
               </span>
-              <span className={cx('min-w-0 flex-1 truncate text-[13px]', labelBlank ? 'text-ink-faint' : 'text-ink')}>
-                {v.label.trim() || 'Untitled link'}
-              </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className={cx(CONTROL_LABEL, labelBlank && 'text-ink-faint')}>
+                  {v.label.trim() || 'Untitled link'}
+                </span>
+                <span className={cx('truncate text-[13px]', urlBlank ? 'italic text-ink-faint' : 'text-ink')}>
+                  {v.url.trim() || 'Add a link'}
+                </span>
+              </div>
               {!l.onSite && <span className={cx(EYEBROW, 'flex-none')}>Off</span>}
-              <span
-                className={cx('flex-none text-ink-faint transition-transform', isOpen && 'rotate-90')}
-                aria-hidden
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : l.id)}
+                aria-label={`Edit ${group.toLowerCase()} link ${i + 1}`}
+                aria-expanded={isOpen}
+                className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
               >
-                <Icon name="chevronRight" size={16} />
-              </span>
-            </button>
+                <Icon name="edit" size={16} />
+              </button>
+            </div>
 
             {isOpen && (
               <div className={PANEL_BODY}>
