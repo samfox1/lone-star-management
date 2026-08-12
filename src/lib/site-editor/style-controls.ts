@@ -52,6 +52,7 @@ import {
   DECO_OFFSET_STEPS,
   ENTRANCE_OPTIONS,
   ENTRANCE_SPEED_STEPS,
+  ENTRANCE_TRAVEL_STEPS,
   HOVER_OPTIONS,
   TEXT_STROKE_STEPS,
   RADIUS_STEPS,
@@ -653,6 +654,14 @@ const msRank = (t: string): number | null => {
   return m ? Number(m[1]) : null
 }
 
+/** Entrance-travel tokens measure in px, with vw as the "screen edge" tail — ranked
+ *  past every px step (no px step approaches 10000). '' is the CSS default (28/36px). */
+const distRank = (t: string): number | null => {
+  if (t === '') return 30
+  const m = /-\[(\d+)(px|vw)\]$/.exec(t)
+  return m ? (m[2] === 'vw' ? 10_000 + Number(m[1]) : Number(m[1])) : null
+}
+
 /** Slice-3 motion (2026-08-11): entrance + its speed + hover, on every styleable
  *  surface. The classes are compiled CSS (tokens.css effects block), the speed lifts
  *  inline — see vocabulary.ts. */
@@ -660,6 +669,7 @@ function motionControls(): StyleControl[] {
   return [
     { id: 'entrance', label: 'Entrance', kind: 'select', options: ENTRANCE_OPTIONS, owns: (t) => t.startsWith('enter-') },
     { id: 'entranceSpeed', label: 'Entrance speed', kind: 'slider', steps: ENTRANCE_SPEED_STEPS, rank: msRank, owns: (t) => t.startsWith('enterdur-[') },
+    { id: 'entranceTravel', label: 'Entrance travel', kind: 'slider', steps: ENTRANCE_TRAVEL_STEPS, rank: distRank, owns: (t) => t.startsWith('enterdist-[') },
     { id: 'hover', label: 'On hover', kind: 'select', options: HOVER_OPTIONS, owns: (t) => t.startsWith('hover-') },
   ]
 }

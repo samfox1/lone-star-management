@@ -299,6 +299,9 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // compiled CSS, the knob lifts inline like every other slider.
   m = token.match(/^enterdur-\[(\d{3,4})ms\]$/);
   if (m) return { "--lse-enter-duration": `${m[1]}ms` };
+  // Entrance travel rides its own property the same way; vw is the "screen edge" step.
+  m = token.match(/^enterdist-\[(\d{1,4})(px|vw)\]$/);
+  if (m) return { "--lse-enter-distance": `${m[1]}${m[2]}` };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
@@ -354,6 +357,7 @@ export const MANAGED_STYLE_PROPS = [
   "-webkit-backdrop-filter",
   "padding",
   "--lse-enter-duration",
+  "--lse-enter-distance",
 ] as const;
 
 export type ResolvedStyle = {

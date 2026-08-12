@@ -8,9 +8,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ENTRANCE_OPTIONS,
+  ENTRANCE_TRAVEL_STEPS,
   HOVER_OPTIONS,
   effectsCss,
 } from '@samfox1/site-bridge/vocabulary'
+import { MANAGED_STYLE_PROPS } from '@samfox1/site-bridge/styles'
 import {
   ENTERED_ATTR,
   ENTRANCES_ROOT_ATTR,
@@ -101,6 +103,34 @@ describe('effectsCss — the derived rules', () => {
     }
     expect(css).toContain('var(--lse-enter-duration')
     expect(resolveStyle('enterdur-[400ms]').style['--lse-enter-duration']).toBe('400ms')
+  })
+
+  it('CRITICAL: travel rides the custom property — off-screen entrances, nothing recompiled', () => {
+    // The directional hidden states read the distance var (fade/zoom/blur do not
+    // move, so travel is a silent no-op on them). Defaults preserve the pre-slider
+    // look: 28px for the vertical pair, 36px for the slides.
+    const css = effectsCss()
+    expect(css).toContain('translateY(var(--lse-enter-distance, 28px))') // rise
+    expect(css).toContain('translateY(calc(-1 * var(--lse-enter-distance, 28px)))') // fall
+    expect(css).toContain('translateX(calc(-1 * var(--lse-enter-distance, 36px)))') // slide from the left
+    expect(css).toContain('translateX(var(--lse-enter-distance, 36px))') // slide from the right
+    expect(resolveStyle('enterdist-[480px]').style['--lse-enter-distance']).toBe('480px')
+    expect(resolveStyle('enterdist-[100vw]').style['--lse-enter-distance']).toBe('100vw')
+    // Derived from the step table (test rule #4): every step the slider offers must
+    // lift, or a position on the knob silently does nothing.
+    for (const s of ENTRANCE_TRAVEL_STEPS) {
+      if (!s.value) continue
+      expect(resolveStyle(s.value).style['--lse-enter-distance'], s.value).toBeTruthy()
+    }
+    // And the clear list can reset it, or a removed slider sticks forever.
+    expect(MANAGED_STYLE_PROPS).toContain('--lse-enter-distance')
+  })
+
+  it('an armed document clips horizontal overflow — an off-screen "from" must not widen the page', () => {
+    // A hidden state parked 100vw to the right adds a horizontal scrollbar for the
+    // whole page until the element enters. Clipped only under the root attribute, so
+    // a site that never mounts the runtime keeps its own overflow behaviour.
+    expect(effectsCss()).toContain('html[data-lse-entrances]{overflow-x:clip}')
   })
 
   it('entrance and hover classes SURVIVE resolution — compiled CSS, never lifted', () => {

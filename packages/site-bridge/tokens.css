@@ -105,16 +105,17 @@
  * html[data-lse-entrances], :hover rules). Derived from the same vocabulary module
  * (effectsCss) and under the same append-only contract as the lines above. Entrances
  * only hide anything while the runtime (entrances.ts) has armed the document. */
+html[data-lse-entrances]{overflow-x:clip}
 .enter-fade{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
 html[data-lse-entrances] .enter-fade:not([data-lse-entered]){opacity:0}
 .enter-rise{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
-html[data-lse-entrances] .enter-rise:not([data-lse-entered]){opacity:0;transform:translateY(28px)}
+html[data-lse-entrances] .enter-rise:not([data-lse-entered]){opacity:0;transform:translateY(var(--lse-enter-distance, 28px))}
 .enter-fall{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
-html[data-lse-entrances] .enter-fall:not([data-lse-entered]){opacity:0;transform:translateY(-28px)}
+html[data-lse-entrances] .enter-fall:not([data-lse-entered]){opacity:0;transform:translateY(calc(-1 * var(--lse-enter-distance, 28px)))}
 .enter-slide-left{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
-html[data-lse-entrances] .enter-slide-left:not([data-lse-entered]){opacity:0;transform:translateX(-36px)}
+html[data-lse-entrances] .enter-slide-left:not([data-lse-entered]){opacity:0;transform:translateX(calc(-1 * var(--lse-enter-distance, 36px)))}
 .enter-slide-right{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
-html[data-lse-entrances] .enter-slide-right:not([data-lse-entered]){opacity:0;transform:translateX(36px)}
+html[data-lse-entrances] .enter-slide-right:not([data-lse-entered]){opacity:0;transform:translateX(var(--lse-enter-distance, 36px))}
 .enter-zoom{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}
 html[data-lse-entrances] .enter-zoom:not([data-lse-entered]){opacity:0;transform:scale(0.9)}
 .enter-blur{transition:opacity var(--lse-enter-duration, 0.7s) ease,transform var(--lse-enter-duration, 0.7s) ease,filter var(--lse-enter-duration, 0.7s) ease}

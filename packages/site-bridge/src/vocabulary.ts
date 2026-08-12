@@ -288,13 +288,32 @@ export const ENTRANCE_SPEED_STEPS: StyleOption[] = Array.from({ length: 19 }, (_
   return { value: ms === 700 ? '' : `enterdur-[${ms}ms]`, label: `${(ms / 1000).toFixed(1)}s` }
 })
 
+/** Entrance travel: how far the hidden state sits from its resting spot.
+ *  `enterdist-[N]` lifts to `--lse-enter-distance`, which the DIRECTIONAL hidden
+ *  states read — so "from the left" can start at the screen edge on a deployed site
+ *  with nothing recompiled (Sam, 2026-08-11: entrances "just fade, grow, drop from
+ *  the container"). `''` is the CSS default (28px vertical, 36px slides), its own
+ *  point on the scale like Speed's 0.7s. Fade/Zoom/Focus don't move; on them the
+ *  property is a silent no-op. */
+export const ENTRANCE_TRAVEL_STEPS: StyleOption[] = [
+  { value: 'enterdist-[16px]', label: '16px' },
+  { value: '', label: 'Default' },
+  { value: 'enterdist-[64px]', label: '64px' },
+  { value: 'enterdist-[120px]', label: '120px' },
+  { value: 'enterdist-[200px]', label: '200px' },
+  { value: 'enterdist-[320px]', label: '320px' },
+  { value: 'enterdist-[480px]', label: '480px' },
+  { value: 'enterdist-[720px]', label: '720px' },
+  { value: 'enterdist-[100vw]', label: 'Screen' },
+]
+
 /** The hidden ("from") state of each entrance; the entered state is the element's own. */
 const ENTRANCE_HIDDEN: Record<string, string> = {
   'enter-fade': 'opacity:0',
-  'enter-rise': 'opacity:0;transform:translateY(28px)',
-  'enter-fall': 'opacity:0;transform:translateY(-28px)',
-  'enter-slide-left': 'opacity:0;transform:translateX(-36px)',
-  'enter-slide-right': 'opacity:0;transform:translateX(36px)',
+  'enter-rise': 'opacity:0;transform:translateY(var(--lse-enter-distance, 28px))',
+  'enter-fall': 'opacity:0;transform:translateY(calc(-1 * var(--lse-enter-distance, 28px)))',
+  'enter-slide-left': 'opacity:0;transform:translateX(calc(-1 * var(--lse-enter-distance, 36px)))',
+  'enter-slide-right': 'opacity:0;transform:translateX(var(--lse-enter-distance, 36px))',
   'enter-zoom': 'opacity:0;transform:scale(0.9)',
   'enter-blur': 'opacity:0;filter:blur(10px)',
 }
@@ -328,6 +347,11 @@ const HOVER_TEXT_RULE: Record<string, string> = {
  */
 export function effectsCss(): string {
   const out: string[] = []
+  // A hidden state parked up to 100vw to the side (the Travel slider) adds a
+  // horizontal scrollbar for the whole page until the element enters. Clipped only
+  // while the runtime has the document armed, so a site that never mounts it keeps
+  // its own overflow behaviour. Vertical stays scrollable — clipping it kills the page.
+  out.push('html[data-lse-entrances]{overflow-x:clip}')
   const durations = 'var(--lse-enter-duration, 0.7s)'
   for (const o of ENTRANCE_OPTIONS) {
     if (o.value === '') continue

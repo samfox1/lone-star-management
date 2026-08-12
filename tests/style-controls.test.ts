@@ -52,7 +52,7 @@ describe('buildStyleControls', () => {
       'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
       'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
-      'entrance', 'entranceSpeed', 'hover',
+      'entrance', 'entranceSpeed', 'entranceTravel', 'hover',
     ])
   })
 })
@@ -68,7 +68,7 @@ describe('buildItemStyleControls (per-image/video)', () => {
       'size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow',
       'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
       'shape', 'feather', 'pad',
-      'entrance', 'entranceSpeed', 'hover',
+      'entrance', 'entranceSpeed', 'entranceTravel', 'hover',
     ])
   })
 
