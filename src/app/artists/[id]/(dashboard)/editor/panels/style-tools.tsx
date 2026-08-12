@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { cx } from '@/lib/cx'
 import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
-import { groupStyleRegions, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import {
   applyStyleValue,
   sameClasses,
@@ -276,12 +276,18 @@ export function StyleTools({
       {/* Regions are grouped by their manifest `group` ("Hero", "Sections", …) so the
           panel reads as a short outline of the page rather than one long list. Regions
           with no group fall under a single unlabelled run, preserving manifest order. */}
-      {groupedRegions.map(([group, rows]) => (
+      {groupedRegions.map(([group, rows]) => {
+        // Suppress a heading that a single row would only repeat — "Footer" over a
+        // "Footer" row is one double header (Sam, 2026-08-12). With >1 row the heading
+        // earns its place and each row drops the heading word instead.
+        const showHeading = Boolean(group) && !(rows.length === 1 && sectionRowLabel(group, rows[0].label) === '')
+        return (
         <div key={group || '_'}>
-          {group && <GroupLabel>{group}</GroupLabel>}
+          {showHeading && <GroupLabel>{group}</GroupLabel>}
           {rows.map((r) => {
             const cls = text[r.key] ?? ''
             const isOpen = open === r.key
+            const rowLabel = showHeading ? sectionRowLabel(group, r.label) || r.label : r.label
             return (
               <div
                 key={r.key}
@@ -290,7 +296,7 @@ export function StyleTools({
                 }}
               >
                 <SectionRow
-                  label={r.label}
+                  label={rowLabel}
                   open={isOpen}
                   onClick={() => setOpen(isOpen ? null : r.key)}
                 />
@@ -327,7 +333,8 @@ export function StyleTools({
             )
           })}
         </div>
-      ))}
+        )
+      })}
       <SaveLine status={status} />
     </div>
   )

@@ -191,6 +191,26 @@ export function groupByPrefix<T extends { key: string; group?: string }>(
 export const groupStyleRegions = groupByPrefix
 
 /**
+ * A child row's label under a group HEADING, with the heading word removed — so a
+ * "Hero" section reads "Name" / "Tagline", not "Hero name" / "Hero tagline", and a
+ * "Footer" group over a "Footer" region shows the heading once, not twice (Sam,
+ * 2026-08-12: "I have a lot of double headers"). Strips only a whole leading word
+ * (case-insensitive); returns '' when the label IS the heading, which the panels read
+ * as "the heading already names this row".
+ */
+export function sectionRowLabel(heading: string, label: string): string {
+  if (!heading) return label
+  const h = heading.toLowerCase()
+  const l = label.toLowerCase()
+  if (l === h) return ''
+  if (l.startsWith(h + ' ')) {
+    const rest = label.slice(heading.length).trimStart()
+    return rest.charAt(0).toUpperCase() + rest.slice(1)
+  }
+  return label
+}
+
+/**
  * What the Style panel SHOWS. Two modes, never mixed (Sam, 2026-08-12 — one edit
  * path per thing): a click in the preview FOCUSES that one region's controls; browsing
  * the tab lists only site-wide regions (`scope: 'site'`), the styles that belong to no

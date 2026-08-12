@@ -1,5 +1,5 @@
 import { cx } from '@/lib/cx'
-import { groupByPrefix } from '@/lib/site-editor/manifest'
+import { groupByPrefix, sectionRowLabel } from '@/lib/site-editor/manifest'
 import { type EditorTextField } from '../inspector-types'
 import { CONTROL_LABEL, GroupLabel, SaveLine, EditButton, type SaveStatus } from '../inspector-shared'
 
@@ -29,12 +29,15 @@ export function TextTools({
           {heading && <GroupLabel>{heading}</GroupLabel>}
           {group.map((f) => {
         const value = values[f.key] ?? ''
+        // Under a heading, drop the heading word — "Hero" › "Name", not "Hero name"
+        // (Sam, 2026-08-12). The full label stays the aria/EditButton name.
+        const rowLabel = sectionRowLabel(heading, f.label) || f.label
         return (
           <div key={f.key} className="px-5 py-1.5">
             {/* No leading icon: one glyph per row down a column of text fields is noise
                 the label already covers. */}
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className={CONTROL_LABEL}>{f.label}</span>
+              <span className={CONTROL_LABEL}>{rowLabel}</span>
               {onEditField && <EditButton label={f.label} onClick={() => onEditField(f)} />}
             </div>
             {/* The current copy, shown not typed. Truncated to two lines: this is a list

@@ -8,7 +8,7 @@
  * become its own heading, which is noise, not structure.
  */
 import { describe, expect, it } from 'vitest'
-import { groupStyleRegions, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 
 const r = (key: string, group?: string): ManifestStyleRegion => ({ key, label: key, group })
 
@@ -121,5 +121,27 @@ describe('visibleStyleRegions — the Style tab shows SITE-WIDE styles only', ()
 
   it('a stale selection that matches no region falls back to browsing', () => {
     expect(visibleStyleRegions(regions, 'gone').map((r) => r.key)).toEqual(['page', 'masthead'])
+  })
+})
+
+describe('sectionRowLabel — no double headers (Sam, 2026-08-12)', () => {
+  it('CRITICAL: strips the group word from a child label — "Hero" › "Name", not "Hero name"', () => {
+    expect(sectionRowLabel('Hero', 'Hero name')).toBe('Name')
+    expect(sectionRowLabel('Hero', 'Hero tagline')).toBe('Tagline')
+  })
+
+  it('a label that IS the heading collapses to empty — the row needs no repeat', () => {
+    // "Footer" group over a "Footer" region: the heading already says it.
+    expect(sectionRowLabel('Footer', 'Footer')).toBe('')
+  })
+
+  it('a label unrelated to the heading is untouched', () => {
+    expect(sectionRowLabel('Site', 'Page background')).toBe('Page background')
+    expect(sectionRowLabel('', 'Biography')).toBe('Biography')
+  })
+
+  it('case-insensitive, and only a whole leading word (not a prefix substring)', () => {
+    expect(sectionRowLabel('hero', 'Hero Name')).toBe('Name')
+    expect(sectionRowLabel('Foot', 'Footer')).toBe('Footer') // "Foot" is not the word "Footer"
   })
 })
