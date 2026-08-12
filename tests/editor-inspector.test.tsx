@@ -1230,6 +1230,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
     expect(screen.getByLabelText('Page Padding')).toBeTruthy()
+    expect(screen.getByLabelText('Page Width')).toBeTruthy()
+    expect(screen.getByLabelText('Page Height')).toBeTruthy()
     expect(screen.queryByLabelText('Page Frosted glass')).toBeNull() // nothing behind an opaque bar to blur
     expect(screen.getByLabelText('Page Background color hex')).toBeTruthy()
     expect(screen.queryByLabelText('Page Size')).toBeNull() // read as doing nothing — gone

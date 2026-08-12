@@ -213,6 +213,27 @@ export const FROST_STEPS = pxSteps('frost', 1, 24, 1, 'None')
 /** Breathing room inside a region — the matte around an image, the inset of a bar. */
 export const PAD_STEPS = pxSteps('pad', 2, 64, 2, 'None')
 
+/** Section geometry (Sam, 2026-08-12: the header bar, the body band and the footer
+ *  each get a width and a height). WIDTH: `''` is the 100% right end — a section is
+ *  full-bleed by default — and the floor is 40%, because a 0%-wide bar is an invisible
+ *  one. A narrowed section centres (auto margins, styles.ts). HEIGHT is a FLOOR
+ *  (min-height): content can still grow past it. Both lift inline, so they work on
+ *  deployed sites with nothing recompiled. */
+export const SECTION_WIDTH_STEPS: StyleOption[] = [
+  ...Array.from({ length: 12 }, (_, i) => {
+    const pct = 40 + i * 5
+    return { value: `secw-[${pct}%]`, label: `${pct}%` }
+  }),
+  { value: '', label: 'Full' },
+]
+export const SECTION_HEIGHT_STEPS: StyleOption[] = [
+  { value: '', label: 'Auto' },
+  ...[48, 64, 80, 96, 128, 160, 192, 240, 288, 336, 384, 448, 512, 576, 640].map((px) => ({
+    value: `sech-[${px}px]`,
+    label: `${px}px`,
+  })),
+]
+
 /** Decoration dressing (Sam, 2026-08-11: "customize the color of the line and the
  *  width/distance between word, and thickness"). Applies to underline AND
  *  strikethrough — one decoration, one dressing. Offset moves an underline away from
@@ -441,6 +462,8 @@ export const VOCABULARY: { id: string; origin: "section" | "item"; options: Styl
   { id: "bgGradient", origin: "section", options: BG_GRADIENT_PROBE },
   { id: "frost", origin: "section", options: FROST_STEPS },
   { id: "pad", origin: "section", options: PAD_STEPS },
+  { id: "width", origin: "section", options: SECTION_WIDTH_STEPS },
+  { id: "height", origin: "section", options: SECTION_HEIGHT_STEPS },
   { id: "shape", origin: "item", options: SHAPE_STEPS },
   { id: "feather", origin: "item", options: FEATHER_STEPS },
   { id: "textStroke", origin: "section", options: TEXT_STROKE_STEPS },

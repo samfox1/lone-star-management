@@ -310,6 +310,12 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
   if (m) return { padding: `${m[1]}px` };
+  // Section geometry: width narrows AND centres the band (auto margins — the page
+  // shows at the sides); height is a FLOOR, so content can still grow past it.
+  m = token.match(/^secw-\[(\d{1,3})%\]$/);
+  if (m) return { width: `${m[1]}%`, marginLeft: "auto", marginRight: "auto" };
+  m = token.match(/^sech-\[(\d{1,4})px\]$/);
+  if (m) return { minHeight: `${m[1]}px` };
   return null;
 }
 
@@ -363,6 +369,10 @@ export const MANAGED_STYLE_PROPS = [
   "--lse-enter-duration",
   "--lse-enter-distance",
   "--lse-hover-color",
+  "width",
+  "margin-left",
+  "margin-right",
+  "min-height",
 ] as const;
 
 export type ResolvedStyle = {

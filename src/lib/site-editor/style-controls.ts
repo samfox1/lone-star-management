@@ -48,6 +48,8 @@ import {
   FEATHER_STEPS,
   FROST_STEPS,
   PAD_STEPS,
+  SECTION_WIDTH_STEPS,
+  SECTION_HEIGHT_STEPS,
   DECO_THICKNESS_STEPS,
   DECO_OFFSET_STEPS,
   // ENTRANCE_OPTIONS, ENTRANCE_SPEED_STEPS, ENTRANCE_TRAVEL_STEPS — ENTRANCES PAUSED
@@ -707,6 +709,30 @@ export function controlsForRegion(
   // "A way to remove the line below the nav bar and above the footer" (Sam,
   // 2026-08-12): a toggle built FROM the region's own base — off strips the border
   // side, on restores exactly the side the base drew. No base line, no toggle.
+  // Section geometry (Sam, 2026-08-12: all three sections get a width and a height).
+  // Width's '' IS the 100% right end — full-bleed is what a section is by default —
+  // so it ranks 100, not off-scale. Height's '' is Auto: what the content needs.
+  out.push({
+    id: 'width',
+    label: 'Width',
+    kind: 'slider',
+    steps: SECTION_WIDTH_STEPS,
+    rank: (t) => (t === '' ? 100 : Number(/^secw-\[(\d{1,3})%\]$/.exec(t)?.[1] ?? NaN) || null),
+    owns: (t) => t.startsWith('secw-['),
+  })
+  out.push({
+    id: 'height',
+    label: 'Height',
+    kind: 'slider',
+    steps: SECTION_HEIGHT_STEPS,
+    defaultOffScale: true,
+    rank: (t) => {
+      if (t === '') return null
+      const m = /^sech-\[(\d{1,4})px\]$/.exec(t)
+      return m ? Number(m[1]) : null
+    },
+    owns: (t) => t.startsWith('sech-['),
+  })
   const side = (region.base ?? '').split(/\s+/).find((t) => DIVIDER_SIDES.has(t))
   if (side)
     out.push({

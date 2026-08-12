@@ -44,7 +44,27 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     // background") — bar height is the padding slider's job — and frost followed for
     // the same reads-as-doing-nothing reason. ALLOWLIST, not blocklist.
     const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'pad'])
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'height', 'pad', 'width'])
+  })
+
+  it('CRITICAL: Width runs 40% → Full and rests at the RIGHT end — a section is full-bleed by default', () => {
+    // Sam, 2026-08-12: "far right is 100% width, left may be 0, or, if that doesn't
+    // make sense, some other number" — 0 is an invisible bar, so the floor is 40%.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
+    const width = page.find((c) => c.id === 'width')!
+    if (width.kind !== 'slider') throw new Error('unreachable')
+    expect(width.steps[0].value).toBe('secw-[40%]')
+    expect(width.steps.at(-1)).toEqual({ value: '', label: 'Full' })
+    expect(width.rank!('')).toBe(100) // '' IS the 100% end, not an off-scale default
+    expect(sliderIndex(width, '').idx).toBe(width.steps.length - 1)
+  })
+
+  it('Height starts at Auto (off-scale) and measures its px steps', () => {
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
+    const height = page.find((c) => c.id === 'height')!
+    if (height.kind !== 'slider') throw new Error('unreachable')
+    expect(height.rank!('sech-[240px]')).toBe(240)
+    expect(height.rank!('')).toBeNull() // Auto is "what the content needs", not zero
   })
 
   it('CRITICAL: a chrome bar whose base draws a divider gets the Divider line toggle', () => {

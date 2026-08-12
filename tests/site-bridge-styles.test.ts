@@ -609,3 +609,18 @@ describe('decoration dressing (2026-08-11)', () => {
     el.remove()
   })
 })
+
+describe('section geometry — width and height lift inline (Sam, 2026-08-12)', () => {
+  it('CRITICAL: width centres the band; height is a FLOOR; both reset via the clear list', () => {
+    // "All 3 sections have a width and height." Width narrows the bar and centres it
+    // (auto margins), so the page shows at the sides; height is min-height, so content
+    // can still grow past it rather than overflowing a hard ceiling.
+    const w = resolveStyle('secw-[80%]');
+    expect(w.style.width).toBe('80%');
+    expect(w.style.marginLeft).toBe('auto');
+    expect(w.style.marginRight).toBe('auto');
+    expect(resolveStyle('sech-[240px]').style.minHeight).toBe('240px');
+    for (const prop of ['width', 'margin-left', 'margin-right', 'min-height'])
+      expect(MANAGED_STYLE_PROPS, prop).toContain(prop);
+  });
+});
