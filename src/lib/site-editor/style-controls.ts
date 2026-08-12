@@ -50,9 +50,8 @@ import {
   PAD_STEPS,
   DECO_THICKNESS_STEPS,
   DECO_OFFSET_STEPS,
-  ENTRANCE_OPTIONS,
-  ENTRANCE_SPEED_STEPS,
-  ENTRANCE_TRAVEL_STEPS,
+  // ENTRANCE_OPTIONS, ENTRANCE_SPEED_STEPS, ENTRANCE_TRAVEL_STEPS — ENTRANCES PAUSED
+  // (2026-08-12), see motionControls().
   HOVER_OPTIONS,
   TEXT_STROKE_STEPS,
   RADIUS_STEPS,
@@ -646,30 +645,40 @@ export function sliderIndex(
   return { idx: middle, label: 'Default', exact: false }
 }
 
-/** Entrance-speed tokens measure in ms; '' is the CSS default (1200ms), a real point
- *  on the scale like Tilt's 0. */
+/* ENTRANCES PAUSED (2026-08-12) — the rank helpers rest with their sliders.
+
+// Entrance-speed tokens measure in ms; '' is the CSS default (1200ms), a real point
+// on the scale like Tilt's 0.
 const msRank = (t: string): number | null => {
   if (t === '') return 1200
   const m = /-\[(\d+)ms\]$/.exec(t)
   return m ? Number(m[1]) : null
 }
 
-/** Entrance-travel tokens measure in px, with vw as the "screen edge" tail — ranked
- *  past every px step (no px step approaches 10000). '' is the CSS default (28/36px). */
+// Entrance-travel tokens measure in px, with vw as the "screen edge" tail — ranked
+// past every px step (no px step approaches 10000). '' is the CSS default (28/36px).
 const distRank = (t: string): number | null => {
   if (t === '') return 30
   const m = /-\[(\d+)(px|vw)\]$/.exec(t)
   return m ? (m[2] === 'vw' ? 10_000 + Number(m[1]) : Number(m[1])) : null
 }
+*/
 
 /** Slice-3 motion (2026-08-11): entrance + its speed + hover, on every styleable
  *  surface. The classes are compiled CSS (tokens.css effects block), the speed lifts
  *  inline — see vocabulary.ts. */
 function motionControls(): StyleControl[] {
   return [
-    { id: 'entrance', label: 'Entrance', kind: 'select', options: ENTRANCE_OPTIONS, owns: (t) => t.startsWith('enter-') },
-    { id: 'entranceSpeed', label: 'Entrance speed', kind: 'slider', steps: ENTRANCE_SPEED_STEPS, rank: msRank, owns: (t) => t.startsWith('enterdur-[') },
-    { id: 'entranceTravel', label: 'Entrance travel', kind: 'slider', steps: ENTRANCE_TRAVEL_STEPS, rank: distRank, owns: (t) => t.startsWith('enterdist-[') },
+    // ENTRANCES PAUSED (Sam, 2026-08-12) — pulled from the panel, not deleted. The
+    // blocker: the IntersectionObserver watches the element's TRANSFORMED box, so a
+    // Travel past the viewport parks the element where it never intersects and it
+    // never releases. Resuming needs release-by-resting-position (observe an
+    // untransformed proxy, or compute the resting rect by backing the translation
+    // out). The bridge keeps the runtime + CSS; stored enter-* tokens still play on
+    // sites whose drafts carry them — juniper's were stripped the same day.
+    // { id: 'entrance', label: 'Entrance', kind: 'select', options: ENTRANCE_OPTIONS, owns: (t) => t.startsWith('enter-') },
+    // { id: 'entranceSpeed', label: 'Entrance speed', kind: 'slider', steps: ENTRANCE_SPEED_STEPS, rank: msRank, owns: (t) => t.startsWith('enterdur-[') },
+    // { id: 'entranceTravel', label: 'Entrance travel', kind: 'slider', steps: ENTRANCE_TRAVEL_STEPS, rank: distRank, owns: (t) => t.startsWith('enterdist-[') },
     { id: 'hover', label: 'On hover', kind: 'select', options: HOVER_OPTIONS, owns: (t) => t.startsWith('hover-') },
   ]
 }

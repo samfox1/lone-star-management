@@ -52,7 +52,8 @@ describe('buildStyleControls', () => {
       'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
       'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
-      'entrance', 'entranceSpeed', 'entranceTravel', 'hover',
+      // Entrances PAUSED 2026-08-12 (see motionControls) — hover stays.
+      'hover',
     ])
   })
 })
@@ -68,7 +69,8 @@ describe('buildItemStyleControls (per-image/video)', () => {
       'size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow',
       'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
       'shape', 'feather', 'pad',
-      'entrance', 'entranceSpeed', 'entranceTravel', 'hover',
+      // Entrances PAUSED 2026-08-12 (see motionControls) — hover stays.
+      'hover',
     ])
   })
 

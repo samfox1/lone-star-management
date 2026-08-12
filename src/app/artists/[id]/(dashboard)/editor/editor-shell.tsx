@@ -199,7 +199,7 @@ export function EditorShell({
     applyStyle,
     applyLink,
     applyCursor,
-    replayMotion,
+    // replayMotion, // ENTRANCES PAUSED (2026-08-12) — rests with the replay button below.
     setPlayback,
     applyHighlight,
     clearHighlight,
@@ -338,9 +338,9 @@ export function EditorShell({
               ))}
             </div>
 
-            {/* Entrances play ONCE, so "what does my page load look like" needs a
-                button — the alternative was hunting for a reload (Sam, 2026-08-11:
-                "having a hard time testing these animations on load"). */}
+            {/* ENTRANCES PAUSED (Sam, 2026-08-12) — the replay button exists only for
+                them, so it rests too. See motionControls() in style-controls.ts for
+                the blocker and what resuming needs.
             <button
               type="button"
               onClick={replayMotion}
@@ -349,7 +349,7 @@ export function EditorShell({
               className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-hairline bg-paper text-ink-faint hover:text-ink"
             >
               <Icon name="replay" size={13} />
-            </button>
+            </button> */}
 
             {/* One switch for every playing video in the preview — background clips
                 loop loudly under the whole editing session otherwise. State lives
