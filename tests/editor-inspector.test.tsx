@@ -1793,10 +1793,13 @@ describe('EditorInspector — tour tools', () => {
     expect(screen.getByRole('link', { name: /Add date/ }).getAttribute('href')).toBe('/artists/artist-1/tour')
   })
 
-  it('says where dates come from when the library is empty', () => {
+  it('an empty library STATES the emptiness — it does not instruct (Sam, 2026-08-12)', () => {
+    // This test used to pin "Add them on the Tour page, publish, then pick them
+    // here." — instructional copy Sam banished ("again, no instructional texts").
     renderInspector([], { tours: [] })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    expect(screen.getByText(/Add them on the Tour page/)).toBeTruthy()
+    expect(screen.getByText('No dates yet.')).toBeTruthy()
+    expect(screen.queryByText(/Add them on the Tour page/)).toBeNull()
   })
 })
 

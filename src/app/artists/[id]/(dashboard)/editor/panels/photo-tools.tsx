@@ -369,7 +369,7 @@ function SlotTile({
           renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
           empty={
             <p className="py-2 text-center text-xs text-ink-muted">
-              No unused photos in your library. Upload one below.
+              No unused photos in your library.
             </p>
           }
           footer={
@@ -494,7 +494,7 @@ export function PhotoTools({
               addLabel={`Add ${orientation} photo`}
               empty={
                 <p className="py-2 text-center text-xs text-ink-muted">
-                  No {orientation} photos in your library yet. Upload one below.
+                  No {orientation} photos in your library yet.
                 </p>
               }
               pickerFooter={

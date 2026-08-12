@@ -95,7 +95,7 @@ export function TourTools({
     <div className="space-y-2.5 px-5 py-4">
       {tours.length === 0 && (
         <p className="py-2 font-space text-[11px] leading-relaxed text-ink-faint">
-          No dates yet. Add them on the Tour page, publish, then pick them here.
+          No dates yet.
         </p>
       )}
 
