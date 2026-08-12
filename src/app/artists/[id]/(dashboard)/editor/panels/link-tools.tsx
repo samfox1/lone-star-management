@@ -9,7 +9,6 @@ import { type EditorLink } from '../inspector-types'
 import { useScrollIntoFocus } from '../inspector-grid'
 import {
   runSerialized,
-  FieldRow,
   EditRow,
   CONTROL_LABEL,
   SaveLine,
@@ -18,7 +17,6 @@ import {
   INVALID_FIELD,
   FIELD,
   FIELD_ON_TINT,
-  PANEL_BODY,
   type SaveStatus,
 } from '../inspector-shared'
 import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
@@ -403,49 +401,39 @@ export function LinkTools({
             </div>
 
             {isOpen && (
-              <div className={PANEL_BODY}>
-                {/* A social needs no Label field (Sam, 2026-08-12: "the tool should be
-                    able to pick up the type of button based on the url") — the platform,
-                    and so the icon, is inferred from the URL's domain. A CONTACT link
-                    (mailto:) has no platform and a manager-chosen name, so it keeps its
-                    Label field. */}
+              // Condensed box (Sam, 2026-08-12): bare inputs, no per-field icon/label
+              // chrome, a tight toggle + remove line. A social has no Label field — the
+              // platform (and icon) is inferred from the URL; a CONTACT link keeps its
+              // manager-chosen name.
+              <div className="space-y-1.5 bg-surface px-4 pb-2.5 pt-1.5">
                 {!inferPlatform && (
-                  <FieldRow icon="text" label="Label">
-                    <input
-                      aria-label={`${group} link ${i + 1} label`}
-                      aria-invalid={(rowInvalid && labelBlank) || undefined}
-                      value={v.label}
-                      onChange={(e) => edit(l.id, { label: e.target.value })}
-                      placeholder="Label"
-                      className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
-                    />
-                  </FieldRow>
-                )}
-                <FieldRow icon="links" label="URL">
                   <input
-                    aria-label={`${group} link ${i + 1} URL`}
-                    aria-invalid={(rowInvalid && urlBlank) || undefined}
-                    type="url"
-                    value={v.url}
-                    onChange={(e) => {
-                      const url = e.target.value
-                      // Infer the platform (→ label → icon) from the URL for a social.
-                      // A recognised host renames the row; an unknown one keeps whatever
-                      // label the modal set, so the row still has a name.
-                      const inferred = inferPlatform ? platformFromUrl(url) : null
-                      edit(l.id, inferred ? { url, label: inferred.label } : { url })
-                    }}
-                    placeholder="https://…"
-                    className={cx(FIELD_ON_TINT, rowInvalid && urlBlank && INVALID_FIELD)}
+                    aria-label={`${group} link ${i + 1} label`}
+                    aria-invalid={(rowInvalid && labelBlank) || undefined}
+                    value={v.label}
+                    onChange={(e) => edit(l.id, { label: e.target.value })}
+                    placeholder="Label"
+                    className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
                   />
-                </FieldRow>
-                <div className="grid grid-cols-[20px_1fr_auto] items-center gap-x-2.5 pt-2">
-                  <span className="justify-self-center text-ink-faint" aria-hidden>
-                    <Icon name="site" size={14} />
-                  </span>
-                  {/* justify-self-start: the grid's 1fr column would otherwise stretch
-                      the pill across the whole row. */}
-                  <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} className="justify-self-start" />
+                )}
+                <input
+                  aria-label={`${group} link ${i + 1} URL`}
+                  aria-invalid={(rowInvalid && urlBlank) || undefined}
+                  type="url"
+                  value={v.url}
+                  onChange={(e) => {
+                    const url = e.target.value
+                    // Infer the platform (→ label → icon) from the URL for a social. A
+                    // recognised host renames the row; an unknown one keeps whatever
+                    // label the modal set, so the row still has a name.
+                    const inferred = inferPlatform ? platformFromUrl(url) : null
+                    edit(l.id, inferred ? { url, label: inferred.label } : { url })
+                  }}
+                  placeholder="https://…"
+                  className={cx(FIELD_ON_TINT, rowInvalid && urlBlank && INVALID_FIELD)}
+                />
+                <div className="flex items-center justify-between pt-0.5">
+                  <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
                   <button
                     type="button"
                     aria-label={`Remove ${group.toLowerCase()} link ${i + 1}`}
