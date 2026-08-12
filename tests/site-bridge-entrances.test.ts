@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ENTRANCE_OPTIONS,
+  ENTRANCE_SPEED_STEPS,
   ENTRANCE_TRAVEL_STEPS,
   HOVER_OPTIONS,
   effectsCss,
@@ -198,6 +199,53 @@ describe('mountEntrances — the runtime', () => {
     teardown = mountEntrances(document)
     t1()
     expect(document.documentElement.hasAttribute(ENTRANCES_ROOT_ATTR)).toBe(true)
+  })
+
+  it('the speed scale reaches 4s and rests at a 1.2s default', () => {
+    // "It moves way too fast" (Sam, 2026-08-12): with Travel able to start a full
+    // screen away, 0.7s was violent and 2.0s the ceiling. The default is a real
+    // point mid-scale, exactly once, and steps stay ordered low→high.
+    expect(effectsCss()).toContain('var(--lse-enter-duration, 1.2s)')
+    const defaults = ENTRANCE_SPEED_STEPS.filter((s) => s.value === '')
+    expect(defaults).toHaveLength(1)
+    expect(defaults[0].label).toBe('1.2s')
+    const values = ENTRANCE_SPEED_STEPS.map((s) =>
+      s.value === '' ? 1200 : Number(/\[(\d+)ms\]/.exec(s.value)![1]),
+    )
+    expect(Math.max(...values)).toBe(4000)
+    expect(values).toEqual([...values].sort((a, b) => a - b))
+  })
+
+  it('CRITICAL: replay SNAPS back to hidden — a reverse transition replays only a sliver', () => {
+    // Removing the entered attribute re-applies the hidden state THROUGH the
+    // element's transition, so the element is still a few px into its journey back
+    // when the re-release fires two frames later — the "entrance" then covers a
+    // sliver of the distance and no slider number matches what plays. The replay
+    // must suppress the transition while it re-hides, then release from the true
+    // hidden state.
+    withIO()
+    const q: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => (q.push(cb), q.length))
+    const target = el('enter-rise')
+    target.setAttribute('data-lse-style', 'hero_name')
+    teardown = mountEntrances(document)
+    const io = FakeIO.instances[0]
+    io.reveal(target)
+    q.splice(0).forEach((cb) => cb(0))
+    q.splice(0).forEach((cb) => cb(0))
+    expect(target.hasAttribute(ENTERED_ATTR)).toBe(true)
+
+    replayEntrances(document, '[data-lse-style="hero_name"]')
+    // The snap window: hidden again, transitions suppressed.
+    expect(target.hasAttribute(ENTERED_ATTR)).toBe(false)
+    expect(target.hasAttribute('data-lse-replaying')).toBe(true)
+    q.splice(0).forEach((cb) => cb(0))
+    q.splice(0).forEach((cb) => cb(0))
+    expect(target.hasAttribute('data-lse-replaying')).toBe(false)
+    expect(io.observed.has(target)).toBe(true)
+    // And the sheet turns the attribute into "no transition" — without the rule the
+    // attribute is decoration.
+    expect(effectsCss()).toContain('[data-lse-replaying]{transition:none')
   })
 
   it('replayEntrances re-hides and re-arms the matching element', () => {

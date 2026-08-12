@@ -646,10 +646,10 @@ export function sliderIndex(
   return { idx: middle, label: 'Default', exact: false }
 }
 
-/** Entrance-speed tokens measure in ms; '' is the CSS default (700ms), a real point
+/** Entrance-speed tokens measure in ms; '' is the CSS default (1200ms), a real point
  *  on the scale like Tilt's 0. */
 const msRank = (t: string): number | null => {
-  if (t === '') return 700
+  if (t === '') return 1200
   const m = /-\[(\d+)ms\]$/.exec(t)
   return m ? Number(m[1]) : null
 }

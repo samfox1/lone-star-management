@@ -13,6 +13,9 @@ import { ENTRANCE_OPTIONS } from "./vocabulary";
 
 export const ENTRANCES_ROOT_ATTR = "data-lse-entrances";
 export const ENTERED_ATTR = "data-lse-entered";
+/** Carried while a replay re-hides an element; the effects sheet suppresses the
+ *  transition under it so the snap back to hidden is instant (see replayEntrances). */
+export const REPLAYING_ATTR = "data-lse-replaying";
 
 /** Derived from the option table — a new entrance is observed the day it exists. */
 const ENTRANCE_SELECTOR = ENTRANCE_OPTIONS.filter((o) => o.value)
@@ -117,11 +120,21 @@ export function replayEntrances(doc: Document, selector: string): void {
   if (!io) return;
   doc.querySelectorAll(selector).forEach((el) => {
     if (!el.matches(ENTRANCE_SELECTOR)) return;
+    // SNAP back to hidden, don't animate there: removing the attribute re-applies the
+    // hidden state THROUGH the element's transition, so the re-release two frames
+    // later would replay from a sliver into the reverse journey — a fraction of the
+    // travel in the full duration, matching no slider number.
+    el.setAttribute(REPLAYING_ATTR, "");
     el.removeAttribute(ENTERED_ATTR);
     // Two frames so the hidden state paints before the observer releases it — without
     // the round trip the attribute flips back within one frame and nothing moves.
     const win = doc.defaultView;
     if (!win) return;
-    win.requestAnimationFrame(() => win.requestAnimationFrame(() => io.observe(el)));
+    win.requestAnimationFrame(() =>
+      win.requestAnimationFrame(() => {
+        el.removeAttribute(REPLAYING_ATTR);
+        io.observe(el);
+      }),
+    );
   });
 }

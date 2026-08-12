@@ -281,12 +281,19 @@ export const HOVER_OPTIONS: StyleOption[] = [
 
 /** Entrance speed: `enterdur-[Nms]` lifts to the `--lse-enter-duration` custom
  *  property inline, which the entrance rules read — so speed works on deployed sites
- *  without recompiling, like every other slider. `''` (the 0.7s default) sits at its
- *  own position on the scale, like Tilt's 0°. */
-export const ENTRANCE_SPEED_STEPS: StyleOption[] = Array.from({ length: 19 }, (_, i) => {
-  const ms = 200 + i * 100
-  return { value: ms === 700 ? '' : `enterdur-[${ms}ms]`, label: `${(ms / 1000).toFixed(1)}s` }
-})
+ *  without recompiling, like every other slider. `''` (the 1.2s default) sits at its
+ *  own position on the scale, like Tilt's 0°. The run is DENSER at the fast end and
+ *  reaches 4s: with Travel able to start a full screen away, 0.7s was violent and
+ *  2.0s the ceiling (Sam, 2026-08-12: "it moves way too fast"). */
+const ENTRANCE_SPEED_MS = [
+  200, 300, 400, 500, 600, 700, 800, 900, 1000,
+  1200, 1400, 1600, 1800, 2000,
+  2400, 2800, 3200, 3600, 4000,
+]
+export const ENTRANCE_SPEED_STEPS: StyleOption[] = ENTRANCE_SPEED_MS.map((ms) => ({
+  value: ms === 1200 ? '' : `enterdur-[${ms}ms]`,
+  label: `${(ms / 1000).toFixed(1)}s`,
+}))
 
 /** Entrance travel: how far the hidden state sits from its resting spot.
  *  `enterdist-[N]` lifts to `--lse-enter-distance`, which the DIRECTIONAL hidden
@@ -352,7 +359,12 @@ export function effectsCss(): string {
   // while the runtime has the document armed, so a site that never mounts it keeps
   // its own overflow behaviour. Vertical stays scrollable — clipping it kills the page.
   out.push('html[data-lse-entrances]{overflow-x:clip}')
-  const durations = 'var(--lse-enter-duration, 0.7s)'
+  // The replay snap: while the runtime re-hides an element it suppresses the
+  // transition, or the removal ANIMATES back toward hidden and the re-release two
+  // frames later replays from a sliver away. More specific than `.enter-X`, so it
+  // wins without !important.
+  out.push('html[data-lse-entrances] [data-lse-replaying]{transition:none}')
+  const durations = 'var(--lse-enter-duration, 1.2s)'
   for (const o of ENTRANCE_OPTIONS) {
     if (o.value === '') continue
     const hidden = ENTRANCE_HIDDEN[o.value]
