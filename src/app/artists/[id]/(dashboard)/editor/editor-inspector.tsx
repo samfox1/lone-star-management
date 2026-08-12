@@ -283,8 +283,14 @@ export function EditorInspector({
   // first render already "match" and the panel would never open for a selection
   // that was present on mount.
   const [lastSelected, setLastSelected] = useState<string | null>(null)
+  // The CLICK FOCUS: while set, the Style panel shows only this region's controls.
+  // Cleared by any manual tab click (selectComponent) — visiting the Style tab by
+  // hand is browsing, and browsing shows site-wide styles only, never a leftover
+  // element (Sam, 2026-08-12).
+  const [styleFocus, setStyleFocus] = useState<string | null>(null)
   if (selectedStyle && selectedStyle !== lastSelected) {
     setLastSelected(selectedStyle)
+    setStyleFocus(selectedStyle)
     setActive(COMPONENTS.find((c) => c.kind === 'style') ?? null)
   }
 
@@ -326,6 +332,12 @@ export function EditorInspector({
   function selectComponent(c: Component | null) {
     setActive(c)
     setFocused(null)
+    // A manual panel change is a deselection for the Style focus too. `lastSelected`
+    // deliberately KEEPS the processed key: clearing it would let the still-set prop
+    // re-focus on the very next render. (Cost: re-clicking the SAME element after
+    // browsing away doesn't re-focus until the prop changes — the prop carries no
+    // nonce; the image channel's nonce pattern is the fix if this ever bites.)
+    setStyleFocus(null)
   }
 
   // The one image/video handed the whole panel for editing (Replace / Remove / styling).
@@ -935,7 +947,7 @@ export function EditorInspector({
           styleRegions={styleRegions}
           styleValues={styleValues}
           styleOptions={styleOptions}
-          selectedStyle={selectedStyle}
+          selectedStyle={styleFocus}
           linkRegions={linkRegions}
           linkValues={linkValues}
           selectedLink={selectedLink}

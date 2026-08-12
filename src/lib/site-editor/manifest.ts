@@ -191,15 +191,16 @@ export function groupByPrefix<T extends { key: string; group?: string }>(
 export const groupStyleRegions = groupByPrefix
 
 /**
- * What the Style tab LISTS: site-wide regions (`scope: 'site'`) plus the region the
- * manager clicked, in manifest order. Every element-scoped region is reached by
- * clicking it in the preview — the tab listing them all beside click-to-edit was two
- * places to edit the same thing (Sam, 2026-08-12). The clicked key still joins the
- * list so a preview click has a row to open.
+ * What the Style panel SHOWS. Two modes, never mixed (Sam, 2026-08-12 — one edit
+ * path per thing): a click in the preview FOCUSES that one region's controls; browsing
+ * the tab lists only site-wide regions (`scope: 'site'`), the styles that belong to no
+ * clickable element. A selection naming no region (a stale key from an older manifest)
+ * falls back to browsing rather than an empty panel.
  */
 export function visibleStyleRegions(
   regions: ManifestStyleRegion[],
   selected: string | null,
 ): ManifestStyleRegion[] {
-  return regions.filter((r) => r.scope === 'site' || r.key === selected)
+  const focused = selected ? regions.filter((r) => r.key === selected) : []
+  return focused.length ? focused : regions.filter((r) => r.scope === 'site')
 }

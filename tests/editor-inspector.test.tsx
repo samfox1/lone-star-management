@@ -1361,6 +1361,23 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
   })
 
+  it('CRITICAL: manually opening the Style tab DROPS the click focus — no leftover element controls', () => {
+    // Clicking footer in the frame focuses its controls; going back to the Style tab
+    // by hand is browsing, and browsing shows site-wide styles only. Without the
+    // drop, the last-clicked element lingers as a second edit path (Sam, 2026-08-12).
+    renderInspector([], {
+      styleRegions: [
+        { key: 'page', label: 'Page background', base: '', scope: 'site' },
+        { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
+      ],
+      selectedStyle: 'footer',
+    })
+    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy() // click focus active
+    fireEvent.click(screen.getByRole('button', { name: /Style/ })) // manual tab visit
+    expect(screen.queryByLabelText('Footer Boldness')).toBeNull()
+    expect(screen.getByText('Page background')).toBeTruthy()
+  })
+
   it('CRITICAL: an element-scoped region is NOT listed — click-to-edit is its only door', () => {
     // One edit path per thing (Sam, 2026-08-12): the tab lists site-wide regions only;
     // an element region appears here solely when it was clicked in the preview.

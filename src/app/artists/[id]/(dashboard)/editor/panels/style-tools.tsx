@@ -215,20 +215,22 @@ export function StyleTools({
   }
 
   // Clicking a styled region in the frame opens its accordion row (during-render reset,
-  // same sanctioned pattern as the panel switch above).
+  // same sanctioned pattern as the panel switch above). The null reset matters: the
+  // inspector CLEARS `selected` on manual tab navigation, and without forgetting the
+  // old key here a re-click of the same element would never re-open its row.
   const [lastSel, setLastSel] = useState<string | null>(null)
   if (selected && selected !== lastSel) {
     setLastSel(selected)
     setOpen(selected)
   }
+  if (!selected && lastSel) setLastSel(null)
 
-  // The tab LISTS only site-wide regions + the clicked one (visibleStyleRegions) —
-  // element regions are click-to-edit only, so nothing is editable from two places.
-  // `lastSel` keeps a clicked region's row until the next click. Note `text` still
-  // seeds from ALL regions: a click must find its value already loaded.
+  // Two modes, never mixed (visibleStyleRegions): a click shows ONLY that region's
+  // controls; browsing lists ONLY site-wide regions. Note `text` still seeds from ALL
+  // regions: a click must find its value already loaded.
   const groupedRegions = useMemo(
-    () => groupStyleRegions(visibleStyleRegions(regions, lastSel)),
-    [regions, lastSel],
+    () => groupStyleRegions(visibleStyleRegions(regions, selected)),
+    [regions, selected],
   )
   useEffect(() => {
     if (!open) return
@@ -267,10 +269,13 @@ export function StyleTools({
   return (
     <div className="py-2">
       {/* The one edit path for page parts is CLICKING them — this line is the panel's
-          whole instruction, and the list below holds only site-wide styles. */}
-      <p className="px-5 pb-2 pt-3 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-        Click any part of the site to style it
-      </p>
+          whole instruction, and the browse list below holds only site-wide styles.
+          Hidden while a click focus is showing: it would caption the wrong thing. */}
+      {!selected && (
+        <p className="px-5 pb-2 pt-3 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          Click any part of the site to style it
+        </p>
+      )}
       {/* Regions are grouped by their manifest `group` ("Hero", "Sections", …) so the
           panel reads as a short outline of the page rather than one long list. Regions
           with no group fall under a single unlabelled run, preserving manifest order. */}

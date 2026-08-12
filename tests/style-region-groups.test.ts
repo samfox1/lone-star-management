@@ -104,18 +104,21 @@ describe('visibleStyleRegions — the Style tab shows SITE-WIDE styles only', ()
     { key: 'work_section', label: 'Music section' },
   ]
 
-  it('CRITICAL: per-element regions are reachable by CLICKING only — no duplicate edit paths', () => {
+  it('CRITICAL: browsing shows site-wide regions ONLY — per-element regions are click-to-edit', () => {
     // Sam, 2026-08-12: the old tab listed every region next to click-to-edit — two
     // places to edit the same thing. Browsing the tab now shows only what belongs to
     // no clickable element (the page itself).
     expect(visibleStyleRegions(regions, null).map((r) => r.key)).toEqual(['page'])
   })
 
-  it('the clicked region joins the list, in manifest order — click-to-edit still lands here', () => {
-    expect(visibleStyleRegions(regions, 'hero_name').map((r) => r.key)).toEqual(['page', 'hero_name'])
+  it("CRITICAL: a click FOCUSES — only the clicked region's controls, no site list around them", () => {
+    // The second half of the same rule: clicking an element shows THAT element's
+    // tools, not the element appended to the site-wide list (Sam's follow-up: the tab
+    // must never become a second place to edit page parts).
+    expect(visibleStyleRegions(regions, 'hero_name').map((r) => r.key)).toEqual(['hero_name'])
   })
 
-  it('a stale selection that matches no region adds nothing', () => {
+  it('a stale selection that matches no region falls back to browsing', () => {
     expect(visibleStyleRegions(regions, 'gone').map((r) => r.key)).toEqual(['page'])
   })
 })
