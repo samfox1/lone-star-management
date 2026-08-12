@@ -1224,18 +1224,21 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.getByLabelText('Chrome Frosted glass')).toBeTruthy()
   })
 
-  it('a site-wide region offers size, padding, ONE color, frost — and no text styling', () => {
+  it('a site-wide region offers padding, ONE color, frost — and the divider only where the base draws one', () => {
     // The component half of controlsForRegion's rule (the id list is pinned in
     // tests/style-controls.test.ts): the rendered rows really match the allowlist.
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
     expect(screen.getByLabelText('Page Frosted glass')).toBeTruthy()
-    expect(screen.getByLabelText('Page Size')).toBeTruthy()
+    expect(screen.getByLabelText('Page Padding')).toBeTruthy()
     expect(screen.getByLabelText('Page Background color hex')).toBeTruthy()
+    expect(screen.queryByLabelText('Page Size')).toBeNull() // read as doing nothing — gone
     expect(screen.queryByLabelText('Page Boldness')).toBeNull()
-    expect(screen.queryByLabelText('Page Underline')).toBeNull()
     // One colour, no gradient (Sam, 2026-08-12).
     expect(screen.queryByLabelText('Page Background gradient start')).toBeNull()
+    expect(screen.queryByLabelText('Page Divider line')).toBeNull() // bg-paper draws no line
+    expand('Chrome')
+    expect(screen.getByLabelText('Chrome Divider line')).toBeTruthy() // border-t in its base
   })
 
   it('reads the base classes into the controls (Black weight, Uppercase on)', () => {

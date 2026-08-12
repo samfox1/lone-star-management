@@ -11,6 +11,7 @@ import {
   buildStyleControls,
   buildVideoItemStyleControls,
   readStyleValue,
+  sliderIndex,
   withUploadedFonts,
   buildTextItemStyleControls,
   controlsForRegion,
@@ -37,16 +38,57 @@ const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
 
 describe('controlsForRegion — a site-wide region styles the SURFACE only', () => {
-  it('CRITICAL: a site-wide region offers size, padding, ONE color, frost — nothing else', () => {
-    // Sam, 2026-08-12: nav bar and footer style here too — "size, padding, color",
-    // and "just one color, no gradient at the moment". ALLOWLIST, not blocklist —
-    // a control added later stays off site-wide regions unless it opts in here.
+  it('CRITICAL: a site-wide region offers padding, ONE color, frost — nothing else', () => {
+    // Sam, 2026-08-12: "just one color, no gradient at the moment"; text Size left the
+    // page ("the size dropdown has no effect… it shouldn't need to be on the site
+    // background") — bar height is the padding slider's job. ALLOWLIST, not blocklist.
     const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'frost', 'pad', 'size'])
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'frost', 'pad'])
+  })
+
+  it('CRITICAL: a chrome bar whose base draws a divider gets the Divider line toggle', () => {
+    // "A way to remove the line below the nav bar and above the footer": the toggle is
+    // built FROM the region's own base — off strips the border side, on restores it.
+    const bar = controlsForRegion(controls, {
+      key: 'masthead', label: 'Masthead', base: 'flex border-b border-ink/15 px-6 py-4', scope: 'site',
+    })
+    const divider = bar.find((c) => c.id === 'divider')
+    expect(divider?.kind).toBe('toggle')
+    if (divider?.kind !== 'toggle') throw new Error('unreachable')
+    expect(readStyleValue(divider, 'flex border-b border-ink/15 px-6 py-4')).toBe('on')
+    expect(applyStyleValue('flex border-b border-ink/15 px-6 py-4', divider, '')).toBe(
+      'flex border-ink/15 px-6 py-4',
+    )
+    expect(applyStyleValue('flex border-ink/15 px-6 py-4', divider, 'on')).toBe(
+      'flex border-ink/15 px-6 py-4 border-b',
+    )
+    // A region whose base draws no line gets no toggle — nothing to remove.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' })
+    expect(page.find((c) => c.id === 'divider')).toBeUndefined()
   })
 
   it('an ELEMENT region keeps the full set — text styling belongs to the elements', () => {
     expect(controlsForRegion(controls, { key: 'bio', label: 'Biography' })).toEqual(controls)
+  })
+})
+
+describe('the padding slider starts where the region actually is', () => {
+  it("CRITICAL: a base's own padding classes are measured — the handle parks at the real value", () => {
+    // Sam, 2026-08-12: the footer slider sat far LEFT ('' exact-matched the None step)
+    // while the bar wore py-10 — the first drag right applied a small pad and the bar
+    // SHRANK. The control must own and rank Tailwind padding classes so the handle
+    // starts ≈ the real inset and dragging right always grows it.
+    const pad = byId('pad')
+    expect(pad.kind).toBe('slider')
+    if (pad.kind !== 'slider') throw new Error('unreachable')
+    expect(readStyleValue(pad, 'border-t py-10 px-6')).toBe('py-10')
+    expect(pad.rank!('py-10')).toBe(40) // Tailwind scale: n × 4px
+    expect(pad.rank!('pad-[40px]')).toBe(40)
+    const { label, exact } = sliderIndex(pad, 'py-10')
+    expect(exact).toBe(false)
+    expect(label).toContain('40px')
+    // Picking a step REPLACES the base padding classes rather than fighting them.
+    expect(applyStyleValue('border-t py-10 px-6', pad, 'pad-[44px]')).toBe('border-t pad-[44px]')
   })
 })
 
@@ -71,6 +113,32 @@ describe('section colour controls — the ONE picker format everywhere', () => {
     expect(noPalette?.kind).toBe('color')
     const bgNoPalette = buildStyleControls().find((c) => c.id === 'bgColor')
     expect(bgNoPalette?.kind).toBe('color')
+  })
+})
+
+describe('the text tab, tuned (Sam, 2026-08-12)', () => {
+  const text = buildTextItemStyleControls({ fonts: [] })
+
+  it('CRITICAL: no strikethrough — the underline is the one decoration offered', () => {
+    expect(text.find((c) => c.id === 'strike')).toBeUndefined()
+    expect(text.find((c) => c.id === 'underline')).toBeTruthy()
+    // …so the line dressing (thickness, colour, Y position) is the UNDERLINE's.
+    expect(text.find((c) => c.id === 'decoThickness')).toBeTruthy()
+  })
+
+  it('Thickness offers only weights fonts render distinctly — five, not nine', () => {
+    // "Text thickness only has so many thicknesses that it can change to" — most
+    // fonts ship a handful of weights and the browser synthesizes the rest into
+    // near-duplicates; nine steps meant four dead notches.
+    const w = text.find((c) => c.id === 'weight')!
+    if (w.kind !== 'slider') throw new Error('unreachable')
+    expect(w.steps.map((s) => s.value)).toEqual([
+      '', 'font-light', 'font-normal', 'font-medium', 'font-bold', 'font-black',
+    ])
+  })
+
+  it("the offset slider is named 'Line Y position'", () => {
+    expect(text.find((c) => c.id === 'decoOffset')?.label).toBe('Line Y position')
   })
 })
 

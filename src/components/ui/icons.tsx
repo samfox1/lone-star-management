@@ -206,7 +206,23 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   trash: <path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13" />,
-  text: <path d="M5 6h14M5 10h14M5 14h9M5 18h6" />,
+  // "Aa" rather than bare lines (Sam, 2026-08-12) — real glyphs say "type" at a glance
+  // where rules read as layout. Drawn as text, not paths: the letterforms come from the
+  // UI font, so they match the app instead of a hand-traced approximation.
+  text: (
+    <text
+      x="12"
+      y="16.5"
+      textAnchor="middle"
+      fontSize="13"
+      fontWeight="700"
+      fontFamily="var(--font-inter, 'Inter'), system-ui, sans-serif"
+      fill="currentColor"
+      stroke="none"
+    >
+      Aa
+    </text>
+  ),
   // A page with a folded corner and a couple of written lines — enquiries are notes
   // somebody wrote, and `text` (bare lines) reads as formatting rather than a message.
   note: (

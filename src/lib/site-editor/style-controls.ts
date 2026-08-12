@@ -256,6 +256,20 @@ const pxRank = (named: Record<string, number>) => (t: string): number | null => 
   return named[t] ?? null
 }
 
+/** The padding slider must MEASURE a base's own Tailwind padding (`py-10` = 40px) and
+ *  REPLACE it when a step is picked. Blind to those classes it started at "None" while
+ *  the footer wore 40px, so the first drag right SHRANK the bar (Sam, 2026-08-12).
+ *  `''` ranks null, not 0 — unset means "whatever the base wears", not zero. */
+const TW_PAD_RE = /^p[trblxy]?-(\d+(?:\.\d+)?)$/
+const padRank = (t: string): number | null => {
+  if (t === '') return null
+  const arb = /^pad-\[(\d+(?:\.\d+)?)px\]$/.exec(t)
+  if (arb) return Number(arb[1])
+  const tw = TW_PAD_RE.exec(t)
+  return tw ? Number(tw[1]) * 4 : null
+}
+const ownsPad = (t: string) => t.startsWith('pad-[') || TW_PAD_RE.test(t)
+
 // The centred dressing sliders: Auto sits mid-ladder and ranks like ~2px (a browser's
 // usual auto thickness), so sub-pixel steps sort left of it and 3px+ right of it.
 const thicknessRank = (t: string): number | null => (t === '' ? 2 : pxRank({})(t))
@@ -395,7 +409,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   // underline sits from the word. One dressing serves both decorations.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
+  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
     id: 'frost',
@@ -410,8 +424,11 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     label: 'Padding',
     kind: 'slider',
     steps: PAD_STEPS,
-    rank: pxRank({}),
-    owns: (t) => t.startsWith('pad-['),
+    // Off-scale default: a section's '' is "whatever its base wears" (a bar's py-10),
+    // measured by padRank so the handle parks at the real inset — never the None end.
+    defaultOffScale: true,
+    rank: padRank,
+    owns: ownsPad,
   })
   controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: CASE_TOGGLE_CLASS, owns: (t) => t === CASE_TOGGLE_CLASS })
   controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: ITALIC_TOGGLE_CLASS, owns: (t) => t === ITALIC_TOGGLE_CLASS })
@@ -475,7 +492,12 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     id: 'weight',
     label: 'Thickness',
     kind: 'slider',
-    steps: [DEFAULT, ...WEIGHT_OPTIONS],
+    // Five distinct weights, not Tailwind's nine: most fonts ship a handful and the
+    // browser synthesizes the rest into near-duplicates, so nine steps meant dead
+    // notches on the slider (Sam, 2026-08-12). Derived by filtering the one table.
+    steps: [DEFAULT, ...WEIGHT_OPTIONS.filter((o) =>
+      ['font-light', 'font-normal', 'font-medium', 'font-bold', 'font-black'].includes(o.value),
+    )],
     defaultOffScale: true,
     owns: (t) => WEIGHTS.includes(fontSuffix(t)),
   })
@@ -546,12 +568,12 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     toToken: (hex) => (hex ? colorClass('text', hex) : ''),
   })
   controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
-  controls.push({ id: 'strike', label: 'Strikethrough', kind: 'toggle', onClass: STRIKE_TOGGLE, owns: (t) => t === STRIKE_TOGGLE })
-  // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
-  // underline sits from the word. One dressing serves both decorations.
+  // No strikethrough here (Sam, 2026-08-12: "for the text tab, remove strikethrough")
+  // — the underline is the one decoration, so the dressing below is unambiguously its.
+  // A stored line-through still renders; the section panel still offers it.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push({ id: 'decoOffset', label: 'Line distance', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
+  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...motionControls())
   return controls
 }
@@ -665,15 +687,33 @@ function sectionColorControl(
 }
 
 /** What a SITE-WIDE region (`scope: 'site'` — the page, the nav bar, the footer) may
- *  style: "size, padding, color" plus frost — and ONE colour, no gradient (Sam,
- *  2026-08-12). An ALLOWLIST, deliberately: a control added later stays off site-wide
- *  regions unless it opts in here. Element regions keep the full set. */
-const SITE_SCOPE_CONTROL_IDS = new Set(['size', 'pad', 'bgColor', 'frost'])
+ *  style: padding (which IS the bar-height knob), ONE colour, frost — no gradient and
+ *  no text controls (Sam, 2026-08-12; text Size left the same day: it read as doing
+ *  nothing, since every child sets its own size). An ALLOWLIST, deliberately: a
+ *  control added later stays off site-wide regions unless it opts in here. Element
+ *  regions keep the full set. */
+const SITE_SCOPE_CONTROL_IDS = new Set(['pad', 'bgColor', 'frost'])
+/** The border-side utilities a base can draw its divider with. */
+const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'border-r', 'border-x', 'border-y'])
 export function controlsForRegion(
   controls: StyleControl[],
   region: ManifestStyleRegion,
 ): StyleControl[] {
-  return region.scope === 'site' ? controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id)) : controls
+  if (region.scope !== 'site') return controls
+  const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
+  // "A way to remove the line below the nav bar and above the footer" (Sam,
+  // 2026-08-12): a toggle built FROM the region's own base — off strips the border
+  // side, on restores exactly the side the base drew. No base line, no toggle.
+  const side = (region.base ?? '').split(/\s+/).find((t) => DIVIDER_SIDES.has(t))
+  if (side)
+    out.push({
+      id: 'divider',
+      label: 'Divider line',
+      kind: 'toggle',
+      onClass: side,
+      owns: (t) => DIVIDER_SIDES.has(t),
+    })
+  return out
 }
 
 /* ENTRANCES PAUSED (2026-08-12) — the rank helpers rest with their sliders.
