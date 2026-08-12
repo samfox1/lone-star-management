@@ -152,9 +152,19 @@ describe('a BUILT-IN template is not fed by what its frame announces', () => {
     expect(inputs.styleRegions).toEqual([])
     expect(inputs.linkRegions).toEqual([])
     expect(inputs.components).toEqual([])
+    // videoSlots too — a built-in must not inherit skeen's hardcoded video layout
+    // (phase 4). If the `?? []` default regressed to a skeen default, only the
+    // component test would catch it; the resolver's own suite must bite here.
+    expect(inputs.videoSlots).toEqual([])
     // The gallery too: it read the UNGATED manifest before this refactor, so a built-in
     // announcing an image slot would have shown a collage its template cannot render.
     expect(inputs.showGallery).toBe(false)
+  })
+
+  it('a CUSTOM site that declares no videoSlots resolves to [] — no inherited slots', () => {
+    const bare = { ...FULL, videoSlots: undefined } as unknown as TemplateManifest
+    const inputs = resolve({ customSiteUrl: 'https://site.example', manifest: bare })
+    expect(inputs.videoSlots).toEqual([])
   })
 })
 

@@ -656,6 +656,24 @@ describe('EditorInspector — Links component', () => {
     }
   })
 
+  it('CRITICAL: an UNKNOWN host keeps the existing label — inference never blanks it', () => {
+    // A URL that matches no platform (a personal site) has no icon to infer, so the row
+    // must keep whatever name it had. The false branch of the inference was untested; a
+    // mutant blanking the label survived the whole suite.
+    vi.useFakeTimers()
+    try {
+      openLinks()
+      expandLink(1) // Spotify
+      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://juniperhale.com' } })
+      vi.advanceTimersByTime(500)
+      const fd = updateContentMock.mock.calls.at(-1)![3] as FormData
+      expect(fd.get('label')).toBe('Spotify') // kept, not blanked
+      expect(fd.get('url')).toBe('https://juniperhale.com')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reflects an edited label on the collapsed row', () => {
     vi.useFakeTimers()
     try {
@@ -1438,6 +1456,17 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     expect(screen.getByText('Page background')).toBeTruthy()
     expect(screen.queryByText('Biography')).toBeNull()
+  })
+
+  it('CRITICAL: a single-region group whose row repeats the heading shows it ONCE', () => {
+    // The double-header fix (Sam, 2026-08-12): a "Footer" group over a "Footer" region
+    // must not render both. The panel-level suppression (showHeading) is separate from
+    // the sectionRowLabel unit tests, and was unpinned.
+    renderInspector([], {
+      styleRegions: [{ key: 'footer', label: 'Footer', base: 'border-t', group: 'Footer', scope: 'chrome' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    expect(screen.getAllByText('Footer')).toHaveLength(1)
   })
 })
 

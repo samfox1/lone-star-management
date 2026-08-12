@@ -99,6 +99,22 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
   it('an ELEMENT region keeps the full set — text styling belongs to the elements', () => {
     expect(controlsForRegion(controls, { key: 'bio', label: 'Biography' })).toEqual(controls)
   })
+
+  it("an ITEM-scoped region also keeps the full set — it dresses one clickable element", () => {
+    // scope 'item' (song titles) falls through to the full control set like an element
+    // region; only 'site'/'chrome' are the surface-only allowlist.
+    expect(controlsForRegion(controls, { key: 'song_title', label: 'Song title', scope: 'item' })).toEqual(controls)
+  })
+
+  it('CRITICAL: the chrome Width slider MEASURES a % token, not just the full default', () => {
+    // '' ranks 100 (full-bleed); a real secw-[N%] token must rank N, or the handle
+    // parks wrong. Only the '' end was pinned before.
+    const bar = controlsForRegion(controls, { key: 'masthead', label: 'Masthead', scope: 'chrome' })
+    const width = bar.find((c) => c.id === 'width')!
+    if (width.kind !== 'slider') throw new Error('unreachable')
+    expect(width.rank!('secw-[60%]')).toBe(60)
+    expect(width.rank!('')).toBe(100)
+  })
 })
 
 describe('the padding slider starts where the region actually is', () => {

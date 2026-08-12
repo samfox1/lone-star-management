@@ -577,3 +577,31 @@ describe('Reset on a section region restores the SITE’S value, not nothing', (
     expect(className).toBe('')
   })
 })
+
+import { EditRow } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
+
+describe('EditRow — the version-A row primitive', () => {
+  it('CRITICAL: two-line mode shows KEY over value, with a muted placeholder when empty', () => {
+    const { rerender } = render(<EditRow label="Name" value="Juniper Hale" onEdit={() => {}} />)
+    expect(screen.getByText('Name')).toBeTruthy()
+    expect(screen.getByText('Juniper Hale')).toBeTruthy()
+    // Empty → the muted italic placeholder text is what shows as the value.
+    rerender(<EditRow label="Bio" value="Not set" empty onEdit={() => {}} />)
+    const placeholder = screen.getByText('Not set')
+    expect(placeholder.className).toContain('italic')
+  })
+
+  it('CRITICAL: single-line mode (no value) shows ONLY the label — the Style row', () => {
+    const { container } = render(<EditRow label="Masthead bar" onEdit={() => {}} />)
+    expect(screen.getByText('Masthead bar')).toBeTruthy()
+    // No second value line: the label is the only text node in the row's text column.
+    expect(container.querySelectorAll('.flex-col > span')).toHaveLength(1)
+  })
+
+  it('the pencil fires onEdit and is labelled "Edit <label>"', () => {
+    const onEdit = vi.fn()
+    render(<EditRow label="Tagline" value="x" onEdit={onEdit} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Tagline' }))
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+})
