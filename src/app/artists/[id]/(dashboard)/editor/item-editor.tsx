@@ -2,11 +2,9 @@ import { useMemo, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { applyStyleValue, buildItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
-import { colorClass, resolveStyle } from '@/lib/site-editor/style-apply'
 import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
-import { ColorPalette } from './color-picker'
 import { LibraryPicker } from './inspector-grid'
 import { saveEditorStyleAction } from '../actions'
 
@@ -118,10 +116,6 @@ export function ItemEditor({
     else onBack()
   }
 
-  // The border hex is read back out of the same resolution the site uses, so the picker
-  // always reflects what is actually staged.
-  const borderHex = resolveStyle(classes).style.borderColor ?? ''
-
   return (
     <>
       <EditorPanel label={label} thumb={preview} onBack={requestBack}>
@@ -146,26 +140,20 @@ export function ItemEditor({
 
         <GroupLabel>Style</GroupLabel>
         <div className="px-5 pb-3">
-          {controls.map((control) =>
-            control.kind === 'color' ? (
-              <ColorPalette
-                key={control.id}
-                label={control.label}
-                aria={`${label} ${control.label}`}
-                value={borderHex}
-                used={swatches}
-                onChange={(hex) => change(applyStyleValue(classes, control, hex ? colorClass('border', hex) : ''))}
-              />
-            ) : (
-              <StyleControlRow
-                key={control.id}
-                regionLabel={label}
-                control={control}
-                cls={classes}
-                onChange={(v) => change(applyStyleValue(classes, control, v))}
-              />
-            ),
-          )}
+          {/* Every control — border colour included — goes through StyleControlRow now
+              (2026-08-12 consolidation): borderColor gained its own hexOf/toToken, so it
+              renders a ColorPalette through the generic colour branch like every other
+              picker, instead of a hand-wired special case here. */}
+          {controls.map((control) => (
+            <StyleControlRow
+              key={control.id}
+              regionLabel={label}
+              control={control}
+              cls={classes}
+              swatches={swatches}
+              onChange={(v) => change(applyStyleValue(classes, control, v))}
+            />
+          ))}
         </div>
 
         {/* The exit contract: Revert restores the last-saved state, Save commits what's

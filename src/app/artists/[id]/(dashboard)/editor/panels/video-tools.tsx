@@ -24,7 +24,7 @@ function FocusableCard({ focused, label, children }: { focused: boolean; label: 
     </div>
   )
 }
-import { runSerialized, SlotGroupLabel } from '../inspector-shared'
+import { runSerialized, SlotGroupLabel, SaveLine } from '../inspector-shared'
 import { renameVideoAction } from '../../actions'
 
 /* ── Video tools: the site's video slots ─────────────────────────────────────────
@@ -247,16 +247,7 @@ export function VideoTools({
         />
       )}
 
-      {status !== 'idle' && (
-        <div
-          className={cx(
-            'font-space text-[10px] uppercase tracking-[0.08em]',
-            status === 'error' ? 'text-accent-red' : 'text-ink-faint',
-          )}
-        >
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Failed'}
-        </div>
-      )}
+      <SaveLine status={status} />
     </div>
   )
 }

@@ -813,7 +813,23 @@ export function buildItemStyleControls(): StyleControl[] {
     { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') },
     { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-') },
     { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, rank: pxRank(BORDER_PX), owns: isBorderWidth },
-    { id: 'borderColor', label: 'Border color', kind: 'color', owns: (t) => colorToken(t)?.prop === 'borderColor' },
+    {
+      id: 'borderColor',
+      label: 'Border color',
+      kind: 'color',
+      owns: (t) => colorToken(t)?.prop === 'borderColor',
+      // Own hex read/write, so the GENERIC StyleControlRow colour branch renders it —
+      // ItemEditor no longer special-cases it (2026-08-12 consolidation). Reads the hex
+      // back out of the same resolution the site uses, so the picker reflects what's set.
+      hexOf: (cls) => {
+        for (const t of cls.split(/\s+/)) {
+          const c = colorToken(t)
+          if (c?.prop === 'borderColor') return c.value
+        }
+        return ''
+      },
+      toToken: (hex) => (hex ? colorClass('border', hex) : ''),
+    },
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
     // Slice-1 effects (2026-08-10). All lift inline, so they work on every deployed
