@@ -270,14 +270,9 @@ export function StyleTools({
 
   return (
     <div className="py-2">
-      {/* The one edit path for page parts is CLICKING them — this line is the panel's
-          whole instruction, and the browse list below holds only site-wide styles.
-          Hidden while a click focus is showing: it would caption the wrong thing. */}
-      {!selected && (
-        <p className="px-5 pb-2 pt-3 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-          Click any part of the site to style it
-        </p>
-      )}
+      {/* No instruction line (Sam, 2026-08-12: "the goal is for the ui to be easy
+          enough to not need them") — the browse list holds only site-wide styles;
+          clicking the preview is discoverable on its own. */}
       {/* Regions are grouped by their manifest `group` ("Hero", "Sections", …) so the
           panel reads as a short outline of the page rather than one long list. Regions
           with no group fall under a single unlabelled run, preserving manifest order. */}
