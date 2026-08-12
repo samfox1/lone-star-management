@@ -680,6 +680,19 @@ function motionControls(): StyleControl[] {
     // { id: 'entranceSpeed', label: 'Entrance speed', kind: 'slider', steps: ENTRANCE_SPEED_STEPS, rank: msRank, owns: (t) => t.startsWith('enterdur-[') },
     // { id: 'entranceTravel', label: 'Entrance travel', kind: 'slider', steps: ENTRANCE_TRAVEL_STEPS, rank: distRank, owns: (t) => t.startsWith('enterdist-[') },
     { id: 'hover', label: 'On hover', kind: 'select', options: HOVER_OPTIONS, owns: (t) => t.startsWith('hover-') },
+    // Hover colour (Sam, 2026-08-12). Two tokens as ONE value: the `hovercolor`
+    // marker class carries the compiled :hover rule, `hovercolor-[#hex]` lifts the
+    // colour inline — apart they are both no-ops, so they are written and cleared
+    // together. No dash after "hover", so the effect select above never sweeps them.
+    {
+      id: 'hoverColor',
+      label: 'Hover color',
+      kind: 'color',
+      owns: (t) => t === 'hovercolor' || t.startsWith('hovercolor-['),
+      hexOf: (cls) =>
+        cls.split(/\s+/).map((t) => /^hovercolor-\[(#[0-9a-fA-F]{3,8})\]$/.exec(t)?.[1]).find(Boolean) ?? '',
+      toToken: (hex) => (hex ? `hovercolor hovercolor-[${hex}]` : ''),
+    },
   ]
 }
 

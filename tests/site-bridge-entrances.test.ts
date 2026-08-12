@@ -134,6 +134,15 @@ describe('effectsCss — the derived rules', () => {
     expect(effectsCss()).toContain('html[data-lse-entrances]{overflow-x:clip}')
   })
 
+  it('CRITICAL: hover colour — the marker rule is compiled, the hex lifts, the clear list can reset it', () => {
+    const css = effectsCss()
+    expect(css).toContain('.hovercolor:hover{color:var(--lse-hover-color')
+    expect(css).toContain('.hovercolor{transition:color') // eases like every hover effect
+    expect(resolveStyle('hovercolor-[#ff0055]').style['--lse-hover-color']).toBe('#ff0055')
+    expect(resolveStyle('hovercolor').className).toBe('hovercolor') // marker survives as a class
+    expect(MANAGED_STYLE_PROPS).toContain('--lse-hover-color')
+  })
+
   it('entrance and hover classes SURVIVE resolution — compiled CSS, never lifted', () => {
     for (const o of [...ENTRANCE_OPTIONS, ...HOVER_OPTIONS]) {
       if (!o.value) continue

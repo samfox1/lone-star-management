@@ -374,6 +374,15 @@ export function effectsCss(): string {
       `html[data-lse-entrances] .${o.value}:not([data-lse-entered]){${hidden}}`,
     )
   }
+  // Hover COLOUR (Sam, 2026-08-12): the `hovercolor` marker class carries the compiled
+  // :hover rule; the hex arrives inline as --lse-hover-color (styles.ts lifts
+  // `hovercolor-[#hex]`). No dash after "hover", deliberately — the hover-effect
+  // select owns the `hover-` prefix and must not sweep the marker. currentColor
+  // fallback makes a marker without a colour a no-op, never a colour change.
+  out.push(
+    '.hovercolor{transition:color 0.25s ease}',
+    '.hovercolor:hover{color:var(--lse-hover-color, currentColor)}',
+  )
   for (const o of HOVER_OPTIONS) {
     if (o.value === '') continue
     const rule = HOVER_RULE[o.value]

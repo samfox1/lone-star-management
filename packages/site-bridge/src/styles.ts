@@ -302,6 +302,10 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // Entrance travel rides its own property the same way; vw is the "screen edge" step.
   m = token.match(/^enterdist-\[(\d{1,4})(px|vw)\]$/);
   if (m) return { "--lse-enter-distance": `${m[1]}${m[2]}` };
+  // Hover colour: the hex lifts here, the `hovercolor` marker class (compiled) applies
+  // it on :hover — inline styles cannot express pseudo-classes.
+  m = token.match(/^hovercolor-\[(#[0-9a-fA-F]{3,8})\]$/);
+  if (m) return { "--lse-hover-color": m[1] };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
@@ -358,6 +362,7 @@ export const MANAGED_STYLE_PROPS = [
   "padding",
   "--lse-enter-duration",
   "--lse-enter-distance",
+  "--lse-hover-color",
 ] as const;
 
 export type ResolvedStyle = {

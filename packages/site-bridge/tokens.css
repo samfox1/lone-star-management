@@ -121,6 +121,8 @@ html[data-lse-entrances] .enter-slide-right:not([data-lse-entered]){opacity:0;tr
 html[data-lse-entrances] .enter-zoom:not([data-lse-entered]){opacity:0;transform:scale(0.9)}
 .enter-blur{transition:opacity var(--lse-enter-duration, 1.2s) ease,transform var(--lse-enter-duration, 1.2s) ease,filter var(--lse-enter-duration, 1.2s) ease}
 html[data-lse-entrances] .enter-blur:not([data-lse-entered]){opacity:0;filter:blur(10px)}
+.hovercolor{transition:color 0.25s ease}
+.hovercolor:hover{color:var(--lse-hover-color, currentColor)}
 .hover-grow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-grow:hover{transform:scale(1.05)}
 .hover-shrink{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}

@@ -53,7 +53,7 @@ describe('buildStyleControls', () => {
       'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
       // Entrances PAUSED 2026-08-12 (see motionControls) — hover stays.
-      'hover',
+      'hover', 'hoverColor',
     ])
   })
 })
@@ -70,8 +70,29 @@ describe('buildItemStyleControls (per-image/video)', () => {
       'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
       'shape', 'feather', 'pad',
       // Entrances PAUSED 2026-08-12 (see motionControls) — hover stays.
-      'hover',
+      'hover', 'hoverColor',
     ])
+  })
+
+  it('CRITICAL: hover colour writes marker + hex together, clears together, survives the effect select', () => {
+    // The compiled :hover rule lives on the `hovercolor` marker class; the hex lifts
+    // inline from `hovercolor-[#hex]`. Apart they are both no-ops, so the control
+    // must write and clear them as one. And the hover-EFFECT select (owns `hover-`)
+    // must not sweep them: `hovercolor` deliberately has no dash after "hover".
+    const ctl = itemById('hoverColor')
+    expect(ctl.kind).toBe('color')
+    if (ctl.kind !== 'color') throw new Error('unreachable — narrows the union for tsc')
+    let s = applyStyleValue('rounded-xl', ctl, ctl.toToken!('#ff0055', 'rounded-xl'))
+    const tokens = () => s.split(/\s+/)
+    expect(tokens()).toContain('hovercolor')
+    expect(tokens()).toContain('hovercolor-[#ff0055]')
+    expect(ctl.hexOf!(s)).toBe('#ff0055')
+    s = applyStyleValue(s, itemById('hover'), 'hover-grow')
+    expect(tokens()).toContain('hovercolor')
+    expect(tokens()).toContain('hovercolor-[#ff0055]')
+    s = applyStyleValue(s, ctl, '')
+    expect(s).not.toContain('hovercolor')
+    expect(tokens()).toContain('hover-grow') // clearing the colour keeps the effect
   })
 
   it('size, transparency, border, corners + shadow are SLIDERS; border colour is a palette', () => {
