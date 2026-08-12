@@ -1,7 +1,6 @@
-import { cx } from '@/lib/cx'
 import { groupByPrefix, sectionRowLabel } from '@/lib/site-editor/manifest'
 import { type EditorTextField } from '../inspector-types'
-import { CONTROL_LABEL, GroupLabel, SaveLine, EditButton, type SaveStatus } from '../inspector-shared'
+import { GroupLabel, SaveLine, EditRow, type SaveStatus } from '../inspector-shared'
 
 /* ── Text tools: the site's headings, taglines, bio, booking copy ──────────────
  *
@@ -28,38 +27,26 @@ export function TextTools({
         <div key={heading || '_flat'}>
           {heading && <GroupLabel>{heading}</GroupLabel>}
           {group.map((f) => {
-        const value = values[f.key] ?? ''
-        // Under a heading, drop the heading word — "Hero" › "Name", not "Hero name"
-        // (Sam, 2026-08-12). The full label stays the aria/EditButton name.
-        const rowLabel = sectionRowLabel(heading, f.label) || f.label
-        return (
-          <div key={f.key} className="px-5 py-1.5">
-            {/* No leading icon: one glyph per row down a column of text fields is noise
-                the label already covers. */}
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <span className={CONTROL_LABEL}>{rowLabel}</span>
-              {onEditField && <EditButton label={f.label} onClick={() => onEditField(f)} />}
-            </div>
-            {/* The current copy, shown not typed. Truncated to two lines: this is a list
-                to scan, and a bio would otherwise push every field below it off screen. */}
-            <p
-              className={cx(
-                'line-clamp-2 rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-[12px] leading-snug',
-                (value || f.defaultValue) && !f.styleOnly
-                  ? 'text-ink'
-                  : 'italic text-ink-faint',
-              )}
-            >
-              {/* A style-only row is an AREA of the site, not a box to type in — say what
-                  it is rather than showing a blank that reads as missing content. */}
-              {/* An unset field falls back to what the SITE shows, when its manifest says.
-                  "Empty" is true of the database and useless to someone looking at a page
-                  of words; the manager needs to see the copy they are about to replace. */}
-              {f.styleOnly
-                ? 'Set by the site — restyle only'
-                : value || f.defaultValue || 'Empty'}
-            </p>
-          </div>
+            const value = values[f.key] ?? ''
+            // Under a heading, drop the heading word — "Hero" › "Name", not "Hero name".
+            // The full label stays the aria name (EditRow builds "Edit <label>").
+            const rowLabel = sectionRowLabel(heading, f.label) || f.label
+            // A style-only row is an AREA of the site (its words are the design's), so
+            // its value is a note, not copy. An unset field falls back to the site's own
+            // words when the manifest supplies them — "Empty" is useless to someone
+            // looking at a page of words.
+            const shown = f.styleOnly
+              ? 'Set by the site — restyle only'
+              : value || f.defaultValue || 'Not set'
+            const empty = f.styleOnly || !(value || f.defaultValue)
+            return (
+              <EditRow
+                key={f.key}
+                label={rowLabel}
+                value={shown}
+                empty={empty}
+                onEdit={() => onEditField?.(f)}
+              />
             )
           })}
         </div>

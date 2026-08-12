@@ -190,6 +190,50 @@ export function EditButton({ label, onClick }: { label: string; onClick: () => v
   )
 }
 
+/**
+ * THE unified list row (Sam, 2026-08-12): a mono-caps KEY over its current VALUE, with
+ * a bare grey edit pencil that appears only on row hover (no bordered button). One row
+ * shape for Text, Links, Merch, and Style — the "version A" prototype. An empty value
+ * renders muted so a blank reads as "nothing set yet", not broken.
+ */
+export function EditRow({
+  label,
+  value,
+  empty = false,
+  onEdit,
+}: {
+  /** The KEY — always shown, so a field like "Name" is unambiguous. */
+  label: string
+  /** The current value (or the muted placeholder when `empty`). */
+  value: React.ReactNode
+  empty?: boolean
+  onEdit: () => void
+}) {
+  return (
+    <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-surface">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className={CONTROL_LABEL}>{label}</span>
+        <span
+          className={cx(
+            'truncate text-[13px]',
+            empty ? 'italic text-ink-faint' : 'text-ink',
+          )}
+        >
+          {value}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${label}`}
+        className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        <Icon name="edit" size={16} />
+      </button>
+    </div>
+  )
+}
+
 /** The mono status line every panel ends with. */
 export function SaveLine({ status }: { status: SaveStatus }) {
   if (status === 'idle') return null
