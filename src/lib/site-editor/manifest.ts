@@ -202,5 +202,5 @@ export function visibleStyleRegions(
   selected: string | null,
 ): ManifestStyleRegion[] {
   const focused = selected ? regions.filter((r) => r.key === selected) : []
-  return focused.length ? focused : regions.filter((r) => r.scope === 'site')
+  return focused.length ? focused : regions.filter((r) => r.scope === 'site' || r.scope === 'chrome')
 }

@@ -1190,7 +1190,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   // allowlist (controlsForRegion) — no text styling on the page itself.
   const PAGE_REGIONS: ManifestStyleRegion[] = [
     { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' },
-    { key: 'chrome', label: 'Chrome', base: 'border-t', scope: 'site' },
+    { key: 'chrome', label: 'Chrome', base: 'border-t', scope: 'chrome' },
   ]
   const PALETTE: SiteStyleOptions = {
     fonts: [{ value: 'font-momo', label: 'Momo' }],
@@ -1230,8 +1230,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
     expect(screen.getByLabelText('Page Padding')).toBeTruthy()
-    expect(screen.getByLabelText('Page Width')).toBeTruthy()
-    expect(screen.getByLabelText('Page Height')).toBeTruthy()
+    // Geometry is the CHROME bars' (Sam: "drop height and width from the middle").
+    expect(screen.queryByLabelText('Page Width')).toBeNull()
+    expect(screen.queryByLabelText('Page Height')).toBeNull()
     expect(screen.queryByLabelText('Page Frosted glass')).toBeNull() // nothing behind an opaque bar to blur
     expect(screen.getByLabelText('Page Background color hex')).toBeTruthy()
     expect(screen.queryByLabelText('Page Size')).toBeNull() // read as doing nothing — gone
@@ -1241,6 +1242,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.queryByLabelText('Page Divider line')).toBeNull() // bg-paper draws no line
     expand('Chrome')
     expect(screen.getByLabelText('Chrome Divider line')).toBeTruthy() // border-t in its base
+    expect(screen.getByLabelText('Chrome Width')).toBeTruthy()
+    expect(screen.getByLabelText('Chrome Height')).toBeTruthy()
   })
 
   it('reads the base classes into the controls (Black weight, Uppercase on)', () => {

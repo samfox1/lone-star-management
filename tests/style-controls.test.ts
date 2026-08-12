@@ -44,14 +44,22 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     // background") — bar height is the padding slider's job — and frost followed for
     // the same reads-as-doing-nothing reason. ALLOWLIST, not blocklist.
     const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'height', 'pad', 'width'])
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'pad'])
+  })
+
+  it("CRITICAL: geometry belongs to the CHROME bars — the body band can't show it", () => {
+    // Sam, 2026-08-12: "we can drop height and width from the middle." Height is a
+    // floor and the body stands taller than every step; width there reads as a
+    // rightward push. The bars are where both behave, so scope:'chrome' carries them.
+    const bar = controlsForRegion(controls, { key: 'masthead', label: 'Masthead', scope: 'chrome' })
+    expect(bar.map((c) => c.id).sort()).toEqual(['bgColor', 'height', 'pad', 'width'])
   })
 
   it('CRITICAL: Width runs 40% → Full and rests at the RIGHT end — a section is full-bleed by default', () => {
     // Sam, 2026-08-12: "far right is 100% width, left may be 0, or, if that doesn't
     // make sense, some other number" — 0 is an invisible bar, so the floor is 40%.
-    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    const width = page.find((c) => c.id === 'width')!
+    const bar = controlsForRegion(controls, { key: 'masthead', label: 'Masthead', scope: 'chrome' })
+    const width = bar.find((c) => c.id === 'width')!
     if (width.kind !== 'slider') throw new Error('unreachable')
     expect(width.steps[0].value).toBe('secw-[40%]')
     expect(width.steps.at(-1)).toEqual({ value: '', label: 'Full' })
@@ -60,8 +68,8 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
   })
 
   it('Height starts at Auto (off-scale) and measures its px steps', () => {
-    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    const height = page.find((c) => c.id === 'height')!
+    const bar = controlsForRegion(controls, { key: 'masthead', label: 'Masthead', scope: 'chrome' })
+    const height = bar.find((c) => c.id === 'height')!
     if (height.kind !== 'slider') throw new Error('unreachable')
     expect(height.rank!('sech-[240px]')).toBe(240)
     expect(height.rank!('')).toBeNull() // Auto is "what the content needs", not zero

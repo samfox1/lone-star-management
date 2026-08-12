@@ -704,15 +704,14 @@ export function controlsForRegion(
   controls: StyleControl[],
   region: ManifestStyleRegion,
 ): StyleControl[] {
-  if (region.scope !== 'site') return controls
+  if (region.scope !== 'site' && region.scope !== 'chrome') return controls
   const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
-  // "A way to remove the line below the nav bar and above the footer" (Sam,
-  // 2026-08-12): a toggle built FROM the region's own base — off strips the border
-  // side, on restores exactly the side the base drew. No base line, no toggle.
-  // Section geometry (Sam, 2026-08-12: all three sections get a width and a height).
+  // Geometry belongs to the CHROME bars only (Sam, 2026-08-12: "drop height and
+  // width from the middle") — the body band stands taller than every height step,
+  // so a floor never engages there, and narrowing it reads as a rightward push.
   // Width's '' IS the 100% right end — full-bleed is what a section is by default —
   // so it ranks 100, not off-scale. Height's '' is Auto: what the content needs.
-  out.push({
+  if (region.scope === 'chrome') out.push({
     id: 'width',
     label: 'Width',
     kind: 'slider',
@@ -720,7 +719,7 @@ export function controlsForRegion(
     rank: (t) => (t === '' ? 100 : Number(/^secw-\[(\d{1,3})%\]$/.exec(t)?.[1] ?? NaN) || null),
     owns: (t) => t.startsWith('secw-['),
   })
-  out.push({
+  if (region.scope === 'chrome') out.push({
     id: 'height',
     label: 'Height',
     kind: 'slider',
@@ -733,6 +732,9 @@ export function controlsForRegion(
     },
     owns: (t) => t.startsWith('sech-['),
   })
+  // "A way to remove the line below the nav bar and above the footer" (Sam,
+  // 2026-08-12): a toggle built FROM the region's own base — off strips the border
+  // side, on restores exactly the side the base drew. No base line, no toggle.
   const side = (region.base ?? '').split(/\s+/).find((t) => DIVIDER_SIDES.has(t))
   if (side)
     out.push({

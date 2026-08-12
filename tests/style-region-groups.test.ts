@@ -100,6 +100,7 @@ describe('groupStyleRegions', () => {
 describe('visibleStyleRegions — the Style tab shows SITE-WIDE styles only', () => {
   const regions: ManifestStyleRegion[] = [
     { key: 'page', label: 'Page background', scope: 'site' },
+    { key: 'masthead', label: 'Masthead', scope: 'chrome' }, // bars list beside the page
     { key: 'hero_name', label: 'Hero title' },
     { key: 'work_section', label: 'Music section' },
   ]
@@ -108,7 +109,7 @@ describe('visibleStyleRegions — the Style tab shows SITE-WIDE styles only', ()
     // Sam, 2026-08-12: the old tab listed every region next to click-to-edit — two
     // places to edit the same thing. Browsing the tab now shows only what belongs to
     // no clickable element (the page itself).
-    expect(visibleStyleRegions(regions, null).map((r) => r.key)).toEqual(['page'])
+    expect(visibleStyleRegions(regions, null).map((r) => r.key)).toEqual(['page', 'masthead'])
   })
 
   it("CRITICAL: a click FOCUSES — only the clicked region's controls, no site list around them", () => {
@@ -119,6 +120,6 @@ describe('visibleStyleRegions — the Style tab shows SITE-WIDE styles only', ()
   })
 
   it('a stale selection that matches no region falls back to browsing', () => {
-    expect(visibleStyleRegions(regions, 'gone').map((r) => r.key)).toEqual(['page'])
+    expect(visibleStyleRegions(regions, 'gone').map((r) => r.key)).toEqual(['page', 'masthead'])
   })
 })
