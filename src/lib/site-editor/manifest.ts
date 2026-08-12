@@ -189,3 +189,17 @@ export function groupByPrefix<T extends { key: string; group?: string }>(
 /** The style panel's grouping, by its original name. Same function — the Text panel now
  *  groups the same way, so the two panels can never disagree about a site's outline. */
 export const groupStyleRegions = groupByPrefix
+
+/**
+ * What the Style tab LISTS: site-wide regions (`scope: 'site'`) plus the region the
+ * manager clicked, in manifest order. Every element-scoped region is reached by
+ * clicking it in the preview — the tab listing them all beside click-to-edit was two
+ * places to edit the same thing (Sam, 2026-08-12). The clicked key still joins the
+ * list so a preview click has a row to open.
+ */
+export function visibleStyleRegions(
+  regions: ManifestStyleRegion[],
+  selected: string | null,
+): ManifestStyleRegion[] {
+  return regions.filter((r) => r.scope === 'site' || r.key === selected)
+}

@@ -112,7 +112,7 @@ const COMPONENTS: Component[] = [
   { kind: 'music', icon: 'tracks', label: 'Music' },
   { kind: 'tour', icon: 'tour', label: 'Tour' },
   { kind: 'merch', icon: 'merch', label: 'Merch' },
-  { kind: 'style', icon: 'bolt', label: 'Style' },
+  { kind: 'style', icon: 'brush', label: 'Style' },
   // Site-WIDE settings (the cursor, and whatever joins it) — things that belong to no
   // single region, so no other panel could honestly hold them.
   { kind: 'site', icon: 'settings', label: 'Site' },

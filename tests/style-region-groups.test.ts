@@ -8,7 +8,7 @@
  * become its own heading, which is noise, not structure.
  */
 import { describe, expect, it } from 'vitest'
-import { groupStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { groupStyleRegions, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 
 const r = (key: string, group?: string): ManifestStyleRegion => ({ key, label: key, group })
 
@@ -94,5 +94,28 @@ describe('groupStyleRegions', () => {
 
   it('is empty for no regions', () => {
     expect(groupStyleRegions([])).toEqual([])
+  })
+})
+
+describe('visibleStyleRegions — the Style tab shows SITE-WIDE styles only', () => {
+  const regions: ManifestStyleRegion[] = [
+    { key: 'page', label: 'Page background', scope: 'site' },
+    { key: 'hero_name', label: 'Hero title' },
+    { key: 'work_section', label: 'Music section' },
+  ]
+
+  it('CRITICAL: per-element regions are reachable by CLICKING only — no duplicate edit paths', () => {
+    // Sam, 2026-08-12: the old tab listed every region next to click-to-edit — two
+    // places to edit the same thing. Browsing the tab now shows only what belongs to
+    // no clickable element (the page itself).
+    expect(visibleStyleRegions(regions, null).map((r) => r.key)).toEqual(['page'])
+  })
+
+  it('the clicked region joins the list, in manifest order — click-to-edit still lands here', () => {
+    expect(visibleStyleRegions(regions, 'hero_name').map((r) => r.key)).toEqual(['page', 'hero_name'])
+  })
+
+  it('a stale selection that matches no region adds nothing', () => {
+    expect(visibleStyleRegions(regions, 'gone').map((r) => r.key)).toEqual(['page'])
   })
 })

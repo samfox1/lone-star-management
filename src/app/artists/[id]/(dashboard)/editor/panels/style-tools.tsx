@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { cx } from '@/lib/cx'
 import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
-import { groupStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { groupStyleRegions, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import {
   applyStyleValue,
   sameClasses,
@@ -204,7 +204,6 @@ export function StyleTools({
   const { status, save } = useStyleRegionSave(artistId, onApplyStyle)
 
   const controls = useMemo(() => buildStyleControls(options), [options])
-  const groupedRegions = useMemo(() => groupStyleRegions(regions), [regions])
 
   // The frame's edit-list arrives asynchronously (on `ready`), so regions/values can
   // land after first render — re-seed when they do, without clobbering typing.
@@ -222,6 +221,15 @@ export function StyleTools({
     setLastSel(selected)
     setOpen(selected)
   }
+
+  // The tab LISTS only site-wide regions + the clicked one (visibleStyleRegions) —
+  // element regions are click-to-edit only, so nothing is editable from two places.
+  // `lastSel` keeps a clicked region's row until the next click. Note `text` still
+  // seeds from ALL regions: a click must find its value already loaded.
+  const groupedRegions = useMemo(
+    () => groupStyleRegions(visibleStyleRegions(regions, lastSel)),
+    [regions, lastSel],
+  )
   useEffect(() => {
     if (!open) return
     rowRefs.current.get(open)?.scrollIntoView?.({ block: 'center' })
@@ -258,6 +266,11 @@ export function StyleTools({
 
   return (
     <div className="py-2">
+      {/* The one edit path for page parts is CLICKING them — this line is the panel's
+          whole instruction, and the list below holds only site-wide styles. */}
+      <p className="px-5 pb-2 pt-3 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+        Click any part of the site to style it
+      </p>
       {/* Regions are grouped by their manifest `group` ("Hero", "Sections", …) so the
           panel reads as a short outline of the page rather than one long list. Regions
           with no group fall under a single unlabelled run, preserving manifest order. */}
