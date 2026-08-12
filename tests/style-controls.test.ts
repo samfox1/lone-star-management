@@ -24,12 +24,12 @@ const PALETTE: SiteStyleOptions = {
     { value: 'font-momo', label: 'Momo' },
   ],
   textColors: [
-    { value: 'text-flash-1', label: 'Flash' },
+    { value: 'text-flash-1', label: 'Flash', hex: '#2563eb' },
     { value: 'text-foreground', label: 'Foreground' },
   ],
   bgColors: [
     { value: 'bg-background', label: 'Background' },
-    { value: 'bg-black', label: 'Black' },
+    { value: 'bg-black', label: 'Black', hex: '#000000' },
   ],
 }
 
@@ -37,17 +37,40 @@ const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
 
 describe('controlsForRegion — a site-wide region styles the SURFACE only', () => {
-  it('CRITICAL: no text control reaches the page — background, gradient, frost, matte', () => {
-    // "Anything for text, text shadow, etc — remove it" (Sam, 2026-08-12): the page
-    // has no words of its own, so size/weight/shadow/decorations/case on it are noise.
-    // ALLOWLIST, not blocklist — a text control added later stays off the page unless
-    // it opts in here.
+  it('CRITICAL: a site-wide region offers size, padding, ONE color, frost — nothing else', () => {
+    // Sam, 2026-08-12: nav bar and footer style here too — "size, padding, color",
+    // and "just one color, no gradient at the moment". ALLOWLIST, not blocklist —
+    // a control added later stays off site-wide regions unless it opts in here.
     const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'bggradFrom', 'bggradTo', 'frost', 'pad'])
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'frost', 'pad', 'size'])
   })
 
   it('an ELEMENT region keeps the full set — text styling belongs to the elements', () => {
     expect(controlsForRegion(controls, { key: 'bio', label: 'Biography' })).toEqual(controls)
+  })
+})
+
+describe('section colour controls — the ONE picker format everywhere', () => {
+  // Sam, 2026-08-12: every colour button gets the text-colour selector's format —
+  // the custom picker plus the colours-on-site swatch row (ColorPalette). That means
+  // hex 'color' kind, never a select of palette classes.
+  it('CRITICAL: Background is a hex picker that also OWNS the declared palette classes', () => {
+    const bg = byId('bgColor')
+    expect(bg.kind).toBe('color')
+    if (bg.kind !== 'color') throw new Error('unreachable — narrows for tsc')
+    expect(bg.toToken!('#112233', '')).toBe('bg-[#112233]')
+    expect(bg.hexOf!('mt-2 bg-[#112233]')).toBe('#112233')
+    // A stored palette class must be REPLACED when a hex is picked, not left to fight.
+    expect(applyStyleValue('bg-black mt-2', bg, bg.toToken!('#112233', ''))).toBe('mt-2 bg-[#112233]')
+    // …and read back as its declared hex, so the picker shows where the site is.
+    expect(bg.hexOf!('bg-black mt-2')).toBe('#000000')
+  })
+
+  it('Text color is the same shape, and exists WITHOUT a palette — hex lifts inline anywhere', () => {
+    const noPalette = buildStyleControls().find((c) => c.id === 'textColor')
+    expect(noPalette?.kind).toBe('color')
+    const bgNoPalette = buildStyleControls().find((c) => c.id === 'bgColor')
+    expect(bgNoPalette?.kind).toBe('color')
   })
 })
 
@@ -63,8 +86,11 @@ describe('buildStyleControls', () => {
     // gradient pairs, frost and padding — all inline-lifted, so none need a palette.
     // Slice-3 (2026-08-11) adds motion: entrance/hover ride tokens.css's effects
     // block (compiled everywhere tokens.css is), speed lifts inline — still no palette.
+    // 2026-08-12: textColor/bgColor left the palette conditionals — hex colours lift
+    // inline, so the pickers work on a site that declares no palette. Only `font`
+    // stays palette-gated (a font class the site never compiled is a silent no-op).
     expect(bare).toEqual([
-      'size', 'weight', 'align', 'textShadow', 'textStroke', 'textGlow',
+      'size', 'weight', 'textColor', 'bgColor', 'align', 'textShadow', 'textStroke', 'textGlow',
       'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
       'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',

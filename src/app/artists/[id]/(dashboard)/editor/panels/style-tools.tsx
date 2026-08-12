@@ -20,6 +20,7 @@ import {
   CONTROL_LABEL,
 } from '../inspector-shared'
 import { useStyleRegionSave } from '../use-style-save'
+import { siteSwatches } from '@/lib/site-editor/style-apply'
 
 /** One friendly control row (a labelled dropdown or a toggle) for a style region — reused
  *  by the per-item editor. `regionLabel` prefixes every aria label ("Hero title Size"). */
@@ -301,13 +302,15 @@ export function StyleTools({
                 {isOpen && (
                   <div className={PANEL_BODY}>
                     {/* Site-wide regions get SURFACE controls only (controlsForRegion):
-                        text styling on the page itself is noise. */}
+                        text styling on the page itself is noise. Every colour picker
+                        gets the colours-on-site swatch row — the one format. */}
                     {controlsForRegion(controls, r).map((control) => (
                       <StyleControlRow
                         key={control.id}
                         regionLabel={r.label}
                         control={control}
                         cls={cls}
+                        swatches={siteSwatches(options, values)}
                         onChange={(v) => edit(r.key, applyStyleValue(cls, control, v), r.base ?? '')}
                       />
                     ))}

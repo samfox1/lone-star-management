@@ -350,26 +350,14 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     options: [DEFAULT, ...WEIGHT_OPTIONS],
     owns: (t) => WEIGHTS.includes(fontSuffix(t)),
   })
-  if (opts?.textColors?.length) {
-    const own = new Set(opts.textColors.map((o) => o.value))
-    controls.push({
-      id: 'textColor',
-      label: 'Text color',
-      kind: 'select',
-      options: [DEFAULT, ...opts.textColors],
-      owns: (t) => own.has(t),
-    })
-  }
-  if (opts?.bgColors?.length) {
-    const own = new Set(opts.bgColors.map((o) => o.value))
-    controls.push({
-      id: 'bgColor',
-      label: 'Background',
-      kind: 'select',
-      options: [DEFAULT, ...opts.bgColors],
-      owns: (t) => own.has(t),
-    })
-  }
+  // ONE colour-picking format everywhere (Sam, 2026-08-12): the ColorPalette hex
+  // picker with the colours-on-site swatch row — never a select of palette classes.
+  // Unconditional: a hex lifts inline (colorClass), so it works on a site that
+  // declares no palette at all. Each control still OWNS the declared palette classes,
+  // so picking a hex REPLACES a stored `bg-black` instead of fighting it, and a
+  // stored palette class reads back as its declared hex so the picker tells the truth.
+  controls.push(sectionColorControl('textColor', 'Text color', 'color', 'text', opts?.textColors))
+  controls.push(sectionColorControl('bgColor', 'Background color', 'backgroundColor', 'bg', opts?.bgColors))
   controls.push({
     id: 'align',
     label: 'Alignment',
@@ -645,12 +633,42 @@ export function sliderIndex(
   return { idx: middle, label: 'Default', exact: false }
 }
 
-/** What a SITE-WIDE region (`scope: 'site'` — the page itself) may style: surface
- *  properties only. The page has no words of its own, so size/weight/shadow/
- *  decorations/case on it are noise ("anything for text — remove it", Sam,
- *  2026-08-12). An ALLOWLIST, deliberately: a text control added later stays off
- *  the page unless it opts in here. Element regions keep the full set. */
-const SITE_SCOPE_CONTROL_IDS = new Set(['bgColor', 'bggradFrom', 'bggradTo', 'frost', 'pad'])
+/** A section colour control in the house picker format: hex 'color' kind rendered as
+ *  ColorPalette (custom picker + colours-on-site swatches). Owns BOTH the hex tokens
+ *  for its property AND the site's declared palette classes for it; a declared class
+ *  reads back as its declared hex (StyleOption.hex) so the picker shows where the
+ *  site actually is — '' when the site never said. */
+function sectionColorControl(
+  id: string,
+  label: string,
+  prop: 'color' | 'backgroundColor',
+  chan: 'text' | 'bg',
+  declared: StyleOption[] | undefined,
+): StyleControl {
+  const declaredHex = new Map((declared ?? []).map((o) => [o.value, o.hex ?? '']))
+  return {
+    id,
+    label,
+    kind: 'color',
+    owns: (t) => colorToken(t)?.prop === prop || declaredHex.has(t),
+    hexOf: (cls) => {
+      for (const t of cls.split(/\s+/)) {
+        const c = colorToken(t)
+        if (c?.prop === prop) return c.value
+        const d = declaredHex.get(t)
+        if (d) return d
+      }
+      return ''
+    },
+    toToken: (hex) => (hex ? colorClass(chan, hex) : ''),
+  }
+}
+
+/** What a SITE-WIDE region (`scope: 'site'` — the page, the nav bar, the footer) may
+ *  style: "size, padding, color" plus frost — and ONE colour, no gradient (Sam,
+ *  2026-08-12). An ALLOWLIST, deliberately: a control added later stays off site-wide
+ *  regions unless it opts in here. Element regions keep the full set. */
+const SITE_SCOPE_CONTROL_IDS = new Set(['size', 'pad', 'bgColor', 'frost'])
 export function controlsForRegion(
   controls: StyleControl[],
   region: ManifestStyleRegion,

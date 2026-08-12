@@ -1224,15 +1224,18 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.getByLabelText('Chrome Frosted glass')).toBeTruthy()
   })
 
-  it('a site-wide region offers SURFACE controls only — no text styling on the page', () => {
+  it('a site-wide region offers size, padding, ONE color, frost — and no text styling', () => {
     // The component half of controlsForRegion's rule (the id list is pinned in
-    // tests/style-controls.test.ts): the rendered row really drops the text controls.
+    // tests/style-controls.test.ts): the rendered rows really match the allowlist.
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
     expect(screen.getByLabelText('Page Frosted glass')).toBeTruthy()
+    expect(screen.getByLabelText('Page Size')).toBeTruthy()
+    expect(screen.getByLabelText('Page Background color hex')).toBeTruthy()
     expect(screen.queryByLabelText('Page Boldness')).toBeNull()
     expect(screen.queryByLabelText('Page Underline')).toBeNull()
-    expect(screen.queryByLabelText('Page Size')).toBeNull()
+    // One colour, no gradient (Sam, 2026-08-12).
+    expect(screen.queryByLabelText('Page Background gradient start')).toBeNull()
   })
 
   it('reads the base classes into the controls (Black weight, Uppercase on)', () => {
@@ -1317,13 +1320,14 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.queryByRole('button', { name: /Revert \d/ })).toBeNull()
   })
 
-  it('shows Font + colour controls only when the site declares a palette', () => {
+  it('Font is palette-gated; the colour pickers exist regardless — hex lifts inline anywhere', () => {
     focusStyle('footer')
     expect(screen.queryByLabelText('Footer Font')).toBeNull() // no palette declared
+    expect(screen.getByLabelText('Footer Background color hex')).toBeTruthy() // 2026-08-12: always
     cleanup()
     focusStyle('footer', { styleOptions: PALETTE })
     expect(screen.getByLabelText('Footer Font')).toBeTruthy()
-    expect(screen.getByLabelText('Footer Background')).toBeTruthy()
+    expect(screen.getByLabelText('Footer Background color hex')).toBeTruthy()
   })
 
   it('paints the chosen value as text (the native control cannot render Inter)', () => {
