@@ -63,3 +63,29 @@ export function socialPlatform(label: string): SocialPlatform | null {
   const slug = socialSlug(label)
   return SOCIAL_PLATFORMS.find((p) => p.slug === slug) ?? null
 }
+
+/** The registrable domain of a URL — its last two host labels (`instagram.com` from
+ *  `www.instagram.com`, `spotify.com` from `open.spotify.com`), lowercased. Null when
+ *  the string will not parse as a URL. */
+function registrableHost(url: string): string | null {
+  try {
+    const host = new URL(url.trim()).hostname.toLowerCase().replace(/^www\./, '')
+    const parts = host.split('.')
+    return parts.length >= 2 ? parts.slice(-2).join('.') : host || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Infer the platform from a link's URL — so the editor can drop the manual label and
+ * pick the icon from what the manager pasted (Sam, 2026-08-12: "the tool should be able
+ * to pick up the type of button based on the url"). Matches on the registrable domain of
+ * each platform's `urlHint`, so subdomains and `www.` don't matter. Null for a host we
+ * don't know (a personal site) — the caller keeps the URL as a plain link with no icon.
+ */
+export function platformFromUrl(url: string): SocialPlatform | null {
+  const host = registrableHost(url)
+  if (!host) return null
+  return SOCIAL_PLATFORMS.find((p) => registrableHost(p.urlHint) === host) ?? null
+}

@@ -1250,6 +1250,7 @@ function EditingView({
               onRemove={onRemoveLink}
               onReorder={onReorderLink}
               onToggleOnSite={onToggleLinkOnSite}
+              inferPlatform
               focusedKey={focusedKey}
             />
             {/* A booking address is a contact route, not a profile to follow, so it gets

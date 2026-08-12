@@ -95,3 +95,26 @@ describe('a social cannot be added to the same site twice', () => {
     expect(linkAddError(['Instagram'], '', 'https://x')).toBeNull()
   })
 })
+
+import { platformFromUrl } from '@samfox1/site-bridge/social'
+
+describe('platformFromUrl — infer the platform from a link (Sam, 2026-08-12)', () => {
+  it('CRITICAL: every platform is recognised from a URL built on its own hint', () => {
+    // Derived from the registry (rule 4): a platform added tomorrow is auto-covered.
+    for (const p of SOCIAL_PLATFORMS) {
+      expect(platformFromUrl(`${p.urlHint}handle`)?.slug, p.label).toBe(p.slug)
+    }
+  })
+
+  it('ignores www. and subdomains, and is case-insensitive on the host', () => {
+    expect(platformFromUrl('https://WWW.Instagram.com/juniper')?.slug).toBe('instagram')
+    expect(platformFromUrl('https://open.spotify.com/artist/x')?.slug).toBe('spotify')
+    expect(platformFromUrl('https://music.apple.com/us/artist/x')?.slug).toBe('apple music')
+  })
+
+  it('returns null for an unknown host or an unparseable string', () => {
+    expect(platformFromUrl('https://juniperhale.com')).toBeNull()
+    expect(platformFromUrl('not a url')).toBeNull()
+    expect(platformFromUrl('')).toBeNull()
+  })
+})

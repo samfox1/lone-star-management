@@ -4,6 +4,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type ManifestLinkRegion } from '@/lib/site-editor/manifest'
 import { safeHref } from '@/lib/url'
+import { platformFromUrl } from '@samfox1/site-bridge/social'
 import { type EditorLink } from '../inspector-types'
 import { useScrollIntoFocus } from '../inspector-grid'
 import {
@@ -224,6 +225,7 @@ export function LinkTools({
   onToggleOnSite,
   group,
   showAdd = true,
+  inferPlatform = false,
   focusedKey,
 }: {
   links: EditorLink[]
@@ -238,6 +240,9 @@ export function LinkTools({
   /** The "Add link" footer. Off for the Contact group, which is a slice of the same
    *  list — one add affordance per panel, not one per group. */
   showAdd?: boolean
+  /** Infer the label (and so the icon) from the URL, hiding the Label field. On for
+   *  Socials, off for Contact (whose label is a manager-chosen name, not a platform). */
+  inferPlatform?: boolean
   onToggleOnSite: (l: EditorLink) => void
   /** The selected region's stable key. A social icon in the frame posts
    *  `item:link:<label lowercased>` — the LABEL, because the row id never reaches the
@@ -399,23 +404,37 @@ export function LinkTools({
 
             {isOpen && (
               <div className={PANEL_BODY}>
-                <FieldRow icon="text" label="Label">
-                  <input
-                    aria-label={`${group} link ${i + 1} label`}
-                    aria-invalid={(rowInvalid && labelBlank) || undefined}
-                    value={v.label}
-                    onChange={(e) => edit(l.id, { label: e.target.value })}
-                    placeholder="Label"
-                    className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
-                  />
-                </FieldRow>
+                {/* A social needs no Label field (Sam, 2026-08-12: "the tool should be
+                    able to pick up the type of button based on the url") — the platform,
+                    and so the icon, is inferred from the URL's domain. A CONTACT link
+                    (mailto:) has no platform and a manager-chosen name, so it keeps its
+                    Label field. */}
+                {!inferPlatform && (
+                  <FieldRow icon="text" label="Label">
+                    <input
+                      aria-label={`${group} link ${i + 1} label`}
+                      aria-invalid={(rowInvalid && labelBlank) || undefined}
+                      value={v.label}
+                      onChange={(e) => edit(l.id, { label: e.target.value })}
+                      placeholder="Label"
+                      className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
+                    />
+                  </FieldRow>
+                )}
                 <FieldRow icon="links" label="URL">
                   <input
                     aria-label={`${group} link ${i + 1} URL`}
                     aria-invalid={(rowInvalid && urlBlank) || undefined}
                     type="url"
                     value={v.url}
-                    onChange={(e) => edit(l.id, { url: e.target.value })}
+                    onChange={(e) => {
+                      const url = e.target.value
+                      // Infer the platform (→ label → icon) from the URL for a social.
+                      // A recognised host renames the row; an unknown one keeps whatever
+                      // label the modal set, so the row still has a name.
+                      const inferred = inferPlatform ? platformFromUrl(url) : null
+                      edit(l.id, inferred ? { url, label: inferred.label } : { url })
+                    }}
                     placeholder="https://…"
                     className={cx(FIELD_ON_TINT, rowInvalid && urlBlank && INVALID_FIELD)}
                   />

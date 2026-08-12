@@ -572,10 +572,11 @@ describe('EditorInspector — Links component', () => {
     expect(screen.getByText('Spotify')).toBeTruthy()
     expect(screen.getByText('https://open.spotify.com/x')).toBeTruthy()
     expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-    // Pencil → the edit controls appear.
+    // Pencil → the edit box. A social has NO label field (2026-08-12): the platform is
+    // inferred from the URL, so only the URL + on-site + remove show.
     expandLink(1)
-    expect((screen.getByLabelText('Social link 1 label') as HTMLInputElement).value).toBe('Spotify')
     expect((screen.getByLabelText('Social link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
+    expect(screen.queryByLabelText('Social link 1 label')).toBeNull()
     expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
   })
 
@@ -624,28 +625,30 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(1)
-      fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: '' } })
+      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: '' } })
       vi.advanceTimersByTime(500)
       expect(updateContentMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Social link 1 label').getAttribute('aria-invalid')).toBe('true')
+      expect(screen.getByLabelText('Social link 1 URL').getAttribute('aria-invalid')).toBe('true')
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('edits a link label with a debounced content save', () => {
+  it('CRITICAL: editing the URL infers the platform label, debounced-saves both', () => {
+    // Sam, 2026-08-12: "the tool should pick up the type of button based on the url."
+    // Change Spotify's URL to a TikTok one → the label (and so the icon) becomes TikTok.
     vi.useFakeTimers()
     try {
       openLinks()
       expandLink(1)
-      fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: 'Listen' } })
+      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://tiktok.com/@juniper' } })
       expect(updateContentMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
       expect(updateContentMock).toHaveBeenCalledTimes(1)
       const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
       expect([type, id, artistId]).toEqual(['link', 'l1', 'artist-1'])
-      expect((fd as FormData).get('label')).toBe('Listen')
-      expect((fd as FormData).get('url')).toBe('https://open.spotify.com/x')
+      expect((fd as FormData).get('label')).toBe('TikTok')
+      expect((fd as FormData).get('url')).toBe('https://tiktok.com/@juniper')
     } finally {
       vi.useRealTimers()
     }
@@ -656,11 +659,11 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(1)
-      fireEvent.change(screen.getByLabelText('Social link 1 label'), { target: { value: 'Listen' } })
-      // Close the box; the row shows the new label as plain text, not the old one.
+      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://tiktok.com/@juniper' } })
+      // Close the box; the row's name is the platform inferred from the new URL.
       expandLink(1)
       expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-      expect(screen.getByText('Listen')).toBeTruthy()
+      expect(screen.getByText('TikTok')).toBeTruthy()
       expect(screen.queryByText('Spotify')).toBeNull()
     } finally {
       vi.useRealTimers()
@@ -739,8 +742,10 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     openLinks({ links: [...LINKS, booking] })
     fireEvent.click(screen.getByRole('button', { name: 'Edit social link 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit contact link 1' }))
-    // Both rows are open at once; each name must resolve to exactly one element.
-    expect(screen.getByLabelText('Social link 1 label')).toBeTruthy()
+    // Both rows are open at once; each name must resolve to exactly one element. A
+    // social has only its URL (label inferred); a CONTACT keeps its manager-set label.
+    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
+    expect(screen.queryByLabelText('Social link 1 label')).toBeNull()
     expect(screen.getByLabelText('Contact link 1 label')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Remove contact link 1' })).toBeTruthy()
