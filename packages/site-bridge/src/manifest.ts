@@ -81,11 +81,13 @@ export type ManifestStyleRegion = {
    *  site declares none, the editor infers groups from shared key prefixes. Declaring
    *  it wins, so a site can name its own outline. */
   group?: string
-  /** `'site'` marks a SITE-WIDE region (the page background, the document itself) —
-   *  one that belongs to no clickable element. The editor's Style tab lists ONLY
-   *  these; every other region is reached by clicking it in the preview (one edit
-   *  path per thing, Sam 2026-08-12). Additive; absent means element-scoped. */
-  scope?: 'site'
+  /** Where this region lives in the editor (one edit path per thing, Sam 2026-08-12).
+   *  `'site'`: a SITE-WIDE region (the page, the chrome bars) — belongs to no clickable
+   *  element, so the Style tab lists it. `'item'`: a PER-ITEM region (song titles) —
+   *  its instances dress LIBRARY content, so the Text panel must not list it as a text
+   *  area (its words are the library's) and styling stays click-to-edit on the item.
+   *  Additive; absent means element-scoped (click-to-edit). */
+  scope?: 'site' | 'item'
 }
 
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by

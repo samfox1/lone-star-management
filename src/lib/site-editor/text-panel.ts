@@ -93,9 +93,11 @@ export function textPanelEntries(
 
   // Then the site's other text areas — the ones no field speaks for. A region already
   // paired above is NOT repeated: several captions can share one region, and listing it
-  // again would say the same thing a sixth time.
+  // again would say the same thing a sixth time. ITEM-scoped regions never list: they
+  // dress library content (song titles), whose words belong to the Music/Videos/Tour
+  // panels — not text areas (Sam, 2026-08-12).
   for (const r of allRegions) {
-    if (claimed.has(r.key) || !isTextRegion(r)) continue
+    if (r.scope === 'item' || claimed.has(r.key) || !isTextRegion(r)) continue
     entries.push({ key: r.key, label: r.label, field: null, styleRegion: r })
   }
 

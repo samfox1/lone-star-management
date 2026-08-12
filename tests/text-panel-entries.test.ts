@@ -102,6 +102,18 @@ describe('textPanelEntries', () => {
     expect(entries[0].styleRegion?.key).toBe('polaroid_caption')
   })
 
+  it("CRITICAL: an ITEM-scoped region is not listed — its words are the library's", () => {
+    // Song titles set type (font-serif text-2xl), so the text heuristic would list
+    // them — but their words come from the Music section, not a text field (Sam,
+    // 2026-08-12: "song titles are not set in the text section"). A site marks such
+    // regions scope:'item'; their styling stays click-to-edit on the item.
+    const entries = textPanelEntries(
+      [],
+      [{ key: 'song_title', label: 'Song titles', base: 'font-serif text-2xl', scope: 'item' }],
+    )
+    expect(entries).toHaveLength(0)
+  })
+
   it('several fields may share one region without duplicating it', () => {
     const region: ManifestStyleRegion = { key: 'polaroid_caption', label: 'Polaroid caption', base: 'text-sm' }
     const fields = [1, 2, 3].map((n) => ({
