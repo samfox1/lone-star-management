@@ -97,6 +97,7 @@ function renderInspector(over: Partial<React.ComponentProps<typeof EditorInspect
       supportLinks={[]}
       linkValues={{}}
       videos={VIDEOS}
+      videoSlots={[{ kind: 'band', count: 2, label: 'Video slot', group: 'Videos band' }]}
       merch={[]}
       releases={PROJECTS}
       tours={TOURS}
@@ -142,9 +143,10 @@ describe('frame select → the matching panel', () => {
 
   it('a video item select opens the Videos panel', () => {
     renderInspector({ selectedRegion: select({ kind: 'item', assetType: 'video', id: 'v1' }) })
-    // The panel's own furniture (its background-slot section) — titles render in
-    // editable inputs, so a text query can't see them.
-    expect(screen.getByText('Landing page')).toBeTruthy()
+    // The panel's own furniture (its DECLARED band group) — titles render in editable
+    // inputs, so a text query can't see them. Slots are manifest-declared now (phase 4),
+    // so the fixture's "Videos band" group is what appears, not a hardcoded "Landing page".
+    expect(screen.getByText('Videos band')).toBeTruthy()
     expect(screen.getByDisplayValue('Live at Mohawk')).toBeTruthy()
   })
 
