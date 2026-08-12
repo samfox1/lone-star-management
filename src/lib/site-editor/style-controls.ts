@@ -700,6 +700,16 @@ function sectionColorControl(
 const SITE_SCOPE_CONTROL_IDS = new Set(['pad', 'bgColor'])
 /** The border-side utilities a base can draw its divider with. */
 const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'border-r', 'border-x', 'border-y'])
+/**
+ * The controls a region gets, filtered by its SCOPE (Sam, 2026-08-12). An element region
+ * (no scope) keeps the full set — text styling belongs where the text is. A `'site'`
+ * region (the body band) is surface-only: padding + one colour, no text controls (they
+ * read as doing nothing on the page). A `'chrome'` region (nav/footer bar) adds geometry
+ * (width/height) — a floor a bar can actually show, unlike the always-taller body — plus
+ * a Divider-line toggle built from whatever border side its base draws. The site-scope
+ * set is an ALLOWLIST, so a control added later stays off site/chrome regions unless it
+ * opts in.
+ */
 export function controlsForRegion(
   controls: StyleControl[],
   region: ManifestStyleRegion,

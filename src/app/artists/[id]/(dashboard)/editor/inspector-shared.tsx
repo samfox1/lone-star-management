@@ -95,35 +95,6 @@ export function runSerialized(
   )
 }
 
-/** A collapsible section header — label, optional tag, chevron. No border and no
- *  leading icon: the section list reads as a plain outline of the page (Sam,
- *  2026-07-21); the chevron rotating is the only open/closed signal. */
-export function SectionRow({
-  label,
-  tag,
-  open,
-  onClick,
-}: {
-  label: string
-  tag?: React.ReactNode
-  open: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={open}
-      className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left hover:bg-surface-hover"
-    >
-      <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{label}</span>
-      {tag}
-      <span className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90')} aria-hidden>
-        <Icon name="chevronRight" size={16} />
-      </span>
-    </button>
-  )
-}
 
 /** One control on the sheet grid: [mono label] [control]. No icon — the style controls
  *  read as a clean list of named values, and a glyph per row was noise, not navigation. */
@@ -173,21 +144,6 @@ export function FieldRow({
         <label className="block">{children}</label>
       </div>
     </div>
-  )
-}
-
-/** "Edit" on a row that opens a full-panel editor — the same affordance the image and
- *  video tiles use, so the word means one thing across the inspector. */
-export function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`Edit ${label}`}
-      className="flex-none rounded-md px-1.5 py-0.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint transition-colors hover:bg-surface hover:text-accent"
-    >
-      Edit
-    </button>
   )
 }
 

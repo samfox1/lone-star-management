@@ -127,7 +127,7 @@ export function StyleControlRow({
       <ControlRow label={control.label}>
         <ColorPalette
           label=""
-          aria={`${regionLabel} ${control.label}`}
+          aria={aria}
           value={control.hexOf(cls)}
           used={swatches ?? []}
           onChange={(hex) => onChange(control.toToken!(hex, cls))}

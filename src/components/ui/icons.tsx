@@ -48,14 +48,6 @@ export type IconName =
   | 'pause'
   | 'replay'
   | 'brush'
-  // Typography controls (the editor's Style panel) — one per style control row.
-  | 'fontSize'
-  | 'bold'
-  | 'italic'
-  | 'uppercase'
-  | 'align'
-  | 'palette'
-  | 'fill'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
@@ -264,37 +256,6 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
       <circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none" />
       <circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none" />
-    </>
-  ),
-  /* Big-A-little-A: the type SIZE control. */
-  fontSize: (
-    <>
-      <path d="M3 19l4.5-12L12 19M4.6 15h5.8" />
-      <path d="M14 19l3-8 3 8M15 16.5h4" />
-    </>
-  ),
-  /* A weighted "B" — the boldness control. */
-  bold: <path d="M8 5h4.5a3.5 3.5 0 0 1 0 7H8zM8 12h5.5a3.5 3.5 0 0 1 0 7H8z" />,
-  /* A slanted "I" — the italic toggle. */
-  italic: <path d="M15 5h-4M13 19H9M14 5l-4 14" />,
-  /* Small "a" rising to a cap "A" — the uppercase toggle. */
-  uppercase: <path d="M4 18l4-9 4 9M5.4 15h5.2M14 18l3-6 3 6M15 16h4" />,
-  /* Stacked rules, the middle inset — the alignment control. */
-  align: <path d="M4 6h16M7 10h10M4 14h16M7 18h10" />,
-  /* Paint dab — the text COLOUR control. */
-  palette: (
-    <>
-      <path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 2-1 2-1.8 0-1.6-1.4-1.6-1.4-2.9 0-.8.7-1.3 1.7-1.3H16a4.5 4.5 0 0 0 4.5-4.5C20.5 6.4 16.7 3.5 12 3.5z" />
-      <circle cx="8" cy="10" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="7.5" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="10" r="1.1" fill="currentColor" stroke="none" />
-    </>
-  ),
-  /* A filled swatch — the BACKGROUND control, distinct from the text-colour dab. */
-  fill: (
-    <>
-      <rect x="4" y="4" width="16" height="16" rx="2.5" />
-      <path d="M4 14l6-6 10 10" />
     </>
   ),
 }

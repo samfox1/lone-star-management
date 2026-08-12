@@ -124,9 +124,6 @@ export function TourTools({
               <Icon name="grip" size={14} />
             </span>
           ) : null}
-          {/* The row's face SELECTS — outlines this date on the site — matching every
-              other item panel. The toggle/Edit/Remove are siblings with their own
-              clicks, so selecting never also fires them. */}
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             {/* The row's face SELECTS — outlines this date on the site — matching every
                 other item panel. The toggle/Edit/Remove are SIBLINGS with their own
