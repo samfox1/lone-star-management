@@ -782,20 +782,20 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     // The label alone names the button. A "Powers: …" line under it restated the label
     // in a longer sentence and pushed every input down a row (Sam, 2026-08-09); the
     // site's description rides the label's hover text instead of costing a row.
-    const label = screen.getByText('USB button')
-    expect(label).toBeTruthy()
-    expect(screen.queryByText(/^Powers:/)).toBeNull()
-    expect(label.getAttribute('title')).toBe('Disco-ball playlist link (Videos band)')
-    // …and it is not POINTER-ONLY. `title` never reaches a keyboard or screen-reader
-    // user, and the description was the only text saying what a declared button powers,
-    // so it is also the input's accessible description (2026-08-09 review).
-    const input = screen.getByLabelText('USB button URL')
+    // The URL is PLAIN TEXT until the pencil opens the box (Sam, 2026-08-12): the
+    // value shows on the row, no input yet.
+    expect(screen.getByText('USB button')).toBeTruthy()
+    expect(screen.getByText('https://open.spotify.com/playlist/usb')).toBeTruthy()
+    expect(screen.queryByLabelText('USB button URL')).toBeNull()
+    // Merch is declared but UNSET → a visible, muted "Add a link" row (not invisible).
+    expect(screen.getByText('Add a link')).toBeTruthy()
+    // Open USB's box: now the input exists, seeded, with the site's description attached.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit USB button' }))
+    const input = screen.getByLabelText('USB button URL') as HTMLInputElement
+    expect(input.value).toBe('https://open.spotify.com/playlist/usb')
     const describedBy = input.getAttribute('aria-describedby')
     expect(describedBy).toBeTruthy()
     expect(document.getElementById(describedBy!)?.textContent).toBe('Disco-ball playlist link (Videos band)')
-    // USB has a URL; Merch is declared but UNSET → an empty, visible row (not invisible).
-    expect((screen.getByLabelText('USB button URL') as HTMLInputElement).value).toBe('https://open.spotify.com/playlist/usb')
-    expect((screen.getByLabelText('Merch button URL') as HTMLInputElement).value).toBe('')
   })
 
   it('debounce-saves a URL by key + optimistically updates the frame', () => {
@@ -803,6 +803,7 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     try {
       const onApplyLink = vi.fn()
       openSiteLinks({ onApplyLink })
+      fireEvent.click(screen.getByRole('button', { name: 'Edit USB button' }))
       fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'https://open.spotify.com/playlist/x' } })
       // Optimistic frame repaint is immediate; the save is debounced.
       expect(onApplyLink).toHaveBeenCalledWith('usb', 'https://open.spotify.com/playlist/x')
@@ -818,6 +819,7 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     vi.useFakeTimers()
     try {
       openSiteLinks()
+      fireEvent.click(screen.getByRole('button', { name: 'Edit USB button' }))
       fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'javascript:alert(1)' } })
       vi.advanceTimersByTime(500)
       expect(saveLinkMock).not.toHaveBeenCalled()

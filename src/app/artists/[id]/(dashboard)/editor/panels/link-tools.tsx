@@ -9,6 +9,7 @@ import { useScrollIntoFocus } from '../inspector-grid'
 import {
   runSerialized,
   FieldRow,
+  EditRow,
   SaveLine,
   OnSiteToggle,
   EYEBROW,
@@ -67,7 +68,20 @@ export function SiteLinkTools({
     setText(Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? ''])))
   }
 
-  // Scroll the clicked link's row into view + focus it (frame → editor `select`).
+  // Which button's inline URL box is revealed. A button's URL is PLAIN TEXT until its
+  // pencil is pressed (Sam, 2026-08-12: "the link shouldn't appear editable until the
+  // edit button is pressed") — then a box drops below the row. One open at a time.
+  const [openKey, setOpenKey] = useState<string | null>(null)
+
+  // A click on the button IN THE FRAME opens its row. Reset-on-prop-change DURING render
+  // (the repo's sanctioned pattern), not in an effect — an effect setState cascades a
+  // render and the lint rule rightly rejects it. The scroll/focus is a real side effect,
+  // so it stays in the effect below, keyed off the now-open row.
+  const [lastSelected, setLastSelected] = useState<string | null>(null)
+  if (selected && selected !== lastSelected) {
+    setLastSelected(selected)
+    setOpenKey(selected)
+  }
   useEffect(() => {
     if (!selected) return
     const el = fieldRefs.current.get(selected)
@@ -136,36 +150,48 @@ export function SiteLinkTools({
 
   return (
     <div className="pb-2 pt-1">
-      {regions.map((r) => (
-        <div key={r.key} className="px-5">
-          {/* The label alone names the button. A site's `description` used to render as
-              a "Powers: …" line under it, which restated the label in a longer sentence
-              and pushed every input down a row (Sam, 2026-08-09). The field stays in the
-              manifest — a site is free to say more than a label can — but it now rides
-              the row's hover title AND the input's accessible description, so the
-              explanation survives for anyone not using a pointer. */}
-          <FieldRow icon="bolt" label={r.label} title={r.description}>
-            <input
-              aria-describedby={r.description ? `link-desc-${r.key}` : undefined}
-              ref={(el) => {
-                fieldRefs.current.set(r.key, el)
-              }}
-              aria-label={`${r.label} URL`}
-              aria-invalid={invalid.has(r.key) || undefined}
-              type="url"
-              value={text[r.key] ?? ''}
-              onChange={(e) => edit(r.key, e.target.value)}
-              placeholder="https://…  (blank = no link)"
-              className={cx(FIELD, invalid.has(r.key) && INVALID_FIELD)}
-            />
-            {r.description && (
-              <span id={`link-desc-${r.key}`} className="sr-only">
-                {r.description}
-              </span>
+      {regions.map((r) => {
+        const url = text[r.key] ?? ''
+        const isOpen = openKey === r.key
+        return (
+          <div key={r.key}>
+            {/* The URL is plain text until the pencil opens the box (no "lit" editable
+                link, no bolt icon). The site's `description` rides the row's hover title
+                and the box's accessible description, so it never costs a row. */}
+            <div title={r.description}>
+              <EditRow
+                label={r.label}
+                value={url || 'Add a link'}
+                empty={!url}
+                onEdit={() => setOpenKey(isOpen ? null : r.key)}
+              />
+            </div>
+            {isOpen && (
+              <div className="px-4 pb-3">
+                <input
+                  autoFocus
+                  aria-describedby={r.description ? `link-desc-${r.key}` : undefined}
+                  ref={(el) => {
+                    fieldRefs.current.set(r.key, el)
+                  }}
+                  aria-label={`${r.label} URL`}
+                  aria-invalid={invalid.has(r.key) || undefined}
+                  type="url"
+                  value={url}
+                  onChange={(e) => edit(r.key, e.target.value)}
+                  placeholder="https://…  (blank = no link)"
+                  className={cx(FIELD, invalid.has(r.key) && INVALID_FIELD)}
+                />
+                {r.description && (
+                  <span id={`link-desc-${r.key}`} className="sr-only">
+                    {r.description}
+                  </span>
+                )}
+              </div>
             )}
-          </FieldRow>
-        </div>
-      ))}
+          </div>
+        )
+      })}
       <SaveLine status={status} />
     </div>
   )
