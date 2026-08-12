@@ -10,7 +10,6 @@ import { useScrollIntoFocus } from '../inspector-grid'
 import {
   runSerialized,
   EditRow,
-  CONTROL_LABEL,
   SaveLine,
   OnSiteToggle,
   EYEBROW,
@@ -371,34 +370,21 @@ export function LinkTools({
               rowInvalid && 'ring-1 ring-accent-red',
             )}
           >
-            {/* Version-A row (Sam, 2026-08-12): the label over its URL as PLAIN TEXT,
-                a drag grip that appears on hover (the reorder handle — the whole row
-                still drags), and a bare hover pencil that reveals the edit box below.
-                An "Off" tag flags a link that isn't on the site. Nothing looks editable
-                until the pencil is pressed. */}
-            <div className="group flex items-center gap-2 px-4 py-2.5 hover:bg-surface">
-              <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
-                <Icon name="grip" size={16} />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className={cx(CONTROL_LABEL, labelBlank && 'text-ink-faint')}>
-                  {v.label.trim() || 'Untitled link'}
-                </span>
-                <span className={cx('truncate text-[13px]', urlBlank ? 'italic text-ink-faint' : 'text-ink')}>
-                  {v.url.trim() || 'Add a link'}
-                </span>
-              </div>
-              {!l.onSite && <span className={cx(EYEBROW, 'flex-none')}>Off</span>}
-              <button
-                type="button"
-                onClick={() => setOpen(isOpen ? null : l.id)}
-                aria-label={`Edit ${group.toLowerCase()} link ${i + 1}`}
-                aria-expanded={isOpen}
-                className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
-              >
-                <Icon name="edit" size={16} />
-              </button>
-            </div>
+            {/* The shared version-A row (EditRow): label over URL as plain text, a
+                hover grip (the reorder handle — the whole row still drags), an "Off"
+                tag for an off-site link, and the hover pencil that reveals the box
+                below. The pencil is numbered per list so Socials + Contact don't
+                collide. */}
+            <EditRow
+              grip
+              label={v.label.trim() || 'Untitled link'}
+              value={v.url.trim() || 'Add a link'}
+              empty={urlBlank}
+              trailing={!l.onSite ? <span className={cx(EYEBROW, 'flex-none')}>Off</span> : undefined}
+              expanded={isOpen}
+              editLabel={`${group.toLowerCase()} link ${i + 1}`}
+              onEdit={() => setOpen(isOpen ? null : l.id)}
+            />
 
             {isOpen && (
               // Condensed box (Sam, 2026-08-12): bare inputs, no per-field icon/label

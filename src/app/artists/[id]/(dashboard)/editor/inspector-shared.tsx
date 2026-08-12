@@ -157,6 +157,10 @@ export function EditRow({
   label,
   value,
   empty = false,
+  grip = false,
+  trailing,
+  expanded,
+  editLabel,
   onEdit,
 }: {
   /** The KEY — always shown, so a field like "Name" is unambiguous. */
@@ -166,11 +170,27 @@ export function EditRow({
    *  summarise (Sam, 2026-08-12: "I don't need to see the paper, 2x padding"). */
   value?: React.ReactNode
   empty?: boolean
+  /** A leading drag grip that appears on hover — the reorder handle for the socials
+   *  list. The row's own draggable wrapper does the actual dragging. */
+  grip?: boolean
+  /** A trailing element before the pencil (the socials "Off" tag). */
+  trailing?: React.ReactNode
+  /** Sets `aria-expanded` on the pencil, for a row whose pencil toggles an inline box. */
+  expanded?: boolean
+  /** Overrides the pencil's accessible name (`Edit <editLabel>`) when the visible label
+   *  is user content — socials number their rows ("social link 1") so two lists don't
+   *  collide, even though the row shows the platform name. */
+  editLabel?: string
   onEdit: () => void
 }) {
   const singleLine = value === undefined
   return (
     <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-surface">
+      {grip && (
+        <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
+          <Icon name="grip" size={16} />
+        </span>
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {singleLine ? (
           <span className="truncate text-[13px] text-ink">{label}</span>
@@ -185,10 +205,12 @@ export function EditRow({
           </>
         )}
       </div>
+      {trailing}
       <button
         type="button"
         onClick={onEdit}
-        aria-label={`Edit ${label}`}
+        aria-label={`Edit ${editLabel ?? label}`}
+        aria-expanded={expanded}
         className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
       >
         <Icon name="edit" size={16} />
