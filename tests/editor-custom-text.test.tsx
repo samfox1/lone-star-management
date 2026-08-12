@@ -203,10 +203,15 @@ describe('EditorShell — Text panel on a CUSTOM site', () => {
     expect(screen.queryByLabelText('Polaroid 1')).toBeNull()
   })
 
-  it('counts them on the browse list, so Text does not read "0 fields"', () => {
+  it('the custom fields reach the Text panel (the browse count was removed 2026-08-12)', () => {
     renderShell({ customSiteUrl: CUSTOM, draft, siteContent: draft.site_content })
     frameSays({ type: 'ready', manifest: CUSTOM_MANIFEST }, CUSTOM)
-    expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
+    fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+    // The three text fields are editable; the image field is not a text row.
+    expect(screen.getByLabelText('Edit Hero caption')).toBeTruthy()
+    expect(screen.getByLabelText('Edit About copy')).toBeTruthy()
+    expect(screen.getByLabelText('Edit Press email')).toBeTruthy()
+    expect(screen.queryByLabelText('Edit Polaroid 1')).toBeNull()
   })
 
   it("REPLACES any built-in fields the server resolved from the artist's template column", () => {
@@ -229,7 +234,10 @@ describe('EditorShell — Text panel on a CUSTOM site', () => {
     // Origin discipline: a stranger must not be able to inject editable fields.
     renderShell({ customSiteUrl: CUSTOM, draft, siteContent: draft.site_content })
     frameSays({ type: 'ready', manifest: CUSTOM_MANIFEST }, 'https://evil.example')
-    expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('0 fields')
+    fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+    // None of the injected fields made it in.
+    expect(screen.queryByLabelText('Edit Hero caption')).toBeNull()
+    expect(screen.queryByLabelText('Edit Press email')).toBeNull()
   })
 })
 
