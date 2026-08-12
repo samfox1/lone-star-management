@@ -205,23 +205,29 @@ export function EditRow({
 }: {
   /** The KEY — always shown, so a field like "Name" is unambiguous. */
   label: string
-  /** The current value (or the muted placeholder when `empty`). */
-  value: React.ReactNode
+  /** The current value (or the muted placeholder when `empty`). OMIT for a single-line
+   *  row that is just its name — the Style panel's regions, which have no one value to
+   *  summarise (Sam, 2026-08-12: "I don't need to see the paper, 2x padding"). */
+  value?: React.ReactNode
   empty?: boolean
   onEdit: () => void
 }) {
+  const singleLine = value === undefined
   return (
     <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-surface">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className={CONTROL_LABEL}>{label}</span>
-        <span
-          className={cx(
-            'truncate text-[13px]',
-            empty ? 'italic text-ink-faint' : 'text-ink',
-          )}
-        >
-          {value}
-        </span>
+        {singleLine ? (
+          <span className="truncate text-[13px] text-ink">{label}</span>
+        ) : (
+          <>
+            <span className={CONTROL_LABEL}>{label}</span>
+            <span
+              className={cx('truncate text-[13px]', empty ? 'italic text-ink-faint' : 'text-ink')}
+            >
+              {value}
+            </span>
+          </>
+        )}
       </div>
       <button
         type="button"

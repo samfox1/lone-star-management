@@ -12,7 +12,7 @@ import {
   type SiteStyleOptions,
   type StyleControl, sliderSteps, sliderIndex } from '@/lib/site-editor/style-controls'
 import {
-  SectionRow,
+  EditRow,
   ControlRow,
   SaveLine,
   GroupLabel,
@@ -295,11 +295,10 @@ export function StyleTools({
                   rowRefs.current.set(r.key, el)
                 }}
               >
-                <SectionRow
-                  label={rowLabel}
-                  open={isOpen}
-                  onClick={() => setOpen(isOpen ? null : r.key)}
-                />
+                {/* Version-A row: just the region name, a hover pencil (Sam,
+                    2026-08-12 — no "Paper · 2px" value line). The pencil reveals the
+                    controls inline below, the same as the Links rows. */}
+                <EditRow label={rowLabel} onEdit={() => setOpen(isOpen ? null : r.key)} />
                 {isOpen && (
                   <div className={PANEL_BODY}>
                     {/* Site-wide regions get SURFACE controls only (controlsForRegion):

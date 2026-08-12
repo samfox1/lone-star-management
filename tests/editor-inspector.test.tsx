@@ -1197,7 +1197,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   function focusStyle(key: string, opts: Parameters<typeof renderInspector>[1] = {}) {
     renderInspector([], { styleRegions: REGIONS, selectedStyle: key, ...opts })
   }
-  const expand = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }))
+  const expand = (label: string) => fireEvent.click(screen.getByRole('button', { name: `Edit ${label}` }))
 
   it('is an accordion: controls appear only when a section is opened', () => {
     // Browsing shows the site-wide list (surface controls) — the accordion rule lives
@@ -1412,7 +1412,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
   const editPage = () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Page' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page' }))
     fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
   }
 
@@ -1421,7 +1421,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
   it('CRITICAL: Save and Cancel appear together only once something is touched', () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Page' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page' }))
     // Nothing touched yet — no session bar.
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
