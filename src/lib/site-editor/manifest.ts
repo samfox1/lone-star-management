@@ -30,6 +30,7 @@ export type {
   ManifestStyleRegion,
   ManifestLinkRegion,
   ManifestComponent,
+  ManifestVideoSlot,
   ComponentSlot,
   TemplateManifest,
 } from '@samfox1/site-bridge/manifest'

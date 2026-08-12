@@ -280,6 +280,7 @@ export function EditorShell({
         releases={releases}
         tours={tours}
         components={panels.components}
+        videoSlots={panels.videoSlots}
         showGallery={panels.showGallery}
         assetBudgets={panels.assetBudgets}
         styleRegions={panels.styleRegions}

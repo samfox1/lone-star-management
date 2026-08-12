@@ -166,6 +166,7 @@ function renderInspector(
     merch?: EditorMerch[]
     releases?: EditorProject[]
     tours?: EditorTour[]
+    videoSlots?: import('@/lib/site-editor/manifest').ManifestVideoSlot[]
     styleRegions?: ManifestStyleRegion[]
     styleValues?: Record<string, string>
     styleOptions?: SiteStyleOptions
@@ -197,6 +198,7 @@ function renderInspector(
       supportLinks={opts.supportLinks ?? []}
       linkValues={opts.linkValues ?? {}}
       videos={opts.videos ?? []}
+      videoSlots={opts.videoSlots ?? SKEEN_VIDEO_SLOTS}
       merch={opts.merch ?? []}
       releases={opts.releases ?? []}
       tours={opts.tours ?? []}
@@ -847,11 +849,40 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
   })
 })
 
+const SKEEN_VIDEO_SLOTS = [
+  { kind: 'hero', role: 'hero_landscape', label: 'Landscape · desktop', group: 'Landing page' },
+  { kind: 'hero', role: 'hero_portrait', label: 'Portrait · mobile', group: 'Landing page' },
+  { kind: 'hero', role: 'bio_background', label: 'Bio background', group: 'Bio background' },
+  { kind: 'band', count: 2, label: 'Video slot', group: 'Videos band' },
+] as import('@/lib/site-editor/manifest').ManifestVideoSlot[]
+
 describe('EditorInspector — Videos component', () => {
   function openVideos() {
     renderInspector([], { videos: VIDEOS })
     fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
   }
+
+  it("CRITICAL: a site that declares NO video slots shows none — no inherited skeen slots", () => {
+    // The whole point of phase 4 (Sam, 2026-08-12): Juniper has no video and must not
+    // show skeen's Landing page / Videos band slots. With videoSlots: [] the panel is
+    // empty — no group headings, no band inputs.
+    renderInspector([], { videos: VIDEOS, videoSlots: [] })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    expect(screen.queryByText('Landing page')).toBeNull()
+    expect(screen.queryByText('Videos band')).toBeNull()
+    expect(screen.queryByLabelText('Slot 1 title')).toBeNull()
+  })
+
+  it('renders exactly the DECLARED slots — a band of 1 shows one slot, not two', () => {
+    renderInspector([], {
+      videos: VIDEOS,
+      videoSlots: [{ kind: 'band', count: 1, label: 'Video slot', group: 'Clips' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
+    expect(screen.getByText('Clips')).toBeTruthy()
+    expect(screen.queryByText('Landing page')).toBeNull() // not declared → not shown
+    expect(screen.getByLabelText('Slot 1 title')).toBeTruthy()
+  })
 
   it('shows the on-site videos as filled band slots with an editable title', () => {
     // v2 is the only on-site video → the one filled slot; v1/v3 are library.

@@ -36,6 +36,7 @@ const FULL: TemplateManifest = {
   styles: [{ key: 'hero', label: 'Hero', base: 'text-4xl' }],
   links: [{ key: 'booking', label: 'Booking' }],
   components: [{ key: 'polaroid', label: 'Polaroid', count: 2, slots: [{ key: 'photo', label: 'Photo' }] }],
+  videoSlots: [{ kind: 'hero', role: 'hero_landscape', label: 'Landscape', group: 'Landing page' }],
   styleOptions: { fonts: [{ value: 'font-serif', label: 'Serif' }] },
   assetBudgets: { image: { maxBytes: 1_000_000 } },
 } as unknown as TemplateManifest
@@ -176,7 +177,7 @@ describe('the registry is the list', () => {
     // executable — widening the union without touching the record stops compiling here.
     const exhaustive: Record<ManifestCategory, true> = {
       fields: true, slots: true, styles: true, links: true,
-      components: true, styleOptions: true, assetBudgets: true,
+      components: true, videoSlots: true, styleOptions: true, assetBudgets: true,
     }
     expect(Object.keys(exhaustive).length).toBe(MANIFEST_CATEGORIES.length)
   })

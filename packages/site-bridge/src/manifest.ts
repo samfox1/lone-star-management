@@ -122,6 +122,29 @@ export type ManifestComponent = {
   slots: ComponentSlot[]
 }
 
+/** One video slot the site renders — declared, not hardcoded (phase 4). */
+export type ManifestVideoSlot =
+  | {
+      /** A background clip: one UPLOADED video assigned to a site_role. */
+      kind: 'hero'
+      /** The site_role the placed clip carries (e.g. `hero_landscape`). */
+      role: string
+      /** The slot's label in the panel + picker heading. */
+      label: string
+      /** The group heading it sits under ("Landing page", "Bio background"). */
+      group: string
+    }
+  | {
+      /** A row of YouTube embeds toggled on-site (skeen's videos band). */
+      kind: 'band'
+      /** How many embed slots the row shows. */
+      count: number
+      /** The per-slot label base ("Video slot" → "Video slot 1"). */
+      label: string
+      /** The group heading it sits under ("Videos band"). */
+      group: string
+    }
+
 /** One image drop target inside a component instance. */
 export type ComponentSlot = {
   /** Slot id, e.g. 'photo' | 'caption'. Lowercase/underscore. */
@@ -201,6 +224,12 @@ export type TemplateManifest = {
   /** Repeated multi-image components (the polaroid wall). Optional — a site that
    *  declares none simply has no component section in the editor. */
   components?: ManifestComponent[]
+  /** The video slots the site renders — the Videos panel is built from THESE, not from
+   *  a hardcoded list (SITE_BRIDGE_PLAN phase 4). Optional and defaulting to empty, so a
+   *  site with no video (Juniper) shows no video slots at all, instead of inheriting
+   *  skeen's hero + band slots. A `'hero'` slot holds one uploaded clip bound by
+   *  `role` (site_role); a `'band'` slot is a row of `count` YouTube embeds. */
+  videoSlots?: ManifestVideoSlot[]
   /** The site's design palette (its own colour + font classes) for the no-code Style
    *  panel's dropdowns. Optional — the universal controls (size/weight/align/case) work
    *  without it; colour + font controls only appear when the site declares them. */

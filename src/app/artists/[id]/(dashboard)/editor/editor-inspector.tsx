@@ -8,6 +8,7 @@ import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protoco
 import {
   componentSlotRole,
   type ManifestComponent,
+  type ManifestVideoSlot,
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
@@ -143,6 +144,7 @@ export function EditorInspector({
   links: initialLinks = [],
   supportLinks = [],
   videos: initialVideos = [],
+  videoSlots = [],
   merch: initialMerch = [],
   releases: initialReleases = [],
   tours: initialTours = [],
@@ -177,6 +179,8 @@ export function EditorInspector({
    *  edited here. */
   supportLinks?: EditorSupportLink[]
   videos?: EditorVideo[]
+  /** The video slots this site declares — the Videos panel renders from THESE. */
+  videoSlots?: ManifestVideoSlot[]
   merch?: EditorMerch[]
   releases?: EditorProject[]
   /** The date LIBRARY, on-site or not — the editor is where they're chosen (ADR 0009). */
@@ -872,6 +876,7 @@ export function EditorInspector({
           }}
           links={links}
           videos={videos}
+          videoSlots={videoSlots}
           merch={merch}
           releases={releases}
           tours={tours}
@@ -1096,6 +1101,7 @@ function EditingView({
   links,
   onEditTour,
   videos,
+  videoSlots,
   merch,
   releases,
   tours,
@@ -1150,6 +1156,7 @@ function EditingView({
   /** Open one show full-panel (its supporting acts and their links). */
   onEditTour: (t: { tour: EditorTour; label: string }) => void
   videos: EditorVideo[]
+  videoSlots: ManifestVideoSlot[]
   merch: EditorMerch[]
   releases: EditorProject[]
   tours: EditorTour[]
@@ -1287,6 +1294,7 @@ function EditingView({
           <VideoTools
             focusedKey={focusedKey}
             videos={videos}
+            videoSlots={videoSlots}
             artistId={artistId}
             onToggleOnSite={onToggleVideoOnSite}
             onAssignHero={onAssignHero}

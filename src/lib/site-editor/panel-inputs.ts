@@ -38,6 +38,7 @@ export const MANIFEST_CATEGORIES = [
   'styles',
   'links',
   'components',
+  'videoSlots',
   'styleOptions',
   'assetBudgets',
 ] as const
@@ -58,6 +59,7 @@ export const CATEGORY_CONSUMERS: Record<ManifestCategory, readonly (keyof PanelI
   styles: ['styleRegions'],
   links: ['linkRegions'],
   components: ['components'],
+  videoSlots: ['videoSlots'],
   styleOptions: ['styleOptions'],
   assetBudgets: ['assetBudgets'],
 }
@@ -69,6 +71,7 @@ export type PanelInputs = {
   /** The orientation collages exist only if the site declares somewhere to render one. */
   showGallery: boolean
   components: NonNullable<TemplateManifest['components']>
+  videoSlots: NonNullable<TemplateManifest['videoSlots']>
   styleRegions: TemplateManifest['styles']
   styleOptions: TemplateManifest['styleOptions']
   assetBudgets: TemplateManifest['assetBudgets']
@@ -115,6 +118,9 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
     // not render — the same class of bug, arriving from the other direction.
     showGallery: (announced?.slots ?? []).some((sl) => sl.accepts === 'image'),
     components: announced?.components ?? [],
+    // The Videos panel is built from THESE, not a hardcoded list — a site that declares
+    // none (Juniper) shows no video slots at all (phase 4, 2026-08-12).
+    videoSlots: announced?.videoSlots ?? [],
     styleRegions: announced?.styles ?? [],
     styleOptions: announced?.styleOptions,
     assetBudgets: announced?.assetBudgets,

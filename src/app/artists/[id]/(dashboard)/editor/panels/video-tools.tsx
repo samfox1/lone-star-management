@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type EditorVideo, type ItemEdit, type SiteVideoRole } from '../inspector-types'
+import { type ManifestVideoSlot } from '@/lib/site-editor/manifest'
 import { CardThumb, EmptySlot, AddFirstLink, LibraryPicker, useScrollIntoFocus } from '../inspector-grid'
 
 /**
@@ -26,14 +27,6 @@ function FocusableCard({ focused, label, children }: { focused: boolean; label: 
 import { runSerialized, SlotGroupLabel } from '../inspector-shared'
 import { renameVideoAction } from '../../actions'
 
-/** The label each background slot shows in the panel and the picker heading. */
-const SLOT_LABELS: Record<SiteVideoRole, string> = {
-  hero_landscape: 'Landscape · desktop',
-  hero_portrait: 'Portrait · mobile',
-  bio_background: 'Bio background',
-}
-const BAND_SLOTS = 2 // skeen's band is designed 2-up; show at least two slots.
-
 /* ── Video tools: the site's video slots ─────────────────────────────────────────
  *
  * EVERY slot is filled by PICKING from the video library (added on the Videos/Assets
@@ -50,6 +43,7 @@ const BAND_SLOTS = 2 // skeen's band is designed 2-up; show at least two slots.
  * EMPTY slots; replace/remove for a filled slot live in the item editor. */
 export function VideoTools({
   videos,
+  videoSlots,
   artistId,
   onToggleOnSite,
   onAssignHero,
@@ -57,6 +51,9 @@ export function VideoTools({
   focusedKey,
 }: {
   videos: EditorVideo[]
+  /** The slots THIS site renders — declared, not hardcoded (phase 4). A site that
+   *  declares none shows no video slots (Juniper no longer inherits skeen's). */
+  videoSlots: ManifestVideoSlot[]
   artistId: string
   onToggleOnSite: (v: EditorVideo) => void
   onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
@@ -126,9 +123,9 @@ export function VideoTools({
   }
 
   // A background slot as a card (preview on top, title + edit below). An empty slot
-  // opens the picker; a filled one's Edit opens the full-panel item editor.
-  function slotCard(role: SiteVideoRole) {
-    const label = SLOT_LABELS[role]
+  // opens the picker; a filled one's Edit opens the full-panel item editor. The label
+  // comes from the DECLARATION now, not a hardcoded table.
+  function slotCard(role: SiteVideoRole, label: string) {
     const placed = uploaded.find((v) => v.siteRole === role)
     return (
       <div key={role} className="space-y-1">
@@ -162,22 +159,67 @@ export function VideoTools({
   const slotRole = picking && picking !== 'band' ? picking : null
   const slotPlaced = slotRole ? uploaded.find((v) => v.siteRole === slotRole) : undefined
 
+  // The label a hero slot declares for a role (for the picker heading).
+  const labelForRole = (role: string) =>
+    videoSlots.find((s) => s.kind === 'hero' && s.role === role)?.label ?? role
+
+  // One YouTube band slot.
+  function bandCard(i: number) {
+    const v = bandSlots[i]
+    if (!v) return <EmptySlot key={`band-empty-${i}`} label="Pick a YouTube video" onClick={() => setPicking('band')} />
+    return (
+      <FocusableCard key={v.id} focused={v.id === focusedVideoId} label={`Video slot ${i + 1}`}>
+        <CardThumb poster={v.poster} previewUrl={v.previewUrl} />
+        <div className="px-1.5 py-1">
+          <div className="flex items-center gap-0.5">
+            <input
+              aria-label={`Slot ${i + 1} title`}
+              value={titles[v.id] ?? ''}
+              onChange={(e) => edit(v.id, e.target.value)}
+              placeholder="Title"
+              className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 font-space text-xs text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-hairline"
+            />
+            <button
+              type="button"
+              aria-label={`Edit video slot ${i + 1}`}
+              title="Customize this video"
+              onClick={() => onEditItem({ type: 'bandVideo', id: v.id, label: `Video slot ${i + 1}` })}
+              className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+            >
+              <Icon name="edit" size={14} />
+            </button>
+          </div>
+        </div>
+      </FocusableCard>
+    )
+  }
+
+  // Declared groups, in first-appearance order — the panel MIRRORS what the site
+  // renders instead of a hardcoded skeen layout (phase 4). No declared slots → nothing.
+  const groups: string[] = []
+  for (const s of videoSlots) if (!groups.includes(s.group)) groups.push(s.group)
+
   return (
     <div className="space-y-3 px-5 py-4">
-      {/* Landing page — the hero background, two slots side by side */}
-      <SlotGroupLabel>Landing page</SlotGroupLabel>
-      <div className="grid grid-cols-2 gap-2">
-        {slotCard('hero_landscape')}
-        {slotCard('hero_portrait')}
-      </div>
-
-      {/* Bio background — the clip that plays behind the bio section */}
-      <SlotGroupLabel>Bio background</SlotGroupLabel>
-      <div className="grid grid-cols-2 gap-2">{slotCard('bio_background')}</div>
+      {groups.map((group) => {
+        const slots = videoSlots.filter((s) => s.group === group)
+        return (
+          <div key={group} className="space-y-2">
+            <SlotGroupLabel>{group}</SlotGroupLabel>
+            <div className="grid grid-cols-2 gap-2">
+              {slots.flatMap((slot) =>
+                slot.kind === 'hero'
+                  ? [slotCard(slot.role as SiteVideoRole, slot.label)]
+                  : Array.from({ length: Math.max(slot.count, bandSlots.length) }).map((_, i) => bandCard(i)),
+              )}
+            </div>
+          </div>
+        )
+      })}
 
       {slotRole && (
         <LibraryPicker
-          title={SLOT_LABELS[slotRole]}
+          title={labelForRole(slotRole)}
           // Only uploaded videos, and not one already in ANOTHER background slot.
           candidates={uploaded.filter((v) => !v.siteRole || v.id === slotPlaced?.id)}
           keyOf={(v) => v.id}
@@ -189,39 +231,6 @@ export function VideoTools({
         />
       )}
 
-      {/* Videos band — two YouTube slots below the disco ball */}
-      <SlotGroupLabel>Videos band</SlotGroupLabel>
-      <div className="grid grid-cols-2 gap-2">
-        {Array.from({ length: Math.max(BAND_SLOTS, bandSlots.length) }).map((_, i) => {
-          const v = bandSlots[i]
-          if (!v) return <EmptySlot key={`band-empty-${i}`} label="Pick a YouTube video" onClick={() => setPicking('band')} />
-          return (
-            <FocusableCard key={v.id} focused={v.id === focusedVideoId} label={`Video slot ${i + 1}`}>
-              <CardThumb poster={v.poster} previewUrl={v.previewUrl} />
-              <div className="px-1.5 py-1">
-                <div className="flex items-center gap-0.5">
-                  <input
-                    aria-label={`Slot ${i + 1} title`}
-                    value={titles[v.id] ?? ''}
-                    onChange={(e) => edit(v.id, e.target.value)}
-                    placeholder="Title"
-                    className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 font-space text-xs text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-hairline"
-                  />
-                  <button
-                    type="button"
-                    aria-label={`Edit video slot ${i + 1}`}
-                    title="Customize this video"
-                    onClick={() => onEditItem({ type: 'bandVideo', id: v.id, label: `Video slot ${i + 1}` })}
-                    className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
-                  >
-                    <Icon name="edit" size={14} />
-                  </button>
-                </div>
-              </div>
-            </FocusableCard>
-          )
-        })}
-      </div>
       {picking === 'band' && (
         <LibraryPicker
           title="YouTube video"
