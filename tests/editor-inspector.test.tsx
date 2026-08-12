@@ -1180,9 +1180,12 @@ describe('EditorInspector — Music panel (projects)', () => {
  * base.
  */
 describe('EditorInspector — Style component (no-code controls)', () => {
+  // scope:'site' so the tab LISTS them: since 2026-08-12 the browse list holds only
+  // site-wide regions (element regions are click-to-edit only — that rule is pinned
+  // separately below). These tests exercise the CONTROLS, which don't care about scope.
   const REGIONS: ManifestStyleRegion[] = [
-    { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase' },
-    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
+    { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase', scope: 'site' },
+    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6', scope: 'site' },
   ]
   const PALETTE: SiteStyleOptions = {
     fonts: [{ value: 'font-momo', label: 'Momo' }],
@@ -1356,6 +1359,20 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     renderInspector([], { styleRegions: REGIONS, selectedStyle: 'footer' })
     // Style panel opened AND the Footer section expanded (its controls are present).
     expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
+  })
+
+  it('CRITICAL: an element-scoped region is NOT listed — click-to-edit is its only door', () => {
+    // One edit path per thing (Sam, 2026-08-12): the tab lists site-wide regions only;
+    // an element region appears here solely when it was clicked in the preview.
+    renderInspector([], {
+      styleRegions: [
+        { key: 'page', label: 'Page background', base: '', scope: 'site' },
+        { key: 'bio', label: 'Biography', base: '' },
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    expect(screen.getByText('Page background')).toBeTruthy()
+    expect(screen.queryByText('Biography')).toBeNull()
   })
 })
 
