@@ -1219,9 +1219,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // Browsing shows the site-wide list (surface controls) — the accordion rule lives
     // there now; a focused element region arrives already open.
     openStyle({ styleRegions: PAGE_REGIONS })
-    expect(screen.queryByLabelText('Chrome Frosted glass')).toBeNull()
+    expect(screen.queryByLabelText('Chrome Padding')).toBeNull()
     expand('Chrome')
-    expect(screen.getByLabelText('Chrome Frosted glass')).toBeTruthy()
+    expect(screen.getByLabelText('Chrome Padding')).toBeTruthy()
   })
 
   it('a site-wide region offers padding, ONE color, frost — and the divider only where the base draws one', () => {
@@ -1229,8 +1229,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // tests/style-controls.test.ts): the rendered rows really match the allowlist.
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
-    expect(screen.getByLabelText('Page Frosted glass')).toBeTruthy()
     expect(screen.getByLabelText('Page Padding')).toBeTruthy()
+    expect(screen.queryByLabelText('Page Frosted glass')).toBeNull() // nothing behind an opaque bar to blur
     expect(screen.getByLabelText('Page Background color hex')).toBeTruthy()
     expect(screen.queryByLabelText('Page Size')).toBeNull() // read as doing nothing — gone
     expect(screen.queryByLabelText('Page Boldness')).toBeNull()
@@ -1308,9 +1308,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     openStyle({ styleRegions: PAGE_REGIONS, styleValues: { chrome: 'border-t text-lg' } })
     expand('Page')
     // Frost is a slider: the range input's value is a STEP INDEX, not a class.
-    fireEvent.change(screen.getByLabelText('Page Frosted glass'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
     expand('Chrome')
-    fireEvent.change(screen.getByLabelText('Chrome Frosted glass'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Chrome Padding'), { target: { value: '1' } })
     // Two keys touched → one button, with the count.
     const btn = screen.getByRole('button', { name: 'Revert 2 changes' })
     await act(async () => {

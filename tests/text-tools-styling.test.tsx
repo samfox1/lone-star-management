@@ -123,16 +123,22 @@ describe('TextFieldEditor — one field, full panel', () => {
     expect(screen.getByDisplayValue('book@example.com')).toBeTruthy()
   })
 
-  it('gives every text slider at least ten stops', () => {
+  it('gives every text slider at least ten stops — except Thickness, which is exactly the real weights', () => {
     // The ask: "each one has like 5 or 6 locations to slide to, I would like double that".
     // A coarse scale is not just inconvenient — the value the manager wants often is not on
     // the slider at all.
     //
-    // Nine, not ten, because Thickness tops out there: nine is EVERY Tailwind weight, and
-    // going finer would mean arbitrary `font-[350]` values that only render on a variable
-    // font and silently round everywhere else. It was four, so it still more than doubled.
+    // Thickness went the OTHER way on 2026-08-12 ("text thickness only has so many
+    // thicknesses that it can change to — make sure the slider reflects this"): most
+    // fonts ship a handful of weights and the browser synthesizes the rest into
+    // near-duplicates, so Tailwind's nine meant dead notches. Five distinct weights,
+    // pinned exactly in tests/style-controls.test.ts.
     for (const c of buildTextItemStyleControls(OPTIONS)) {
       if (c.kind !== 'slider') continue
+      if (c.id === 'weight') {
+        expect(sliderSteps(c).length, 'weight stops').toBe(5)
+        continue
+      }
       expect(sliderSteps(c).length, `${c.id} stops`).toBeGreaterThanOrEqual(9)
     }
   })

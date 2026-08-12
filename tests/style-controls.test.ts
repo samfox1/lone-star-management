@@ -38,12 +38,13 @@ const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
 
 describe('controlsForRegion — a site-wide region styles the SURFACE only', () => {
-  it('CRITICAL: a site-wide region offers padding, ONE color, frost — nothing else', () => {
+  it('CRITICAL: a site-wide region offers padding and ONE color — nothing else', () => {
     // Sam, 2026-08-12: "just one color, no gradient at the moment"; text Size left the
     // page ("the size dropdown has no effect… it shouldn't need to be on the site
-    // background") — bar height is the padding slider's job. ALLOWLIST, not blocklist.
+    // background") — bar height is the padding slider's job — and frost followed for
+    // the same reads-as-doing-nothing reason. ALLOWLIST, not blocklist.
     const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'frost', 'pad'])
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'pad'])
   })
 
   it('CRITICAL: a chrome bar whose base draws a divider gets the Divider line toggle', () => {

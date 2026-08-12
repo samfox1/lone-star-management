@@ -692,7 +692,10 @@ function sectionColorControl(
  *  nothing, since every child sets its own size). An ALLOWLIST, deliberately: a
  *  control added later stays off site-wide regions unless it opts in here. Element
  *  regions keep the full set. */
-const SITE_SCOPE_CONTROL_IDS = new Set(['pad', 'bgColor', 'frost'])
+// (frost left 2026-08-12, minutes after size and for the same reason: backdrop-blur
+// only shows through a TRANSLUCENT background over layered content, and chrome bars
+// sit opaque in normal flow — a control that reads as doing nothing.)
+const SITE_SCOPE_CONTROL_IDS = new Set(['pad', 'bgColor'])
 /** The border-side utilities a base can draw its divider with. */
 const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'border-r', 'border-x', 'border-y'])
 export function controlsForRegion(
