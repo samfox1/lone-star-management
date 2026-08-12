@@ -43,6 +43,7 @@ export type IconName =
   | 'note'
   | 'grip'
   | 'minus'
+  | 'close'
   | 'play'
   | 'pause'
   | 'replay'
@@ -233,6 +234,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   minus: <path d="M5 12h14" />,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
   play: <path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor" stroke="none" />,
   pause: (
     <>

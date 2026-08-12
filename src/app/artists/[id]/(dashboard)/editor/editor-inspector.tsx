@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { cx } from '@/lib/cx'
-import { plural, GroupLabel, EYEBROW, SCROLL_BODY, type SaveStatus } from './inspector-shared'
+import { GroupLabel, SCROLL_BODY, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
 import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import {
@@ -52,7 +52,7 @@ import {
   saveEditorStyleAction,
   setOnSiteAction,
 } from '../actions'
-import { useSessionJournal } from './use-session-journal'
+import { useSessionJournal, type JournalEntry } from './use-session-journal'
 import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
@@ -118,42 +118,9 @@ const COMPONENTS: Component[] = [
   { kind: 'site', icon: 'settings', label: 'Site' },
 ]
 
-/** What a component counts. `onSite` is null for kinds that have no on-site concept
- *  (text fields, style regions); otherwise it's how many are actually ON THE SITE. */
-export type KindCount = { total: number; onSite: number | null }
-
-/** The noun each component counts. One table keyed by Kind, replacing a per-kind
- *  pluralizer plus the same 7-arm ternary written out in BOTH the browse list and the
- *  editing header — so an 8th Kind is one entry here, not four edits. `Record<Kind, …>`
- *  is the point: TypeScript refuses a new Kind without one. */
-const COUNT_NOUN: Record<Kind, string> = {
-  images: 'photo',
-  text: 'field',
-  links: 'link',
-  videos: 'video',
-  music: 'song',
-  tour: 'date',
-  merch: 'product',
-  style: 'region',
-  site: 'setting',
-}
-
-/**
- * The subtitle under each component. For anything with an on-site concept this reads
- * "N of M on site" — NOT the library total.
- *
- * The library total alone actively lied: the editor's job is what's on the SITE
- * (ADR 0006), but Videos showed "83 videos" while the public site served ZERO of them
- * — every one imported off-site by the YouTube sync (`insertDefaults: on_site:false`).
- * It read as "83 videos are on your site". Songs and links looked right only by luck:
- * they happen to be 19/19 and 8/8.
- */
-export function countLabel(kind: Kind, c: KindCount): string {
-  const noun = COUNT_NOUN[kind]
-  if (c.total === 0) return plural(0, noun) // "0 photos" beats "0 of 0 on site"
-  if (c.onSite === null) return plural(c.total, noun) // no on-site concept
-  return `${c.onSite} of ${c.total} on site`
-}
+// The per-kind on-site count that used to head each browse row is GONE (Sam,
+// 2026-08-12: "I don't need to see the x of x on site") — the grid tile is icon +
+// label. countLabel / COUNT_NOUN / KindCount went with it.
 
 /* A read-only OnSiteBadge lived here for the publish-reconciled kinds, because
  * `reconcileOnSite` would silently revert a toggle they didn't own. Videos were its
@@ -870,25 +837,6 @@ export function EditorInspector({
     })
   }
 
-  // One count per Kind, derived once and shared by both views — they used to each
-  // reach into a different set of arrays through their own ternary chain. `onSite`
-  // is what the site actually serves; null means the kind has no on-site concept.
-  const onSite = <T,>(xs: T[], f: (x: T) => boolean) => xs.filter(f).length
-  const counts: Record<Kind, KindCount> = {
-    // Gallery photos are edited as orientation SLOTS: a photo in a slot is on the site by
-    // construction, so there's no separate on-site count to show — just the total.
-    images: { total: photos.length, onSite: null },
-    text: { total: textFields.length, onSite: null },
-    links: { total: links.length, onSite: onSite(links, (l) => l.onSite) },
-    videos: { total: videos.length, onSite: onSite(videos, (v) => v.onSite) },
-    music: { total: releases.length, onSite: onSite(releases, (x) => x.onSite) },
-    tour: { total: tours.length, onSite: onSite(tours, (t) => t.onSite) },
-    merch: { total: merch.length, onSite: onSite(merch, (m) => m.onSite) },
-    style: { total: styleRegions.length, onSite: null },
-    // How many site-wide settings are actually SET — "0 settings" reads as untouched.
-    site: { total: Object.values(cursorValues).filter(Boolean).length, onSite: null },
-  }
-
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {itemEditor ? (
@@ -960,64 +908,175 @@ export function EditorInspector({
           onSwitch={selectComponent}
         />
       ) : (
-        <BrowseView counts={counts} onOpen={selectComponent} />
+        <BrowseView onOpen={selectComponent} />
       )}
-      {/* The session's one exit ramp: everything touched since the editor opened, put
-          back in one click. Hidden at zero — an inert Revert would only raise "revert
-          to what?" — and hidden while the ITEM editor is open, whose own Revert/Save
-          pair owns that surface (two Revert buttons at once, Sam 2026-08-03). */}
+      {/* The session's Save / Cancel pair: Cancel walks every touched key back to its
+          session-start value; Save accepts the session (edits already autosaved to the
+          DRAFT, so Save clears the ledger — nothing is pushed live until Publish).
+          Hidden at zero, and while the ITEM editor is open (its own pair owns that
+          surface). */}
       {!itemEditor && !textEditor && !tourEditor && journal.count > 0 && (
-        <div className="border-t border-hairline px-4 py-2.5">
-          <button
-            type="button"
-            onClick={revertSession}
-            disabled={reverting}
-            className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-accent enabled:hover:text-accent disabled:opacity-40"
-          >
-            {reverting ? 'Reverting…' : `Revert ${plural(journal.count, 'change')}`}
-          </button>
-        </div>
+        <SessionActions
+          entries={journal.entries}
+          busy={reverting}
+          onCancel={revertSession}
+          onSave={() => journal.clear()}
+        />
       )}
     </aside>
   )
 }
 
-/* ── Browse: the component-type list ─────────────────────────────────────────── */
-function BrowseView({
-  counts,
-  onOpen,
+/** A friendly label for one journal entry, for the confirm list. */
+function entryLabel(e: JournalEntry): string {
+  const noun: Record<JournalEntry['kind'], string> = {
+    style: 'Style', field: 'Text', link: 'Link', slot: 'Image',
+  }
+  const key = 'key' in e ? e.key : e.role
+  return `${noun[e.kind]} · ${key.replace(/_/g, ' ')}`
+}
+
+const SKIP_SAVE_CONFIRM = 'lse:skip-save-confirm'
+
+/* ── Session Save / Cancel, with a Confirm-changes dialog ────────────────────── */
+function SessionActions({
+  entries,
+  busy,
+  onCancel,
+  onSave,
 }: {
-  counts: Record<Kind, KindCount>
-  onOpen: (c: Component) => void
+  entries: JournalEntry[]
+  busy: boolean
+  onCancel: () => void
+  onSave: () => void
 }) {
+  const [confirming, setConfirming] = useState(false)
+  // Deduplicate: several edits to one key are one line in the list.
+  const changes = Array.from(new Map(entries.map((e) => [entryLabel(e), e])).values())
+
+  const commit = () => {
+    setConfirming(false)
+    onSave()
+  }
+  const requestSave = () => {
+    const skip = typeof window !== 'undefined' && window.localStorage.getItem(SKIP_SAVE_CONFIRM) === '1'
+    if (skip) commit()
+    else setConfirming(true)
+  }
+
   return (
     <>
-      <div className="px-5 pb-3.5 pt-5">
-        <div className={EYEBROW}>Editor</div>
-        <h2 className="mt-2 text-[19px] font-semibold tracking-[-0.01em]">Edit your site</h2>
+      <div className="flex gap-2 border-t border-hairline px-4 py-2.5">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
+        >
+          {busy ? 'Cancelling…' : 'Cancel'}
+        </button>
+        <button
+          type="button"
+          onClick={requestSave}
+          disabled={busy}
+          className="flex-1 rounded-lg border border-ink bg-ink px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper transition-opacity hover:opacity-85 disabled:opacity-40"
+        >
+          Save
+        </button>
       </div>
-      <div className={cx(SCROLL_BODY, 'border-t border-hairline-soft')}>
+
+      {confirming && (
+        <SaveConfirm
+          changes={changes}
+          onConfirm={commit}
+          onDismiss={() => setConfirming(false)}
+        />
+      )}
+    </>
+  )
+}
+
+function SaveConfirm({
+  changes,
+  onConfirm,
+  onDismiss,
+}: {
+  changes: JournalEntry[]
+  onConfirm: () => void
+  onDismiss: () => void
+}) {
+  const [dontAsk, setDontAsk] = useState(false)
+  const confirm = () => {
+    if (dontAsk && typeof window !== 'undefined') window.localStorage.setItem(SKIP_SAVE_CONFIRM, '1')
+    onConfirm()
+  }
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Confirm changes"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6"
+      onClick={onDismiss}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl border border-hairline bg-paper p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">Confirm changes</h2>
+        <ul className="mt-3 max-h-56 space-y-1.5 overflow-y-auto">
+          {changes.map((e, i) => (
+            <li key={i} className="flex items-center gap-2 font-space text-[12px] text-ink-muted">
+              <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" aria-hidden />
+              {entryLabel(e)}
+            </li>
+          ))}
+        </ul>
+        <label className="mt-4 flex items-center gap-2 font-space text-[11px] text-ink-faint">
+          <input type="checkbox" checked={dontAsk} onChange={(e) => setDontAsk(e.target.checked)} className="accent-ink" />
+          Don&apos;t ask me to confirm again
+        </label>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-ink hover:text-ink"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={confirm}
+            className="flex-1 rounded-lg border border-ink bg-ink px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper hover:opacity-85"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Browse: the component-type list ─────────────────────────────────────────── */
+function BrowseView({ onOpen }: { onOpen: (c: Component) => void }) {
+  return (
+    // A GRID of the editable options — no header (Sam, 2026-08-12): the icons are the
+    // whole home screen. Icon + label turn accent on hover, together.
+    <div className={cx(SCROLL_BODY, 'p-3')}>
+      <div className="grid grid-cols-3 gap-2">
         {COMPONENTS.map((c) => (
           <button
             key={c.kind}
             type="button"
             onClick={() => onOpen(c)}
-            className="group flex w-full items-center gap-3.5 border-b border-hairline-soft px-5 py-[15px] text-left hover:bg-surface"
+            aria-label={c.label}
+            className="group flex flex-col items-center gap-2 rounded-xl border border-hairline-soft px-2 py-4 text-ink-muted transition-colors hover:border-accent hover:text-accent"
           >
-            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-track text-ink-muted group-hover:text-ink">
-              <Icon name={c.icon} size={19} />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-[13px] font-medium">{c.label}</span>
-              <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
-                {countLabel(c.kind, counts[c.kind])}
-              </span>
-            </span>
-            <Icon name="chevronRight" size={16} className="flex-none text-hairline" />
+            <Icon name={c.icon} size={22} />
+            <span className="text-[12px] font-medium leading-none text-ink group-hover:text-accent">{c.label}</span>
           </button>
         ))}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -1138,19 +1197,17 @@ function EditingView({
   const isSite = component.kind === 'site'
   return (
     <>
-      {/* Minimal header: back on the left, the component's icon on the right. */}
-      <div className="flex items-center justify-between border-b border-hairline px-5 pb-2.5 pt-[15px]">
+      {/* No header row (Sam, 2026-08-12) — just a small black X, top-left, back to the
+          grid. The panel's own GroupLabels say what's being edited. */}
+      <div className="px-3 pt-3">
         <button
           type="button"
           onClick={onBack}
-          className={cx('flex items-center gap-1.5 text-ink-muted hover:text-ink', EYEBROW)}
+          aria-label="Close"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-ink hover:bg-surface"
         >
-          <Icon name="chevronLeft" size={15} />
-          All components
+          <Icon name="close" size={16} />
         </button>
-        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-accent-soft text-accent">
-          <Icon name={component.icon} size={18} />
-        </span>
       </div>
 
       <div className={SCROLL_BODY}>
@@ -1277,7 +1334,9 @@ function EditingView({
         )}
       </div>
 
-      {/* the browse list, collapsed to a switcher strip */}
+      {/* The component switcher strip stays on a specific tab (Sam, 2026-08-12: only
+          the LANDING view became a grid) — jump straight between panels without
+          returning to the grid. */}
       <div className="flex items-center justify-between gap-0.5 border-t border-hairline bg-surface px-4 py-2.5">
         {COMPONENTS.map((c) => (
           <button

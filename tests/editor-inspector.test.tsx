@@ -6,7 +6,7 @@
  * add link, remove wired to deleteMediaAction, size slider, accordions, switcher
  * strip); Back returns; accordions collapse.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
@@ -228,9 +228,6 @@ describe('EditorInspector — browse state', () => {
     for (const label of ['Images', 'Text', 'Links', 'Videos', 'Music', 'Merch']) {
       expect(screen.getByRole('button', { name: new RegExp(label) })).toBeTruthy()
     }
-    // Gallery photos are orientation groups (on-site by construction), so the subtitle is
-    // just a total.
-    expect(screen.getByRole('button', { name: /Images/ }).textContent).toContain('4 photos')
   })
 
   it('does not show editing tools until a component is opened', () => {
@@ -248,7 +245,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
 
   it('opens the gallery as Horizontal + Vertical groups, each with an Add tile', () => {
     openImages()
-    expect(screen.getByRole('button', { name: /All components/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
     expect(screen.getByText('Horizontal')).toBeTruthy()
     expect(screen.getByText('Vertical')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add horizontal photo' })).toBeTruthy()
@@ -325,17 +322,20 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     expect(setOnSiteMock).not.toHaveBeenCalled()
   })
 
-  it('returns to browse via Back', () => {
+  it('returns to the grid via the Close X', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: /All components/ }))
-    expect(screen.getByRole('button', { name: /Images/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    // Back on the grid home — every component is a tile again.
+    expect(screen.getByRole('button', { name: 'Images' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Music' })).toBeTruthy()
   })
 
-  it('exposes the collapsed component switcher strip with Images current', () => {
+  it('KEEPS the bottom switcher strip AND offers the Close X (Sam, 2026-08-12: only the landing view changed)', () => {
     openImages()
     const strip = screen.getByRole('button', { name: 'Images' })
     expect(strip.getAttribute('aria-current')).toBe('true')
     expect(within(document.body).getByRole('button', { name: 'Videos' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
   })
 })
 
@@ -403,11 +403,6 @@ describe('EditorInspector — Images: image fields + two-way highlight', () => {
 })
 
 describe('EditorInspector — Text component', () => {
-  it('lists text fields with the real count', () => {
-    renderInspector([], { textFields: TEXT_FIELDS })
-    expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
-  })
-
   it('CRITICAL: an unset field opens holding the site’s OWN words, editable', () => {
     // Sam, 2026-08-09, on throwaway #1: "for the text, I want there to be actual text
     // here not just the placeholder text." The site's fallback was the input's
@@ -565,11 +560,6 @@ describe('EditorInspector — Links component', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add to the site/i }))
     expect(addContentMock).not.toHaveBeenCalled()
     expect(screen.getByText(/just the site’s address/i)).toBeTruthy()
-  })
-
-  it('shows the real link count in browse', () => {
-    renderInspector([], { links: LINKS })
-    expect(screen.getByRole('button', { name: /Links/ }).textContent).toContain('2 of 3 on site')
   })
 
   it('collapses rows to just the label and expands the editor on click', () => {
@@ -851,11 +841,6 @@ describe('EditorInspector — Videos component', () => {
     fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
   }
 
-  it('shows the real video count in browse', () => {
-    renderInspector([], { videos: VIDEOS })
-    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('1 of 3 on site')
-  })
-
   it('shows the on-site videos as filled band slots with an editable title', () => {
     // v2 is the only on-site video → the one filled slot; v1/v3 are library.
     openVideos()
@@ -1052,11 +1037,6 @@ describe('EditorInspector — Merch component', () => {
     fireEvent.click(screen.getByRole('button', { name: /Merch/ }))
   }
 
-  it('shows the real product count in browse', () => {
-    renderInspector([], { merch: MERCH })
-    expect(screen.getByRole('button', { name: /Merch/ }).textContent).toContain('0 of 2 on site')
-  })
-
   it('lists products with editable name/price/url + an add-product out', () => {
     openMerch()
     expect((screen.getByLabelText('Product 1 name') as HTMLInputElement).value).toBe('Tour Tee')
@@ -1109,10 +1089,12 @@ describe('EditorInspector — Music panel (projects)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Music/ }))
   }
 
-  it('counts PROJECTS on site, not songs, in browse', () => {
+  it('the grid tile is just icon + label — no on-site count (Sam, 2026-08-12)', () => {
     renderInspector([], { releases: RELEASES })
-    // 2 of 3 releases on site — never "14 songs".
-    expect(screen.getByRole('button', { name: /Music/ }).textContent).toContain('2 of 3 on site')
+    const tile = screen.getByRole('button', { name: /Music/ })
+    expect(tile.textContent).toContain('Music')
+    // The "2 of 3 on site" line was removed from the landing grid.
+    expect(tile.textContent).not.toMatch(/on site/i)
   })
 
   it('lists one card per project, with its kind and song count — never individual songs', () => {
@@ -1209,11 +1191,6 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     renderInspector([], { styleRegions: REGIONS, selectedStyle: key, ...opts })
   }
   const expand = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }))
-
-  it('lists the frame-provided regions with the real count', () => {
-    renderInspector([], { styleRegions: REGIONS })
-    expect(screen.getByRole('button', { name: /Style/ }).textContent).toContain('2 regions')
-  })
 
   it('is an accordion: controls appear only when a section is opened', () => {
     // Browsing shows the site-wide list (surface controls) — the accordion rule lives
@@ -1316,16 +1293,15 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
     expand('Chrome')
     fireEvent.change(screen.getByLabelText('Chrome Padding'), { target: { value: '1' } })
-    // Two keys touched → one button, with the count.
-    const btn = screen.getByRole('button', { name: 'Revert 2 changes' })
+    // Two keys touched → the session Cancel walks BOTH back.
     await act(async () => {
-      fireEvent.click(btn)
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     })
     // Reverse order: chrome (touched last) first, then the page.
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'chrome', 'border-t text-lg')
     expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'page', '')
-    // The ledger clears — the button leaves until something new is touched.
-    expect(screen.queryByRole('button', { name: /Revert \d/ })).toBeNull()
+    // The ledger clears — Save/Cancel leave until something new is touched.
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
   it('Font is palette-gated; the colour pickers exist regardless — hex lifts inline anywhere', () => {
@@ -1401,7 +1377,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
       selectedStyle: 'footer',
     })
     expect(screen.getByLabelText('Footer Boldness')).toBeTruthy() // click focus active
-    fireEvent.click(screen.getByRole('button', { name: /Style/ })) // manual tab visit
+    fireEvent.click(screen.getByRole('button', { name: 'Close' })) // back to the grid…
+    fireEvent.click(screen.getByRole('button', { name: /Style/ })) // …then open Style by hand
     expect(screen.queryByLabelText('Footer Boldness')).toBeNull()
     expect(screen.getByText('Page background')).toBeTruthy()
   })
@@ -1421,6 +1398,63 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 })
 
+describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)', () => {
+  const REGIONS: ManifestStyleRegion[] = [
+    { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' },
+  ]
+  const editPage = () => {
+    renderInspector([], { styleRegions: REGIONS })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Page' }))
+    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
+  }
+
+  beforeEach(() => window.localStorage.clear())
+
+  it('CRITICAL: Save and Cancel appear together only once something is touched', () => {
+    renderInspector([], { styleRegions: REGIONS })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Page' }))
+    // Nothing touched yet — no session bar.
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+  })
+
+  it('CRITICAL: Save opens a Confirm dialog LISTING the changes, and confirming clears the ledger', () => {
+    editPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const dialog = screen.getByRole('dialog', { name: 'Confirm changes' })
+    expect(within(dialog).getByText('Style · page')).toBeTruthy() // the change is named
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    // Committed: the dialog closes and the session bar is gone.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('CRITICAL: "Don\'t ask me to confirm again" skips the dialog on the NEXT save', () => {
+    editPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const dialog = screen.getByRole('dialog', { name: 'Confirm changes' })
+    fireEvent.click(within(dialog).getByLabelText(/Don't ask me to confirm again/i))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    // Second session: Save commits immediately, no dialog.
+    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('dismissing the dialog (Back) keeps the ledger — nothing is lost', () => {
+    editPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Back' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy() // still pending
+  })
+})
+
 /**
  * The editor's job is what's on the SITE (ADR 0006), so its counts must be on-site
  * counts. They used to be LIBRARY counts, which lied: skeen's YouTube sync imports
@@ -1428,39 +1462,11 @@ describe('EditorInspector — Style component (no-code controls)', () => {
  * "83 videos" while the public site served ZERO of them. Songs and links looked fine
  * only by luck — they happened to be 19/19 and 8/8, so library == on-site.
  */
-describe('EditorInspector — counts tell the truth about what is on the site', () => {
-  it("REGRESSION: a synced library with NOTHING on-site does not read as '83 videos'", () => {
-    const offSite: EditorVideo[] = Array.from({ length: 83 }, (_, i) =>
-      yt({ id: `v${i}`, title: `DAY ${i}`, poster: null, onSite: false }),
-    )
-    renderInspector([], { videos: offSite })
-    const label = screen.getByRole('button', { name: /Videos/ }).textContent ?? ''
-    expect(label).toContain('0 of 83 on site')
-    expect(label).not.toContain('83 videos') // the exact lie
-  })
-
-  it('says "N of M on site", not the library total', () => {
-    const videos: EditorVideo[] = [
-      yt({ id: 'a', title: 'A', poster: null, onSite: true }),
-      yt({ id: 'b', title: 'B', poster: null, onSite: false }),
-      yt({ id: 'c', title: 'C', poster: null, onSite: true }),
-    ]
-    renderInspector([], { videos })
-    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('2 of 3 on site')
-  })
-
-  it('an empty library reads plainly, not "0 of 0 on site"', () => {
-    renderInspector([], { videos: [] })
-    expect(screen.getByRole('button', { name: /Videos/ }).textContent).toContain('0 videos')
-  })
-
-  it('kinds with NO on-site concept keep a plain count (text, style)', () => {
-    // A text field or a style region is not something you put "on the site" — it's
-    // part of a section that's already there.
-    renderInspector([], { textFields: TEXT_FIELDS, styleRegions: [] })
-    expect(screen.getByRole('button', { name: /Text/ }).textContent).toContain('3 fields')
-  })
-
+describe('EditorInspector — what is ON the site is unambiguous', () => {
+  // The per-kind on-site count that headed each browse row is GONE (Sam, 2026-08-12:
+  // "I don't need to see the x of x on site") — the four label-assertion tests here
+  // went with it. What survives is the STRUCTURAL guarantee the count only ever
+  // narrated: a big off-site library never masquerades as filled slots.
   it('keeps a big off-site library out of the slots, so what is ON the site is unambiguous', () => {
     // An off-site video is NOT a filled slot — it sits in the library picker. So a
     // channel of 83 imports never reads as "83 on your site": both band slots are empty.
@@ -1738,11 +1744,6 @@ describe('EditorInspector — tour tools', () => {
     expect(reorderContentMock).toHaveBeenCalledWith('tour_date', 'artist-1', ['u2', 'u1'])
   })
 
-  it('counts dates that are ON THE SITE, not the library total', () => {
-    renderInspector([], { tours: TOURS })
-    expect(screen.getByRole('button', { name: /Tour/ }).textContent).toContain('1 of 3 on site')
-  })
-
   it('lists each date with its venue, place and lineup', () => {
     openTour()
     expect(screen.getByText('Mohawk')).toBeTruthy()
@@ -1829,17 +1830,17 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
-  it('Revert changes puts a slot placement back to its previous holder', async () => {
-    // m2 takes Slot 1 (previously empty) → revert re-places null.
+  it('session Cancel puts a slot placement back to its previous holder', async () => {
+    // m2 takes Slot 1 (previously empty) → Cancel re-places null.
     openImages(PHOTOS)
     fireEvent.click(screen.getByRole('button', { name: 'Slot 1' }))
     fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert 1 change' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     })
     expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
-    expect(screen.queryByRole('button', { name: /Revert \d/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
   it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {
