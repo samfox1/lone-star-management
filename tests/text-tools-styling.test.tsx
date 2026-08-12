@@ -55,8 +55,9 @@ describe('TextTools — the list', () => {
     )
     fireEvent.click(screen.getByLabelText('Edit Hero title'))
     expect(onEditField).toHaveBeenCalledWith(styled)
-    // One glyph per row down a column of text fields is noise the label already covers.
-    expect(container.querySelectorAll('svg')).toHaveLength(0)
+    // Version A (2026-08-12): the only glyph per row is the hover EDIT pencil — one per
+    // field, no leading/content icon. Two fields → two pencils.
+    expect(container.querySelectorAll('svg')).toHaveLength(2)
   })
 
   it('CRITICAL: the list is READ-ONLY — nothing here can change the site', () => {
@@ -84,7 +85,7 @@ describe('TextTools — the list', () => {
       />,
     )
     expect(screen.getByText('Typed elsewhere')).toBeTruthy()
-    expect(screen.getByText('Empty')).toBeTruthy()
+    expect(screen.getByText('Not set')).toBeTruthy()
   })
 })
 
