@@ -22,7 +22,7 @@ export function TextTools({
   onEditField?: (field: EditorTextField) => void
 }) {
   return (
-    <div className="py-2">
+    <div className="pb-2">
       {groupByPrefix(textFields).map(([heading, group]) => (
         <div key={heading || '_flat'}>
           {heading && <GroupLabel>{heading}</GroupLabel>}

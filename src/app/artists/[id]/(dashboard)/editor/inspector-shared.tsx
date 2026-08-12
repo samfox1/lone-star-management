@@ -129,7 +129,8 @@ export function SectionRow({
  *  read as a clean list of named values, and a glyph per row was noise, not navigation. */
 export function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2.5 py-1.5">
+    // py-1 (was py-1.5): the editor's control column reads denser (Sam, 2026-08-12).
+    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2.5 py-1">
       <span className={CONTROL_LABEL}>{label}</span>
       {children}
     </div>

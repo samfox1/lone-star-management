@@ -102,12 +102,12 @@ export function TextFieldEditor({
       {/* A style-only entry is a text AREA of the site — the words are written into the
           design, so there is nothing to type. It still gets the type controls below. */}
       {field.styleOnly ? (
-        <p className="px-5 pt-4 font-space text-[11px] leading-snug text-ink-faint">
+        <p className="px-5 pt-3 font-space text-[11px] leading-snug text-ink-faint">
           This text is part of the site&apos;s design, so it can&apos;t be retyped here — but you
           can change how it looks.
         </p>
       ) : (
-      <div className="px-5 pt-4">
+      <div className="px-5 pt-3">
         {/* SEEDED with the site's own words, not merely hinted at by a placeholder.
             A placeholder looked right and could not be edited: changing one word of a
             sentence already on the page meant retyping it from memory (Sam, 2026-08-09).
@@ -136,12 +136,12 @@ export function TextFieldEditor({
       </div>
       )}
 
-      <div className="mt-5 border-t border-hairline-soft px-5 pt-4">
+      <div className="mt-3 border-t border-hairline-soft px-5 pt-3">
         {region ? (
           // Controls only when the site declares a style region for this field. One that
           // writes to a key nothing renders is worse than none: the manager changes the
           // font, nothing happens, and no error explains it.
-          <div className="space-y-1.5">
+          <div className="space-y-0.5">
             {controls.map((control) => (
               <StyleControlRow
                 key={control.id}

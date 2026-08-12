@@ -90,7 +90,7 @@ export function StyleControlRow({
     const canReset = steps.length !== control.steps.length
     const { idx, label, exact } = sliderIndex(control, current)
     return (
-      <div className="py-1.5">
+      <div className="py-1">
         <div className="flex items-center justify-between">
           <span className={CONTROL_LABEL}>{control.label}</span>
           <span className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export function StyleControlRow({
           value={idx}
           aria-label={aria}
           onChange={(e) => onChange(steps[Number(e.target.value)].value)}
-          className="mt-1 w-full accent-ink"
+          className="lse-slider mt-1 w-full"
         />
       </div>
     )

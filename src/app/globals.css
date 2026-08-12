@@ -111,3 +111,41 @@ body {
 .toast-in {
   animation: toast-in 0.18s ease-out;
 }
+
+/* Thin slider (Sam, 2026-08-12: "sliders can be less tall / thinner"). Native range
+   inputs reserve ~20px of height for a chunky thumb; this trims the track to 3px and
+   the thumb to 12px so a column of them reads dense. WebKit + Firefox both need the
+   pseudo-elements styled explicitly once appearance is reset. */
+.lse-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+.lse-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-hairline);
+}
+.lse-slider::-moz-range-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-hairline);
+}
+.lse-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--color-ink);
+}
+.lse-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-ink);
+}
