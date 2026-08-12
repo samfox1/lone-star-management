@@ -1180,12 +1180,17 @@ describe('EditorInspector — Music panel (projects)', () => {
  * base.
  */
 describe('EditorInspector — Style component (no-code controls)', () => {
-  // scope:'site' so the tab LISTS them: since 2026-08-12 the browse list holds only
-  // site-wide regions (element regions are click-to-edit only — that rule is pinned
-  // separately below). These tests exercise the CONTROLS, which don't care about scope.
+  // ELEMENT regions: reachable only via click focus (`focusStyle`) since 2026-08-12 —
+  // the control tests drive them that way. Site-wide browsing is PAGE_REGIONS below.
   const REGIONS: ManifestStyleRegion[] = [
-    { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase', scope: 'site' },
-    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6', scope: 'site' },
+    { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase' },
+    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
+  ]
+  // SITE-WIDE regions: what browsing the tab lists. Their controls are the SURFACE
+  // allowlist (controlsForRegion) — no text styling on the page itself.
+  const PAGE_REGIONS: ManifestStyleRegion[] = [
+    { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' },
+    { key: 'chrome', label: 'Chrome', base: 'border-t', scope: 'site' },
   ]
   const PALETTE: SiteStyleOptions = {
     fonts: [{ value: 'font-momo', label: 'Momo' }],
@@ -1197,6 +1202,12 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     renderInspector([], { styleRegions: REGIONS, ...opts })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
   }
+  /** The click-to-edit route: mount with a frame selection — the panel opens focused
+   *  on that one region, its controls already expanded. The only door to an element
+   *  region since 2026-08-12. */
+  function focusStyle(key: string, opts: Parameters<typeof renderInspector>[1] = {}) {
+    renderInspector([], { styleRegions: REGIONS, selectedStyle: key, ...opts })
+  }
   const expand = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }))
 
   it('lists the frame-provided regions with the real count', () => {
@@ -1205,15 +1216,27 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 
   it('is an accordion: controls appear only when a section is opened', () => {
-    openStyle()
-    expect(screen.queryByLabelText('Footer Boldness')).toBeNull()
-    expand('Footer')
-    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
+    // Browsing shows the site-wide list (surface controls) — the accordion rule lives
+    // there now; a focused element region arrives already open.
+    openStyle({ styleRegions: PAGE_REGIONS })
+    expect(screen.queryByLabelText('Chrome Frosted glass')).toBeNull()
+    expand('Chrome')
+    expect(screen.getByLabelText('Chrome Frosted glass')).toBeTruthy()
+  })
+
+  it('a site-wide region offers SURFACE controls only — no text styling on the page', () => {
+    // The component half of controlsForRegion's rule (the id list is pinned in
+    // tests/style-controls.test.ts): the rendered row really drops the text controls.
+    openStyle({ styleRegions: PAGE_REGIONS })
+    expand('Page')
+    expect(screen.getByLabelText('Page Frosted glass')).toBeTruthy()
+    expect(screen.queryByLabelText('Page Boldness')).toBeNull()
+    expect(screen.queryByLabelText('Page Underline')).toBeNull()
+    expect(screen.queryByLabelText('Page Size')).toBeNull()
   })
 
   it('reads the base classes into the controls (Black weight, Uppercase on)', () => {
-    openStyle()
-    expand('Hero wordmark (SKEEN)')
+    focusStyle('hero_wordmark')
     expect((screen.getByLabelText('Hero wordmark (SKEEN) Boldness') as HTMLSelectElement).value).toBe('font-black')
     // The toggles are role=switch buttons (not checkboxes), so the on/off state is
     // aria-checked — the same signal a screen reader reads.
@@ -1222,16 +1245,14 @@ describe('EditorInspector — Style component (no-code controls)', () => {
 
   it('changing Boldness swaps the weight class and PRESERVES the rest, repainting live', () => {
     const onApplyStyle = vi.fn()
-    openStyle({ onApplyStyle })
-    expand('Hero wordmark (SKEEN)')
+    focusStyle('hero_wordmark', { onApplyStyle })
     fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'font-bold' } })
     expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'uppercase font-bold')
   })
 
   it('a toggle clears its class when unchecked', () => {
     const onApplyStyle = vi.fn()
-    openStyle({ onApplyStyle })
-    expand('Hero wordmark (SKEEN)')
+    focusStyle('hero_wordmark', { onApplyStyle })
     fireEvent.click(screen.getByLabelText('Hero wordmark (SKEEN) Uppercase')) // uncheck
     expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'font-black')
   })
@@ -1239,8 +1260,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   it('debounces the save, then persists the swapped class string', () => {
     vi.useFakeTimers()
     try {
-      openStyle()
-      expand('Footer')
+      focusStyle('footer')
       // Derived from the real control: sizes became fluid clamps so text shrinks on a
       // phone, and a hardcoded `text-lg` here would assert against a scale that no
       // longer exists.
@@ -1260,8 +1280,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // site's own base classes (skeen brief, 2026-08-03).
     vi.useFakeTimers()
     try {
-      openStyle()
-      expand('Hero wordmark (SKEEN)')
+      focusStyle('hero_wordmark')
       const weight = screen.getByLabelText('Hero wordmark (SKEEN) Boldness')
       fireEvent.change(weight, { target: { value: 'font-bold' } })
       await vi.advanceTimersByTimeAsync(500)
@@ -1277,32 +1296,32 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 
   it('Revert changes walks every touched region back to its session-start value', async () => {
-    // hero_wordmark starts with NO stored row (before = null → revert deletes via '');
-    // footer starts with a stored override (before = that string → revert restores it).
-    openStyle({ styleValues: { footer: 'mt-auto text-lg' } })
-    expand('Hero wordmark (SKEEN)')
-    fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'font-bold' } })
-    expand('Footer')
-    fireEvent.change(screen.getByLabelText('Footer Size'), { target: { value: 'text-6xl' } })
+    // Two site-wide regions (the browse list can open several rows; a focus shows one):
+    // page starts with NO stored row (before = null → revert deletes via ''); chrome
+    // starts with a stored override (before = that string → revert restores it).
+    openStyle({ styleRegions: PAGE_REGIONS, styleValues: { chrome: 'border-t text-lg' } })
+    expand('Page')
+    // Frost is a slider: the range input's value is a STEP INDEX, not a class.
+    fireEvent.change(screen.getByLabelText('Page Frosted glass'), { target: { value: '1' } })
+    expand('Chrome')
+    fireEvent.change(screen.getByLabelText('Chrome Frosted glass'), { target: { value: '1' } })
     // Two keys touched → one button, with the count.
     const btn = screen.getByRole('button', { name: 'Revert 2 changes' })
     await act(async () => {
       fireEvent.click(btn)
     })
-    // Reverse order: footer (touched last) first, then the wordmark.
-    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', 'mt-auto text-lg')
-    expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
+    // Reverse order: chrome (touched last) first, then the page.
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'chrome', 'border-t text-lg')
+    expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'page', '')
     // The ledger clears — the button leaves until something new is touched.
     expect(screen.queryByRole('button', { name: /Revert \d/ })).toBeNull()
   })
 
   it('shows Font + colour controls only when the site declares a palette', () => {
-    openStyle()
-    expand('Footer')
+    focusStyle('footer')
     expect(screen.queryByLabelText('Footer Font')).toBeNull() // no palette declared
     cleanup()
-    openStyle({ styleOptions: PALETTE })
-    expand('Footer')
+    focusStyle('footer', { styleOptions: PALETTE })
     expect(screen.getByLabelText('Footer Font')).toBeTruthy()
     expect(screen.getByLabelText('Footer Background')).toBeTruthy()
   })
@@ -1311,8 +1330,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // The <select> is transparent and overlaid; the value beside it is ordinary DOM
     // text. If that text ever stops tracking the select, the panel silently lies about
     // what is set — so assert it moves with the value.
-    openStyle()
-    expand('Footer')
+    focusStyle('footer')
     // The painted layer is the select's sibling — reading the wrapper instead would
     // also pick up every <option>'s text.
     const painted = () => (screen.getByLabelText('Footer Alignment').parentElement as HTMLElement).lastElementChild
@@ -1322,8 +1340,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 
   it('never exposes the raw Tailwind classes — no Advanced box for a manager to break', () => {
-    openStyle()
-    expand('Footer')
+    focusStyle('footer')
     expect(screen.queryByLabelText('Footer classes')).toBeNull()
     expect(screen.queryByText(/advanced/i)).toBeNull()
   })
@@ -1334,8 +1351,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // by hand if a control eats one.
     vi.useFakeTimers()
     try {
-      openStyle()
-      expand('Footer')
+      focusStyle('footer')
       fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'text-center' } })
       vi.advanceTimersByTime(500)
       const saved = saveStyleMock.mock.calls.at(-1)?.[2] as string

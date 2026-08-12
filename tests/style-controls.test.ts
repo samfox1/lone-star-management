@@ -13,6 +13,7 @@ import {
   readStyleValue,
   withUploadedFonts,
   buildTextItemStyleControls,
+  controlsForRegion,
   type SiteStyleOptions,
   type StyleControl,
 } from '@/lib/site-editor/style-controls'
@@ -34,6 +35,21 @@ const PALETTE: SiteStyleOptions = {
 
 const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
+
+describe('controlsForRegion — a site-wide region styles the SURFACE only', () => {
+  it('CRITICAL: no text control reaches the page — background, gradient, frost, matte', () => {
+    // "Anything for text, text shadow, etc — remove it" (Sam, 2026-08-12): the page
+    // has no words of its own, so size/weight/shadow/decorations/case on it are noise.
+    // ALLOWLIST, not blocklist — a text control added later stays off the page unless
+    // it opts in here.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'bggradFrom', 'bggradTo', 'frost', 'pad'])
+  })
+
+  it('an ELEMENT region keeps the full set — text styling belongs to the elements', () => {
+    expect(controlsForRegion(controls, { key: 'bio', label: 'Biography' })).toEqual(controls)
+  })
+})
 
 describe('buildStyleControls', () => {
   it('includes the universal controls always, palette controls only when declared', () => {

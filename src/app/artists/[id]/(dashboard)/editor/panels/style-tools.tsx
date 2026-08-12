@@ -7,6 +7,7 @@ import {
   applyStyleValue,
   sameClasses,
   buildStyleControls,
+  controlsForRegion,
   readStyleValue,
   type SiteStyleOptions,
   type StyleControl, sliderSteps, sliderIndex } from '@/lib/site-editor/style-controls'
@@ -299,7 +300,9 @@ export function StyleTools({
                 />
                 {isOpen && (
                   <div className={PANEL_BODY}>
-                    {controls.map((control) => (
+                    {/* Site-wide regions get SURFACE controls only (controlsForRegion):
+                        text styling on the page itself is noise. */}
+                    {controlsForRegion(controls, r).map((control) => (
                       <StyleControlRow
                         key={control.id}
                         regionLabel={r.label}

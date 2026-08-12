@@ -19,7 +19,7 @@ import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
 export type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
-import type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
+import type { ManifestStyleRegion, StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import { TEXT_SIZES } from '@samfox1/site-bridge/styles'
 // The option TABLES live in the package's vocabulary module (2026-08-07 deepening):
 // they generate tokens.css, which is append-only contract, so the vocabulary lives
@@ -643,6 +643,19 @@ export function sliderIndex(
     if (best >= 0) return { idx: best, label: `≈ ${steps[best].label}`, exact: false }
   }
   return { idx: middle, label: 'Default', exact: false }
+}
+
+/** What a SITE-WIDE region (`scope: 'site'` — the page itself) may style: surface
+ *  properties only. The page has no words of its own, so size/weight/shadow/
+ *  decorations/case on it are noise ("anything for text — remove it", Sam,
+ *  2026-08-12). An ALLOWLIST, deliberately: a text control added later stays off
+ *  the page unless it opts in here. Element regions keep the full set. */
+const SITE_SCOPE_CONTROL_IDS = new Set(['bgColor', 'bggradFrom', 'bggradTo', 'frost', 'pad'])
+export function controlsForRegion(
+  controls: StyleControl[],
+  region: ManifestStyleRegion,
+): StyleControl[] {
+  return region.scope === 'site' ? controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id)) : controls
 }
 
 /* ENTRANCES PAUSED (2026-08-12) — the rank helpers rest with their sliders.
