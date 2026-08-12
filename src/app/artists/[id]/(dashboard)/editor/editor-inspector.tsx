@@ -1197,17 +1197,20 @@ function EditingView({
   const isSite = component.kind === 'site'
   return (
     <>
-      {/* No header row (Sam, 2026-08-12) — just a small black X, top-left, back to the
-          grid. The panel's own GroupLabels say what's being edited. */}
-      <div className="px-3 pt-3">
+      {/* A compact top bar (Sam, 2026-08-12, "bar B"): a black X back to the grid, plus
+          the panel's name so the row earns its space instead of the X floating alone. */}
+      <div className="flex items-center gap-2.5 border-b border-hairline px-4 py-3.5">
         <button
           type="button"
           onClick={onBack}
           aria-label="Close"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-ink hover:bg-surface"
+          className="flex h-6 w-6 flex-none items-center justify-center rounded-md text-ink hover:bg-surface"
         >
           <Icon name="close" size={16} />
         </button>
+        <span className="font-space text-[11px] font-bold uppercase tracking-[0.08em] text-ink">
+          {component.label}
+        </span>
       </div>
 
       <div className={SCROLL_BODY}>
