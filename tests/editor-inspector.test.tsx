@@ -1797,12 +1797,12 @@ describe('EditorInspector — tour tools', () => {
     expect(screen.getByRole('link', { name: /Add date/ }).getAttribute('href')).toBe('/artists/artist-1/tour')
   })
 
-  it('an empty library STATES the emptiness — it does not instruct (Sam, 2026-08-12)', () => {
-    // This test used to pin "Add them on the Tour page, publish, then pick them
-    // here." — instructional copy Sam banished ("again, no instructional texts").
+  it('an empty Tour panel shows NO copy at all (Sam, 2026-08-12)', () => {
+    // First "Add them on the Tour page…" went, then "No dates yet." too — an empty
+    // panel is just empty. Neither the instruction nor the summary remains.
     renderInspector([], { tours: [] })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    expect(screen.getByText('No dates yet.')).toBeTruthy()
+    expect(screen.queryByText(/No dates yet/)).toBeNull()
     expect(screen.queryByText(/Add them on the Tour page/)).toBeNull()
   })
 })

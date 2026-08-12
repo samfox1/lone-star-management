@@ -93,12 +93,8 @@ export function TourTools({
 
   return (
     <div className="space-y-2.5 px-5 py-4">
-      {tours.length === 0 && (
-        <p className="py-2 font-space text-[11px] leading-relaxed text-ink-faint">
-          No dates yet.
-        </p>
-      )}
-
+      {/* No empty-state copy (Sam, 2026-08-12): an empty Tour panel just shows nothing —
+          dates are entered on the Tour page, and a "No dates yet." line is noise. */}
       {tours.map((t) => {
         // A DATED show sorts itself by date on the site forever, so dragging it would be
         // a lie — the order wouldn't survive. Only undated shows, which the site can't
