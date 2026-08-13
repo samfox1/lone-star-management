@@ -47,6 +47,60 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'pad'])
   })
 
+  it('CRITICAL: site/chrome padding is VERTICAL only — labelled so, emits pady-, migrates legacy pad-', () => {
+    // A full-bleed band around a centred column can't show a horizontal inset (Sam,
+    // 2026-08-13), so the scoped pad slider writes top/bottom only. It keeps id 'pad'
+    // but swaps token + label, and still ranks/strips a legacy all-sides pad- so a
+    // region padded before the switch migrates on the next pick.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
+    const pad = page.find((c) => c.id === 'pad')!
+    if (pad.kind !== 'slider') throw new Error('unreachable')
+    expect(pad.label).toBe('Vert padding')
+    expect(pad.steps.some((s) => s.value.startsWith('pady-['))).toBe(true)
+    expect(pad.steps.every((s) => !s.value.startsWith('pad-['))).toBe(true) // never all-sides
+    expect(pad.rank!('pady-[24px]')).toBe(24)
+    expect(pad.rank!('pad-[40px]')).toBe(40) // legacy token still measured…
+    // …and replaced (not left beside the new one) when a step is picked.
+    expect(applyStyleValue('bg-paper pad-[40px]', pad, 'pady-[24px]')).toBe('bg-paper pady-[24px]')
+  })
+
+  it('CRITICAL: a region whose base declares an alignable justify gets a Left/Center/Right control', () => {
+    // The hero row opts in by wearing `justify-center`; the control writes `just-[…]`
+    // inline over it (Sam, 2026-08-13).
+    const hero = controlsForRegion(controls, {
+      key: 'hero', label: 'Hero', base: 'grid md:grid-cols-[auto_260px] justify-center', scope: 'site',
+    })
+    const align = hero.find((c) => c.id === 'justify')
+    expect(align?.kind).toBe('select')
+    if (align?.kind !== 'select') throw new Error('unreachable')
+    expect(align.options.map((o) => o.value)).toEqual(['', 'just-[start]', 'just-[center]', 'just-[end]'])
+    expect(applyStyleValue('grid justify-center', align, 'just-[end]')).toBe('grid justify-center just-[end]')
+  })
+
+  it("CRITICAL: a bar's intrinsic justify-between does NOT sprout the Alignment control", () => {
+    // The masthead spreads wordmark ↔ socials with justify-between; that is layout, not
+    // an orientation to flip — the control must stay off it.
+    const bar = controlsForRegion(controls, {
+      key: 'masthead', label: 'Masthead', base: 'flex justify-between px-6 py-4', scope: 'chrome',
+    })
+    expect(bar.find((c) => c.id === 'justify')).toBeUndefined()
+  })
+
+  it('a region whose base sets a gap gets a Gap slider that MEASURES that gap; one without does not', () => {
+    const hero = controlsForRegion(controls, {
+      key: 'hero', label: 'Hero', base: 'grid gap-8 md:grid-cols-[auto_260px] justify-center', scope: 'site',
+    })
+    const gap = hero.find((c) => c.id === 'gap')
+    expect(gap?.kind).toBe('slider')
+    if (gap?.kind !== 'slider') throw new Error('unreachable')
+    expect(gap.rank!('gap-8')).toBe(32) // Tailwind scale: 8 × 4px — handle parks at the base gap
+    expect(gap.rank!('gap-[48px]')).toBe(48)
+    expect(applyStyleValue('grid gap-8', gap, 'gap-[48px]')).toBe('grid gap-[48px]') // replaces, not appends
+    // A site-scope region with no gap in its base (the page band) gets no Gap control.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' })
+    expect(page.find((c) => c.id === 'gap')).toBeUndefined()
+  })
+
   it("CRITICAL: geometry belongs to the CHROME bars — the body band can't show it", () => {
     // Sam, 2026-08-12: "we can drop height and width from the middle." Height is a
     // floor and the body stands taller than every step; width there reads as a

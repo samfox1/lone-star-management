@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
+import { bridgeOutdated } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withUploadedFonts } from '@/lib/site-editor/style-controls'
@@ -270,6 +271,7 @@ export function EditorShell({
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
       <EditorInspector
         artistId={artistId}
+        bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
         photos={photos}
         imageFields={panels.imageFields}
         textFields={panels.textFields}

@@ -136,8 +136,24 @@ const COMPONENTS: Component[] = [
  *  inspector with "Too many re-renders". Found while fixing the 2026-08-09 review. */
 const NO_STYLES: Record<string, string> = {}
 
+/** Shown when the connected site was built against an OLDER bridge than the editor: a
+ *  control here can write a token the site's applier can't lift yet, so a slider may do
+ *  nothing on the live site until it is republished. A STATUS line, not an instruction —
+ *  it names why an edit isn't showing so the manager isn't left guessing (Sam, 2026-08-13). */
+function BridgeOutdatedBanner() {
+  return (
+    <div className="flex items-start gap-2 border-b border-hairline bg-surface px-4 py-2.5 text-[11px] leading-snug text-ink-muted">
+      <span className="mt-px flex-none text-status-pending" aria-hidden>
+        <Icon name="alert" size={13} />
+      </span>
+      <span>Preview site is on an older version. Some controls won’t take effect until it’s republished.</span>
+    </div>
+  )
+}
+
 export function EditorInspector({
   artistId,
+  bridgeOutdated = false,
   photos: initial,
   imageFields = [],
   textFields = [],
@@ -169,6 +185,10 @@ export function EditorInspector({
   onClearHighlight,
 }: {
   artistId: string
+  /** The connected site was built against an OLDER bridge than the editor — a newly added
+   *  control can emit a token its bundled applier can't lift yet, so show a "republish to
+   *  apply" note instead of letting a slider silently do nothing. */
+  bridgeOutdated?: boolean
   photos: GalleryPhoto[]
   /** Single-occupancy image regions (hero image, profile photo) — the "Set slots" group. */
   imageFields?: EditorImageField[]
@@ -843,6 +863,7 @@ export function EditorInspector({
 
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
+      {bridgeOutdated && <BridgeOutdatedBanner />}
       {itemEditor ? (
         itemEditor
       ) : textEditor ? (

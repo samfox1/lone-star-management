@@ -48,6 +48,8 @@ import {
   FEATHER_STEPS,
   FROST_STEPS,
   PAD_STEPS,
+  PAD_Y_STEPS,
+  GAP_STEPS,
   SECTION_WIDTH_STEPS,
   SECTION_HEIGHT_STEPS,
   DECO_THICKNESS_STEPS,
@@ -271,6 +273,31 @@ const padRank = (t: string): number | null => {
   return tw ? Number(tw[1]) * 4 : null
 }
 const ownsPad = (t: string) => t.startsWith('pad-[') || TW_PAD_RE.test(t)
+
+/** The VERTICAL padding slider (site + chrome). Measures `pady-[Npx]`, but also RANKS and
+ *  OWNS a legacy all-sides `pad-[…]` so a region padded before the site went vertical-only
+ *  migrates: the handle parks at the old inset, and picking a step strips the symmetric
+ *  token as it writes the vertical one. */
+const padYRank = (t: string): number | null => {
+  if (t === '') return null
+  const arb = /^pady-\[(\d+(?:\.\d+)?)px\]$/.exec(t)
+  if (arb) return Number(arb[1])
+  return padRank(t)
+}
+const ownsPadY = (t: string) => t.startsWith('pady-[') || ownsPad(t)
+
+/** The gap slider MEASURES a base's own Tailwind gap (`gap-8` = 32px) and REPLACES it,
+ *  the same way the padding slider handles `py-10` — so the handle parks at the real
+ *  gutter, not the None end. `''` ranks null: unset means "the base's gap", not zero. */
+const GAP_TW_RE = /^gap-(\d+(?:\.\d+)?)$/
+const gapRank = (t: string): number | null => {
+  if (t === '') return null
+  const arb = /^gap-\[(\d+(?:\.\d+)?)px\]$/.exec(t)
+  if (arb) return Number(arb[1])
+  const tw = GAP_TW_RE.exec(t)
+  return tw ? Number(tw[1]) * 4 : null
+}
+const ownsGap = (t: string) => t.startsWith('gap-[') || GAP_TW_RE.test(t)
 
 // The centred dressing sliders: Auto sits mid-ladder and ranks like ~2px (a browser's
 // usual auto thickness), so sub-pixel steps sort left of it and 3px+ right of it.
@@ -700,6 +727,23 @@ function sectionColorControl(
 const SITE_SCOPE_CONTROL_IDS = new Set(['pad', 'bgColor'])
 /** The border-side utilities a base can draw its divider with. */
 const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'border-r', 'border-x', 'border-y'])
+/** The justify utilities that mean "orient this block" — the ones the Alignment control
+ *  offers. Deliberately NOT `justify-between`/`-around`/`-evenly`, which are a bar's
+ *  intrinsic layout, not an orientation a manager should flip. */
+const ALIGNABLE_JUSTIFY = new Set(['justify-start', 'justify-center', 'justify-end'])
+
+/** The site/chrome padding control: top + bottom only, labelled so the manager knows the
+ *  slider is vertical (a full-bleed band can't show a horizontal inset). Replaces the
+ *  all-sides 'pad' for scoped regions; keeps id 'pad' so nothing else has to special-case
+ *  it. */
+const VERT_PAD_CONTROL: StyleControl = {
+  id: 'pad',
+  label: 'Vert padding',
+  kind: 'slider',
+  steps: PAD_Y_STEPS,
+  rank: padYRank,
+  owns: ownsPadY,
+}
 /**
  * The controls a region gets, filtered by its SCOPE (Sam, 2026-08-12). An element region
  * (no scope) keeps the full set — text styling belongs where the text is. A `'site'`
@@ -715,7 +759,12 @@ export function controlsForRegion(
   region: ManifestStyleRegion,
 ): StyleControl[] {
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
-  const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
+  // Padding on a site-wide region is VERTICAL only (Sam, 2026-08-13): the page band and
+  // the bars wrap a centred column, so all-sides padding's horizontal half lands in empty
+  // gutters and reads as nothing. Swap the generic all-sides 'pad' for the vertical one.
+  const out = controls
+    .filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
+    .map((c) => (c.id === 'pad' ? VERT_PAD_CONTROL : c))
   // Geometry belongs to the CHROME bars only (Sam, 2026-08-12: "drop height and
   // width from the middle") — the body band stands taller than every height step,
   // so a floor never engages there, and narrowing it reads as a rightward push.
@@ -753,6 +802,30 @@ export function controlsForRegion(
       kind: 'toggle',
       onClass: side,
       owns: (t) => DIVIDER_SIDES.has(t),
+    })
+  // Alignment (Left/Center/Right) for a region whose base declares an ALIGNABLE justify —
+  // the hero block, whose columns are content-sized so there's free space to orient them
+  // (Sam, 2026-08-13). Gated on justify-start/center/end, NOT any justify-*, so a bar's
+  // intrinsic `justify-between` (wordmark left, socials right) never sprouts the control.
+  const base = (region.base ?? '').split(/\s+/)
+  if (base.some((t) => ALIGNABLE_JUSTIFY.has(t)))
+    out.push({
+      id: 'justify',
+      label: 'Alignment',
+      kind: 'select',
+      options: [DEFAULT, { value: 'just-[start]', label: 'Left' }, { value: 'just-[center]', label: 'Center' }, { value: 'just-[end]', label: 'Right' }],
+      owns: (t) => t.startsWith('just-['),
+    })
+  // Gap between a region's items, for a grid/flex region whose base sets one (the hero
+  // row's name↔portrait gutter). Opt-in on a `gap-*` base class, like Alignment/Divider.
+  if (base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')))
+    out.push({
+      id: 'gap',
+      label: 'Gap',
+      kind: 'slider',
+      steps: GAP_STEPS,
+      rank: gapRank,
+      owns: ownsGap,
     })
   return out
 }

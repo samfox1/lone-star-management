@@ -1,10 +1,9 @@
 import { useState, useRef } from 'react'
-import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type EditorTour } from '../inspector-types'
 import { OnSiteToggle } from '../inspector-shared'
-import { useScrollIntoFocus } from '../inspector-grid'
+import { AddLink, useScrollIntoFocus } from '../inspector-grid'
 import { type SelectTarget } from '@samfox1/site-bridge/protocol'
 
 /* ── Tour tools: pick which dates are on the site (no reorder — dates sort by date) ─ */
@@ -174,13 +173,7 @@ export function TourTools({
         )
       })}
 
-      <Link
-        href={`/artists/${artistId}/tour`}
-        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
-      >
-        <Icon name="plus" size={16} />
-        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add date</span>
-      </Link>
+      <AddLink href={`/artists/${artistId}/tour`} label="Add date" />
     </div>
   )
 }

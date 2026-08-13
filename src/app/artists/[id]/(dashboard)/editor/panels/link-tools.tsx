@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
@@ -8,16 +8,16 @@ import { platformFromUrl } from '@samfox1/site-bridge/social'
 import { type EditorLink } from '../inspector-types'
 import { useScrollIntoFocus } from '../inspector-grid'
 import {
-  runSerialized,
   EditRow,
   SaveLine,
   OnSiteToggle,
+  NoSlots,
   EYEBROW,
   INVALID_FIELD,
   FIELD,
   FIELD_ON_TINT,
-  type SaveStatus,
 } from '../inspector-shared'
+import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
 import { AddSocialModal } from '../add-social-modal'
 
@@ -45,18 +45,26 @@ export function SiteLinkTools({
     Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? ''])),
   )
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
-  const [status, setStatus] = useState<SaveStatus>('idle')
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Map<string, string>>(new Map())
   const fieldRefs = useRef<Map<string, HTMLInputElement | null>>(new Map())
-  // Manifest labels, so the unmount flush can name each row without the region list
+  // Manifest labels, so the (unmount) flush can name each row without the region list
   // being an effect dependency (same trick as SupportLinkTools' linksRef).
   const labelsRef = useRef<Record<string, string>>({})
   useEffect(() => {
     labelsRef.current = Object.fromEntries(regions.map((r) => [r.key, r.label]))
   }, [regions])
+
+  // A link's URL is trimmed before it is saved, but the box keeps the raw text; a blank
+  // clears the link (valid), a non-blank one must be a safe http(s)/relative URL —
+  // validated with the SAME safeHref the action uses, so the panel can't claim "Saved" on
+  // a write the server will reject. The label rides along from the manifest at save time.
+  const { status, save } = useDebouncedFieldSave<string>({
+    persist: (key, url) => saveEditorLinkAction(artistId, key, url, labelsRef.current[key] ?? key),
+    normalize: (raw) => {
+      const trimmed = raw.trim()
+      return trimmed === '' || safeHref(trimmed) !== undefined ? trimmed : null
+    },
+    onApply: onApplyLink,
+  })
 
   // The frame's manifest arrives on `ready`, so regions/values can land after first
   // render — re-seed when they do, without clobbering typing.
@@ -88,64 +96,18 @@ export function SiteLinkTools({
     el?.focus()
   }, [selected])
 
-  const persist = useCallback(
-    (key: string, url: string) => {
-      pending.current.delete(key)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, key, () =>
-        saveEditorLinkAction(artistId, key, url, labelsRef.current[key] ?? key),
-      )
-    },
-    [artistId],
-  )
-
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingMap = pending.current
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingMap.forEach((url, key) => {
-        void saveEditorLinkAction(artistId, key, url, labelsRef.current[key] ?? key)
-      })
-    }
-  }, [artistId])
-
   function edit(key: string, raw: string) {
     setText((t) => ({ ...t, [key]: raw }))
-    const trimmed = raw.trim()
-    // Blank clears the link (valid). A non-blank value must be a safe http(s)/relative
-    // URL — validated with the SAME safeHref the action uses, so the panel can't claim
-    // "Saved" on a write the server will reject.
-    const ok = trimmed === '' || safeHref(trimmed) !== undefined
+    const ok = save(key, raw) // normalize + optimistic paint + debounced persist, all in the hook
     setInvalid((s) => {
       const next = new Set(s)
       if (ok) next.delete(key)
       else next.add(key)
       return next
     })
-    if (!ok) return
-
-    onApplyLink?.(key, trimmed) // optimistic href in the frame
-    pending.current.set(key, trimmed)
-    const existing = timers.current.get(key)
-    if (existing) clearTimeout(existing)
-    timers.current.set(
-      key,
-      setTimeout(() => {
-        timers.current.delete(key)
-        persist(key, trimmed)
-      }, 500),
-    )
   }
 
-  if (!regions.length) {
-    return (
-      <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
-        This site hasn&apos;t declared any link buttons. A custom site sends them when the
-        preview loads; the built-in templates declare none yet.
-      </p>
-    )
-  }
+  if (!regions.length) return <NoSlots noun="link" />
 
   return (
     <div className="pb-2 pt-1">
@@ -250,7 +212,6 @@ export function LinkTools({
   const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
   )
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [adding, setAdding] = useState(false)
   const router = useRouter()
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
@@ -269,71 +230,31 @@ export function LinkTools({
     setLastFocusedLabel(focusedLabel)
     if (focusedRow) setOpen(focusedRow.id)
   }
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Set<string>>(new Set())
   const dragFrom = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
-  // Latest values, so the unmount flush reads current text (synced off-render).
-  const valuesRef = useRef(values)
-  useEffect(() => {
-    valuesRef.current = values
-  }, [values])
 
-  const persist = useCallback(
-    (id: string, v: { label: string; url: string }) => {
-      pending.current.delete(id)
+  // Both label and url are required — a blank one is dropped, not saved. The pending
+  // row itself is what the (unmount) flush persists, so there is no separate values ref.
+  const { status, save } = useDebouncedFieldSave<{ label: string; url: string }>({
+    persist: (id, v) => {
       const fd = new FormData()
       fd.set('label', v.label)
       fd.set('url', v.url)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, id, () => updateContentAction('link', id, artistId, fd))
+      return updateContentAction('link', id, artistId, fd)
     },
-    [artistId],
-  )
-
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingSet = pending.current
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingSet.forEach((id) => {
-        const v = valuesRef.current[id]
-        if (!v) return
-        const fd = new FormData()
-        fd.set('label', v.label)
-        fd.set('url', v.url)
-        void updateContentAction('link', id, artistId, fd)
-      })
-    }
-  }, [artistId])
+    normalize: (v) => (v.label.trim() !== '' && v.url.trim() !== '' ? v : null),
+  })
 
   function edit(id: string, patch: Partial<{ label: string; url: string }>) {
     const row = { ...(values[id] ?? { label: '', url: '' }), ...patch }
     setValues((v) => ({ ...v, [id]: { ...v[id], ...patch } }))
-    const ok = row.label.trim() !== '' && row.url.trim() !== '' // both required — a blank one is dropped
+    const ok = save(id, row)
     setInvalid((s) => {
       const n = new Set(s)
       if (ok) n.delete(id)
       else n.add(id)
       return n
     })
-    const existing = timers.current.get(id)
-    if (existing) clearTimeout(existing)
-    timers.current.delete(id)
-    if (!ok) {
-      pending.current.delete(id)
-      return
-    }
-    pending.current.add(id)
-    timers.current.set(
-      id,
-      setTimeout(() => {
-        timers.current.delete(id)
-        persist(id, row)
-      }, 500),
-    )
   }
 
   function drop(to: number) {

@@ -20,7 +20,8 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
-import { ControlRow, GroupLabel, PANEL_BODY, runSerialized, SaveLine, type SaveStatus } from '../inspector-shared'
+import { ControlRow, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
+import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
 import type { AssetBudget } from '@/lib/site-editor/asset-budget'
@@ -54,13 +55,11 @@ export function SiteTools({
   onApplyCursor?: (settings: CursorSettings) => void
 }) {
   const [vals, setVals] = useState<Record<string, string>>(initial)
-  const [status, setStatus] = useState<SaveStatus>('idle')
-  // The house save machinery (review #6/#8): per-key serialization so an older click
-  // can't land after a newer one, and an errored set so one key's failure isn't masked
-  // by another key's later success. The first draft hand-rolled a `.then` and had all
-  // three of those bugs (2026-08-11 review).
-  const saving = useRef(new Map<string, Promise<unknown>>())
-  const errored = useRef(new Set<string>())
+  // This panel saves IMMEDIATELY (a cursor pick is a discrete choice, not a typing
+  // burst), so it uses the hook's non-debounced `runNow` — the per-key serialization
+  // (#6) and errored-set (#8) come along for free. `persist` (the debounced door) is
+  // unused here.
+  const { status, runNow } = useDebouncedFieldSave<string>({ persist: () => Promise.resolve() })
   // What the panel last painted, so a failed save reverts THIS key only — snapshotting
   // the whole `vals` object rolled back concurrent keys that had already committed.
   const latest = useRef<Record<string, string>>(initial)
@@ -70,8 +69,7 @@ export function SiteTools({
     latest.current = { ...latest.current, [key]: value }
     setVals(latest.current)
     onApplyCursor?.(cursorSettingsFrom(latest.current))
-    setStatus('saving')
-    runSerialized(saving, errored, setStatus, key, () =>
+    runNow(key, () =>
       saveCursorFieldAction(artistId, key, value).then((res) => {
         if (res.ok) return
         // Revert the ONE key, in the panel and the frame — an optimistic cursor the

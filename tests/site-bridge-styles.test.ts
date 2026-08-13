@@ -551,6 +551,26 @@ describe('slice-2 visual effects (2026-08-11)', () => {
     expect(r.style.padding).toBe('24px')
   })
 
+  it('vertical padding (pady-) lifts to top/bottom ONLY — a bar keeps its side gutters', () => {
+    const r = resolveRegionStyle('masthead', '', 'pady-[24px]')
+    expect(r.style.paddingTop).toBe('24px')
+    expect(r.style.paddingBottom).toBe('24px')
+    // Not all-sides: horizontal padding from the base (a bar's px-6) must survive.
+    expect(r.style.padding).toBeUndefined()
+    expect(r.style.paddingLeft).toBeUndefined()
+    expect(r.style.paddingRight).toBeUndefined()
+  })
+
+  it('block alignment (just-) lifts to justify-content for orienting the hero row', () => {
+    expect(resolveRegionStyle('hero', '', 'just-[start]').style.justifyContent).toBe('start')
+    expect(resolveRegionStyle('hero', '', 'just-[center]').style.justifyContent).toBe('center')
+    expect(resolveRegionStyle('hero', '', 'just-[end]').style.justifyContent).toBe('end')
+  })
+
+  it('gap (gap-) lifts to the CSS gap for the hero row gutter', () => {
+    expect(resolveRegionStyle('hero', '', 'gap-[48px]').style.gap).toBe('48px')
+  })
+
   it('shapes and feather are ITEM lifts, with both mask spellings', () => {
     const r = resolveStyle('shape-arch feather-30')
     expect(r.style.clipPath).toBe('inset(0 round 999px 999px 0 0)')

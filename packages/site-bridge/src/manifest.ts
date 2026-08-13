@@ -14,6 +14,17 @@
  * announced by an older site build at any time, forever.
  */
 
+/**
+ * This package's RELEASE version (semver), for the editor's "republish to apply" flag. A
+ * site stamps it into its manifest (`bridgeVersion`) at build time from whatever bridge it
+ * installed; the editor compares against its own copy. Distinct from protocol.ts's numeric
+ * `BRIDGE_VERSION`, which is the postMessage wire version — this one tracks the npm
+ * release, because that is what determines which style tokens the site's applier can lift.
+ * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
+ * consumed from source, and a JSON import of package.json is not part of the export surface.)
+ */
+export const PACKAGE_VERSION = '0.10.0'
+
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
 export type FieldValueType = 'text' | 'email' | 'image' | 'richtext'
@@ -215,6 +226,11 @@ export type AssetBudgets = {
  *  custom site's declared id. */
 export type TemplateManifest = {
   template: string
+  /** The version of THIS package the site was built against (`BRIDGE_VERSION`). The
+   *  editor compares it to its own: when the site is behind, a control may emit a token
+   *  the site's bundled applier can't lift yet, so the editor flags "republish to apply".
+   *  Optional — a site that omits it (an older build) simply isn't flagged. */
+  bridgeVersion?: string
   fields: ManifestField[]
   slots: ManifestSlot[]
   styles: ManifestStyleRegion[]

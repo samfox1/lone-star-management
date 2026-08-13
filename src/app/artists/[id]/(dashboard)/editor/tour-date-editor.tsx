@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { type EditorTour } from './inspector-types'
 import { Icon } from '@/components/ui/icons'
-import { FIELD, FieldRow, runSerialized, SaveLine, type SaveStatus } from './inspector-shared'
+import { FIELD, FieldRow, SaveLine } from './inspector-shared'
+import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { EditorPanel } from './editor-panel'
 import { setSupportUrlAction, updateContentAction } from '../actions'
 import { useRouter } from 'next/navigation'
@@ -43,25 +44,27 @@ export function TourDateEditor({
   onBack: () => void
 }) {
   const [urls, setUrls] = useState<Record<string, string>>(initialUrls)
-  const [status, setStatus] = useState<SaveStatus>('idle')
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Set<string>>(new Set())
-  // Latest values, so the unmount flush reads what is on screen without `urls` being an
-  // effect dependency (the pattern the link and style tools already use).
-  const urlsRef = useRef(urls)
-  useEffect(() => {
-    urlsRef.current = urls
-  }, [urls])
+  const router = useRouter()
 
-  /**
-   * The show's own fields, editable in place (Sam, 2026-08-10: "you should be able to
-   * edit some of the info right there and it updates in the tour dates section").
-   * Saved through the SAME generic CRUD the Tour page uses — one write path — and
-   * `router.refresh()` afterwards re-fetches the draft, whose new identity re-sends
-   * init-data to the frame: that is what updates the window, not a special message.
-   */
+  // One debounced saver for BOTH kinds of field on this panel, dispatched by key: a
+  // `detail:<field>` key writes the show's own column (and refreshes the dates section),
+  // a bare act name writes that act's support URL. The pending value is what the
+  // (unmount) flush persists, so neither kind needs a values ref.
+  const { status, save, runNow } = useDebouncedFieldSave<string>({
+    persist: (key, value) => {
+      if (key.startsWith('detail:')) {
+        const field = key.slice('detail:'.length)
+        const fd = new FormData()
+        fd.set(field, value)
+        return updateContentAction('tour_date', tour.id, artistId, fd).then((res) => {
+          if (!res?.error) router.refresh()
+          return res
+        })
+      }
+      return setSupportUrlAction(artistId, tour.id, key, value)
+    },
+  })
+
   /**
    * The acts themselves, editable here (Sam, 2026-08-10: "Allow to add supporting acts
    * (multiple need be) and their links in the side panel"). Owned as state because adds
@@ -70,7 +73,6 @@ export function TourDateEditor({
    * last act posts the blank SENTINEL: extractUpdate skips absent fields, so an empty
    * FormData would silently keep the old list (content-form.ts documents this).
    */
-  const router = useRouter()
   const [acts, setActs] = useState<string[]>(tour.support)
   const [actDraft, setActDraft] = useState('')
   const [actError, setActError] = useState<string | null>(null)
@@ -78,8 +80,9 @@ export function TourDateEditor({
   const saveActs = useCallback(
     (next: string[]) => {
       setActs(next)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, 'acts', async () => {
+      // A discrete write, not a debounce — the whole support[] array at once — through
+      // the same serialized runner + status as the debounced fields.
+      runNow('acts', async () => {
         const fd = new FormData()
         if (next.length === 0) fd.append('support', '')
         for (const name of next) fd.append('support', name)
@@ -88,7 +91,7 @@ export function TourDateEditor({
         return res
       })
     },
-    [artistId, tour.id, router],
+    [artistId, tour.id, router, runNow],
   )
 
   function addAct() {
@@ -104,6 +107,13 @@ export function TourDateEditor({
     saveActs([...acts, name])
   }
 
+  /**
+   * The show's own fields, editable in place (Sam, 2026-08-10: "you should be able to
+   * edit some of the info right there and it updates in the tour dates section").
+   * Saved through the SAME generic CRUD the Tour page uses — one write path — and
+   * `router.refresh()` afterwards re-fetches the draft, whose new identity re-sends
+   * init-data to the frame: that is what updates the window, not a special message.
+   */
   const [details, setDetails] = useState<Record<string, string>>({
     date: tour.date ?? '',
     venue: tour.venue ?? '',
@@ -111,83 +121,15 @@ export function TourDateEditor({
     state: tour.state ?? '',
     country: tour.country ?? '',
   })
-  const detailsRef = useRef(details)
-  useEffect(() => {
-    detailsRef.current = details
-  }, [details])
-
-  const persistDetail = useCallback(
-    (field: string, value: string) => {
-      pending.current.delete(`detail:${field}`)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, `detail:${field}`, async () => {
-        const fd = new FormData()
-        fd.set(field, value)
-        const res = await updateContentAction('tour_date', tour.id, artistId, fd)
-        if (!res?.error) router.refresh()
-        return res
-      })
-    },
-    [artistId, tour.id, router],
-  )
 
   function editDetail(field: string, value: string) {
     setDetails((d) => ({ ...d, [field]: value }))
-    const key = `detail:${field}`
-    const existing = timers.current.get(key)
-    if (existing) clearTimeout(existing)
-    pending.current.add(key)
-    timers.current.set(
-      key,
-      setTimeout(() => {
-        timers.current.delete(key)
-        persistDetail(field, value)
-      }, 500),
-    )
+    save(`detail:${field}`, value)
   }
-
-  const persist = useCallback(
-    (name: string, url: string) => {
-      pending.current.delete(name)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, name, () => setSupportUrlAction(artistId, tour.id, name, url))
-    },
-    [artistId, tour.id],
-  )
-
-  // Closing the panel mid-debounce must not drop the edit — the manager typed it, so it
-  // saves on the way out.
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingSet = pending.current
-    const tourId = tour.id
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingSet.forEach((name) => {
-        if (name.startsWith('detail:')) {
-          const field = name.slice('detail:'.length)
-          const fd = new FormData()
-          fd.set(field, detailsRef.current[field] ?? '')
-          void updateContentAction('tour_date', tourId, artistId, fd)
-        } else {
-          void setSupportUrlAction(artistId, tourId, name, urlsRef.current[name] ?? '')
-        }
-      })
-    }
-  }, [artistId, tour.id])
 
   function edit(name: string, url: string) {
     setUrls((u) => ({ ...u, [name]: url }))
-    const existing = timers.current.get(name)
-    if (existing) clearTimeout(existing)
-    pending.current.add(name)
-    timers.current.set(
-      name,
-      setTimeout(() => {
-        timers.current.delete(name)
-        persist(name, url)
-      }, 500),
-    )
+    save(name, url)
   }
 
   return (

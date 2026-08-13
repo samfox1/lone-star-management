@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import Link from 'next/link'
+import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type EditorMerch } from '../inspector-types'
-import { runSerialized, INVALID_RING } from '../inspector-shared'
+import { INVALID_RING } from '../inspector-shared'
+import { AddLink } from '../inspector-grid'
+import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { updateContentAction } from '../../actions'
 
 /* ── Merch tools: edit title / price / url, remove (no reorder — no sort_order) ─ */
@@ -20,16 +21,7 @@ export function MerchTools({
   const [values, setValues] = useState<Record<string, Fields>>(() =>
     Object.fromEntries(merch.map((m) => [m.id, { title: m.title, price: m.price, url: m.url }])),
   )
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const saving = useRef<Map<string, Promise<unknown>>>(new Map())
-  const errored = useRef<Set<string>>(new Set())
-  const pending = useRef<Set<string>>(new Set())
-  const valuesRef = useRef(values)
-  useEffect(() => {
-    valuesRef.current = values
-  }, [values])
 
   // Title is required; price must be blank or a number — else the write is dropped server-side.
   const badFields = (v: Fields) => ({
@@ -37,62 +29,31 @@ export function MerchTools({
     price: v.price.trim() !== '' && Number.isNaN(Number(v.price)),
   })
 
-  const persist = useCallback(
-    (id: string, v: Fields) => {
-      pending.current.delete(id)
+  // The pending row is what the (unmount) flush persists — no separate values ref.
+  const { status, save } = useDebouncedFieldSave<Fields>({
+    persist: (id, v) => {
       const fd = new FormData()
       fd.set('title', v.title)
       fd.set('price', v.price)
       fd.set('url', v.url)
-      setStatus('saving')
-      runSerialized(saving, errored, setStatus, id, () => updateContentAction('merch', id, artistId, fd))
+      return updateContentAction('merch', id, artistId, fd)
     },
-    [artistId],
-  )
-
-  useEffect(() => {
-    const timersMap = timers.current
-    const pendingSet = pending.current
-    return () => {
-      timersMap.forEach((t) => clearTimeout(t))
-      pendingSet.forEach((id) => {
-        const v = valuesRef.current[id]
-        if (!v) return
-        const fd = new FormData()
-        fd.set('title', v.title)
-        fd.set('price', v.price)
-        fd.set('url', v.url)
-        void updateContentAction('merch', id, artistId, fd)
-      })
-    }
-  }, [artistId])
+    normalize: (v) => {
+      const bad = badFields(v)
+      return !bad.title && !bad.price ? v : null
+    },
+  })
 
   function edit(id: string, patch: Partial<Fields>) {
     const row: Fields = { ...(values[id] ?? { title: '', price: '', url: '' }), ...patch }
     setValues((v) => ({ ...v, [id]: { ...v[id], ...patch } }))
-    const bad = badFields(row)
-    const ok = !bad.title && !bad.price
+    const ok = save(id, row)
     setInvalid((s) => {
       const n = new Set(s)
       if (ok) n.delete(id)
       else n.add(id)
       return n
     })
-    const existing = timers.current.get(id)
-    if (existing) clearTimeout(existing)
-    timers.current.delete(id)
-    if (!ok) {
-      pending.current.delete(id)
-      return
-    }
-    pending.current.add(id)
-    timers.current.set(
-      id,
-      setTimeout(() => {
-        timers.current.delete(id)
-        persist(id, row)
-      }, 500),
-    )
   }
 
   const control =
@@ -159,13 +120,7 @@ export function MerchTools({
         </div>
       ))}
 
-      <Link
-        href={`/artists/${artistId}/merch`}
-        className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
-      >
-        <Icon name="plus" size={16} />
-        <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Add product</span>
-      </Link>
+      <AddLink href={`/artists/${artistId}/merch`} label="Add product" />
 
       {status !== 'idle' && (
         <div

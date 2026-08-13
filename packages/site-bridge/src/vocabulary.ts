@@ -213,6 +213,15 @@ export const FROST_STEPS = pxSteps('frost', 1, 24, 1, 'None')
 /** Breathing room inside a region — the matte around an image, the inset of a bar. */
 export const PAD_STEPS = pxSteps('pad', 2, 64, 2, 'None')
 
+/** VERTICAL-only breathing room (top + bottom). The site-wide page band and the chrome
+ *  bars use this instead of all-sides padding: they are full width around a centred
+ *  column, so horizontal padding lands in gutters that are already empty and reads as
+ *  nothing (Sam, 2026-08-13). Top/bottom is the only axis that shows. */
+export const PAD_Y_STEPS = pxSteps('pady', 2, 64, 2, 'None')
+
+/** The gutter between items in a grid/flex region — the hero row's name↔portrait gap. */
+export const GAP_STEPS = pxSteps('gap', 0, 64, 4, 'None')
+
 /** Section geometry (Sam, 2026-08-12: the header bar, the body band and the footer
  *  each get a width and a height). WIDTH: `''` is the 100% right end — a section is
  *  full-bleed by default — and the floor is 40%, because a 0%-wide bar is an invisible

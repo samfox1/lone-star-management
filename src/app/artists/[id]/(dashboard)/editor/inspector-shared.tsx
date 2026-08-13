@@ -219,6 +219,15 @@ export function EditRow({
   )
 }
 
+/** The brief empty state for a manifest-slot panel (Images, Videos, site Links). When the
+ *  site declares no slots of this kind there is nothing to place, so the panel says so in
+ *  one plain line rather than offering an add button that would upload work the site has
+ *  nowhere to show (Sam, 2026-08-13). ONE wording for all three so the empty panels read
+ *  identically. */
+export function NoSlots({ noun }: { noun: string }) {
+  return <p className="px-5 py-6 text-sm text-ink-muted">No {noun} slots on this site.</p>
+}
+
 /** The mono status line every panel ends with. */
 export function SaveLine({ status }: { status: SaveStatus }) {
   if (status === 'idle') return null

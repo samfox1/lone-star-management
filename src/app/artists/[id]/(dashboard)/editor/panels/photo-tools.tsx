@@ -8,7 +8,7 @@ import { componentSlotRole, type ComponentSlot, type ManifestComponent } from '@
 import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import { type Orientation } from '@/lib/site-editor/gallery'
 import { type EditorImageField, type GalleryPhoto, type ItemEdit } from '../inspector-types'
-import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, EYEBROW } from '../inspector-shared'
+import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, EYEBROW, NoSlots } from '../inspector-shared'
 import {
   PhotoThumb,
   EmptySlot,
@@ -514,12 +514,7 @@ export function PhotoTools({
             />
           </div>
         ))}
-      {nothing && (
-        <p className="px-5 py-6 text-sm leading-relaxed text-ink-muted">
-          This site has no image slots. Photos you upload live in Assets until the site
-          declares somewhere to put them.
-        </p>
-      )}
+      {nothing && <NoSlots noun="image" />}
     </div>
   )
 }

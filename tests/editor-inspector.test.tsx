@@ -183,11 +183,13 @@ function renderInspector(
     onApplyLink?: (k: string, u: string) => void
     onHighlight?: (t: SelectTarget) => void
     onClearHighlight?: () => void
+    bridgeOutdated?: boolean
   } = {},
 ) {
   return render(
     <EditorInspector
       artistId="artist-1"
+      bridgeOutdated={opts.bridgeOutdated ?? false}
       photos={photos}
       imageFields={opts.imageFields ?? []}
       selectedRegion={opts.selectedRegion ?? null}
@@ -863,7 +865,8 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     renderInspector([], { linkRegions: [] })
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
     expect(screen.getByText('Buttons')).toBeTruthy()
-    expect(screen.getByText(/hasn't declared any link buttons/)).toBeTruthy()
+    // The brief "no slots" line — not an add button (nothing to place without a slot).
+    expect(screen.getByText(/no link slots/i)).toBeTruthy()
   })
 })
 
@@ -889,6 +892,8 @@ describe('EditorInspector — Videos component', () => {
     expect(screen.queryByText('Landing page')).toBeNull()
     expect(screen.queryByText('Videos band')).toBeNull()
     expect(screen.queryByLabelText('Slot 1 title')).toBeNull()
+    // …and the brief "no slots" line stands in for the (absent) add affordances.
+    expect(screen.getByText(/no video slots/i)).toBeTruthy()
   })
 
   it('renders exactly the DECLARED slots — a band of 1 shows one slot, not two', () => {
@@ -1211,7 +1216,7 @@ describe('EditorInspector — Music panel (projects)', () => {
   it('points at the Music page when there are no projects', () => {
     renderInspector([], { releases: [] })
     fireEvent.click(screen.getByRole('button', { name: /Music/ }))
-    expect(screen.getByRole('link', { name: /Add music first/ }).getAttribute('href')).toBe('/artists/artist-1/music')
+    expect(screen.getByRole('link', { name: /Add music/ }).getAttribute('href')).toBe('/artists/artist-1/music')
   })
 })
 
@@ -1257,9 +1262,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // Browsing shows the site-wide list (surface controls) — the accordion rule lives
     // there now; a focused element region arrives already open.
     openStyle({ styleRegions: PAGE_REGIONS })
-    expect(screen.queryByLabelText('Chrome Padding')).toBeNull()
+    expect(screen.queryByLabelText('Chrome Vert padding')).toBeNull()
     expand('Chrome')
-    expect(screen.getByLabelText('Chrome Padding')).toBeTruthy()
+    expect(screen.getByLabelText('Chrome Vert padding')).toBeTruthy()
   })
 
   it('a site-wide region offers padding, ONE color, frost — and the divider only where the base draws one', () => {
@@ -1267,7 +1272,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // tests/style-controls.test.ts): the rendered rows really match the allowlist.
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
-    expect(screen.getByLabelText('Page Padding')).toBeTruthy()
+    expect(screen.getByLabelText('Page Vert padding')).toBeTruthy()
     // Geometry is the CHROME bars' (Sam: "drop height and width from the middle").
     expect(screen.queryByLabelText('Page Width')).toBeNull()
     expect(screen.queryByLabelText('Page Height')).toBeNull()
@@ -1351,9 +1356,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     openStyle({ styleRegions: PAGE_REGIONS, styleValues: { chrome: 'border-t text-lg' } })
     expand('Page')
     // Frost is a slider: the range input's value is a STEP INDEX, not a class.
-    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '1' } })
     expand('Chrome')
-    fireEvent.change(screen.getByLabelText('Chrome Padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Chrome Vert padding'), { target: { value: '1' } })
     // Two keys touched → the session Cancel walks BOTH back.
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -1478,7 +1483,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Page' }))
-    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '1' } })
   }
 
   beforeEach(() => window.localStorage.clear())
@@ -1489,7 +1494,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     fireEvent.click(screen.getByRole('button', { name: 'Edit Page' }))
     // Nothing touched yet — no session bar.
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '1' } })
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
   })
@@ -1512,7 +1517,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     fireEvent.click(within(dialog).getByLabelText(/Don't ask me to confirm again/i))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     // Second session: Save commits immediately, no dialog.
-    fireEvent.change(screen.getByLabelText('Page Padding'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
@@ -2335,5 +2340,17 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     renderInspector(PHOTOS)
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     expect(screen.queryByRole('button', { name: 'Slot 1' })).toBeNull()
+  })
+})
+
+describe('EditorInspector — the outdated-bridge flag', () => {
+  it('shows a republish note when the connected site is behind', () => {
+    renderInspector(PHOTOS, { bridgeOutdated: true })
+    expect(screen.getByText(/older version/i)).toBeTruthy()
+  })
+
+  it('shows NO note when the site is up to date (not a permanent fixture)', () => {
+    renderInspector(PHOTOS, { bridgeOutdated: false })
+    expect(screen.queryByText(/older version/i)).toBeNull()
   })
 })

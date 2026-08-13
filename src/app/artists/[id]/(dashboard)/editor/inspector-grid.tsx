@@ -290,12 +290,29 @@ export function useDismiss(open: boolean, onClose: () => void) {
 }
 
 /** The dashed "add your first item" link shown in a picker with no candidates left —
- *  points at the collection's own page (Videos / Music) to add one. */
+ *  points at the collection's own page (Videos / Music) to add one. Taller (`py-6`) than
+ *  AddLink because it fills an empty picker-modal grid, not a panel footer. */
 export function AddFirstLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
       className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-6 text-ink-muted hover:border-accent hover:text-accent"
+    >
+      <Icon name="plus" size={16} />
+      <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>
+    </Link>
+  )
+}
+
+/** THE panel-footer "add another" button, ONE shared size for Music / Tour / Merch so the
+ *  three read identically (Sam, 2026-08-13). Points at the collection's own page, where
+ *  items are actually created — the editor only arranges what already exists. Distinct
+ *  from AddFirstLink (taller, for an empty picker grid). */
+export function AddLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
     >
       <Icon name="plus" size={16} />
       <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>

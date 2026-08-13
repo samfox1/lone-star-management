@@ -5,7 +5,7 @@ import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type EditorProject } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { plural, EYEBROW } from '../inspector-shared'
-import { SongThumb, AddFirstLink } from '../inspector-grid'
+import { SongThumb, AddLink } from '../inspector-grid'
 
 /* ── Music tools: the setlist as on-site cover cards + an Add tile (mirrors Videos).
  * Songs are entered/renamed on the Music page; here the manager just picks which are on
@@ -54,7 +54,7 @@ export function MusicTools({
   if (releases.length === 0) {
     return (
       <div className="px-5 py-4">
-        <AddFirstLink href={`/artists/${artistId}/music`} label="Add music first" />
+        <AddLink href={`/artists/${artistId}/music`} label="Add music" />
       </div>
     )
   }
@@ -169,6 +169,8 @@ export function MusicTools({
           </div>
         )
       })}
+
+      <AddLink href={`/artists/${artistId}/music`} label="Add music" />
     </div>
   )
 }

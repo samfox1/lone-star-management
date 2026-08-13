@@ -35,6 +35,30 @@ export type {
   TemplateManifest,
 } from '@samfox1/site-bridge/manifest'
 import type { ManifestField, ManifestStyleRegion, TemplateManifest } from '@samfox1/site-bridge/manifest'
+import { PACKAGE_VERSION } from '@samfox1/site-bridge/manifest'
+export { PACKAGE_VERSION } from '@samfox1/site-bridge/manifest'
+
+/**
+ * Is the connected site OLDER than the editor's bridge? A site stamps the version it was
+ * built against into its manifest (`bridgeVersion`); when it lags, a newly added control
+ * can emit a token the site's bundled applier can't lift yet — so the editor flags
+ * "republish to apply" rather than letting the manager drag a slider that does nothing.
+ *
+ * Dotted numeric compare; a missing or malformed version reads as NOT outdated (never a
+ * false alarm — an older site that predates the field simply isn't flagged).
+ */
+export function bridgeOutdated(siteVersion: string | undefined, editorVersion = PACKAGE_VERSION): boolean {
+  // Only a well-formed dotted-numeric version can be behind; anything else (absent, empty,
+  // garbage) is NOT flagged — a false alarm is worse than a missed one here.
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  const a = siteVersion.split('.').map((n) => Number(n) || 0)
+  const b = editorVersion.split('.').map((n) => Number(n) || 0)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0)
+    if (d !== 0) return d < 0
+  }
+  return false
+}
 
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {

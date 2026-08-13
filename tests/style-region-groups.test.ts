@@ -8,7 +8,22 @@
  * become its own heading, which is noise, not structure.
  */
 import { describe, expect, it } from 'vitest'
-import { groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { bridgeOutdated, groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+
+describe('bridgeOutdated — the editor flags a site built against an older bridge', () => {
+  it('is TRUE only when the site version is strictly lower than the editor version', () => {
+    expect(bridgeOutdated('0.9.8', '0.10.0')).toBe(true)
+    expect(bridgeOutdated('0.9.12', '0.10.0')).toBe(true) // numeric compare, not string ('9' < '10')
+    expect(bridgeOutdated('0.10.0', '0.10.0')).toBe(false) // equal is up to date
+    expect(bridgeOutdated('0.11.0', '0.10.0')).toBe(false) // newer never flags
+  })
+
+  it('never false-alarms on a missing or malformed version', () => {
+    expect(bridgeOutdated(undefined, '0.10.0')).toBe(false) // a site that predates the field
+    expect(bridgeOutdated('', '0.10.0')).toBe(false)
+    expect(bridgeOutdated('garbage', '0.10.0')).toBe(false) // non-numeric parts read as 0
+  })
+})
 
 const r = (key: string, group?: string): ManifestStyleRegion => ({ key, label: key, group })
 

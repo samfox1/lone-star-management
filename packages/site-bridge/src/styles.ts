@@ -310,12 +310,24 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
   if (m) return { padding: `${m[1]}px` };
+  // Vertical-only padding (the page band + chrome bars): top/bottom longhands, so a
+  // base's horizontal padding (a bar's `px-6` side gutters) survives underneath.
+  m = token.match(/^pady-\[(\d{1,3})px\]$/);
+  if (m) return { paddingTop: `${m[1]}px`, paddingBottom: `${m[1]}px` };
   // Section geometry: width narrows AND centres the band (auto margins — the page
   // shows at the sides); height is a FLOOR, so content can still grow past it.
   m = token.match(/^secw-\[(\d{1,3})%\]$/);
   if (m) return { width: `${m[1]}%`, marginLeft: "auto", marginRight: "auto" };
   m = token.match(/^sech-\[(\d{1,4})px\]$/);
   if (m) return { minHeight: `${m[1]}px` };
+  // Block alignment: orient a content-sized row (the hero name + portrait) left / centre
+  // / right. justify-content positions the packed tracks, so it only shows once the
+  // region's columns are auto-sized rather than 1fr-filling the width.
+  m = token.match(/^just-\[(start|center|end)\]$/);
+  if (m) return { justifyContent: m[1] };
+  // The gutter between a region's items (grid/flex gap) — the hero name↔portrait space.
+  m = token.match(/^gap-\[(\d{1,3})px\]$/);
+  if (m) return { gap: `${m[1]}px` };
   return null;
 }
 
@@ -366,6 +378,10 @@ export const MANAGED_STYLE_PROPS = [
   "backdrop-filter",
   "-webkit-backdrop-filter",
   "padding",
+  "padding-top",
+  "padding-bottom",
+  "justify-content",
+  "gap",
   "--lse-enter-duration",
   "--lse-enter-distance",
   "--lse-hover-color",
