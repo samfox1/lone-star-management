@@ -178,6 +178,7 @@ function renderInspector(
     selectedLink?: string | null
     imageFields?: EditorImageField[]
     selectedRegion?: { target: SelectTarget; nonce: number } | null
+    deselectedAt?: number
     onApplyField?: (k: string, v: string) => void
     onApplyStyle?: (k: string, c: string) => void
     onApplyLink?: (k: string, u: string) => void
@@ -186,7 +187,16 @@ function renderInspector(
     bridgeOutdated?: boolean
   } = {},
 ) {
-  return render(
+  return render(inspector(photos, opts))
+}
+
+/** The same element, unrendered — for `rerender`, which is how a test drives a PROP
+ *  change (a preview click arriving from the frame bridge) rather than a DOM event. */
+function inspector(
+  photos: GalleryPhoto[] = PHOTOS,
+  opts: Parameters<typeof renderInspector>[1] = {},
+) {
+  return (
     <EditorInspector
       artistId="artist-1"
       bridgeOutdated={opts.bridgeOutdated ?? false}
@@ -210,12 +220,13 @@ function renderInspector(
       styleValues={opts.styleValues ?? {}}
       styleOptions={opts.styleOptions}
       selectedStyle={opts.selectedStyle ?? null}
+      deselectedAt={opts.deselectedAt ?? 0}
       linkRegions={opts.linkRegions ?? []}
       selectedLink={opts.selectedLink ?? null}
       onApplyField={opts.onApplyField}
       onApplyStyle={opts.onApplyStyle}
       onApplyLink={opts.onApplyLink}
-    />,
+    />
   )
 }
 
@@ -717,6 +728,17 @@ describe('EditorInspector — Links component', () => {
     // boundary ref makes the assertion above vacuously true — nothing would close the
     // row, so "it stayed open" would prove nothing at all.
     fireEvent.mouseDown(document.body)
+    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
+  })
+
+  it('CRITICAL: a preview click on dead space closes an open social row too', () => {
+    // Pinned per PANEL: the collapse tick is threaded independently to each list, so
+    // Style passing proves nothing about Links (the same reason as the outside-click).
+    const view = renderInspector([], { links: LINKS, deselectedAt: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+    expandLink(1)
+    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
+    view.rerender(inspector([], { links: LINKS, deselectedAt: 2 }))
     expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
   })
 
@@ -1393,13 +1415,13 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     fireEvent.change(screen.getByLabelText('Foot Padding'), { target: { value: '1' } })
     // Two keys touched → the session Cancel walks BOTH back.
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     })
     // Reverse order: foot (touched last) first, then nav.
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'foot', 'border-b text-lg')
     expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'nav', '')
-    // The ledger clears — Save/Cancel leave until something new is touched.
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    // The ledger clears — the Revert button leaves until something new is touched.
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })
 
   it('Font is palette-gated; the colour pickers exist regardless — hex lifts inline anywhere', () => {
@@ -1574,6 +1596,51 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.queryByLabelText('Page background Background color hex')).toBeNull()
   })
 
+  it('CRITICAL: clicking dead space in the PREVIEW closes the open row', () => {
+    // Sam, 2026-08-14: "if I click inside the iframe and there is nothing in the editor
+    // related to that click, simply close the opened edit panel". The frame already
+    // posts `deselect` for a click on nothing marked; this is the editor honouring it.
+    const view = renderInspector([], {
+      styleRegions: [{ key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' }],
+      deselectedAt: 1,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page background' }))
+    expect(screen.getByLabelText('Page background Background color hex')).toBeTruthy()
+    view.rerender(inspector([], {
+      styleRegions: [{ key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' }],
+      deselectedAt: 2, // a new click on nothing
+    }))
+    expect(screen.queryByLabelText('Page background Background color hex')).toBeNull()
+  })
+
+  it('CRITICAL: clicking an EDITABLE element in the preview swaps which row is open', () => {
+    // The other half: "if I clicked somewhere that is editable, close the previous panel
+    // and open the new one." One row open at a time, driven by the preview.
+    const regions: ManifestStyleRegion[] = [
+      { key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' },
+      { key: 'masthead', label: 'Masthead bar', base: 'flex border-b px-6 py-4', scope: 'chrome' },
+    ]
+    const view = renderInspector([], { styleRegions: regions, selectedStyle: 'page' })
+    expect(screen.getByLabelText('Page background Background color hex')).toBeTruthy()
+    view.rerender(inspector([], { styleRegions: regions, selectedStyle: 'masthead' }))
+    expect(screen.getByLabelText('Masthead bar Padding')).toBeTruthy()
+    expect(screen.queryByLabelText('Page background Background color hex')).toBeNull()
+  })
+
+  it('a deselect does NOT reopen or disturb a row the manager opens afterwards', () => {
+    // The signal is an EVENT (a counter), not a state. Once handled it must not keep
+    // slamming rows shut, or the panel becomes unusable after one preview click.
+    const regions: ManifestStyleRegion[] = [
+      { key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' },
+    ]
+    const view = renderInspector([], { styleRegions: regions, deselectedAt: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    view.rerender(inspector([], { styleRegions: regions, deselectedAt: 2 }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page background' }))
+    expect(screen.getByLabelText('Page background Background color hex')).toBeTruthy()
+  })
+
   it('CRITICAL: a heading-suppressed group still breaks from the group above it', () => {
     // The other half of the double-header fix (Sam, 2026-08-14: "the footer lies under
     // the hero section … The footer should be its own thing"). Suppressing the "Footer"
@@ -1591,7 +1658,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 })
 
-describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)', () => {
+describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () => {
   // A chrome bar: it carries the padding slider (the page background no longer does), and
   // the slider touches the ledger on `change` — no blur/commit needed like the colour hex.
   const REGIONS: ManifestStyleRegion[] = [
@@ -1606,47 +1673,50 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
 
   beforeEach(() => window.localStorage.clear())
 
-  it('CRITICAL: Save and Cancel appear together only once something is touched', () => {
+  it('CRITICAL: Revert changes appears only once something is touched', () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
-    // Nothing touched yet — no session bar.
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
     fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
-    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
-  it('CRITICAL: Save opens a Confirm dialog LISTING the changes, and confirming clears the ledger', () => {
+  it('CRITICAL: there is NO Save/Done button and no confirm dialog', () => {
+    // Sam, 2026-08-14: edits already autosave to the draft, so a button that only
+    // dismissed the undo buffer was a second word for "save" that saved nothing.
+    // Publish stays the one thing that goes public.
     editPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    const dialog = screen.getByRole('dialog', { name: 'Confirm changes' })
-    expect(within(dialog).getByText('Style · footer')).toBeTruthy() // the change is named
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
-    // Committed: the dialog closes and the session bar is gone.
-    expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Confirm changes' })).toBeNull()
+    // The revert affordance is the ONLY thing in the bar.
+    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
-  it('CRITICAL: "Don\'t ask me to confirm again" skips the dialog on the NEXT save', () => {
-    editPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    const dialog = screen.getByRole('dialog', { name: 'Confirm changes' })
-    fireEvent.click(within(dialog).getByLabelText(/Don't ask me to confirm again/i))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
-    // Second session: Save commits immediately, no dialog.
-    fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-  })
-
-  it('dismissing the dialog (Back) keeps the ledger — nothing is lost', () => {
-    editPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Back' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy() // still pending
+  it('CRITICAL: the panel never announces "Saved" or "Saving…"', async () => {
+    // "I dont need that text though to show up saying saved" (Sam, 2026-08-14). The
+    // draft write is silent; only a FAILED write still speaks (pinned in site-tools).
+    //
+    // The timers MUST be driven: the write is debounced 500ms, so asserting straight
+    // after the edit finds `idle` and passes whatever the component would have printed
+    // — a vacuous green (caught by mutation check, 2026-08-14). Advancing past the
+    // debounce and flushing the resolve is the exact moment the old code printed
+    // "Saved" and then left it on screen for the rest of the session.
+    vi.useFakeTimers()
+    try {
+      editPage()
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(screen.queryByText('Saved')).toBeNull()
+      expect(screen.queryByText('Saving…')).toBeNull()
+      // WITNESS: the write really did land, so the silence above is a CHOICE, not an
+      // edit that never happened.
+      expect(saveStyleMock).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -2025,17 +2095,17 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
-  it('session Cancel puts a slot placement back to its previous holder', async () => {
-    // m2 takes Slot 1 (previously empty) → Cancel re-places null.
+  it('session Revert puts a slot placement back to its previous holder', async () => {
+    // m2 takes Slot 1 (previously empty) → Revert re-places null.
     openImages(PHOTOS)
     fireEvent.click(screen.getByRole('button', { name: 'Slot 1' }))
     fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     })
     expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })
 
   it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {

@@ -33,12 +33,15 @@ export function SiteLinkTools({
   regions,
   values,
   selected,
+  collapseAt = 0,
   artistId,
   onApplyLink,
 }: {
   regions: ManifestLinkRegion[]
   values: Record<string, string>
   selected: string | null
+  /** Ticks when a preview click hit nothing editable — collapse the open row. */
+  collapseAt?: number
   artistId: string
   onApplyLink?: (key: string, url: string) => void
 }) {
@@ -82,6 +85,14 @@ export function SiteLinkTools({
   const [openKey, setOpenKey] = useState<string | null>(null)
   // A click anywhere outside the open row (or Escape) collapses it.
   const openRef = useCollapseOnOutsideClick(openKey !== null, () => setOpenKey(null))
+  // A preview click that hit nothing editable collapses the open row too. Compared
+  // against the last seen tick (an event, not a state) so the manager can immediately
+  // open another row afterwards.
+  const [lastCollapse, setLastCollapse] = useState(collapseAt)
+  if (collapseAt !== lastCollapse) {
+    setLastCollapse(collapseAt)
+    setOpenKey(null)
+  }
 
   // A click on the button IN THE FRAME opens its row. Reset-on-prop-change DURING render
   // (the repo's sanctioned pattern), not in an effect — an effect setState cascades a
@@ -201,6 +212,7 @@ export function LinkTools({
   showAdd = true,
   inferPlatform = false,
   focusedKey,
+  collapseAt = 0,
 }: {
   links: EditorLink[]
   artistId: string
@@ -223,6 +235,8 @@ export function LinkTools({
    *  deployed site (socials arrive there as label-mapped config values), and lowercasing
    *  is the exact normalization that pipeline already joins on. */
   focusedKey?: string | null
+  /** Ticks when a preview click hit nothing editable — collapse the open row. */
+  collapseAt?: number
 }) {
   const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
@@ -235,6 +249,12 @@ export function LinkTools({
   const [open, setOpen] = useState<string | null>(null)
   // A click anywhere outside the open row (or Escape) collapses it.
   const rowOpenRef = useCollapseOnOutsideClick(open !== null, () => setOpen(null))
+  // Same collapse-on-preview-deselect tick as the other lists.
+  const [lastCollapse, setLastCollapse] = useState(collapseAt)
+  if (collapseAt !== lastCollapse) {
+    setLastCollapse(collapseAt)
+    setOpen(null)
+  }
 
   // A social selected in the FRAME lands as `item:link:<label lowercased>` — join by the
   // same normalization and OPEN that row, or the "selected link" is a closed accordion

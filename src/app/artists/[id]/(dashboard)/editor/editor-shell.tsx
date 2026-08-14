@@ -210,6 +210,7 @@ export function EditorShell({
     selectedStyle,
     selectedLink,
     selectedRegion,
+    deselectedAt,
   } = useFrameBridge({
     artistId,
     customSiteUrl,
@@ -289,6 +290,7 @@ export function EditorShell({
         styleValues={draft?.styles ?? {}}
         styleOptions={withUploadedFonts(panels.styleOptions, uploadedFonts)}
         selectedStyle={selectedStyle}
+        deselectedAt={deselectedAt}
         linkRegions={panels.linkRegions}
         linkValues={linkValues}
         selectedLink={selectedLink}

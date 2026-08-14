@@ -48,7 +48,9 @@ describe('SiteTools — the save loop', () => {
     expect(saveMock).toHaveBeenCalledWith('artist-1', CURSOR_CONTENT_KEYS.trail, 'dots')
     expect(applied.at(-1)?.trail).toBe('dots')
     expect(screen.getByRole('button', { name: 'Trail style: Dots' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('Saved')).toBeTruthy()
+    // A successful draft write is SILENT now (Sam, 2026-08-14). The state that proves it
+    // landed is the persisted call + the paint above; only a failure speaks (next test).
+    expect(screen.queryByText('Saved')).toBeNull()
   })
 
   it('CRITICAL: a REFUSED save reverts the panel AND the frame', async () => {

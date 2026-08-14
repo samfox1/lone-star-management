@@ -89,6 +89,9 @@ export type FrameBridge = {
    *  Only field/slot/item selects land here — style/link route to their own panels. A
    *  bumped `nonce` re-fires the focus even when the same tile is clicked twice. */
   selectedRegion: { target: SelectTarget; nonce: number } | null
+  /** Increments each time a preview click landed on nothing editable. The inspector
+   *  collapses any open edit row on a change. */
+  deselectedAt: number
 }
 
 export function useFrameBridge({
@@ -107,6 +110,9 @@ export function useFrameBridge({
   const [connected, setConnected] = useState(false)
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
+  /** Ticks on every preview click that selected nothing — the panels read it as
+   *  "collapse whatever is open". */
+  const [deselectedAt, setDeselectedAt] = useState(0)
   const [selectedRegion, setSelectedRegion] = useState<{ target: SelectTarget; nonce: number } | null>(null)
   /** Whether a click in the frame SELECTS a region or works the site. Owned HERE, not in
    *  the shell, because the FRAME resets to `edit` whenever its page reloads — and in
@@ -193,6 +199,13 @@ export function useFrameBridge({
         setSelectedStyle(msg.target.key)
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
         setSelectedLink(msg.target.key)
+      } else if (msg.type === 'deselect') {
+        // A click in the preview that hit NOTHING editable. The frame has always posted
+        // this; the editor used to drop it, which is why an open panel sat there while
+        // the manager clicked around the page trying to dismiss it (Sam, 2026-08-14).
+        // A COUNTER, not a boolean: two consecutive clicks on dead space are two events,
+        // and a flag would only fire on the first.
+        setDeselectedAt((n) => n + 1)
       } else if (msg.type === 'select') {
         // field / slot / item — an image (or text) region. Hand it to the inspector,
         // which knows which of these are images and opens the Images panel on them.
@@ -268,5 +281,6 @@ export function useFrameBridge({
     selectedStyle,
     selectedLink,
     selectedRegion,
+    deselectedAt,
   }
 }

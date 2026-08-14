@@ -283,14 +283,21 @@ export function NoSlots({ noun }: { noun: string }) {
   return <p className="px-5 py-6 text-sm text-ink-muted">No {noun} slots on this site.</p>
 }
 
-/** The mono status line every panel ends with. */
+/**
+ * The panel's save status line — FAILURES ONLY (Sam, 2026-08-14: "I dont need that text
+ * though to show up saying saved").
+ *
+ * Every edit autosaves to the DRAFT, so "Saved" was narrating the expected case forever:
+ * it appeared on the first change and never cleared, which read as a permanent claim
+ * about a private scratchpad nobody could see anyway. Publish is what makes anything
+ * public, and it reports for itself.
+ *
+ * A FAILED write still speaks, and must: a silent failure is the one state where the
+ * panel and the database disagree and nothing on screen says so.
+ */
 export function SaveLine({ status }: { status: SaveStatus }) {
-  if (status === 'idle') return null
-  return (
-    <p className={cx('px-5 pt-3', EYEBROW, status === 'error' && 'text-accent-red')}>
-      {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'}
-    </p>
-  )
+  if (status !== 'error') return null
+  return <p className={cx('px-5 pt-3', EYEBROW, 'text-accent-red')}>Save failed</p>
 }
 
 /** A panel-level group heading: the mono eyebrow padded to the gutter, hairline rule

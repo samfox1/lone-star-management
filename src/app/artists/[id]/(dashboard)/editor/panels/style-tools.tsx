@@ -186,6 +186,7 @@ export function StyleTools({
   values,
   options,
   selected,
+  collapseAt = 0,
   artistId,
   onApplyStyle,
 }: {
@@ -193,6 +194,8 @@ export function StyleTools({
   values: Record<string, string>
   options?: SiteStyleOptions
   selected: string | null
+  /** Ticks when a preview click hit nothing editable — collapse the open row. */
+  collapseAt?: number
   artistId: string
   onApplyStyle?: (key: string, className: string) => void
 }) {
@@ -229,6 +232,16 @@ export function StyleTools({
     setOpen(selected)
   }
   if (!selected && lastSel) setLastSel(null)
+
+  // A preview click that hit nothing editable collapses whatever is open (Sam,
+  // 2026-08-14). Compared against the LAST SEEN tick, the same during-render pattern as
+  // the selection above: an event, not a state, so it fires once per click and leaves
+  // the manager free to open another row immediately afterwards.
+  const [lastCollapse, setLastCollapse] = useState(collapseAt)
+  if (collapseAt !== lastCollapse) {
+    setLastCollapse(collapseAt)
+    setOpen(null)
+  }
 
   // Two modes, never mixed (visibleStyleRegions): a click shows ONLY that region's
   // controls; browsing lists ONLY site-wide regions. Note `text` still seeds from ALL

@@ -53,7 +53,7 @@ import {
   saveEditorStyleAction,
   setOnSiteAction,
 } from '../actions'
-import { useSessionJournal, type JournalEntry } from './use-session-journal'
+import { useSessionJournal } from './use-session-journal'
 import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
@@ -171,6 +171,7 @@ export function EditorInspector({
   styleValues = NO_STYLES,
   styleOptions,
   selectedStyle = null,
+  deselectedAt = 0,
   linkRegions = [],
   linkValues = {},
   selectedLink = null,
@@ -224,6 +225,10 @@ export function EditorInspector({
   styleOptions?: SiteStyleOptions
   /** Region the frame reported a click on — jumps the panel to Style, focused there. */
   selectedStyle?: string | null
+  /** Ticks when a preview click hit nothing editable — panels collapse whatever row is
+   *  open (Sam, 2026-08-14). A counter, not a flag: consecutive clicks are separate
+   *  events, and a boolean would only ever fire once. */
+  deselectedAt?: number
   /** Link-powered elements the site declared (USB/Merch buttons). From the FRAME's
    *  manifest at runtime for a custom site; [] for built-in templates. */
   linkRegions?: ManifestLinkRegion[]
@@ -922,6 +927,7 @@ export function EditorInspector({
           styleValues={styleValues}
           styleOptions={styleOptions}
           selectedStyle={styleFocus}
+          deselectedAt={deselectedAt}
           linkRegions={linkRegions}
           linkValues={linkValues}
           selectedLink={selectedLink}
@@ -936,148 +942,43 @@ export function EditorInspector({
       ) : (
         <BrowseView onOpen={selectComponent} />
       )}
-      {/* The session's Save / Cancel pair: Cancel walks every touched key back to its
-          session-start value; Save accepts the session (edits already autosaved to the
-          DRAFT, so Save clears the ledger — nothing is pushed live until Publish).
-          Hidden at zero, and while the ITEM editor is open (its own pair owns that
-          surface). */}
+      {/* The session's Revert button: walks every touched key back to its session-start
+          value. Hidden until something is touched, and while the ITEM editor is open
+          (its own revert owns that surface). */}
       {!itemEditor && !textEditor && !tourEditor && journal.count > 0 && (
-        <SessionActions
-          entries={journal.entries}
-          busy={reverting}
-          onCancel={revertSession}
-          onSave={() => journal.clear()}
-        />
+        <SessionActions busy={reverting} onRevert={revertSession} />
       )}
     </aside>
   )
 }
 
-/** A friendly label for one journal entry, for the confirm list. */
-function entryLabel(e: JournalEntry): string {
-  const noun: Record<JournalEntry['kind'], string> = {
-    style: 'Style', field: 'Text', link: 'Link', slot: 'Image',
-  }
-  const key = 'key' in e ? e.key : e.role
-  return `${noun[e.kind]} · ${key.replace(/_/g, ' ')}`
-}
-
-const SKIP_SAVE_CONFIRM = 'lse:skip-save-confirm'
-
-/* ── Session Save / Cancel, with a Confirm-changes dialog ────────────────────── */
+/* ── The session's Revert button ─────────────────────────────────────────────────
+ * ONE button, because there is only one thing left to do here (Sam, 2026-08-14).
+ * Every edit already autosaves to the DRAFT, so the old "Save" wrote nothing — it only
+ * dismissed this bar — and a second word for "save" next to Publish was the whole
+ * confusion. What remains is the escape hatch: put everything back the way it was.
+ *
+ * The bar therefore stays visible for the rest of the session, and Revert always walks
+ * back to the values this session STARTED from. Publish does not reset that baseline;
+ * if it should, that is a deliberate follow-up, not a silent side effect.
+ */
 function SessionActions({
-  entries,
   busy,
-  onCancel,
-  onSave,
+  onRevert,
 }: {
-  entries: JournalEntry[]
   busy: boolean
-  onCancel: () => void
-  onSave: () => void
+  onRevert: () => void
 }) {
-  const [confirming, setConfirming] = useState(false)
-  // Deduplicate: several edits to one key are one line in the list.
-  const changes = Array.from(new Map(entries.map((e) => [entryLabel(e), e])).values())
-
-  const commit = () => {
-    setConfirming(false)
-    onSave()
-  }
-  const requestSave = () => {
-    const skip = typeof window !== 'undefined' && window.localStorage.getItem(SKIP_SAVE_CONFIRM) === '1'
-    if (skip) commit()
-    else setConfirming(true)
-  }
-
   return (
-    <>
-      <div className="flex gap-2 border-t border-hairline px-4 py-2.5">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
-        >
-          {busy ? 'Cancelling…' : 'Cancel'}
-        </button>
-        <button
-          type="button"
-          onClick={requestSave}
-          disabled={busy}
-          className="flex-1 rounded-lg border border-ink bg-ink px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper transition-opacity hover:opacity-85 disabled:opacity-40"
-        >
-          Save
-        </button>
-      </div>
-
-      {confirming && (
-        <SaveConfirm
-          changes={changes}
-          onConfirm={commit}
-          onDismiss={() => setConfirming(false)}
-        />
-      )}
-    </>
-  )
-}
-
-function SaveConfirm({
-  changes,
-  onConfirm,
-  onDismiss,
-}: {
-  changes: JournalEntry[]
-  onConfirm: () => void
-  onDismiss: () => void
-}) {
-  const [dontAsk, setDontAsk] = useState(false)
-  const confirm = () => {
-    if (dontAsk && typeof window !== 'undefined') window.localStorage.setItem(SKIP_SAVE_CONFIRM, '1')
-    onConfirm()
-  }
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Confirm changes"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6"
-      onClick={onDismiss}
-    >
-      <div
-        className="w-full max-w-sm rounded-xl border border-hairline bg-paper p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+    <div className="border-t border-hairline px-4 py-2.5">
+      <button
+        type="button"
+        onClick={onRevert}
+        disabled={busy}
+        className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
       >
-        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">Confirm changes</h2>
-        <ul className="mt-3 max-h-56 space-y-1.5 overflow-y-auto">
-          {changes.map((e, i) => (
-            <li key={i} className="flex items-center gap-2 font-space text-[12px] text-ink-muted">
-              <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" aria-hidden />
-              {entryLabel(e)}
-            </li>
-          ))}
-        </ul>
-        <label className="mt-4 flex items-center gap-2 font-space text-[11px] text-ink-faint">
-          <input type="checkbox" checked={dontAsk} onChange={(e) => setDontAsk(e.target.checked)} className="accent-ink" />
-          Don&apos;t ask me to confirm again
-        </label>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-ink hover:text-ink"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            className="flex-1 rounded-lg border border-ink bg-ink px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper hover:opacity-85"
-          >
-            Confirm
-          </button>
-        </div>
-      </div>
+        {busy ? 'Reverting…' : 'Revert changes'}
+      </button>
     </div>
   )
 }
@@ -1147,6 +1048,7 @@ function EditingView({
   styleValues,
   styleOptions,
   selectedStyle,
+  deselectedAt,
   linkRegions,
   linkValues,
   selectedLink,
@@ -1203,6 +1105,7 @@ function EditingView({
   styleValues: Record<string, string>
   styleOptions?: SiteStyleOptions
   selectedStyle: string | null
+  deselectedAt: number
   linkRegions: ManifestLinkRegion[]
   linkValues: Record<string, string>
   selectedLink: string | null
@@ -1274,6 +1177,7 @@ function EditingView({
             <LinkTools
               links={links.filter((l) => !isContactish(l.url))}
               group="Social"
+              collapseAt={deselectedAt}
               artistId={artistId}
               onRemove={onRemoveLink}
               onReorder={onReorderLink}
@@ -1290,6 +1194,7 @@ function EditingView({
                 <LinkTools
                   links={links.filter((l) => isContactish(l.url))}
                   group="Contact"
+                  collapseAt={deselectedAt}
                   artistId={artistId}
                   onRemove={onRemoveLink}
                   onReorder={onReorderLink}
@@ -1307,6 +1212,7 @@ function EditingView({
               regions={linkRegions}
               values={linkValues}
               selected={selectedLink}
+              collapseAt={deselectedAt}
               artistId={artistId}
               onApplyLink={onApplyLink}
             />
@@ -1348,6 +1254,7 @@ function EditingView({
             values={styleValues}
             options={styleOptions}
             selected={selectedStyle}
+            collapseAt={deselectedAt}
             artistId={artistId}
             onApplyStyle={onApplyStyle}
           />
