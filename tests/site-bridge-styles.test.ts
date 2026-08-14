@@ -571,6 +571,11 @@ describe('slice-2 visual effects (2026-08-11)', () => {
     expect(resolveRegionStyle('hero', '', 'gap-[48px]').style.gap).toBe('48px')
   })
 
+  it('icon size (iconsize-) lifts to the --lse-icon-size var the group icons read', () => {
+    const r = resolveRegionStyle('socials', '', 'iconsize-[28px]')
+    expect(r.style['--lse-icon-size' as keyof typeof r.style]).toBe('28px')
+  })
+
   it('shapes and feather are ITEM lifts, with both mask spellings', () => {
     const r = resolveStyle('shape-arch feather-30')
     expect(r.style.clipPath).toBe('inset(0 round 999px 999px 0 0)')

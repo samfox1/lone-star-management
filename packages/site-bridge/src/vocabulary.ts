@@ -222,6 +222,10 @@ export const PAD_Y_STEPS = pxSteps('pady', 2, 64, 2, 'None')
 /** The gutter between items in a grid/flex region — the hero row's name↔portrait gap. */
 export const GAP_STEPS = pxSteps('gap', 0, 64, 4, 'None')
 
+/** Icon size for an icon GROUP (the socials row). Sets a CSS var the icons read, so one
+ *  value scales them all consistently. `''` = the site's own default. */
+export const ICON_SIZE_STEPS = pxSteps('iconsize', 12, 40, 2, 'Default')
+
 /** Section geometry (Sam, 2026-08-12: the header bar, the body band and the footer
  *  each get a width and a height). WIDTH: `''` is the 100% right end — a section is
  *  full-bleed by default — and the floor is 40%, because a 0%-wide bar is an invisible

@@ -99,6 +99,25 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     expect(page.find((c) => c.id === 'gap')).toBeUndefined()
   })
 
+  it('CRITICAL: an icon GROUP (scope "icons") gets size + colour + hover + gap, curated', () => {
+    // The socials row: a cascading set so every icon stays consistent (Sam, 2026-08-14).
+    const socials = controlsForRegion(controls, {
+      key: 'socials', label: 'Social icons', base: 'flex gap-4 text-ink/60', scope: 'icons',
+    })
+    expect(socials.map((c) => c.id)).toEqual(['iconSize', 'textColor', 'hoverColor', 'gap'])
+    const size = socials.find((c) => c.id === 'iconSize')!
+    if (size.kind !== 'slider') throw new Error('unreachable')
+    expect(size.rank!('iconsize-[28px]')).toBe(28)
+    expect(socials.find((c) => c.id === 'textColor')!.label).toBe('Icon color') // relabelled
+    // Hover colour emits the VAR token ONLY (no `hovercolor` marker) → per-icon hover.
+    const hover = socials.find((c) => c.id === 'hoverColor')!
+    if (hover.kind !== 'color') throw new Error('unreachable')
+    expect(hover.toToken!('#ff0000', '')).toBe('hovercolor-[#ff0000]')
+    // A group with no gap in its base gets no Gap control.
+    const noGap = controlsForRegion(controls, { key: 'x', label: 'X', base: 'flex text-ink/60', scope: 'icons' })
+    expect(noGap.find((c) => c.id === 'gap')).toBeUndefined()
+  })
+
   it("CRITICAL: geometry belongs to the CHROME bars — the body band can't show it", () => {
     // Sam, 2026-08-12: "we can drop height and width from the middle." Height is a
     // floor and the body stands taller than every step; width there reads as a

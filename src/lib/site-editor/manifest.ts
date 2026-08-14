@@ -247,5 +247,9 @@ export function visibleStyleRegions(
   selected: string | null,
 ): ManifestStyleRegion[] {
   const focused = selected ? regions.filter((r) => r.key === selected) : []
-  return focused.length ? focused : regions.filter((r) => r.scope === 'site' || r.scope === 'chrome')
+  // Site-wide surfaces (page/bars) AND icon groups (the socials row) list in the browse
+  // view — they belong to no single clickable element, so the Style tab is where they live.
+  return focused.length
+    ? focused
+    : regions.filter((r) => r.scope === 'site' || r.scope === 'chrome' || r.scope === 'icons')
 }

@@ -49,6 +49,7 @@ import {
   FROST_STEPS,
   PAD_STEPS,
   GAP_STEPS,
+  ICON_SIZE_STEPS,
   SECTION_WIDTH_STEPS,
   SECTION_HEIGHT_STEPS,
   DECO_THICKNESS_STEPS,
@@ -285,6 +286,15 @@ const gapRank = (t: string): number | null => {
   return tw ? Number(tw[1]) * 4 : null
 }
 const ownsGap = (t: string) => t.startsWith('gap-[') || GAP_TW_RE.test(t)
+
+/** Icon-size slider (an icon group): measures `iconsize-[Npx]`. '' ranks null — unset is
+ *  the site's own default, not zero. */
+const iconSizeRank = (t: string): number | null => {
+  if (t === '') return null
+  const m = /^iconsize-\[(\d+)px\]$/.exec(t)
+  return m ? Number(m[1]) : null
+}
+const ownsIconSize = (t: string) => t.startsWith('iconsize-[')
 
 // The centred dressing sliders: Auto sits mid-ladder and ranks like ~2px (a browser's
 // usual auto thickness), so sub-pixel steps sort left of it and 3px+ right of it.
@@ -723,6 +733,29 @@ const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'bo
  *  intrinsic layout, not an orientation a manager should flip. */
 const ALIGNABLE_JUSTIFY = new Set(['justify-start', 'justify-center', 'justify-end'])
 
+/** The gap slider, shared by every region that opts in on a `gap-*` base (the hero row,
+ *  the socials group). Extracted so the site/chrome and icons branches use one control. */
+const GAP_CONTROL: StyleControl = { id: 'gap', label: 'Gap', kind: 'slider', steps: GAP_STEPS, rank: gapRank, owns: ownsGap }
+
+/** Icon size for an icon group — one value scales every icon (they read `--lse-icon-size`). */
+const ICON_SIZE_CONTROL: StyleControl = {
+  id: 'iconSize', label: 'Icon size', kind: 'slider', steps: ICON_SIZE_STEPS, rank: iconSizeRank, owns: ownsIconSize,
+}
+
+/** Hover colour for an icon GROUP: emits ONLY the `hovercolor-[#hex]` var token (no
+ *  `hovercolor` marker class). The var is set on the group and inherited; each icon reads
+ *  it in its OWN `:hover` rule, so hovering one icon recolours just that icon — the marker
+ *  version would recolour the whole group on any hover. */
+const GROUP_HOVER_COLOR_CONTROL: StyleControl = {
+  id: 'hoverColor',
+  label: 'Hover color',
+  kind: 'color',
+  owns: (t) => t.startsWith('hovercolor-['),
+  hexOf: (cls) =>
+    cls.split(/\s+/).map((t) => /^hovercolor-\[(#[0-9a-fA-F]{3,8})\]$/.exec(t)?.[1]).find(Boolean) ?? '',
+  toToken: (hex) => (hex ? `hovercolor-[${hex}]` : ''),
+}
+
 /**
  * The controls a region gets, filtered by its SCOPE (Sam, 2026-08-12). An element region
  * (no scope) keeps the full set — text styling belongs where the text is. A `'site'`
@@ -737,6 +770,19 @@ export function controlsForRegion(
   controls: StyleControl[],
   region: ManifestStyleRegion,
 ): StyleControl[] {
+  // An icon GROUP (the socials row): a curated, cascading set so every icon stays
+  // consistent — size, colour (currentColor), hover colour (per-icon via an inherited
+  // var), and the gap between them. NOT the full text set, none of which fits an icon row.
+  if (region.scope === 'icons') {
+    const iconColor = controls.find((c) => c.id === 'textColor')
+    const base = (region.base ?? '').split(/\s+/)
+    return [
+      ICON_SIZE_CONTROL,
+      ...(iconColor ? [{ ...iconColor, label: 'Icon color' }] : []),
+      GROUP_HOVER_COLOR_CONTROL,
+      ...(base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [GAP_CONTROL] : []),
+    ]
+  }
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
   const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
   // The chrome bars (header/footer) keep NORMAL all-sides padding — the same 'pad' control
@@ -800,15 +846,7 @@ export function controlsForRegion(
     })
   // Gap between a region's items, for a grid/flex region whose base sets one (the hero
   // row's name↔portrait gutter). Opt-in on a `gap-*` base class, like Alignment/Divider.
-  if (base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')))
-    out.push({
-      id: 'gap',
-      label: 'Gap',
-      kind: 'slider',
-      steps: GAP_STEPS,
-      rank: gapRank,
-      owns: ownsGap,
-    })
+  if (base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-['))) out.push(GAP_CONTROL)
   return out
 }
 

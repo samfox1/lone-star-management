@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.10.0'
+export const PACKAGE_VERSION = '0.11.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -99,8 +99,10 @@ export type ManifestStyleRegion = {
    *  can't show (height is a floor the body always exceeds). `'item'`: a PER-ITEM
    *  region (song titles) — its instances dress LIBRARY content, so the Text panel
    *  must not list it as a text area and styling stays click-to-edit on the item.
-   *  Additive; absent means element-scoped (click-to-edit). */
-  scope?: 'site' | 'chrome' | 'item'
+   *  Additive; absent means element-scoped (click-to-edit). 'icons' is an icon GROUP (the
+   *  socials row): a curated set — icon size, colour, hover colour, gap — that cascades to
+   *  every icon so they stay consistent. */
+  scope?: 'site' | 'chrome' | 'item' | 'icons'
 }
 
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by

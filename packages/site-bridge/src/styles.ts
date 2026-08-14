@@ -328,6 +328,10 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // The gutter between a region's items (grid/flex gap) — the hero name↔portrait space.
   m = token.match(/^gap-\[(\d{1,3})px\]$/);
   if (m) return { gap: `${m[1]}px` };
+  // Icon size for an icon group: a CSS var the group's icons read, so one value scales
+  // them all together (the socials row). The icons opt in by sizing off the var.
+  m = token.match(/^iconsize-\[(\d{1,3})px\]$/);
+  if (m) return { "--lse-icon-size": `${m[1]}px` };
   return null;
 }
 
@@ -385,6 +389,7 @@ export const MANAGED_STYLE_PROPS = [
   "--lse-enter-duration",
   "--lse-enter-distance",
   "--lse-hover-color",
+  "--lse-icon-size",
   "width",
   "margin-left",
   "margin-right",
