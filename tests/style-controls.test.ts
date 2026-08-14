@@ -46,21 +46,20 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     expect(page.map((c) => c.id).sort()).toEqual(['bgColor'])
   })
 
-  it('CRITICAL: chrome-bar padding is VERTICAL only — labelled so, emits pady-, migrates legacy pad-', () => {
-    // Padding lives on the CHROME bars now (the bar-height knob), not the page. A bar wraps
-    // a centred column too, so the slider writes top/bottom only. It keeps id 'pad' but
-    // swaps token + label, and still ranks/strips a legacy all-sides pad- so a bar padded
-    // before the switch migrates on the next pick.
+  it('CRITICAL: chrome bars keep NORMAL all-sides padding — the page has none', () => {
+    // The header/footer padding must be unchanged from an element region's: all-sides,
+    // emitting `pad-[Npx]` (Sam, 2026-08-14: "I didn't want the padding set up to change for
+    // the footer and header bars … normal padding on all directions"). The page has no pad.
     const bar = controlsForRegion(controls, { key: 'masthead', label: 'Masthead', scope: 'chrome' })
     const pad = bar.find((c) => c.id === 'pad')!
     if (pad.kind !== 'slider') throw new Error('unreachable')
-    expect(pad.label).toBe('Vert padding')
-    expect(pad.steps.some((s) => s.value.startsWith('pady-['))).toBe(true)
-    expect(pad.steps.every((s) => !s.value.startsWith('pad-['))).toBe(true) // never all-sides
-    expect(pad.rank!('pady-[24px]')).toBe(24)
-    expect(pad.rank!('pad-[40px]')).toBe(40) // legacy token still measured…
-    // …and replaced (not left beside the new one) when a step is picked.
-    expect(applyStyleValue('bg-paper pad-[40px]', pad, 'pady-[24px]')).toBe('bg-paper pady-[24px]')
+    expect(pad.label).toBe('Padding') // NOT "Vert padding"
+    expect(pad.steps.some((s) => s.value.startsWith('pad-['))).toBe(true) // all-sides token
+    expect(pad.steps.every((s) => !s.value.startsWith('pady-['))).toBe(true) // never vertical-only
+    // It is the SAME control an element region gets — nothing special-cased for chrome.
+    expect(pad).toBe(controls.find((c) => c.id === 'pad'))
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
+    expect(page.find((c) => c.id === 'pad')).toBeUndefined()
   })
 
   it('CRITICAL: a region whose base declares an alignable justify gets a Left/Center/Right control', () => {

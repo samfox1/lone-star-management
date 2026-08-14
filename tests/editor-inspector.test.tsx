@@ -1262,9 +1262,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // Browsing shows the site-wide list (surface controls) — the accordion rule lives
     // there now; a focused element region arrives already open.
     openStyle({ styleRegions: PAGE_REGIONS })
-    expect(screen.queryByLabelText('Chrome Vert padding')).toBeNull()
+    expect(screen.queryByLabelText('Chrome Padding')).toBeNull()
     expand('Chrome')
-    expect(screen.getByLabelText('Chrome Vert padding')).toBeTruthy()
+    expect(screen.getByLabelText('Chrome Padding')).toBeTruthy()
   })
 
   it('the page background offers ONE color and nothing else — padding is the chrome bars\'', () => {
@@ -1360,9 +1360,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     openStyle({ styleRegions: regions, styleValues: { foot: 'border-b text-lg' } })
     expand('Nav')
     // Padding is a slider: the range input's value is a STEP INDEX, not a class.
-    fireEvent.change(screen.getByLabelText('Nav Vert padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Nav Padding'), { target: { value: '1' } })
     expand('Foot')
-    fireEvent.change(screen.getByLabelText('Foot Vert padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Foot Padding'), { target: { value: '1' } })
     // Two keys touched → the session Cancel walks BOTH back.
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -1489,7 +1489,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
-    fireEvent.change(screen.getByLabelText('Footer Vert padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
   }
 
   beforeEach(() => window.localStorage.clear())
@@ -1500,7 +1500,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
     // Nothing touched yet — no session bar.
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    fireEvent.change(screen.getByLabelText('Footer Vert padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
   })
@@ -1523,7 +1523,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     fireEvent.click(within(dialog).getByLabelText(/Don't ask me to confirm again/i))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     // Second session: Save commits immediately, no dialog.
-    fireEvent.change(screen.getByLabelText('Footer Vert padding'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()

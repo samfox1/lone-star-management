@@ -48,7 +48,6 @@ import {
   FEATHER_STEPS,
   FROST_STEPS,
   PAD_STEPS,
-  PAD_Y_STEPS,
   GAP_STEPS,
   SECTION_WIDTH_STEPS,
   SECTION_HEIGHT_STEPS,
@@ -273,18 +272,6 @@ const padRank = (t: string): number | null => {
   return tw ? Number(tw[1]) * 4 : null
 }
 const ownsPad = (t: string) => t.startsWith('pad-[') || TW_PAD_RE.test(t)
-
-/** The VERTICAL padding slider (site + chrome). Measures `pady-[Npx]`, but also RANKS and
- *  OWNS a legacy all-sides `pad-[…]` so a region padded before the site went vertical-only
- *  migrates: the handle parks at the old inset, and picking a step strips the symmetric
- *  token as it writes the vertical one. */
-const padYRank = (t: string): number | null => {
-  if (t === '') return null
-  const arb = /^pady-\[(\d+(?:\.\d+)?)px\]$/.exec(t)
-  if (arb) return Number(arb[1])
-  return padRank(t)
-}
-const ownsPadY = (t: string) => t.startsWith('pady-[') || ownsPad(t)
 
 /** The gap slider MEASURES a base's own Tailwind gap (`gap-8` = 32px) and REPLACES it,
  *  the same way the padding slider handles `py-10` — so the handle parks at the real
@@ -736,18 +723,6 @@ const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'bo
  *  intrinsic layout, not an orientation a manager should flip. */
 const ALIGNABLE_JUSTIFY = new Set(['justify-start', 'justify-center', 'justify-end'])
 
-/** The site/chrome padding control: top + bottom only, labelled so the manager knows the
- *  slider is vertical (a full-bleed band can't show a horizontal inset). Replaces the
- *  all-sides 'pad' for scoped regions; keeps id 'pad' so nothing else has to special-case
- *  it. */
-const VERT_PAD_CONTROL: StyleControl = {
-  id: 'pad',
-  label: 'Vert padding',
-  kind: 'slider',
-  steps: PAD_Y_STEPS,
-  rank: padYRank,
-  owns: ownsPadY,
-}
 /**
  * The controls a region gets, filtered by its SCOPE (Sam, 2026-08-12). An element region
  * (no scope) keeps the full set — text styling belongs where the text is. A `'site'`
@@ -764,9 +739,14 @@ export function controlsForRegion(
 ): StyleControl[] {
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
   const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
-  // Vertical padding is a CHROME-bar control (the bar-height knob). Dropped from the page
-  // background, where it did nothing useful (Sam, 2026-08-14).
-  if (region.scope === 'chrome') out.push(VERT_PAD_CONTROL)
+  // The chrome bars (header/footer) keep NORMAL all-sides padding — the same 'pad' control
+  // an element region has (Sam, 2026-08-14: "I didn't want the padding set up to change for
+  // the footer and header bars … normal padding on all directions"). The page background
+  // has no padding at all.
+  if (region.scope === 'chrome') {
+    const pad = controls.find((c) => c.id === 'pad')
+    if (pad) out.push(pad)
+  }
   // Geometry belongs to the CHROME bars only (Sam, 2026-08-12: "drop height and
   // width from the middle") — the body band stands taller than every height step,
   // so a floor never engages there, and narrowing it reads as a rightward push.
