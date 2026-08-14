@@ -776,11 +776,12 @@ export function controlsForRegion(
   if (region.scope === 'icons') {
     const iconColor = controls.find((c) => c.id === 'textColor')
     const base = (region.base ?? '').split(/\s+/)
+    const isFlexOrGrid = base.some((t) => t === 'flex' || t === 'inline-flex' || t === 'grid' || t === 'inline-grid' || t.startsWith('grid-cols'))
     return [
       ICON_SIZE_CONTROL,
       ...(iconColor ? [{ ...iconColor, label: 'Icon color' }] : []),
       GROUP_HOVER_COLOR_CONTROL,
-      ...(base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [GAP_CONTROL] : []),
+      ...(isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [GAP_CONTROL] : []),
     ]
   }
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
@@ -836,7 +837,13 @@ export function controlsForRegion(
   // (Sam, 2026-08-13). Gated on justify-start/center/end, NOT any justify-*, so a bar's
   // intrinsic `justify-between` (wordmark left, socials right) never sprouts the control.
   const base = (region.base ?? '').split(/\s+/)
-  if (base.some((t) => ALIGNABLE_JUSTIFY.has(t)))
+  // Alignment and Gap both act through justify-content / gap, which do NOTHING outside a
+  // flex or grid container — so BOTH require the base to actually be flex/grid, or the
+  // control would appear and silently do nothing (Sam, 2026-08-14: "the alignment does
+  // nothing" — its footer had justify-* but was a block). This is the guard that keeps a
+  // control from being offered where it can't take effect.
+  const isFlexOrGrid = base.some((t) => t === 'flex' || t === 'inline-flex' || t === 'grid' || t === 'inline-grid' || t.startsWith('grid-cols'))
+  if (isFlexOrGrid && base.some((t) => ALIGNABLE_JUSTIFY.has(t)))
     out.push({
       id: 'justify',
       label: 'Alignment',
@@ -844,9 +851,9 @@ export function controlsForRegion(
       options: [DEFAULT, { value: 'just-[start]', label: 'Left' }, { value: 'just-[center]', label: 'Center' }, { value: 'just-[end]', label: 'Right' }],
       owns: (t) => t.startsWith('just-['),
     })
-  // Gap between a region's items, for a grid/flex region whose base sets one (the hero
-  // row's name↔portrait gutter). Opt-in on a `gap-*` base class, like Alignment/Divider.
-  if (base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-['))) out.push(GAP_CONTROL)
+  // Gap between a region's items — same flex/grid requirement, plus a `gap-*` base class
+  // (the hero row's name↔portrait gutter, the socials row).
+  if (isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-['))) out.push(GAP_CONTROL)
   return out
 }
 
