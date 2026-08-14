@@ -474,6 +474,10 @@ describe('EditorInspector — Links component', () => {
   function expandLink(n: number) {
     fireEvent.click(screen.getByRole('button', { name: `Edit social link ${n}` }))
   }
+  /** The same button, which reads "Close …" once the row is open (2026-08-14). */
+  function collapseLink(n: number) {
+    fireEvent.click(screen.getByRole('button', { name: `Close social link ${n}` }))
+  }
 
   it('CRITICAL: Add opens a MODAL — the editor session is never navigated away', () => {
     // Sam, 2026-08-09: "when they hit the add social button, a modal should come up
@@ -683,13 +687,37 @@ describe('EditorInspector — Links component', () => {
       expandLink(1)
       fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://tiktok.com/@juniper' } })
       // Close the box; the row's name is the platform inferred from the new URL.
-      expandLink(1)
+      collapseLink(1)
       expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
       expect(screen.getByText('TikTok')).toBeTruthy()
       expect(screen.queryByText('Spotify')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('CRITICAL: clicking outside an open social row closes it too', () => {
+    // The same rule as the Style panel (Sam, 2026-08-14). Pinned per PANEL because the
+    // boundary ref is wired per panel — Style passing is no evidence Links does.
+    openLinks()
+    expandLink(1)
+    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
+  })
+
+  it('typing in an open social row never closes it', () => {
+    // The field lives inside the boundary; a mousedown to focus it must not collapse
+    // the row out from under the cursor.
+    openLinks()
+    expandLink(1)
+    fireEvent.mouseDown(screen.getByLabelText('Social link 1 URL'))
+    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
+    // WITNESS: prove the listener is actually armed. Without this, an unattached
+    // boundary ref makes the assertion above vacuously true — nothing would close the
+    // row, so "it stayed open" would prove nothing at all.
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
   })
 
   it('removes a link optimistically via deleteContentAction', () => {
@@ -1476,6 +1504,74 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     expect(screen.getAllByText('Footer')).toHaveLength(1)
+  })
+
+  it('CRITICAL: an OPEN row shows an X, not a pencil — and it closes the row', () => {
+    // Sam, 2026-08-14: "the edit button should be an x to close it". The pencil is also
+    // hover-gated (opacity-0); an open row's X must be visible without hovering, or the
+    // only affordance for closing is invisible.
+    renderInspector([], {
+      styleRegions: [{ key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page background' }))
+    expect(screen.getByLabelText('Page background Background color hex')).toBeTruthy() // open
+    const close = screen.getByRole('button', { name: 'Close Page background' })
+    expect(screen.queryByRole('button', { name: 'Edit Page background' })).toBeNull() // swapped
+    expect(close.className).not.toContain('opacity-0') // visible without a hover
+    fireEvent.click(close)
+    expect(screen.queryByLabelText('Page background Background color hex')).toBeNull()
+  })
+
+  it('CRITICAL: clicking anywhere outside an open row closes it', () => {
+    // "when the editing panel is open, hitting the x or tapping anywhere else should
+    // close it" (Sam, 2026-08-14).
+    renderInspector([], {
+      styleRegions: [{ key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page background' }))
+    expect(screen.getByLabelText('Page background Background color hex')).toBeTruthy()
+    fireEvent.mouseDown(document.body) // a click on empty panel chrome
+    expect(screen.queryByLabelText('Page background Background color hex')).toBeNull()
+  })
+
+  it('CRITICAL: clicking a CONTROL inside the open body does not close it', () => {
+    // The mirror of the rule above, and the one that makes it safe: every drag of a
+    // slider starts with a mousedown INSIDE the body. Close on those and the panel
+    // shuts the instant the manager tries to use it.
+    renderInspector([], {
+      styleRegions: [{ key: 'masthead', label: 'Masthead bar', base: 'flex border-b px-6 py-4', scope: 'chrome' }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Masthead bar' }))
+    const pad = screen.getByLabelText('Masthead bar Padding')
+    fireEvent.mouseDown(pad)
+    expect(screen.getByLabelText('Masthead bar Padding')).toBeTruthy() // still open
+    // …and the row's own header is inside too, so clicking its label never shuts it.
+    fireEvent.mouseDown(screen.getByText('Masthead bar'))
+    expect(screen.getByLabelText('Masthead bar Padding')).toBeTruthy()
+    // WITNESS: prove the listener is armed at all. An unattached boundary ref closes
+    // NOTHING, which would make both assertions above vacuously true.
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByLabelText('Masthead bar Padding')).toBeNull()
+  })
+
+  it('opening a SECOND row closes the first — one open row at a time', () => {
+    renderInspector([], {
+      styleRegions: [
+        { key: 'page', label: 'Page background', base: 'bg-paper', scope: 'site' },
+        { key: 'masthead', label: 'Masthead bar', base: 'flex border-b px-6 py-4', scope: 'chrome' },
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Page background' }))
+    // The outside-click listener fires on mousedown, the open on click — so the second
+    // row must still end up OPEN, not closed by its own opening gesture.
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Edit Masthead bar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Masthead bar' }))
+    expect(screen.getByLabelText('Masthead bar Padding')).toBeTruthy()
+    expect(screen.queryByLabelText('Page background Background color hex')).toBeNull()
   })
 
   it('CRITICAL: a heading-suppressed group still breaks from the group above it', () => {

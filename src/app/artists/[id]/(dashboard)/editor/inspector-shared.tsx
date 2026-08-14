@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 
@@ -206,17 +207,71 @@ export function EditRow({
         )}
       </div>
       {trailing}
+      {/* OPEN rows carry an X, not a pencil (Sam, 2026-08-14: "the edit button should be
+          an x to close it") — and it is NOT hover-gated. The pencil may fade in on hover
+          because a closed row is quiet by design; the only way to shut an open one must
+          be visible the moment it opens, or the affordance is a secret. */}
       <button
         type="button"
         onClick={onEdit}
-        aria-label={`Edit ${editLabel ?? label}`}
+        aria-label={`${expanded ? 'Close' : 'Edit'} ${editLabel ?? label}`}
         aria-expanded={expanded}
-        className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+        className={cx(
+          'flex-none text-ink-faint transition-opacity hover:text-ink focus-visible:opacity-100',
+          expanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
       >
-        <Icon name="edit" size={16} />
+        <Icon name={expanded ? 'close' : 'edit'} size={16} />
       </button>
     </div>
   )
+}
+
+/**
+ * Close an expanded row when the manager clicks ANYWHERE outside it (Sam, 2026-08-14:
+ * "when the editing panel is open, hitting the x or tapping anywhere else should close
+ * it"). Attach the returned ref to the wrapper that holds BOTH the row header and its
+ * expanded body — everything inside is "still working in here".
+ *
+ * `mousedown`, not `click`, for two reasons. It fires before the click that OPENS another
+ * row, so switching rows lands open-on-the-new-one rather than closing what the second
+ * click just opened. And a slider drag that starts inside the body but releases outside it
+ * (the handle at the far right, the pointer drifting off the panel) never sees a `click`
+ * on the body at all — on `click` semantics that drag would shut the panel mid-adjust.
+ *
+ * Escape closes too: same intent, and it is the one gesture that works when the open body
+ * covers everything a manager might otherwise click.
+ */
+export function useCollapseOnOutsideClick(
+  isOpen: boolean,
+  onClose: () => void,
+): React.RefObject<HTMLDivElement | null> {
+  const ref = useRef<HTMLDivElement>(null)
+  // The callback lives in a ref so the listener subscribes ONCE per open, instead of
+  // tearing down and re-adding on every parent render (every keystroke, every slider tick).
+  const close = useRef(onClose)
+  // Written in an effect, never during render: React's rule, and the timing is free
+  // here because the listener can only fire after a commit.
+  useEffect(() => {
+    close.current = onClose
+  })
+  useEffect(() => {
+    if (!isOpen) return
+    const onDown = (e: MouseEvent) => {
+      const el = ref.current
+      if (el && e.target instanceof Node && !el.contains(e.target)) close.current()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close.current()
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [isOpen])
+  return ref
 }
 
 /** The brief empty state for a manifest-slot panel (Images, Videos, site Links). When the

@@ -18,6 +18,7 @@ import {
   GroupLabel,
   PANEL_BODY,
   CONTROL_LABEL,
+  useCollapseOnOutsideClick,
 } from '../inspector-shared'
 import { useStyleRegionSave } from '../use-style-save'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
@@ -203,6 +204,8 @@ export function StyleTools({
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<string | null>(null)
   const rowRefs = useRef<Map<string, HTMLElement | null>>(new Map())
+  // A click anywhere outside the open row (or Escape) collapses it.
+  const openRef = useCollapseOnOutsideClick(open !== null, () => setOpen(null))
   const { status, save } = useStyleRegionSave(artistId, onApplyStyle)
 
   const controls = useMemo(() => buildStyleControls(options), [options])
@@ -300,14 +303,18 @@ export function StyleTools({
             return (
               <div
                 key={r.key}
+                // Two refs on one node: the scroll-into-view map, and (for the OPEN row
+                // only) the outside-click boundary — everything inside this wrapper,
+                // header and body alike, counts as "still editing this region".
                 ref={(el) => {
                   rowRefs.current.set(r.key, el)
+                  if (isOpen) openRef.current = el
                 }}
               >
                 {/* Version-A row: just the region name, a hover pencil (Sam,
                     2026-08-12 — no "Paper · 2px" value line). The pencil reveals the
-                    controls inline below, the same as the Links rows. */}
-                <EditRow label={rowLabel} onEdit={() => setOpen(isOpen ? null : r.key)} />
+                    controls inline below, the same as the Links rows; open, it is an X. */}
+                <EditRow label={rowLabel} expanded={isOpen} onEdit={() => setOpen(isOpen ? null : r.key)} />
                 {isOpen && (
                   <div className={PANEL_BODY}>
                     {/* Site-wide regions get SURFACE controls only (controlsForRegion):

@@ -84,6 +84,56 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     expect(bar.find((c) => c.id === 'justify')).toBeUndefined()
   })
 
+  it('CRITICAL: a site-scope region whose base sets vertical padding gets a Spacing slider', () => {
+    // The vertical rhythm BETWEEN sections (Juniper's `py-12` on every section block).
+    // It must emit `pady-` (top/bottom only): the all-sides `pad-` token would invent
+    // horizontal padding a full-width band never had.
+    const block = controlsForRegion(controls, {
+      key: 'section_block', label: 'Section spacing', base: 'border-t border-ink/15 py-12', scope: 'site',
+    })
+    const spacing = block.find((c) => c.id === 'sectionSpacing')
+    expect(spacing?.kind).toBe('slider')
+    if (spacing?.kind !== 'slider') throw new Error('unreachable')
+    expect(spacing.rank!('py-12')).toBe(48) // measures the base's own Tailwind rhythm
+    expect(spacing.rank!('pady-[64px]')).toBe(64)
+    expect(spacing.steps.every((s) => !s.value.startsWith('pad-['))).toBe(true) // never all-sides
+    // Applying REPLACES the base's py-* and keeps everything it does not own.
+    expect(applyStyleValue('border-t border-ink/15 py-12', spacing, 'pady-[64px]')).toBe(
+      'border-t border-ink/15 pady-[64px]',
+    )
+    // A site-scope region with no vertical padding in its base does not get it.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' })
+    expect(page.find((c) => c.id === 'sectionSpacing')).toBeUndefined()
+  })
+
+  it('CRITICAL: Spacing never eats a band\'s SIDE gutters', () => {
+    // skeen's bands wear `px-6 pb-24 pt-16`. A vertical control that owned every padding
+    // utility would strip `px-6` on the first drag and shove the content to the window
+    // edge — a silent regression with nothing on screen to explain it.
+    const band = controlsForRegion(controls, {
+      key: 'shows_section', label: 'Tour section', base: 'mx-auto max-w-6xl px-6 pb-24 pt-16', scope: 'site',
+    })
+    const spacing = band.find((c) => c.id === 'sectionSpacing')!
+    expect(spacing.owns('px-6')).toBe(false)
+    expect(spacing.owns('p-4')).toBe(false) // all-sides is the other control's business
+    expect(spacing.owns('pt-16')).toBe(true)
+    expect(spacing.owns('pb-24')).toBe(true)
+    expect(applyStyleValue('mx-auto max-w-6xl px-6 pb-24 pt-16', spacing, 'pady-[48px]')).toBe(
+      'mx-auto max-w-6xl px-6 pady-[48px]',
+    )
+  })
+
+  it('CRITICAL: a CHROME bar keeps all-sides Padding and never grows a second spacing slider', () => {
+    // The bars wear `py-4`, which the Spacing control would also claim — two controls
+    // owning one token fight over it. Sam's 2026-08-14 call stands: bars keep NORMAL
+    // all-sides padding, so the vertical control is site-scope only.
+    const bar = controlsForRegion(controls, {
+      key: 'masthead', label: 'Masthead', base: 'flex border-b px-6 py-4', scope: 'chrome',
+    })
+    expect(bar.find((c) => c.id === 'sectionSpacing')).toBeUndefined()
+    expect(bar.find((c) => c.id === 'pad')).toBeTruthy()
+  })
+
   it('CRITICAL: a region whose base caps its width (max-w-*) gets a Width slider that MEASURES the cap', () => {
     // The content column (mx-auto max-w-3xl px-6). The slider must park ON the base's own
     // compiled cap — max-w-3xl is 768px — so the first drag right is always WIDER than

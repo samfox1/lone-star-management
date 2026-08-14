@@ -48,6 +48,7 @@ import {
   FEATHER_STEPS,
   FROST_STEPS,
   PAD_STEPS,
+  PAD_Y_STEPS,
   GAP_STEPS,
   ICON_SIZE_STEPS,
   CONTENT_WIDTH_STEPS,
@@ -738,6 +739,29 @@ const ALIGNABLE_JUSTIFY = new Set(['justify-start', 'justify-center', 'justify-e
  *  the socials group). Extracted so the site/chrome and icons branches use one control. */
 const GAP_CONTROL: StyleControl = { id: 'gap', label: 'Gap', kind: 'slider', steps: GAP_STEPS, rank: gapRank, owns: ownsGap }
 
+/** The vertical rhythm BETWEEN sections (Sam, 2026-08-14): one slider for the top/bottom
+ *  inset every section block wears. Emits `pady-` — top/bottom longhands only — because
+ *  a full-width band's horizontal padding lands in gutters that are already empty, the
+ *  same reason the page band lost its all-sides control. Owns the base's own `py-*` so
+ *  the handle parks at the real rhythm and a pick REPLACES it rather than stacking. */
+/*  VERTICAL TOKENS ONLY — deliberately NOT the shared `ownsPad`, which matches every
+ *  padding utility including `px-6` and bare `p-4`. A vertical control that owned those
+ *  would DELETE a band's side gutters (skeen's sections wear `px-6 pb-24 pt-16`) the
+ *  first time someone touched the spacing, and nothing on screen would explain why. */
+const TW_PAD_Y_RE = /^p[tby]-(\d+(?:\.\d+)?)$/
+const ownsSectionSpacing = (t: string) => t.startsWith('pady-[') || TW_PAD_Y_RE.test(t)
+const sectionSpacingRank = (t: string): number | null => {
+  if (t === '') return null
+  const arb = /^pady-\[(\d{1,3})px\]$/.exec(t)
+  if (arb) return Number(arb[1])
+  const tw = TW_PAD_Y_RE.exec(t)
+  return tw ? Number(tw[1]) * 4 : null
+}
+const SECTION_SPACING_CONTROL: StyleControl = {
+  id: 'sectionSpacing', label: 'Spacing', kind: 'slider',
+  steps: PAD_Y_STEPS, rank: sectionSpacingRank, owns: ownsSectionSpacing,
+}
+
 /** Tailwind's named max-w caps in px — what a content column's compiled base wears, so
  *  the Width slider can MEASURE it and park the handle on the real value (max-w-3xl →
  *  768). Derived from Tailwind's own scale; an unknown name ranks null → mid-rest. */
@@ -884,6 +908,10 @@ export function controlsForRegion(
   // band is a control that reads as doing nothing until you drag far enough to notice —
   // and the chrome bars already have their own % Width.
   if (region.scope === 'site' && base.some((t) => maxWidthRank(t) != null)) out.push(CONTENT_WIDTH_CONTROL)
+  // Vertical rhythm, for a site-scope block that declares one (`py-*`). SITE ONLY: a
+  // chrome bar's `py-4` is its HEIGHT knob and already belongs to the all-sides Padding
+  // control (Sam, 2026-08-14) — offering both would put two controls on one token.
+  if (region.scope === 'site' && base.some((t) => ownsSectionSpacing(t))) out.push(SECTION_SPACING_CONTROL)
   return out
 }
 

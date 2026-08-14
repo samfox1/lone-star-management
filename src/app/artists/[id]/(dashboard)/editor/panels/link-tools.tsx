@@ -16,6 +16,7 @@ import {
   INVALID_FIELD,
   FIELD,
   FIELD_ON_TINT,
+  useCollapseOnOutsideClick,
 } from '../inspector-shared'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
@@ -79,6 +80,8 @@ export function SiteLinkTools({
   // pencil is pressed (Sam, 2026-08-12: "the link shouldn't appear editable until the
   // edit button is pressed") — then a box drops below the row. One open at a time.
   const [openKey, setOpenKey] = useState<string | null>(null)
+  // A click anywhere outside the open row (or Escape) collapses it.
+  const openRef = useCollapseOnOutsideClick(openKey !== null, () => setOpenKey(null))
 
   // A click on the button IN THE FRAME opens its row. Reset-on-prop-change DURING render
   // (the repo's sanctioned pattern), not in an effect — an effect setState cascades a
@@ -115,7 +118,7 @@ export function SiteLinkTools({
         const url = text[r.key] ?? ''
         const isOpen = openKey === r.key
         return (
-          <div key={r.key}>
+          <div key={r.key} ref={isOpen ? openRef : undefined}>
             {/* The URL is plain text until the pencil opens the box (no "lit" editable
                 link, no bolt icon). The site's `description` rides the row's hover title
                 and the box's accessible description, so it never costs a row. */}
@@ -124,6 +127,7 @@ export function SiteLinkTools({
                 label={r.label}
                 value={url || 'Add a link'}
                 empty={!url}
+                expanded={isOpen}
                 onEdit={() => setOpenKey(isOpen ? null : r.key)}
               />
             </div>
@@ -163,14 +167,25 @@ export function SiteLinkTools({
  *  handler and class passes straight through. */
 function FocusScroll({
   focused,
+  boundaryRef,
   children,
   ...rest
 }: { focused: boolean; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement> & {
   draggable?: boolean
+  /** Published to the caller when this row is the OPEN one, so the outside-click
+   *  hook can tell "inside the row I'm editing" from "somewhere else". */
+  boundaryRef?: React.RefObject<HTMLDivElement | null>
 }) {
   const ref = useScrollIntoFocus<HTMLDivElement>(focused)
   return (
-    <div ref={ref} aria-current={focused ? 'true' : undefined} {...rest}>
+    <div
+      ref={(el) => {
+        ref.current = el
+        if (boundaryRef) boundaryRef.current = el
+      }}
+      aria-current={focused ? 'true' : undefined}
+      {...rest}
+    >
       {children}
     </div>
   )
@@ -218,6 +233,8 @@ export function LinkTools({
   // Which row is expanded. Rows collapse to just their label; clicking one opens the
   // edit/remove controls below it (single-open accordion — keeps the list short).
   const [open, setOpen] = useState<string | null>(null)
+  // A click anywhere outside the open row (or Escape) collapses it.
+  const rowOpenRef = useCollapseOnOutsideClick(open !== null, () => setOpen(null))
 
   // A social selected in the FRAME lands as `item:link:<label lowercased>` — join by the
   // same normalization and OPEN that row, or the "selected link" is a closed accordion
@@ -277,6 +294,7 @@ export function LinkTools({
           <FocusScroll
             key={l.id}
             focused={isFocused}
+            boundaryRef={isOpen ? rowOpenRef : undefined}
             draggable
             onDragStart={() => (dragFrom.current = i)}
             onDragEnter={() => setDragOver(i)}
