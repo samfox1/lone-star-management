@@ -50,6 +50,7 @@ import {
   PAD_STEPS,
   GAP_STEPS,
   ICON_SIZE_STEPS,
+  CONTENT_WIDTH_STEPS,
   SECTION_WIDTH_STEPS,
   SECTION_HEIGHT_STEPS,
   DECO_THICKNESS_STEPS,
@@ -737,6 +738,30 @@ const ALIGNABLE_JUSTIFY = new Set(['justify-start', 'justify-center', 'justify-e
  *  the socials group). Extracted so the site/chrome and icons branches use one control. */
 const GAP_CONTROL: StyleControl = { id: 'gap', label: 'Gap', kind: 'slider', steps: GAP_STEPS, rank: gapRank, owns: ownsGap }
 
+/** Tailwind's named max-w caps in px — what a content column's compiled base wears, so
+ *  the Width slider can MEASURE it and park the handle on the real value (max-w-3xl →
+ *  768). Derived from Tailwind's own scale; an unknown name ranks null → mid-rest. */
+const MAX_W_PX: Record<string, number> = {
+  'max-w-xs': 320, 'max-w-sm': 384, 'max-w-md': 448, 'max-w-lg': 512, 'max-w-xl': 576,
+  'max-w-2xl': 672, 'max-w-3xl': 768, 'max-w-4xl': 896, 'max-w-5xl': 1024,
+  'max-w-6xl': 1152, 'max-w-7xl': 1280,
+}
+/** Does this token cap a width — the base's own (`max-w-3xl`, `max-w-[Npx]`) or the
+ *  editor's (`maxw-[Npx]`, `maxw-full`)? Applying must strip BOTH: two caps on one
+ *  element is a fight the narrower one always wins. */
+const ownsMaxWidth = (t: string) => t.startsWith('maxw-') || t.startsWith('max-w-')
+const maxWidthRank = (t: string): number | null => {
+  if (t === 'maxw-full' || t === 'max-w-full' || t === 'max-w-none') return 10_000 // past every px step
+  const arb = /^(?:maxw|max-w)-\[(\d{3,4})px\]$/.exec(t)
+  if (arb) return Number(arb[1])
+  return MAX_W_PX[t] ?? null
+}
+/** Content-column width, offered only where the base actually caps one (max-w-*). */
+const CONTENT_WIDTH_CONTROL: StyleControl = {
+  id: 'contentWidth', label: 'Width', kind: 'slider',
+  steps: CONTENT_WIDTH_STEPS, rank: maxWidthRank, owns: ownsMaxWidth,
+}
+
 /** Icon size for an icon group — one value scales every icon (they read `--lse-icon-size`). */
 const ICON_SIZE_CONTROL: StyleControl = {
   id: 'iconSize', label: 'Icon size', kind: 'slider', steps: ICON_SIZE_STEPS, rank: iconSizeRank, owns: ownsIconSize,
@@ -854,6 +879,11 @@ export function controlsForRegion(
   // Gap between a region's items — same flex/grid requirement, plus a `gap-*` base class
   // (the hero row's name↔portrait gutter, the socials row).
   if (isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-['))) out.push(GAP_CONTROL)
+  // Content width, for a region whose base CAPS one (the mx-auto max-w-* column). Gated
+  // on the cap the same way Gap is gated on gap-*: a max-width on an uncapped full-bleed
+  // band is a control that reads as doing nothing until you drag far enough to notice —
+  // and the chrome bars already have their own % Width.
+  if (region.scope === 'site' && base.some((t) => maxWidthRank(t) != null)) out.push(CONTENT_WIDTH_CONTROL)
   return out
 }
 

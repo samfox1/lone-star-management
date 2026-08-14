@@ -1477,6 +1477,22 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     expect(screen.getAllByText('Footer')).toHaveLength(1)
   })
+
+  it('CRITICAL: a heading-suppressed group still breaks from the group above it', () => {
+    // The other half of the double-header fix (Sam, 2026-08-14: "the footer lies under
+    // the hero section … The footer should be its own thing"). Suppressing the "Footer"
+    // heading must not let the bare row visually attach to the "Hero" group above — the
+    // group boundary renders as a separator even when its text is dropped.
+    renderInspector([], {
+      styleRegions: [
+        { key: 'hero', label: 'Hero layout', base: 'grid', group: 'Hero', scope: 'site' },
+        { key: 'footer', label: 'Footer', base: 'border-t', group: 'Footer', scope: 'chrome' },
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    expect(screen.getAllByText('Footer')).toHaveLength(1) // suppression itself still holds
+    expect(screen.getByRole('separator')).toBeTruthy() // …but the boundary survives it
+  })
 })
 
 describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)', () => {

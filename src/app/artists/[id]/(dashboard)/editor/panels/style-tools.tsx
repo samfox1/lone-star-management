@@ -281,9 +281,18 @@ export function StyleTools({
         // "Footer" row is one double header (Sam, 2026-08-12). With >1 row the heading
         // earns its place and each row drops the heading word instead.
         const showHeading = Boolean(group) && !(rows.length === 1 && sectionRowLabel(group, rows[0].label) === '')
+        // A suppressed heading must still BREAK from the group above: without the
+        // boundary, the bare "Footer" row reads as a child of "Hero" (Sam, 2026-08-14:
+        // "the footer should be its own thing"). Same rhythm as GroupLabel, no text.
+        const showRule = Boolean(group) && !showHeading
         return (
         <div key={group || '_'}>
           {showHeading && <GroupLabel>{group}</GroupLabel>}
+          {showRule && (
+            <div role="separator" className="px-5 pb-1 pt-4">
+              <span className="block h-px bg-hairline-soft" />
+            </div>
+          )}
           {rows.map((r) => {
             const cls = text[r.key] ?? ''
             const isOpen = open === r.key

@@ -635,6 +635,28 @@ describe('decoration dressing (2026-08-11)', () => {
   })
 })
 
+describe('content width — maxw- lifts to a centred max-width cap (Sam, 2026-08-14)', () => {
+  it('CRITICAL: maxw-[px] lifts to max-width + auto margins, and resets via the clear list', () => {
+    // The content column ships as a compiled cap (max-w-3xl). Widening past it can only
+    // happen inline — no site compiles maxw-[1120px] — and must re-centre, because the
+    // base's mx-auto survives only when the base keeps its own classes.
+    const r = resolveRegionStyle('content', '', 'mx-auto px-6 maxw-[1120px]')
+    expect(r.style.maxWidth).toBe('1120px')
+    expect(r.style.marginLeft).toBe('auto')
+    expect(r.style.marginRight).toBe('auto')
+    expect(r.className).toBe('mx-auto px-6')
+    expect(MANAGED_STYLE_PROPS).toContain('max-width')
+  })
+
+  it('maxw-full releases the cap entirely — the column goes full-bleed', () => {
+    expect(resolveRegionStyle('content', '', 'maxw-full').style.maxWidth).toBe('none')
+  })
+
+  it('3-digit widths lift too (a phone-width column is a real choice)', () => {
+    expect(resolveRegionStyle('content', '', 'maxw-[480px]').style.maxWidth).toBe('480px')
+  })
+})
+
 describe('section geometry — width and height lift inline (Sam, 2026-08-12)', () => {
   it('CRITICAL: width centres the band; height is a FLOOR; both reset via the clear list', () => {
     // "All 3 sections have a width and height." Width narrows the bar and centres it

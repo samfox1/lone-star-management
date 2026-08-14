@@ -314,6 +314,13 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // base's horizontal padding (a bar's `px-6` side gutters) survives underneath.
   m = token.match(/^pady-\[(\d{1,3})px\]$/);
   if (m) return { paddingTop: `${m[1]}px`, paddingBottom: `${m[1]}px` };
+  // Content width: the cap on a centred content column (the site's max-w-* container).
+  // A px cap because the base's own cap is one (max-w-3xl = 768px); auto margins keep
+  // the column centred even on a base that lost its mx-auto. `maxw-full` releases the
+  // cap entirely — full-bleed content inside the page band.
+  if (token === "maxw-full") return { maxWidth: "none" };
+  m = token.match(/^maxw-\[(\d{3,4})px\]$/);
+  if (m) return { maxWidth: `${m[1]}px`, marginLeft: "auto", marginRight: "auto" };
   // Section geometry: width narrows AND centres the band (auto margins — the page
   // shows at the sides); height is a FLOOR, so content can still grow past it.
   m = token.match(/^secw-\[(\d{1,3})%\]$/);
@@ -394,6 +401,7 @@ export const MANAGED_STYLE_PROPS = [
   "margin-left",
   "margin-right",
   "min-height",
+  "max-width",
 ] as const;
 
 export type ResolvedStyle = {

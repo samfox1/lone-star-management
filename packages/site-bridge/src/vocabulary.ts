@@ -226,6 +226,18 @@ export const GAP_STEPS = pxSteps('gap', 0, 64, 4, 'None')
  *  value scales them all consistently. `''` = the site's own default. */
 export const ICON_SIZE_STEPS = pxSteps('iconsize', 12, 40, 2, 'Default')
 
+/** Content-column width cap (Sam, 2026-08-14: "control the width that this content
+ *  has"). Real px values low → high — the editor's slider parks on the base's own
+ *  compiled cap (max-w-3xl = 768px) by MEASURING it, so dragging right is always wider
+ *  than what's on screen. `maxw-full` at the top end releases the cap entirely. */
+export const CONTENT_WIDTH_STEPS: StyleOption[] = [
+  ...[480, 560, 640, 720, 768, 832, 896, 960, 1024, 1120, 1216, 1280, 1360, 1440].map((px) => ({
+    value: `maxw-[${px}px]`,
+    label: `${px}px`,
+  })),
+  { value: 'maxw-full', label: 'Full' },
+]
+
 /** Section geometry (Sam, 2026-08-12: the header bar, the body band and the footer
  *  each get a width and a height). WIDTH: `''` is the 100% right end — a section is
  *  full-bleed by default — and the floor is 40%, because a 0%-wide bar is an invisible

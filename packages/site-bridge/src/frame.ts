@@ -558,11 +558,14 @@ export function mountFrameBridge(options: {
    *  mounting for any reason at all would have stolen the ring back). */
   let cancelWait: (() => void) | null = null;
 
+  // scrollIntoView is optional-called throughout: jsdom (every site's test env) has no
+  // layout and does not implement it, and a highlight that lands minus the scroll is
+  // strictly better than an exception mid-apply.
   const revealAndHighlight = (target: SelectTarget) => {
     // Whatever was being waited for, this selection supersedes it.
     cancelWait?.();
     const found = applyHighlightToDom(document, target);
-    if (found) return found.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (found) return found.scrollIntoView?.({ behavior: "smooth", block: "center" });
     // Nothing matched. If the site can show it, ask — then wait for it to arrive.
     if (!options.onReveal) return;
     options.onReveal(target);
@@ -571,7 +574,7 @@ export function mountFrameBridge(options: {
     // fires on FUTURE mutations, so observing first would wait out the timeout for an
     // element sitting right there. (Found by the test, 2026-08-10.)
     const now = applyHighlightToDom(document, target);
-    if (now) return now.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (now) return now.scrollIntoView?.({ behavior: "smooth", block: "center" });
     waitForRegion(target);
   };
 
@@ -587,7 +590,7 @@ export function mountFrameBridge(options: {
       cancelWait = null;
       observer.disconnect();
       clearTimeout(timer);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     };
     const observer = new MutationObserver(() => {
       const el = applyHighlightToDom(document, target);

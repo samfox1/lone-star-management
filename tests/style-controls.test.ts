@@ -84,6 +84,26 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     expect(bar.find((c) => c.id === 'justify')).toBeUndefined()
   })
 
+  it('CRITICAL: a region whose base caps its width (max-w-*) gets a Width slider that MEASURES the cap', () => {
+    // The content column (mx-auto max-w-3xl px-6). The slider must park ON the base's own
+    // compiled cap — max-w-3xl is 768px — so the first drag right is always WIDER than
+    // what's on screen, never a jump to the scale's far end (the size-slider lesson).
+    const content = controlsForRegion(controls, {
+      key: 'content', label: 'Content', base: 'mx-auto max-w-3xl px-6', scope: 'site',
+    })
+    const width = content.find((c) => c.id === 'contentWidth')
+    expect(width?.kind).toBe('slider')
+    if (width?.kind !== 'slider') throw new Error('unreachable')
+    expect(width.rank!('max-w-3xl')).toBe(768) // measures the compiled base cap
+    expect(width.rank!('maxw-[1120px]')).toBe(1120) // measures its own token
+    expect(width.rank!('maxw-full')).toBeGreaterThan(1440) // Full ranks past every px step
+    // Applying REPLACES the base cap — two max-widths on one element is a fight.
+    expect(applyStyleValue('mx-auto max-w-3xl px-6', width, 'maxw-[1120px]')).toBe('mx-auto px-6 maxw-[1120px]')
+    // A site-scope region with no width cap (the page band) gets no Width control.
+    const page = controlsForRegion(controls, { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' })
+    expect(page.find((c) => c.id === 'contentWidth')).toBeUndefined()
+  })
+
   it('a region whose base sets a gap gets a Gap slider that MEASURES that gap; one without does not', () => {
     const hero = controlsForRegion(controls, {
       key: 'hero', label: 'Hero', base: 'grid gap-8 md:grid-cols-[auto_260px] justify-center', scope: 'site',
