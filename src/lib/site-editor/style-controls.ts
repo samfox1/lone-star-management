@@ -724,7 +724,11 @@ function sectionColorControl(
 // (frost left 2026-08-12, minutes after size and for the same reason: backdrop-blur
 // only shows through a TRANSLUCENT background over layered content, and chrome bars
 // sit opaque in normal flow — a control that reads as doing nothing.)
-const SITE_SCOPE_CONTROL_IDS = new Set(['pad', 'bgColor'])
+// The page BACKGROUND (scope 'site') offers ONE colour and nothing else: vertical padding
+// there had no useful effect on a full-bleed band around a centred column, so it was pulled
+// (Sam, 2026-08-14). Padding lives on the CHROME bars only now, where it is the bar-height
+// knob. An allowlist, deliberately — a control added later stays off unless it opts in.
+const SITE_SCOPE_CONTROL_IDS = new Set(['bgColor'])
 /** The border-side utilities a base can draw its divider with. */
 const DIVIDER_SIDES = new Set(['border', 'border-t', 'border-b', 'border-l', 'border-r', 'border-x', 'border-y'])
 /** The justify utilities that mean "orient this block" — the ones the Alignment control
@@ -759,12 +763,10 @@ export function controlsForRegion(
   region: ManifestStyleRegion,
 ): StyleControl[] {
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
-  // Padding on a site-wide region is VERTICAL only (Sam, 2026-08-13): the page band and
-  // the bars wrap a centred column, so all-sides padding's horizontal half lands in empty
-  // gutters and reads as nothing. Swap the generic all-sides 'pad' for the vertical one.
-  const out = controls
-    .filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
-    .map((c) => (c.id === 'pad' ? VERT_PAD_CONTROL : c))
+  const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
+  // Vertical padding is a CHROME-bar control (the bar-height knob). Dropped from the page
+  // background, where it did nothing useful (Sam, 2026-08-14).
+  if (region.scope === 'chrome') out.push(VERT_PAD_CONTROL)
   // Geometry belongs to the CHROME bars only (Sam, 2026-08-12: "drop height and
   // width from the middle") — the body band stands taller than every height step,
   // so a floor never engages there, and narrowing it reads as a rightward push.

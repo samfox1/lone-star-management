@@ -38,22 +38,21 @@ const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
 
 describe('controlsForRegion — a site-wide region styles the SURFACE only', () => {
-  it('CRITICAL: a site-wide region offers padding and ONE color — nothing else', () => {
-    // Sam, 2026-08-12: "just one color, no gradient at the moment"; text Size left the
-    // page ("the size dropdown has no effect… it shouldn't need to be on the site
-    // background") — bar height is the padding slider's job — and frost followed for
-    // the same reads-as-doing-nothing reason. ALLOWLIST, not blocklist.
+  it('CRITICAL: the page BACKGROUND offers ONE color and nothing else — no padding', () => {
+    // Sam, 2026-08-12: "just one color, no gradient"; text Size + frost left as reads-as-
+    // doing-nothing. Vertical padding followed on 2026-08-14 — it had no useful effect on
+    // a full-bleed band around a centred column, so the page keeps only its colour.
     const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    expect(page.map((c) => c.id).sort()).toEqual(['bgColor', 'pad'])
+    expect(page.map((c) => c.id).sort()).toEqual(['bgColor'])
   })
 
-  it('CRITICAL: site/chrome padding is VERTICAL only — labelled so, emits pady-, migrates legacy pad-', () => {
-    // A full-bleed band around a centred column can't show a horizontal inset (Sam,
-    // 2026-08-13), so the scoped pad slider writes top/bottom only. It keeps id 'pad'
-    // but swaps token + label, and still ranks/strips a legacy all-sides pad- so a
-    // region padded before the switch migrates on the next pick.
-    const page = controlsForRegion(controls, { key: 'page', label: 'Page', scope: 'site' })
-    const pad = page.find((c) => c.id === 'pad')!
+  it('CRITICAL: chrome-bar padding is VERTICAL only — labelled so, emits pady-, migrates legacy pad-', () => {
+    // Padding lives on the CHROME bars now (the bar-height knob), not the page. A bar wraps
+    // a centred column too, so the slider writes top/bottom only. It keeps id 'pad' but
+    // swaps token + label, and still ranks/strips a legacy all-sides pad- so a bar padded
+    // before the switch migrates on the next pick.
+    const bar = controlsForRegion(controls, { key: 'masthead', label: 'Masthead', scope: 'chrome' })
+    const pad = bar.find((c) => c.id === 'pad')!
     if (pad.kind !== 'slider') throw new Error('unreachable')
     expect(pad.label).toBe('Vert padding')
     expect(pad.steps.some((s) => s.value.startsWith('pady-['))).toBe(true)

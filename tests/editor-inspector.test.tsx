@@ -1267,12 +1267,12 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.getByLabelText('Chrome Vert padding')).toBeTruthy()
   })
 
-  it('a site-wide region offers padding, ONE color, frost — and the divider only where the base draws one', () => {
+  it('the page background offers ONE color and nothing else — padding is the chrome bars\'', () => {
     // The component half of controlsForRegion's rule (the id list is pinned in
     // tests/style-controls.test.ts): the rendered rows really match the allowlist.
     openStyle({ styleRegions: PAGE_REGIONS })
     expand('Page')
-    expect(screen.getByLabelText('Page Vert padding')).toBeTruthy()
+    expect(screen.queryByLabelText('Page Vert padding')).toBeNull() // pulled 2026-08-14
     // Geometry is the CHROME bars' (Sam: "drop height and width from the middle").
     expect(screen.queryByLabelText('Page Width')).toBeNull()
     expect(screen.queryByLabelText('Page Height')).toBeNull()
@@ -1350,22 +1350,26 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 
   it('Revert changes walks every touched region back to its session-start value', async () => {
-    // Two site-wide regions (the browse list can open several rows; a focus shows one):
-    // page starts with NO stored row (before = null → revert deletes via ''); chrome
-    // starts with a stored override (before = that string → revert restores it).
-    openStyle({ styleRegions: PAGE_REGIONS, styleValues: { chrome: 'border-t text-lg' } })
-    expand('Page')
-    // Frost is a slider: the range input's value is a STEP INDEX, not a class.
-    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '1' } })
-    expand('Chrome')
-    fireEvent.change(screen.getByLabelText('Chrome Vert padding'), { target: { value: '1' } })
+    // Two chrome bars (the browse list can open several rows; both carry the padding
+    // slider): 'nav' starts with NO stored row (before = null → revert deletes via '');
+    // 'foot' starts with a stored override (before = that string → revert restores it).
+    const regions: ManifestStyleRegion[] = [
+      { key: 'nav', label: 'Nav', base: 'border-t', scope: 'chrome' },
+      { key: 'foot', label: 'Foot', base: 'border-b', scope: 'chrome' },
+    ]
+    openStyle({ styleRegions: regions, styleValues: { foot: 'border-b text-lg' } })
+    expand('Nav')
+    // Padding is a slider: the range input's value is a STEP INDEX, not a class.
+    fireEvent.change(screen.getByLabelText('Nav Vert padding'), { target: { value: '1' } })
+    expand('Foot')
+    fireEvent.change(screen.getByLabelText('Foot Vert padding'), { target: { value: '1' } })
     // Two keys touched → the session Cancel walks BOTH back.
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     })
-    // Reverse order: chrome (touched last) first, then the page.
-    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'chrome', 'border-t text-lg')
-    expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'page', '')
+    // Reverse order: foot (touched last) first, then nav.
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'foot', 'border-b text-lg')
+    expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'nav', '')
     // The ledger clears — Save/Cancel leave until something new is touched.
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
@@ -1476,14 +1480,16 @@ describe('EditorInspector — Style component (no-code controls)', () => {
 })
 
 describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)', () => {
+  // A chrome bar: it carries the padding slider (the page background no longer does), and
+  // the slider touches the ledger on `change` — no blur/commit needed like the colour hex.
   const REGIONS: ManifestStyleRegion[] = [
-    { key: 'page', label: 'Page', base: 'bg-paper', scope: 'site' },
+    { key: 'footer', label: 'Footer', base: 'border-t', scope: 'chrome' },
   ]
   const editPage = () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Page' }))
-    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
+    fireEvent.change(screen.getByLabelText('Footer Vert padding'), { target: { value: '1' } })
   }
 
   beforeEach(() => window.localStorage.clear())
@@ -1491,10 +1497,10 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
   it('CRITICAL: Save and Cancel appear together only once something is touched', () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Page' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
     // Nothing touched yet — no session bar.
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Footer Vert padding'), { target: { value: '1' } })
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
   })
@@ -1503,7 +1509,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     editPage()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     const dialog = screen.getByRole('dialog', { name: 'Confirm changes' })
-    expect(within(dialog).getByText('Style · page')).toBeTruthy() // the change is named
+    expect(within(dialog).getByText('Style · footer')).toBeTruthy() // the change is named
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     // Committed: the dialog closes and the session bar is gone.
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -1517,7 +1523,7 @@ describe('EditorInspector — the session Save / Cancel pair (Sam, 2026-08-12)',
     fireEvent.click(within(dialog).getByLabelText(/Don't ask me to confirm again/i))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     // Second session: Save commits immediately, no dialog.
-    fireEvent.change(screen.getByLabelText('Page Vert padding'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Footer Vert padding'), { target: { value: '2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
