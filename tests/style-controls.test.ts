@@ -12,6 +12,7 @@ import {
   buildVideoItemStyleControls,
   readStyleValue,
   sliderIndex,
+  sliderSteps,
   withUploadedFonts,
   buildTextItemStyleControls,
   controlsForRegion,
@@ -82,6 +83,41 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
       key: 'masthead', label: 'Masthead', base: 'flex justify-between px-6 py-4', scope: 'chrome',
     })
     expect(bar.find((c) => c.id === 'justify')).toBeUndefined()
+  })
+
+  it('CRITICAL: Icon size starts ON the row\'s real size, never at the far-left end', () => {
+    // Sam, 2026-08-14: "it starts far left and when I move it to the right it gets
+    // smaller. Have the slider start on its current size." Same shape as the text-size
+    // bug of 2026-08-12: an unset value matched the '' step sitting at INDEX 0, so the
+    // handle pinned left and the first nudge right applied 12px over a real 18/24px.
+    const socials = controlsForRegion(controls, {
+      key: 'socials', label: 'Social icons', base: 'flex gap-4 iconsize-[18px] text-ink/60', scope: 'icons',
+    })
+    const size = socials.find((c) => c.id === 'iconSize')!
+    if (size.kind !== 'slider') throw new Error('unreachable')
+    // The site DECLARES its size in the base, so the handle can sit exactly on it.
+    const parked = sliderIndex(size, readStyleValue(size, 'flex gap-4 iconsize-[18px] text-ink/60'))
+    expect(sliderSteps(size)[parked.idx].label).toBe('18px')
+    expect(parked.exact).toBe(true)
+    // Dragging right is BIGGER than what is on screen. This is the assertion the bug broke.
+    expect(sliderSteps(size)[parked.idx + 1].label).toBe('20px')
+    // And "Default" is never a position on the scale — no step may be the empty value,
+    // or an unset row pins left again for the next site that forgets to declare a size.
+    expect(sliderSteps(size).every((s) => s.value !== '')).toBe(true)
+  })
+
+  it('an icon row that declares NO size rests mid-scale, not at either end', () => {
+    // The safety net for a site that never declared one: mid-scale is honest about
+    // "unset", and both ends are lies.
+    const socials = controlsForRegion(controls, {
+      key: 'socials', label: 'Social icons', base: 'flex gap-4 text-ink/60', scope: 'icons',
+    })
+    const size = socials.find((c) => c.id === 'iconSize')!
+    if (size.kind !== 'slider') throw new Error('unreachable')
+    const { idx, label } = sliderIndex(size, readStyleValue(size, 'flex gap-4 text-ink/60'))
+    expect(idx).toBeGreaterThan(0) // NOT the far-left end
+    expect(idx).toBeLessThan(sliderSteps(size).length - 1)
+    expect(label).toBe('Default')
   })
 
   it('CRITICAL: a site-scope region whose base sets vertical padding gets a Spacing slider', () => {

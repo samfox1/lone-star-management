@@ -786,9 +786,22 @@ const CONTENT_WIDTH_CONTROL: StyleControl = {
   steps: CONTENT_WIDTH_STEPS, rank: maxWidthRank, owns: ownsMaxWidth,
 }
 
-/** Icon size for an icon group — one value scales every icon (they read `--lse-icon-size`). */
+/**
+ * Icon size for an icon group — one value scales every icon (they read `--lse-icon-size`).
+ *
+ * `defaultOffScale` is load-bearing (Sam, 2026-08-14: "it starts far left and when I move
+ * it to the right it gets smaller"). ICON_SIZE_STEPS opens with a `''` "Default" entry,
+ * and an un-styled row's value IS `''` — so it matched that entry EXACTLY and pinned the
+ * handle to index 0, the far-left end. The first nudge right then applied 12px over icons
+ * actually drawn at 18px or 24px. Filtering `''` out of the scale leaves only real,
+ * ascending sizes: a row whose base declares its size (`iconsize-[18px]`) parks exactly
+ * on it, and one that declares nothing rests mid-scale reading "Default" instead of at an
+ * end. Clearing moves to the explicit Reset button. Identical fix, and identical reason,
+ * to the text-size ladder of 2026-08-12.
+ */
 const ICON_SIZE_CONTROL: StyleControl = {
-  id: 'iconSize', label: 'Icon size', kind: 'slider', steps: ICON_SIZE_STEPS, rank: iconSizeRank, owns: ownsIconSize,
+  id: 'iconSize', label: 'Icon size', kind: 'slider', steps: ICON_SIZE_STEPS,
+  defaultOffScale: true, rank: iconSizeRank, owns: ownsIconSize,
 }
 
 /** Hover colour for an icon GROUP: emits ONLY the `hovercolor-[#hex]` var token (no
