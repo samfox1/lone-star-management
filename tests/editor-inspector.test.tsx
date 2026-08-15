@@ -2220,7 +2220,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.getByRole('heading', { name: 'Edit Slot 1' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Replace' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Revert changes/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Remove changes/ })).toBeTruthy()
     // The visual controls, keyed by the slot's label.
     expect(screen.getByLabelText('Slot 1 Size')).toBeTruthy()
     expect(screen.getByLabelText('Slot 1 Transparency')).toBeTruthy()
@@ -2246,7 +2246,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
     // Nothing staged yet → both exit buttons idle.
-    expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /Remove changes/ }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
     // The frame paints instantly; the DB is untouched.
@@ -2266,7 +2266,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
     fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: /Revert changes/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Remove changes/ }))
     // Repainted back to the saved state ('' — unstyled), nothing written.
     expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
     expect(saveStyleMock).not.toHaveBeenCalled()

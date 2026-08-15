@@ -1,7 +1,7 @@
 {
   "name": "@samfox1/site-bridge",
-  "version": "0.13.0",
-  "description": "The contract between the lone-star editor and a connected site: the bridge protocol, the wire payload, and the manifest schema. Framework-free — a site imports this instead of hand-mirroring it (SITE_BRIDGE_PLAN.md).",
+  "version": "0.14.2",
+  "description": "The contract between the lone-star editor and a connected site: the bridge protocol, the wire payload, and the manifest schema. Framework-free \u2014 a site imports this instead of hand-mirroring it (SITE_BRIDGE_PLAN.md).",
   "type": "module",
   "types": "./src/index.ts",
   "main": "./src/index.ts",
@@ -13,6 +13,10 @@
     "./payload": {
       "types": "./src/payload.ts",
       "default": "./src/payload.ts"
+    },
+    "./audit": {
+      "types": "./src/audit.ts",
+      "default": "./src/audit.ts"
     },
     "./public-site": {
       "types": "./src/public-site.ts",

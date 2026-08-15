@@ -12,6 +12,7 @@
  */
 export * from './payload'
 export * from './public-site'
+export * from './audit'
 export * from './markers'
 export * from './styles'
 export * from './frame'
