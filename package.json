@@ -24,7 +24,8 @@
     "tokens": "tsx scripts/generate-bridge-tokens.ts",
     "social-icons": "tsx scripts/generate-social-icons.ts",
     "mutation:changed": "tsx scripts/mutation-changed.ts",
-    "audit:regions": "tsx scripts/audit-regions.ts"
+    "audit:regions": "tsx scripts/audit-regions.ts",
+    "rebase:styles": "tsx scripts/rebase-styles.ts"
   },
   "dependencies": {
     "@lone-star/music-rules": "*",
