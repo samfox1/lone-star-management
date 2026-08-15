@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { GroupLabel, SCROLL_BODY, type SaveStatus } from './inspector-shared'
+import { GroupLabel, SCROLL_BODY, EYEBROW, plural, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
 import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import {
@@ -42,6 +42,7 @@ import {
   SiteTools,
 } from './panels'
 import type { CursorSettings } from '@samfox1/site-bridge/cursor'
+import type { PublishMoment } from '@/lib/content'
 import {
   assignComponentSlotAction,
   setSongsOnSiteAction,
@@ -54,6 +55,7 @@ import {
   saveEditorStyleAction,
   setOnSiteAction,
   restorePublishedAction,
+  listPublishMomentsAction,
 } from '../actions'
 import { useSessionJournal } from './use-session-journal'
 import { useTextFieldSave } from './use-text-save'
@@ -453,11 +455,11 @@ export function EditorInspector({
    * return to, so undo means the session walk-back below — the best available reading of
    * "put it back", and the one Sam picked for that case.
    */
-  async function undoChanges() {
+  async function undoChanges(at?: string) {
     if (reverting) return
     setReverting(true)
     try {
-      const res = await restorePublishedAction(artistId)
+      const res = await restorePublishedAction(artistId, at)
       if (res.ok && res.hasPublished) {
         journal.clear()
         router.refresh()
@@ -984,7 +986,7 @@ export function EditorInspector({
           value. Hidden until something is touched, and while the ITEM editor is open
           (its own revert owns that surface). */}
       {!itemEditor && !textEditor && !tourEditor && journal.count > 0 && (
-        <SessionActions busy={reverting} onRevert={undoChanges} />
+        <SessionActions artistId={artistId} busy={reverting} onRevert={undoChanges} />
       )}
     </aside>
   )
@@ -1001,11 +1003,13 @@ export function EditorInspector({
  * if it should, that is a deliberate follow-up, not a silent side effect.
  */
 function SessionActions({
+  artistId,
   busy,
   onRevert,
 }: {
+  artistId: string
   busy: boolean
-  onRevert: () => void
+  onRevert: (at?: string) => void
 }) {
   const [confirming, setConfirming] = useState(false)
   return (
@@ -1022,9 +1026,10 @@ function SessionActions({
       </div>
       {confirming && (
         <UndoConfirm
-          onConfirm={() => {
+          artistId={artistId}
+          onConfirm={(at) => {
             setConfirming(false)
-            onRevert()
+            onRevert(at)
           }}
           onDismiss={() => setConfirming(false)}
         />
@@ -1033,9 +1038,47 @@ function SessionActions({
   )
 }
 
-/** The one gate in front of a destructive, unrecoverable action. Says plainly what will
- *  happen and what it costs, and the safe choice is the one on the left. */
-function UndoConfirm({ onConfirm, onDismiss }: { onConfirm: () => void; onDismiss: () => void }) {
+/** "14 Aug, 6:00 pm" — a moment a manager can recognise, not an ISO string. */
+function momentLabel(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleString(undefined, {
+    day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+  })
+}
+
+/**
+ * The one gate in front of a destructive, unrecoverable action — and the door to the
+ * publish history (Sam, 2026-08-15).
+ *
+ * The newest version is preselected, so the common case is still two clicks and reads
+ * exactly as it did before the history existed. Older versions are there for someone who
+ * wants them, not in the way of someone who doesn't.
+ */
+function UndoConfirm({
+  artistId,
+  onConfirm,
+  onDismiss,
+}: {
+  artistId: string
+  onConfirm: (at?: string) => void
+  onDismiss: () => void
+}) {
+  const [moments, setMoments] = useState<PublishMoment[] | null>(null)
+  const [chosen, setChosen] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    let live = true
+    listPublishMomentsAction(artistId).then((res) => {
+      if (!live) return
+      const list = res.ok ? (res.moments ?? []) : []
+      setMoments(list)
+      // The newest, preselected — the behaviour before there was anything to choose.
+      setChosen(list[0]?.publishedAt)
+    })
+    return () => {
+      live = false
+    }
+  }, [artistId])
+
   return (
     <div
       role="dialog"
@@ -1050,9 +1093,35 @@ function UndoConfirm({ onConfirm, onDismiss }: { onConfirm: () => void; onDismis
       >
         <h2 className="text-[15px] font-semibold tracking-[-0.01em]">Undo changes</h2>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
-          This puts your site back to the way it looked the last time you published.
-          Everything you have changed since then will be lost.
+          This puts your site back to how it looked when you published. Everything you
+          have changed since then will be lost.
         </p>
+        {/* More than one version → let them pick. With one (or none) there is nothing to
+            choose and a list of one is just noise. */}
+        {moments && moments.length > 1 && (
+          <div role="radiogroup" aria-label="Version to go back to" className="mt-3 max-h-44 space-y-1 overflow-y-auto">
+            {moments.map((m, i) => (
+              <button
+                key={m.publishedAt}
+                type="button"
+                role="radio"
+                aria-checked={chosen === m.publishedAt}
+                aria-label={`${momentLabel(m.publishedAt)}${i === 0 ? ', most recent' : ''} — ${plural(m.entities, 'change')}`}
+                onClick={() => setChosen(m.publishedAt)}
+                className={cx(
+                  'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors',
+                  chosen === m.publishedAt ? 'border-ink bg-surface' : 'border-hairline hover:border-ink-faint',
+                )}
+              >
+                <span className="font-space text-[12px] text-ink">
+                  {momentLabel(m.publishedAt)}
+                  {i === 0 && <span className={cx(EYEBROW, 'ml-2')}>Most recent</span>}
+                </span>
+                <span className="font-space text-[11px] text-ink-faint">{plural(m.entities, 'change')}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="mt-4 flex gap-2">
           <button
             type="button"
@@ -1063,7 +1132,7 @@ function UndoConfirm({ onConfirm, onDismiss }: { onConfirm: () => void; onDismis
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => onConfirm(chosen)}
             className="flex-1 rounded-lg border border-accent-red bg-accent-red px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper hover:opacity-85"
           >
             Undo changes

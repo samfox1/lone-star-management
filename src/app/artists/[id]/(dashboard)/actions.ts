@@ -32,6 +32,8 @@ import {
   publishProfile,
   reconcileOnSite,
   restoreToPublished,
+  listPublishMoments,
+  type PublishMoment,
   type OnSiteEntity,
   setSupportUrl,
   updateContent,
@@ -449,8 +451,25 @@ export async function saveEditorStyleAction(
  * to an artist this user actually manages; the owner gate below is the same one every
  * editor action uses, and 404s a non-owner before anything is written.
  */
+export async function listPublishMomentsAction(
+  artistId: string,
+): Promise<{ ok: boolean; moments?: PublishMoment[]; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+  try {
+    return { ok: true, moments: await listPublishMoments(supabase, artistId) }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not read the history.' }
+  }
+}
+
 export async function restorePublishedAction(
   artistId: string,
+  /** Which published version to go back to. Omitted = the most recent one. */
+  at?: string,
 ): Promise<{ ok: boolean; error?: string; changed?: number; hasPublished?: boolean }> {
   const supabase = await createClient()
   const {
@@ -462,7 +481,7 @@ export async function restorePublishedAction(
   if (!artist) return { ok: false, error: 'Artist not found.' }
 
   try {
-    const { restored, removed, readded, hasPublished } = await restoreToPublished(supabase, artistId)
+    const { restored, removed, readded, hasPublished } = await restoreToPublished(supabase, artistId, at)
     revalidatePath(`/artists/${artistId}`, 'layout')
     return { ok: true, changed: restored + removed + readded, hasPublished }
   } catch (e) {

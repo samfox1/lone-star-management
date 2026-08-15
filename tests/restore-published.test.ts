@@ -11,7 +11,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishContent, restoreToPublished, EDITOR_RESTORE } from '@/lib/content'
+import { publishContent, restoreToPublished, listPublishMoments, EDITOR_RESTORE } from '@/lib/content'
 import { serviceClient } from './helpers/supabase'
 
 const svc = serviceClient()
@@ -122,6 +122,63 @@ describe('publishContent — an unchanged row is not re-snapshotted', () => {
       .limit(1)
       .single()
     expect((newest!.data as { _deleted?: boolean })._deleted).toBe(true)
+  })
+})
+
+describe('publish history — going back to an OLDER version', () => {
+  /**
+   * The log already held every published state; what was missing was the ability to ask
+   * it about a moment other than "now" (Sam, 2026-08-15).
+   */
+  let histId: string
+  let v1At: string
+  const heroClass = async () => {
+    const { data } = await svc.from('site_styles').select('class_names').eq('artist_id', histId).eq('region_key', 'hero').maybeSingle()
+    return data?.class_names ?? null
+  }
+
+  beforeAll(async () => {
+    const { data } = await svc
+      .from('artists')
+      .insert({ slug: `zz-history-${Date.now()}`, name: 'ZZ History Fixture' })
+      .select('id')
+      .single()
+    histId = data!.id
+    // Three published versions, each a real change (the dedupe means each writes a row).
+    await svc.from('site_styles').insert({ artist_id: histId, region_key: 'hero', class_names: 'version one' })
+    await publishContent(svc, 'site_styles', histId)
+    await svc.from('site_styles').update({ class_names: 'version two' }).eq('artist_id', histId).eq('region_key', 'hero')
+    await publishContent(svc, 'site_styles', histId)
+    await svc.from('site_styles').update({ class_names: 'version three' }).eq('artist_id', histId).eq('region_key', 'hero')
+    await publishContent(svc, 'site_styles', histId)
+  })
+  afterAll(async () => {
+    if (histId) await svc.from('artists').delete().eq('id', histId)
+  })
+
+  it('CRITICAL: lists one moment per publish, newest first', async () => {
+    const moments = await listPublishMoments(svc, histId)
+    expect(moments).toHaveLength(3)
+    const times = moments.map((m) => new Date(m.publishedAt).getTime())
+    expect(times[0]).toBeGreaterThanOrEqual(times[1])
+    expect(times[1]).toBeGreaterThanOrEqual(times[2])
+    v1At = moments[2].publishedAt // the OLDEST publish
+  })
+
+  it('CRITICAL: restoring to an older moment brings back THAT version, not the newest', async () => {
+    // The whole feature. Restoring to the first publish must produce "version one" —
+    // reading the newest snapshot regardless of the moment is the bug this pins.
+    expect(await heroClass()).toBe('version three')
+    const counts = await restoreToPublished(svc, histId, v1At)
+    expect(counts.hasPublished).toBe(true)
+    expect(await heroClass()).toBe('version one')
+  })
+
+  it('with no moment given it still means the LATEST publish', async () => {
+    // The default path the Undo button uses — unchanged by the history feature.
+    await svc.from('site_styles').update({ class_names: 'scribble' }).eq('artist_id', histId).eq('region_key', 'hero')
+    await restoreToPublished(svc, histId)
+    expect(await heroClass()).toBe('version three')
   })
 })
 

@@ -460,6 +460,23 @@ export async function setSupportUrl(
  * "latest" and remain live forever. get_public_site drops entities whose latest
  * revision is a tombstone. Returns the number of revision rows written.
  */
+/** One moment something was published, newest first, with how many entities changed in
+ *  it. Since the 2026-08-15 dedupe every moment is a real change, so this list reads as
+ *  the site's versions rather than as a log of no-op republishes. */
+export type PublishMoment = { publishedAt: string; entities: number }
+
+export async function listPublishMoments(
+  supabase: SupabaseClient,
+  artistId: string,
+): Promise<PublishMoment[]> {
+  const { data, error } = await supabase.rpc('publish_moments', { p_artist_id: artistId })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as { published_at: string; entities: number }[]).map((r) => ({
+    publishedAt: r.published_at,
+    entities: Number(r.entities),
+  }))
+}
+
 /** A key-order-independent string for a snapshot, so "did this change?" compares VALUES.
  *  JSONB does not preserve key order, so a plain JSON.stringify of the stored copy and of
  *  a freshly built snapshot differ constantly even when nothing about the row moved. */
@@ -519,8 +536,17 @@ export const EDITOR_RESTORE: {
 export async function restoreToPublished(
   supabase: SupabaseClient,
   artistId: string,
+  /** Go back to the version published at this moment. Omitted = the latest publish,
+   *  which is what the editor's Undo button asks for. */
+  at?: string,
 ): Promise<{ restored: number; removed: number; readded: number; hasPublished: boolean }> {
-  const { data: latest, error: revErr } = await supabase.rpc('latest_revisions', { p_artist_id: artistId })
+  // `revisions_at` is `latest_revisions` with a ceiling on published_at — the newest
+  // snapshot per entity AT OR BEFORE the chosen moment. Both live in SQL because
+  // reducing "latest per entity" in JS means selecting the whole log, which PostgREST
+  // silently caps at 1000 rows.
+  const { data: latest, error: revErr } = at
+    ? await supabase.rpc('revisions_at', { p_artist_id: artistId, p_at: at })
+    : await supabase.rpc('latest_revisions', { p_artist_id: artistId })
   if (revErr) throw new Error(revErr.message)
 
   // The published state, by type → id → snapshot. Tombstones are DROPPED here, which is

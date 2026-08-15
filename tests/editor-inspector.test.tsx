@@ -26,6 +26,7 @@ import {
   assignComponentSlotAction,
   setSongsOnSiteAction,
   restorePublishedAction,
+  listPublishMomentsAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
@@ -60,6 +61,13 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setImageFieldAction: vi.fn(async () => ({ ok: true })),
   addContentAction: vi.fn(async () => ({})),
   restorePublishedAction: vi.fn(async () => ({ ok: true, changed: 3, hasPublished: true })),
+  listPublishMomentsAction: vi.fn(async () => ({
+    ok: true,
+    moments: [
+      { publishedAt: '2026-08-14T18:00:00.000Z', entities: 4 },
+      { publishedAt: '2026-08-10T09:30:00.000Z', entities: 12 },
+    ],
+  })),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
@@ -1701,7 +1709,41 @@ describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () =
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Undo changes' }))
     })
-    expect(restoreMock).toHaveBeenCalledWith('artist-1')
+    // Confirming immediately — before the version list has loaded — targets the LATEST
+    // publish (an absent moment means "the most recent one"), which is the safe default.
+    expect(restoreMock).toHaveBeenCalledWith('artist-1', undefined)
+  })
+
+  it('CRITICAL: the confirmation lists earlier versions, and picking one restores THAT', async () => {
+    // Sam, 2026-08-15: "keep track of publish history in case users want to revert to old
+    // versions." The log already held them; this is the door to them.
+    const restoreMock = vi.mocked(restorePublishedAction)
+    editPage()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    })
+    const dialog = screen.getByRole('dialog', { name: 'Undo changes' })
+    expect(listPublishMomentsAction).toHaveBeenCalledWith('artist-1')
+    // The older publish is offered as its own choice…
+    const older = within(dialog).getByRole('radio', { name: /12 changes/ })
+    fireEvent.click(older)
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Undo changes' }))
+    })
+    // …and restoring targets THAT moment, not the newest.
+    expect(restoreMock).toHaveBeenCalledWith('artist-1', '2026-08-10T09:30:00.000Z')
+  })
+
+  it('defaults to the most recent version without any picking', async () => {
+    const restoreMock = vi.mocked(restorePublishedAction)
+    editPage()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    })
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
+    })
+    expect(restoreMock).toHaveBeenCalledWith('artist-1', '2026-08-14T18:00:00.000Z')
   })
 
   it('CRITICAL: dismissing the confirmation changes nothing', async () => {
