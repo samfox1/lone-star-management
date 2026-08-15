@@ -1410,7 +1410,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     }
   })
 
-  it('Revert changes walks every touched region back to its session-start value', async () => {
+  it('Remove changes walks every touched region back to its session-start value', async () => {
     // Two chrome bars (the browse list can open several rows; both carry the padding
     // slider): 'nav' starts with NO stored row (before = null → revert deletes via '');
     // 'foot' starts with a stored override (before = that string → revert restores it).
@@ -1427,16 +1427,14 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // Two keys touched → the walk-back covers BOTH. Driven through the never-published
     // fallback, which is the path that still uses the session ledger (2026-08-14); with a
     // published version the server restore replaces this walk entirely.
-    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
-    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
     })
     // Reverse order: foot (touched last) first, then nav.
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'foot', 'border-b text-lg')
     expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'nav', '')
-    // The ledger clears — the Revert button leaves until something new is touched.
-    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
+    // The ledger clears — the button leaves until something new is touched.
+    expect(screen.queryByRole('button', { name: 'Remove changes' })).toBeNull()
   })
 
   it('Font is palette-gated; the colour pickers exist regardless — hex lifts inline anywhere', () => {
@@ -1673,14 +1671,14 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 })
 
-describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () => {
+describe('EditorInspector — the Remove changes button (Sam, 2026-08-15)', () => {
   // A chrome bar: it carries the padding slider (the page background no longer does), and
   // the slider touches the ledger on `change` — no blur/commit needed like the colour hex.
   const REGIONS: ManifestStyleRegion[] = [
     { key: 'footer', label: 'Footer', base: 'border-t', scope: 'chrome' },
   ]
   const editPage = () => {
-    renderInspector([], { styleRegions: REGIONS })
+    renderInspector([], { styleRegions: REGIONS, styleValues: { footer: 'border-t text-lg' } })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
     fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
@@ -1688,102 +1686,45 @@ describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () =
 
   beforeEach(() => window.localStorage.clear())
 
-  it('CRITICAL: Revert changes appears only once something is touched', () => {
+  it('CRITICAL: appears only once something is touched, and is called Remove changes', () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
-    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove changes' })).toBeNull()
     fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
-    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove changes' })).toBeTruthy()
   })
 
-  it('CRITICAL: Undo asks first, then resets to the LAST PUBLISHED version', async () => {
-    // Sam, 2026-08-14: "if they want to clear their changes, it resets to the last
-    // published version." Destructive, so it confirms before it runs — and a click on
-    // the button alone must NOT touch anything.
-    const restoreMock = vi.mocked(restorePublishedAction)
-    editPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    expect(restoreMock).not.toHaveBeenCalled() // asked, not acted
-    const dialog = screen.getByRole('dialog', { name: 'Undo changes' })
-    await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Undo changes' }))
-    })
-    // Confirming immediately — before the version list has loaded — targets the LATEST
-    // publish (an absent moment means "the most recent one"), which is the safe default.
-    expect(restoreMock).toHaveBeenCalledWith('artist-1', undefined)
-  })
-
-  it('CRITICAL: the confirmation lists earlier versions, and picking one restores THAT', async () => {
-    // Sam, 2026-08-15: "keep track of publish history in case users want to revert to old
-    // versions." The log already held them; this is the door to them.
-    const restoreMock = vi.mocked(restorePublishedAction)
-    editPage()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
-    const dialog = screen.getByRole('dialog', { name: 'Undo changes' })
-    expect(listPublishMomentsAction).toHaveBeenCalledWith('artist-1')
-    // The older publish is offered as its own choice…
-    const older = within(dialog).getByRole('radio', { name: /12 changes/ })
-    fireEvent.click(older)
-    await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Undo changes' }))
-    })
-    // …and restoring targets THAT moment, not the newest.
-    expect(restoreMock).toHaveBeenCalledWith('artist-1', '2026-08-10T09:30:00.000Z')
-  })
-
-  it('defaults to the most recent version without any picking', async () => {
-    const restoreMock = vi.mocked(restorePublishedAction)
-    editPage()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
-    })
-    expect(restoreMock).toHaveBeenCalledWith('artist-1', '2026-08-14T18:00:00.000Z')
-  })
-
-  it('CRITICAL: dismissing the confirmation changes nothing', async () => {
-    const restoreMock = vi.mocked(restorePublishedAction)
-    editPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep editing' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(restoreMock).not.toHaveBeenCalled()
-    // …and the pending changes are still pending, so nothing was quietly accepted.
-    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
-  })
-
-  it('CRITICAL: with NOTHING published, it falls back to undoing this session', async () => {
-    // Sam's call for a site that has never published: there is no published version to
-    // return to, so undo means "put back what was there before my changes".
-    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
+  it('CRITICAL: it undoes THIS SESSION only — it never restores a published version', () => {
+    // Sam, 2026-08-15: "it just removes all the changes in the current session." Going
+    // back to a PUBLISHED version is a separate, deliberate act, and it lives behind the
+    // Restore version menu next to Publish — not on this button.
     const saveStyle = vi.mocked(saveEditorStyleAction)
-    renderInspector([], { styleRegions: REGIONS, styleValues: { footer: 'border-t text-lg' } })
-    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
-    fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
+    editPage()
     saveStyle.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
-    })
-    // The session walk-back ran: the region is written back to its session-start value.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
+    // The region goes back to the value it had when the session started…
     expect(saveStyle).toHaveBeenCalledWith('artist-1', 'footer', 'border-t text-lg')
+    // …and the published-restore path is never involved.
+    expect(restorePublishedAction).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: no confirmation and no version list — it is a plain undo', () => {
+    // Both belong to Restore version now. A dialog in front of "undo what I just did"
+    // is friction on the cheap, expected action.
+    editPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(listPublishMomentsAction).not.toHaveBeenCalled()
   })
 
   it('CRITICAL: there is NO Save/Done button', () => {
     // Sam, 2026-08-14: edits already autosave to the draft, so a button that only
     // dismissed the undo buffer was a second word for "save" that saved nothing.
-    // Publish stays the one thing that goes public.
     editPage()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
-    // The revert affordance is the ONLY thing in the bar.
-    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove changes' })).toBeTruthy()
   })
 
   it('CRITICAL: the panel never announces "Saved" or "Saving…"', async () => {
@@ -1792,9 +1733,7 @@ describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () =
     //
     // The timers MUST be driven: the write is debounced 500ms, so asserting straight
     // after the edit finds `idle` and passes whatever the component would have printed
-    // — a vacuous green (caught by mutation check, 2026-08-14). Advancing past the
-    // debounce and flushing the resolve is the exact moment the old code printed
-    // "Saved" and then left it on screen for the rest of the session.
+    // — a vacuous green (caught by mutation check, 2026-08-14).
     vi.useFakeTimers()
     try {
       editPage()
@@ -1803,9 +1742,7 @@ describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () =
       })
       expect(screen.queryByText('Saved')).toBeNull()
       expect(screen.queryByText('Saving…')).toBeNull()
-      // WITNESS: the write really did land, so the silence above is a CHOICE, not an
-      // edit that never happened.
-      expect(saveStyleMock).toHaveBeenCalled()
+      expect(saveEditorStyleAction).toHaveBeenCalled() // the write really did land
     } finally {
       vi.useRealTimers()
     }
@@ -2194,13 +2131,11 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
     // The never-published fallback — the path that still walks the session ledger.
-    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
-    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
     })
     expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
-    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove changes' })).toBeNull()
   })
 
   it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {

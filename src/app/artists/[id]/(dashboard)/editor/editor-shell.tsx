@@ -14,6 +14,7 @@ import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { EditorPublish } from './editor-publish'
+import { RestoreVersionMenu } from './restore-version'
 import { useFrameBridge } from './use-frame-bridge'
 import {
   EditorInspector,
@@ -387,6 +388,10 @@ export function EditorShell({
             {/* No global save chip here — the real per-field status ('Saving…/Saved/Failed')
                 lives in each inspector tool; a hardcoded chip would just lie. */}
             <EditorPublish artistId={artistId} />
+            {/* Restore version lives HERE, not on the inspector's Remove-changes button:
+                it reaches past the session into what visitors have already seen, which is
+                the same idea Publish belongs to (Sam, 2026-08-15). */}
+            <RestoreVersionMenu artistId={artistId} />
           </div>
 
           {/* The frame renders at a TRUE desktop width and is scaled down to fit,
