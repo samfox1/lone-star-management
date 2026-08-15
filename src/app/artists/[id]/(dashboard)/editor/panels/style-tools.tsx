@@ -33,6 +33,7 @@ export function StyleControlRow({
   cls,
   onChange,
   swatches,
+  palette,
 }: {
   regionLabel: string
   control: StyleControl
@@ -40,6 +41,9 @@ export function StyleControlRow({
   onChange: (value: string) => void
   /** Site palette + already-used colours, for generic colour controls' swatch row. */
   swatches?: string[]
+  /** The site's declared palette, so an UNSET colour can show what the element actually
+   *  inherits instead of a "nothing here" mark. */
+  palette?: SiteStyleOptions
 }) {
   const current = readStyleValue(control, cls)
   const aria = `${regionLabel} ${control.label}`
@@ -133,6 +137,7 @@ export function StyleControlRow({
           aria={aria}
           value={control.hexOf(cls)}
           used={swatches ?? []}
+          fallbackHex={siteDefaultHex(control.id, palette)}
           onChange={(hex) => onChange(control.toToken!(hex, cls))}
         />
       </ControlRow>
@@ -174,6 +179,22 @@ export function StyleControlRow({
       </span>
     </ControlRow>
   )
+}
+
+/**
+ * What a region SHOWS for a colour it never declares.
+ *
+ * Most regions never set a colour — they inherit the site's. The picker answered that
+ * with a "no colour" mark, so a site that is plainly cream on black read as a panel full
+ * of blanks (Sam, 2026-08-15: "a lot of colors that show the white with the red slash").
+ * The site's own palette already names its default: skeen labels them "Cream (default)"
+ * and "Black (default)", and every site lists its ground colour first. Showing that is
+ * both honest and what is actually on screen; the label still reads Default.
+ */
+function siteDefaultHex(controlId: string, options?: SiteStyleOptions): string | undefined {
+  if (controlId === 'textColor') return options?.textColors?.[0]?.hex
+  if (controlId === 'bgColor') return options?.bgColors?.[0]?.hex
+  return undefined
 }
 
 /* ── Style tools: NO-CODE styling (SITE_STYLING_PLAN.md) ─────────────────────────────
@@ -390,6 +411,7 @@ export function StyleTools({
                         control={control}
                         cls={cls}
                         swatches={siteSwatches(options, values)}
+                        palette={options}
                         onChange={(v) => edit(r.key, applyStyleValue(cls, control, v), r.base ?? '')}
                       />
                     ))}

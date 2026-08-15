@@ -631,6 +631,7 @@ export function EditorInspector({
         styleKey={cfg.key}
         label={item.label}
         initialClasses={styleValues[cfg.key] ?? ''}
+        palette={styleOptions}
         preview={cfg.preview}
         replace={{
           title: `Replace ${item.label}`,

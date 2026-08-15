@@ -5,6 +5,7 @@ import { applyStyleValue, buildItemStyleControls, type StyleControl } from '@/li
 import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
+import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import { LibraryPicker } from './inspector-grid'
 import { saveEditorStyleAction } from '../actions'
 
@@ -49,6 +50,7 @@ export function ItemEditor({
   replace,
   controls: controlsProp,
   swatches = [],
+  palette,
   onRemove,
   onApplyStyle,
   onBack,
@@ -73,6 +75,9 @@ export function ItemEditor({
   /** The palette's quick-pick row: the site's declared colours + ones already used
    *  (`siteSwatches`). */
   swatches?: string[]
+  /** The site's declared palette, so an unset colour shows what the item inherits
+   *  rather than a "no colour" mark (Sam, 2026-08-15). */
+  palette?: SiteStyleOptions
   onRemove: () => void
   onApplyStyle?: (key: string, className: string) => void
   onBack: () => void
@@ -151,6 +156,7 @@ export function ItemEditor({
               control={control}
               cls={classes}
               swatches={swatches}
+              palette={palette}
               onChange={(v) => change(applyStyleValue(classes, control, v))}
             />
           ))}

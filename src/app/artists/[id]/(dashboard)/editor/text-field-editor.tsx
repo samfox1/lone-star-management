@@ -149,6 +149,7 @@ export function TextFieldEditor({
                 control={control}
                 cls={cls}
                 swatches={siteSwatches(styleOptions, styleValues)}
+                palette={styleOptions}
                 onChange={(v) => {
                   // Reset/Default on a SECTION region means "what the site had", NOT
                   // "no class": the override REPLACES the base, so removing the token

@@ -112,6 +112,7 @@ export function ColorPalette({
   aria,
   value,
   used = [],
+  fallbackHex,
   onChange,
 }: {
   label: string
@@ -119,6 +120,12 @@ export function ColorPalette({
   aria: string
   /** The current hex, '' when no colour is set. */
   value: string
+  /** What the element ACTUALLY shows when nothing is set here — the site's own default
+   *  for this channel. Most regions never declare a colour; they inherit one, and the
+   *  swatch used to answer that with a "no colour" mark, so a site that is plainly cream
+   *  on black read as a panel full of blanks (Sam, 2026-08-15). With this the swatch shows
+   *  what is on screen and the label still says Default, which is both true at once. */
+  fallbackHex?: string
   /** Colours already used elsewhere on this site, most-used first. Offered as one-click
    *  swatches so a manager can match what they picked before instead of re-deriving the
    *  hex by eye — the palette is precise, but on its own it does nothing for consistency. */
@@ -292,7 +299,7 @@ export function ColorPalette({
           aria-label={`${aria} palette`}
           aria-haspopup="dialog"
           title="Pick a colour"
-          style={value ? { backgroundColor: current } : NO_COLOR_SWATCH}
+          style={value ? { backgroundColor: current } : fallbackHex ? { backgroundColor: fallbackHex } : NO_COLOR_SWATCH}
           className="h-6 w-6 flex-none rounded-md border border-hairline transition-shadow hover:ring-2 hover:ring-hairline"
         />
         <input
