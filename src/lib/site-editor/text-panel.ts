@@ -91,15 +91,14 @@ export function textPanelEntries(
     entries.push({ key: f.key, label: f.label, field: f, styleRegion: region })
   }
 
-  // Then the site's other text areas — the ones no field speaks for. A region already
-  // paired above is NOT repeated: several captions can share one region, and listing it
-  // again would say the same thing a sixth time. ITEM-scoped regions never list: they
-  // dress library content (song titles), whose words belong to the Music/Videos/Tour
-  // panels — not text areas (Sam, 2026-08-12).
-  for (const r of allRegions) {
-    if (r.scope === 'item' || claimed.has(r.key) || !isTextRegion(r)) continue
-    entries.push({ key: r.key, label: r.label, field: null, styleRegion: r })
-  }
+  // A region NO field speaks for is deliberately not listed. It used to be, as a
+  // "Set by the site — restyle only" row, so a manager could restyle text they cannot
+  // retype. In practice that filled the Text panel with things that are not text to
+  // type: Operator's Tab buttons, Body copy, List rows and Section stamps all sat there
+  // saying the same unhelpful sentence (Sam, 2026-08-15). They are already reachable —
+  // click the element in the preview and its controls open — which is the one-edit-path-
+  // per-thing rule this panel is built on.
+  void claimed
 
   return entries
 }

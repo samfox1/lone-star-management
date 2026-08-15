@@ -54,33 +54,26 @@ const POLAROID_WALL: ManifestStyleRegion = {
 }
 
 describe('textPanelEntries', () => {
-  it('CRITICAL: lists text-bearing STYLE REGIONS, not just declared fields', () => {
-    // The bug this fixes: skeen declares only polaroid captions as fields, so a panel
-    // driven by fields alone showed five rows and nothing else on an eleven-region site.
-    const entries = textPanelEntries([], [HERO_WORDMARK, FOOTER])
-    expect(entries.map((e) => e.key)).toEqual(['hero_wordmark', 'footer_line'])
-    expect(entries[0].styleRegion?.key).toBe('hero_wordmark')
-    // Nothing to type into: the site never declared this as editable copy.
-    expect(entries[0].field).toBeNull()
-  })
-
-  it('CRITICAL: a section WRAPPER is not listed, however much text it holds', () => {
-    // Sam, 2026-08-05: the panel offered skeen's `shows_section` as if it were the TOUR
-    // heading. It is the section's outermost box; setting a size on it sets font-size on
-    // every child, so the section got taller. Alignment is not type.
-    expect(textPanelEntries([], [HERO_WORDMARK, FOOTER_WRAP]).map((e) => e.key)).toEqual(['hero_wordmark'])
-  })
-
-  it('CRITICAL: skips regions that are not text', () => {
-    // A video region has no words in it; offering Font and Size there is nonsense the
-    // manager has to learn to ignore.
-    const entries = textPanelEntries([], [HERO_WORDMARK, HERO_VIDEO])
-    expect(entries.map((e) => e.key)).toEqual(['hero_wordmark'])
-  })
-
-  it('a layout-only region is not text either', () => {
-    // The polaroid WALL is a flex container: it positions cards, it does not set type.
+  it('CRITICAL: a region NO field speaks for is not listed at all', () => {
+    // It used to be, as a "Set by the site — restyle only" row, so a manager could
+    // restyle text they cannot retype. In practice it filled the panel with things that
+    // are not text to type — Operator's Tab buttons, Body copy, List rows and Section
+    // stamps all sat there repeating the same unhelpful sentence (Sam, 2026-08-15).
+    // They stay reachable by clicking the element in the preview, which is the
+    // one-edit-path-per-thing rule this panel is built on.
+    expect(textPanelEntries([], [HERO_WORDMARK, FOOTER])).toEqual([])
+    expect(textPanelEntries([], [HERO_WORDMARK, HERO_VIDEO])).toEqual([])
     expect(textPanelEntries([], [POLAROID_WALL])).toEqual([])
+  })
+
+  it('CRITICAL: the panel is the manager\'s COPY — every row has words to type', () => {
+    // The positive half. Without it, a function that returned [] for everything would
+    // pass the rule above and empty the Text panel completely.
+    const entries = textPanelEntries([field('hero_wordmark', 'Hero wordmark')], [HERO_WORDMARK, FOOTER])
+    expect(entries.map((e) => e.key)).toEqual(['hero_wordmark'])
+    expect(entries[0].field).not.toBeNull()
+    // …and it still carries the region, so the row keeps its type controls.
+    expect(entries[0].styleRegion?.key).toBe('hero_wordmark')
   })
 
   it('pairs a field with the region of the same key — one row, both jobs', () => {
@@ -125,9 +118,11 @@ describe('textPanelEntries', () => {
     expect(entries.every((e) => e.styleRegion?.key === 'polaroid_caption')).toBe(true)
   })
 
-  it('fields come first, then regions the fields did not claim', () => {
-    // The manager's own copy is what they came for; the site's other text areas follow.
-    const entries = textPanelEntries([field('polaroid_1_caption', 'Caption 1')], [HERO_WORDMARK])
+  it('only the fields are listed, in their declared order', () => {
+    const entries = textPanelEntries(
+      [field('polaroid_1_caption', 'Caption 1'), field('hero_wordmark', 'Hero wordmark')],
+      [HERO_WORDMARK],
+    )
     expect(entries.map((e) => e.key)).toEqual(['polaroid_1_caption', 'hero_wordmark'])
   })
 

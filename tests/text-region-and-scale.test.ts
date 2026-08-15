@@ -83,12 +83,22 @@ describe('isTextRegion — a wrapper is not the words', () => {
     expect(isTextRegion({ key: 'x', label: 'x', base: 'block text-[#ffffff]' })).toBe(false)
   })
 
-  it('CRITICAL: skeen’s Text panel lists the wordmark and nothing structural', () => {
-    // End to end on the real manifest: six things a manager can point at, none of them a
-    // container. The TOUR heading is absent because skeen has not declared one yet — a
-    // missing row a manager can live with, unlike a row that resizes the page.
-    const entries = textPanelEntries([], Object.keys(SKEEN).map(region))
-    expect(entries.map((e) => e.key)).toEqual(['hero_wordmark', 'polaroid_1_caption'])
+  it('CRITICAL: regions ALONE list nothing — the Text panel is fields', () => {
+    // `isTextRegion` still decides which region can PAIR with a field (and so carry that
+    // row's type controls), but a region no field speaks for is no longer a row of its
+    // own: it filled the panel with "Set by the site — restyle only" lines that are not
+    // text to type (Sam, 2026-08-15). Those elements stay reachable by clicking them.
+    expect(textPanelEntries([], Object.keys(SKEEN).map(region))).toEqual([])
+  })
+
+  it('CRITICAL: a field still PAIRS with its text region, so the row keeps its type controls', () => {
+    // The positive half. Without it, a function that returned [] for everything would
+    // pass the rule above and empty the Text panel completely.
+    const regions = Object.keys(SKEEN).map(region)
+    const field = { key: 'hero_wordmark', label: 'Hero wordmark', type: 'text' as const, target: { store: 'site_content' as const, key: 'hero_wordmark' } }
+    const [entry] = textPanelEntries([field], regions)
+    expect(entry.key).toBe('hero_wordmark')
+    expect(entry.styleRegion?.key).toBe('hero_wordmark')
   })
 })
 
