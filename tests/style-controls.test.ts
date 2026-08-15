@@ -120,6 +120,34 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     expect(label).toBe('Default')
   })
 
+  it('CRITICAL: an icon group SHOWS the colours the site already sets', () => {
+    // Sam, 2026-08-15: "these buttons already have an on hover color change, can you set
+    // that in the editor. Everything that is set on the site should be seen in the
+    // editor." The control can only show what the REGION declares — a colour living on a
+    // child anchor, or in a CSS var fallback, is invisible to it and the picker reads
+    // empty while the site is plainly coloured. Same lesson as the icon-size slider.
+    const base = 'flex gap-4 iconsize-[18px] text-ink/60 hovercolor-[#9c4221]'
+    // Built with the SITE'S palette, because a colour control can only recognise an
+    // arbitrary hex or a colour the site declared. A base wearing `text-ink/60` that the
+    // palette never mentions reads as unset — the site is coloured, the picker is blank.
+    const juniper = buildStyleControls({
+      fonts: [{ value: 'font-serif', label: 'Serif' }],
+      textColors: [{ value: 'text-ink/60', label: 'Muted ink', hex: '#1a171499' }],
+      bgColors: [{ value: 'bg-paper', label: 'Paper', hex: '#faf8f4' }],
+    })
+    const socials = controlsForRegion(juniper, {
+      key: 'socials', label: 'Social icons', base, scope: 'icons',
+    })
+    const hover = socials.find((c) => c.id === 'hoverColor')!
+    const color = socials.find((c) => c.id === 'textColor')!
+    if (hover.kind !== 'color') throw new Error('the hover control must be a colour picker')
+    expect(hover.hexOf!(base)).toBe('#9c4221') // the site's real hover colour, shown
+    expect(readStyleValue(color, base)).toBe('text-ink/60') // and its real icon colour
+    // Picking a new hover colour REPLACES the declared one rather than stacking a second.
+    expect(applyStyleValue(base, hover, hover.toToken!('#123456', base)))
+      .toBe('flex gap-4 iconsize-[18px] text-ink/60 hovercolor-[#123456]')
+  })
+
   it('CRITICAL: a site-scope region whose base sets vertical padding gets a Spacing slider', () => {
     // The vertical rhythm BETWEEN sections (Juniper's `py-12` on every section block).
     // It must emit `pady-` (top/bottom only): the all-sides `pad-` token would invent

@@ -73,7 +73,11 @@ function ColorModal({
           rule order, not on the order written here. */}
       <div className="flex max-h-[88vh] w-[320px] max-w-full flex-col gap-3 overflow-auto rounded-2xl bg-paper p-5 shadow-2xl">
         <div className="flex items-center gap-2">
-          <span aria-hidden className="h-6 w-6 flex-none rounded-md" style={{ backgroundColor: value ? current : 'transparent' }} />
+          <span
+            aria-hidden
+            className="h-6 w-6 flex-none rounded-md border border-hairline"
+            style={value ? { backgroundColor: current } : NO_COLOR_SWATCH}
+          />
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.01em]">{label}</h2>
           <span className="flex-none font-space text-[11px] text-ink-muted">{value || 'None'}</span>
         </div>
@@ -88,6 +92,19 @@ function ColorModal({
       </div>
     </div>
   )
+}
+
+/**
+ * How a swatch draws "no colour set".
+ *
+ * NOT `transparent`. An empty square on the panel's white paper is indistinguishable from
+ * one someone painted white, so the picker was reporting a choice nobody had made — Sam
+ * read skeen's undeclared footer background as "said to be the white" (2026-08-15). A
+ * diagonal rule is the conventional mark for none, and it cannot be mistaken for a colour.
+ */
+const NO_COLOR_SWATCH: React.CSSProperties = {
+  backgroundImage:
+    'linear-gradient(to top right, transparent calc(50% - 0.5px), var(--color-accent-red, #c4403a) calc(50% - 0.5px), var(--color-accent-red, #c4403a) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
 }
 
 export function ColorPalette({
@@ -275,7 +292,7 @@ export function ColorPalette({
           aria-label={`${aria} palette`}
           aria-haspopup="dialog"
           title="Pick a colour"
-          style={{ backgroundColor: value ? current : 'transparent' }}
+          style={value ? { backgroundColor: current } : NO_COLOR_SWATCH}
           className="h-6 w-6 flex-none rounded-md border border-hairline transition-shadow hover:ring-2 hover:ring-hairline"
         />
         <input
