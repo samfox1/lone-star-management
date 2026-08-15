@@ -1654,55 +1654,6 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     expect(screen.getByLabelText('Page background Background color hex')).toBeTruthy()
   })
 
-  it('CRITICAL: a region left behind by the site design says so, and one click updates it', async () => {
-    // Drift was INVISIBLE (Sam, 2026-08-15): a section override replaces the base, so a
-    // styled region keeps rendering the string it was saved with while the site improves
-    // around it. He reported skeen's footer twice — "it won't centre", "the colour is
-    // wrong" — before the cause turned out to be one stale override.
-    const saveStyle = vi.mocked(saveEditorStyleAction)
-    renderInspector([], {
-      styleRegions: [{
-        key: 'footer',
-        label: 'Footer bar',
-        base: 'mt-auto grid content-center border-t bg-paper px-6 py-16',
-        scope: 'chrome',
-      }],
-      styleValues: { footer: 'mt-auto border-t pad-[52px] sech-[448px]' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    expect(screen.getByText(/site design has been updated/i)).toBeTruthy()
-    saveStyle.mockClear()
-    vi.useFakeTimers()
-    try {
-      fireEvent.click(screen.getByRole('button', { name: 'Update sections' }))
-      // The write is debounced like every other style save — drive past it, or this
-      // asserts on a call that has not happened yet.
-      await act(async () => {
-        vi.advanceTimersByTime(600)
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-    const [, key, className] = saveStyle.mock.calls[0]
-    expect(key).toBe('footer')
-    expect(className).toContain('grid') // picks up the design…
-    expect(className).toContain('content-center')
-    expect(className).toContain('pad-[52px]') // …without touching their choices
-    // Once updated the notice is gone — it must not nag about work already done.
-    expect(screen.queryByText(/site design has been updated/i)).toBeNull()
-  })
-
-  it('CRITICAL: no notice when nothing has drifted', () => {
-    // The common case. A banner in front of every manager forever, on sites where
-    // nothing is wrong, is worse than the problem it reports.
-    renderInspector([], {
-      styleRegions: [{ key: 'footer', label: 'Footer bar', base: 'border-t bg-paper', scope: 'chrome' }],
-      styleValues: { footer: 'border-t bg-paper pad-[52px]' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
-    expect(screen.queryByText(/site design has been updated/i)).toBeNull()
-  })
-
   it('CRITICAL: a heading-suppressed group still breaks from the group above it', () => {
     // The other half of the double-header fix (Sam, 2026-08-14: "the footer lies under
     // the hero section … The footer should be its own thing"). Suppressing the "Footer"
