@@ -16,11 +16,14 @@
  *     manager did could have meant to remove it; the editor cannot even express that.
  *   • a control owns it AND the stored string carries a token that same control owns →
  *     SKIP. That is their choice, and re-adding would fight it for the same property.
- *   • a control owns it and the stored string carries NOTHING for that control → AMBIGUOUS.
- *     It reads identically whether the base gained the token yesterday or the manager
- *     deliberately cleared it — the Divider toggle removes `border-t` by storing a string
- *     without it, and blindly folding the base back in would switch every manager's
- *     divider back on. Skipped unless `includeOwned` says a human has looked.
+ *   • a TOGGLE owns it and the stored string carries nothing for it → SKIP. A toggle's
+ *     absence is a decision: the Divider control turns a line OFF by storing a string
+ *     without `border-t`, so folding the base back in would switch every manager's
+ *     divider back on. `includeOwned` overrides this for a human who has read a dry run.
+ *   • any OTHER control owns it and the manager set nothing → ADD. "Not set" on a colour,
+ *     size or font is not a decision to remove it; it is a gap the design should fill.
+ *     This is the distinction that lets skeen's footer pick up the `bg-background` it was
+ *     always meant to have without also relighting a divider someone switched off.
  *
  * Returns null when nothing is missing, so an already-current row is never rewritten.
  */
@@ -61,9 +64,44 @@ export function rebaseOverride(
     const owner = controls.find((c) => c.owns(token))
     if (owner) {
       if (storedTokens.some((t) => owner.owns(t))) continue // their choice stands
-      if (!opts.includeOwned) continue // ambiguous: cleared on purpose, or new to the base?
+      // A toggle's absence IS its off state — see the docblock.
+      if (owner.kind === 'toggle' && !opts.includeOwned) continue
     }
     missing.push(token)
   }
   return missing.length ? [...storedTokens, ...missing].join(' ') : null
+}
+
+/** One region whose stored styling predates the site's current design. */
+export type DriftedRegion = { key: string; label: string; next: string; adds: string[] }
+
+/**
+ * Every styled region that is behind the site's design, with what it would pick up.
+ *
+ * This is what lets the editor SAY SO. Drift was invisible: the site improved, the region
+ * kept rendering the old string, and the only symptom was a control that looked wrong or a
+ * layout that would not respond — Sam reported skeen's footer twice, as two separate bugs,
+ * before the cause turned out to be one stale override (2026-08-15).
+ */
+export function driftedRegions(
+  regions: { key: string; label: string; base?: string; scope?: string }[],
+  values: Record<string, string>,
+  controlsFor: (region: { key: string; label: string; base?: string; scope?: string }) => StyleControl[],
+): DriftedRegion[] {
+  const out: DriftedRegion[] = []
+  for (const region of regions) {
+    const stored = values[region.key]
+    // No stored override means the region already renders the live base — nothing to do.
+    if (!region.base || !stored?.trim()) continue
+    const next = rebaseOverride(region.base, stored, controlsFor(region))
+    if (!next) continue
+    const before = new Set(stored.split(/\s+/).filter(Boolean))
+    out.push({
+      key: region.key,
+      label: region.label,
+      next,
+      adds: next.split(/\s+/).filter((t) => t && !before.has(t)),
+    })
+  }
+  return out
 }

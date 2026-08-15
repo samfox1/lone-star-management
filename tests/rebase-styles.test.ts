@@ -36,14 +36,11 @@ describe('rebase', () => {
     expect(next).toContain('content-center')
   })
 
-  it('CRITICAL: a colour the manager COULD have cleared needs a human to say so', () => {
-    // `bg-background` is owned by the background picker, and an override with no bg reads
-    // identically whether the base gained one yesterday or the manager cleared it. Adding
-    // it by default would repaint surfaces someone deliberately made transparent.
+  it('CRITICAL: a colour the manager never set IS filled in from the design', () => {
+    // "Not set" on a colour is a gap, not a decision to remove it. skeen's footer was
+    // always meant to be bg-background; the override simply predated the declaration.
     const stored = 'mt-auto border-border text-center border-t pad-[52px] sech-[448px]'
-    expect(rebase(FOOTER_BASE, stored, controlsFor(FOOTER_BASE, 'chrome'))).not.toContain('bg-background')
-    const reviewed = rebase(FOOTER_BASE, stored, controlsFor(FOOTER_BASE, 'chrome'), { includeOwned: true })!
-    expect(reviewed).toContain('bg-background')
+    expect(rebase(FOOTER_BASE, stored, controlsFor(FOOTER_BASE, 'chrome'))).toContain('bg-background')
   })
 
   it('CRITICAL: never overwrites a choice the manager made', () => {

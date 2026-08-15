@@ -16,11 +16,13 @@ import {
   ControlRow,
   SaveLine,
   GroupLabel,
+  plural,
   PANEL_BODY,
   CONTROL_LABEL,
   useCollapseOnOutsideClick,
 } from '../inspector-shared'
 import { useStyleRegionSave } from '../use-style-save'
+import { driftedRegions } from '@/lib/site-editor/rebase-override'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 
 /** One friendly control row (a labelled dropdown or a toggle) for a style region — reused
@@ -213,6 +215,33 @@ export function StyleTools({
 
   const controls = useMemo(() => buildStyleControls(options), [options])
 
+  /**
+   * Regions whose saved styling predates the site's current design.
+   *
+   * A section override REPLACES the base, so styling a region freezes it: every later
+   * improvement to the site's own design is invisible to it, and the symptoms are
+   * indirect — a control that reads wrong, a layout that will not respond. Sam reported
+   * skeen's footer twice, as two separate bugs, before the cause turned out to be one
+   * stale override (2026-08-15). Computed from the LIVE bases the frame just announced,
+   * so it is always the real comparison.
+   */
+  const drifted = useMemo(
+    () => driftedRegions(regions, values, (r) => controlsForRegion(controls, r as ManifestStyleRegion)),
+    [regions, values, controls],
+  )
+  // Dismissed for this session once acted on, so the notice cannot nag about work already
+  // done — `values` is a prop and does not change until the page re-reads the draft.
+  const [driftHandled, setDriftHandled] = useState(false)
+  const showDrift = drifted.length > 0 && !driftHandled
+
+  function updateDrifted() {
+    setDriftHandled(true)
+    for (const d of drifted) {
+      setText((t) => ({ ...t, [d.key]: d.next }))
+      save(d.key, d.next)
+    }
+  }
+
   // The frame's edit-list arrives asynchronously (on `ready`), so regions/values can
   // land after first render — re-seed when they do, without clobbering typing.
   const seedKey = regions.map((r) => r.key).join(',')
@@ -286,6 +315,27 @@ export function StyleTools({
 
   return (
     <div className="py-2">
+      {showDrift && (
+        <div className="mx-4 mb-2 rounded-lg border border-hairline bg-surface px-3 py-2.5">
+          <p className="text-[12px] leading-relaxed text-ink-muted">
+            The site design has been updated since{' '}
+            {drifted.length === 1 ? (
+              <span className="text-ink">{drifted[0].label.toLowerCase()}</span>
+            ) : (
+              <span className="text-ink">{plural(drifted.length, 'section')}</span>
+            )}{' '}
+            {drifted.length === 1 ? 'was' : 'were'} styled. Updating keeps everything you
+            changed.
+          </p>
+          <button
+            type="button"
+            onClick={updateDrifted}
+            className="mt-2 rounded-md border border-ink px-2.5 py-1.5 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink transition-opacity hover:opacity-70"
+          >
+            Update sections
+          </button>
+        </div>
+      )}
       {/* No instruction line (Sam, 2026-08-12: "the goal is for the ui to be easy
           enough to not need them") — the browse list holds only site-wide styles;
           clicking the preview is discoverable on its own. */}
