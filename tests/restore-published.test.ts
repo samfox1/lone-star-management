@@ -44,6 +44,41 @@ afterAll(async () => {
   if (artistId) await svc.from('artists').delete().eq('id', artistId)
 })
 
+describe('restoreToPublished — a site that has NEVER published', () => {
+  /**
+   * THE REGRESSION. Shipped 2026-08-14 and destroyed Juniper's styling within the minute:
+   * with no revisions at all, every draft row read as "added since the publish" and was
+   * deleted — the manager's whole body of work, with no snapshot anywhere to get it back.
+   *
+   * Its own artist, so the fixture is guaranteed to have published nothing.
+   */
+  let freshId: string
+  beforeAll(async () => {
+    const { data } = await svc
+      .from('artists')
+      .insert({ slug: `zz-neverpub-${Date.now()}`, name: 'ZZ Never Published' })
+      .select('id')
+      .single()
+    freshId = data!.id
+    await svc.from('site_styles').insert({ artist_id: freshId, region_key: 'hero', class_names: 'precious work' })
+    await svc.from('site_content').insert({ artist_id: freshId, key: 'bio', value: 'precious words' })
+  })
+  afterAll(async () => {
+    if (freshId) await svc.from('artists').delete().eq('id', freshId)
+  })
+
+  it('CRITICAL: changes NOTHING, and says so, rather than deleting everything', async () => {
+    const counts = await restoreToPublished(svc, freshId)
+    expect(counts.hasPublished).toBe(false)
+    expect(counts).toMatchObject({ restored: 0, removed: 0, readded: 0 })
+    const { data: styles } = await svc.from('site_styles').select('class_names').eq('artist_id', freshId)
+    expect(styles, 'the unpublished styling must survive').toHaveLength(1)
+    expect(styles![0].class_names).toBe('precious work')
+    const { data: content } = await svc.from('site_content').select('value').eq('artist_id', freshId)
+    expect(content).toHaveLength(1)
+  })
+})
+
 describe('restoreToPublished — the editor’s Undo changes', () => {
   it('CRITICAL: puts an edited style back, drops one added since, and re-adds one deleted since', async () => {
     // The three cases that together mean "the draft equals the last published version".
@@ -104,6 +139,18 @@ describe('restoreToPublished — the editor’s Undo changes', () => {
   it('CRITICAL: a photo added since the publish is UNPLACED, never deleted', async () => {
     // The file is the manager's, not the editor's. Undo takes it out of the slot it was
     // dropped into; deleting the upload would be destroying work the editor never made.
+    //
+    // A published photo has to exist first: with NO published media at all, the per-type
+    // guard skips media entirely (see the never-published regression above), so a slot
+    // assignment would survive. That is the safe reading, and it is also why this fixture
+    // publishes before it places.
+    await svc.from('media').insert({
+      artist_id: artistId,
+      purpose: 'gallery_image',
+      storage_path: `${artistId}/gallery/already-published.jpg`,
+    })
+    await publishContent(svc, 'media', artistId)
+
     const { data: photo } = await svc
       .from('media')
       .insert({

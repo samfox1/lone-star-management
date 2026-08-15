@@ -523,14 +523,31 @@ export async function restoreToPublished(
     published.set(r.entity_type, forType)
   }
 
+  // NOTHING PUBLISHED → CHANGE NOTHING. Without this the function read "no published
+  // rows" as "every draft row was added since the publish" and deleted the lot — on a
+  // site that has never published, that is the manager's entire body of work, with no
+  // snapshot anywhere to restore it from. It destroyed Juniper's styling on 2026-08-14,
+  // in the first minute this shipped. The caller falls back to undoing the session.
+  //
+  // The same guard PER TYPE, below, for the narrower version of the same trap: an artist
+  // who published before a type existed (site_styles arrived long after the log did) has
+  // no revisions for it, and deleting every row of it would be the same wipe one table
+  // down. Leaving a row that was added since a publish is a visible, one-click mistake;
+  // deleting a table's worth of work is not.
+  const hasPublished = (latest ?? []).length > 0
+  if (!hasPublished) return { restored: 0, removed: 0, readded: 0, hasPublished: false }
+
   let restored = 0
   let removed = 0
   let readded = 0
 
   for (const { type, columns, absent } of EDITOR_RESTORE) {
+    const wanted = published.get(type)
+    // No published rows of this type: see the note above — skip it rather than read the
+    // absence as "delete everything".
+    if (!wanted) continue
     const table = PUBLISHABLE[type].table
     const live = await listContent(supabase, type, artistId)
-    const wanted = published.get(type) ?? new Map<string, Record<string, unknown>>()
     const liveIds = new Set(live.map((row) => String(row.id)))
 
     for (const row of live) {
@@ -574,11 +591,10 @@ export async function restoreToPublished(
     }
   }
 
-  // Whether this artist has EVER published. The caller needs it to tell "the draft
-  // already matches the published site" (nothing to do) from "there is no published site
-  // to go back to" (fall back to undoing the session) — both of which otherwise look
-  // identical: zero changes.
-  return { restored, removed, readded, hasPublished: (latest ?? []).length > 0 }
+  // `hasPublished` lets the caller tell "the draft already matches the published site"
+  // (nothing to do) from "there is no published site to go back to" (fall back to undoing
+  // the session) — both of which otherwise look identical: zero changes.
+  return { restored, removed, readded, hasPublished }
 }
 
 export async function publishContent(
