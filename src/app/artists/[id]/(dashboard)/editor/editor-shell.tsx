@@ -387,11 +387,15 @@ export function EditorShell({
 
             {/* No global save chip here — the real per-field status ('Saving…/Saved/Failed')
                 lives in each inspector tool; a hardcoded chip would just lie. */}
-            <EditorPublish artistId={artistId} />
-            {/* Restore version lives HERE, not on the inspector's Remove-changes button:
-                it reaches past the session into what visitors have already seen, which is
-                the same idea Publish belongs to (Sam, 2026-08-15). */}
-            <RestoreVersionMenu artistId={artistId} />
+            {/* Publish and its overflow menu are ONE group, tighter than the toolbar's
+                own gap-3 (Sam, 2026-08-15): the three dots belong to Publish, and spacing
+                is what says so. Restore version lives here rather than on the inspector's
+                Remove-changes button because it reaches past the session into what
+                visitors have already seen — the same idea Publish belongs to. */}
+            <div className="flex items-center gap-1.5">
+              <EditorPublish artistId={artistId} />
+              <RestoreVersionMenu artistId={artistId} />
+            </div>
           </div>
 
           {/* The frame renders at a TRUE desktop width and is scaled down to fit,

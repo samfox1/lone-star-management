@@ -273,7 +273,15 @@ export function cleanClassText(raw: string): string | null {
   if (trimmed.length > 500) return null
   // Tailwind-safe: letters/digits/space + the punctuation utilities use, including
   // arbitrary values `text-[clamp(3rem,12vw,11rem)]` and variants `hover:` `sm:` `!`.
-  if (!/^[A-Za-z0-9 _:/.,%#!\[\]()@-]+$/.test(trimmed)) return null
+  //
+  // `+` is in the set because REAL base classes use it: skeen's hero rows carry
+  // `bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)]`, and the editor
+  // writes a region's WHOLE class string — so leaving it out refused every save of those
+  // regions with "that setting produced something the site can't use" (Sam, 2026-08-15).
+  // It is not a hole: what this list keeps out is the characters that could END the class
+  // attribute or open a tag — quote, apostrophe, angle bracket, backtick, brace — and
+  // those are all still absent.
+  if (!/^[A-Za-z0-9 _:/.,%#!+\[\]()@-]+$/.test(trimmed)) return null
   return trimmed
 }
 

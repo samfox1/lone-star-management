@@ -16,6 +16,22 @@ describe('cleanClassText', () => {
     expect(cleanClassText('hover:text-flash-1 sm:text-2xl !font-black')).toBe('hover:text-flash-1 sm:text-2xl !font-black')
   })
 
+  it('CRITICAL: accepts `+` — a calc() in a real site\'s base classes', () => {
+    // Sam, 2026-08-15: styling skeen's social icons answered "that setting produced
+    // something the site can't use". The editor writes the region's WHOLE class string,
+    // and skeen's hero rows carry `bottom-[calc(0.75rem+env(safe-area-inset-bottom))]` —
+    // the `+` was not in the allowlist, so every save of those regions was refused. The
+    // region could be styled in the panel and never once saved.
+    expect(cleanClassText('bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)]'))
+      .toBe('bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)]')
+    // The real string, verbatim, so this test fails if the allowlist ever narrows again.
+    const heroSocials =
+      'absolute inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)] z-20 ' +
+      'flex flex-wrap items-center justify-center gap-6 iconsize-[24px] px-6 ' +
+      'sm:bottom-[calc(1rem+env(safe-area-inset-bottom)+100lvh-100svh)]'
+    expect(cleanClassText(heroSocials)).toBe(heroSocials)
+  })
+
   it('treats blank/whitespace as a valid clear ("" — fall back to base)', () => {
     expect(cleanClassText('')).toBe('')
     expect(cleanClassText('   ')).toBe('')
