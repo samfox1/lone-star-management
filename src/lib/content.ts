@@ -460,6 +460,16 @@ export async function setSupportUrl(
  * "latest" and remain live forever. get_public_site drops entities whose latest
  * revision is a tombstone. Returns the number of revision rows written.
  */
+/** A key-order-independent string for a snapshot, so "did this change?" compares VALUES.
+ *  JSONB does not preserve key order, so a plain JSON.stringify of the stored copy and of
+ *  a freshly built snapshot differ constantly even when nothing about the row moved. */
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  const o = value as Record<string, unknown>
+  return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`).join(',')}}`
+}
+
 /**
  * What the site editor's "Undo changes" puts back, per entity type (Sam, 2026-08-14:
  * "if they want to clear their changes, it resets to the last published version").
@@ -629,14 +639,31 @@ export async function publishContent(
     )
     .map((r) => r.entity_id as string)
 
+  // What each entity's snapshot ALREADY says, so an unchanged row is not written again.
+  // 89% of skeen's 3,829 revision rows were byte-identical re-writes of the row before
+  // them (measured 2026-08-15): the log was growing with the number of PUBLISHES rather
+  // than the number of CHANGES. Nothing about history is lost — the newest revision per
+  // entity is still the published value, and "what was live at time T" is still the
+  // newest revision at or before T. What changes is that a publish moment now means
+  // "something actually changed", which is exactly what a version list should show.
+  const currentSnapshot = new Map<string, string>()
+  for (const r of (latest ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[]) {
+    if (r.entity_type === type && r.entity_id) currentSnapshot.set(r.entity_id, stableJson(r.data))
+  }
+
   const revisions = [
-    ...rows.map((row) => ({
-      artist_id: artistId,
-      entity_type: type,
-      entity_id: row.id,
-      data: publicSnapshot(type, row),
-      published_by: publishedBy ?? null,
-    })),
+    ...rows
+      .map((row) => ({ row, data: publicSnapshot(type, row) }))
+      // Compared through stableJson because the stored copy comes back from JSONB with
+      // its keys in Postgres's order, not the order publicSnapshot wrote them.
+      .filter(({ row, data }) => currentSnapshot.get(String(row.id)) !== stableJson(data))
+      .map(({ row, data }) => ({
+        artist_id: artistId,
+        entity_type: type,
+        entity_id: row.id,
+        data,
+        published_by: publishedBy ?? null,
+      })),
     ...tombstoneIds.map((id) => ({
       artist_id: artistId,
       entity_type: type,

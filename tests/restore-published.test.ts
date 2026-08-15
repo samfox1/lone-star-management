@@ -44,6 +44,87 @@ afterAll(async () => {
   if (artistId) await svc.from('artists').delete().eq('id', artistId)
 })
 
+describe('publishContent — an unchanged row is not re-snapshotted', () => {
+  /**
+   * 89% of skeen's 3,829 revision rows were byte-identical re-writes of the row before
+   * them (measured 2026-08-15): every publish re-snapshotted every row, changed or not.
+   * The log grew with the number of PUBLISHES rather than the number of CHANGES.
+   *
+   * Skipping unchanged rows keeps the history exactly as complete — latest-per-entity is
+   * unaffected, and "what was live at time T" is still the newest revision at or before
+   * T — while making the list of publish moments mean "something actually changed".
+   */
+  let pubId: string
+  const countRevisions = async () => {
+    const { count } = await svc
+      .from('revisions')
+      .select('*', { count: 'exact', head: true })
+      .eq('artist_id', pubId)
+      .eq('entity_type', 'site_styles')
+    return count ?? 0
+  }
+
+  beforeAll(async () => {
+    const { data } = await svc
+      .from('artists')
+      .insert({ slug: `zz-dedupe-${Date.now()}`, name: 'ZZ Dedupe Fixture' })
+      .select('id')
+      .single()
+    pubId = data!.id
+    await svc.from('site_styles').insert({ artist_id: pubId, region_key: 'hero', class_names: 'v1' })
+  })
+  afterAll(async () => {
+    if (pubId) await svc.from('artists').delete().eq('id', pubId)
+  })
+
+  it('CRITICAL: republishing an untouched site writes NO new revisions', async () => {
+    await publishContent(svc, 'site_styles', pubId)
+    const afterFirst = await countRevisions()
+    expect(afterFirst).toBe(1) // the first publish records it
+
+    await publishContent(svc, 'site_styles', pubId)
+    await publishContent(svc, 'site_styles', pubId)
+    expect(await countRevisions(), 'nothing changed, so nothing new is recorded').toBe(afterFirst)
+  })
+
+  it('CRITICAL: a real edit still records a new revision', async () => {
+    // The other half — the dedupe must not swallow actual changes, which would silently
+    // freeze the live site at an old version.
+    const before = await countRevisions()
+    await svc.from('site_styles').update({ class_names: 'v2' }).eq('artist_id', pubId).eq('region_key', 'hero')
+    await publishContent(svc, 'site_styles', pubId)
+    expect(await countRevisions()).toBe(before + 1)
+    // …and the newest snapshot is the new value, so the live site would serve v2.
+    const { data: newest } = await svc
+      .from('revisions')
+      .select('data')
+      .eq('artist_id', pubId)
+      .eq('entity_type', 'site_styles')
+      .order('published_at', { ascending: false })
+      .limit(1)
+      .single()
+    expect((newest!.data as { class_names: string }).class_names).toBe('v2')
+  })
+
+  it('CRITICAL: a DELETED row still gets its tombstone, dedupe or not', async () => {
+    // The tombstone is what takes a row off the live site. Losing it to the dedupe would
+    // leave deleted content published forever.
+    const before = await countRevisions()
+    await svc.from('site_styles').delete().eq('artist_id', pubId).eq('region_key', 'hero')
+    await publishContent(svc, 'site_styles', pubId)
+    expect(await countRevisions()).toBe(before + 1)
+    const { data: newest } = await svc
+      .from('revisions')
+      .select('data')
+      .eq('artist_id', pubId)
+      .eq('entity_type', 'site_styles')
+      .order('published_at', { ascending: false })
+      .limit(1)
+      .single()
+    expect((newest!.data as { _deleted?: boolean })._deleted).toBe(true)
+  })
+})
+
 describe('restoreToPublished — a site that has NEVER published', () => {
   /**
    * THE REGRESSION. Shipped 2026-08-14 and destroyed Juniper's styling within the minute:
