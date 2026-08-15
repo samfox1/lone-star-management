@@ -31,6 +31,7 @@ import {
   publishContent,
   publishProfile,
   reconcileOnSite,
+  restoreToPublished,
   type OnSiteEntity,
   setSupportUrl,
   updateContent,
@@ -437,6 +438,36 @@ export async function saveEditorStyleAction(
   const res = await saveEditorStyle(supabase, artistId, regionKey, className)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
+}
+
+/**
+ * "Undo changes": put the draft back to the last published version, for everything the
+ * site editor owns (Sam, 2026-08-14).
+ *
+ * DESTRUCTIVE, and deliberately so — that is the whole feature. The UI confirms first.
+ * The caller's own client is used, never the service role, so RLS scopes every statement
+ * to an artist this user actually manages; the owner gate below is the same one every
+ * editor action uses, and 404s a non-owner before anything is written.
+ */
+export async function restorePublishedAction(
+  artistId: string,
+): Promise<{ ok: boolean; error?: string; changed?: number; hasPublished?: boolean }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+
+  try {
+    const { restored, removed, readded, hasPublished } = await restoreToPublished(supabase, artistId)
+    revalidatePath(`/artists/${artistId}`, 'layout')
+    return { ok: true, changed: restored + removed + readded, hasPublished }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not undo those changes.' }
+  }
 }
 
 /**

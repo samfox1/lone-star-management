@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
@@ -52,6 +53,7 @@ import {
   saveEditorLinkAction,
   saveEditorStyleAction,
   setOnSiteAction,
+  restorePublishedAction,
 } from '../actions'
 import { useSessionJournal } from './use-session-journal'
 import { useTextFieldSave } from './use-text-save'
@@ -437,6 +439,36 @@ export function EditorInspector({
    * the ledger in reverse through the same actions + paints. */
   const journal = useSessionJournal()
   const [reverting, setReverting] = useState(false)
+  const router = useRouter()
+
+  /**
+   * "Undo changes" — put the site back to the LAST PUBLISHED version (Sam, 2026-08-14).
+   *
+   * The server does the real work (restorePublishedAction), because "what was published"
+   * lives in the revision log, not in this component's memory of the session. A refresh
+   * then re-reads the draft so the panels and the preview show the restored values
+   * instead of the ones the manager just threw away.
+   *
+   * FALLBACK, for a site that has never published: there is no published version to
+   * return to, so undo means the session walk-back below — the best available reading of
+   * "put it back", and the one Sam picked for that case.
+   */
+  async function undoChanges() {
+    if (reverting) return
+    setReverting(true)
+    try {
+      const res = await restorePublishedAction(artistId)
+      if (res.ok && res.hasPublished) {
+        journal.clear()
+        router.refresh()
+        return
+      }
+      await revertSession({ keepBusy: true })
+    } finally {
+      journal.clear()
+      setReverting(false)
+    }
+  }
 
   const paintStyle = useCallback(
     (key: string, className: string) => {
@@ -463,9 +495,13 @@ export function EditorInspector({
     [journal, linkValues, onApplyLink],
   )
 
-  async function revertSession() {
-    if (reverting) return
-    setReverting(true)
+  async function revertSession(opts: { keepBusy?: boolean } = {}) {
+    // `keepBusy`: undoChanges already owns the busy flag and the ledger clear, so the
+    // fallback must not re-enter the guard it is being called from behind.
+    if (!opts.keepBusy) {
+      if (reverting) return
+      setReverting(true)
+    }
     try {
       for (const e of [...journal.entries].reverse()) {
         if (e.kind === 'style') {
@@ -487,8 +523,10 @@ export function EditorInspector({
         }
       }
     } finally {
-      journal.clear()
-      setReverting(false)
+      if (!opts.keepBusy) {
+        journal.clear()
+        setReverting(false)
+      }
     }
   }
 
@@ -946,7 +984,7 @@ export function EditorInspector({
           value. Hidden until something is touched, and while the ITEM editor is open
           (its own revert owns that surface). */}
       {!itemEditor && !textEditor && !tourEditor && journal.count > 0 && (
-        <SessionActions busy={reverting} onRevert={revertSession} />
+        <SessionActions busy={reverting} onRevert={undoChanges} />
       )}
     </aside>
   )
@@ -969,16 +1007,69 @@ function SessionActions({
   busy: boolean
   onRevert: () => void
 }) {
+  const [confirming, setConfirming] = useState(false)
   return (
-    <div className="border-t border-hairline px-4 py-2.5">
-      <button
-        type="button"
-        onClick={onRevert}
-        disabled={busy}
-        className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
+    <>
+      <div className="border-t border-hairline px-4 py-2.5">
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          disabled={busy}
+          className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
+        >
+          {busy ? 'Undoing…' : 'Revert changes'}
+        </button>
+      </div>
+      {confirming && (
+        <UndoConfirm
+          onConfirm={() => {
+            setConfirming(false)
+            onRevert()
+          }}
+          onDismiss={() => setConfirming(false)}
+        />
+      )}
+    </>
+  )
+}
+
+/** The one gate in front of a destructive, unrecoverable action. Says plainly what will
+ *  happen and what it costs, and the safe choice is the one on the left. */
+function UndoConfirm({ onConfirm, onDismiss }: { onConfirm: () => void; onDismiss: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Undo changes"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6"
+      onClick={onDismiss}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl border border-hairline bg-paper p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
       >
-        {busy ? 'Reverting…' : 'Revert changes'}
-      </button>
+        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">Undo changes</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
+          This puts your site back to the way it looked the last time you published.
+          Everything you have changed since then will be lost.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-ink hover:text-ink"
+          >
+            Keep editing
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex-1 rounded-lg border border-accent-red bg-accent-red px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper hover:opacity-85"
+          >
+            Undo changes
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

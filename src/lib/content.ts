@@ -460,6 +460,127 @@ export async function setSupportUrl(
  * "latest" and remain live forever. get_public_site drops entities whose latest
  * revision is a tombstone. Returns the number of revision rows written.
  */
+/**
+ * What the site editor's "Undo changes" puts back, per entity type (Sam, 2026-08-14:
+ * "if they want to clear their changes, it resets to the last published version").
+ *
+ * `columns` are the ones the EDITOR owns, and only those. Restoring a whole row would
+ * let an undo in the styling panel also rename a video someone retitled on the Videos
+ * page — an edit the editor never made and its undo has no business reversing.
+ *
+ * `absent` is what to do with a DRAFT row the last publish knows nothing about:
+ *   • 'delete' — the editor creates these whole (a style override, a text row, a link),
+ *     so a row added since the publish is exactly the change being undone.
+ *   • 'unplace' — the row exists independently of the editor (a photo, a video: a real
+ *     uploaded file). Undo takes it out of its slot; it must never delete the file.
+ */
+export const EDITOR_RESTORE: {
+  type: PublishableEntity
+  columns: string[]
+  absent: 'delete' | 'unplace'
+}[] = [
+  { type: 'site_styles', columns: ['region_key', 'class_names'], absent: 'delete' },
+  { type: 'site_content', columns: ['key', 'value'], absent: 'delete' },
+  { type: 'link', columns: ['label', 'url', 'sort_order', 'role'], absent: 'delete' },
+  // Placement only. `site_role` is which slot a photo/video sits in — the one thing the
+  // editor assigns; the file, its title and its storage path are not the editor's.
+  { type: 'media', columns: ['site_role'], absent: 'unplace' },
+  { type: 'video', columns: ['site_role'], absent: 'unplace' },
+]
+
+/**
+ * Put the DRAFT back to the last published version, for everything the site editor owns.
+ *
+ * The inverse of publishContent, and it reads the same log: `latest_revisions` is the
+ * newest snapshot per entity, so "what the site looked like at the last publish" is
+ * already recorded and needs no extra bookkeeping. Three cases per row, and all three
+ * matter — a restore that only handled the first would leave the draft looking published
+ * while still carrying additions and missing deletions:
+ *
+ *   • published AND still in the draft → put the owned columns back to the snapshot.
+ *   • in the draft, NOT published (added since, or its latest revision is a tombstone)
+ *     → delete it, or unplace it (see EDITOR_RESTORE.absent).
+ *   • published but GONE from the draft (deleted since) → re-insert it, id and all, so
+ *     the row the manager deleted comes back rather than silently staying gone.
+ *
+ * RLS scopes every statement to the caller's own artist; the RPC is SECURITY INVOKER for
+ * the same reason. Returns per-type counts, which the caller reports and the tests assert.
+ */
+export async function restoreToPublished(
+  supabase: SupabaseClient,
+  artistId: string,
+): Promise<{ restored: number; removed: number; readded: number; hasPublished: boolean }> {
+  const { data: latest, error: revErr } = await supabase.rpc('latest_revisions', { p_artist_id: artistId })
+  if (revErr) throw new Error(revErr.message)
+
+  // The published state, by type → id → snapshot. Tombstones are DROPPED here, which is
+  // what makes a deleted-then-published row count as "not published" below.
+  const published = new Map<string, Map<string, Record<string, unknown>>>()
+  for (const r of (latest ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[]) {
+    if (r.entity_id === null || r.data?._deleted === true) continue
+    const forType = published.get(r.entity_type) ?? new Map<string, Record<string, unknown>>()
+    forType.set(r.entity_id, r.data)
+    published.set(r.entity_type, forType)
+  }
+
+  let restored = 0
+  let removed = 0
+  let readded = 0
+
+  for (const { type, columns, absent } of EDITOR_RESTORE) {
+    const table = PUBLISHABLE[type].table
+    const live = await listContent(supabase, type, artistId)
+    const wanted = published.get(type) ?? new Map<string, Record<string, unknown>>()
+    const liveIds = new Set(live.map((row) => String(row.id)))
+
+    for (const row of live) {
+      const id = String(row.id)
+      const snapshot = wanted.get(id)
+      if (snapshot) {
+        // Only the columns that actually differ: a no-op UPDATE would still bump
+        // updated_at on every row of every publish-clean site.
+        const patch: Record<string, unknown> = {}
+        for (const col of columns) {
+          const next = snapshot[col] ?? null
+          if ((row as Record<string, unknown>)[col] !== next) patch[col] = next
+        }
+        if (Object.keys(patch).length === 0) continue
+        const { error } = await supabase.from(table).update(patch).eq('id', id).eq('artist_id', artistId)
+        if (error) throw new Error(error.message)
+        restored++
+        continue
+      }
+      if (absent === 'delete') {
+        const { error } = await supabase.from(table).delete().eq('id', id).eq('artist_id', artistId)
+        if (error) throw new Error(error.message)
+        removed++
+      } else if ((row as Record<string, unknown>).site_role != null) {
+        const { error } = await supabase.from(table).update({ site_role: null }).eq('id', id).eq('artist_id', artistId)
+        if (error) throw new Error(error.message)
+        removed++
+      }
+    }
+
+    // Rows deleted since the publish. Only for types the editor creates whole — a photo
+    // whose FILE is gone cannot be brought back by re-inserting its row.
+    if (absent !== 'delete') continue
+    for (const [id, snapshot] of wanted) {
+      if (liveIds.has(id)) continue
+      const insert: Record<string, unknown> = { id, artist_id: artistId }
+      for (const col of columns) insert[col] = snapshot[col] ?? null
+      const { error } = await supabase.from(table).insert(insert)
+      if (error) throw new Error(error.message)
+      readded++
+    }
+  }
+
+  // Whether this artist has EVER published. The caller needs it to tell "the draft
+  // already matches the published site" (nothing to do) from "there is no published site
+  // to go back to" (fall back to undoing the session) — both of which otherwise look
+  // identical: zero changes.
+  return { restored, removed, readded, hasPublished: (latest ?? []).length > 0 }
+}
+
 export async function publishContent(
   supabase: SupabaseClient,
   type: PublishableEntity,

@@ -25,6 +25,7 @@ import {
   assignHeroSlotAction,
   assignComponentSlotAction,
   setSongsOnSiteAction,
+  restorePublishedAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
@@ -58,7 +59,9 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setSongsOnSiteAction: vi.fn(async () => ({})),
   setImageFieldAction: vi.fn(async () => ({ ok: true })),
   addContentAction: vi.fn(async () => ({})),
+  restorePublishedAction: vi.fn(async () => ({ ok: true, changed: 3, hasPublished: true })),
 }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (
     <button type="button" onClick={() => onUploaded?.({ id: 'new1', storage_path: 'artist-1/gallery/new.jpg' })}>
@@ -1413,9 +1416,13 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     fireEvent.change(screen.getByLabelText('Nav Padding'), { target: { value: '1' } })
     expand('Foot')
     fireEvent.change(screen.getByLabelText('Foot Padding'), { target: { value: '1' } })
-    // Two keys touched → the session Cancel walks BOTH back.
+    // Two keys touched → the walk-back covers BOTH. Driven through the never-published
+    // fallback, which is the path that still uses the session ledger (2026-08-14); with a
+    // published version the server restore replaces this walk entirely.
+    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
     })
     // Reverse order: foot (touched last) first, then nav.
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'foot', 'border-b text-lg')
@@ -1682,14 +1689,57 @@ describe('EditorInspector — the session Revert button (Sam, 2026-08-14)', () =
     expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
-  it('CRITICAL: there is NO Save/Done button and no confirm dialog', () => {
+  it('CRITICAL: Undo asks first, then resets to the LAST PUBLISHED version', async () => {
+    // Sam, 2026-08-14: "if they want to clear their changes, it resets to the last
+    // published version." Destructive, so it confirms before it runs — and a click on
+    // the button alone must NOT touch anything.
+    const restoreMock = vi.mocked(restorePublishedAction)
+    editPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    expect(restoreMock).not.toHaveBeenCalled() // asked, not acted
+    const dialog = screen.getByRole('dialog', { name: 'Undo changes' })
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Undo changes' }))
+    })
+    expect(restoreMock).toHaveBeenCalledWith('artist-1')
+  })
+
+  it('CRITICAL: dismissing the confirmation changes nothing', async () => {
+    const restoreMock = vi.mocked(restorePublishedAction)
+    editPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(restoreMock).not.toHaveBeenCalled()
+    // …and the pending changes are still pending, so nothing was quietly accepted.
+    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
+  })
+
+  it('CRITICAL: with NOTHING published, it falls back to undoing this session', async () => {
+    // Sam's call for a site that has never published: there is no published version to
+    // return to, so undo means "put back what was there before my changes".
+    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
+    const saveStyle = vi.mocked(saveEditorStyleAction)
+    renderInspector([], { styleRegions: REGIONS, styleValues: { footer: 'border-t text-lg' } })
+    fireEvent.click(screen.getByRole('button', { name: /Style/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
+    fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
+    saveStyle.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
+    })
+    // The session walk-back ran: the region is written back to its session-start value.
+    expect(saveStyle).toHaveBeenCalledWith('artist-1', 'footer', 'border-t text-lg')
+  })
+
+  it('CRITICAL: there is NO Save/Done button', () => {
     // Sam, 2026-08-14: edits already autosave to the draft, so a button that only
     // dismissed the undo buffer was a second word for "save" that saved nothing.
     // Publish stays the one thing that goes public.
     editPage()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
-    expect(screen.queryByRole('dialog', { name: 'Confirm changes' })).toBeNull()
     // The revert affordance is the ONLY thing in the bar.
     expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
@@ -2101,8 +2151,11 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Slot 1' }))
     fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
+    // The never-published fallback — the path that still walks the session ledger.
+    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo changes' }))
     })
     expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
     expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()

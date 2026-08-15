@@ -38,6 +38,7 @@ export default defineConfig({
       'tests/audio-storage.test.ts',
       'tests/backfill.test.ts',
       'tests/brand-media.test.ts',
+      'tests/restore-published.test.ts',
       'tests/integrations.test.ts',
       'tests/site-editor-gallery.test.ts',
       'tests/sync.test.ts',
