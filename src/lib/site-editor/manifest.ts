@@ -60,6 +60,25 @@ export function bridgeOutdated(siteVersion: string | undefined, editorVersion = 
   return false
 }
 
+/** The bridge release that taught a site's applier to lift `size-[…]` and `fontfam-[…]`
+ *  onto `--lse-size` / `--lse-font`. */
+export const STYLE_VARS_SINCE = '0.16.0'
+
+/**
+ * Can the connected site turn the VALUE tokens into CSS? An older applier does not
+ * recognise them, so they would ride through to the class attribute as dead classes and
+ * the region would silently fall back to its base size — a control that stops working
+ * with no error anywhere.
+ *
+ * Unknown reads as NO, the opposite of `bridgeOutdated`'s reading, and deliberately: this
+ * gate decides what the editor WRITES, so being wrong means writing a token the site
+ * cannot use. Falling back to the class costs a manager nothing.
+ */
+export function bridgeSupportsStyleVars(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, STYLE_VARS_SINCE)
+}
+
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`

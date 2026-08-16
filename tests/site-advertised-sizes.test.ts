@@ -23,6 +23,7 @@ import {
   sliderSteps,
   type SiteStyleOptions,
 } from '@/lib/site-editor/style-controls'
+import { stepCss } from './helpers/clamp'
 
 const sizeOf = (controls: ReturnType<typeof buildStyleControls>) =>
   controls.find((c) => c.id === 'size')!
@@ -60,7 +61,10 @@ describe('the size scale a site advertises', () => {
     // all — a worse failure than the one this fixes.
     const steps = sliderSteps(sizeOf(buildTextItemStyleControls({ fonts: [] })))
     expect(steps.length).toBeGreaterThan(10)
-    expect(steps.every((s) => /^text-\[clamp\(/.test(s.value))).toBe(true)
+    // The built-in scale is written as VALUE tokens since 2026-08-16 — nothing to compile,
+    // so the reason this file exists does not apply to it. Resolved rather than pattern-
+    // matched, so the assertion still measures what renders: every step a real clamp.
+    expect(steps.every((s) => /^clamp\(/.test(stepCss(s.value)))).toBe(true)
   })
 
   it('an EMPTY advertised list is treated as "not advertised", not as "no sizes"', () => {

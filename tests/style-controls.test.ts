@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { clampMaxRem } from './helpers/clamp'
+import { sizeLength } from '@samfox1/site-bridge/styles'
 import {
   applyStyleValue,
   buildItemStyleControls,
@@ -616,8 +617,12 @@ describe('withUploadedFonts — Brand-page uploads join the manifest dropdown', 
     const font = buildStyleControls(opts).find((c) => c.id === 'font')
     expect(font?.kind).toBe('select')
     if (font?.kind !== 'select') throw new Error('no font control')
-    expect(font.options.map((o) => o.value)).toContain('font-archivo-narrow')
-    expect(font.options.find((o) => o.value === 'font-archivo-narrow')?.label).toBe('Archivo Narrow')
+    // An uploaded font is offered as a VALUE token now (the 2026-08-16 migration): the
+    // stack it resolves to is known — `fontStyleCss` wrote it — so the editor sets
+    // `--lse-font` rather than relying on the class. Pinned by LABEL plus the family
+    // inside the token, since the token shape is what changed.
+    const offered = font.options.find((o) => o.label === 'Archivo Narrow')
+    expect(offered?.value).toBe("fontfam-[archivo-narrow,sans-serif]")
   })
 
   it("manifest tokens keep list precedence — they are the site's own design", () => {
@@ -648,6 +653,15 @@ describe('text size is FLUID — it shrinks on a phone', () => {
     return c
   }
 
+  /**
+   * The step's value is now a VALUE token (`size-[48px]`), not a class — the CSS-variable
+   * migration of 2026-08-16. The fluidity these tests exist to protect moved with it,
+   * into `sizeLength`, so they resolve each step the way the bridge does and go on
+   * asserting the same properties about what actually renders. Pinning the token string
+   * instead would be a test that passes while every headline is fixed-size again.
+   */
+  const stepCss = (value: string) => sizeLength(Number(/^size-\[(\d+)px\]$/.exec(value)![1]))
+
   it('CRITICAL: every step scales with the viewport', () => {
     // A fixed `text-4xl` is 2.25rem at every width, so a caption sized on a desktop
     // preview runs off the edge of a phone — which is exactly what happened to the
@@ -655,7 +669,8 @@ describe('text size is FLUID — it shrinks on a phone', () => {
     // there is less room".
     for (const step of sizeControl().steps) {
       if (step.value === '') continue // the site's own default, not ours to define
-      expect(step.value).toMatch(/^text-\[clamp\(/)
+      expect(step.value, 'a step must be a value token').toMatch(/^size-\[\d+px\]$/)
+      expect(stepCss(step.value), step.value).toMatch(/^clamp\(/)
     }
   })
 
@@ -671,7 +686,7 @@ describe('text size is FLUID — it shrinks on a phone', () => {
     // two things at once.
     const maxima = sizeControl()
       .steps.filter((s) => s.value)
-      .map((s) => String(clampMaxRem(s.value)))
+      .map((s) => String(clampMaxRem(stepCss(s.value))))
     const LEGACY = ['0.75', '0.875', '1', '1.125', '1.25', '1.5', '1.875', '2.25', '3', '3.75', '4.5', '6', '8']
     expect(maxima.slice(0, LEGACY.length)).toEqual(LEGACY)
     // …and they are the START of the scale, not scattered through it.
@@ -681,7 +696,7 @@ describe('text size is FLUID — it shrinks on a phone', () => {
   it('every step is smaller at its minimum than at its maximum', () => {
     for (const step of sizeControl().steps) {
       if (!step.value) continue
-      const m = step.value.match(/clamp\(([\d.]+)rem,\s*[\d.]+vw,\s*([\d.]+)rem\)/)
+      const m = stepCss(step.value).match(/clamp\(([\d.]+)(?:rem|px),\s*[\d.]+vw,\s*([\d.]+)(?:rem|px)\)/)
       expect(m, step.value).not.toBeNull()
       expect(Number(m![1])).toBeLessThan(Number(m![2]))
     }
@@ -690,7 +705,7 @@ describe('text size is FLUID — it shrinks on a phone', () => {
   it('the scale ascends, so dragging right always means bigger', () => {
     const maxima = sizeControl()
       .steps.filter((s) => s.value)
-      .map((s) => clampMaxRem(s.value))
+      .map((s) => clampMaxRem(stepCss(s.value)))
     for (let i = 1; i < maxima.length; i++) expect(maxima[i]).toBeGreaterThan(maxima[i - 1])
   })
 
@@ -701,6 +716,7 @@ describe('text size is FLUID — it shrinks on a phone', () => {
     const c = sizeControl()
     expect(c.owns('text-4xl')).toBe(true)
     expect(c.owns('text-[clamp(1.5rem,5.2vw,2.25rem)]')).toBe(true)
+    expect(c.owns('size-[48px]')).toBe(true)
     // Not a colour or an alignment that happens to share the prefix.
     expect(c.owns('text-center')).toBe(false)
     expect(c.owns('text-foreground')).toBe(false)

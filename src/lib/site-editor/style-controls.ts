@@ -153,6 +153,74 @@ export const isTextSize = (t: string) =>
   /^text-\[(clamp\(|-?[\d.]+(r?em|px|v(w|h|min|max)|ch|ex|pt|%)[\])])/.test(t)
 const fontSuffix = (t: string) => (t.startsWith('font-') ? t.slice(5) : '')
 
+/* ── Size and font as VALUES, not classes (CONNECTING.md §5) ─────────────────────────
+ * A class beats the site's breakpoints: it lands in the merged string, and a section
+ * override replaces the base, so the `md:text-6xl` the site wrote is gone. These two
+ * controls now emit VALUE tokens the bridge lifts onto `--lse-size` / `--lse-font`,
+ * which a site can read and still shrink on a phone.
+ *
+ * Both controls own the OLD shape as well. Every already-styled region stores a class,
+ * and owning only the new token would leave two sizes on one element with stylesheet
+ * order deciding which wins — the exact silent failure the size control was built to
+ * avoid in the first place.
+ */
+
+/** The size token the editor writes: a desktop px, which the bridge turns into a fluid
+ *  clamp. `size-[Npx]` rather than a bare number so it reads like every other token in a
+ *  stored string, and so `owns` can recognise it without ambiguity. */
+const isSizeVar = (t: string) => /^size-\[\d{1,4}px\]$/.test(t)
+const sizeVarPx = (t: string): number | null => {
+  const m = /^size-\[(\d{1,4})px\]$/.exec(t)
+  return m ? Number(m[1]) : null
+}
+const isFontVar = (t: string) => t.startsWith('fontfam-[')
+
+/**
+ * May the editor WRITE value tokens for this site?
+ *
+ * A site whose bundled applier predates them does not recognise `size-[48px]`, so it would
+ * ride through to the class attribute as a dead class and the region would quietly fall
+ * back to its base size — a control that stops working with no error anywhere. The editor
+ * sets this from the manifest's `bridgeVersion` (see `withStyleVars`).
+ *
+ * Absent means YES: lone-star's own built-in templates render in-process against this very
+ * package, and a caller that never met a remote site has nothing to be behind.
+ *
+ * Both shapes stay READABLE either way — the controls own the old classes forever, because
+ * every region styled before the migration still stores one.
+ */
+const usesVars = (opts?: SiteStyleOptions) =>
+  (opts as EditorStyleOptions | undefined)?.styleVars !== false
+
+/** Style options plus what the EDITOR knows that the site did not declare. Kept separate
+ *  from `SiteStyleOptions` (the manifest type) because this is derived, not announced. */
+export type EditorStyleOptions = SiteStyleOptions & { styleVars?: boolean }
+
+/** Record whether the connected site can lift value tokens, for the control builders to
+ *  read. Call once where the options are prepared, beside `withUploadedFonts`. */
+export function withStyleVars(
+  opts: SiteStyleOptions | undefined,
+  supported: boolean,
+): EditorStyleOptions {
+  return { ...opts, styleVars: supported }
+}
+/** Both shapes — the value token this control now writes, and every class shape a region
+ *  styled before the migration still stores. */
+const ownsSize = (t: string) => isSizeVar(t) || isTextSize(t)
+
+/**
+ * The font token: the site's declared stack, underscore-encoded because a stored style
+ * string is split on whitespace (Tailwind's own arbitrary-value convention).
+ *
+ * QUOTES ARE STRIPPED. A quote is one of the few characters that could end a style
+ * attribute, so `cleanClassText` refuses it — a quoted stack would fail to save with
+ * "that setting produced something the site can't use", the message Sam hit on the social
+ * icons. The bridge re-quotes each family when it builds the CSS value, which is the only
+ * place that can do it correctly (a generic keyword must stay bare).
+ */
+export const encodeFontStack = (css: string) =>
+  `fontfam-[${css.replace(/["']/g, '').trim().replace(/\s+/g, '_')}]`
+
 // FLUID sizes, not fixed ones. A `text-4xl` is 2.25rem at every width, so a caption
 // sized against the desktop preview ran off the edge of a phone — which is exactly what
 // happened to the polaroid captions.
@@ -190,6 +258,8 @@ const SIZE_REM: Record<string, number> = {
 /** A font size in rem. A clamp is measured by its MAX — the desktop size, which is what
  *  the manager is looking at while they drag. */
 function textSizeRank(t: string): number | null {
+  const varPx = sizeVarPx(t)
+  if (varPx != null) return varPx / 16
   const named = SIZE_REM[textSuffix(t)]
   if (named != null) return named
   const arb = /^text-\[(.+)\]$/.exec(t)
@@ -332,16 +402,47 @@ export function withUploadedFonts(
   const manifest = opts?.fonts ?? []
   const seen = new Set(manifest.map((f) => f.value))
   const extra = uploaded
-    .map((f) => ({ value: `font-${f.family}`, label: f.label }))
+    // `css` is the stack `fontStyleCss` writes for this family, character for character
+    // (`.font-<family>{font-family:'<family>',sans-serif}`) — so choosing the font via
+    // the variable renders identically to choosing it via the class.
+    .map((f) => ({ value: `font-${f.family}`, label: f.label, css: `'${f.family}',sans-serif` }))
     .filter((f) => !seen.has(f.value))
   return { ...opts, fonts: [...manifest, ...extra] }
 }
 
-/** The scale to offer: the site's own if it advertises one, else this module's.
- *  EMPTY counts as "not advertised" — a site mid-migration announcing `textSizes: []`
- *  should get a working slider, not one with nothing on it. */
-const sizeScale = (opts?: SiteStyleOptions): StyleOption[] =>
-  opts?.textSizes?.length ? opts.textSizes : SIZE_OPTIONS
+/**
+ * The scale to offer: the site's own if it advertises one, else this module's.
+ * EMPTY counts as "not advertised" — a site mid-migration announcing `textSizes: []`
+ * should get a working slider, not one with nothing on it.
+ *
+ * Which STEPS to offer stays the site's call; what gets WRITTEN is a value token. The
+ * declaration existed because Tailwind only builds the classes it can see, and a size the
+ * site never compiled landed with no CSS behind it — a variable has nothing to compile,
+ * so that reason is gone while the site's choice of scale is not.
+ *
+ * A step whose size cannot be measured is left as its own class: better a control that
+ * behaves as it always did than one that silently writes a size nobody asked for.
+ */
+const sizeScale = (opts?: SiteStyleOptions): StyleOption[] => {
+  // ADVERTISED SIZES ARE WRITTEN VERBATIM. A site that declares `textSizes` has said
+  // exactly which classes it wants set, down to each clamp's floor — reinterpreting one
+  // as a px and re-deriving the clamp would quietly substitute the editor's judgement for
+  // the site's, which is the opposite of the point. Declaring the scale is how a site
+  // opts OUT of the variable; omitting it is how a site opts in.
+  if (opts?.textSizes?.length) return opts.textSizes
+  if (!usesVars(opts)) return SIZE_OPTIONS
+  return SIZE_OPTIONS.map((o) => {
+    const rem = textSizeRank(o.value)
+    return rem == null ? o : { ...o, value: `size-[${Math.round(rem * 16)}px]` }
+  })
+}
+
+/** A font option as the editor should WRITE it: a value token when the site declared what
+ *  its class resolves to, the class itself otherwise. The editor cannot know what
+ *  `font-display` means, and inventing a stack would replace the site's typeface with a
+ *  guess — so an undeclared font keeps working exactly as it does today. */
+const fontOption = (opts: SiteStyleOptions | undefined) => (f: StyleOption): StyleOption =>
+  f.css && usesVars(opts) ? { ...f, value: encodeFontStack(f.css) } : f
 
 const isLeading = (t: string) => t.startsWith('leading-') || t.startsWith('!leading-')
 const isTracking = (t: string) => t.startsWith('tracking-') || t.startsWith('!tracking-')
@@ -373,9 +474,9 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
       id: 'font',
       label: 'Font',
       kind: 'select',
-      options: [DEFAULT, ...opts.fonts],
+      options: [DEFAULT, ...opts.fonts.map(fontOption(opts))],
       // Any font-* that isn't a weight is a family.
-      owns: (t) => t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t)),
+      owns: (t) => isFontVar(t) || (t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t))),
     })
   }
   controls.push({
@@ -383,7 +484,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     label: 'Size',
     kind: 'select',
     options: [DEFAULT, ...sizeScale(opts)],
-    owns: isTextSize,
+    owns: ownsSize,
   })
   controls.push({
     id: 'weight',
@@ -503,8 +604,8 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
       id: 'font',
       label: 'Font',
       kind: 'select',
-      options: [DEFAULT, ...opts.fonts],
-      owns: (t) => t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t)),
+      options: [DEFAULT, ...opts.fonts.map(fontOption(opts))],
+      owns: (t) => isFontVar(t) || (t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t))),
     })
   }
   controls.push({
@@ -514,7 +615,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     steps: [DEFAULT, ...sizeScale(opts)],
     defaultOffScale: true,
     rank: textSizeRank,
-    owns: isTextSize,
+    owns: ownsSize,
   })
   controls.push({
     id: 'weight',

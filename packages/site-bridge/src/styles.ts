@@ -95,6 +95,125 @@ export function fluidizeSizes(override: string): string {
     .join(" ");
 }
 
+/* ── SIZE and FONT as CSS custom properties (CONNECTING.md §5) ────────────────────────
+ * A class-writing control beats the site's breakpoints: it lands in the merged string,
+ * and a section override REPLACES the base, so the `md:text-6xl` the site wrote is gone.
+ * These two tokens invert that. The editor supplies a VALUE on `--lse-size` /
+ * `--lse-font`; the site writes the rule that reads it and can still shrink it on a
+ * phone.
+ *
+ * The property is inlined TOO, so a site that opts into nothing renders exactly as it
+ * does today. A region takes that authority back by CLAIMING the property in its base
+ * (`lse-owns-[size]`), after which only the variable is set.
+ */
+
+/** Desktop px → the ladder's own clamp, derived from TEXT_SIZES so a step added to the
+ *  ladder is carried here automatically. Every already-styled headline must render
+ *  pixel-identically after the migration, which means reusing the exact same clamp
+ *  string the `text-[clamp(…)]` class carried. */
+const SIZE_BY_PX: Map<number, string> = new Map(
+  TEXT_SIZES.map((o) => [
+    Number(o.label.replace("px", "")),
+    o.value.replace(/^text-\[/, "").replace(/\]$/, ""),
+  ]),
+);
+
+/**
+ * The CSS length `--lse-size` carries for a chosen desktop size.
+ *
+ * On the ladder: that step's clamp, verbatim. Off it (a site's own base size is almost
+ * never a step): a clamp derived the same way — a floor at 70% so a phone has something
+ * to give, a vw term that reaches the chosen size at a 1024px viewport, and the choice
+ * itself as the ceiling. Fluid either way; a fixed length is the bug this replaces.
+ */
+export function sizeLength(px: number): string {
+  const exact = SIZE_BY_PX.get(px);
+  if (exact) return exact;
+  const min = Math.round(px * 0.7);
+  const vw = ((px / 1024) * 100).toFixed(2).replace(/\.?0+$/, "");
+  return `clamp(${min}px,${vw}vw,${px}px)`;
+}
+
+/** A font stack is a name list and nothing else. It reaches a style attribute verbatim,
+ *  so anything that could close a declaration or open a fetch is refused outright rather
+ *  than escaped — there is no legitimate family name containing a paren or a semicolon. */
+const FONT_STACK_OK = /^[A-Za-z0-9 ,-]+$/;
+const MAX_FONT_STACK = 200;
+
+/** CSS's own family keywords, which must NOT be quoted — `font-family: 'serif'` asks for
+ *  a font actually named "serif" and falls back to the browser default instead. */
+const GENERIC_FAMILIES = new Set([
+  "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
+  "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "math", "emoji",
+  "fangsong", "inherit", "initial", "revert", "unset",
+]);
+
+/**
+ * Decode a `fontfam-[…]` payload into a real font stack, or null if it is not one.
+ *
+ * Underscores stand in for spaces — Tailwind's own arbitrary-value convention, and the
+ * only workable one here because the stored style string is split on whitespace.
+ *
+ * The stored token carries NO quotes: a quote is one of the few characters that could
+ * end a style attribute, so the editor's save validator refuses it outright and that
+ * refusal is worth keeping. Quoting is restored HERE instead, per family, which is also
+ * the only place that can do it correctly — a generic keyword must stay bare, and a name
+ * beginning with a digit is invalid unless quoted.
+ */
+export function fontFamilyValue(encoded: string): string | null {
+  const value = encoded.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  if (!value || value.length > MAX_FONT_STACK) return null;
+  if (!FONT_STACK_OK.test(value)) return null;
+  const families = value
+    .split(",")
+    .map((f) => f.trim())
+    .filter(Boolean);
+  if (!families.length) return null;
+  return families
+    .map((f) => (GENERIC_FAMILIES.has(f.toLowerCase()) ? f : `'${f}'`))
+    .join(", ");
+}
+
+/** A region CLAIMS a property when it writes the rule that reads the variable itself.
+ *  Claims are per-property and independent: owning size says nothing about font. */
+const CLAIM_TOKEN = /^lse-owns-\[([a-z,]+)\]$/;
+
+/** The properties a base claims. Read from the BASE, never the merged string — a section
+ *  override replaces the base, so a claim read from the merged string would evaporate the
+ *  moment a manager styled the region. */
+function claimedProps(base: string): Set<string> {
+  const claims = new Set<string>();
+  for (const token of base.split(/\s+/)) {
+    const m = token.match(CLAIM_TOKEN);
+    if (m) for (const prop of m[1].split(",")) claims.add(prop);
+  }
+  return claims;
+}
+
+/** `size-[Npx]` / `fontfam-[…]` → the variable, plus the property itself unless the
+ *  region has claimed it. Returns `{}` for a token whose payload is refused, so a
+ *  malformed one is inert rather than falling through to the class list. */
+function variableToken(
+  token: string,
+  claims: Set<string>,
+): Record<string, string> | null {
+  let m = token.match(/^size-\[(\d{1,4})px\]$/);
+  if (m) {
+    const style: Record<string, string> = { "--lse-size": sizeLength(Number(m[1])) };
+    if (!claims.has("size")) style.fontSize = "var(--lse-size)";
+    return style;
+  }
+  m = token.match(/^fontfam-\[(.+)\]$/);
+  if (m) {
+    const value = fontFamilyValue(m[1]);
+    if (!value) return {};
+    const style: Record<string, string> = { "--lse-font": value };
+    if (!claims.has("font")) style.fontFamily = "var(--lse-font)";
+    return style;
+  }
+  return null;
+}
+
 /**
  * Resolve a region's class string: the editor override if the manager set one,
  * otherwise the given base classes. Exported for direct use/testing; components
@@ -402,6 +521,10 @@ export const MANAGED_STYLE_PROPS = [
   "margin-right",
   "min-height",
   "max-width",
+  "font-size",
+  "font-family",
+  "--lse-size",
+  "--lse-font",
 ] as const;
 
 export type ResolvedStyle = {
@@ -451,7 +574,11 @@ function speedRate(token: string): number | null {
  * base classes, where stylesheet order decides. Inline needs no build and always wins.
  * Everything else — the site's own vocabulary — stays a class.
  */
-function resolveTokens(classString: string, liftAll: boolean): ResolvedStyle {
+function resolveTokens(
+  classString: string,
+  liftAll: boolean,
+  claims: Set<string> = new Set(),
+): ResolvedStyle {
   const classes: string[] = [];
   const style: Record<string, string> = {};
   const filters: string[] = [];
@@ -459,9 +586,13 @@ function resolveTokens(classString: string, liftAll: boolean): ResolvedStyle {
   const decorations: string[] = [];
   let playbackRate: number | undefined;
   for (const token of classString.split(/\s+/).filter(Boolean)) {
+    // The claim marker is a DECLARATION, not CSS — no site compiles it, and leaving it
+    // in the class list would put a dead token in the public page's markup.
+    if (CLAIM_TOKEN.test(token)) continue;
     const decoration = token === "underline" || token === "line-through" ? token : null;
     const inline =
       colorStyle(token) ??
+      variableToken(token, claims) ??
       textEffectStyle(token) ??
       (decoration ? null : sectionEffectStyle(token)) ??
       (liftAll ? (inlineToken(token) ?? mediaToken(token) ?? shapeToken(token)) : null);
@@ -551,10 +682,16 @@ export function resolveRegionStyle(
   // screenshot of 2026-08-05. The base is code and says what it means; the override is
   // data with a history. See fluidizeSizes.
   const override = fluidizeSizes(rawOverride);
+  // From the BASE, before the merge: a section override REPLACES the base, so a claim
+  // read out of the merged string would vanish the moment a manager styled the region.
+  const claims = claimedProps(base);
   if (!isItemKey(key))
-    return resolveTokens(mergeStyle(key, base, override), false);
-  const lifted = resolveTokens(override.trim(), true);
-  const kept = base.trim();
+    return resolveTokens(mergeStyle(key, base, override), false, claims);
+  const lifted = resolveTokens(override.trim(), true, claims);
+  const kept = base
+    .split(/\s+/)
+    .filter((t) => t && !CLAIM_TOKEN.test(t))
+    .join(" ");
   return {
     className: [kept, lifted.className].filter(Boolean).join(" "),
     style: lifted.style,

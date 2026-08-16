@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
-import { bridgeOutdated } from '@/lib/site-editor/manifest'
+import { bridgeOutdated, bridgeSupportsStyleVars } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
-import { withUploadedFonts } from '@/lib/site-editor/style-controls'
+import { withStyleVars, withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
 import { CURSOR_KEYS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
@@ -289,7 +289,10 @@ export function EditorShell({
         assetBudgets={panels.assetBudgets}
         styleRegions={panels.styleRegions}
         styleValues={draft?.styles ?? {}}
-        styleOptions={withUploadedFonts(panels.styleOptions, uploadedFonts)}
+        styleOptions={withStyleVars(
+          withUploadedFonts(panels.styleOptions, uploadedFonts),
+          bridgeSupportsStyleVars(manifest?.bridgeVersion),
+        )}
         selectedStyle={selectedStyle}
         deselectedAt={deselectedAt}
         linkRegions={panels.linkRegions}

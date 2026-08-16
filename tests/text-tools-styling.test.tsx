@@ -240,7 +240,7 @@ describe('TextFieldEditor — one field, full panel', () => {
     // Derived from the scale, not hardcoded: the step whose desktop max is the hero's own
     // 11rem. Hardcoding an index here would quietly become an assertion about some other
     // size the next time a step is added.
-    const own = steps.findIndex((s) => /,\s*11rem\)\]$/.test(s.value))
+    const own = steps.findIndex((s) => clampMaxRem(s.value) === 11)
     expect(size.value).toBe(String(own))
     // …and it must not still claim to be unset, which is what licensed the jump.
     expect(within(size.parentElement!).queryByText('Default')).toBeNull()

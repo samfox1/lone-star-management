@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.15.0'
+export const PACKAGE_VERSION = '0.16.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -182,6 +182,17 @@ export type StyleOption = {
    *  like — a site that declares this gets its palette offered as real swatches in the
    *  colour picker. Optional: a site that omits it simply isn't offered there. */
   hex?: string
+  /**
+   * For a FONT option, the CSS `font-family` value the class resolves to
+   * (`'"Momo Display", serif'`).
+   *
+   * The same shape of declaration as `hex`, for the same reason: the class is the site's
+   * own, so the editor cannot know what it means. Declaring it lets the editor set
+   * `--lse-font` instead of writing the class, which is what keeps the site in charge of
+   * the typeface at each breakpoint (CONNECTING.md §5). Omitted, the editor keeps writing
+   * the class — a site migrates one font at a time, never all at once.
+   */
+  css?: string
 }
 
 /** A site's declared design palette (from its manifest). Colours + fonts are the site's

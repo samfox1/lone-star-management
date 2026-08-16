@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest'
 import { isTextRegion, textPanelEntries } from '@/lib/site-editor/text-panel'
 import { buildTextItemStyleControls, sliderIndex, sliderSteps } from '@/lib/site-editor/style-controls'
 import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
-import { clampMaxRem, clampMinRem } from './helpers/clamp'
+import { clampMaxRem, clampMinRem, stepCss } from './helpers/clamp'
 
 /** skeen's real bases, verbatim from its lib/styles.ts. Copied rather than imported (it is
  *  another repo), so each is quoted in full and can be re-checked by eye against source. */
@@ -112,10 +112,15 @@ describe('the size scale reaches past what the site already uses', () => {
     expect(clampMaxRem(steps[steps.length - 1].value)).toBeGreaterThan(11)
   })
 
-  it('CRITICAL: the hero’s own size is a step, so it opens ON it and can Reset', () => {
+  it('CRITICAL: the hero’s own size is a step, so the handle opens ON it', () => {
     const { idx, exact } = sliderIndex(size, 'text-[clamp(4rem,18vw,11rem)]')
-    expect(exact).toBe(true)
     expect(clampMaxRem(steps[idx].value)).toBe(11)
+    // NOT exact, since the migration to value tokens (2026-08-16): this string is the
+    // SITE's base, not something the manager set, and `exact` is what gates Reset. There
+    // is nothing of theirs to clear yet. Once they pick a size it stores `size-[176px]`,
+    // which is a step literally — asserted below.
+    expect(exact).toBe(false)
+    expect(sliderIndex(size, steps[idx].value).exact).toBe(true)
   })
 
   it('there is room to drag UP from the hero, not just down', () => {
@@ -128,7 +133,7 @@ describe('the size scale reaches past what the site already uses', () => {
   it('every step still ascends, and every one is a clamp', () => {
     // Pinned here as well as in text-tools-styling: adding six steps by hand is exactly
     // where a transposed digit would go unnoticed.
-    for (const s of steps) expect(s.value, s.label).toMatch(/^text-\[clamp\([\d.]+rem,[\d.]+vw,[\d.]+rem\)\]$/)
+    for (const s of steps) expect(stepCss(s.value), s.label).toMatch(/^clamp\([\d.]+rem,[\d.]+vw,[\d.]+rem\)$/)
     const maxes = steps.map((s) => clampMaxRem(s.value))
     for (let i = 1; i < maxes.length; i++) expect(maxes[i], steps[i].label).toBeGreaterThan(maxes[i - 1])
     // The mobile floor must ascend too, or a bigger choice could render SMALLER on a phone.
@@ -140,7 +145,7 @@ describe('the size scale reaches past what the site already uses', () => {
     // A clamp whose min equals its max is a fixed size wearing a costume, and would run
     // off a phone exactly like the old text-4xl did.
     for (const s of steps) {
-      const [, min, , max] = /clamp\(([\d.]+)rem,([\d.]+)vw,([\d.]+)rem\)/.exec(s.value)!.map(Number) as unknown as number[]
+      const [, min, , max] = /clamp\(([\d.]+)rem,([\d.]+)vw,([\d.]+)rem\)/.exec(stepCss(s.value))!.map(Number) as unknown as number[]
       expect(min, s.label).toBeLessThan(max)
     }
   })

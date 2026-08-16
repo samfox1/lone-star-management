@@ -150,6 +150,8 @@ opts in by reading it, with your own default as the fallback:
 
 | Variable | Set by | Read it like |
 | --- | --- | --- |
+| `--lse-size` | Font size | `font-size: var(--lse-size, 2rem)` |
+| `--lse-font` | Font | `font-family: var(--lse-font, 'Momo Display', serif)` |
 | `--lse-icon-size` | Icon size | `width: var(--lse-icon-size, 24px)` |
 | `--lse-hover-color` | Hover colour | `hover:text-[var(--lse-hover-color,#c63a2a)]` |
 | `--lse-enter-duration` | Entrance speed | `animation-duration: var(--lse-enter-duration, 1.2s)` |
@@ -159,13 +161,43 @@ opts in by reading it, with your own default as the fallback:
 your site in charge: the editor supplies a number, and you decide how it behaves at every
 screen size.
 
-```css
-/* the manager picks a size; the site still shrinks it on a phone */
-font-size: var(--lse-size, 2rem);
-@media (max-width: 640px) { font-size: calc(var(--lse-size, 2rem) * 0.8); }
+### Claiming a property
+
+Size and font set their variable **and** the property itself, so a site that does nothing
+renders exactly as it did when they were classes. Add `lse-owns-[…]` to a region's **base**
+to take that authority back — the variable is still set, the property is not, and your own
+rule decides:
+
+```ts
+hero_name: 'block lse-owns-[size]'   // or lse-owns-[size,font]
 ```
 
-Today most other controls still write classes or inline values, which override your
+```css
+.hero-name { font-size: var(--lse-size, clamp(4rem, 18vw, 11rem)); }
+@media (max-width: 640px) { .hero-name { font-size: calc(var(--lse-size, 3rem) * 0.8); } }
+```
+
+Three things to know about the claim:
+
+- It is read from the **base**, never the merged string, so it survives a manager styling
+  the region (which replaces the base — see Known rough edges).
+- Claims are **per property**. Owning size says nothing about font.
+- The marker never reaches the rendered class list. It is a declaration, not CSS.
+
+Declare your own fallback in every `var()`, and make it the value the region actually
+wears. An unset variable falling back to nothing is a region that disappears.
+
+**Fonts must declare what they resolve to.** The editor cannot know what `font-momo`
+means, so it keeps writing the class until you say:
+
+```ts
+fonts: [{ value: 'font-momo', label: 'Momo', css: '"Momo Display", serif' }]
+```
+
+Once declared, the editor sets `--lse-font` instead — nothing to safelist and nothing to
+compile. Undeclared fonts keep working, so a site migrates one at a time.
+
+Every other control still writes classes or inline values, which override your
 breakpoints. Prefer fluid values (`clamp()`) in your bases so a manager's choice stays
 responsive, and expect more of these to become variables.
 
@@ -252,5 +284,10 @@ Written down so nobody rediscovers them.
   is storing only what the manager changed, which is what §5 is building toward.
 - **Reset on a section control removes the property** rather than restoring your default,
   for the same reason.
-- **Class-writing controls beat your breakpoints.** Until they become variables, keep base
-  values fluid.
+- **Class-writing controls beat your breakpoints.** Size and font became variables in
+  0.16.0 (§5); the rest — weight, alignment, leading, tracking, case, italic, palette
+  colours — have not. Until they do, keep base values fluid.
+- **Value tokens need 0.16.0 or newer.** An older applier renders `size-[48px]` as a dead
+  class and the region falls back to its base size. The editor checks your `bridgeVersion`
+  and keeps writing classes when you are behind, so upgrading is safe in either order —
+  but a site that never stamps a version is treated as old and never gets them.
