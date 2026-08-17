@@ -130,8 +130,9 @@ socials: 'flex gap-4 iconsize-[18px] text-ink/60 hovercolor-[#9c4221]'
 Concretely:
 
 - **Sizes and gaps a slider should open on** go in the base (`iconsize-[18px]`, `gap-4`,
-  `py-12`). Without one the handle rests on a guess, and dragging can make something
-  smaller when it should get bigger.
+  `py-12` — and `sizesm-[28px]`, the phone floor, beside a declared `size-[48px]`).
+  Without one the handle rests on a guess, and dragging can make something smaller when
+  it should get bigger. This has now bitten three separate controls; declare both ends.
 - **Colours** go in the base **and** in `styleOptions`. A picker recognises exactly two
   things: a colour your palette declares, and an arbitrary hex (`text-[#ffffffcc]`). Use
   the hex form for a colour with no palette entry.
