@@ -222,7 +222,10 @@ region's base) plus a phone pick — the bridge emits ONE fluid clamp on `--lse-
 phone pick as the floor, desktop pick as the ceiling, interpolating from a 390px to a
 1024px viewport. No marker class, no package breakpoint, no snap; `--lse-size-m` is not
 set in that case, and your chain above degrades to reading the fused value. The marker
-mechanism survives only for a phone pick on a region with no known ceiling.
+mechanism survives only for a region with no size of its own anywhere — the ceiling is
+otherwise read from the initial build itself: a size token or class in the base, or a
+legacy stored size class.
+
 
 **Fonts must declare what they resolve to.** The editor cannot know what `font-momo`
 means, so it keeps writing the class until you say:

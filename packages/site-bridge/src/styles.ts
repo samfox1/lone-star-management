@@ -308,6 +308,29 @@ function tokenPx(tokens: string[], re: RegExp): number | null {
   return null;
 }
 
+/**
+ * The DESKTOP px a size CLASS renders at, or null. The initial build already set every
+ * region's ceiling (Sam, 2026-08-17) — usually as a class, not a token: the site's own
+ * fluid clamp (its max is the desktop size), an arbitrary length, or a named Tailwind
+ * size (resolved through LEGACY_TO_FLUID, the same table that renders it). Reading it
+ * here is what makes a phone-only edit work on any region that has a size at all;
+ * without this the fallback machinery fired on regions with a perfectly good ceiling.
+ */
+function sizeClassMaxPx(tokens: string[]): number | null {
+  for (const raw of tokens) {
+    const t = LEGACY_TO_FLUID[raw.replace(/^!/, "")] ?? raw;
+    const arb = t.match(/^text-\[(.+)\]$/);
+    if (!arb) continue;
+    const clamp = arb[1].match(/^clamp\(.+,\s*([\d.]+)(rem|px)\)$/);
+    const single = clamp ?? arb[1].match(/^([\d.]+)(rem|px)$/);
+    if (!single) continue;
+    const n = Number(single[1]);
+    if (!Number.isFinite(n)) continue;
+    return Math.round(single[2] === "rem" ? n * 16 : n);
+  }
+  return null;
+}
+
 /** `size-[Npx]` / `fontfam-[…]` / the TEXT_VARS families → the variable, plus the
  *  property itself unless the region has claimed it. Returns `{}` for a token whose
  *  payload is refused, so a malformed one is inert rather than falling through to the
@@ -842,8 +865,12 @@ export function resolveRegionStyle(
     // The ceiling: the merged string's own desktop pick, else the BASE's declared size —
     // an override that replaced the base took its size token with it, but the base is
     // still what the region renders as on desktop (the claimed rule's fallback says so).
+    const baseTokens = base.split(/\s+/);
     const desktop =
-      tokenPx(tokens, SIZE_TOKEN_RE) ?? tokenPx(base.split(/\s+/), SIZE_TOKEN_RE);
+      tokenPx(tokens, SIZE_TOKEN_RE) ??
+      sizeClassMaxPx(tokens) ??
+      tokenPx(baseTokens, SIZE_TOKEN_RE) ??
+      sizeClassMaxPx(baseTokens);
     if (phone != null && desktop != null) {
       const resolved = resolveTokens(
         tokens.filter((t) => !SIZESM_TOKEN_RE.test(t)).join(" "),

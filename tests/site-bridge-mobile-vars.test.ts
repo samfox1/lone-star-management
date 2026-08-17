@@ -151,6 +151,35 @@ describe("fused clamp — both ends known", () => {
     expect(style["--lse-size-m"]).toBeUndefined();
   });
 
+  it("derives the ceiling from a base size CLASS — the initial build already set it", () => {
+    // Sam, 2026-08-17: "the ceiling should already be there based off of the initial
+    // build." Most bases declare size as a CLASS, not a token — the fluid clamp the
+    // site shipped with, or a named Tailwind size. Its max IS the default ceiling.
+    const clamp = resolveRegionStyle(
+      "r",
+      "grid text-[clamp(1.75rem,6.5vw,3rem)]",
+      "sizesm-[18px]",
+    );
+    expect(clamp.style["--lse-size"]).toContain("clamp(18px");
+    expect(clamp.style["--lse-size"]).toContain("48px)"); // 3rem
+    expect(clamp.style["--lse-size-m"]).toBeUndefined();
+
+    const named = resolveRegionStyle("r", "grid text-sm", "sizesm-[12px]");
+    expect(named.style["--lse-size"]).toContain("clamp(12px");
+    expect(named.style["--lse-size"]).toContain("14px)");
+  });
+
+  it("derives it from a LEGACY stored size class in the override too", () => {
+    // Pre-0.16 rows store the clamp classes; their max is the manager's own ceiling.
+    const { style } = resolveRegionStyle(
+      "r",
+      "grid",
+      "text-[clamp(1.5rem,5.2vw,2.25rem)] sizesm-[16px]",
+    );
+    expect(style["--lse-size"]).toContain("clamp(16px");
+    expect(style["--lse-size"]).toContain("36px)"); // 2.25rem
+  });
+
   it("a phone pick with NO known ceiling keeps the fallback machinery", () => {
     const { style, className } = resolveRegionStyle("r", "grid", "sizesm-[18px]");
     expect(style["--lse-size-m"]).toBe("18px");
