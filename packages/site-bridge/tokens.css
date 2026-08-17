@@ -136,3 +136,15 @@ html[data-lse-entrances] .enter-blur:not([data-lse-entered]){opacity:0;filter:bl
 .hover-brighten:hover{filter:brightness(1.15)}
 .hover-glow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
 .hover-glow:hover{filter:drop-shadow(0 0 10px currentColor)}
+
+/* ── Mobile overrides (0.19.0) — REAL rules. The bridge cannot put an @media in an
+ * inline style, so a phone-only value rides a variable plus one of these marker
+ * classes. !important is load-bearing: it must beat the same element's inline desktop
+ * property (font-size: var(--lse-size)). 639px = below Tailwind's sm, the convention
+ * every connected site already uses. A CLAIMED region never gets the marker class —
+ * its own media query reads var(--lse-size-m, var(--lse-size, …)) and keeps owning
+ * where "mobile" begins. */
+@media (max-width: 639px) {
+  .lse-msize { font-size: var(--lse-size-m) !important; }
+  .lse-mpad { padding: var(--lse-pad-m) !important; }
+}

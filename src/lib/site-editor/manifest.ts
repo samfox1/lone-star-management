@@ -89,6 +89,16 @@ export function bridgeSupportsTextVars(siteVersion: string | undefined): boolean
   return !bridgeOutdated(siteVersion, TEXT_VARS_SINCE)
 }
 
+/** The bridge release whose applier + tokens.css carry the MOBILE overrides
+ *  (`sizesm-[…]`, `padsm-[…]`, the lse-msize/lse-mpad rules). */
+export const MOBILE_VARS_SINCE = '0.19.0'
+
+/** And once more: may the editor write phone-only values? */
+export function bridgeSupportsMobileVars(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, MOBILE_VARS_SINCE)
+}
+
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`

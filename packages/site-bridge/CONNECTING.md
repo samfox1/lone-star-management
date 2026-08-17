@@ -158,6 +158,8 @@ opts in by reading it, with your own default as the fallback:
 | `--lse-tracking` | Letter spacing | `letter-spacing: var(--lse-tracking, -0.02em)` |
 | `--lse-case` | Uppercase | `text-transform: var(--lse-case, none)` |
 | `--lse-fontstyle` | Italic | `font-style: var(--lse-fontstyle, normal)` |
+| `--lse-size-m` | Font size · phone view | see *Mobile overrides* below |
+| `--lse-pad-m` | Padding · phone view | see *Mobile overrides* below |
 | `--lse-icon-size` | Icon size | `width: var(--lse-icon-size, 24px)` |
 | `--lse-hover-color` | Hover colour | `hover:text-[var(--lse-hover-color,#c63a2a)]` |
 | `--lse-enter-duration` | Entrance speed | `animation-duration: var(--lse-enter-duration, 1.2s)` |
@@ -193,6 +195,27 @@ Three things to know about the claim:
 
 Declare your own fallback in every `var()`, and make it the value the region actually
 wears. An unset variable falling back to nothing is a region that disappears.
+
+### Mobile overrides (0.19.0)
+
+Editing in the editor's **phone view** writes a second, phone-only value (`sizesm-[18px]`
+→ `--lse-size-m`, `padsm-[12px]` → `--lse-pad-m`). Inline styles cannot express
+`@media`, so on an UNCLAIMED region the element also gains a marker class
+(`lse-msize` / `lse-mpad`) that the package's own tokens.css reads below 640px, with
+`!important` so it beats the same element's inline desktop value.
+
+A region that **claims** the property gets the variable only — no marker class, because
+the package rule would beat your phone cap. Read it yourself, inside your own media
+query, wherever you decide "mobile" begins:
+
+```css
+@media (max-width: 480px) {
+  .hero-name { font-size: min(var(--lse-size-m, var(--lse-size, 3rem)), 12vw); }
+}
+```
+
+The chain order matters: the phone value if the manager set one, else the desktop value,
+else your fallback — and your cap over all of it.
 
 **Fonts must declare what they resolve to.** The editor cannot know what `font-momo`
 means, so it keeps writing the class until you say:

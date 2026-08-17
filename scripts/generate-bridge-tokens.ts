@@ -77,6 +77,18 @@ ${lines.join('\n')}
  * (effectsCss) and under the same append-only contract as the lines above. Entrances
  * only hide anything while the runtime (entrances.ts) has armed the document. */
 ${effectsCss()}
+
+/* ── Mobile overrides (0.19.0) — REAL rules. The bridge cannot put an @media in an
+ * inline style, so a phone-only value rides a variable plus one of these marker
+ * classes. !important is load-bearing: it must beat the same element's inline desktop
+ * property (font-size: var(--lse-size)). 639px = below Tailwind's sm, the convention
+ * every connected site already uses. A CLAIMED region never gets the marker class —
+ * its own media query reads var(--lse-size-m, var(--lse-size, …)) and keeps owning
+ * where "mobile" begins. */
+@media (max-width: 639px) {
+  .lse-msize { font-size: var(--lse-size-m) !important; }
+  .lse-mpad { padding: var(--lse-pad-m) !important; }
+}
 `
 }
 

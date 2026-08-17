@@ -12,7 +12,7 @@ import {
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
-import { buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
+import { type EditorStyleOptions, buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mediaUrl } from '@/lib/storage-url'
 import { isContactLink, looksLikeEmail } from '@/lib/url'
@@ -222,7 +222,7 @@ export function EditorInspector({
    *  the region is still on its base classes. */
   styleValues?: Record<string, string>
   /** The site's declared colour + font palette, for the Style panel's dropdowns. */
-  styleOptions?: SiteStyleOptions
+  styleOptions?: EditorStyleOptions
   /** Region the frame reported a click on — jumps the panel to Style, focused there. */
   selectedStyle?: string | null
   /** Ticks when a preview click hit nothing editable — panels collapse whatever row is
@@ -1113,7 +1113,7 @@ function EditingView({
   onRemoveMerch: (m: EditorMerch) => void
   styleRegions: ManifestStyleRegion[]
   styleValues: Record<string, string>
-  styleOptions?: SiteStyleOptions
+  styleOptions?: EditorStyleOptions
   selectedStyle: string | null
   deselectedAt: number
   linkRegions: ManifestLinkRegion[]

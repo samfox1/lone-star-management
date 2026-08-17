@@ -15,7 +15,7 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -199,9 +199,51 @@ const usesVars = (opts?: SiteStyleOptions) =>
 const usesTextVars = (opts?: SiteStyleOptions) =>
   (opts as EditorStyleOptions | undefined)?.textVars !== false
 
+/** Phone-scoped editing: BOTH the phone view and a 0.19+ site. An older site in phone
+ *  view keeps the desktop-scoped controls — a phone token it cannot lift would be a
+ *  dead class AND an invisible marker class. */
+const phoneScope = (opts?: SiteStyleOptions) => {
+  const o = opts as EditorStyleOptions | undefined
+  return o?.mobileView === true && o?.mobileVars !== false
+}
+
+/* ── Phone-scope token helpers. Ownership is DISJOINT from the desktop families by
+ * regex shape (`sizesm-[` never matches `^size-\[`), which is what lets a desktop edit
+ * preserve the phone override and vice versa. */
+const isSizeSm = (t: string) => /^sizesm-\[\d{1,4}px\]$/.test(t)
+const isPadSm = (t: string) => /^padsm-\[\d{1,4}px\]$/.test(t)
+const sizeSmRank = (t: string): number | null => {
+  const m = /^sizesm-\[(\d{1,4})px\]$/.exec(t)
+  return m ? Number(m[1]) / 16 : null
+}
+const padSmRank = (t: string): number | null => {
+  const m = /^padsm-\[(\d{1,4})px\]$/.exec(t)
+  return m ? Number(m[1]) : null
+}
+/** A desktop step → its phone twin, same label. Sizes measure via textSizeRank so a
+ *  class-era ladder (a site that declares textSizes) converts too; an unmeasurable step
+ *  is dropped rather than emitting a token the bridge would refuse. */
+const sizeSmOption = (o: StyleOption): StyleOption => {
+  const rem = textSizeRank(o.value) // reads both eras: size-[48px] tokens AND text-* classes
+  return { ...o, value: rem != null ? `sizesm-[${Math.round(rem * 16)}px]` : o.value }
+}
+const padSmOption = (o: StyleOption): StyleOption => {
+  if (o.value === '') return o
+  const px = padRank(o.value)
+  return { ...o, value: px != null ? `padsm-[${px}px]` : o.value }
+}
+
 /** Style options plus what the EDITOR knows that the site did not declare. Kept separate
  *  from `SiteStyleOptions` (the manifest type) because this is derived, not announced. */
-export type EditorStyleOptions = SiteStyleOptions & { styleVars?: boolean; textVars?: boolean }
+export type EditorStyleOptions = SiteStyleOptions & {
+  styleVars?: boolean
+  textVars?: boolean
+  /** The connected site's applier + tokens.css understand the mobile tokens (0.19+). */
+  mobileVars?: boolean
+  /** The editor is currently in PHONE view. With mobileVars, the Size and Padding
+   *  controls become phone-scoped: same slider, writing the `…sm-[…]` twin. */
+  mobileView?: boolean
+}
 
 /**
  * Record what the connected site's bridge can lift, for the control builders to read.
@@ -218,6 +260,7 @@ export function withStyleVars(
     ...opts,
     styleVars: bridgeSupportsStyleVars(bridgeVersion),
     textVars: bridgeSupportsTextVars(bridgeVersion),
+    mobileVars: bridgeSupportsMobileVars(bridgeVersion),
   }
 }
 /** Both shapes — the value token this control now writes, and every class shape a region
@@ -531,13 +574,26 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
       owns: (t) => isFontVar(t) || (t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t))),
     })
   }
-  controls.push({
-    id: 'size',
-    label: 'Size',
-    kind: 'select',
-    options: [DEFAULT, ...sizeScale(opts)],
-    owns: ownsSize,
-  })
+  // PHONE SCOPE: in the editor's mobile view (on a 0.19+ site) Size and Padding write
+  // the `…sm-[…]` twin — a value only applied below 640px — and own ONLY that twin, so
+  // a phone edit preserves the desktop value and a desktop edit preserves the phone one.
+  controls.push(
+    phoneScope(opts)
+      ? {
+          id: 'size',
+          label: 'Size · phone',
+          kind: 'select',
+          options: [DEFAULT, ...sizeScale(opts).map(sizeSmOption)],
+          owns: isSizeSm,
+        }
+      : {
+          id: 'size',
+          label: 'Size',
+          kind: 'select',
+          options: [DEFAULT, ...sizeScale(opts)],
+          owns: ownsSize,
+        },
+  )
   controls.push({
     id: 'weight',
     label: 'Boldness',
@@ -600,17 +656,30 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     rank: pxRank({}),
     owns: (t) => t.startsWith('frost-['),
   })
-  controls.push({
-    id: 'pad',
-    label: 'Padding',
-    kind: 'slider',
-    steps: PAD_STEPS,
-    // Off-scale default: a section's '' is "whatever its base wears" (a bar's py-10),
-    // measured by padRank so the handle parks at the real inset — never the None end.
-    defaultOffScale: true,
-    rank: padRank,
-    owns: ownsPad,
-  })
+  controls.push(
+    phoneScope(opts)
+      ? {
+          id: 'pad',
+          label: 'Padding · phone',
+          kind: 'slider',
+          steps: PAD_STEPS.map(padSmOption),
+          defaultOffScale: true,
+          rank: padSmRank,
+          owns: isPadSm,
+        }
+      : {
+          id: 'pad',
+          label: 'Padding',
+          kind: 'slider',
+          steps: PAD_STEPS,
+          // Off-scale default: a section's '' is "whatever its base wears" (a bar's
+          // py-10), measured by padRank so the handle parks at the real inset — never
+          // the None end.
+          defaultOffScale: true,
+          rank: padRank,
+          owns: ownsPad,
+        },
+  )
   // Toggles own the ON form of both eras, so a stored legacy class still reads as ON and
   // flipping it off removes the class rather than stacking a token beside it.
   controls.push({
@@ -670,15 +739,27 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
       owns: (t) => isFontVar(t) || (t.startsWith('font-') && !WEIGHTS.includes(fontSuffix(t))),
     })
   }
-  controls.push({
-    id: 'size',
-    label: 'Size',
-    kind: 'slider',
-    steps: [DEFAULT, ...sizeScale(opts)],
-    defaultOffScale: true,
-    rank: textSizeRank,
-    owns: ownsSize,
-  })
+  controls.push(
+    phoneScope(opts)
+      ? {
+          id: 'size',
+          label: 'Size · phone',
+          kind: 'slider',
+          steps: [DEFAULT, ...sizeScale(opts).map(sizeSmOption)],
+          defaultOffScale: true,
+          rank: sizeSmRank,
+          owns: isSizeSm,
+        }
+      : {
+          id: 'size',
+          label: 'Size',
+          kind: 'slider',
+          steps: [DEFAULT, ...sizeScale(opts)],
+          defaultOffScale: true,
+          rank: textSizeRank,
+          owns: ownsSize,
+        },
+  )
   controls.push({
     id: 'weight',
     label: 'Thickness',

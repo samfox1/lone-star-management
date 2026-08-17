@@ -16,7 +16,7 @@
  * hand-written booleans, so a new era joins the assertion when its gate does.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EditorShell } from '@/app/artists/[id]/(dashboard)/editor/editor-shell'
 import {
   bridgeSupportsStyleVars,
@@ -89,6 +89,17 @@ describe('EditorShell derives the token gates from the ANNOUNCED bridgeVersion',
       expect(opts.textVars, 'textVars').toBe(bridgeSupportsTextVars(version))
     })
   }
+
+  it('phone view flips mobileView on the SAME options object', () => {
+    // The phone-scoped controls key off styleOptions.mobileView; if the shell stops
+    // threading the device through, phone view silently edits desktop values — no
+    // error, wrong scope. fireEvent on the real device select, not a prop.
+    const opts = announce('0.19.0')
+    expect(opts.mobileView).toBe(false)
+    fireEvent.change(screen.getByLabelText('Preview device'), { target: { value: 'mobile' } })
+    expect((seen.at(-1)!.styleOptions as EditorStyleOptions).mobileView).toBe(true)
+    expect((seen.at(-1)!.styleOptions as EditorStyleOptions).mobileVars).toBe(true)
+  })
 
   it('the eras genuinely differ across these fixtures (self-check)', () => {
     // If the gates ever collapsed to one behaviour, every case above would still pass

@@ -289,10 +289,14 @@ export function EditorShell({
         assetBudgets={panels.assetBudgets}
         styleRegions={panels.styleRegions}
         styleValues={draft?.styles ?? {}}
-        styleOptions={withStyleVars(
-          withUploadedFonts(panels.styleOptions, uploadedFonts),
-          manifest?.bridgeVersion,
-        )}
+        styleOptions={{
+          ...withStyleVars(
+            withUploadedFonts(panels.styleOptions, uploadedFonts),
+            manifest?.bridgeVersion,
+          ),
+          // The device toggle scopes Size/Padding: phone view writes the …sm-[…] twin.
+          mobileView: device === 'mobile',
+        }}
         selectedStyle={selectedStyle}
         deselectedAt={deselectedAt}
         linkRegions={panels.linkRegions}

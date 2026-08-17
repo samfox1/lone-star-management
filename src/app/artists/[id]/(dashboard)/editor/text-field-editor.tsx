@@ -1,3 +1,4 @@
+import type { EditorStyleOptions } from '@/lib/site-editor/style-controls'
 'use client'
 
 import { useState } from 'react'
@@ -42,7 +43,7 @@ export function TextFieldEditor({
   value: string
   status: SaveStatus
   styleValues: Record<string, string>
-  styleOptions?: SiteStyleOptions
+  styleOptions?: EditorStyleOptions
   onEdit: (value: string) => void
   onStyle: (regionKey: string, className: string) => void
   onBack: () => void

@@ -239,6 +239,48 @@ const TEXT_VARS: {
   },
 ];
 
+/**
+ * MOBILE OVERRIDES (0.19.0): a second, phone-only value set from the editor's phone
+ * view. Inline styles cannot express @media, so the token sets a variable and the
+ * element gains a MARKER CLASS that tokens.css reads inside its media query (with
+ * !important, to beat the same element's inline desktop property).
+ *
+ * A CLAIMED property gets the variable only — no marker class — because the package
+ * rule would otherwise beat the site's own phone cap, which is the authority the claim
+ * exists to protect. The site reads var(--lse-size-m, var(--lse-size, …)) itself.
+ *
+ * Values are EXACT px, not clamps: the manager chose the number while looking at a
+ * phone; there is nothing left to adapt.
+ */
+const MOBILE_VARS: {
+  re: RegExp;
+  variable: string;
+  marker: string;
+  /** The claim that suppresses the marker class, or null when unclaimable (padding). */
+  claim: string | null;
+}[] = [
+  { re: /^sizesm-\[(.+)\]$/, variable: "--lse-size-m", marker: "lse-msize", claim: "size" },
+  { re: /^padsm-\[(.+)\]$/, variable: "--lse-pad-m", marker: "lse-mpad", claim: null },
+];
+
+/** A mobile token → its inline variable + optional marker class, `{}`-style inert on a
+ *  refused payload, or null when the token is not a mobile one. */
+function mobileToken(
+  token: string,
+  claims: Set<string>,
+): { style: Record<string, string>; marker?: string } | null {
+  for (const fam of MOBILE_VARS) {
+    const m = token.match(fam.re);
+    if (!m) continue;
+    if (!/^\d{1,4}px$/.test(m[1])) return { style: {} };
+    return {
+      style: { [fam.variable]: m[1] },
+      ...(fam.claim === null || !claims.has(fam.claim) ? { marker: fam.marker } : {}),
+    };
+  }
+  return null;
+}
+
 /** `size-[Npx]` / `fontfam-[…]` / the TEXT_VARS families → the variable, plus the
  *  property itself unless the region has claimed it. Returns `{}` for a token whose
  *  payload is refused, so a malformed one is inert rather than falling through to the
@@ -596,6 +638,8 @@ export const MANAGED_STYLE_PROPS = [
   "--lse-tracking",
   "--lse-case",
   "--lse-fontstyle",
+  "--lse-size-m",
+  "--lse-pad-m",
 ] as const;
 
 export type ResolvedStyle = {
@@ -660,6 +704,14 @@ function resolveTokens(
     // The claim marker is a DECLARATION, not CSS — no site compiles it, and leaving it
     // in the class list would put a dead token in the public page's markup.
     if (CLAIM_TOKEN.test(token)) continue;
+    // Mobile tokens first: they contribute a CLASS as well as style, which no other
+    // family does — routing them through `inline` would drop the marker.
+    const mobile = mobileToken(token, claims);
+    if (mobile) {
+      Object.assign(style, mobile.style);
+      if (mobile.marker) classes.push(mobile.marker);
+      continue;
+    }
     const decoration = token === "underline" || token === "line-through" ? token : null;
     const inline =
       colorStyle(token) ??
