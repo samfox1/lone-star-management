@@ -152,6 +152,12 @@ opts in by reading it, with your own default as the fallback:
 | --- | --- | --- |
 | `--lse-size` | Font size | `font-size: var(--lse-size, 2rem)` |
 | `--lse-font` | Font | `font-family: var(--lse-font, 'Momo Display', serif)` |
+| `--lse-weight` | Boldness | `font-weight: var(--lse-weight, 700)` |
+| `--lse-align` | Alignment | `text-align: var(--lse-align, center)` |
+| `--lse-leading` | Line spacing | `line-height: var(--lse-leading, 1.25)` |
+| `--lse-tracking` | Letter spacing | `letter-spacing: var(--lse-tracking, -0.02em)` |
+| `--lse-case` | Uppercase | `text-transform: var(--lse-case, none)` |
+| `--lse-fontstyle` | Italic | `font-style: var(--lse-fontstyle, normal)` |
 | `--lse-icon-size` | Icon size | `width: var(--lse-icon-size, 24px)` |
 | `--lse-hover-color` | Hover colour | `hover:text-[var(--lse-hover-color,#c63a2a)]` |
 | `--lse-enter-duration` | Entrance speed | `animation-duration: var(--lse-enter-duration, 1.2s)` |
@@ -169,7 +175,8 @@ to take that authority back — the variable is still set, the property is not, 
 rule decides:
 
 ```ts
-hero_name: 'block lse-owns-[size]'   // or lse-owns-[size,font]
+hero_name: 'block lse-owns-[size]'   // any of: size, font, weight, align,
+                                     // leading, tracking, case, italic
 ```
 
 ```css
@@ -318,9 +325,9 @@ Written down so nobody rediscovers them.
 - **Reset on a section control removes the property** rather than restoring your default,
   for the same reason.
 - **Class-writing controls beat your breakpoints.** Size and font became variables in
-  0.16.0 (§5); the rest — weight, alignment, leading, tracking, case, italic, palette
-  colours — have not. Until they do, keep base values fluid.
-- **Value tokens need 0.16.0 or newer.** An older applier renders `size-[48px]` as a dead
+  0.16.0, the six remaining text controls in 0.18.0 (§5). Palette colours still lift
+  inline; keep base values fluid where a control has no variable yet.
+- **Value tokens need 0.16.0 or newer** (the text families 0.18.0). An older applier renders `size-[48px]` as a dead
   class and the region falls back to its base size. The editor checks your `bridgeVersion`
   and keeps writing classes when you are behind, so upgrading is safe in either order —
   but a site that never stamps a version is treated as old and never gets them.
