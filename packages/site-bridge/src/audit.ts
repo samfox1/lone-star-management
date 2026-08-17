@@ -60,7 +60,12 @@ function colorChannel(token: string): "text" | "bg" | null {
  * a colour the design wears but the palette never names is invisible to the picker, which
  * can only recognise a declared class or an arbitrary hex.
  */
-export function auditRegions(regions: AuditRegion[], palette: string[]): AuditFinding[] {
+export function auditRegions(
+  // `readonly`: a site's own registry is usually `as const`, and checkContract passes its
+  // structural view straight through. This function only reads.
+  regions: readonly AuditRegion[],
+  palette: readonly string[],
+): AuditFinding[] {
   const declared = new Set(palette);
   const findings: AuditFinding[] = [];
 

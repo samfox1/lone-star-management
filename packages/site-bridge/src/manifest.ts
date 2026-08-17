@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.16.0'
+export const PACKAGE_VERSION = '0.17.2'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -113,6 +113,17 @@ export type ManifestLinkRegion = {
   key: string
   label: string
   description?: string
+  /**
+   * `false` when this link CONFIGURES something rather than powering an element on the
+   * page — skeen's `booking` is the address the contact form sends enquiries to, so there
+   * is no anchor to mark and no `data-lse-link` to emit.
+   *
+   * Declared rather than inferred, because a link with no marker is otherwise
+   * indistinguishable from one whose marker was forgotten — which is a control the
+   * manager can set that changes nothing, with no error anywhere. `checkContract` demands
+   * a marker for every link that does not opt out here.
+   */
+  rendered?: boolean
 }
 
 /**
