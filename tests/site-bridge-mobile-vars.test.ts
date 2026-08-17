@@ -187,10 +187,50 @@ describe("fused clamp — both ends known", () => {
     expect(style["--lse-size"]).toBeUndefined();
   });
 
-  it("a phone pick LARGER than the ceiling still honours the phone end", () => {
-    // clamp(MIN, VAL, MAX) resolves as max(MIN, min(VAL, MAX)) — the floor wins. The
-    // manager sees their pick on a phone either way; no branch needed.
+  it("CRITICAL: a phone pick larger than desktop NEVER moves desktop", () => {
+    // The first cut celebrated 'the floor wins' — but a clamp floor wins at EVERY
+    // width, so dragging mobile above desktop changed desktop too (Sam hit it live).
+    // The clamp is ORDERED now: lo/hi sorted, the slope decides direction, and each
+    // end only ever moves its own side.
     const { style } = resolveRegionStyle("r", "grid", "size-[16px] sizesm-[24px]");
-    expect(style["--lse-size"]).toMatch(/^clamp\(24px,/);
+    expect(style["--lse-size"]).toBe(
+      "clamp(16px,calc(24px + -8 * (100vw - 390px) / 634),24px)",
+    );
+    // At ≥1024px the calc sits at/below 16px and the lower bound holds desktop at 16.
+    // At 390px it reads exactly 24 — the phone pick.
+  });
+
+  it("CRITICAL: a desktop pick NEVER moves the phone end — the floor is the BUILD's", () => {
+    // The other live leak: desktop-only picks emitted the ladder clamp, whose floor is
+    // 70% OF THE PICK — raise desktop and the phone floor rose with it. The default
+    // floor is the initial build's own (the base clamp's min), held until the manager
+    // touches it in phone view.
+    const base = "grid text-[clamp(1.75rem,6.5vw,3rem)]"; // build floor 28px, ceiling 48px
+    const at60 = resolveRegionStyle("r", base, "size-[60px]");
+    expect(at60.style["--lse-size"]).toBe(
+      "clamp(28px,calc(28px + 32 * (100vw - 390px) / 634),60px)",
+    );
+    const at96 = resolveRegionStyle("r", base, "size-[96px]");
+    // Desktop went 60 → 96; the phone end did not move an inch.
+    expect(at96.style["--lse-size"]).toMatch(/^clamp\(28px,/);
+  });
+
+  it("a claimed base's own size token supplies the default floor the same way", () => {
+    // skeen's claimed bases declare size-[48px]; its ladder floor (28px) is the build
+    // default a desktop-only edit must hold.
+    const { style } = resolveRegionStyle(
+      "r",
+      "grid size-[48px] lse-owns-[size]",
+      "text-white size-[60px]",
+    );
+    expect(style["--lse-size"]).toMatch(/^clamp\(28px,.*60px\)$/);
+    expect(style.fontSize).toBeUndefined();
+  });
+
+  it("a region with NO size of its own keeps the plain ladder clamp for desktop picks", () => {
+    // Genuinely sizeless (inherited text): there is no build floor to hold, so the
+    // ladder's own fluid clamp is still the honest rendering.
+    const { style } = resolveRegionStyle("r", "grid", "size-[48px]");
+    expect(style["--lse-size"]).toBe("clamp(1.75rem,6.5vw,3rem)");
   });
 });

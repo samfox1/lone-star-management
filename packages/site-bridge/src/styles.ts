@@ -296,7 +296,38 @@ const SIZESM_TOKEN_RE = /^sizesm-\[(\d{1,4})px\]$/;
 
 function fusedSizeValue(phonePx: number, desktopPx: number): string {
   if (phonePx === desktopPx) return `${phonePx}px`;
-  return `clamp(${phonePx}px,calc(${phonePx}px + ${desktopPx - phonePx} * (100vw - 390px) / 634),${desktopPx}px)`;
+  // ORDERED bounds, direction carried by the slope. A raw clamp(P,…,D) with P>D lets
+  // the floor win at EVERY width — dragging mobile above desktop changed desktop
+  // (found live, 2026-08-17). Sorted lo/hi pin each end to its own side; the calc runs
+  // P→D across 390→1024px either way.
+  const lo = Math.min(phonePx, desktopPx);
+  const hi = Math.max(phonePx, desktopPx);
+  return `clamp(${lo}px,calc(${phonePx}px + ${desktopPx - phonePx} * (100vw - 390px) / 634),${hi}px)`;
+}
+
+/** The px a size CLASS bottoms out at on a phone — the clamp's MIN — or null. The
+ *  initial build's floor, held steady while desktop-only edits move the ceiling. */
+function sizeClassMinPx(tokens: string[]): number | null {
+  for (const raw of tokens) {
+    const t = LEGACY_TO_FLUID[raw.replace(/^!/, "")] ?? raw;
+    const m = t.match(/^text-\[clamp\(([\d.]+)(rem|px),/);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n)) continue;
+    return Math.round(m[2] === "rem" ? n * 16 : n);
+  }
+  return null;
+}
+
+/** The build's default floor for a declared size TOKEN: the ladder clamp it renders as
+ *  bottoms out somewhere, and that min is the phone size the build shipped with. */
+function sizeTokenMinPx(tokens: string[]): number | null {
+  const px = tokenPx(tokens, SIZE_TOKEN_RE);
+  if (px == null) return null;
+  const m = sizeLength(px).match(/^clamp\(([\d.]+)(rem|px),/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Math.round(m[2] === "rem" ? n * 16 : n);
 }
 
 /** The px a token list declares for a family, or null. */
@@ -871,13 +902,23 @@ export function resolveRegionStyle(
       sizeClassMaxPx(tokens) ??
       tokenPx(baseTokens, SIZE_TOKEN_RE) ??
       sizeClassMaxPx(baseTokens);
-    if (phone != null && desktop != null) {
+    // The floor: the manager's phone pick, else THE BUILD'S OWN — a base clamp's min or
+    // a declared token's ladder floor. Never derived from the desktop pick: a floor at
+    // 70%-of-the-pick made desktop edits drag the phone size along (found live,
+    // 2026-08-17). Only a manager-set desktop pick triggers desktop-only fusion — an
+    // untouched region renders its base classes exactly as built.
+    const floor =
+      phone ??
+      (tokenPx(tokens, SIZE_TOKEN_RE) != null
+        ? (sizeClassMinPx(baseTokens) ?? sizeTokenMinPx(baseTokens))
+        : null);
+    if (floor != null && desktop != null) {
       const resolved = resolveTokens(
         tokens.filter((t) => !SIZESM_TOKEN_RE.test(t)).join(" "),
         false,
         claims,
       );
-      resolved.style["--lse-size"] = fusedSizeValue(phone, desktop);
+      resolved.style["--lse-size"] = fusedSizeValue(floor, desktop);
       if (!claims.has("size")) resolved.style.fontSize = "var(--lse-size)";
       return resolved;
     }
