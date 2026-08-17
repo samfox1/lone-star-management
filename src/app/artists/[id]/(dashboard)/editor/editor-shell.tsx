@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
-import { bridgeOutdated, bridgeSupportsStyleVars } from '@/lib/site-editor/manifest'
+import { bridgeOutdated } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withStyleVars, withUploadedFonts } from '@/lib/site-editor/style-controls'
@@ -291,7 +291,7 @@ export function EditorShell({
         styleValues={draft?.styles ?? {}}
         styleOptions={withStyleVars(
           withUploadedFonts(panels.styleOptions, uploadedFonts),
-          bridgeSupportsStyleVars(manifest?.bridgeVersion),
+          manifest?.bridgeVersion,
         )}
         selectedStyle={selectedStyle}
         deselectedAt={deselectedAt}

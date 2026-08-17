@@ -108,6 +108,15 @@ const CLAIM_TOKEN = /^lse-owns-\[([a-z,]+)\]$/;
 const CLAIMABLE: Record<string, { variable: string; property: string }> = {
   size: { variable: "--lse-size", property: "font-size" },
   font: { variable: "--lse-font", property: "font-family" },
+  // The second wave (2026-08-17) — one row per TEXT_VARS family in styles.ts. The
+  // contract-check test couples the two lists: a claim the checker does not know is
+  // reported as unsatisfiable, which is how the coupling stays honest.
+  weight: { variable: "--lse-weight", property: "font-weight" },
+  align: { variable: "--lse-align", property: "text-align" },
+  leading: { variable: "--lse-leading", property: "line-height" },
+  tracking: { variable: "--lse-tracking", property: "letter-spacing" },
+  case: { variable: "--lse-case", property: "text-transform" },
+  italic: { variable: "--lse-fontstyle", property: "font-style" },
 };
 
 const attrSelector = (attr: string) => `[${attr}]`;

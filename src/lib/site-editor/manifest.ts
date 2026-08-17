@@ -64,6 +64,10 @@ export function bridgeOutdated(siteVersion: string | undefined, editorVersion = 
  *  onto `--lse-size` / `--lse-font`. */
 export const STYLE_VARS_SINCE = '0.16.0'
 
+/** The bridge release that taught the applier the SECOND-WAVE text tokens
+ *  (`weight-[…]`, `align-[…]`, `lead-[…]`, `track-[…]`, `case-[…]`, `fstyle-[…]`). */
+export const TEXT_VARS_SINCE = '0.18.0'
+
 /**
  * Can the connected site turn the VALUE tokens into CSS? An older applier does not
  * recognise them, so they would ride through to the class attribute as dead classes and
@@ -77,6 +81,12 @@ export const STYLE_VARS_SINCE = '0.16.0'
 export function bridgeSupportsStyleVars(siteVersion: string | undefined): boolean {
   if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
   return !bridgeOutdated(siteVersion, STYLE_VARS_SINCE)
+}
+
+/** Same reading, one era later: may the editor write the text-family tokens? */
+export function bridgeSupportsTextVars(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, TEXT_VARS_SINCE)
 }
 
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */

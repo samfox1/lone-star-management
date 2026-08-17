@@ -119,7 +119,7 @@ describe('a site whose bridge is too old keeps the classes', () => {
   // would ride through to the class attribute as a dead class and the region would fall
   // back to its base size — a control that stops working with no error anywhere. So the
   // editor writes what the CONNECTED site can lift, not what it would prefer to write.
-  const old = withStyleVars(PALETTE, bridgeSupportsStyleVars('0.15.0'))
+  const old = withStyleVars(PALETTE, '0.15.0')
   const oldControls = buildStyleControls(old)
 
   it('offers the class scale, not tokens', () => {

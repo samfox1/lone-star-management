@@ -101,14 +101,16 @@ describe('sliderIndex — a value that is not a step', () => {
     const leading = textControl('leading')
     const steps = sliderSteps(leading)
     const { idx } = sliderIndex(leading, 'leading-none')
-    expect(steps[idx].value).toBe('!leading-none')
+    // Asserted by LABEL: the step's value changed spelling twice now (!leading-none,
+    // then lead-[1.0]) while its meaning — the 1.0 position — never moved.
+    expect(steps[idx].label).toBe('1.0')
   })
 
   it('line spacing measures an arbitrary ratio', () => {
     const leading = textControl('leading')
     const steps = sliderSteps(leading)
     // skeen's polaroid captions sit at leading-[0.95].
-    expect(steps[sliderIndex(leading, 'leading-[0.95]').idx].value).toBe('!leading-[0.95]')
+    expect(steps[sliderIndex(leading, 'leading-[0.95]').idx].label).toBe('0.95')
   })
 
   it('letter spacing measures a named step against the arbitrary scale', () => {

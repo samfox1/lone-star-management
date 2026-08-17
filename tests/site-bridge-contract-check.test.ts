@@ -217,6 +217,35 @@ describe("5. a claimed property is a variable, never an inline value", () => {
     expect(checkContract({ ...base, editableDom: noVar }).map((f) => f.check)).toContain("claim-ignored");
   });
 
+  it("covers the second-wave claims too, not just size and font", () => {
+    // A claim the checker does not know is reported as unsatisfiable — so this list and
+    // the bridge's CLAIMABLE map must grow together, and this test is the coupling.
+    const claims: TemplateManifest = {
+      ...MANIFEST,
+      styles: [
+        { key: "page", label: "Page", base: "bg-paper text-ink", scope: "site" },
+        { key: "title", label: "Title", base: "block weight-[900] lse-owns-[weight,align,leading,tracking,case,italic] align-[center] lead-[1.1] track-[-0.04em] case-[uppercase] fstyle-[italic]" },
+      ],
+    };
+    const ok = dom(`
+      <main data-lse-style="page">
+        <h1 data-lse-style="title" data-lse-field="site_title" data-lse-text=""
+            style="--lse-weight:900; --lse-align:center; --lse-leading:1.1; --lse-tracking:-0.04em; --lse-case:uppercase; --lse-fontstyle:italic">Title</h1>
+        <ul data-lse-slot="shows"></ul><a data-lse-link="tickets"></a>
+      </main>`);
+    expect(checkContract({ ...base, manifest: claims, editableDom: ok })).toEqual([]);
+
+    // …and a claimed weight whose variable never arrived is a finding.
+    const missing = dom(`
+      <main data-lse-style="page">
+        <h1 data-lse-style="title" data-lse-field="site_title" data-lse-text="">Title</h1>
+        <ul data-lse-slot="shows"></ul><a data-lse-link="tickets"></a>
+      </main>`);
+    const found = checkContract({ ...base, manifest: claims, editableDom: missing });
+    expect(found.map((f) => f.check)).toContain("claim-ignored");
+    expect(found.map((f) => f.detail).join(" ")).toContain("--lse-weight");
+  });
+
   it("says nothing about a region that claims nothing", () => {
     // Inlining is CORRECT for an unclaimed region — it is what keeps a site that opts
     // into nothing rendering exactly as it did.

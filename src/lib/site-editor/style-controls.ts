@@ -15,6 +15,7 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
+import { bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -192,21 +193,68 @@ const isFontVar = (t: string) => t.startsWith('fontfam-[')
 const usesVars = (opts?: SiteStyleOptions) =>
   (opts as EditorStyleOptions | undefined)?.styleVars !== false
 
+/** The second era's gate: weight/align/leading/tracking/case/italic tokens need 0.18+.
+ *  A 0.16 site lifts `size-[…]` but has never heard of `weight-[…]`, so the two flags
+ *  are independent — a mixed-era site gets size tokens AND weight classes. */
+const usesTextVars = (opts?: SiteStyleOptions) =>
+  (opts as EditorStyleOptions | undefined)?.textVars !== false
+
 /** Style options plus what the EDITOR knows that the site did not declare. Kept separate
  *  from `SiteStyleOptions` (the manifest type) because this is derived, not announced. */
-export type EditorStyleOptions = SiteStyleOptions & { styleVars?: boolean }
+export type EditorStyleOptions = SiteStyleOptions & { styleVars?: boolean; textVars?: boolean }
 
-/** Record whether the connected site can lift value tokens, for the control builders to
- *  read. Call once where the options are prepared, beside `withUploadedFonts`. */
+/**
+ * Record what the connected site's bridge can lift, for the control builders to read.
+ * Takes the announced VERSION rather than booleans, because the eras multiplied: size
+ * and font tokens need 0.16+, the text families 0.18+, and a caller juggling two flags
+ * is a caller that will someday pass them in the wrong order.
+ * Call once where the options are prepared, beside `withUploadedFonts`.
+ */
 export function withStyleVars(
   opts: SiteStyleOptions | undefined,
-  supported: boolean,
+  bridgeVersion: string | undefined,
 ): EditorStyleOptions {
-  return { ...opts, styleVars: supported }
+  return {
+    ...opts,
+    styleVars: bridgeSupportsStyleVars(bridgeVersion),
+    textVars: bridgeSupportsTextVars(bridgeVersion),
+  }
 }
 /** Both shapes — the value token this control now writes, and every class shape a region
  *  styled before the migration still stores. */
 const ownsSize = (t: string) => isSizeVar(t) || isTextSize(t)
+
+/* ── The SECOND-WAVE text tokens (2026-08-17): weight, align, leading, tracking, case,
+ * italic — the same recipe as size, one bridge era later (usesTextVars gates emission).
+ * Each control owns BOTH shapes forever: every region styled before today stores a class,
+ * and owning only the token would leave two values on one element with stylesheet order
+ * arbitrating. */
+const WEIGHT_NUM: Record<string, number> = {
+  thin: 100, extralight: 200, light: 300, normal: 400, medium: 500,
+  semibold: 600, bold: 700, extrabold: 800, black: 900,
+}
+const isWeightVar = (t: string) => /^weight-\[\d{3}\]$/.test(t)
+const weightRank = (t: string): number | null => {
+  if (t === '') return null
+  const m = /^weight-\[(\d{3})\]$/.exec(t)
+  if (m) return Number(m[1])
+  return WEIGHT_NUM[fontSuffix(t)] ?? null
+}
+/** A class option → its token twin (`font-bold` → `weight-[700]`), label untouched. */
+const weightToken = (o: StyleOption): StyleOption =>
+  ({ ...o, value: `weight-[${WEIGHT_NUM[o.value.slice('font-'.length)]}]` })
+
+const isAlignVar = (t: string) => t.startsWith('align-[')
+const alignToken = (o: StyleOption): StyleOption =>
+  ({ ...o, value: `align-[${o.value.slice('text-'.length)}]` })
+
+/** Leading/tracking option labels ARE their numeric values (that is why the scales read
+ *  as numbers), so the token twin is derived from the label rather than re-tabulated. */
+const isLeadVar = (t: string) => t.startsWith('lead-[')
+const leadToken = (o: StyleOption): StyleOption => ({ ...o, value: `lead-[${o.label}]` })
+const isTrackVar = (t: string) => t.startsWith('track-[')
+const trackToken = (o: StyleOption): StyleOption =>
+  ({ ...o, value: `track-[${o.label}em]` })
 
 /**
  * The font token: the site's declared stack, underscore-encoded because a stored style
@@ -279,6 +327,8 @@ const LEADING_RATIO: Record<string, number> = {
  *  editor emits `!leading-none`, and they are the same 1.0 — treating them as different
  *  values is what put the handle at 1.1 on a region already sitting at 1.0. */
 function leadingRank(t: string): number | null {
+  const tok = /^lead-\[(\d(?:\.\d{1,3})?)\]$/.exec(t)
+  if (tok) return Number(tok[1])
   const s = t.replace(/^!/, '')
   if (!s.startsWith('leading-')) return null
   const v = s.slice('leading-'.length)
@@ -292,6 +342,8 @@ const TRACKING_EM: Record<string, number> = {
 }
 /** Letter spacing in em. */
 function trackingRank(t: string): number | null {
+  const tok = /^track-\[(-?\d(?:\.\d{1,3})?)em\]$/.exec(t)
+  if (tok) return Number(tok[1])
   const s = t.replace(/^!/, '')
   if (!s.startsWith('tracking-')) return null
   const v = s.slice('tracking-'.length)
@@ -490,8 +542,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     id: 'weight',
     label: 'Boldness',
     kind: 'select',
-    options: [DEFAULT, ...WEIGHT_OPTIONS],
-    owns: (t) => WEIGHTS.includes(fontSuffix(t)),
+    options: [DEFAULT, ...(usesTextVars(opts) ? WEIGHT_OPTIONS.map(weightToken) : WEIGHT_OPTIONS)],
+    owns: (t) => isWeightVar(t) || WEIGHTS.includes(fontSuffix(t)),
   })
   // ONE colour-picking format everywhere (Sam, 2026-08-12): the ColorPalette hex
   // picker with the colours-on-site swatch row — never a select of palette classes.
@@ -505,8 +557,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     id: 'align',
     label: 'Alignment',
     kind: 'select',
-    options: [DEFAULT, ...ALIGN_OPTIONS],
-    owns: (t) => ALIGNS.includes(textSuffix(t)),
+    options: [DEFAULT, ...(usesTextVars(opts) ? ALIGN_OPTIONS.map(alignToken) : ALIGN_OPTIONS)],
+    owns: (t) => isAlignVar(t) || ALIGNS.includes(textSuffix(t)),
   })
   controls.push({
     id: 'textShadow',
@@ -559,8 +611,18 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     rank: padRank,
     owns: ownsPad,
   })
-  controls.push({ id: 'uppercase', label: 'Uppercase', kind: 'toggle', onClass: CASE_TOGGLE_CLASS, owns: (t) => t === CASE_TOGGLE_CLASS })
-  controls.push({ id: 'italic', label: 'Italic', kind: 'toggle', onClass: ITALIC_TOGGLE_CLASS, owns: (t) => t === ITALIC_TOGGLE_CLASS })
+  // Toggles own the ON form of both eras, so a stored legacy class still reads as ON and
+  // flipping it off removes the class rather than stacking a token beside it.
+  controls.push({
+    id: 'uppercase', label: 'Uppercase', kind: 'toggle',
+    onClass: usesTextVars(opts) ? 'case-[uppercase]' : CASE_TOGGLE_CLASS,
+    owns: (t) => t === CASE_TOGGLE_CLASS || t === 'case-[uppercase]',
+  })
+  controls.push({
+    id: 'italic', label: 'Italic', kind: 'toggle',
+    onClass: usesTextVars(opts) ? 'fstyle-[italic]' : ITALIC_TOGGLE_CLASS,
+    owns: (t) => t === ITALIC_TOGGLE_CLASS || t === 'fstyle-[italic]',
+  })
   controls.push(...motionControls())
   return controls
 }
@@ -626,9 +688,12 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     // notches on the slider (Sam, 2026-08-12). Derived by filtering the one table.
     steps: [DEFAULT, ...WEIGHT_OPTIONS.filter((o) =>
       ['font-light', 'font-normal', 'font-medium', 'font-bold', 'font-black'].includes(o.value),
-    )],
+    ).map((o) => (usesTextVars(opts) ? weightToken(o) : o))],
     defaultOffScale: true,
-    owns: (t) => WEIGHTS.includes(fontSuffix(t)),
+    // The rank is what lets a stored value of EITHER shape land on its step — a token
+    // and its legacy class both resolve to the same number.
+    rank: weightRank,
+    owns: (t) => isWeightVar(t) || WEIGHTS.includes(fontSuffix(t)),
   })
   // Sam, 2026-08-05: "allow all text input editor sections to edit these parts" — the gap
   // between stacked lines and between letters. Both were previously fixed by whatever the
@@ -637,19 +702,19 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     id: 'leading',
     label: 'Line spacing',
     kind: 'slider',
-    steps: [DEFAULT, ...LEADING_OPTIONS],
+    steps: [DEFAULT, ...(usesTextVars(opts) ? LEADING_OPTIONS.map(leadToken) : LEADING_OPTIONS)],
     defaultOffScale: true,
     rank: leadingRank,
-    owns: isLeading,
+    owns: (t) => isLeadVar(t) || isLeading(t),
   })
   controls.push({
     id: 'tracking',
     label: 'Letter spacing',
     kind: 'slider',
-    steps: [DEFAULT, ...TRACKING_OPTIONS],
+    steps: [DEFAULT, ...(usesTextVars(opts) ? TRACKING_OPTIONS.map(trackToken) : TRACKING_OPTIONS)],
     defaultOffScale: true,
     rank: trackingRank,
-    owns: isTracking,
+    owns: (t) => isTrackVar(t) || isTracking(t),
   })
   // Slice-1 text effects — in BOTH text surfaces (this per-field editor and the Style
   // panel's section controls), so a shadow set in one place is adjustable in the other.
@@ -1269,7 +1334,11 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
  *  or 'on'/'' for a toggle. */
 export function readStyleValue(control: StyleControl, classString: string): string {
   const tokens = classString.split(/\s+/).filter(Boolean)
-  if (control.kind === 'toggle') return tokens.includes(control.onClass) ? 'on' : ''
+  // ANY owned token reads as ON, not just the era's own onClass — half the stored
+  // strings still say `uppercase` while the control now writes `case-[uppercase]`, and
+  // reading only the onClass would show OFF on a plainly uppercase region (the first
+  // click would then stack the token on top of the class).
+  if (control.kind === 'toggle') return tokens.some(control.owns) ? 'on' : ''
   return tokens.find(control.owns) ?? ''
 }
 
@@ -1316,7 +1385,32 @@ export function applyStyleValue(classString: string, control: StyleControl, valu
  * (skeen brief, 2026-08-03). Shared so the Style panel and the text-field editor can
  * never disagree about what "unchanged" means.
  */
+/** A token in its CANONICAL spelling: every class-era form rewritten as its token twin,
+ *  so `font-black` ≡ `weight-[900]` across the migration. The region's BASE wears
+ *  classes while the controls emit tokens — without this, returning a control to the
+ *  base's own value reads as a change and pins an override forever. Anything without a
+ *  twin (layout, colours, effects) passes through untouched. */
+function canonToken(t: string): string {
+  const w = WEIGHT_NUM[fontSuffix(t)]
+  if (w != null) return `weight-[${w}]`
+  if (ALIGNS.includes(textSuffix(t))) return `align-[${textSuffix(t)}]`
+  const lead = leadingRank(t)
+  if (lead != null && (isLeading(t) || isLeadVar(t))) return `lead-[${lead}]`
+  const track = trackingRank(t)
+  if (track != null && (isTracking(t) || isTrackVar(t))) return `track-[${track}em]`
+  if (t === CASE_TOGGLE_CLASS) return 'case-[uppercase]'
+  if (t === ITALIC_TOGGLE_CLASS) return 'fstyle-[italic]'
+  if (isTextSize(t)) {
+    const rem = textSizeRank(t)
+    if (rem != null) return `size-[${Math.round(rem * 16)}px]`
+  }
+  const size = sizeVarPx(t)
+  if (size != null) return `size-[${size}px]`
+  return t
+}
+
 export function sameClasses(a: string, b: string): boolean {
-  const norm = (s: string) => s.split(/\s+/).filter(Boolean).sort().join(' ')
+  const norm = (s: string) =>
+    s.split(/\s+/).filter(Boolean).map(canonToken).sort().join(' ')
   return norm(a) === norm(b)
 }

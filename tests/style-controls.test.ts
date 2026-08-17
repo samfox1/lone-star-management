@@ -383,8 +383,9 @@ describe('the text tab, tuned (Sam, 2026-08-12)', () => {
     // near-duplicates; nine steps meant four dead notches.
     const w = text.find((c) => c.id === 'weight')!
     if (w.kind !== 'slider') throw new Error('unreachable')
+    // Token era: same five weights, spoken as numbers the bridge lifts onto --lse-weight.
     expect(w.steps.map((s) => s.value)).toEqual([
-      '', 'font-light', 'font-normal', 'font-medium', 'font-bold', 'font-black',
+      '', 'weight-[300]', 'weight-[400]', 'weight-[500]', 'weight-[700]', 'weight-[900]',
     ])
   })
 
@@ -546,9 +547,12 @@ describe('applyStyleValue', () => {
     const out = applyStyleValue('text-center text-flash-1 text-2xl', byId('size'), 'text-5xl')
     expect(out.split(/\s+/).sort()).toEqual(['text-5xl', 'text-center', 'text-flash-1'])
   })
-  it('toggles a class on and off', () => {
-    expect(applyStyleValue('relative', byId('italic'), 'on')).toBe('relative italic')
+  it('toggles on and off — and a legacy class comes OFF under the token-era control', () => {
+    expect(applyStyleValue('relative', byId('italic'), 'on')).toBe('relative fstyle-[italic]')
+    expect(applyStyleValue('relative fstyle-[italic]', byId('italic'), '')).toBe('relative')
+    // Half the stored strings still say `italic`; the control must clear that shape too.
     expect(applyStyleValue('relative italic', byId('italic'), '')).toBe('relative')
+    expect(readStyleValue(byId('italic'), 'relative italic')).toBe('on')
   })
   it('swaps a font family without touching the weight', () => {
     const out = applyStyleValue('font-momo font-bold', byId('font'), 'font-display')

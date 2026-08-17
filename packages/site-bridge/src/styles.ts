@@ -190,9 +190,59 @@ function claimedProps(base: string): Set<string> {
   return claims;
 }
 
-/** `size-[Npx]` / `fontfam-[…]` → the variable, plus the property itself unless the
- *  region has claimed it. Returns `{}` for a token whose payload is refused, so a
- *  malformed one is inert rather than falling through to the class list. */
+/**
+ * The SECOND-WAVE text families (2026-08-17): the remaining class-writing text controls
+ * as value tokens, one row each. `parse` returns the CSS value or null for a refused
+ * payload — refusal must be airtight, since these land in a style attribute.
+ *
+ * Leading gets a bonus over its class form: `!leading-*` needed Tailwind's important
+ * prefix because text-* size utilities set line-height too and a parent could pin it at
+ * higher specificity. Inline beats both by construction, so the `!` era ends here.
+ */
+const TEXT_VARS: {
+  re: RegExp;
+  claim: string;
+  variable: string;
+  camel: string;
+  parse: (payload: string) => string | null;
+}[] = [
+  // Every `re` claims the whole FAMILY (`prefix-[anything]`) and `parse` alone decides
+  // validity. A narrower regex would let a malformed payload fall through as a class —
+  // a dead token in the DOM instead of an inert one, and the difference is testable.
+  {
+    re: /^weight-\[(.+)\]$/, claim: "weight", variable: "--lse-weight", camel: "fontWeight",
+    parse: (p) => (/^\d{3}$/.test(p) && Number(p) >= 100 && Number(p) <= 900 ? p : null),
+  },
+  {
+    re: /^align-\[(.+)\]$/, claim: "align", variable: "--lse-align", camel: "textAlign",
+    parse: (p) => (["left", "center", "right", "justify", "start", "end"].includes(p) ? p : null),
+  },
+  {
+    // Unitless ratio, matching what the leading scale always meant. 0.5–3 spans every
+    // step the editor offers with slack, and excludes px-sized junk.
+    re: /^lead-\[(.+)\]$/, claim: "leading", variable: "--lse-leading", camel: "lineHeight",
+    parse: (p) =>
+      /^\d(?:\.\d{1,3})?$/.test(p) && Number(p) >= 0.5 && Number(p) <= 3 ? p : null,
+  },
+  {
+    re: /^track-\[(.+)\]$/, claim: "tracking", variable: "--lse-tracking", camel: "letterSpacing",
+    parse: (p) =>
+      /^-?\d(?:\.\d{1,3})?em$/.test(p) && Math.abs(parseFloat(p)) <= 1 ? p : null,
+  },
+  {
+    re: /^case-\[(.+)\]$/, claim: "case", variable: "--lse-case", camel: "textTransform",
+    parse: (p) => (["uppercase", "lowercase", "capitalize", "none"].includes(p) ? p : null),
+  },
+  {
+    re: /^fstyle-\[(.+)\]$/, claim: "italic", variable: "--lse-fontstyle", camel: "fontStyle",
+    parse: (p) => (["italic", "normal"].includes(p) ? p : null),
+  },
+];
+
+/** `size-[Npx]` / `fontfam-[…]` / the TEXT_VARS families → the variable, plus the
+ *  property itself unless the region has claimed it. Returns `{}` for a token whose
+ *  payload is refused, so a malformed one is inert rather than falling through to the
+ *  class list. */
 function variableToken(
   token: string,
   claims: Set<string>,
@@ -209,6 +259,15 @@ function variableToken(
     if (!value) return {};
     const style: Record<string, string> = { "--lse-font": value };
     if (!claims.has("font")) style.fontFamily = "var(--lse-font)";
+    return style;
+  }
+  for (const fam of TEXT_VARS) {
+    const hit = token.match(fam.re);
+    if (!hit) continue;
+    const value = fam.parse(hit[1]);
+    if (value == null) return {};
+    const style: Record<string, string> = { [fam.variable]: value };
+    if (!claims.has(fam.claim)) style[fam.camel] = `var(${fam.variable})`;
     return style;
   }
   return null;
@@ -525,6 +584,18 @@ export const MANAGED_STYLE_PROPS = [
   "font-family",
   "--lse-size",
   "--lse-font",
+  "font-weight",
+  "text-align",
+  "line-height",
+  "letter-spacing",
+  "text-transform",
+  "font-style",
+  "--lse-weight",
+  "--lse-align",
+  "--lse-leading",
+  "--lse-tracking",
+  "--lse-case",
+  "--lse-fontstyle",
 ] as const;
 
 export type ResolvedStyle = {

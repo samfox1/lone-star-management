@@ -1361,8 +1361,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   it('changing Boldness swaps the weight class and PRESERVES the rest, repainting live', () => {
     const onApplyStyle = vi.fn()
     focusStyle('hero_wordmark', { onApplyStyle })
-    fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'font-bold' } })
-    expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'uppercase font-bold')
+    fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'weight-[700]' } })
+    expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'uppercase weight-[700]')
   })
 
   it('a toggle clears its class when unchecked', () => {
@@ -1397,12 +1397,14 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     try {
       focusStyle('hero_wordmark')
       const weight = screen.getByLabelText('Hero wordmark (SKEEN) Boldness')
-      fireEvent.change(weight, { target: { value: 'font-bold' } })
+      fireEvent.change(weight, { target: { value: 'weight-[700]' } })
       await vi.advanceTimersByTimeAsync(500)
-      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'uppercase font-bold')
-      // Back to the base weight: same tokens as the base (order aside) → save ''.
+      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'uppercase weight-[700]')
+      // Back to the base weight — VIA ITS TOKEN. The base says `font-black`, the control
+      // now offers `weight-[900]`; the two must read as the same meaning or returning to
+      // the base pins an override every time (the exact regression the migration risked).
       // (Async advance: the second persist chains behind the first's promise.)
-      fireEvent.change(weight, { target: { value: 'font-black' } })
+      fireEvent.change(weight, { target: { value: 'weight-[900]' } })
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
     } finally {
@@ -1456,7 +1458,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // also pick up every <option>'s text.
     const painted = () => (screen.getByLabelText('Footer Alignment').parentElement as HTMLElement).lastElementChild
     expect(painted()?.textContent).toBe('Default')
-    fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'text-center' } })
+    fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'align-[center]' } })
     expect(painted()?.textContent).toBe('Center')
   })
 
@@ -1473,13 +1475,17 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     vi.useFakeTimers()
     try {
       focusStyle('footer')
-      fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'text-center' } })
+      // A value that DIFFERS from the base's own alignment, or the save is '' (equal to
+      // base → row deleted) and there is nothing to inspect.
+      fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'align-[right]' } })
       vi.advanceTimersByTime(500)
       const saved = saveStyleMock.mock.calls.at(-1)?.[2] as string
       expect(saved).toContain('mt-auto')
       expect(saved).toContain('border-t')
       expect(saved).toContain('px-6')
-      expect(saved).toContain('text-center')
+      expect(saved).toContain('align-[right]')
+      // …and the base's own alignment is REPLACED, not left to fight the new one.
+      expect(saved).not.toContain('text-center')
     } finally {
       vi.useRealTimers()
     }

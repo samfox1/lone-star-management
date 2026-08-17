@@ -167,15 +167,14 @@ describe('TextFieldEditor — one field, full panel', () => {
     }
   })
 
-  it('emits line spacing as !important, so a size class cannot re-loosen it', () => {
-    // Tailwind's text-* utilities set font-size AND line-height together, so a plain
-    // leading class loses to the Size the manager just picked. A site may also pin
-    // line-height on a PARENT at higher specificity (skeen's polaroid strip does) to stop
-    // a half-styled caption coming out loose. `!` beats both, which is the precedence a
-    // manager expects from a control they just moved.
+  it('emits line spacing as a value token — the ! era is over', () => {
+    // The class form needed Tailwind's `!` because text-* utilities set line-height too
+    // and a parent could pin it at higher specificity (skeen's polaroid strip does). The
+    // token lifts to an INLINE line-height, which beats both by construction — same
+    // precedence the `!` bought, without the prefix.
     const leading = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'leading')!
     for (const step of sliderSteps(leading))
-      expect(step.value.startsWith('!leading-'), step.value).toBe(true)
+      expect(step.value, step.label).toMatch(/^lead-\[\d(?:\.\d{1,3})?\]$/)
   })
 
   it('recognises its own tokens, so changing one does not stack duplicates', () => {
@@ -252,7 +251,7 @@ describe('TextFieldEditor — one field, full panel', () => {
     // used to miss too, opening the manager at 1.1 on a line already set to 1.0.
     const leadingSteps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'leading')!)
     const leading = screen.getByLabelText('Hero title Line spacing') as HTMLInputElement
-    expect(leadingSteps[Number(leading.value)].value).toBe('!leading-none')
+    expect(leadingSteps[Number(leading.value)].label).toBe('1.0')
   })
 
   it('offers Reset only once a size is actually set', () => {
@@ -332,14 +331,14 @@ describe('TextFieldEditor — one field, full panel', () => {
     const weightSteps = controls.find((c) => c.id === 'weight')!
     const sIdx = sliderSteps(sizeSteps).length - 2 // not the mid resting position
     const sVal = sliderSteps(sizeSteps)[sIdx].value
-    const wIdx = sliderSteps(weightSteps).findIndex((s) => s.value === 'font-bold')
+    const wIdx = sliderSteps(weightSteps).findIndex((s) => s.label === 'Bold')
 
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(sIdx) } })
     fireEvent.change(screen.getByLabelText('Hero title Thickness'), { target: { value: String(wIdx) } })
 
     const last = onStyle.mock.calls.at(-1) as unknown as string[]
     expect(last[1]).toContain(sVal)
-    expect(last[1]).toContain('font-bold')
+    expect(last[1]).toContain('weight-[700]')
   })
 
   it('offers the site’s own fonts, so the dropdown is real classes not guesses', () => {
