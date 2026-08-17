@@ -281,6 +281,33 @@ function mobileToken(
   return null;
 }
 
+/* ── FUSION (0.20.0, Sam's refinement of the mobile overrides): when both ends are
+ * known, the desktop and phone picks become ONE clamp — desktop = ceiling, phone =
+ * floor, fluid between — and the whole phone-only apparatus (marker class, !important
+ * rule, package breakpoint) drops away for that element. The site's initial build is
+ * the default for whichever end the manager has not touched: a claimed base declares
+ * its size token, so a phone-only edit still knows its ceiling.
+ *
+ * The slope runs 390px → 1024px, the same span sizeLength's ladder uses: at the
+ * editor's phone canvas (390) the value IS the phone pick — the preview tells the
+ * truth — and by a small laptop it has reached the desktop pick. */
+const SIZE_TOKEN_RE = /^size-\[(\d{1,4})px\]$/;
+const SIZESM_TOKEN_RE = /^sizesm-\[(\d{1,4})px\]$/;
+
+function fusedSizeValue(phonePx: number, desktopPx: number): string {
+  if (phonePx === desktopPx) return `${phonePx}px`;
+  return `clamp(${phonePx}px,calc(${phonePx}px + ${desktopPx - phonePx} * (100vw - 390px) / 634),${desktopPx}px)`;
+}
+
+/** The px a token list declares for a family, or null. */
+function tokenPx(tokens: string[], re: RegExp): number | null {
+  for (const t of tokens) {
+    const m = t.match(re);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
 /** `size-[Npx]` / `fontfam-[…]` / the TEXT_VARS families → the variable, plus the
  *  property itself unless the region has claimed it. Returns `{}` for a token whose
  *  payload is refused, so a malformed one is inert rather than falling through to the
@@ -808,8 +835,27 @@ export function resolveRegionStyle(
   // From the BASE, before the merge: a section override REPLACES the base, so a claim
   // read out of the merged string would vanish the moment a manager styled the region.
   const claims = claimedProps(base);
-  if (!isItemKey(key))
-    return resolveTokens(mergeStyle(key, base, override), false, claims);
+  if (!isItemKey(key)) {
+    const merged = mergeStyle(key, base, override);
+    const tokens = merged.split(/\s+/).filter(Boolean);
+    const phone = tokenPx(tokens, SIZESM_TOKEN_RE);
+    // The ceiling: the merged string's own desktop pick, else the BASE's declared size —
+    // an override that replaced the base took its size token with it, but the base is
+    // still what the region renders as on desktop (the claimed rule's fallback says so).
+    const desktop =
+      tokenPx(tokens, SIZE_TOKEN_RE) ?? tokenPx(base.split(/\s+/), SIZE_TOKEN_RE);
+    if (phone != null && desktop != null) {
+      const resolved = resolveTokens(
+        tokens.filter((t) => !SIZESM_TOKEN_RE.test(t)).join(" "),
+        false,
+        claims,
+      );
+      resolved.style["--lse-size"] = fusedSizeValue(phone, desktop);
+      if (!claims.has("size")) resolved.style.fontSize = "var(--lse-size)";
+      return resolved;
+    }
+    return resolveTokens(merged, false, claims);
+  }
   const lifted = resolveTokens(override.trim(), true, claims);
   const kept = base
     .split(/\s+/)

@@ -32,22 +32,23 @@ describe("sizesm-[Npx] on an UNCLAIMED region", () => {
     expect(className).not.toContain("sizesm-[18px]");
   });
 
-  it("coexists with the desktop token — two values, one element", () => {
-    const { style, className } = resolveRegionStyle("r", "grid", "size-[48px] sizesm-[18px]");
-    expect(style.fontSize).toBe("var(--lse-size)");
-    expect(style["--lse-size-m"]).toBe("18px");
-    expect(className.split(/\s+/)).toContain("lse-msize");
+  it("with the desktop token present, both picks FUSE — see the fusion suite below", () => {
+    // 0.19 shipped this case as marker class + --lse-size-m; 0.20 supersedes it with
+    // one fused clamp (Sam's refinement). The full pinning lives in the fusion
+    // describe; this stub stays so the superseded behaviour has a tombstone.
+    const { style } = resolveRegionStyle("r", "grid", "size-[48px] sizesm-[18px]");
+    expect(style["--lse-size"]).toContain("clamp(18px");
   });
 });
 
 describe("sizesm-[Npx] on a CLAIMED region", () => {
-  it("sets ONLY the variable — no marker class, or the package rule beats the site's cap", () => {
+  it("claimed + both picks: fused variable only, never a marker class", () => {
     const { style, className } = resolveRegionStyle(
       "r",
       "grid lse-owns-[size]",
       "size-[48px] sizesm-[18px]",
     );
-    expect(style["--lse-size-m"]).toBe("18px");
+    expect(style["--lse-size"]).toContain("clamp(18px");
     expect(style.fontSize).toBeUndefined();
     expect(className.split(/\s+/)).not.toContain("lse-msize");
   });
@@ -107,5 +108,60 @@ describe("tokens.css ships the media rules", () => {
     // !important is load-bearing: it must beat the same element's inline
     // font-size: var(--lse-size). Without it the desktop value wins on phones too.
     expect(media.match(/!important/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/* ── FUSION (0.20.0, Sam's refinement): when BOTH ends are known, the two picks become
+ * one clamp — desktop pick = ceiling, phone pick = floor, fluid between. No breakpoint,
+ * no marker class, no !important, no snap at 640px. The fallback machinery above
+ * survives only for a phone pick with no known ceiling. */
+describe("fused clamp — both ends known", () => {
+  it("fuses override tokens into one clamp on --lse-size", () => {
+    const { style, className } = resolveRegionStyle("r", "grid", "size-[48px] sizesm-[18px]");
+    const v = style["--lse-size"];
+    // Floor is the phone pick, ceiling the desktop pick, slope fluid between them.
+    expect(v).toMatch(/^clamp\(18px,calc\(18px \+ 30 \* \(100vw - 390px\) \/ 634\),48px\)$/);
+    expect(style.fontSize).toBe("var(--lse-size)");
+    // The whole point: no phone-only machinery left on the element.
+    expect(style["--lse-size-m"]).toBeUndefined();
+    expect(className.split(/\s+/)).not.toContain("lse-msize");
+  });
+
+  it("a claimed region fuses too, variable only", () => {
+    const { style, className } = resolveRegionStyle(
+      "r",
+      "grid lse-owns-[size]",
+      "size-[48px] sizesm-[18px]",
+    );
+    expect(style["--lse-size"]).toContain("clamp(18px");
+    expect(style.fontSize).toBeUndefined();
+    expect(className.split(/\s+/)).not.toContain("lse-msize");
+  });
+
+  it("CRITICAL: a phone-only pick borrows the ceiling from the BASE's size token", () => {
+    // The site's initial build is the default max (Sam's framing). A claimed base
+    // declares size-[48px]; the manager bumps only the phone end.
+    const { style } = resolveRegionStyle(
+      "r",
+      "grid size-[48px] lse-owns-[size]",
+      "text-white sizesm-[22px]",
+    );
+    expect(style["--lse-size"]).toContain("clamp(22px");
+    expect(style["--lse-size"]).toContain("48px)");
+    expect(style["--lse-size-m"]).toBeUndefined();
+  });
+
+  it("a phone pick with NO known ceiling keeps the fallback machinery", () => {
+    const { style, className } = resolveRegionStyle("r", "grid", "sizesm-[18px]");
+    expect(style["--lse-size-m"]).toBe("18px");
+    expect(className.split(/\s+/)).toContain("lse-msize");
+    expect(style["--lse-size"]).toBeUndefined();
+  });
+
+  it("a phone pick LARGER than the ceiling still honours the phone end", () => {
+    // clamp(MIN, VAL, MAX) resolves as max(MIN, min(VAL, MAX)) — the floor wins. The
+    // manager sees their pick on a phone either way; no branch needed.
+    const { style } = resolveRegionStyle("r", "grid", "size-[16px] sizesm-[24px]");
+    expect(style["--lse-size"]).toMatch(/^clamp\(24px,/);
   });
 });
