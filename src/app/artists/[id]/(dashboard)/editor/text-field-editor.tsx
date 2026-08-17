@@ -1,6 +1,6 @@
-import type { EditorStyleOptions } from '@/lib/site-editor/style-controls'
 'use client'
 
+import type { EditorStyleOptions } from '@/lib/site-editor/style-controls'
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
