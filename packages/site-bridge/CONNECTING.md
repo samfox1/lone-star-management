@@ -210,21 +210,18 @@ query, wherever you decide "mobile" begins:
 
 ```css
 @media (max-width: 480px) {
-  .hero-name { font-size: min(var(--lse-size-m, var(--lse-size, 3rem)), 12vw); }
+  .hero-name { font-size: var(--lse-size-m, min(var(--lse-size, 3rem), 12vw)); }
 }
 ```
 
-The chain order matters: the phone value if the manager set one, else the desktop value,
-else your fallback — and your cap over all of it.
+The chain order matters: the manager's phone value if set — UNCAPPED, because an
+explicit phone pick is them saying what they want on a phone — else the desktop value
+under your cap, which exists to stop desktop-derived sizes overflowing small screens.
 
-**Fusion (0.20.0):** when both ends are known — a desktop pick (or a size token in the
-region's base) plus a phone pick — the bridge emits ONE fluid clamp on `--lse-size`:
-phone pick as the floor, desktop pick as the ceiling, interpolating from a 390px to a
-1024px viewport. No marker class, no package breakpoint, no snap; `--lse-size-m` is not
-set in that case, and your chain above degrades to reading the fused value. The marker
-mechanism survives only for a region with no size of its own anywhere — the ceiling is
-otherwise read from the initial build itself: a size token or class in the base, or a
-legacy stored size class.
+**Why discrete, not fluid (history):** 0.20 briefly fused the two picks into one clamp
+interpolating 390→1024px. Elegant, wrong: every not-fullscreen laptop sat on the slope,
+so the phone pick reached "desktop" widths. The two values are independent again — each
+editor view edits exactly what it shows.
 
 
 **Fonts must declare what they resolve to.** The editor cannot know what `font-momo`

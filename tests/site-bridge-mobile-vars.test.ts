@@ -32,23 +32,23 @@ describe("sizesm-[Npx] on an UNCLAIMED region", () => {
     expect(className).not.toContain("sizesm-[18px]");
   });
 
-  it("with the desktop token present, both picks FUSE — see the fusion suite below", () => {
-    // 0.19 shipped this case as marker class + --lse-size-m; 0.20 supersedes it with
-    // one fused clamp (Sam's refinement). The full pinning lives in the fusion
-    // describe; this stub stays so the superseded behaviour has a tombstone.
+  it("with the desktop token present, the two stay independent — see the discrete suite", () => {
+    // History: 0.19 shipped this discretely; 0.20 fused the picks into one clamp; 0.21
+    // went BACK — the fusion's interpolation zone let the phone pick reach desktop
+    // widths. The full pinning lives in "the two picks are fully independent".
     const { style } = resolveRegionStyle("r", "grid", "size-[48px] sizesm-[18px]");
-    expect(style["--lse-size"]).toContain("clamp(18px");
+    expect(style["--lse-size-m"]).toBe("18px");
   });
 });
 
 describe("sizesm-[Npx] on a CLAIMED region", () => {
-  it("claimed + both picks: fused variable only, never a marker class", () => {
+  it("claimed + both picks: variables only, never a marker class", () => {
     const { style, className } = resolveRegionStyle(
       "r",
       "grid lse-owns-[size]",
       "size-[48px] sizesm-[18px]",
     );
-    expect(style["--lse-size"]).toContain("clamp(18px");
+    expect(style["--lse-size-m"]).toBe("18px");
     expect(style.fontSize).toBeUndefined();
     expect(className.split(/\s+/)).not.toContain("lse-msize");
   });
@@ -111,126 +111,38 @@ describe("tokens.css ships the media rules", () => {
   });
 });
 
-/* ── FUSION (0.20.0, Sam's refinement): when BOTH ends are known, the two picks become
- * one clamp — desktop pick = ceiling, phone pick = floor, fluid between. No breakpoint,
- * no marker class, no !important, no snap at 640px. The fallback machinery above
- * survives only for a phone pick with no known ceiling. */
-describe("fused clamp — both ends known", () => {
-  it("fuses override tokens into one clamp on --lse-size", () => {
+/* ── DISCRETE MODEL (0.21.0). Fusion (0.20.x) blended the two picks across a 390-1024px
+ * interpolation zone — clever CSS, wrong mental model: any not-fullscreen laptop sat on
+ * the slope, so the phone pick kept a hand in "desktop" (Sam hit it twice, live). The
+ * two values are fully independent now: below the breakpoint the phone value, above it
+ * the desktop value, no zone where they mix. Each slider edits exactly what its view
+ * shows. */
+describe("the two picks are fully independent", () => {
+  it("both set, unclaimed: desktop inlines, phone rides the marker", () => {
     const { style, className } = resolveRegionStyle("r", "grid", "size-[48px] sizesm-[18px]");
-    const v = style["--lse-size"];
-    // Floor is the phone pick, ceiling the desktop pick, slope fluid between them.
-    expect(v).toMatch(/^clamp\(18px,calc\(18px \+ 30 \* \(100vw - 390px\) \/ 634\),48px\)$/);
+    expect(style["--lse-size"]).toBe("clamp(1.75rem,6.5vw,3rem)");
     expect(style.fontSize).toBe("var(--lse-size)");
-    // The whole point: no phone-only machinery left on the element.
-    expect(style["--lse-size-m"]).toBeUndefined();
-    expect(className.split(/\s+/)).not.toContain("lse-msize");
+    expect(style["--lse-size-m"]).toBe("18px");
+    expect(className.split(/\s+/)).toContain("lse-msize");
   });
 
-  it("a claimed region fuses too, variable only", () => {
+  it("both set, claimed: variables only — the site's rules decide everything", () => {
     const { style, className } = resolveRegionStyle(
       "r",
       "grid lse-owns-[size]",
       "size-[48px] sizesm-[18px]",
     );
-    expect(style["--lse-size"]).toContain("clamp(18px");
+    expect(style["--lse-size"]).toBe("clamp(1.75rem,6.5vw,3rem)");
+    expect(style["--lse-size-m"]).toBe("18px");
     expect(style.fontSize).toBeUndefined();
     expect(className.split(/\s+/)).not.toContain("lse-msize");
   });
 
-  it("CRITICAL: a phone-only pick borrows the ceiling from the BASE's size token", () => {
-    // The site's initial build is the default max (Sam's framing). A claimed base
-    // declares size-[48px]; the manager bumps only the phone end.
-    const { style } = resolveRegionStyle(
-      "r",
-      "grid size-[48px] lse-owns-[size]",
-      "text-white sizesm-[22px]",
-    );
-    expect(style["--lse-size"]).toContain("clamp(22px");
-    expect(style["--lse-size"]).toContain("48px)");
-    expect(style["--lse-size-m"]).toBeUndefined();
-  });
-
-  it("derives the ceiling from a base size CLASS — the initial build already set it", () => {
-    // Sam, 2026-08-17: "the ceiling should already be there based off of the initial
-    // build." Most bases declare size as a CLASS, not a token — the fluid clamp the
-    // site shipped with, or a named Tailwind size. Its max IS the default ceiling.
-    const clamp = resolveRegionStyle(
-      "r",
-      "grid text-[clamp(1.75rem,6.5vw,3rem)]",
-      "sizesm-[18px]",
-    );
-    expect(clamp.style["--lse-size"]).toContain("clamp(18px");
-    expect(clamp.style["--lse-size"]).toContain("48px)"); // 3rem
-    expect(clamp.style["--lse-size-m"]).toBeUndefined();
-
-    const named = resolveRegionStyle("r", "grid text-sm", "sizesm-[12px]");
-    expect(named.style["--lse-size"]).toContain("clamp(12px");
-    expect(named.style["--lse-size"]).toContain("14px)");
-  });
-
-  it("derives it from a LEGACY stored size class in the override too", () => {
-    // Pre-0.16 rows store the clamp classes; their max is the manager's own ceiling.
-    const { style } = resolveRegionStyle(
-      "r",
-      "grid",
-      "text-[clamp(1.5rem,5.2vw,2.25rem)] sizesm-[16px]",
-    );
-    expect(style["--lse-size"]).toContain("clamp(16px");
-    expect(style["--lse-size"]).toContain("36px)"); // 2.25rem
-  });
-
-  it("a phone pick with NO known ceiling keeps the fallback machinery", () => {
-    const { style, className } = resolveRegionStyle("r", "grid", "sizesm-[18px]");
-    expect(style["--lse-size-m"]).toBe("18px");
-    expect(className.split(/\s+/)).toContain("lse-msize");
-    expect(style["--lse-size"]).toBeUndefined();
-  });
-
-  it("CRITICAL: a phone pick larger than desktop NEVER moves desktop", () => {
-    // The first cut celebrated 'the floor wins' — but a clamp floor wins at EVERY
-    // width, so dragging mobile above desktop changed desktop too (Sam hit it live).
-    // The clamp is ORDERED now: lo/hi sorted, the slope decides direction, and each
-    // end only ever moves its own side.
-    const { style } = resolveRegionStyle("r", "grid", "size-[16px] sizesm-[24px]");
-    expect(style["--lse-size"]).toBe(
-      "clamp(16px,calc(24px + -8 * (100vw - 390px) / 634),24px)",
-    );
-    // At ≥1024px the calc sits at/below 16px and the lower bound holds desktop at 16.
-    // At 390px it reads exactly 24 — the phone pick.
-  });
-
-  it("CRITICAL: a desktop pick NEVER moves the phone end — the floor is the BUILD's", () => {
-    // The other live leak: desktop-only picks emitted the ladder clamp, whose floor is
-    // 70% OF THE PICK — raise desktop and the phone floor rose with it. The default
-    // floor is the initial build's own (the base clamp's min), held until the manager
-    // touches it in phone view.
-    const base = "grid text-[clamp(1.75rem,6.5vw,3rem)]"; // build floor 28px, ceiling 48px
-    const at60 = resolveRegionStyle("r", base, "size-[60px]");
-    expect(at60.style["--lse-size"]).toBe(
-      "clamp(28px,calc(28px + 32 * (100vw - 390px) / 634),60px)",
-    );
-    const at96 = resolveRegionStyle("r", base, "size-[96px]");
-    // Desktop went 60 → 96; the phone end did not move an inch.
-    expect(at96.style["--lse-size"]).toMatch(/^clamp\(28px,/);
-  });
-
-  it("a claimed base's own size token supplies the default floor the same way", () => {
-    // skeen's claimed bases declare size-[48px]; its ladder floor (28px) is the build
-    // default a desktop-only edit must hold.
-    const { style } = resolveRegionStyle(
-      "r",
-      "grid size-[48px] lse-owns-[size]",
-      "text-white size-[60px]",
-    );
-    expect(style["--lse-size"]).toMatch(/^clamp\(28px,.*60px\)$/);
-    expect(style.fontSize).toBeUndefined();
-  });
-
-  it("a region with NO size of its own keeps the plain ladder clamp for desktop picks", () => {
-    // Genuinely sizeless (inherited text): there is no build floor to hold, so the
-    // ladder's own fluid clamp is still the honest rendering.
-    const { style } = resolveRegionStyle("r", "grid", "size-[48px]");
-    expect(style["--lse-size"]).toBe("clamp(1.75rem,6.5vw,3rem)");
+  it("CRITICAL: the phone value appears NOWHERE in the desktop-width math", () => {
+    // The property fusion could not deliver: --lse-size must not depend on the phone
+    // pick at all. Desktop reads --lse-size; phone reads --lse-size-m; done.
+    const alone = resolveRegionStyle("r", "grid", "size-[48px]");
+    const withPhone = resolveRegionStyle("r", "grid", "size-[48px] sizesm-[176px]");
+    expect(withPhone.style["--lse-size"]).toBe(alone.style["--lse-size"]);
   });
 });
