@@ -1518,7 +1518,26 @@ export function readStyleValue(control: StyleControl, classString: string): stri
   // semantics (a base's py-10 before its px-6).
   const owned = tokens.filter(control.owns)
   const written = owned.filter((t) => familyOf(t) !== null)
-  return written[written.length - 1] ?? owned[0] ?? ''
+  if (written.length) return written[written.length - 1]
+  // Nothing SAVED — the control is measuring the base. A base can wear several owned
+  // tokens (skeen's footer: `px-6 py-16`), and first-match parked the handle at
+  // whichever came first in the string: px-6, 24px, on a bar visibly wearing 64px —
+  // one nudge right SHRANK it (Sam, 2026-08-17; the fourth occurrence of this bug
+  // class). Open on the LARGEST measurable owned value instead, so the notch right of
+  // the handle is bigger than everything on screen, whatever the base's token order.
+  if (control.kind === 'slider' && control.rank && owned.length > 1) {
+    let best = owned[0]
+    let bestRank = -Infinity
+    for (const t of owned) {
+      const r = control.rank(t)
+      if (r != null && r > bestRank) {
+        bestRank = r
+        best = t
+      }
+    }
+    return best
+  }
+  return owned[0] ?? ''
 }
 
 /** A new class string with this control set to `value`: every token the control owns is

@@ -22,8 +22,11 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  buildStyleControls,
   buildTextItemStyleControls,
   buildItemStyleControls,
+  controlsForRegion,
+  readStyleValue,
   sliderIndex,
   sliderSteps,
   type StyleControl,
@@ -139,5 +142,43 @@ describe('sliderIndex — a value that is not a step', () => {
     const opacity = itemControl('opacity')
     const steps = sliderSteps(opacity)
     expect(steps[sliderIndex(opacity, 'opacity-72').idx].label).toBe('70%')
+  })
+})
+
+
+describe('a base wearing SEVERAL owned tokens measures the LARGEST (Sam, 2026-08-17)', () => {
+  // Fourth occurrence of the drag-right-shrinks bug class, this time skeen's footer:
+  // its base is `… px-6 py-16 …`, first-owned measuring parked the handle at px-6
+  // (24px) while the bar visibly wears 64px of vertical padding — one nudge right
+  // shrank it. The general rule: with nothing SAVED, open on the largest owned value,
+  // so right of the handle is bigger than everything on screen, whatever the base's
+  // token order. (A saved value still wins outright — family-bearing tokens first.)
+  const region = { key: 'footer', label: 'Footer', scope: 'chrome' as const }
+  const pad = () => {
+    const c = controlsForRegion(buildStyleControls(), region).find((x) => x.id === 'pad')!
+    if (c.kind !== 'slider') throw new Error('unreachable')
+    return c
+  }
+
+  it("CRITICAL: skeen's real footer base opens at 64px, not 24px", () => {
+    const SKEEN_FOOTER = 'mt-auto grid content-center border-t border-border bg-background px-6 py-16 text-center'
+    const c = pad()
+    const { idx } = sliderIndex(c, readStyleValue(c, SKEEN_FOOTER))
+    const steps = sliderSteps(c)
+    expect(c.rank!(steps[idx].value)).toBeGreaterThanOrEqual(64)
+    // …and the next notch right is bigger still — the property Sam keeps having to ask for.
+    if (idx < steps.length - 1) {
+      expect(c.rank!(steps[idx + 1].value)!).toBeGreaterThan(64)
+    }
+  })
+
+  it('order does not matter: py-first and px-first bases measure the same', () => {
+    const c = pad()
+    expect(readStyleValue(c, 'px-6 py-16')).toBe(readStyleValue(c, 'py-16 px-6'))
+  })
+
+  it('a SAVED value still beats every base token, whatever its size', () => {
+    const c = pad()
+    expect(readStyleValue(c, 'px-6 py-16 pad-[8px]')).toBe('pad-[8px]')
   })
 })
