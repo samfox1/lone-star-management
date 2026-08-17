@@ -266,7 +266,7 @@ const trackToken = (o: StyleOption): StyleOption =>
  * icons. The bridge re-quotes each family when it builds the CSS value, which is the only
  * place that can do it correctly (a generic keyword must stay bare).
  */
-export const encodeFontStack = (css: string) =>
+const encodeFontStack = (css: string) =>
   `fontfam-[${css.replace(/["']/g, '').trim().replace(/\s+/g, '_')}]`
 
 // FLUID sizes, not fixed ones. A `text-4xl` is 2.25rem at every width, so a caption

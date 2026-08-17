@@ -85,13 +85,6 @@ export const TRACKING_OPTIONS: StyleOption[] = [
 ]
 
 
-/* ── Measuring an owned token ────────────────────────────────────────────────────────
- * Each `rank` turns a class into a number on its own scale, so sliderIndex can place a
- * value the scale does not literally contain. They are deliberately conservative: an
- * unrecognised shape returns null and the slider falls back to its resting position
- * rather than guessing a position that would be wrong in an invisible way.
- */
-
 
 
 /** The case + emphasis toggles' one-token vocabulary. */

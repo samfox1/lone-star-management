@@ -17,7 +17,7 @@ import type { SiteStyles } from "./payload";
 
 export { STYLE_ATTR, WINDOW_ATTR };
 
-export type TextSizeOption = { value: string; label: string };
+type TextSizeOption = { value: string; label: string };
 
 // LABELS are the desktop px (each clamp's max) — the number every site editor shows for
 // font size, and the only labelling that stays ordered across 19 stops. The first pass
