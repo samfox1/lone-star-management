@@ -142,10 +142,18 @@ export function StyleControlRow({
     )
   }
   // Show the current value even when it's a class the site declared no option for (e.g. a
-  // base class), so nothing is silently dropped or mislabelled as Default.
+  // base class), so nothing is silently dropped or mislabelled as Default. In the token
+  // era that off-list case is EVERY legacy value — the options say `align-[center]` while
+  // a base or pre-migration row says `text-center` — so first look for an option that
+  // MEANS the same thing (sameClasses canonicalises across the eras) and borrow its
+  // label. A manager reads "Center", never the raw class string (2026-08-17 review).
+  const twin =
+    current && !control.options.some((o) => o.value === current)
+      ? control.options.find((o) => o.value && sameClasses(o.value, current))
+      : undefined
   const options =
     current && !control.options.some((o) => o.value === current)
-      ? [{ value: current, label: current }, ...control.options]
+      ? [{ value: current, label: twin?.label ?? current }, ...control.options]
       : control.options
   const currentLabel = options.find((o) => o.value === current)?.label ?? options[0]?.label ?? ''
   return (

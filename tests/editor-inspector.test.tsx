@@ -1293,7 +1293,10 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   // the control tests drive them that way. Site-wide browsing is PAGE_REGIONS below.
   const REGIONS: ManifestStyleRegion[] = [
     { key: 'hero_wordmark', label: 'Hero wordmark (SKEEN)', base: 'font-black uppercase' },
-    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
+    // text-center is the point, not decoration: the "base alignment is REPLACED" test
+    // below was vacuous without an alignment class in the base to replace (2026-08-17
+    // review) — its not.toContain passed against a base that never contained it.
+    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6 text-center' },
   ]
   // SITE-WIDE regions: what browsing the tab lists. Their controls are the SURFACE
   // allowlist (controlsForRegion) — no text styling on the page itself.
@@ -1384,7 +1387,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
       fireEvent.change(screen.getByLabelText('Footer Size'), { target: { value: size } })
       expect(saveStyleMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
-      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', `mt-auto border-t px-6 ${size}`)
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'footer', `mt-auto border-t px-6 text-center ${size}`)
     } finally {
       vi.useRealTimers()
     }
@@ -1457,9 +1460,11 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // The painted layer is the select's sibling — reading the wrapper instead would
     // also pick up every <option>'s text.
     const painted = () => (screen.getByLabelText('Footer Alignment').parentElement as HTMLElement).lastElementChild
-    expect(painted()?.textContent).toBe('Default')
-    fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'align-[center]' } })
+    // The base sets text-center, so the control opens ON Center (the fixture gained an
+    // alignment class on 2026-08-17 to arm the is-REPLACED assertion below).
     expect(painted()?.textContent).toBe('Center')
+    fireEvent.change(screen.getByLabelText('Footer Alignment'), { target: { value: 'align-[right]' } })
+    expect(painted()?.textContent).toBe('Right')
   })
 
   it('never exposes the raw Tailwind classes — no Advanced box for a manager to break', () => {
