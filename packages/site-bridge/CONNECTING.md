@@ -236,15 +236,48 @@ fine while doing nothing.
 ## 7. Tests a connected site must pass
 
 These are the connection, not extras. Each one exists because its absence shipped a
-silent bug.
+silent bug — so they are **code, not a checklist**:
 
-1. **No editor furniture on the public page** — no marker attribute survives to a fan.
-   Assert the positive too, or a component rendering nothing passes.
-2. **Every declared key is marked in the markup.** For a site that mounts sections
-   conditionally, walk them: the union is the real page.
-3. **The self-audit passes**: `expect(auditRegions(list.styles, palette)).toEqual([])`.
-4. **An empty payload renders empty states**, never invented content.
-5. **Editor-set variables reach the element** they are supposed to reach.
+```ts
+import { checkContract } from '@samfox1/site-bridge/contract'
+
+it('passes the connection contract', () => {
+  const full = aFullyPublishedSite()
+  const snap = (el: Element) => el.cloneNode(true) as Element   // cleanup() empties it
+  const publicDom = snap(render(<SiteBody site={full} />).container)
+  cleanup()
+  const live = render(<SiteBody site={full} editable />).container
+  const editableDom = snap(live)
+  cleanup()
+  expect(checkContract({
+    manifest: EDIT_LIST,
+    publicDom,
+    editableDom,
+    emptyDom: snap(render(<SiteBody site={emptyPayload()} />).container),
+    publishedValues: [full.config.instagram, full.bio[0]],
+  })).toEqual([])
+})
+```
+
+What it checks, and what each one is about:
+
+1. **No editor furniture on the public page** — no marker attribute survives to a fan,
+   *and* the editable render must carry some. Without that witness, a component rendering
+   nothing passes perfectly.
+2. **Every declared key is marked.** A control the manager can set that changes nothing,
+   with no error anywhere. For a site that mounts sections conditionally, walk them: the
+   union is the real page. A link that configures rather than renders declares
+   `rendered: false` (§2).
+3. **The self-audit passes** — delegated to `auditRegions`, so the two can never disagree
+   about what "declare what you set" means.
+4. **An empty payload invents nothing.** Pass `publishedValues`: strings that exist only
+   because someone published them. None may appear when nothing is published.
+5. **A claimed property arrives as a variable** and is never inlined over (§5).
+
+Write this one test rather than one per component. skeen had five per-component versions
+of rule 1, all passing, while every heading on its live site carried `data-lse-field` —
+each asserted only over the markers its own component emits, and the leak came from one
+none of them rendered.
 
 ---
 
