@@ -12,7 +12,7 @@
  * they chose.
  */
 import { describe, expect, it } from 'vitest'
-import { rebaseOverride as rebase } from '@/lib/site-editor/rebase-override'
+import { driftedRegions, rebaseOverride, rebaseOverride as rebase } from '@/lib/site-editor/rebase-override'
 import { buildStyleControls, controlsForRegion, type StyleControl } from '@/lib/site-editor/style-controls'
 import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
 
@@ -96,5 +96,26 @@ describe('rebase', () => {
     expect(next).toContain('hovercolor-[#c63a2a]')
     expect(next).toContain('gap-[24px]') // their gap survives…
     expect(next).not.toContain('gap-6') // …and the base's is not re-added beside it
+  })
+})
+
+
+describe('delta rows are OFF LIMITS to rebase and drift (review F4)', () => {
+  // A delta cannot drift — it stores only the manager's changes and re-reads the base
+  // at every render. Unguarded, rebaseOverride read a delta's kept-base tokens as
+  // "missing", appended a base copy INTO the sentinel string, and re-froze the exact
+  // families the delta model exists to unfreeze; driftedRegions flagged every fresh
+  // delta as drifted.
+  it('rebaseOverride reports nothing to do for a delta', () => {
+    // null, not the string back: the script treats ANY returned string as a pending
+    // change and would list every delta row as "behind the current design".
+    const base = 'tour-heading grid font-display size-[48px] uppercase text-foreground'
+    expect(rebaseOverride(base, 'lse-delta weight-[700]', buildStyleControls())).toBeNull()
+  })
+
+  it('driftedRegions never flags a delta row', () => {
+    const regions = [{ key: 'footer', label: 'Footer', base: 'flex px-6 border-t bg-background' }]
+    const values = { footer: 'lse-delta pad-[80px]' }
+    expect(driftedRegions(regions, values, () => buildStyleControls())).toEqual([])
   })
 })

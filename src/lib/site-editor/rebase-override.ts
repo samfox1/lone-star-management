@@ -27,6 +27,7 @@
  *
  * Returns null when nothing is missing, so an already-current row is never rewritten.
  */
+import { isDeltaOverride } from '@samfox1/site-bridge'
 import type { StyleControl } from './style-controls'
 
 /**
@@ -52,6 +53,13 @@ export function rebaseOverride(
   controls: StyleControl[],
   opts: { includeOwned?: boolean } = {},
 ): string | null {
+  // A DELTA cannot drift: it stores only the manager's changes and re-reads the base at
+  // every render, which is the disease this whole module existed to treat. Unguarded,
+  // the kept-base tokens read as "missing" and a base copy was appended INTO the
+  // sentinel string — re-freezing the exact families deltas unfreeze (review F4).
+  // null = nothing to do: the script treats any string as a pending change to write.
+  if (isDeltaOverride(stored)) return null
+
   const storedTokens = stored.split(/\s+/).filter(Boolean)
   const has = new Set(storedTokens)
   const missing: string[] = []
@@ -93,6 +101,8 @@ export function driftedRegions(
     const stored = values[region.key]
     // No stored override means the region already renders the live base — nothing to do.
     if (!region.base || !stored?.trim()) continue
+    // A delta row cannot drift by construction (see rebaseOverride's guard).
+    if (isDeltaOverride(stored)) continue
     const next = rebaseOverride(region.base, stored, controlsFor(region))
     if (!next) continue
     const before = new Set(stored.split(/\s+/).filter(Boolean))

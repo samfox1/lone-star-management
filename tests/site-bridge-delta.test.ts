@@ -18,6 +18,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { familyOf, mergeStyle, resolveRegionStyle } from "@samfox1/site-bridge";
+import { createStyleApplier } from "@samfox1/site-bridge/frame";
 
 const BASE =
   "tour-heading font-display size-[48px] sizesm-[28px] lse-owns-[size] font-black uppercase tracking-tight text-foreground";
@@ -72,6 +73,54 @@ describe("familyOf — one family id per owned token, either era", () => {
       ["lse-owns-[size]", null],
     ];
     for (const [token, fam] of cases) expect(familyOf(token), token).toBe(fam);
+  });
+});
+
+describe("review findings — the two HIGH bugs, pinned before fixing", () => {
+  it("F2: lse-not parses CAMELCASE family ids (textColor et al.)", () => {
+    // The writer emits ids like textColor; the parser accepted [a-z]+ only, so the
+    // removal shipped as a junk class, stripped nothing, and vanished on re-save.
+    expect(familyOf("lse-not-[textColor]")).toBe("textColor");
+    const { className, style } = resolveRegionStyle(
+      "r",
+      "grid text-foreground",
+      "lse-delta lse-not-[textColor]",
+    );
+    expect(className.split(/\s+/)).toEqual(["grid"]);
+    expect(style.color).toBeUndefined();
+    expect(className).not.toContain("lse-not");
+  });
+
+  it("F1: the divider sides are a family, so a toggle-off can strip them", () => {
+    // border-t had NO family: turning the Divider off diffed to nothing, the row was
+    // deleted, and the line stayed on the live site.
+    expect(familyOf("border-t")).toBe("divider");
+    expect(familyOf("border-b")).toBe("divider");
+    const { className } = resolveRegionStyle(
+      "r",
+      "flex border-t px-6",
+      "lse-delta lse-not-[divider]",
+    );
+    expect(className.split(/\s+/)).toEqual(["flex", "px-6"]);
+  });
+
+  it("F6: a text-[…] payload that is neither hex nor a length stays the site's own", () => {
+    // text-[var(--x)] classified as size — stripped by a size edit, which is backwards.
+    expect(familyOf("text-[var(--x)]")).toBe(null);
+    expect(familyOf("text-[#abc]")).toBe("textColor");
+    expect(familyOf("text-[2rem]")).toBe("size");
+  });
+
+  it("membership, not position: a reordered sentinel still reads as a delta", () => {
+    const { className } = resolveRegionStyle("r", "grid text-center", "align-[right] lse-delta");
+    expect(className.split(/\s+/)).toEqual(["grid"]);
+  });
+
+  it("variant-prefixed base tokens are site design — never a family, always kept", () => {
+    // A delta must not strip md:grid-cols-2 because someone edited alignment; deliberate.
+    for (const t of ["md:text-6xl", "sm:pb-4", "hover:text-flash-1"]) {
+      expect(familyOf(t), t).toBe(null);
+    }
   });
 });
 
@@ -138,6 +187,24 @@ describe("delta rendering", () => {
   it("mergeStyle exposes the same semantics to sites' own styleClass path", () => {
     expect(mergeStyle("r", "grid text-center", "lse-delta align-[right]"))
       .toBe("grid align-[right]");
+  });
+
+  it("the LIVE applier renders a delta over the registry base (the editor's preview path)", () => {
+    document.body.innerHTML = `<section data-lse-style="footer" class="flex px-6 border-t"></section>`;
+    const el = document.querySelector("section") as HTMLElement;
+    const { applyStyleToDom: apply } = createStyleApplier({
+      regionBase: () => "flex px-6 border-t",
+    });
+    apply(document.body, "footer", "lse-delta lse-not-[divider] pad-[40px]");
+    const classes = (el.getAttribute("class") ?? "").split(/\s+/);
+    expect(classes).toContain("flex");
+    expect(classes).toContain("px-6");
+    expect(classes).not.toContain("border-t");
+    expect(classes).not.toContain("lse-delta");
+    expect(el.style.getPropertyValue("padding")).toBe("40px");
+    // And removal restores the base wholesale.
+    apply(document.body, "footer", "");
+    expect((el.getAttribute("class") ?? "").split(/\s+/)).toContain("border-t");
   });
 
   it("item keys are untouched — they were always overlays", () => {

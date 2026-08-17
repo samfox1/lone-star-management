@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyStyleValue,
   buildStyleControls,
+  readStyleValue,
   deltaFromEffective,
   withStyleVars,
   type StyleControl,
@@ -73,6 +74,33 @@ describe('deltaFromEffective', () => {
   it('every emitted delta survives the save validator', () => {
     const delta = deltaFromEffective(BASE, BASE.replace(' uppercase', '') + ' align-[center]')
     expect(cleanClassText(delta)).not.toBeNull()
+  })
+})
+
+describe('F3: readback after reload tells the truth', () => {
+  it('a base-measuring slider reads the SAVED token, not the base class it measures', () => {
+    // pad/gap/maxw controls own the base's own Tailwind classes so the handle can open
+    // on them — but after a delta save + reload, the seed keeps those base classes
+    // (null family, correctly) AND appends the saved token. First-match reading
+    // returned the base class: Sam saves 80px, reloads, the handle says 24px, and the
+    // first nudge slams the bar from 80 to 28. Owned reads take the LAST match — the
+    // delta half of the merged string — so the handle opens on what was saved.
+    const pad = byId(buildStyleControls(NOW), 'pad')
+    const base = 'flex px-6 py-16 border-t'
+    const seeded = mergeStyle('footer', base, deltaFromEffective(base, `${base} pad-[80px]`))
+    expect(readStyleValue(pad, seeded)).toBe('pad-[80px]')
+  })
+
+  it('the divider toggle round-trips OFF through save and reload', () => {
+    // F1 end to end on the editor side: effective loses border-t → the delta carries
+    // the removal → the seed renders without it → the toggle reads OFF.
+    const base = 'flex px-6 border-t'
+    const delta = deltaFromEffective(base, 'flex px-6')
+    expect(delta).toBe('lse-delta lse-not-[divider]')
+    const seeded = mergeStyle('footer', base, delta)
+    expect(seeded.split(/\s+/)).not.toContain('border-t')
+    // …and re-diffing the seed keeps the removal: saves are stable.
+    expect(deltaFromEffective(base, seeded)).toBe(delta)
   })
 })
 

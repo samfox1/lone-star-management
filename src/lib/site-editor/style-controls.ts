@@ -1509,7 +1509,16 @@ export function readStyleValue(control: StyleControl, classString: string): stri
   // reading only the onClass would show OFF on a plainly uppercase region (the first
   // click would then stack the token on top of the class).
   if (control.kind === 'toggle') return tokens.some(control.owns) ? 'on' : ''
-  return tokens.find(control.owns) ?? ''
+  // A delta-era seed is kept-base-tokens + delta-tokens, and a base-measuring control
+  // (pad, gap, width) owns tokens in BOTH halves — the base's px-6 it measures and the
+  // pad-[80px] the manager saved. First-match read the base and the handle lied after
+  // every reload (review F3). The discriminator is familyOf: editor-WRITTEN tokens have
+  // a family, measured base classes do not — so the manager's saved value (last of the
+  // family-bearing) wins, and with none the first owned keeps the legacy measuring
+  // semantics (a base's py-10 before its px-6).
+  const owned = tokens.filter(control.owns)
+  const written = owned.filter((t) => familyOf(t) !== null)
+  return written[written.length - 1] ?? owned[0] ?? ''
 }
 
 /** A new class string with this control set to `value`: every token the control owns is

@@ -367,7 +367,10 @@ export function styleClass(
  * rewrites each as a delta the next time it is edited. */
 
 export const DELTA_SENTINEL = "lse-delta";
-const NOT_TOKEN = /^lse-not-\[([a-z]+)\]$/;
+// [a-zA-Z]: family ids include camelCase (textColor). The first cut accepted lowercase
+// only, so those removals shipped as junk classes, stripped nothing, and dropped
+// themselves on the next re-save (2026-08-17 review, both agents independently).
+const NOT_TOKEN = /^lse-not-\[([a-zA-Z]+)\]$/;
 
 /** Is this stored string a delta? The sentinel leads by construction, but membership is
  *  enough — an editor that reordered tokens must not silently flip semantics. */
@@ -396,6 +399,13 @@ const WEIGHT_WORDS = new Set([
 export function familyOf(raw: string): string | null {
   const t = raw.replace(/^!/, "");
   if (t === DELTA_SENTINEL || CLAIM_TOKEN.test(t)) return null;
+  // A variant-prefixed token (sm:, md:, hover:) is the SITE's responsive design — no
+  // editor control writes one, so no delta may ever strip one. Deliberately null.
+  if (t.includes(":")) return null;
+  // The divider toggle's whole vocabulary: side borders. Bare `border` stays the
+  // borderWidth family (the per-item control). Without this family the divider had no
+  // way OFF on a delta site — the toggle diffed to nothing and the row was deleted.
+  if (/^border-[tblrxy]$/.test(t)) return "divider";
   const not = t.match(NOT_TOKEN);
   if (not) return not[1];
 
@@ -407,8 +417,12 @@ export function familyOf(raw: string): string | null {
   const arb = t.match(/^([a-z]+)-\[(.+)\]$/);
   if (arb) {
     const [, prefix, payload] = arb;
-    if (prefix === "text")
-      return payload.startsWith("#") ? "textColor" : "size";
+    if (prefix === "text") {
+      if (payload.startsWith("#")) return "textColor";
+      // Only a measurable size shape is the size family; anything else in the bracket
+      // (var(), rgb(), color:) is the site's own vocabulary and must be KEPT.
+      return /^(clamp\(|-?[\d.]+(r?em|px|v(w|h|min|max)|ch|ex|pt|%))/.test(payload) ? "size" : null;
+    }
     if (prefix === "bg") return payload.startsWith("#") ? "bgColor" : null;
     if (prefix === "border")
       return payload.startsWith("#") ? "borderColor" : "borderWidth";
@@ -460,6 +474,11 @@ export function familyOf(raw: string): string | null {
   const filter = t.match(/^(bw|sepia|brightness|contrast|saturate)-\d/);
   if (filter) return filter[1];
   if (/^textshadow-/.test(t)) return "textshadow";
+  // Bare-suffix families the bracket branch cannot see (found by the derived
+  // invariant sweep the moment it existed — the same way border-t was found).
+  if (/^hover-(grow|shrink|lift|tilt|brighten|glow)$/.test(t)) return "hover";
+  if (/^feather-\d/.test(t)) return "feather";
+  if (t === "hovercolor") return "hovercolor"; // the marker half of the two-token pick
   if (/^textglow-/.test(t)) return "textglow";
   if (/^(shape)-/.test(t)) return "shape";
   if (/^fit-/.test(t)) return "fit";
