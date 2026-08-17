@@ -173,7 +173,7 @@ export function ItemEditor({
             disabled={!dirty}
             className={`${FOOT_BUTTON} text-ink-muted enabled:hover:border-accent enabled:hover:text-accent`}
           >
-            Remove changes
+            Revert changes
           </button>
           <button
             type="button"

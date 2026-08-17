@@ -1435,7 +1435,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     }
   })
 
-  it('Remove changes walks every touched region back to its session-start value', async () => {
+  it('Revert changes walks every touched region back to its session-start value', async () => {
     // Two chrome bars (the browse list can open several rows; both carry the padding
     // slider): 'nav' starts with NO stored row (before = null → revert deletes via '');
     // 'foot' starts with a stored override (before = that string → revert restores it).
@@ -1453,13 +1453,13 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // fallback, which is the path that still uses the session ledger (2026-08-14); with a
     // published version the server restore replaces this walk entirely.
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     })
     // Reverse order: foot (touched last) first, then nav.
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'foot', 'border-b text-lg')
     expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'nav', '')
     // The ledger clears — the button leaves until something new is touched.
-    expect(screen.queryByRole('button', { name: 'Remove changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })
 
   it('Font is palette-gated; the colour pickers exist regardless — hex lifts inline anywhere', () => {
@@ -1702,7 +1702,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 })
 
-describe('EditorInspector — the Remove changes button (Sam, 2026-08-15)', () => {
+describe('EditorInspector — the Revert changes button (session undo; named by Sam 2026-08-17)', () => {
   // A chrome bar: it carries the padding slider (the page background no longer does), and
   // the slider touches the ledger on `change` — no blur/commit needed like the colour hex.
   const REGIONS: ManifestStyleRegion[] = [
@@ -1717,13 +1717,13 @@ describe('EditorInspector — the Remove changes button (Sam, 2026-08-15)', () =
 
   beforeEach(() => window.localStorage.clear())
 
-  it('CRITICAL: appears only once something is touched, and is called Remove changes', () => {
+  it('CRITICAL: appears only once something is touched, and is called Revert changes', () => {
     renderInspector([], { styleRegions: REGIONS })
     fireEvent.click(screen.getByRole('button', { name: /Style/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Footer' }))
-    expect(screen.queryByRole('button', { name: 'Remove changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
     fireEvent.change(screen.getByLabelText('Footer Padding'), { target: { value: '1' } })
-    expect(screen.getByRole('button', { name: 'Remove changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
   it('CRITICAL: it undoes THIS SESSION only — it never restores a published version', () => {
@@ -1733,7 +1733,7 @@ describe('EditorInspector — the Remove changes button (Sam, 2026-08-15)', () =
     const saveStyle = vi.mocked(saveEditorStyleAction)
     editPage()
     saveStyle.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     // The region goes back to the value it had when the session started…
     expect(saveStyle).toHaveBeenCalledWith('artist-1', 'footer', 'border-t text-lg')
     // …and the published-restore path is never involved.
@@ -1744,7 +1744,7 @@ describe('EditorInspector — the Remove changes button (Sam, 2026-08-15)', () =
     // Both belong to Restore version now. A dialog in front of "undo what I just did"
     // is friction on the cheap, expected action.
     editPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(listPublishMomentsAction).not.toHaveBeenCalled()
   })
@@ -1755,7 +1755,7 @@ describe('EditorInspector — the Remove changes button (Sam, 2026-08-15)', () =
     editPage()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Remove changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
   it('CRITICAL: the panel never announces "Saved" or "Saving…"', async () => {
@@ -2163,10 +2163,10 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
     // The never-published fallback — the path that still walks the session ledger.
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Remove changes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
     })
     expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
-    expect(screen.queryByRole('button', { name: 'Remove changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })
 
   it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {
@@ -2251,7 +2251,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.getByRole('heading', { name: 'Edit Slot 1' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Replace' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Remove changes/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Revert changes/ })).toBeTruthy()
     // The visual controls, keyed by the slot's label.
     expect(screen.getByLabelText('Slot 1 Size')).toBeTruthy()
     expect(screen.getByLabelText('Slot 1 Transparency')).toBeTruthy()
@@ -2277,7 +2277,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
     // Nothing staged yet → both exit buttons idle.
-    expect((screen.getByRole('button', { name: /Remove changes/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
     // The frame paints instantly; the DB is untouched.
@@ -2297,7 +2297,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
     fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: /Remove changes/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Revert changes/ }))
     // Repainted back to the saved state ('' — unstyled), nothing written.
     expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
     expect(saveStyleMock).not.toHaveBeenCalled()

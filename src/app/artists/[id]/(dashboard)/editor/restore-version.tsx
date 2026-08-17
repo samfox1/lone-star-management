@@ -12,8 +12,8 @@ import type { PublishMoment } from '@/lib/content'
  * The three-dot menu beside Publish, and the one thing in it: Restore version
  * (Sam, 2026-08-15).
  *
- * Deliberately NOT the inspector's "Remove changes" button. Those are different acts and
- * they were confusing each other while they shared one control: Remove changes undoes what
+ * Deliberately NOT the inspector's "Revert changes" button. Those are different acts and
+ * they were confusing each other while they shared one control: Revert changes undoes what
  * the manager just did, cheap and expected; restoring a version reaches past the session
  * into what visitors have already seen. This one sits next to Publish because it belongs
  * to the same idea — what the public gets — and it asks before it acts.

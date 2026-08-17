@@ -464,10 +464,12 @@ export function EditorInspector({
   )
 
   /**
-   * "Remove changes": walk every key this SESSION touched back to the value it had when
-   * the session started (Sam, 2026-08-15: "it just removes all the changes in the current
-   * session"). Nothing else — going back to a PUBLISHED version is a separate, deliberate
-   * act and lives behind Restore version, next to Publish.
+   * "Revert changes": walk every key this SESSION touched back to the value it had when
+   * the session started (Sam, 2026-08-17: "someone logs onto lone star, makes a few
+   * changes, and wants to undo them to the state it was at when they arrived" —
+   * reaffirming the 2026-08-15 semantics under the name he prefers). Nothing else —
+   * going back to a PUBLISHED version is a separate, deliberate act and lives behind
+   * Restore version, next to Publish.
    *
    * No confirmation: this undoes what the manager just did, which is the cheap, expected
    * action. The dialog belongs in front of the one that reaches past the session.
@@ -987,7 +989,7 @@ function SessionActions({
         disabled={busy}
         className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
       >
-        {busy ? 'Removing…' : 'Remove changes'}
+        {busy ? 'Reverting…' : 'Revert changes'}
       </button>
     </div>
   )
