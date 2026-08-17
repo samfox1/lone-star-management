@@ -182,6 +182,7 @@ function renderInspector(
     styleRegions?: ManifestStyleRegion[]
     styleValues?: Record<string, string>
     styleOptions?: SiteStyleOptions
+    hasUnpublished?: boolean
     selectedStyle?: string | null
     components?: ManifestComponent[]
     showGallery?: boolean
@@ -231,6 +232,7 @@ function inspector(
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
       styleOptions={opts.styleOptions}
+      hasUnpublished={opts.hasUnpublished}
       selectedStyle={opts.selectedStyle ?? null}
       deselectedAt={opts.deselectedAt ?? 0}
       linkRegions={opts.linkRegions ?? []}
@@ -1436,6 +1438,9 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 
   it('Revert changes walks every touched region back to its session-start value', async () => {
+    // NEVER-PUBLISHED fallback path (published-first since 2026-08-17): with no
+    // edition to restore, the session ledger is the only anchor left.
+    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
     // Two chrome bars (the browse list can open several rows; both carry the padding
     // slider): 'nav' starts with NO stored row (before = null → revert deletes via '');
     // 'foot' starts with a stored override (before = that string → revert restores it).
@@ -1702,6 +1707,48 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   })
 })
 
+describe('EditorInspector — Revert changes survives a refresh (Sam, 2026-08-17)', () => {
+  // The divider scenario: flip it off, REFRESH the page — the line is still gone (the
+  // draft holds the change) but the button vanished with the in-memory session ledger.
+  // "It should still be there until I hit publish or manually undo the change." So the
+  // button's real anchor is PUBLISHED: it shows whenever the draft differs from the
+  // last published edition, and clicking it restores that edition.
+  const REGIONS: ManifestStyleRegion[] = [
+    { key: 'nav', label: 'Nav', base: 'border-t', scope: 'chrome' },
+  ]
+
+  it('CRITICAL: shows on arrival when unpublished changes exist, with an empty ledger', () => {
+    renderInspector([], { styleRegions: REGIONS, hasUnpublished: true })
+    expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
+  })
+
+  it('clicking it restores the last PUBLISHED edition and refreshes the draft', async () => {
+    vi.mocked(restorePublishedAction).mockClear()
+    renderInspector([], { styleRegions: REGIONS, hasUnpublished: true })
+    const saveStyle = vi.mocked(saveEditorStyleAction)
+    saveStyle.mockClear()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    })
+    expect(restorePublishedAction).toHaveBeenCalledWith('artist-1')
+    // The published restore replaces the ledger walk entirely on this path.
+    expect(saveStyle).not.toHaveBeenCalled()
+  })
+
+  it('a NEVER-PUBLISHED artist falls back to the session walk', async () => {
+    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
+    renderInspector([], { styleRegions: REGIONS, selectedStyle: 'nav' })
+    const saveStyle = vi.mocked(saveEditorStyleAction)
+    fireEvent.change(screen.getByLabelText('Nav Padding'), { target: { value: '2' } })
+    saveStyle.mockClear()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    })
+    // No publish to restore → the touched key walks back to its session-start value.
+    expect(saveStyle).toHaveBeenLastCalledWith('artist-1', 'nav', '')
+  })
+})
+
 describe('EditorInspector — the Revert changes button (session undo; named by Sam 2026-08-17)', () => {
   // A chrome bar: it carries the padding slider (the page background no longer does), and
   // the slider touches the ledger on `change` — no blur/commit needed like the colour hex.
@@ -1726,18 +1773,18 @@ describe('EditorInspector — the Revert changes button (session undo; named by 
     expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
-  it('CRITICAL: it undoes THIS SESSION only — it never restores a published version', () => {
-    // Sam, 2026-08-15: "it just removes all the changes in the current session." Going
-    // back to a PUBLISHED version is a separate, deliberate act, and it lives behind the
-    // Restore version menu next to Publish — not on this button.
+  it('CRITICAL: the fallback walk never runs when a published restore succeeded', async () => {
+    // Published-first (Sam, 2026-08-17): the restore IS the revert. Walking the ledger
+    // on top of it would double-apply — the ledger's session-start values could differ
+    // from the published edition just restored.
     const saveStyle = vi.mocked(saveEditorStyleAction)
     editPage()
     saveStyle.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    // The region goes back to the value it had when the session started…
-    expect(saveStyle).toHaveBeenCalledWith('artist-1', 'footer', 'border-t text-lg')
-    // …and the published-restore path is never involved.
-    expect(restorePublishedAction).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    })
+    expect(restorePublishedAction).toHaveBeenCalledWith('artist-1')
+    expect(saveStyle).not.toHaveBeenCalled()
   })
 
   it('CRITICAL: no confirmation and no version list — it is a plain undo', () => {
@@ -2156,6 +2203,8 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
   }
 
   it('session Revert puts a slot placement back to its previous holder', async () => {
+    // Through the never-published fallback — the ledger walk is the subject here.
+    vi.mocked(restorePublishedAction).mockResolvedValueOnce({ ok: true, changed: 0, hasPublished: false })
     // m2 takes Slot 1 (previously empty) → Revert re-places null.
     openImages(PHOTOS)
     fireEvent.click(screen.getByRole('button', { name: 'Slot 1' }))

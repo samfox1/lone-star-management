@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY, EYEBROW, plural, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
@@ -52,6 +53,7 @@ import {
   saveEditorLinkAction,
   saveEditorStyleAction,
   setOnSiteAction,
+  restorePublishedAction,
 } from '../actions'
 import { useSessionJournal } from './use-session-journal'
 import { useTextFieldSave } from './use-text-save'
@@ -170,6 +172,7 @@ export function EditorInspector({
   styleRegions = [],
   styleValues = NO_STYLES,
   styleOptions,
+  hasUnpublished = false,
   selectedStyle = null,
   deselectedAt = 0,
   linkRegions = [],
@@ -223,6 +226,11 @@ export function EditorInspector({
   styleValues?: Record<string, string>
   /** The site's declared colour + font palette, for the Style panel's dropdowns. */
   styleOptions?: EditorStyleOptions
+  /** The draft differs from the last published edition (computed server-side). Keeps
+   *  Revert changes visible across refreshes — the in-memory ledger dies with the tab,
+   *  but the CHANGES don't (Sam, 2026-08-17: the divider stayed off after a refresh
+   *  while the button vanished). */
+  hasUnpublished?: boolean
   /** Region the frame reported a click on — jumps the panel to Style, focused there. */
   selectedStyle?: string | null
   /** Ticks when a preview click hit nothing editable — panels collapse whatever row is
@@ -437,6 +445,7 @@ export function EditorInspector({
    * the ledger in reverse through the same actions + paints. */
   const journal = useSessionJournal()
   const [reverting, setReverting] = useState(false)
+  const router = useRouter()
 
   const paintStyle = useCallback(
     (key: string, className: string) => {
@@ -478,6 +487,16 @@ export function EditorInspector({
     if (reverting) return
     setReverting(true)
     try {
+      // PUBLISHED-FIRST (Sam, 2026-08-17): "it should still be there until I hit
+      // publish or manually undo." The anchor a manager means is the last published
+      // edition — it survives refreshes the way the change itself does. The session
+      // walk below remains only for a NEVER-published artist, where there is nothing
+      // to restore to.
+      const restored = await restorePublishedAction(artistId)
+      if (restored.ok && restored.hasPublished) {
+        router.refresh() // the draft changed under every panel — re-read it
+        return
+      }
       for (const e of [...journal.entries].reverse()) {
         if (e.kind === 'style') {
           // before=null → save '' → the override row is DELETED, not written empty.
@@ -954,10 +973,11 @@ export function EditorInspector({
       ) : (
         <BrowseView onOpen={selectComponent} />
       )}
-      {/* Removes THIS SESSION's changes: walks every touched key back to its
-          session-start value. Hidden until something is touched, and while the ITEM
-          editor is open (its own revert owns that surface). */}
-      {!itemEditor && !textEditor && !tourEditor && journal.count > 0 && (
+      {/* Revert changes: back to the last PUBLISHED edition (session walk only for a
+          never-published artist). Shows while anything is unpublished OR touched this
+          session; hidden while the ITEM editor is open (its own revert owns that
+          surface). */}
+      {!itemEditor && !textEditor && !tourEditor && (journal.count > 0 || hasUnpublished) && (
         <SessionActions busy={reverting} onRemove={revertSession} />
       )}
     </aside>

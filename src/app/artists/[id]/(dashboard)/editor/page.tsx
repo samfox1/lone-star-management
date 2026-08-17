@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { listContent } from '@/lib/content'
+import { diffUnpublished, listContent } from '@/lib/content'
 import { groupTracksIntoProjects } from '@/lib/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
@@ -257,10 +257,19 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     onSite: p.anyOnSite,
   }))
 
+  // Draft ≠ published? Computed server-side so Revert changes survives a refresh
+  // (Sam, 2026-08-17: the divider stayed off after a reload while the button vanished).
+  // router.refresh() after a revert or publish re-runs this and the flag follows.
+  const unpublished = await diffUnpublished(supabase, id).catch(() => null)
+  const hasUnpublished = unpublished
+    ? Object.values(unpublished).some((d) => d.dirty)
+    : false
+
   return (
     <EditorShell
       artistId={id}
       customSiteUrl={customSiteUrl}
+      hasUnpublished={hasUnpublished}
       draft={draft}
       photos={photos}
       imageFields={imageFields}

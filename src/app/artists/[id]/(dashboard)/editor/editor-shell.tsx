@@ -135,6 +135,7 @@ export function runtimeImageFields(
 export function EditorShell({
   artistId,
   customSiteUrl,
+  hasUnpublished = false,
   draft,
   photos,
   imageFields,
@@ -152,6 +153,8 @@ export function EditorShell({
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
   customSiteUrl?: string | null
+  /** Draft differs from the last published edition — keeps Revert changes visible. */
+  hasUnpublished?: boolean
   /** The draft to inject into a custom frame, in the wire shape. Null for a
    *  built-in template, which reads its own draft server-side. */
   draft?: PublicSitePayload | null
@@ -274,6 +277,7 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
+        hasUnpublished={hasUnpublished}
         photos={photos}
         imageFields={panels.imageFields}
         textFields={panels.textFields}
