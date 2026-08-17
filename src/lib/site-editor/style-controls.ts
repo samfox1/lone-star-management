@@ -15,13 +15,13 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
 export type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import type { ManifestStyleRegion, StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
-import { TEXT_SIZES } from '@samfox1/site-bridge/styles'
+import { DELTA_SENTINEL, TEXT_SIZES, familyOf } from '@samfox1/site-bridge/styles'
 // The option TABLES live in the package's vocabulary module (2026-08-07 deepening):
 // they generate tokens.css, which is append-only contract, so the vocabulary lives
 // beside the sheet it produces. This module adds the editor machinery on top.
@@ -296,6 +296,8 @@ export type EditorStyleOptions = SiteStyleOptions & {
   mobileTextVars?: boolean
   /** Per-item phone twins (scale, 0.23+). */
   mobileItemVars?: boolean
+  /** The site renders delta overrides (0.24+), so saves store only changed families. */
+  deltaStyles?: boolean
   /** The editor is currently in PHONE view. With the vars flags, controls become
    *  phone-scoped: same control, writing the `…sm-[…]` twin. */
   mobileView?: boolean
@@ -319,6 +321,7 @@ export function withStyleVars(
     mobileVars: bridgeSupportsMobileVars(bridgeVersion),
     mobileTextVars: bridgeSupportsMobileText(bridgeVersion),
     mobileItemVars: bridgeSupportsMobileItem(bridgeVersion),
+    deltaStyles: bridgeSupportsDeltas(bridgeVersion),
   }
 }
 /** Both shapes — the value token this control now writes, and every class shape a region
@@ -1518,8 +1521,47 @@ export function readStyleValue(control: StyleControl, classString: string): stri
 const DRESSING_PREFIXES = ['decocolor-[', 'decothick-[', 'underoffset-[']
 const isDressing = (t: string) => DRESSING_PREFIXES.some((p) => t.startsWith(p))
 
-export function applyStyleValue(classString: string, control: StyleControl, value: string): string {
+/**
+ * The DELTA a save stores: only the families whose value differs from the base,
+ * canonically compared (font-black ≡ weight-[900]), sentinel-led; an emptied family the
+ * base still carries becomes an explicit `lse-not-[fam]`. '' when nothing differs — the
+ * row is deleted, never pinned. Family knowledge comes from the bridge (familyOf), the
+ * same function that renders deltas, so writer and renderer cannot disagree.
+ */
+export function deltaFromEffective(base: string, effective: string): string {
+  const byFamily = (s: string) => {
+    const out = new Map<string, string[]>()
+    for (const t of s.split(/\s+/).filter(Boolean)) {
+      const fam = familyOf(t)
+      if (!fam) continue
+      out.set(fam, [...(out.get(fam) ?? []), t])
+    }
+    return out
+  }
+  const canonList = (tokens: string[]) => tokens.map(canonToken).sort().join(' ')
+  const baseFams = byFamily(base)
+  const effFams = byFamily(effective)
+  const changed: string[] = []
+  for (const fam of new Set([...baseFams.keys(), ...effFams.keys()])) {
+    const b = baseFams.get(fam) ?? []
+    const e = effFams.get(fam) ?? []
+    if (canonList(b) === canonList(e)) continue
+    if (e.length) changed.push(...e)
+    else changed.push(`lse-not-[${fam}]`)
+  }
+  return changed.length ? `${DELTA_SENTINEL} ${changed.join(' ')}` : ''
+}
+
+export function applyStyleValue(classString: string, control: StyleControl, value: string, base?: string): string {
   const kept = classString.split(/\s+/).filter(Boolean).filter((t) => !control.owns(t))
+  // DEFAULT RESTORES THE BASE (delta era): a non-toggle applied with '' brings back the
+  // base's own family token, so "Default" genuinely means the site's default rather
+  // than "delete the property" — CONNECTING.md rough edge #2. Toggles keep removal:
+  // off against a base that is on is a real intent, which the delta spells lse-not.
+  if (value === '' && base && control.kind !== 'toggle') {
+    const restored = base.split(/\s+/).filter((t) => t && control.owns(t))
+    if (restored.length) return [...kept, ...restored].join(' ')
+  }
   const hasLine = () => kept.includes(UNDERLINE_TOGGLE) || kept.includes(STRIKE_TOGGLE)
   if (control.kind === 'toggle') {
     if (value === 'on') kept.push(control.onClass)

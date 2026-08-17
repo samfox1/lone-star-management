@@ -116,6 +116,16 @@ export function bridgeSupportsMobileItem(siteVersion: string | undefined): boole
   return !bridgeOutdated(siteVersion, MOBILE_ITEM_SINCE)
 }
 
+/** Delta overrides (`lse-delta …`) render on 0.24+ appliers; the editor must keep
+ *  writing full strings to anything older — a delta there would render as replace
+ *  semantics with a stray sentinel class. */
+export const DELTA_SINCE = '0.24.0'
+
+export function bridgeSupportsDeltas(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, DELTA_SINCE)
+}
+
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`

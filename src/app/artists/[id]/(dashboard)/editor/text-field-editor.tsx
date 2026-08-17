@@ -4,8 +4,10 @@ import type { EditorStyleOptions } from '@/lib/site-editor/style-controls'
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
+import { mergeStyle } from '@samfox1/site-bridge'
 import {
   applyStyleValue,
+  deltaFromEffective,
   buildTextItemStyleControls,
   readStyleValue,
   sameClasses,
@@ -89,7 +91,9 @@ export function TextFieldEditor({
   // turns "set a size" into "delete every class this element had". That is not
   // theoretical: it wiped `fx-glitch-mono` off the hero wordmark, whose effect paints
   // the visible text, and the word disappeared from the site.
-  const seed = (r: typeof region) => (r ? (styleValues[r.key] || r.base || '') : '')
+  // EFFECTIVE string, whichever era the stored row is from: mergeStyle applies a delta
+  // over the base, passes a legacy full string through, and falls back to the base.
+  const seed = (r: typeof region) => (r ? mergeStyle(r.key, r.base ?? '', styleValues[r.key] ?? '') : '')
   const [staged, setStaged] = useState(() => seed(region))
   const [seededFor, setSeededFor] = useState(region?.key ?? null)
   if (seededFor !== (region?.key ?? null)) {
@@ -152,17 +156,20 @@ export function TextFieldEditor({
                 swatches={siteSwatches(styleOptions, styleValues)}
                 palette={styleOptions}
                 onChange={(v) => {
-                  // Reset/Default on a SECTION region means "what the site had", NOT
-                  // "no class": the override REPLACES the base, so removing the token
-                  // leaves the element with no rule at all. That is what shrank the hero
-                  // wordmark to body size — its base carried the only font-size it had.
-                  const fallback = readStyleValue(control, region.base ?? '')
-                  const next = applyStyleValue(cls, control, v || fallback)
+                  // '' (Default) restores the BASE's own family token — applyStyleValue
+                  // is base-aware now, which is what makes Default mean "the site's
+                  // default" instead of "delete the property".
+                  const next = applyStyleValue(cls, control, v, region.base ?? '')
                   setStaged(next) // the control moves NOW; the save follows
-                  // A string equal to the base is not an override: save '' so the row is
-                  // DELETED rather than pinning a copy of today's defaults, which would
-                  // win forever over any later change the site makes to its own classes.
-                  onStyle(region.key, sameClasses(next, region.base ?? '') ? '' : next)
+                  // Delta era: store only the changed families (an unchanged string
+                  // diffs to '' and the row is deleted). Older sites keep the full
+                  // string with the base-equality delete.
+                  onStyle(
+                    region.key,
+                    (styleOptions as EditorStyleOptions | undefined)?.deltaStyles
+                      ? deltaFromEffective(region.base ?? '', next)
+                      : sameClasses(next, region.base ?? '') ? '' : next,
+                  )
                 }}
               />
             ))}

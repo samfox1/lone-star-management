@@ -3,8 +3,11 @@ import { cx } from '@/lib/cx'
 import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
 import { groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { mergeStyle } from '@samfox1/site-bridge'
 import {
   applyStyleValue,
+  deltaFromEffective,
+  type EditorStyleOptions,
   sameClasses,
   buildStyleControls,
   controlsForRegion,
@@ -236,7 +239,7 @@ export function StyleTools({
   // Seed each region with its saved override if there is one, else its BASE classes — so
   // the controls read what's actually on the element. A stored string REPLACES the base.
   const [text, setText] = useState<Record<string, string>>(() =>
-    Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])),
+    Object.fromEntries(regions.map((r) => [r.key, mergeStyle(r.key, r.base ?? '', values[r.key] ?? '')])),
   )
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<string | null>(null)
@@ -253,7 +256,7 @@ export function StyleTools({
   const [seeded, setSeeded] = useState(seedKey)
   if (seeded !== seedKey) {
     setSeeded(seedKey)
-    setText(Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? r.base ?? ''])))
+    setText(Object.fromEntries(regions.map((r) => [r.key, mergeStyle(r.key, r.base ?? '', values[r.key] ?? '')])))
   }
 
   // Clicking a styled region in the frame opens its accordion row (during-render reset,
@@ -293,10 +296,13 @@ export function StyleTools({
    *  breaks ties within equal specificity, which the controls never produce. */
   function edit(key: string, raw: string, base: string) {
     setText((t) => ({ ...t, [key]: raw }))
-    // A string that equals the region's BASE is not an override — save '' so the row is
-    // DELETED rather than pinning a copy of the defaults (skeen brief, 2026-08-03: a
-    // pinned copy wins forever over any later change to the site's own base classes).
-    const toSave = sameClasses(raw, base) ? '' : raw
+    // DELTA ERA (0.24 sites): store only the families the manager changed — the row
+    // stops freezing the region, the frame renders base+delta live, and an unchanged
+    // string still diffs to '' so the row is deleted, never pinned. Older sites keep
+    // the full string with the base-equality delete (skeen brief, 2026-08-03).
+    const toSave = (options as EditorStyleOptions | undefined)?.deltaStyles
+      ? deltaFromEffective(base, raw)
+      : sameClasses(raw, base) ? '' : raw
     // The hook validates with the SAME function the server uses, so the panel can't
     // claim "Saved" on a rejected write. Controls always emit clean utilities; only a
     // raw escape hatch could produce something invalid.
@@ -375,7 +381,7 @@ export function StyleTools({
                         cls={cls}
                         swatches={siteSwatches(options, values)}
                         palette={options}
-                        onChange={(v) => edit(r.key, applyStyleValue(cls, control, v), r.base ?? '')}
+                        onChange={(v) => edit(r.key, applyStyleValue(cls, control, v, r.base ?? ''), r.base ?? '')}
                       />
                     ))}
                     {/* No raw-class escape hatch: this panel is for a MANAGER, and a

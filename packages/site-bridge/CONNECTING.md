@@ -348,16 +348,24 @@ than trusting the push.
 
 ---
 
+### Delta overrides (0.24.0)
+
+A stored section override is a **delta** now: the sentinel `lse-delta` plus only the
+tokens the manager changed. Rendering keeps every base token whose family the delta does
+not touch — your layout, hook classes and claims flow through a styled region — and
+`lse-not-[family]` expresses an explicit removal (a toggle forced off). Legacy
+full-string rows keep the old replace semantics and are rewritten as deltas the next
+time each is edited. `familyOf` in `@samfox1/site-bridge/styles` is the shared family
+table; the editor's diff and the renderer both read it, so they cannot disagree.
+
 ## Known rough edges
 
 Written down so nobody rediscovers them.
 
-- **A section override replaces the base**, so a region a manager has styled is frozen at
-  the design of that day and later improvements never reach it. Detectable
-  (`driftedRegions`) and repairable (`npm run rebase:styles`), not yet impossible. The fix
-  is storing only what the manager changed, which is what §5 is building toward.
-- **Reset on a section control removes the property** rather than restoring your default,
-  for the same reason.
+- ~~A section override replaces the base~~ — **resolved in 0.24.0** by delta overrides
+  (above). `driftedRegions`/`rebase:styles` remain only for legacy rows.
+- ~~Reset removes the property~~ — **resolved in 0.24.0**: Default restores the base's
+  own family token; only an explicit toggle-off forces a family empty.
 - **Class-writing controls beat your breakpoints.** Size and font became variables in
   0.16.0, the six remaining text controls in 0.18.0 (§5). Palette colours still lift
   inline; keep base values fluid where a control has no variable yet.

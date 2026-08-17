@@ -354,6 +354,136 @@ export function styleClass(
  * shared contract, so change them in both repos or the editor preview and the live
  * site will disagree about what a stored string means. */
 
+/* ── DELTA OVERRIDES (0.24.0) — the end of the frozen region ─────────────────────────
+ * A section override used to REPLACE the base wholesale, freezing a styled region at
+ * the design of that day (CONNECTING.md's oldest rough edge; three 2026-08-17 review
+ * findings traced to it). A stored override is now a DELTA: the sentinel `lse-delta`
+ * plus only the tokens the manager changed. Rendering keeps every base token whose
+ * FAMILY the delta does not touch — layout, hook classes, claims — and swaps in the
+ * delta's families. `lse-not-[fam]` is an explicit removal: strip the base's family,
+ * apply nothing (a toggle turned OFF against a base that had it ON).
+ *
+ * Legacy full-string rows (no sentinel) keep replace semantics forever; the editor
+ * rewrites each as a delta the next time it is edited. */
+
+export const DELTA_SENTINEL = "lse-delta";
+const NOT_TOKEN = /^lse-not-\[([a-z]+)\]$/;
+
+/** Is this stored string a delta? The sentinel leads by construction, but membership is
+ *  enough — an editor that reordered tokens must not silently flip semantics. */
+export function isDeltaOverride(stored: string): boolean {
+  return stored.split(/\s+/).includes(DELTA_SENTINEL);
+}
+
+const NAMED_SIZES = new Set([
+  "xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "8xl", "9xl",
+]);
+const ALIGN_WORDS = new Set(["left", "center", "right", "justify", "start", "end"]);
+const NON_COLOR_TEXT = new Set([
+  ...NAMED_SIZES, ...ALIGN_WORDS, "wrap", "nowrap", "balance", "pretty", "ellipsis", "clip",
+]);
+const WEIGHT_WORDS = new Set([
+  "thin", "extralight", "light", "normal", "medium", "semibold", "bold", "extrabold", "black",
+]);
+
+/**
+ * The FAMILY a token belongs to — the unit a delta replaces — or null for a token the
+ * editor does not own (layout, hook classes, site vocabulary), which a delta must
+ * always keep from the base. Spans BOTH eras of every control: the value tokens the
+ * editor writes now and the classes it wrote before, because a base legitimately wears
+ * either.
+ */
+export function familyOf(raw: string): string | null {
+  const t = raw.replace(/^!/, "");
+  if (t === DELTA_SENTINEL || CLAIM_TOKEN.test(t)) return null;
+  const not = t.match(NOT_TOKEN);
+  if (not) return not[1];
+
+  // Mobile twins first: their prefix embeds the family (`sizesm`, `scalesm`, …).
+  const sm = t.match(/^([a-z]+)sm-\[/);
+  if (sm) return `${sm[1]}sm`;
+
+  // Bracketed forms. The `text-[…]` shape is three families wearing one prefix.
+  const arb = t.match(/^([a-z]+)-\[(.+)\]$/);
+  if (arb) {
+    const [, prefix, payload] = arb;
+    if (prefix === "text")
+      return payload.startsWith("#") ? "textColor" : "size";
+    if (prefix === "bg") return payload.startsWith("#") ? "bgColor" : null;
+    if (prefix === "border")
+      return payload.startsWith("#") ? "borderColor" : "borderWidth";
+    if (prefix === "leading") return "leading";
+    if (prefix === "tracking") return "tracking";
+    if (prefix === "rounded") return "radius";
+    if (prefix === "tilt") return "tilt";
+    if (prefix === "soften") return "soften";
+    if (prefix === "feather") return "feather";
+    if (prefix === "textstroke") return "textstroke";
+    if (prefix === "decothick") return "decothick";
+    if (prefix === "underoffset") return "underoffset";
+    // Value-token prefixes whose class-era twins already named the family.
+    if (prefix === "fontfam") return "font";
+    if (prefix === "lead") return "leading";
+    if (prefix === "track") return "tracking";
+    if (prefix === "fstyle") return "italic";
+    if (prefix === "enterdur") return "enterdur";
+    if (prefix === "enterdist") return "enterdist";
+    if (prefix === "speed") return "speed";
+    // Every remaining bracketed prefix is its own single-family vocabulary:
+    // size, fontfam, weight, align, lead, track, case, fstyle, pad, pady, gap, just,
+    // secw, sech, maxw, iconsize, hovercolor, frost, decocolor, textgrad, bggrad.
+    return prefix;
+  }
+
+  // Named classes, oldest era.
+  if (t.startsWith("font-"))
+    return WEIGHT_WORDS.has(t.slice(5)) ? "weight" : "font";
+  if (t.startsWith("text-")) {
+    const suffix = t.slice(5);
+    if (NAMED_SIZES.has(suffix)) return "size";
+    if (ALIGN_WORDS.has(suffix)) return "align";
+    if (NON_COLOR_TEXT.has(suffix)) return null; // wrapping etc — not a control's
+    return "textColor"; // a palette class (text-foreground, text-ink/60)
+  }
+  if (t.startsWith("bg-")) return "bgColor";
+  if (t.startsWith("leading-")) return "leading";
+  if (t.startsWith("tracking-")) return "tracking";
+  if (t === "uppercase" || t === "lowercase" || t === "capitalize" || t === "normal-case") return "case";
+  if (t === "italic" || t === "not-italic") return "italic";
+  if (t === "underline") return "underline";
+  if (t === "line-through") return "strike";
+  if (t === "border" || /^border-(0|2|4|8)$/.test(t)) return "borderWidth";
+  if (t === "rounded" || /^rounded-(none|sm|md|lg|xl|2xl|3xl|full)$/.test(t)) return "radius";
+  if (/^shadow(-|$)/.test(t)) return "shadow";
+  if (/^scale-\d/.test(t)) return "scale";
+  if (/^opacity-\d/.test(t)) return "opacity";
+  const filter = t.match(/^(bw|sepia|brightness|contrast|saturate)-\d/);
+  if (filter) return filter[1];
+  if (/^textshadow-/.test(t)) return "textshadow";
+  if (/^textglow-/.test(t)) return "textglow";
+  if (/^(shape)-/.test(t)) return "shape";
+  if (/^fit-/.test(t)) return "fit";
+  return null;
+}
+
+/** The delta applied to a base: keep every base token whose family the delta does not
+ *  name, then the delta's own tokens (removals excluded — their work is the strip). */
+function applyDelta(base: string, stored: string): string {
+  const deltaTokens = stored.split(/\s+/).filter((t) => t && t !== DELTA_SENTINEL);
+  const touched = new Set<string>();
+  for (const t of deltaTokens) {
+    const fam = familyOf(t);
+    if (fam) touched.add(fam);
+  }
+  const kept = base.split(/\s+/).filter((t) => {
+    if (!t) return false;
+    const fam = familyOf(t);
+    return fam === null || !touched.has(fam);
+  });
+  const applied = deltaTokens.filter((t) => !NOT_TOKEN.test(t));
+  return [...kept, ...applied].join(" ");
+}
+
 /** True when the key addresses ONE item inside a slot rather than a whole section: the
  *  colon convention (`slot:polaroid_1_photo`, `image:<uuid>`). A section override
  *  REPLACES its base classes; an item override is an OVERLAY that adds to them, because
@@ -370,7 +500,8 @@ export function mergeStyle(
   override: string,
 ): string {
   if (!override.trim()) return base;
-  if (!isItemKey(key)) return override;
+  if (!isItemKey(key))
+    return isDeltaOverride(override) ? applyDelta(base, override) : override;
   return base.trim() ? `${base.trim()} ${override.trim()}` : override.trim();
 }
 

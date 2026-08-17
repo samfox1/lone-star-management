@@ -29,7 +29,8 @@ import {
   listPublishMomentsAction,
 } from '@/app/artists/[id]/(dashboard)/actions'
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
-import { buildStyleControls, type SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import { buildStyleControls, withStyleVars, type SiteStyleOptions,
+} from '@/lib/site-editor/style-controls'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import type {
   EditorImageField,
@@ -1408,6 +1409,25 @@ describe('EditorInspector — Style component (no-code controls)', () => {
       // the base pins an override every time (the exact regression the migration risked).
       // (Async advance: the second persist chains behind the first's promise.)
       fireEvent.change(weight, { target: { value: 'weight-[900]' } })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('DELTA ERA: a 0.24 site stores only the changed family, sentinel-led', async () => {
+    // The whole point of delta overrides: the save carries `lse-delta weight-[700]`,
+    // not a copy of the base — so the region never freezes, and the base's own hook
+    // classes/claims keep flowing at render. End-to-end through the real panel.
+    vi.useFakeTimers()
+    try {
+      focusStyle('hero_wordmark', { styleOptions: withStyleVars(undefined, '0.24.0') })
+      fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'weight-[700]' } })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'lse-delta weight-[700]')
+      // Back to the base's weight: the delta empties and the row is DELETED.
+      fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'weight-[900]' } })
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
     } finally {
