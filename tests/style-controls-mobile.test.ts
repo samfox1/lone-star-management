@@ -39,9 +39,43 @@ describe('the phone-scoped size control', () => {
     for (const o of offered.slice(1)) expect(o.value).toMatch(/^sizesm-\[\d+px\]$/)
   })
 
-  it('says it is phone-scoped in its label', () => {
-    expect(byId(buildStyleControls(onPhone()), 'size').label).toContain('phone')
-    expect(byId(buildStyleControls(onDesktop), 'size').label).not.toContain('phone')
+  it('carries the phoneScoped flag — the row renders a bold (Mobile) tag from it', () => {
+    // Scope moved OFF the label text (Sam, 2026-08-17): the tag renders per-control,
+    // bold and parenthesised, because only SOME controls are phone-scoped — colours and
+    // effects stay global, and a header tag would have claimed them all.
+    expect(byId(buildStyleControls(onPhone()), 'size').phoneScoped).toBe(true)
+    expect(byId(buildStyleControls(onPhone()), 'size').label).toBe('Size')
+    expect(byId(buildStyleControls(onDesktop), 'size').phoneScoped).toBeUndefined()
+  })
+
+  it('the whole text set twins in phone scope, colours stay global', () => {
+    const phone = buildStyleControls(onPhone('0.22.0'))
+    for (const id of ['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic']) {
+      const c = phone.find((x) => x.id === id)
+      // leading/tracking live in the text-item builder; section builder has the rest
+      if (!c) continue
+      expect(c.phoneScoped, id).toBe(true)
+    }
+    const item = buildTextItemStyleControls(onPhone('0.22.0'))
+    expect(byId(item, 'leading').phoneScoped).toBe(true)
+    expect(byId(item, 'tracking').phoneScoped).toBe(true)
+    expect(phone.find((c) => c.id === 'textColor')!.phoneScoped).toBeUndefined()
+    // Twins write the sm shape and translate back for reading — never the desktop token.
+    const weight = byId(phone, 'weight')
+    const offered = weight.kind === 'select' ? weight.options : []
+    expect(offered.find((o) => o.label === 'Bold')!.value).toBe('weightsm-[700]')
+    expect(applyStyleValue('grid weight-[900]', weight, 'weightsm-[700]'))
+      .toBe('grid weight-[900] weightsm-[700]')
+    const upper = byId(phone, 'uppercase')
+    expect(upper.kind === 'toggle' && upper.onClass).toBe('casesm-[uppercase]')
+    expect(readStyleValue(upper, 'grid casesm-[uppercase]')).toBe('on')
+    expect(readStyleValue(upper, 'grid case-[uppercase]')).toBe('')
+  })
+
+  it('the whole-set twins need the 0.22 floor; size/pad only 0.19', () => {
+    const mid = buildStyleControls(onPhone('0.19.0'))
+    expect(byId(mid, 'size').phoneScoped).toBe(true)
+    expect(byId(mid, 'weight').phoneScoped).toBeUndefined()
   })
 
   it('CRITICAL: applying a phone size PRESERVES the desktop one, and vice versa', () => {

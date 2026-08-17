@@ -15,7 +15,7 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -69,8 +69,8 @@ import {
 } from '@samfox1/site-bridge/vocabulary'
 
 export type StyleControl =
-  | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean }
-  | { id: string; label: string; kind: 'toggle'; onClass: string; owns: (token: string) => boolean; impliesLine?: boolean }
+  | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean }
+  | { id: string; label: string; kind: 'toggle'; onClass: string; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean }
   /** A hex picker. The plain form (border colour) is special-cased where it renders; a
    *  control that sets `hexOf`/`toToken` is GENERIC — the row reads the current hex out
    *  of the class string and writes a whole replacement token, which lets two pickers
@@ -86,6 +86,8 @@ export type StyleControl =
        *  (see applyStyleValue). Declared at the control's definition, not inferred from
        *  its tokens, so a new dressing can't miss the rule. */
       impliesLine?: boolean
+      /** Colour controls are never phone-scoped, but the union member needs the field. */
+      phoneScoped?: boolean
     }
   /** A slider over ORDERED steps (size, transparency). Reads/applies exactly like a select —
    *  one owned utility swapped, the rest preserved — but the manager drags a continuous scale
@@ -123,6 +125,8 @@ export type StyleControl =
       owns: (token: string) => boolean
       /** See the color variant's note — a dressing slider (thickness, distance). */
       impliesLine?: boolean
+      /** Writes the `…sm-[…]` phone twin — the row shows a bold (Mobile) tag. */
+      phoneScoped?: boolean
     }
   /** A full colour palette (hue slider + saturation/brightness square + hex field). The owned
    *  utility is an arbitrary `border-[#hex]`, so the value is a free hex rather than one of a
@@ -220,6 +224,41 @@ const padSmRank = (t: string): number | null => {
   const m = /^padsm-\[(\d{1,4})px\]$/.exec(t)
   return m ? Number(m[1]) : null
 }
+
+/* ── The GENERIC phone twin (0.22, Sam: "all the styles"). Any token-emitting control
+ * becomes phone-scoped by rewriting its vocabulary `x-[…]` → `xsm-[…]` and translating
+ * back for owns/rank, so the twin can never drift from its desktop original. Colour and
+ * effect controls pass through untouched — they stay device-global. */
+const SM_SHAPE = /^([a-z]+)sm-\[/
+const toSm = (v: string) => (v === '' ? v : v.replace(/^([a-z]+)-\[/, '$1sm-['))
+const unSm = (t: string) => t.replace(SM_SHAPE, '$1-[')
+const phoneTwin = (c: StyleControl): StyleControl => {
+  if (c.kind === 'select')
+    return {
+      ...c, phoneScoped: true,
+      options: c.options.map((o) => ({ ...o, value: toSm(o.value) })),
+      owns: (t) => SM_SHAPE.test(t) && c.owns(unSm(t)),
+    }
+  if (c.kind === 'slider')
+    return {
+      ...c, phoneScoped: true, defaultOffScale: true,
+      steps: c.steps.map((o) => ({ ...o, value: toSm(o.value) })),
+      rank: (t) => (t === '' ? null : SM_SHAPE.test(t) ? (c.rank?.(unSm(t)) ?? null) : null),
+      owns: (t) => SM_SHAPE.test(t) && c.owns(unSm(t)),
+    }
+  if (c.kind === 'toggle')
+    return {
+      ...c, phoneScoped: true,
+      onClass: toSm(c.onClass),
+      owns: (t) => SM_SHAPE.test(t) && c.owns(unSm(t)),
+    }
+  return c
+}
+/** Twin the whole-set controls when the phone scope AND the 0.22 floor hold. */
+const phoneTextScope = (opts?: SiteStyleOptions) =>
+  phoneScope(opts) &&
+  (opts as EditorStyleOptions | undefined)?.mobileTextVars !== false &&
+  usesTextVars(opts) // class-era vocabularies have no sm shape to rewrite
 /** A desktop step → its phone twin, same label. Sizes measure via textSizeRank so a
  *  class-era ladder (a site that declares textSizes) converts too; an unmeasurable step
  *  is dropped rather than emitting a token the bridge would refuse. */
@@ -240,8 +279,10 @@ export type EditorStyleOptions = SiteStyleOptions & {
   textVars?: boolean
   /** The connected site's applier + tokens.css understand the mobile tokens (0.19+). */
   mobileVars?: boolean
-  /** The editor is currently in PHONE view. With mobileVars, the Size and Padding
-   *  controls become phone-scoped: same slider, writing the `…sm-[…]` twin. */
+  /** Phone twins for the whole style set (0.22+); size/pad need only mobileVars. */
+  mobileTextVars?: boolean
+  /** The editor is currently in PHONE view. With the vars flags, controls become
+   *  phone-scoped: same control, writing the `…sm-[…]` twin. */
   mobileView?: boolean
 }
 
@@ -261,6 +302,7 @@ export function withStyleVars(
     styleVars: bridgeSupportsStyleVars(bridgeVersion),
     textVars: bridgeSupportsTextVars(bridgeVersion),
     mobileVars: bridgeSupportsMobileVars(bridgeVersion),
+    mobileTextVars: bridgeSupportsMobileText(bridgeVersion),
   }
 }
 /** Both shapes — the value token this control now writes, and every class shape a region
@@ -581,7 +623,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     phoneScope(opts)
       ? {
           id: 'size',
-          label: 'Size · phone',
+          label: 'Size',
+          phoneScoped: true,
           kind: 'select',
           options: [DEFAULT, ...sizeScale(opts).map(sizeSmOption)],
           owns: isSizeSm,
@@ -660,7 +703,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     phoneScope(opts)
       ? {
           id: 'pad',
-          label: 'Padding · phone',
+          label: 'Padding',
+          phoneScoped: true,
           kind: 'slider',
           steps: PAD_STEPS.map(padSmOption),
           defaultOffScale: true,
@@ -693,6 +737,12 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     owns: (t) => t === ITALIC_TOGGLE_CLASS || t === 'fstyle-[italic]',
   })
   controls.push(...motionControls())
+  // 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
+  // becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).
+  if (phoneTextScope(opts)) {
+    const TWIN = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
+    return controls.map((c) => (TWIN.has(c.id) ? phoneTwin(c) : c))
+  }
   return controls
 }
 
@@ -743,7 +793,8 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
     phoneScope(opts)
       ? {
           id: 'size',
-          label: 'Size · phone',
+          label: 'Size',
+          phoneScoped: true,
           kind: 'slider',
           steps: [DEFAULT, ...sizeScale(opts).map(sizeSmOption)],
           defaultOffScale: true,
@@ -850,6 +901,16 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
   controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...motionControls())
+  // 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
+  // becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).
+  if (phoneTextScope(opts)) {
+    const TWIN = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
+    return controls.map((c) => (TWIN.has(c.id) ? phoneTwin(c) : c))
+  }
+  if (phoneTextScope(opts)) {
+    const TWIN = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
+    return controls.map((c) => (TWIN.has(c.id) ? phoneTwin(c) : c))
+  }
   return controls
 }
 
@@ -985,6 +1046,11 @@ const ALIGNABLE_JUSTIFY = new Set(['justify-start', 'justify-center', 'justify-e
 /** The gap slider, shared by every region that opts in on a `gap-*` base (the hero row,
  *  the socials group). Extracted so the site/chrome and icons branches use one control. */
 const GAP_CONTROL: StyleControl = { id: 'gap', label: 'Gap', kind: 'slider', steps: GAP_STEPS, rank: gapRank, owns: ownsGap }
+/** GAP is appended per-region here rather than built per-options, so its phone scope is
+ *  read off the LIST it joins: a list whose controls carry phoneScoped was built in
+ *  phone scope, and gap twins with them. */
+const maybePhoneGap = (controls: StyleControl[]): StyleControl =>
+  controls.some((c) => c.phoneScoped) ? phoneTwin(GAP_CONTROL) : GAP_CONTROL
 
 /** The vertical rhythm BETWEEN sections (Sam, 2026-08-14): one slider for the top/bottom
  *  inset every section block wears. Emits `pady-` — top/bottom longhands only — because
@@ -1090,7 +1156,7 @@ export function controlsForRegion(
       ICON_SIZE_CONTROL,
       ...(iconColor ? [{ ...iconColor, label: 'Icon color' }] : []),
       GROUP_HOVER_COLOR_CONTROL,
-      ...(isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [GAP_CONTROL] : []),
+      ...(isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [maybePhoneGap(controls)] : []),
     ]
   }
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
@@ -1162,7 +1228,7 @@ export function controlsForRegion(
     })
   // Gap between a region's items — same flex/grid requirement, plus a `gap-*` base class
   // (the hero row's name↔portrait gutter, the socials row).
-  if (isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-['))) out.push(GAP_CONTROL)
+  if (isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-['))) out.push(maybePhoneGap(controls))
   // Content width, for a region whose base CAPS one (the mx-auto max-w-* column). Gated
   // on the cap the same way Gap is gated on gap-*: a max-width on an uncapped full-bleed
   // band is a control that reads as doing nothing until you drag far enough to notice —

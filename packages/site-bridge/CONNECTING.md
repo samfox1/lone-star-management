@@ -199,8 +199,11 @@ wears. An unset variable falling back to nothing is a region that disappears.
 
 ### Mobile overrides (0.19.0)
 
-Editing in the editor's **phone view** writes a second, phone-only value (`sizesm-[18px]`
-→ `--lse-size-m`, `padsm-[12px]` → `--lse-pad-m`). Inline styles cannot express
+Editing in the editor's **phone view** writes a second, phone-only value. Every
+variable-backed style has a twin — `sizesm-[18px]` → `--lse-size-m`, `padsm-[12px]` →
+`--lse-pad-m`, and likewise `gapsm`/`weightsm`/`alignsm`/`leadsm`/`tracksm`/`casesm`/
+`fstylesm` → their `--lse-*-m` variables (0.22.0). Colours and effects stay
+device-global. Inline styles cannot express
 `@media`, so on an UNCLAIMED region the element also gains a marker class
 (`lse-msize` / `lse-mpad`) that the package's own tokens.css reads below 640px, with
 `!important` so it beats the same element's inline desktop value.

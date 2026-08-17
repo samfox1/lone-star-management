@@ -99,6 +99,15 @@ export function bridgeSupportsMobileVars(siteVersion: string | undefined): boole
   return !bridgeOutdated(siteVersion, MOBILE_VARS_SINCE)
 }
 
+/** Phone twins for the WHOLE style set (weight/align/leading/tracking/case/italic/gap)
+ *  arrived with 0.22.0's applier + tokens.css rules; size/pad keep the 0.19 floor. */
+export const MOBILE_TEXT_SINCE = '0.22.0'
+
+export function bridgeSupportsMobileText(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, MOBILE_TEXT_SINCE)
+}
+
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`

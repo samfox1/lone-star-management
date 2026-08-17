@@ -72,6 +72,62 @@ describe("malformed payloads are inert", () => {
   });
 });
 
+/* ── ALL THE STYLES (0.22.0, Sam): every variable-backed family gets a phone twin,
+ * derived from the SAME tables as the desktop forms so a family added later joins
+ * automatically. Same discrete mechanics as sizesm: var + marker class for unclaimed,
+ * var only for claimed. */
+const SM_FAMILIES: [string, string, string, string][] = [
+  // token, variable, marker class, claim ('' = unclaimable)
+  ["weightsm-[700]", "--lse-weight-m", "lse-mweight", "weight"],
+  ["alignsm-[center]", "--lse-align-m", "lse-malign", "align"],
+  ["leadsm-[1.25]", "--lse-leading-m", "lse-mleading", "leading"],
+  ["tracksm-[-0.04em]", "--lse-tracking-m", "lse-mtracking", "tracking"],
+  ["casesm-[uppercase]", "--lse-case-m", "lse-mcase", "case"],
+  ["fstylesm-[italic]", "--lse-fontstyle-m", "lse-mitalic", "italic"],
+  ["gapsm-[12px]", "--lse-gap-m", "lse-mgap", ""],
+];
+
+describe("every phone twin: var + marker unclaimed, var only when claimed", () => {
+  for (const [token, variable, marker, claim] of SM_FAMILIES) {
+    it(token, () => {
+      const value = token.match(/\[(.+)\]/)![1];
+      const open = resolveRegionStyle("r", "grid", token);
+      expect(open.style[variable]).toBe(value);
+      expect(open.className.split(/\s+/)).toContain(marker);
+      expect(open.className).not.toContain(token);
+      // Desktop math untouched — the twin sets ONLY its -m variable.
+      expect(Object.keys(open.style)).toEqual([variable]);
+
+      if (claim) {
+        const claimed = resolveRegionStyle("r", `grid lse-owns-[${claim}]`, token);
+        expect(claimed.style[variable]).toBe(value);
+        expect(claimed.className.split(/\s+/)).not.toContain(marker);
+      }
+    });
+  }
+
+  it("rejects junk payloads without leaving classes behind", () => {
+    for (const bad of ["weightsm-[banana]", "alignsm-[up]", "leadsm-[99]", "tracksm-[4em]", "casesm-[blink]", "gapsm-[12em]"]) {
+      const { style, className } = resolveRegionStyle("r", "grid", `flex ${bad}`);
+      expect(Object.keys(style), bad).toEqual([]);
+      expect(className, bad).toBe("flex");
+    }
+  });
+
+  it("declares every -m variable in the clear-list", () => {
+    for (const [, variable] of SM_FAMILIES) expect(MANAGED_STYLE_PROPS).toContain(variable);
+  });
+
+  it("tokens.css carries a media rule per family, all !important", () => {
+    const css = buildTokensCss();
+    const media = css.slice(css.indexOf("Mobile overrides"));
+    for (const [, variable, marker] of SM_FAMILIES) {
+      expect(media, marker).toContain(`.${marker}`);
+      expect(media, variable).toContain(`var(${variable})`);
+    }
+  });
+});
+
 describe("the live re-apply path", () => {
   it("clears both variables and marker classes on removal", () => {
     document.body.innerHTML = `<section data-lse-style="r" class="grid"></section>`;

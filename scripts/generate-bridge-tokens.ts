@@ -88,6 +88,13 @@ ${effectsCss()}
 @media (max-width: 639px) {
   .lse-msize { font-size: var(--lse-size-m) !important; }
   .lse-mpad { padding: var(--lse-pad-m) !important; }
+  .lse-mgap { gap: var(--lse-gap-m) !important; }
+  .lse-mweight { font-weight: var(--lse-weight-m) !important; }
+  .lse-malign { text-align: var(--lse-align-m) !important; }
+  .lse-mleading { line-height: var(--lse-leading-m) !important; }
+  .lse-mtracking { letter-spacing: var(--lse-tracking-m) !important; }
+  .lse-mcase { text-transform: var(--lse-case-m) !important; }
+  .lse-mitalic { font-style: var(--lse-fontstyle-m) !important; }
 }
 `
 }

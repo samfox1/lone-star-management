@@ -47,7 +47,7 @@ export function StyleControlRow({
   const aria = `${regionLabel} ${control.label}`
   if (control.kind === 'toggle') {
     return (
-      <ControlRow label={control.label}>
+      <ControlRow label={control.label} scopeTag={control.phoneScoped ? 'Mobile' : undefined}>
         {/* A switch, not a checkbox: it reads as on/off at a glance in a panel where
             every other control is a value, and it matches OnSiteToggle elsewhere. */}
         <button
@@ -129,7 +129,7 @@ export function StyleControlRow({
   if (control.kind === 'color') {
     if (!control.hexOf || !control.toToken) return null
     return (
-      <ControlRow label={control.label}>
+      <ControlRow label={control.label} scopeTag={control.phoneScoped ? 'Mobile' : undefined}>
         <ColorPalette
           label=""
           aria={aria}
@@ -157,7 +157,7 @@ export function StyleControlRow({
       : control.options
   const currentLabel = options.find((o) => o.value === current)?.label ?? options[0]?.label ?? ''
   return (
-    <ControlRow label={control.label}>
+    <ControlRow label={control.label} scopeTag={control.phoneScoped ? 'Mobile' : undefined}>
       {/* The <select> stays for BEHAVIOUR (native menu, keyboard, a11y, and the `.value`
           every test drives) but is transparent and stretched over the row; the value is
           painted beside it as ordinary DOM text. macOS Chrome renders a control's own

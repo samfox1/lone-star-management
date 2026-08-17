@@ -252,15 +252,28 @@ const TEXT_VARS: {
  * Values are EXACT px, not clamps: the manager chose the number while looking at a
  * phone; there is nothing left to adapt.
  */
+const PX_ONLY = (p: string) => (/^\d{1,4}px$/.test(p) ? p : null);
 const MOBILE_VARS: {
   re: RegExp;
   variable: string;
   marker: string;
-  /** The claim that suppresses the marker class, or null when unclaimable (padding). */
+  /** The claim that suppresses the marker class, or null when unclaimable. */
   claim: string | null;
+  parse: (payload: string) => string | null;
 }[] = [
-  { re: /^sizesm-\[(.+)\]$/, variable: "--lse-size-m", marker: "lse-msize", claim: "size" },
-  { re: /^padsm-\[(.+)\]$/, variable: "--lse-pad-m", marker: "lse-mpad", claim: null },
+  { re: /^sizesm-\[(.+)\]$/, variable: "--lse-size-m", marker: "lse-msize", claim: "size", parse: PX_ONLY },
+  { re: /^padsm-\[(.+)\]$/, variable: "--lse-pad-m", marker: "lse-mpad", claim: null, parse: PX_ONLY },
+  { re: /^gapsm-\[(.+)\]$/, variable: "--lse-gap-m", marker: "lse-mgap", claim: null, parse: PX_ONLY },
+  // Every TEXT_VARS family joins with a derived row (0.22.0, Sam: "all the styles") —
+  // same payload validation as its desktop twin, so the two can never disagree about
+  // what a legal value is. Marker naming: lse-m + the claim the manager knows.
+  ...TEXT_VARS.map((fam) => ({
+    re: new RegExp(fam.re.source.replace("-\\[", "sm-\\[")),
+    variable: `${fam.variable}-m`,
+    marker: `lse-m${fam.claim}`,
+    claim: fam.claim,
+    parse: fam.parse,
+  })),
 ];
 
 /** A mobile token → its inline variable + optional marker class, `{}`-style inert on a
@@ -272,9 +285,10 @@ function mobileToken(
   for (const fam of MOBILE_VARS) {
     const m = token.match(fam.re);
     if (!m) continue;
-    if (!/^\d{1,4}px$/.test(m[1])) return { style: {} };
+    const value = fam.parse(m[1]);
+    if (value == null) return { style: {} };
     return {
-      style: { [fam.variable]: m[1] },
+      style: { [fam.variable]: value },
       ...(fam.claim === null || !claims.has(fam.claim) ? { marker: fam.marker } : {}),
     };
   }
@@ -640,6 +654,13 @@ export const MANAGED_STYLE_PROPS = [
   "--lse-fontstyle",
   "--lse-size-m",
   "--lse-pad-m",
+  "--lse-gap-m",
+  "--lse-weight-m",
+  "--lse-align-m",
+  "--lse-leading-m",
+  "--lse-tracking-m",
+  "--lse-case-m",
+  "--lse-fontstyle-m",
 ] as const;
 
 export type ResolvedStyle = {

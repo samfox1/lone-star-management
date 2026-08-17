@@ -99,11 +99,26 @@ export function runSerialized(
 
 /** One control on the sheet grid: [mono label] [control]. No icon — the style controls
  *  read as a clean list of named values, and a glyph per row was noise, not navigation. */
-export function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
+export function ControlRow({
+  label,
+  scopeTag,
+  children,
+}: {
+  label: string
+  /** Bold parenthesised tag beside the label — "(Mobile)" on a phone-scoped control.
+   *  Per-control, not on the panel header, because only SOME controls are phone-scoped
+   *  (colours and effects stay global) and a header tag would claim them all (Sam,
+   *  2026-08-17). */
+  scopeTag?: string
+  children: React.ReactNode
+}) {
   return (
     // py-1 (was py-1.5): the editor's control column reads denser (Sam, 2026-08-12).
     <div className="grid grid-cols-[1fr_auto] items-center gap-x-2.5 py-1">
-      <span className={CONTROL_LABEL}>{label}</span>
+      <span className={CONTROL_LABEL}>
+        {label}
+        {scopeTag ? <b className="font-bold"> ({scopeTag})</b> : null}
+      </span>
       {children}
     </div>
   )
