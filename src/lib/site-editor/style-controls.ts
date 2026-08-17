@@ -15,7 +15,7 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -230,8 +230,19 @@ const padSmRank = (t: string): number | null => {
  * back for owns/rank, so the twin can never drift from its desktop original. Colour and
  * effect controls pass through untouched — they stay device-global. */
 const SM_SHAPE = /^([a-z]+)sm-\[/
-const toSm = (v: string) => (v === '' ? v : v.replace(/^([a-z]+)-\[/, '$1sm-['))
-const unSm = (t: string) => t.replace(SM_SHAPE, '$1-[')
+const toSm = (v: string) => {
+  if (v === '') return v
+  // scale is the one bare-suffix family (`scale-135`, no brackets); its twin adopts the
+  // bracket shape so SM detection stays one regex.
+  const scale = /^scale-(\d{1,3})$/.exec(v)
+  if (scale) return `scalesm-[${scale[1]}]`
+  return v.replace(/^([a-z]+)-\[/, '$1sm-[')
+}
+const unSm = (t: string) => {
+  const scale = /^scalesm-\[(\d{1,3})\]$/.exec(t)
+  if (scale) return `scale-${scale[1]}`
+  return t.replace(SM_SHAPE, '$1-[')
+}
 const phoneTwin = (c: StyleControl): StyleControl => {
   if (c.kind === 'select')
     return {
@@ -259,6 +270,8 @@ const phoneTextScope = (opts?: SiteStyleOptions) =>
   phoneScope(opts) &&
   (opts as EditorStyleOptions | undefined)?.mobileTextVars !== false &&
   usesTextVars(opts) // class-era vocabularies have no sm shape to rewrite
+const phoneItemScope = (opts?: SiteStyleOptions) =>
+  phoneScope(opts) && (opts as EditorStyleOptions | undefined)?.mobileItemVars !== false
 /** A desktop step → its phone twin, same label. Sizes measure via textSizeRank so a
  *  class-era ladder (a site that declares textSizes) converts too; an unmeasurable step
  *  is dropped rather than emitting a token the bridge would refuse. */
@@ -281,6 +294,8 @@ export type EditorStyleOptions = SiteStyleOptions & {
   mobileVars?: boolean
   /** Phone twins for the whole style set (0.22+); size/pad need only mobileVars. */
   mobileTextVars?: boolean
+  /** Per-item phone twins (scale, 0.23+). */
+  mobileItemVars?: boolean
   /** The editor is currently in PHONE view. With the vars flags, controls become
    *  phone-scoped: same control, writing the `…sm-[…]` twin. */
   mobileView?: boolean
@@ -303,6 +318,7 @@ export function withStyleVars(
     textVars: bridgeSupportsTextVars(bridgeVersion),
     mobileVars: bridgeSupportsMobileVars(bridgeVersion),
     mobileTextVars: bridgeSupportsMobileText(bridgeVersion),
+    mobileItemVars: bridgeSupportsMobileItem(bridgeVersion),
   }
 }
 /** Both shapes — the value token this control now writes, and every class shape a region
@@ -1292,9 +1308,12 @@ function motionControls(): StyleControl[] {
   ]
 }
 
-export function buildItemStyleControls(): StyleControl[] {
+export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] {
+  // Per-item Size is a SCALE, and it was the control Sam caught cross-talking on the
+  // hero logo — in phone scope it twins like everything else (0.23).
+  const scale: StyleControl = { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') && !t.startsWith('scalesm-') }
   return [
-    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') },
+    phoneItemScope(opts) ? phoneTwin(scale) : scale,
     { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-') },
     { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, rank: pxRank(BORDER_PX), owns: isBorderWidth },
     {
@@ -1440,7 +1459,7 @@ const SPEED_STEPS: StyleOption[] = [
  *  • 'file' (an uploaded background clip): Speed + transparency. It renders full-bleed
  *    behind the page, so scale/corners/shadow have nothing visible to act on.
  */
-export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleControl[] {
+export function buildVideoItemStyleControls(kind: 'embed' | 'file', opts?: SiteStyleOptions): StyleControl[] {
   const opacity: StyleControl = {
     id: 'opacity',
     label: 'Transparency',
@@ -1461,8 +1480,9 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file'): StyleContro
       ...filterControls(),
     ]
   }
+  const scale: StyleControl = { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') && !t.startsWith('scalesm-') }
   return [
-    { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') },
+    phoneItemScope(opts) ? phoneTwin(scale) : scale,
     opacity,
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },

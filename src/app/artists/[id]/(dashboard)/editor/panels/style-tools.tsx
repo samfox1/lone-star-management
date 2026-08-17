@@ -97,7 +97,12 @@ export function StyleControlRow({
     return (
       <div className="py-1">
         <div className="flex items-center justify-between">
-          <span className={CONTROL_LABEL}>{control.label}</span>
+          <span className={CONTROL_LABEL}>
+            {control.label}
+            {/* Sliders draw their own label row (not ControlRow), which is how the
+                phone tag missed every slider on the first pass — Sam's screenshot. */}
+            {control.phoneScoped ? <b className="font-bold"> (Mobile)</b> : null}
+          </span>
           <span className="flex items-center gap-2">
             <span className="font-space text-[11px] text-ink-muted">{label}</span>
             {canReset && exact && (

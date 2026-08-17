@@ -85,12 +85,16 @@ const SM_FAMILIES: [string, string, string, string][] = [
   ["casesm-[uppercase]", "--lse-case-m", "lse-mcase", "case"],
   ["fstylesm-[italic]", "--lse-fontstyle-m", "lse-mitalic", "italic"],
   ["gapsm-[12px]", "--lse-gap-m", "lse-mgap", ""],
+  // Item scale, percent → ratio: the hero-logo case (Sam, 2026-08-17: "I tried to edit
+  // the size of the SKEEN hero image and it changes when I edit desktop/mobile").
+  ["scalesm-[135]", "--lse-scale-m", "lse-mscale", ""],
 ];
 
 describe("every phone twin: var + marker unclaimed, var only when claimed", () => {
   for (const [token, variable, marker, claim] of SM_FAMILIES) {
     it(token, () => {
-      const value = token.match(/\[(.+)\]/)![1];
+      const raw = token.match(/\[(.+)\]/)![1];
+      const value = token.startsWith("scalesm-") ? String(Number(raw) / 100) : raw;
       const open = resolveRegionStyle("r", "grid", token);
       expect(open.style[variable]).toBe(value);
       expect(open.className.split(/\s+/)).toContain(marker);
@@ -125,6 +129,20 @@ describe("every phone twin: var + marker unclaimed, var only when claimed", () =
       expect(media, marker).toContain(`.${marker}`);
       expect(media, variable).toContain(`var(${variable})`);
     }
+  });
+});
+
+describe("item regions twin too — the hero logo is one", () => {
+  it("a per-item overlay lifts scalesm on the ITEM path", () => {
+    const { style, className } = resolveRegionStyle(
+      "slot:hero_wordmark_1_image",
+      "max-h-[45svh] w-auto",
+      "opacity-30 scalesm-[135]",
+    );
+    expect(style["--lse-scale-m"]).toBe("1.35");
+    expect(className.split(/\s+/)).toContain("lse-mscale");
+    // The desktop scale untouched by the twin: opacity lifts as before, no `scale` set.
+    expect(style.scale).toBeUndefined();
   });
 });
 

@@ -108,6 +108,14 @@ export function bridgeSupportsMobileText(siteVersion: string | undefined): boole
   return !bridgeOutdated(siteVersion, MOBILE_TEXT_SINCE)
 }
 
+/** Per-ITEM phone twins (scale — the hero-logo Size) arrived with 0.23.0. */
+export const MOBILE_ITEM_SINCE = '0.23.0'
+
+export function bridgeSupportsMobileItem(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, MOBILE_ITEM_SINCE)
+}
+
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`

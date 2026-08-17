@@ -95,6 +95,7 @@ ${effectsCss()}
   .lse-mtracking { letter-spacing: var(--lse-tracking-m) !important; }
   .lse-mcase { text-transform: var(--lse-case-m) !important; }
   .lse-mitalic { font-style: var(--lse-fontstyle-m) !important; }
+  .lse-mscale { scale: var(--lse-scale-m) !important; }
 }
 `
 }

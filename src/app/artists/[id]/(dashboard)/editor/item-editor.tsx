@@ -89,7 +89,9 @@ export function ItemEditor({
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [picking, setPicking] = useState(false)
   const [confirmExit, setConfirmExit] = useState(false)
-  const defaultControls = useMemo(() => buildItemStyleControls(), [])
+  // Built with the palette (the shell's EditorStyleOptions): in phone view the scale
+  // control twins to `scalesm-[…]` and tags itself (Mobile).
+  const defaultControls = useMemo(() => buildItemStyleControls(palette), [palette])
   const controls = controlsProp ?? defaultControls
   const dirty = classes !== savedClasses
 

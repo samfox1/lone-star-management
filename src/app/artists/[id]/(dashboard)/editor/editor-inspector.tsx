@@ -602,7 +602,7 @@ export function EditorInspector({
         onRemove: () => assignHero(item.role, null),
         empty: videosPageLink,
         // An uploaded background clip: playback is ours to control, so Speed applies.
-        controls: buildVideoItemStyleControls('file'),
+        controls: buildVideoItemStyleControls('file', styleOptions),
       }
     } else {
       const placed = videos.find((v) => v.id === item.id)
@@ -621,7 +621,7 @@ export function EditorInspector({
         onRemove: () => toggleVideoOnSite(placed),
         empty: videosPageLink,
         // A YouTube iframe: playback can't be touched from outside, so visual-only.
-        controls: buildVideoItemStyleControls('embed'),
+        controls: buildVideoItemStyleControls('embed', styleOptions),
       }
     }
     return (

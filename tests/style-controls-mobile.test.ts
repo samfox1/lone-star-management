@@ -12,9 +12,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyStyleValue,
+  buildItemStyleControls,
   buildStyleControls,
   buildTextItemStyleControls,
+  buildVideoItemStyleControls,
   readStyleValue,
+  sliderIndex,
   sliderSteps,
   withStyleVars,
   type EditorStyleOptions,
@@ -123,6 +126,37 @@ describe('the phone-scoped padding control', () => {
     const desktop = byId(buildStyleControls(onDesktop), 'pad')
     expect(applyStyleValue('grid pad-[24px] padsm-[12px]', desktop, 'pad-[32px]'))
       .toBe('grid padsm-[12px] pad-[32px]')
+  })
+})
+
+describe('per-item scale twins — the hero-logo case', () => {
+  it('phone view scales write scalesm and PRESERVE the desktop scale', () => {
+    const phone = byId(buildItemStyleControls(onPhone('0.23.0')), 'size')
+    expect(phone.phoneScoped).toBe(true)
+    for (const s of sliderSteps(phone)) {
+      if (s.value === '') continue
+      expect(s.value).toMatch(/^scalesm-\[\d+\]$/)
+    }
+    // The exact cross-talk Sam hit, both directions:
+    expect(applyStyleValue('opacity-30 scale-135', phone, 'scalesm-[80]'))
+      .toBe('opacity-30 scale-135 scalesm-[80]')
+    const desktop = byId(buildItemStyleControls(withStyleVars({}, '0.23.0')), 'size')
+    expect(applyStyleValue('opacity-30 scale-135 scalesm-[80]', desktop, 'scale-150'))
+      .toBe('opacity-30 scalesm-[80] scale-150')
+    // Reading stays scoped, and ranks land on the same step either era.
+    expect(readStyleValue(phone, 'scale-135 scalesm-[80]')).toBe('scalesm-[80]')
+    expect(readStyleValue(desktop, 'scale-135 scalesm-[80]')).toBe('scale-135')
+    // Same STEP by label, not index — the twin drops the '' step (unset means
+    // "inherit desktop"), so the two lists are offset by one.
+    expect(sliderSteps(phone)[sliderIndex(phone, 'scalesm-[135]').idx].label)
+      .toBe(sliderSteps(desktop)[sliderIndex(desktop, 'scale-135').idx].label)
+  })
+
+  it('video item Size twins the same way; 0.22 sites keep the desktop scale', () => {
+    const phone = byId(buildVideoItemStyleControls('embed', onPhone('0.23.0')), 'size')
+    expect(phone.phoneScoped).toBe(true)
+    const old = byId(buildItemStyleControls(onPhone('0.22.0')), 'size')
+    expect(old.phoneScoped).toBeUndefined()
   })
 })
 

@@ -264,6 +264,12 @@ const MOBILE_VARS: {
   { re: /^sizesm-\[(.+)\]$/, variable: "--lse-size-m", marker: "lse-msize", claim: "size", parse: PX_ONLY },
   { re: /^padsm-\[(.+)\]$/, variable: "--lse-pad-m", marker: "lse-mpad", claim: null, parse: PX_ONLY },
   { re: /^gapsm-\[(.+)\]$/, variable: "--lse-gap-m", marker: "lse-mgap", claim: null, parse: PX_ONLY },
+  // Item scale, percent → ratio (`scale-135` desktop ↔ `scalesm-[135]` phone). The
+  // hero-logo case: per-item Size is a scale, and it had no twin at all.
+  {
+    re: /^scalesm-\[(.+)\]$/, variable: "--lse-scale-m", marker: "lse-mscale", claim: null,
+    parse: (p) => (/^\d{1,3}$/.test(p) ? String(Number(p) / 100) : null),
+  },
   // Every TEXT_VARS family joins with a derived row (0.22.0, Sam: "all the styles") —
   // same payload validation as its desktop twin, so the two can never disagree about
   // what a legal value is. Marker naming: lse-m + the claim the manager knows.
@@ -661,6 +667,7 @@ export const MANAGED_STYLE_PROPS = [
   "--lse-tracking-m",
   "--lse-case-m",
   "--lse-fontstyle-m",
+  "--lse-scale-m",
 ] as const;
 
 export type ResolvedStyle = {
