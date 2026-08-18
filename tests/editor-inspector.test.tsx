@@ -149,8 +149,8 @@ const VIDEOS: EditorVideo[] = [
 ]
 
 const MERCH: EditorMerch[] = [
-  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: false },
-  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: false },
+  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: false, inStock: true },
+  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: false, inStock: false },
 ]
 
 const RELEASES: EditorProject[] = [
@@ -183,6 +183,8 @@ function renderInspector(
     styleValues?: Record<string, string>
     styleOptions?: SiteStyleOptions
     hasUnpublished?: boolean
+    /** A region key; the harness wraps it in a fresh nonce per render, so every
+     *  render with a key set reads as a new click (matching the live channel). */
     selectedStyle?: string | null
     components?: ManifestComponent[]
     showGallery?: boolean
@@ -202,6 +204,9 @@ function renderInspector(
 ) {
   return render(inspector(photos, opts))
 }
+
+/** Ticks per inspector() build so a selectedStyle key always reads as a fresh click. */
+let styleSelectNonce = 0
 
 /** The same element, unrendered — for `rerender`, which is how a test drives a PROP
  *  change (a preview click arriving from the frame bridge) rather than a DOM event. */
@@ -233,7 +238,7 @@ function inspector(
       styleValues={opts.styleValues ?? {}}
       styleOptions={opts.styleOptions}
       hasUnpublished={opts.hasUnpublished}
-      selectedStyle={opts.selectedStyle ?? null}
+      selectedStyle={opts.selectedStyle ? { key: opts.selectedStyle, nonce: ++styleSelectNonce } : null}
       deselectedAt={opts.deselectedAt ?? 0}
       linkRegions={opts.linkRegions ?? []}
       selectedLink={opts.selectedLink ?? null}
@@ -1167,49 +1172,75 @@ describe('EditorInspector — Merch component', () => {
     fireEvent.click(screen.getByRole('button', { name: /Merch/ }))
   }
 
-  it('lists products with editable name/price/url + an add-product out', () => {
+  // The inline-row tests retired 2026-08-18: Sam asked for a grid like Music with a
+  // per-item Edit panel — the redesign below is their replacement.
+
+  it('a cover grid: one card per product, sold-out badged, plus the add-product out', () => {
     openMerch()
-    expect((screen.getByLabelText('Product 1 name') as HTMLInputElement).value).toBe('Tour Tee')
-    expect((screen.getByLabelText('Product 1 price') as HTMLInputElement).value).toBe('30')
-    expect((screen.getByLabelText('Product 1 URL') as HTMLInputElement).value).toBe('https://shop/x')
+    expect(screen.getByText('Tour Tee')).toBeTruthy()
+    expect(screen.getByText('$30')).toBeTruthy()
+    // p2 is out of stock — its card carries the badge; in-stock p1 does not.
+    expect(screen.getAllByText('Sold out')).toHaveLength(1)
     expect(screen.getByRole('link', { name: /Add product/ }).getAttribute('href')).toBe('/artists/artist-1/merch')
   })
 
-  it('edits a product with a debounced content save (title/price/url together)', () => {
+  it('the Edit pencil opens the full-panel editor with the product loaded', () => {
+    openMerch()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+    expect((screen.getByLabelText('Product name') as HTMLInputElement).value).toBe('Tour Tee')
+    expect((screen.getByLabelText('Price') as HTMLInputElement).value).toBe('30')
+    expect((screen.getByLabelText('Product link') as HTMLInputElement).value).toBe('https://shop/x')
+  })
+
+  it('CRITICAL: edits debounce-save through the merch CRUD, one field at a time', () => {
     vi.useFakeTimers()
     try {
       openMerch()
-      fireEvent.change(screen.getByLabelText('Product 1 price'), { target: { value: '35' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+      fireEvent.change(screen.getByLabelText('Price'), { target: { value: '35' } })
       expect(updateContentMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
       const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
       expect([type, id, artistId]).toEqual(['merch', 'p1', 'artist-1'])
-      expect((fd as FormData).get('title')).toBe('Tour Tee')
       expect((fd as FormData).get('price')).toBe('35')
-      expect((fd as FormData).get('url')).toBe('https://shop/x')
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('removes a product via deleteContentAction', () => {
+  it('CRITICAL: the out-of-stock toggle writes in_stock immediately (no debounce)', () => {
+    // Sam, 2026-08-18: "maybe a in stock input or a 'out of stock' toggle". A discrete
+    // press — a flag waiting in a debounce window would read as a broken switch.
     openMerch()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove product 1' }))
-    expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
-    expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+    const toggle = screen.getByRole('switch', { name: 'Out of stock' })
+    expect(toggle.getAttribute('aria-checked')).toBe('false') // p1 is in stock
+    fireEvent.click(toggle)
+    const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+    expect([type, id, artistId]).toEqual(['merch', 'p1', 'artist-1'])
+    expect((fd as FormData).get('in_stock')).toBe('false')
   })
 
   it('does NOT save a non-numeric price and flags it invalid', () => {
     vi.useFakeTimers()
     try {
       openMerch()
-      fireEvent.change(screen.getByLabelText('Product 1 price'), { target: { value: 'abc' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+      fireEvent.change(screen.getByLabelText('Price'), { target: { value: 'abc' } })
       vi.advanceTimersByTime(500)
       expect(updateContentMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Product 1 price').getAttribute('aria-invalid')).toBe('true')
+      expect(screen.getByLabelText('Price').getAttribute('aria-invalid')).toBe('true')
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('removes a product from inside its editor via deleteContentAction', () => {
+    openMerch()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+    fireEvent.click(screen.getByRole('button', { name: /Remove product/ }))
+    expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
+    expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
   })
 })
 
@@ -1225,6 +1256,18 @@ describe('EditorInspector — Music panel (projects)', () => {
     expect(tile.textContent).toContain('Music')
     // The "2 of 3 on site" line was removed from the landing grid.
     expect(tile.textContent).not.toMatch(/on site/i)
+  })
+
+  it('CRITICAL: dragging a card onto another renumbers the WHOLE catalog, songs intact', () => {
+    // Sam, 2026-08-18: "drag the songs around in the music panel to rearrange like the
+    // tour dates." Projects drag as cards; the persisted list is every TRACK in the new
+    // project order — the numbering is what flips a connected site into manual mode.
+    openMusic()
+    const cards = document.querySelectorAll('aside div[draggable="true"]')
+    expect(cards.length).toBe(RELEASES.length)
+    fireEvent.dragStart(cards[0]) // Midnight LP…
+    fireEvent.drop(cards[1]) // …dropped on Sundown EP
+    expect(reorderContentMock).toHaveBeenCalledWith('track', 'artist-1', ['t4', 't5', 't1', 't2', 't3', 't9'])
   })
 
   it('lists one card per project, with its kind and song count — never individual songs', () => {
@@ -1250,10 +1293,8 @@ describe('EditorInspector — Music panel (projects)', () => {
     expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t9'], true)
   })
 
-  it('projects are NOT draggable — order comes from release date, not the manager', () => {
-    openMusic()
-    expect(document.querySelectorAll('aside div[draggable="true"]').length).toBe(0)
-  })
+  // 'projects are NOT draggable' retired 2026-08-18: Sam asked for the tour-dates drag
+  // here too. The CRITICAL drag test above is its replacement.
 
   it('renders projects in the order given (page sorts them newest-first)', () => {
     openMusic()
@@ -1947,6 +1988,41 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
       />,
     )
     expect(screen.queryByText('Supporting acts')).toBeNull()
+  })
+
+  // The footer region both style tests click — element-scoped, so its click focus
+  // carries the full text control set (Boldness is the presence probe).
+  const STYLE_REGIONS: ManifestStyleRegion[] = [
+    { key: 'page', label: 'Page background', base: '', scope: 'site' },
+    { key: 'footer', label: 'Footer', base: 'mt-auto border-t px-6' },
+  ]
+
+  it('CRITICAL: a STYLE click also dismisses the show editor and lands on the region', () => {
+    // Sam, 2026-08-18: with the show editor open, clicking the footer bar or the page
+    // background changed nothing — the style channel predated closeEditors, so the tab
+    // switched underneath a tour editor that kept rendering on top.
+    const { rerender } = renderInspector([], {
+      tours: TOURS, supportLinks: SUPPORT, styleRegions: STYLE_REGIONS,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    expect(screen.getByText('Supporting acts')).toBeTruthy()
+
+    rerender(inspector([], { tours: TOURS, supportLinks: SUPPORT, styleRegions: STYLE_REGIONS, selectedStyle: 'footer' }))
+    expect(screen.queryByText('Supporting acts')).toBeNull()
+    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
+  })
+
+  it('CRITICAL: re-clicking the SAME region after browsing away re-focuses it (nonce)', () => {
+    // The bare-key gate could not re-fire for a repeat click — the exact Listen-button
+    // bug (2026-08-17), which the style channel then reproduced.
+    const { rerender } = renderInspector([], { styleRegions: STYLE_REGIONS, selectedStyle: 'footer' })
+    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' })) // browse away
+    expect(screen.queryByLabelText('Footer Boldness')).toBeNull()
+
+    rerender(inspector([], { styleRegions: STYLE_REGIONS, selectedStyle: 'footer' })) // same key, new click
+    expect(screen.getByLabelText('Footer Boldness')).toBeTruthy()
   })
 
   it('CRITICAL: the show’s own details are editable right here', () => {

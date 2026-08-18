@@ -187,12 +187,18 @@ describe('inbound: origin + shape guards', () => {
 })
 
 describe('inbound: select routing', () => {
-  it('reports a style-region click so the inspector can focus it', () => {
+  it('reports a style-region click so the inspector can focus it — key, nonce, measurement', () => {
     const { result } = mount({ customSiteUrl: CUSTOM })
-    frameSays({ type: 'select', target: { kind: 'style', key: 'hero_wordmark' }, rect: {} }, CUSTOM)
-    expect(result.current.selectedStyle).toBe('hero_wordmark')
+    const measured = { fontSizePx: 16, lineHeightPx: 27.2, letterSpacingPx: 0, padTopPx: 0, padBottomPx: 0, padLeftPx: 0, padRightPx: 0, gapPx: null, childWidthPx: null }
+    frameSays({ type: 'select', target: { kind: 'style', key: 'hero_wordmark' }, rect: {}, measured }, CUSTOM)
+    expect(result.current.selectedStyle).toMatchObject({ key: 'hero_wordmark', nonce: 1, measured })
     // A style select is NOT an image region — it doesn't also fire selectedRegion.
     expect(result.current.selectedRegion).toBeNull()
+
+    // A REPEAT click on the same region is a new gesture: the nonce ticks (the
+    // Listen-button lesson, 2026-08-17 — a bare key never re-fired).
+    frameSays({ type: 'select', target: { kind: 'style', key: 'hero_wordmark' }, rect: {} }, CUSTOM)
+    expect(result.current.selectedStyle).toMatchObject({ key: 'hero_wordmark', nonce: 2 })
   })
 
   it('reports a field/slot/item click as selectedRegion (the inspector decides if it\'s an image)', () => {

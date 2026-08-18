@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
-import { editorMessage, isFrameMessage, type FrameMode, type SelectTarget } from '@samfox1/site-bridge/protocol'
+import { editorMessage, isFrameMessage, type FrameMode, type RegionMeasurements, type SelectTarget } from '@samfox1/site-bridge/protocol'
 import type { CursorSettings } from '@samfox1/site-bridge/cursor'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
@@ -80,8 +80,11 @@ export type FrameBridge = {
   /** A custom site's own edit-list, received on `ready` (D-D). Null for a built-in
    *  template, which has none to send. */
   manifest: TemplateManifest | null
-  /** Region key the frame last reported a click on, so the inspector can focus it. */
-  selectedStyle: string | null
+  /** Region key the frame last reported a click on, so the inspector can focus it.
+   *  Key + nonce: a repeat click on the same region is a new gesture (the Listen-button
+   *  lesson, 2026-08-17 — a bare key never re-fires). `measured` is what the element
+   *  actually renders (0.25.0), so sliders park on reality; absent from older frames. */
+  selectedStyle: { key: string; nonce: number; measured?: RegionMeasurements } | null
   /** Link-region key the frame last reported a click on, to focus the Site-links panel. */
   selectedLink: { key: string; nonce: number } | null
   /** The IMAGE region (field / slot / item) the frame last reported a click on, so the
@@ -108,7 +111,7 @@ export function useFrameBridge({
   /** Has the frame answered at all? Internal: it drives the `hello` retries and the
    *  init-data effect. Not returned — nothing displays it (yet). */
   const [connected, setConnected] = useState(false)
-  const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
+  const [selectedStyle, setSelectedStyle] = useState<{ key: string; nonce: number; measured?: RegionMeasurements } | null>(null)
   // Key + NONCE, like selectedRegion: a repeat click on the same element is a new
   // gesture (Sam, 2026-08-17: clicking Listen with another panel open did nothing —
   // the key hadn't changed, so the gate never re-fired).
@@ -199,7 +202,9 @@ export function useFrameBridge({
           frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
         }
       } else if (msg.type === 'select' && msg.target.kind === 'style') {
-        setSelectedStyle(msg.target.key)
+        const key = msg.target.key
+        const measured = msg.measured
+        setSelectedStyle((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1, measured }))
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
         const key = msg.target.key
         setSelectedLink((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }))

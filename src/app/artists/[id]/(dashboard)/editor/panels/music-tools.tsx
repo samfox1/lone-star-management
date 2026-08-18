@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
@@ -24,12 +24,16 @@ export function MusicTools({
   releases,
   artistId,
   onToggleOnSite,
+  onReorder,
   focusedKey,
   onFocus,
 }: {
   releases: EditorProject[]
   artistId: string
   onToggleOnSite: (r: EditorProject) => void
+  /** Drag a card onto another (Sam, 2026-08-18) — same gesture as the tour rows.
+   *  Reorders by project KEY; the inspector renumbers the whole catalog from it. */
+  onReorder?: (fromKey: string, toKey: string) => void
   /** The selected region's stable key (`item:track:<id>` when a song is selected) —
    *  from a frame click OR a row click below. Drives the ring + auto-expand. */
   focusedKey?: string | null
@@ -37,6 +41,15 @@ export function MusicTools({
   onFocus?: (target: SelectTarget) => void
 }) {
   const [open, setOpen] = useState<string | null>(null)
+  const dragFrom = useRef<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
+
+  function drop(toKey: string) {
+    const fromKey = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (fromKey && fromKey !== toKey) onReorder?.(fromKey, toKey)
+  }
 
   // A song selected in the FRAME (cover-art click) lands here as `item:track:<id>` —
   // expand the project that owns it, or the "selected song" is invisible behind a closed
@@ -82,9 +95,19 @@ export function MusicTools({
                 return (
                   <div
                     key={r.key}
+                    draggable
+                    onDragStart={() => (dragFrom.current = r.key)}
+                    onDragEnter={() => setDragOver(r.key)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => drop(r.key)}
+                    onDragEnd={() => {
+                      dragFrom.current = null
+                      setDragOver(null)
+                    }}
                     className={cx(
                       'relative overflow-hidden rounded-lg border',
                       isOpen ? 'border-accent ring-1 ring-accent' : 'border-hairline',
+                      dragOver === r.key && 'ring-2 ring-accent',
                     )}
                   >
                     {/* The card face expands the tracklist; the on/off toggle is a SIBLING

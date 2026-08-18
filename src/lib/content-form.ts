@@ -16,7 +16,7 @@ const NUMERIC = new Set(['price', 'sort_order'])
 
 /** Fields that are boolean columns: the form posts 'true'/'false' (a BoolToggle's
  *  hidden input), coerced to a real boolean here. */
-const BOOLEAN_FIELDS = new Set(['is_past'])
+const BOOLEAN_FIELDS = new Set(['is_past', 'in_stock'])
 
 /**
  * Fields posted as REPEATED FormData entries — one per chip from a TagInput —

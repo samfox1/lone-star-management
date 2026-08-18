@@ -32,6 +32,34 @@ export const EDITOR_SOURCE = 'lse-editor'
 /** A region's on-screen box, for drawing the editor's selection overlay. */
 export type Rect = { x: number; y: number; width: number; height: number }
 
+/**
+ * What the clicked element ACTUALLY RENDERS (0.25.0) — getComputedStyle at select time,
+ * so the editor's sliders can park on reality instead of guessing from the class string.
+ *
+ * This exists because the guess failed six separate times (icon size, phone size, footer
+ * padding, deco thickness, line spacing…): any value living in site CSS, a breakpoint,
+ * or the browser default is invisible to a class-string reader, so the handle rested
+ * mid-scale and the first drag applied something smaller than what was on screen.
+ *
+ * All values are px as computed. Optional on the wire — an older frame never sends it,
+ * and the editor falls back to the class-string guess exactly as before.
+ */
+export type RegionMeasurements = {
+  fontSizePx: number
+  /** null when computed line-height is 'normal' (no resolvable px). */
+  lineHeightPx: number | null
+  /** 'normal' computes to 0 — letter-spacing's actual none value. */
+  letterSpacingPx: number
+  padTopPx: number
+  padBottomPx: number
+  padLeftPx: number
+  padRightPx: number
+  /** column-gap, else row-gap; null when neither resolves. */
+  gapPx: number | null
+  /** The first element child's rendered width — an icon row's icon size. */
+  childWidthPx: number | null
+}
+
 /** What the user selected in the frame (maps to a manifest field / slot / item /
  *  style region). */
 export type SelectTarget =
@@ -56,7 +84,7 @@ export function selectTargetKey(t: SelectTarget): string {
  *  knowable. `select` already carries a `rect`. */
 export type FrameMessage =
   | { v: number; source: typeof FRAME_SOURCE; type: 'ready'; manifest?: TemplateManifest }
-  | { v: number; source: typeof FRAME_SOURCE; type: 'select'; target: SelectTarget; rect: Rect }
+  | { v: number; source: typeof FRAME_SOURCE; type: 'select'; target: SelectTarget; rect: Rect; measured?: RegionMeasurements }
   | { v: number; source: typeof FRAME_SOURCE; type: 'deselect' }
 
 /** editor → frame. `init-data` hands the frame its draft so a custom site in edit

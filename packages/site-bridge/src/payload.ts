@@ -89,6 +89,9 @@ export type SiteMerch = {
   url: string | null
   /** Rides the snapshot as the sort key; sites rarely read it. */
   created_at?: string | null
+  /** Stock state (20260818130000) — false renders as sold out; the item STAYS on the
+   *  site. Absent on revisions published before the column — read with `!== false`. */
+  in_stock?: boolean | null
 }
 
 export type SiteLink = {

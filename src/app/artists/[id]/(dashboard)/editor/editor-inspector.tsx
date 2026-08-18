@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY, EYEBROW, plural, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
-import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
+import { type RegionMeasurements, type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import {
   componentSlotRole,
   type ManifestComponent,
@@ -60,6 +60,7 @@ import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
 import { TourDateEditor } from './tour-date-editor'
+import { MerchEditor } from './merch-editor'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -231,8 +232,9 @@ export function EditorInspector({
    *  but the CHANGES don't (Sam, 2026-08-17: the divider stayed off after a refresh
    *  while the button vanished). */
   hasUnpublished?: boolean
-  /** Region the frame reported a click on — jumps the panel to Style, focused there. */
-  selectedStyle?: string | null
+  /** Region the frame reported a click on — jumps the panel to Style, focused there.
+   *  Key + nonce so a repeat click on the same region re-fires (the Listen lesson). */
+  selectedStyle?: { key: string; nonce: number; measured?: RegionMeasurements } | null
   /** Ticks when a preview click hit nothing editable — panels collapse whatever row is
    *  open (Sam, 2026-08-14). A counter, not a flag: consecutive clicks are separate
    *  events, and a boolean would only ever fire once. */
@@ -283,18 +285,49 @@ export function EditorInspector({
   // immediately without painting the stale panel, whereas a setState inside an
   // effect cascades an extra render (and the lint rule rightly rejects it). Same
   // sanctioned "reset state on prop change" pattern as use-on-site-selection.
-  // Starts null, NOT at `selectedStyle`: seeding it from the prop would make the
-  // first render already "match" and the panel would never open for a selection
-  // that was present on mount.
-  const [lastSelected, setLastSelected] = useState<string | null>(null)
+
+  // The full-panel editors, declared ABOVE every select branch because each branch must
+  // be able to dismiss them: they render over `active`, so a routed select that leaves
+  // one open changes a panel the manager never sees (the 2026-08-09 editingTour lesson —
+  // repeated on 2026-08-18 by the STYLE channel, which predated closeEditors).
+  //
+  // The one image/video handed the whole panel for editing (Replace / Remove / styling).
+  const [editingItem, setEditingItem] = useState<ItemEdit | null>(null)
+  // The one TEXT field handed the whole panel (the words + their type controls). Held
+  // separately from editingItem because it carries no media and shares none of that
+  // editor's Replace/Remove machinery.
+  const [editingText, setEditingText] = useState<EditorTextField | null>(null)
+  // The one TOUR DATE handed the whole panel (its supporting acts and their links). A
+  // third state rather than a branch of ItemEdit: that union is media-shaped —
+  // preview, Replace, Remove — and a show has none of those.
+  const [editingTour, setEditingTour] = useState<{ tour: EditorTour; label: string } | null>(null)
+  // The one MERCH ITEM handed the whole panel (name / price / link / stock) — the grid's
+  // Edit button opens it (Sam, 2026-08-18). Held by ID, not row: the row snapshot would
+  // go stale the moment a debounced save refreshes the list under it.
+  const [editingMerchId, setEditingMerchId] = useState<string | null>(null)
+  // ONE dismissal for every routed select, so the next editor added here cannot be
+  // missed by one of the branches.
+  const closeEditors = () => {
+    setEditingItem(null)
+    setEditingText(null)
+    setEditingTour(null)
+    setEditingMerchId(null)
+  }
+
   // The CLICK FOCUS: while set, the Style panel shows only this region's controls.
   // Cleared by any manual tab click (selectComponent) — visiting the Style tab by
   // hand is browsing, and browsing shows site-wide styles only, never a leftover
   // element (Sam, 2026-08-12).
   const [styleFocus, setStyleFocus] = useState<string | null>(null)
-  if (selectedStyle && selectedStyle !== lastSelected) {
-    setLastSelected(selectedStyle)
-    setStyleFocus(selectedStyle)
+  // What the clicked element renders (bridge 0.25.0) — rides beside the focus so the
+  // focused region's sliders park on measured reality, not a class-string guess.
+  const [styleMeasured, setStyleMeasured] = useState<RegionMeasurements | null>(null)
+  const [lastSelected, setLastSelected] = useState<number>(0)
+  if (selectedStyle && selectedStyle.nonce !== lastSelected) {
+    setLastSelected(selectedStyle.nonce)
+    closeEditors()
+    setStyleFocus(selectedStyle.key)
+    setStyleMeasured(selectedStyle.measured ?? null)
     setActive(COMPONENTS.find((c) => c.kind === 'style') ?? null)
   }
 
@@ -303,6 +336,7 @@ export function EditorInspector({
   const [lastSelectedLink, setLastSelectedLink] = useState<number>(0)
   if (selectedLink && selectedLink.nonce !== lastSelectedLink) {
     setLastSelectedLink(selectedLink.nonce)
+    closeEditors()
     setActive(COMPONENTS.find((c) => c.kind === 'links') ?? null)
   }
 
@@ -342,18 +376,8 @@ export function EditorInspector({
     // browsing away doesn't re-focus until the prop changes — the prop carries no
     // nonce; the image channel's nonce pattern is the fix if this ever bites.)
     setStyleFocus(null)
+    setStyleMeasured(null)
   }
-
-  // The one image/video handed the whole panel for editing (Replace / Remove / styling).
-  const [editingItem, setEditingItem] = useState<ItemEdit | null>(null)
-  // The one TEXT field handed the whole panel (the words + their type controls). Held
-  // separately from editingItem because it carries no media and shares none of that
-  // editor's Replace/Remove machinery.
-  const [editingText, setEditingText] = useState<EditorTextField | null>(null)
-  // The one TOUR DATE handed the whole panel (its supporting acts and their links). A
-  // third state rather than a branch of ItemEdit: that union is media-shaped —
-  // preview, Replace, Remove — and a show has none of those.
-  const [editingTour, setEditingTour] = useState<{ tour: EditorTour; label: string } | null>(null)
 
   // Which panel owns an ITEM select, by the asset type skeen stamps on the element
   // (`data-lse-item="track:<id>"`). Images route through isImageRegion instead — they
@@ -382,17 +406,8 @@ export function EditorInspector({
     const textField =
       target.kind === 'field' ? textFields.find((f) => f.key === target.key) : undefined
     const itemPanel = target.kind === 'item' ? PANEL_BY_ASSET[target.assetType] : undefined
-    // A routed select DISMISSES whatever full-panel editor is open, in every branch,
-    // before opening what it asked for. Clearing them per-branch is how editingTour got
-    // missed when it was added (2026-08-09 review): the tour editor renders ABOVE
-    // `active`, so a stale one made every preview click look dead — the panel behind it
-    // changed and the manager saw none of it. One place to close them all, so the next
-    // editor added here cannot repeat it.
-    const closeEditors = () => {
-      setEditingItem(null)
-      setEditingText(null)
-      setEditingTour(null)
-    }
+    // A routed select DISMISSES whatever full-panel editor is open (closeEditors above),
+    // in every branch, before opening what it asked for.
     if (isImageRegion(target)) {
       setLastRegionNonce(selectedRegion.nonce)
       closeEditors()
@@ -686,6 +701,20 @@ export function EditorInspector({
       onBack={() => setEditingTour(null)}
     />
   ) : null
+  // By ID, resolved against the LIVE list each render — a debounced save's
+  // router.refresh() replaces `merch`, and a captured row would show stale values.
+  const editingMerch = editingMerchId ? merch.find((m) => m.id === editingMerchId) : undefined
+  const merchEditor = editingMerch ? (
+    <MerchEditor
+      item={editingMerch}
+      artistId={artistId}
+      onBack={() => setEditingMerchId(null)}
+      onRemove={() => {
+        removeMerch(editingMerch)
+        setEditingMerchId(null)
+      }}
+    />
+  ) : null
   // Same panel slot as the item editor, and mutually exclusive with it: opening one
   // closes the other, so the panel is never showing two things at once.
   const textEditor = editingText ? (
@@ -897,6 +926,27 @@ export function EditorInspector({
     })
   }
 
+  /**
+   * Reorder PROJECTS by card drag (Sam, 2026-08-18: "drag the songs around in the music
+   * panel to rearrange like the tour dates"). The persisted list is every TRACK, in the
+   * new project order with each project's songs kept intact — the first drag numbers the
+   * whole catalog, which is what flips groupTracksIntoProjects (and a connected site's
+   * wire order) into manual mode.
+   */
+  function reorderProjects(fromKey: string, toKey: string) {
+    if (isPending) return
+    const from = releases.findIndex((r) => r.key === fromKey)
+    const to = releases.findIndex((r) => r.key === toKey)
+    if (from < 0 || to < 0 || from === to) return
+    const prev = releases
+    const next = reorderList(releases, from, to)
+    setReleases(next) // optimistic
+    startTransition(async () => {
+      const res = await reorderContentAction('track', artistId, next.flatMap((r) => r.songs.map((s) => s.id)))
+      if (res?.error) setReleases(prev)
+    })
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {bridgeOutdated && <BridgeOutdatedBanner />}
@@ -906,6 +956,8 @@ export function EditorInspector({
         textEditor
       ) : tourEditor ? (
         tourEditor
+      ) : merchEditor ? (
+        merchEditor
       ) : active ? (
         <EditingView
           component={active}
@@ -919,17 +971,19 @@ export function EditorInspector({
           textValues={textSave.values}
           textStatus={textSave.status}
           onEditTextField={(f) => {
-            setEditingItem(null) // one editor in the panel at a time
-            setEditingTour(null)
+            closeEditors() // one editor in the panel at a time
             setEditingText(f)
             // Panel → preview: the outline follows the selection, so opening a field
             // from the list highlights (and scrolls to) the words it edits.
             setFocused({ kind: 'field', key: f.key })
           }}
           onEditTour={(t) => {
-            setEditingItem(null) // one editor in the panel at a time
-            setEditingText(null)
+            closeEditors() // one editor in the panel at a time
             setEditingTour(t)
+          }}
+          onEditMerch={(m) => {
+            closeEditors()
+            setEditingMerchId(m.id)
           }}
           links={links}
           videos={videos}
@@ -948,16 +1002,17 @@ export function EditorInspector({
           onToggleTourOnSite={toggleTourOnSite}
           onRemoveTour={removeTour}
           onReorderTour={reorderTours}
+          onReorderProject={reorderProjects}
           components={components}
           showGallery={showGallery}
           onPlaceSlot={placeInSlot}
           onRemoveLink={removeLink}
           onReorderLink={reorderLinks}
-          onRemoveMerch={removeMerch}
           styleRegions={styleRegions}
           styleValues={styleValues}
           styleOptions={styleOptions}
           selectedStyle={styleFocus}
+          styleMeasured={styleMeasured ?? undefined}
           deselectedAt={deselectedAt}
           linkRegions={linkRegions}
           linkValues={linkValues}
@@ -1070,16 +1125,18 @@ function EditingView({
   onToggleTourOnSite,
   onRemoveTour,
   onReorderTour,
+  onReorderProject,
   components,
   showGallery,
   onPlaceSlot,
   onRemoveLink,
   onReorderLink,
-  onRemoveMerch,
+  onEditMerch,
   styleRegions,
   styleValues,
   styleOptions,
   selectedStyle,
+  styleMeasured,
   deselectedAt,
   linkRegions,
   linkValues,
@@ -1126,17 +1183,22 @@ function EditingView({
   onToggleTourOnSite: (t: EditorTour) => void
   onRemoveTour: (t: EditorTour) => void
   onReorderTour: (fromId: string, toId: string) => void
+  /** Drag a project card onto another — reorders the whole catalog (manual mode). */
+  onReorderProject: (fromKey: string, toKey: string) => void
   components: ManifestComponent[]
   assetBudgets?: AssetBudgets
   showGallery: boolean
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onRemoveLink: (l: EditorLink) => void
   onReorderLink: (fromId: string, toId: string) => void
-  onRemoveMerch: (m: EditorMerch) => void
+  /** Open one product full-panel (the merch grid's Edit pencil). Remove lives there. */
+  onEditMerch: (m: EditorMerch) => void
   styleRegions: ManifestStyleRegion[]
   styleValues: Record<string, string>
   styleOptions?: EditorStyleOptions
   selectedStyle: string | null
+  /** The frame-clicked region's live measurements (bridge 0.25.0). */
+  styleMeasured?: RegionMeasurements
   deselectedAt: number
   linkRegions: ManifestLinkRegion[]
   linkValues: Record<string, string>
@@ -1271,12 +1333,19 @@ function EditingView({
             onFocus={onFocus}
           />
         ) : isMerch ? (
-          <MerchTools merch={merch} artistId={artistId} onRemove={onRemoveMerch} />
+          <MerchTools
+            merch={merch}
+            artistId={artistId}
+            onEdit={onEditMerch}
+            focusedKey={focusedKey}
+            onFocus={onFocus}
+          />
         ) : isMusic ? (
           <MusicTools
             releases={releases}
             artistId={artistId}
             onToggleOnSite={onToggleProjectOnSite}
+            onReorder={onReorderProject}
             focusedKey={focusedKey}
             onFocus={onFocus}
           />
@@ -1286,6 +1355,7 @@ function EditingView({
             values={styleValues}
             options={styleOptions}
             selected={selectedStyle}
+            measured={styleMeasured}
             collapseAt={deselectedAt}
             artistId={artistId}
             onApplyStyle={onApplyStyle}

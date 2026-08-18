@@ -134,7 +134,7 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   // `date` became nullable in 20260716120000. `required` here only governs which
   // columns are never cleared to null on edit, so an empty list lets date be cleared.
   tour_date: { fields: ['date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'is_past'], required: [] },
-  merch: { fields: ['title', 'image_url', 'price', 'url'], required: ['title'] },
+  merch: { fields: ['title', 'image_url', 'price', 'url', 'in_stock'], required: ['title'] },
   link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
   // Manual video adds set provider + a normalized embed_url (validated by the
   // add action via embedInfo); the generic update touches title/sort_order.
@@ -202,7 +202,10 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   },
   merch: {
     table: 'merch',
-    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'created_at'],
+    // in_stock (20260818130000): content-level stock state — a sold-out item stays on
+    // the site, rendered sold out. Rides the snapshot wholesale, no SQL change (the
+    // `role` precedent on links).
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'created_at'],
     orderBy: ['created_at'],
   },
   link: {

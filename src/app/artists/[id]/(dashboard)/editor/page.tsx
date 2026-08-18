@@ -230,6 +230,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     // Like videos: a new/imported product lands off-site (INSERT_OFF_SITE) and is
     // chosen + published on the Merch page.
     onSite: (r.on_site as boolean | null) ?? false,
+    inStock: (r.in_stock as boolean | null) ?? true,
   }))
 
   // The Music panel lists PROJECTS, not songs, newest-first: songs grouped by their PARENT
@@ -244,6 +245,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       release_type: (t.release_type as string | null) ?? null,
       title: (t.title as string | null) ?? null,
       on_site: (t.on_site as boolean | null) ?? false,
+      sort_order: (t.sort_order as number | null) ?? null,
     })),
     (rid) => {
       const r = releaseById.get(rid)

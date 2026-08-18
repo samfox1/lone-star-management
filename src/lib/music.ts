@@ -84,6 +84,9 @@ export type ProjectTrack = {
   /** Fallback display title for a standalone song (no parent release to name it). */
   title: string | null
   on_site: boolean | null
+  /** The library position — the Music panel's drag order. Optional so older callers
+   *  (and tests) that never number tracks keep the date sort below. */
+  sort_order?: number | null
 }
 export type ReleaseMeta = {
   title: string | null
@@ -104,7 +107,7 @@ export function groupTracksIntoProjects(
   tracks: ProjectTrack[],
   releaseById: (id: string) => ReleaseMeta | undefined,
 ): MusicProject[] {
-  type G = { key: string; releaseId: string | null; type: string; title: string | null; ids: string[]; anyOnSite: boolean }
+  type G = { key: string; releaseId: string | null; type: string; title: string | null; ids: string[]; anyOnSite: boolean; minSort: number }
   const groups = new Map<string, G>()
   for (const t of tracks) {
     // The parent release groups; a parent-less song is its own project. The two key
@@ -112,8 +115,9 @@ export function groupTracksIntoProjects(
     const key = t.release_id ? `release:${t.release_id}` : `track:${t.id}`
     const g =
       groups.get(key) ??
-      { key, releaseId: t.release_id ?? null, type: t.release_type ?? 'single', title: t.title ?? null, ids: [], anyOnSite: false }
+      { key, releaseId: t.release_id ?? null, type: t.release_type ?? 'single', title: t.title ?? null, ids: [], anyOnSite: false, minSort: Number.MAX_SAFE_INTEGER }
     g.ids.push(t.id)
+    g.minSort = Math.min(g.minSort, t.sort_order ?? 0)
     // A null on_site is OFF here. This is the OPPOSITE of every SQL door, which does
     // `coalesce(on_site, true)` — a published snapshot whose live row is gone must keep
     // serving there, whereas the panel must never claim a song is live when it has no
@@ -123,7 +127,16 @@ export function groupTracksIntoProjects(
     groups.set(key, g)
   }
 
-  return [...groups.values()]
+  // MANUAL MODE, the tour-dates rule (2026-08-18): a drag in the editor's Music panel
+  // renumbers every track, so DISTINCT project minimums mean the manager ordered them —
+  // their order IS the order. A never-dragged catalog (synced rows all sort_order 0,
+  // or one project) keeps the newest-first date sort below.
+  const mins = [...groups.values()].map((g) => g.minSort)
+  const manual = new Set(mins).size > 1
+  const ordered = manual
+    ? [...groups.values()].sort((a, b) => a.minSort - b.minSort)
+    : [...groups.values()]
+  return ordered
     .map((g) => {
       const r = g.releaseId ? releaseById(g.releaseId) : undefined
       return {
@@ -136,6 +149,7 @@ export function groupTracksIntoProjects(
       }
     })
     .sort((a, b) => {
+      if (manual) return 0 // dragged order already applied above; keep it stable
       // Newest first; a project with no date sorts last (a stable, if arbitrary, tail).
       if (!a.releaseDate && !b.releaseDate) return 0
       if (!a.releaseDate) return 1

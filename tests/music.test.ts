@@ -171,6 +171,33 @@ describe('groupTracksIntoProjects', () => {
     expect(p.map((x) => x.title)).toEqual(['You Were There', 'Heatwaves & Horizons', 'OutWest', 'd'])
   })
 
+  it('CRITICAL: MANUAL MODE — distinct sort_orders beat the date sort (the dragged order rules)', () => {
+    // Sam, 2026-08-18: a drag in the Music panel renumbers every track; from then on the
+    // manager's order IS the order. relOut (older) deliberately numbered FIRST so a pass
+    // under date sorting is impossible.
+    const p = groupTracksIntoProjects(
+      [
+        { ...ptrk('a', 'relOut'), sort_order: 0 },
+        { ...ptrk('b', 'relYou'), sort_order: 1 },
+        { ...ptrk('c', 'relHeat'), sort_order: 2 },
+      ],
+      lookup,
+    )
+    expect(p.map((x) => x.title)).toEqual(['OutWest', 'You Were There', 'Heatwaves & Horizons'])
+  })
+
+  it('a NEVER-DRAGGED catalog (all sort_orders tie at 0, the synced default) keeps newest-first', () => {
+    const p = groupTracksIntoProjects(
+      [
+        { ...ptrk('a', 'relOut'), sort_order: 0 },
+        { ...ptrk('b', 'relYou'), sort_order: 0 },
+        { ...ptrk('c', 'relHeat'), sort_order: 0 },
+      ],
+      lookup,
+    )
+    expect(p.map((x) => x.title)).toEqual(['You Were There', 'Heatwaves & Horizons', 'OutWest'])
+  })
+
   it('a project is on-site iff ANY of its songs is', () => {
     const p = groupTracksIntoProjects([ptrk('a', 'relOut', 'ep', false), ptrk('b', 'relOut', 'ep', true)], lookup)
     expect(p.find((x) => x.title === 'OutWest')!.anyOnSite).toBe(true)

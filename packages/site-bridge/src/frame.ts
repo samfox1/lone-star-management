@@ -43,6 +43,7 @@ import {
   isEditorMessage,
   type EditorMessage,
   type Rect,
+  type RegionMeasurements,
   type SelectTarget,
   type FrameMode,
 } from "./protocol";
@@ -161,6 +162,34 @@ export function targetOf(marked: Element): SelectTarget | null {
 function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect();
   return { x: r.x, y: r.y, width: r.width, height: r.height };
+}
+
+/**
+ * What the element actually renders, read at click time (protocol.RegionMeasurements —
+ * see its docblock for why the class-string guess kept failing). Read from the LIVE
+ * layout, so phone view measures phone reality for free: the frame is already rendering
+ * at the phone width when the editor is in phone view.
+ */
+function measureOf(el: Element): RegionMeasurements {
+  const cs = getComputedStyle(el);
+  const px = (v: string): number | null => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const fontSizePx = px(cs.fontSize) ?? 16;
+  const child = el.firstElementChild;
+  return {
+    fontSizePx,
+    lineHeightPx: cs.lineHeight === "normal" ? null : px(cs.lineHeight),
+    // 'normal' IS zero for letter-spacing — report the truth, not a hole.
+    letterSpacingPx: cs.letterSpacing === "normal" ? 0 : (px(cs.letterSpacing) ?? 0),
+    padTopPx: px(cs.paddingTop) ?? 0,
+    padBottomPx: px(cs.paddingBottom) ?? 0,
+    padLeftPx: px(cs.paddingLeft) ?? 0,
+    padRightPx: px(cs.paddingRight) ?? 0,
+    gapPx: px(cs.columnGap) ?? px(cs.rowGap),
+    childWidthPx: child ? child.getBoundingClientRect().width || null : null,
+  };
 }
 
 
@@ -536,7 +565,7 @@ export function mountFrameBridge(options: {
     e.stopPropagation();
     e.stopImmediatePropagation();
     const sel = targetOf(marked);
-    if (sel) post(stamp({ type: "select", target: sel, rect: rectOf(marked) }));
+    if (sel) post(stamp({ type: "select", target: sel, rect: rectOf(marked), measured: measureOf(marked) }));
   };
 
   /**

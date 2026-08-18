@@ -4,6 +4,7 @@ import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
 import { groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { mergeStyle } from '@samfox1/site-bridge'
+import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import {
   applyStyleValue,
   deltaFromEffective,
@@ -35,6 +36,7 @@ export function StyleControlRow({
   onChange,
   swatches,
   palette,
+  measured,
 }: {
   regionLabel: string
   control: StyleControl
@@ -45,6 +47,9 @@ export function StyleControlRow({
   /** The site's declared palette, so an UNSET colour can show what the element actually
    *  inherits instead of a "nothing here" mark. */
   palette?: SiteStyleOptions
+  /** What the clicked element actually renders (bridge 0.25.0) — sliders park on it
+   *  when the class string declares nothing. Only the frame-selected region has one. */
+  measured?: RegionMeasurements
 }) {
   const current = readStyleValue(control, cls)
   const aria = `${regionLabel} ${control.label}`
@@ -96,7 +101,7 @@ export function StyleControlRow({
     // resolve to a number rests in the middle.
     const steps = sliderSteps(control)
     const canReset = steps.length !== control.steps.length
-    const { idx, label, exact } = sliderIndex(control, current)
+    const { idx, label, exact } = sliderIndex(control, current, measured)
     return (
       <div className="py-1">
         <div className="flex items-center justify-between">
@@ -253,6 +258,7 @@ export function StyleTools({
   values,
   options,
   selected,
+  measured,
   collapseAt = 0,
   artistId,
   onApplyStyle,
@@ -261,6 +267,8 @@ export function StyleTools({
   values: Record<string, string>
   options?: SiteStyleOptions
   selected: string | null
+  /** The frame-clicked region's live measurements — parks its sliders on reality. */
+  measured?: RegionMeasurements
   /** Ticks when a preview click hit nothing editable — collapse the open row. */
   collapseAt?: number
   artistId: string
@@ -411,6 +419,9 @@ export function StyleTools({
                         cls={cls}
                         swatches={siteSwatches(options, values)}
                         palette={options}
+                        // Only the region the manager CLICKED has a measurement — a row
+                        // opened by hand had no click to measure from.
+                        measured={selected === r.key ? measured : undefined}
                         onChange={(v) => edit(r.key, applyStyleValue(cls, control, v, r.base ?? ''), r.base ?? '')}
                       />
                     ))}

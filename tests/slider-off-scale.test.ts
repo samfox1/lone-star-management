@@ -182,3 +182,71 @@ describe('a base wearing SEVERAL owned tokens measures the LARGEST (Sam, 2026-08
     expect(readStyleValue(c, 'px-6 py-16 pad-[8px]')).toBe('pad-[8px]')
   })
 })
+
+/**
+ * MEASURED PARKING (bridge 0.25.0). The class-string rules above still leave one hole:
+ * a value living in site CSS, a breakpoint, or the browser default declares NOTHING in
+ * the class string, so the handle rested mid-scale and the first drag lied. Sam hit it
+ * six times; the last was Line spacing (2026-08-18: "i moved right and it got smaller").
+ * The frame now measures the clicked element (getComputedStyle) and the select carries
+ * it — a slider with no owned token parks on the MEASURED value instead of the middle.
+ */
+describe('sliderIndex — measured parking (bridge 0.25.0)', () => {
+  const MEASURED = {
+    fontSizePx: 16,
+    lineHeightPx: 27.2, // 1.7 ratio — atlas's bio, the exact region Sam dragged
+    letterSpacingPx: 0.64, // 0.04em
+    padTopPx: 64,
+    padBottomPx: 64,
+    padLeftPx: 24,
+    padRightPx: 24,
+    gapPx: 24,
+    childWidthPx: 22,
+  }
+
+  it('CRITICAL: Line spacing with NO owned token parks at the measured ratio — right drags LOOSER', () => {
+    const c = textControl('leading')
+    const steps = sliderSteps(c)
+    const { idx, exact } = sliderIndex(c, '', MEASURED)
+    expect(exact).toBe(false)
+    // Parked at the nearest step to 1.7, and the next notch right is LOOSER than what
+    // is on screen — the property every parking fix exists to guarantee.
+    expect(c.rank!(steps[idx].value)!).toBeGreaterThan(1.4)
+    if (idx < steps.length - 1) {
+      expect(c.rank!(steps[idx + 1].value)!).toBeGreaterThan(1.7)
+    }
+  })
+
+  it('Padding with no owned token parks at the measured inset', () => {
+    const region = { key: 'footer', label: 'Footer', base: 'grid text-center', scope: 'chrome' as const }
+    const c = controlsForRegion(buildStyleControls(), region).find((x) => x.id === 'pad')!
+    const steps = sliderSteps(c)
+    const { idx } = sliderIndex(c, '', MEASURED)
+    expect(c.rank!(steps[idx].value)!).toBeGreaterThanOrEqual(48)
+  })
+
+  it('a STORED value still beats the measurement', () => {
+    const c = textControl('leading')
+    const withToken = sliderIndex(c, 'lead-[1.25]', MEASURED)
+    const steps = sliderSteps(c)
+    expect(c.rank!(steps[withToken.idx].value)).toBe(1.25)
+  })
+
+  it('no measurement (an older frame) keeps the old middle-Default fallback', () => {
+    const c = textControl('leading')
+    const { idx, label } = sliderIndex(c, '')
+    expect(idx).toBe(Math.floor((sliderSteps(c).length - 1) / 2))
+    expect(label).toBe('Default')
+  })
+
+  it("a phone twin parks from the same measurement — the frame's phone layout IS phone reality", () => {
+    const phone = buildTextItemStyleControls({
+      ...OPTIONS,
+      styleVars: true, textVars: true, mobileVars: true, mobileTextVars: true, mobileView: true,
+    } as Parameters<typeof buildTextItemStyleControls>[0]).find((c) => c.id === 'leading')!
+    const steps = sliderSteps(phone)
+    const { idx } = sliderIndex(phone, '', MEASURED)
+    // Same rank space as the desktop control (a ratio), so the same park point.
+    expect(phone.rank!(steps[idx].value)!).toBeGreaterThan(1.4)
+  })
+})

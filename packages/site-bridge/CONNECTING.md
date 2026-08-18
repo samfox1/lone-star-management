@@ -358,6 +358,17 @@ full-string rows keep the old replace semantics and are rewritten as deltas the 
 time each is edited. `familyOf` in `@samfox1/site-bridge/styles` is the shared family
 table; the editor's diff and the renderer both read it, so they cannot disagree.
 
+### Measured selects (0.25.0)
+
+A click in the edit frame now carries what the clicked element **actually renders** —
+`getComputedStyle` at select time (font size, line-height, letter-spacing, paddings,
+gap, first-child width) — so the editor's sliders park on reality even when the value
+lives in your CSS, a breakpoint, or the browser default. Nothing for a site to do:
+the frame half of this package measures automatically. Older frames simply don't send
+it, and the editor falls back to reading the class string as before. (This closes the
+recurring "slider opens mid-scale and the first drag shrinks things" class — six
+sightings, from icon size to line spacing.)
+
 ## Known rough edges
 
 Written down so nobody rediscovers them.

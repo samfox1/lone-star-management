@@ -22,6 +22,7 @@ import { bridgeSupportsDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileTex
 export type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import type { ManifestStyleRegion, StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import { DELTA_SENTINEL, TEXT_SIZES, familyOf } from '@samfox1/site-bridge/styles'
+import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 // The option TABLES live in the package's vocabulary module (2026-08-07 deepening):
 // they generate tokens.css, which is append-only contract, so the vocabulary lives
 // beside the sheet it produces. This module adds the editor machinery on top.
@@ -982,9 +983,31 @@ export function sliderSteps(control: StyleControl): StyleOption[] {
  * `exact` is what the caller should gate a Reset control on: nudging an off-scale value
  * is a real change, but there is nothing of the manager's own to clear yet.
  */
+/**
+ * MEASURED PARKING (bridge 0.25.0): a select from the frame carries what the element
+ * actually renders (getComputedStyle), keyed here by control id into that control's
+ * rank space. This is the fallback for the case no class-string reader can win — the
+ * value lives in site CSS, a breakpoint, or the browser default, so `current` is ''
+ * and the handle used to rest mid-scale (six sliders bit on exactly this; the last was
+ * Line spacing, Sam 2026-08-18: "i moved right and it got smaller").
+ *
+ * Phone twins share ids AND rank spaces with their desktop originals (size rem, pad px,
+ * leading ratio, tracking em), and the frame measures the live layout — which in phone
+ * view IS the phone rendering — so one map serves both.
+ */
+const MEASURE_BY_ID: Record<string, (m: RegionMeasurements) => number | null> = {
+  size: (m) => m.fontSizePx / 16, // rem — textSizeRank / sizeSmRank space
+  leading: (m) => (m.lineHeightPx != null && m.fontSizePx > 0 ? m.lineHeightPx / m.fontSizePx : null),
+  tracking: (m) => (m.fontSizePx > 0 ? m.letterSpacingPx / m.fontSizePx : null), // em
+  pad: (m) => m.padTopPx,
+  gap: (m) => m.gapPx,
+  iconSize: (m) => m.childWidthPx,
+}
+
 export function sliderIndex(
   control: StyleControl,
   current: string,
+  measured?: RegionMeasurements,
 ): { idx: number; label: string; exact: boolean } {
   const steps = sliderSteps(control)
   const middle = Math.floor((steps.length - 1) / 2)
@@ -994,7 +1017,10 @@ export function sliderIndex(
   if (exact >= 0) return { idx: exact, label: steps[exact].label, exact: true }
 
   const rank = control.rank
-  const target = current && rank ? rank(current) : null
+  const target =
+    (current && rank ? rank(current) : null) ??
+    // Nothing stored — park on what the page MEASURABLY renders, when the frame told us.
+    (measured ? (MEASURE_BY_ID[control.id]?.(measured) ?? null) : null)
   if (target != null) {
     let best = -1
     let bestDistance = Infinity
