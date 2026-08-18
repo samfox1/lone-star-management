@@ -83,15 +83,24 @@ describe('item sliders park on measured reality', () => {
     expect(c.kind === 'slider' && c.rank!(steps[idx].value)).toBe(12)
   })
 
-  it("an OLDER frame (no item fields) keeps the old '' behaviour — the 100% step", () => {
-    // Opacity's scale encodes 100% as the empty class, so with no measurement an unset
-    // item parks fully opaque — true for a normal image, and exactly the pre-0.25.2 rule.
+  it("an OLDER frame (no item fields) falls back to the middle — never a claimed value", () => {
+    // 100% stopped being the '' step (0.25.3): '' means NOTHING STORED, and with no
+    // measurement either, mid-scale is the only honest park.
     const c = item('opacity')
     const { opacity: _o, transformScale: _t, borderWidthPx: _b, radiusPx: _r, ...old } = MEASURED
+    const { idx, label } = sliderIndex(c, '', old)
+    expect(idx).toBe(Math.floor((sliderSteps(c).length - 1) / 2))
+    expect(label).toBe('Default')
+  })
+
+  it('CRITICAL: choosing 100% WRITES opacity-100 — it no longer removes the token', () => {
+    // Sam, 2026-08-18: "Instead of transparency reaching 100%, it jumps back down to
+    // its 40% begning" — the '' encoding removed the class and the element fell back
+    // to its own 40%. Every step is a real token now.
+    const c = item('opacity')
     const steps = sliderSteps(c)
-    const { idx, exact } = sliderIndex(c, '', old)
-    expect(exact).toBe(true)
-    expect(steps[idx].label).toBe('100%')
+    expect(steps[steps.length - 1]).toEqual({ value: 'opacity-100', label: '100%' })
+    expect(steps.every((s) => s.value !== '')).toBe(true)
   })
 
   it('a STORED value still beats the measurement', () => {

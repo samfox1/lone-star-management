@@ -485,7 +485,9 @@ describe('buildItemStyleControls (per-image/video)', () => {
     if (size.kind !== 'slider') throw new Error('size should be a slider')
     expect(size.steps).toHaveLength(31) // (175-25)/5 + 1
     expect(size.steps[0]).toEqual({ value: 'scale-25', label: '25%' })
-    expect(size.steps[15]).toEqual({ value: '', label: '100%' }) // 100% → no class
+    // 100% is a REAL token since 0.25.3: the '' encoding removed the class, and an
+    // element whose OWN value isn't 100% snapped back to it (the atlas backdrop's 40%).
+    expect(size.steps[15]).toEqual({ value: 'scale-100', label: '100%' })
     expect(size.steps[17]).toEqual({ value: 'scale-110', label: '110%' })
     expect(size.steps[30]).toEqual({ value: 'scale-175', label: '175%' })
   })
@@ -596,20 +598,23 @@ describe('slider seeding round-trips (skeen brief 2026-08-03)', () => {
     }
   })
 
-  it('an off-scale or unparseable owned token seeds the DEFAULT step', () => {
+  it('an off-scale owned token parks at the NEAREST step (rank), never the max', () => {
+    // The old rule seeded the '' default step; since the parking work (0.25.x) an
+    // off-scale value MEASURES via the control's rank and sits beside its real value —
+    // the same guarantee every slider carries (tests/slider-off-scale.test.ts).
     const byId = Object.fromEntries(buildItemStyleControls().map((c) => [c.id, c]))
-    // scale-37 is owned (scale-*) but not a step; opacity-33 likewise. Each must land on
-    // its default. (For opacity the default 100% IS the right end — that's the one
-    // control whose default legitimately sits at max.)
-    for (const [id, cls] of [['size', 'scale-37'], ['opacity', 'opacity-33'], ['radius', 'rounded-[999px]']] as const) {
+    for (const [id, cls, nearest] of [
+      ['size', 'scale-37', 'scale-35'],
+      ['opacity', 'opacity-33', 'opacity-35'],
+    ] as const) {
       const c = byId[id]
       if (c.kind !== 'slider') throw new Error('not a slider')
-      expect(sliderIdx(c, cls)).toBe(c.steps.findIndex((s) => s.value === ''))
+      expect(c.steps[sliderIndex(c, readStyleValue(c, cls)).idx].value).toBe(nearest)
     }
-    // For the size scale specifically, default is the middle (100%) — never the max.
+    // Never parked at the max from a small value — the "one notch right shrinks" trap.
     const size = byId.size
     if (size.kind !== 'slider') throw new Error('not a slider')
-    expect(sliderIdx(size, 'scale-37')).not.toBe(size.steps.length - 1)
+    expect(sliderIndex(size, 'scale-37').idx).not.toBe(size.steps.length - 1)
   })
 })
 

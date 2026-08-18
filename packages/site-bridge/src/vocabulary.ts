@@ -99,7 +99,11 @@ export const ITALIC_TOGGLE_CLASS = "italic";
 function pctSteps(prefix: string, from: number, to: number, step: number): StyleOption[] {
   const out: StyleOption[] = []
   for (let n = from; n <= to; n += step) {
-    out.push({ value: n === 100 ? '' : `${prefix}-${n}`, label: `${n}%` })
+    // 100 used to encode as '' ("no class"), which is only the same thing when the
+    // element's OWN value is 100%. Atlas's backdrop renders 40% from its code, so
+    // choosing 100% REMOVED the token and snapped the image back to 40 (Sam,
+    // 2026-08-18). Every step is a real token now; both lifts read `\d{1,3}`.
+    out.push({ value: `${prefix}-${n}`, label: `${n}%` })
   }
   return out
 }
