@@ -7,9 +7,8 @@ import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mergeStyle } from '@samfox1/site-bridge'
 import {
   applyStyleValue,
-  deltaFromEffective,
   buildTextItemStyleControls,
-  sameClasses,
+  storableStyle,
 } from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from './inspector-types'
 import { FIELD, SaveLine, type SaveStatus } from './inspector-shared'
@@ -162,12 +161,7 @@ export function TextFieldEditor({
                   // Delta era: store only the changed families (an unchanged string
                   // diffs to '' and the row is deleted). Older sites keep the full
                   // string with the base-equality delete.
-                  onStyle(
-                    region.key,
-                    (styleOptions as EditorStyleOptions | undefined)?.deltaStyles
-                      ? deltaFromEffective(region.base ?? '', next)
-                      : sameClasses(next, region.base ?? '') ? '' : next,
-                  )
+                  onStyle(region.key, storableStyle(styleOptions, region.base ?? '', next))
                 }}
               />
             ))}

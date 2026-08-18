@@ -15,7 +15,7 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsDeltas, bridgeSupportsItemDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -301,6 +301,9 @@ export type EditorStyleOptions = SiteStyleOptions & {
   mobileItemVars?: boolean
   /** The site renders delta overrides (0.24+), so saves store only changed families. */
   deltaStyles?: boolean
+  /** The site's window/inner splitter re-wears the sentinel (0.25.4), so PER-ITEM saves
+   *  may store deltas too. */
+  deltaItemStyles?: boolean
   /** The editor is currently in PHONE view. With the vars flags, controls become
    *  phone-scoped: same control, writing the `…sm-[…]` twin. */
   mobileView?: boolean
@@ -325,7 +328,46 @@ export function withStyleVars(
     mobileTextVars: bridgeSupportsMobileText(bridgeVersion),
     mobileItemVars: bridgeSupportsMobileItem(bridgeVersion),
     deltaStyles: bridgeSupportsDeltas(bridgeVersion),
+    deltaItemStyles: bridgeSupportsItemDeltas(bridgeVersion),
   }
+}
+
+/**
+ * What a REGION save STORES (2026-08-18 consolidation — this expression lived
+ * copy-pasted in style-tools and text-field-editor): a delta on 0.24+ sites, else the
+ * legacy full string with the base-equality delete.
+ */
+export function storableStyle(
+  opts: SiteStyleOptions | undefined,
+  base: string,
+  effective: string,
+): string {
+  return (opts as EditorStyleOptions | undefined)?.deltaStyles
+    ? deltaFromEffective(base, effective)
+    : sameClasses(effective, base)
+      ? ''
+      : effective
+}
+
+/**
+ * What an ITEM save stores — items joined the delta model on 0.25.4 sites (deliberate,
+ * not accidental: an item's base lives in SITE code, so a raw string freezes whatever
+ * the card looked like on the day of the edit; the delta stores only the manager's
+ * changes and survives a site redesign). An item editor works in plain changed tokens;
+ * the sentinel is worn only in storage.
+ */
+export function toItemStored(opts: SiteStyleOptions | undefined, classes: string): string {
+  const c = classes.trim()
+  if (!c) return ''
+  return (opts as EditorStyleOptions | undefined)?.deltaItemStyles ? `${DELTA_SENTINEL} ${c}` : c
+}
+
+/** A stored item row → the editor's working tokens (strips the delta sentinel). */
+export function fromItemStored(stored: string): string {
+  return stored
+    .split(/\s+/)
+    .filter((t) => t && t !== DELTA_SENTINEL)
+    .join(' ')
 }
 /** Both shapes — the value token this control now writes, and every class shape a region
  *  styled before the migration still stores. */

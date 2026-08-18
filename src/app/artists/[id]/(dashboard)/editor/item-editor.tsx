@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { PortalModal } from '@/components/ui/portal-modal'
-import { applyStyleValue, buildItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
+import { applyStyleValue, buildItemStyleControls, fromItemStored, toItemStored, type StyleControl } from '@/lib/site-editor/style-controls'
 import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
@@ -86,10 +86,15 @@ export function ItemEditor({
    *  sliders with nothing stored park on it instead of mid-scale. */
   measured?: RegionMeasurements
 }) {
-  const [classes, setClasses] = useState(initialClasses)
+  // The editor WORKS in plain changed tokens; a stored 0.25.4 delta row wears the
+  // sentinel only in storage (fromItemStored strips it, toItemStored puts it back).
+  // Items joined the delta model deliberately (Sam, 2026-08-18): a raw string freezes
+  // whatever the site's card looked like on the day of the edit, and connected sites
+  // redeploy on their own schedules.
+  const [classes, setClasses] = useState(() => fromItemStored(initialClasses))
   /** What is actually persisted — Revert's target, and what `dirty` compares against.
    *  Starts at the stored value and moves only when Save succeeds. */
-  const [savedClasses, setSavedClasses] = useState(initialClasses)
+  const [savedClasses, setSavedClasses] = useState(() => fromItemStored(initialClasses))
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [picking, setPicking] = useState(false)
   const [confirmExit, setConfirmExit] = useState(false)
@@ -107,7 +112,7 @@ export function ItemEditor({
 
   async function save(): Promise<boolean> {
     setStatus('saving')
-    const res = await saveEditorStyleAction(artistId, styleKey, classes)
+    const res = await saveEditorStyleAction(artistId, styleKey, toItemStored(palette, classes))
     if (!res.ok) {
       setStatus('error')
       return false

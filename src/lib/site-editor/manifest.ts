@@ -126,6 +126,16 @@ export function bridgeSupportsDeltas(siteVersion: string | undefined): boolean {
   return !bridgeOutdated(siteVersion, DELTA_SINCE)
 }
 
+/** PER-ITEM deltas: the window/inner splitter re-wears the sentinel on both halves
+ *  from 0.25.4; an older applier would render a delta item row's window half with
+ *  replace semantics and blow away the card frame. */
+const ITEM_DELTA_SINCE = '0.25.4'
+
+export function bridgeSupportsItemDeltas(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, ITEM_DELTA_SINCE)
+}
+
 /** The site_role a media row carries when placed in `component` instance `n`, slot `slot`. */
 export function componentSlotRole(component: string, n: number, slot: string): string {
   return `${component}_${n}_${slot}`

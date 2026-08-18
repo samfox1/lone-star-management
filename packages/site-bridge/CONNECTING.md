@@ -358,6 +358,12 @@ full-string rows keep the old replace semantics and are rewritten as deltas the 
 time each is edited. `familyOf` in `@samfox1/site-bridge/styles` is the shared family
 table; the editor's diff and the renderer both read it, so they cannot disagree.
 
+PER-ITEM overrides joined the model in **0.25.4**: an item row stores the sentinel plus
+the manager's tokens, and `splitItemOverlay` re-wears the sentinel on both the window
+and inner halves — so a site can redesign its cards and every stored item tweak still
+applies. Legacy raw item rows keep replace semantics and self-upgrade on next edit,
+exactly like regions did in 0.24.
+
 ### Measured selects (0.25.0)
 
 A click in the edit frame now carries what the clicked element **actually renders** —

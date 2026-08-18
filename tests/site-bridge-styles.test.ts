@@ -361,6 +361,22 @@ describe("splitItemOverlay — window vs item", () => {
   it("splits an empty overlay into two empty halves", () => {
     expect(splitItemOverlay("")).toEqual({ window: "", inner: "" });
   });
+
+  it("CRITICAL: a DELTA overlay re-wears the sentinel on BOTH non-empty halves (0.25.4)", () => {
+    // Items joined the delta model; one stored sentinel must become delta semantics on
+    // each element, or the window half would REPLACE the card frame's base.
+    expect(splitItemOverlay("lse-delta opacity-50 rounded-[24px]")).toEqual({
+      window: "lse-delta rounded-[24px]",
+      inner: "lse-delta opacity-50",
+    });
+  });
+
+  it("a delta overlay with changes for only one element leaves the other at PURE BASE", () => {
+    expect(splitItemOverlay("lse-delta opacity-50")).toEqual({
+      window: "",
+      inner: "lse-delta opacity-50",
+    });
+  });
 });
 
 describe("splitItemProps — the polaroid photo's two elements", () => {

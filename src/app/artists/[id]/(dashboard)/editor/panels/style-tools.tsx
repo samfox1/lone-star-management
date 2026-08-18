@@ -7,9 +7,8 @@ import { mergeStyle } from '@samfox1/site-bridge'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import {
   applyStyleValue,
-  deltaFromEffective,
-  type EditorStyleOptions,
   sameClasses,
+  storableStyle,
   buildStyleControls,
   controlsForRegion,
   readStyleValue,
@@ -338,9 +337,7 @@ export function StyleTools({
     // stops freezing the region, the frame renders base+delta live, and an unchanged
     // string still diffs to '' so the row is deleted, never pinned. Older sites keep
     // the full string with the base-equality delete (skeen brief, 2026-08-03).
-    const toSave = (options as EditorStyleOptions | undefined)?.deltaStyles
-      ? deltaFromEffective(base, raw)
-      : sameClasses(raw, base) ? '' : raw
+    const toSave = storableStyle(options, base, raw)
     // The hook validates with the SAME function the server uses, so the panel can't
     // claim "Saved" on a rejected write. Controls always emit clean utilities; only a
     // raw escape hatch could produce something invalid.

@@ -1075,12 +1075,20 @@ export function splitItemOverlay(override: string): {
   window: string;
   inner: string;
 } {
+  // A DELTA item row (0.25.4 — items joined the 0.24 model) carries ONE sentinel for
+  // the whole overlay; each non-empty half re-wears it so both elements resolve with
+  // delta semantics. An empty half stays '' — pure base, which is what "no changes for
+  // this element" means in both eras.
+  const delta = isDeltaOverride(override);
+  const tokens = override.split(/\s+/).filter(Boolean).filter((t) => t !== DELTA_SENTINEL);
   const win: string[] = [];
   const inner: string[] = [];
-  for (const token of override.split(/\s+/).filter(Boolean)) {
+  for (const token of tokens) {
     (WINDOW_TOKEN.test(token) ? win : inner).push(token);
   }
-  return { window: win.join(" "), inner: inner.join(" ") };
+  const dress = (half: string[]): string =>
+    half.length && delta ? [DELTA_SENTINEL, ...half].join(" ") : half.join(" ");
+  return { window: dress(win), inner: dress(inner) };
 }
 
 /**
