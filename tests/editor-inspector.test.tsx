@@ -277,13 +277,16 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
   }
 
-  it('opens the gallery as Horizontal + Vertical groups, each with an Add tile', () => {
+  it('opens the gallery as ONE Gallery section with an Add tile — no orientation split', () => {
+    // Sam, 2026-08-18: "the gallery images should be … under a section that says
+    // gallery. That is the name of the section they are associated with." Orientation
+    // is a fact about the FILE (the uploader measures it), not an organizing principle.
     openImages()
     expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
-    expect(screen.getByText('Horizontal')).toBeTruthy()
-    expect(screen.getByText('Vertical')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Add horizontal photo' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Add vertical photo' })).toBeTruthy()
+    expect(screen.getByText('Gallery')).toBeTruthy()
+    expect(screen.queryByText('Horizontal')).toBeNull()
+    expect(screen.queryByText('Vertical')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add photo' })).toBeTruthy()
   })
 
   it('shows only ON-SITE photos as cards (m1 horizontal, m3 vertical)', () => {
@@ -294,49 +297,51 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     expect(imgs.some((i) => i.src.includes('v-on.jpg'))).toBe(true)
   })
 
-  it('Add opens the picker over ONLY that orientation’s off-site photos + an uploader', () => {
+  it('Add opens the picker over EVERY off-site photo, both shapes, + an uploader', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Add horizontal photo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add photo' }))
     const dialog = screen.getByRole('dialog')
-    // A photo is horizontal OR vertical: the horizontal picker shows m2 only (m4 is
-    // vertical and must not appear here). Candidates are labelled by the group.
-    expect(within(dialog).getByRole('button', { name: /Horizontal 1/ })).toBeTruthy()
-    expect(within(dialog).queryByRole('button', { name: /Horizontal 2/ })).toBeNull()
+    // One library now: m2 (horizontal) AND m4 (vertical) are both candidates.
+    expect(within(dialog).getByRole('button', { name: /Photo 1/ })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: /Photo 2/ })).toBeTruthy()
     expect(within(dialog).getByRole('button', { name: 'upload horizontal photo' })).toBeTruthy()
   })
 
-  it('picking a library photo PLACES it (sets orientation + on the site)', () => {
+  it('CRITICAL: picking places a photo with its OWN measured shape, not a group default', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Add horizontal photo' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Horizontal 1/ })) // m2
+    fireEvent.click(screen.getByRole('button', { name: 'Add photo' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Photo 2/ })) // m4, vertical
+    expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm4', 'vertical')
+    fireEvent.click(screen.getByRole('button', { name: 'Add photo' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Photo 1/ })) // m2, horizontal
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal')
   })
 
   it('Edit opens the full-panel editor; Remove takes the photo off the site (never deletes)', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Edit horizontal photo 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
     // The whole panel is now the item editor, headed "Edit <label>".
-    expect(screen.getByRole('heading', { name: 'Edit Horizontal 1' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Edit Photo 1' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false)
     expect(deleteMock).not.toHaveBeenCalled()
   })
 
-  it('a legacy null-orientation on-site photo stays MANAGEABLE (shows in Horizontal, not vanished)', () => {
+  it('a legacy null-orientation on-site photo stays MANAGEABLE (in the Gallery, not vanished)', () => {
     // Regression: an untagged photo (legacy row / Drive import) that's live on the site
-    // must not disappear from the editor. It belongs to the Horizontal group until placed.
+    // must not disappear from the editor.
     renderInspector([
       { id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null, siteRole: null },
     ])
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     const imgs = Array.from(document.querySelectorAll('aside img')) as HTMLImageElement[]
     expect(imgs.some((i) => i.src.includes('legacy.jpg'))).toBe(true)
-    expect(screen.getByRole('button', { name: 'Edit horizontal photo 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Edit photo 1' })).toBeTruthy()
   })
 
-  it('Edit → Replace swaps within the group (old off, new placed)', () => {
+  it('Edit → Replace swaps (old off, new placed with its own shape)', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Edit horizontal photo 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
     // The item editor's picker labels candidates by filename (m2 = h-lib.jpg).
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /h-lib\.jpg/ }))
@@ -344,14 +349,14 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed
   })
 
-  it('uploading a horizontal photo adds it to the horizontal library (no placement)', () => {
+  it('uploading adds to the library (no placement)', () => {
     openImages()
-    fireEvent.click(screen.getByRole('button', { name: 'Add horizontal photo' }))
-    // Only m2 to start (Horizontal 1); no second horizontal candidate yet.
-    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: /Horizontal 2/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add photo' }))
+    // m2 + m4 to start; no third candidate yet.
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: /Photo 3/ })).toBeNull()
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'upload horizontal photo' }))
-    // The uploaded horizontal photo joins the horizontal library; nothing is placed.
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Horizontal 2/ })).toBeTruthy()
+    // The uploaded photo joins the library; nothing is placed.
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Photo 3/ })).toBeTruthy()
     expect(placePhotoMock).not.toHaveBeenCalled()
     expect(setOnSiteMock).not.toHaveBeenCalled()
   })
@@ -430,8 +435,8 @@ describe('EditorInspector — Images: image fields + two-way highlight', () => {
       showGallery: true,
       selectedRegion: { target: { kind: 'item', assetType: 'image', id: 'm1' }, nonce: 1 },
     })
-    // m1 (on-site horizontal) is the focused gallery card.
-    const card = screen.getByRole('button', { name: 'Select horizontal photo 1' })
+    // m1 (on-site) is the focused gallery card.
+    const card = screen.getByRole('button', { name: 'Select photo 1' })
     expect(card.getAttribute('aria-pressed')).toBe('true')
   })
 })
@@ -2312,10 +2317,31 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })
 
-  it('heads the wall "Custom slots" — where the artist arranges their own photos, not named cards', () => {
+  it('heads the wall with the COMPONENT LABEL — the section the slots dress (Sam, 2026-08-18)', () => {
     openImages(PHOTOS)
-    expect(screen.getByText('Custom slots')).toBeTruthy()
-    expect(screen.queryByText(/polaroids/i)).toBeNull()
+    expect(screen.getByText('Polaroid')).toBeTruthy()
+    expect(screen.queryByText('Custom slots')).toBeNull()
+  })
+
+  it('CRITICAL: a SINGLE-INSTANCE component names its tiles by SLOT LABEL, not "Slot n"', () => {
+    // Sam, 2026-08-18: "the about image should be in a slot in the images tab that says
+    // about image." Numbering is for repeated walls, where five identical frames have
+    // no better names; a one-off slot has one.
+    renderInspector([], {
+      components: [
+        { key: 'portrait', label: 'About', count: 1, slots: [{ key: 'photo', label: 'About image' }] },
+        { key: 'backdrop', label: 'Hero background', count: 1, slots: [
+          { key: 'desktop', label: 'Desktop (horizontal)' },
+          { key: 'mobile', label: 'Mobile (vertical)' },
+        ] },
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    expect(screen.getByText('About')).toBeTruthy() // the section header
+    expect(screen.getByRole('button', { name: 'About image' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Desktop (horizontal)' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Mobile (vertical)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Slot 1' })).toBeNull()
   })
 
   it('renders one flat numbered slot per image, across every instance — Slot 1 … Slot N', () => {

@@ -218,16 +218,19 @@ function ImageUploadModal({
   )
 }
 
-/* ── Custom slots: the artist's own photo arrangement (skeen's polaroids) ─────────────
+/* ── Component slots: the artist's own photo arrangement ──────────────────────────────
  * Where the artist arranges their own photos. The site declares the component and how many
- * images it renders (manifest.components: count × slots); the manager fills each one. NOT
- * boxed into named cards (Sam, 2026-07-28) — just a flat grid of "Slot 1 … Slot N", numbered
- * sequentially across every instance, so the wall reads as bare slots to fill.
+ * images it renders (manifest.components: count × slots); the manager fills each one.
+ *
+ * NAMED BY SECTION (Sam, 2026-08-18: "the about image should be in a slot in the images
+ * tab that says about image"): each component gets its own header — the component's LABEL,
+ * which is the page section it dresses — and a single-instance component's tiles carry
+ * their slot labels ("About image", "Desktop"). Only a REPEATED wall (count > 1, skeen's
+ * polaroids) numbers its tiles "Slot 1 … Slot N" (Sam, 2026-07-28 — five identical frames
+ * have no better names).
  *
  * A placed photo carries `media.site_role = <key>_<n>_<slot>`, which is exactly the field
- * key skeen already declares, so the two can't drift (tests/component-slots.test.ts). The
- * per-slot format hint (a caption wants a transparent PNG) rides on the slot and still
- * warns, but the visible label is just its number. */
+ * key skeen already declares, so the two can't drift (tests/component-slots.test.ts). */
 function ComponentTools({
   components,
   photos,
@@ -257,30 +260,35 @@ function ComponentTools({
     <div className="pb-2">
       {components.map((c) => {
         // Flatten every instance's slots into one sequential list: instance 1's slots,
-        // then instance 2's, … so numbering runs Slot 1 … Slot (count × slots).
+        // then instance 2's, … Each carries its display label: the slot's own label for
+        // a single-instance component, "Slot n" for a repeated wall.
+        const repeated = c.count > 1
         const slots = Array.from({ length: c.count }, (_, i) => i + 1).flatMap((n) =>
           c.slots.map((slot) => ({ slot, role: componentSlotRole(c.key, n, slot.key) })),
         )
         return (
           <div key={c.key}>
-            <GroupLabel>Custom slots</GroupLabel>
+            <GroupLabel>{c.label}</GroupLabel>
             <div className="grid grid-cols-3 gap-2 px-5 pt-1">
-              {slots.map(({ slot, role }, i) => (
-                <SlotTile
-                  key={role}
-                  index={i + 1}
-                  slot={slot}
-                  role={role}
-                  placed={placedByRole.get(role) ?? null}
-                  library={library}
-                  budget={budgetFor(assetBudgets, 'image', budgetSlotKey(role))}
-                  artistId={artistId}
-                  focused={focusedKey === selectTargetKey(fieldTarget(role))}
-                  onFocus={() => onFocus(fieldTarget(role))}
-                  onEdit={() => onEditItem({ type: 'imageSlot', role, label: `Slot ${i + 1}` })}
-                  onPlaceSlot={onPlaceSlot}
-                />
-              ))}
+              {slots.map(({ slot, role }, i) => {
+                const label = repeated ? `Slot ${i + 1}` : slot.label
+                return (
+                  <SlotTile
+                    key={role}
+                    label={label}
+                    slot={slot}
+                    role={role}
+                    placed={placedByRole.get(role) ?? null}
+                    library={library}
+                    budget={budgetFor(assetBudgets, 'image', budgetSlotKey(role))}
+                    artistId={artistId}
+                    focused={focusedKey === selectTargetKey(fieldTarget(role))}
+                    onFocus={() => onFocus(fieldTarget(role))}
+                    onEdit={() => onEditItem({ type: 'imageSlot', role, label })}
+                    onPlaceSlot={onPlaceSlot}
+                  />
+                )
+              })}
             </div>
           </div>
         )
@@ -292,7 +300,7 @@ function ComponentTools({
 /** One numbered slot: a drop target, or a placed thumbnail with Select / Replace / Remove
  *  and the two-way highlight ring. Owns its own picker. */
 function SlotTile({
-  index,
+  label,
   slot,
   role,
   placed,
@@ -304,7 +312,8 @@ function SlotTile({
   onEdit,
   onPlaceSlot,
 }: {
-  index: number
+  /** The tile's display name: the slot's own label, or "Slot n" on a repeated wall. */
+  label: string
   slot: ComponentSlot
   role: string
   /** The photo holding this slot, or null when it's empty. */
@@ -321,7 +330,6 @@ function SlotTile({
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
 }) {
   const [picking, setPicking] = useState(false)
-  const label = `Slot ${index}`
   const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
 
   return (
@@ -395,11 +403,13 @@ function SlotTile({
   )
 }
 
-/* ── Gallery: the orientation collages, uniformly 3-up ───────────────────────────── */
-const PHOTO_GROUPS: { orientation: Orientation; label: string; aspect: string }[] = [
-  { orientation: 'horizontal', label: 'Horizontal', aspect: 'aspect-[3/2]' },
-  { orientation: 'vertical', label: 'Vertical', aspect: 'aspect-[2/3]' },
-]
+/* ── Gallery: ONE section, named for the section it fills (Sam, 2026-08-18) ─────────
+ * The gallery listed as two top-level "Horizontal / Vertical" groups organized the
+ * panel around a property of the FILES instead of the page: "the horizontal/vertical
+ * images only really come into play when an image or video is the entire background of
+ * a screen" — and those are component slots now (a desktop + mobile pair), not the
+ * gallery. One header, one grid; each photo keeps its measured orientation (the
+ * uploader reads the pixels), the site's collage still lays out by it. */
 
 export function PhotoTools({
   photos,
@@ -440,16 +450,11 @@ export function PhotoTools({
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onApplyField?: (key: string, value: string) => void
 }) {
-  // A photo is horizontal OR vertical by its real shape, so each group shows only its own
-  // orientation — never the same photo in both. A null-orientation photo (a legacy row,
-  // or a Drive import that was never measured) has no shape yet: it belongs to the
-  // Horizontal group so it stays visible and manageable instead of vanishing from the
-  // editor while still live on the site. Placing it there assigns a real orientation.
-  // A photo holding a component slot is NOT a gallery photo — it belongs to a polaroid
-  // card, and showing it in the collage groups would invite placing a handwriting PNG in
-  // the photo wall (20260724120000).
-  const belongs = (p: GalleryPhoto, group: Orientation) =>
-    !p.siteRole && (p.orientation === group || (group === 'horizontal' && p.orientation == null))
+  // A photo holding a component slot is NOT a gallery photo — it belongs to that slot,
+  // and showing it here would invite placing a handwriting PNG in the photo wall
+  // (20260724120000). A null-orientation photo (a legacy row, a Drive import never
+  // measured) stays visible and manageable; placing it assigns 'horizontal'.
+  const inGallery = (p: GalleryPhoto) => !p.siteRole
   const nothing = imageFields.length === 0 && components.length === 0 && !showGallery
   // Same shape as link-tools/video-tools: the bare line, not inside the padded body.
   if (nothing) return <NoSlots noun="image" />
@@ -477,45 +482,44 @@ export function PhotoTools({
           onPlaceSlot={onPlaceSlot}
         />
       )}
-      {showGallery &&
-        PHOTO_GROUPS.map(({ orientation, label, aspect }) => (
-          <div key={orientation}>
-            <div className="px-5 pt-3">
-              <SlotGroupLabel>{label}</SlotGroupLabel>
-            </div>
-            <MediaGrid
-              onSiteItems={photos.filter((p) => p.onSite && belongs(p, orientation))}
-              library={photos.filter((p) => !p.onSite && belongs(p, orientation))}
-              noun={`${orientation} photo`}
-              keyOf={(p) => p.id}
-              labelOf={(_, i) => `${label} ${i + 1}`}
-              renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect={aspect} fit="cover" />}
-              aspect={aspect}
-              cols="grid-cols-3"
-              pickTitle={`Add a ${orientation} photo`}
-              addLabel={`Add ${orientation} photo`}
-              empty={
-                <p className="py-2 text-center text-xs text-ink-muted">
-                  No {orientation} photos in your library yet.
-                </p>
-              }
-              pickerFooter={
-                <GallerySlotUploader
-                  artistId={artistId}
-                  orientation={orientation}
-                  budget={budgetFor(assetBudgets, 'image')}
-                  onUploaded={onAdd}
-                />
-              }
-              onSetOnSite={(p, next) => (next ? onPlace(p, orientation) : onUnplace(p))}
-              select={{
-                onSelect: (p) => onFocus(galleryTarget(p.id)),
-                isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
-                onEdit: (p, i) => onEditItem({ type: 'galleryPhoto', id: p.id, orientation, label: `${label} ${i + 1}` }),
-              }}
-            />
+      {showGallery && (
+        <div>
+          <div className="px-5 pt-3">
+            <SlotGroupLabel>Gallery</SlotGroupLabel>
           </div>
-        ))}
+          <MediaGrid
+            onSiteItems={photos.filter((p) => p.onSite && inGallery(p))}
+            library={photos.filter((p) => !p.onSite && inGallery(p))}
+            noun="photo"
+            keyOf={(p) => p.id}
+            labelOf={(_, i) => `Photo ${i + 1}`}
+            renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" fit="cover" />}
+            aspect="aspect-square"
+            cols="grid-cols-3"
+            pickTitle="Add a photo"
+            addLabel="Add photo"
+            empty={<p className="py-2 text-center text-xs text-ink-muted">No photos in your library yet.</p>}
+            pickerFooter={
+              <GallerySlotUploader
+                artistId={artistId}
+                // Fallback ONLY — the uploader measures the file's real pixels.
+                orientation="horizontal"
+                budget={budgetFor(assetBudgets, 'image')}
+                onUploaded={onAdd}
+              />
+            }
+            // Placing keeps the photo's own measured shape; only a never-measured
+            // legacy row falls to horizontal.
+            onSetOnSite={(p, next) => (next ? onPlace(p, p.orientation ?? 'horizontal') : onUnplace(p))}
+            select={{
+              onSelect: (p) => onFocus(galleryTarget(p.id)),
+              isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
+              onEdit: (p, i) =>
+                onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` }),
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }
