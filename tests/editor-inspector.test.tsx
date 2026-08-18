@@ -2430,12 +2430,12 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     // while the slot stays filled here, so ON needs no re-pick.
     renderInspector(HELD_SLOT, { components: [POLAROID] })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Hide Slot 1 on the site' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Take Slot 1 off the site' }))
     expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'mp', 'artist-1', false)
     expect(assignSlotMock).not.toHaveBeenCalled() // the placement is untouched
     // Optimistic flip: the switch now reads Show, and the tile still holds its image.
-    expect(screen.getByRole('button', { name: 'Show Slot 1 on the site' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Show Slot 1 on the site' }))
+    expect(screen.getByRole('button', { name: 'Put Slot 1 on the site' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Put Slot 1 on the site' }))
     expect(setOnSiteMock).toHaveBeenLastCalledWith('photo', 'mp', 'artist-1', true)
   })
 

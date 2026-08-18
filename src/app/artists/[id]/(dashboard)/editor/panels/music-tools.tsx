@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { cx } from '@/lib/cx'
-import { Icon } from '@/components/ui/icons'
+import { useDragReorder } from '../use-drag-reorder'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type EditorProject } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
-import { plural, EYEBROW } from '../inspector-shared'
+import { OnSiteDot, plural, EYEBROW } from '../inspector-shared'
 import { SongThumb, AddLink } from '../inspector-grid'
 
 /* ── Music tools: the setlist as on-site cover cards + an Add tile (mirrors Videos).
@@ -41,15 +41,7 @@ export function MusicTools({
   onFocus?: (target: SelectTarget) => void
 }) {
   const [open, setOpen] = useState<string | null>(null)
-  const dragFrom = useRef<string | null>(null)
-  const [dragOver, setDragOver] = useState<string | null>(null)
-
-  function drop(toKey: string) {
-    const fromKey = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (fromKey && fromKey !== toKey) onReorder?.(fromKey, toKey)
-  }
+  const { dragProps, isOver } = useDragReorder((fromKey, toKey) => onReorder?.(fromKey, toKey))
 
   // A song selected in the FRAME (cover-art click) lands here as `item:track:<id>` —
   // expand the project that owns it, or the "selected song" is invisible behind a closed
@@ -95,19 +87,11 @@ export function MusicTools({
                 return (
                   <div
                     key={r.key}
-                    draggable
-                    onDragStart={() => (dragFrom.current = r.key)}
-                    onDragEnter={() => setDragOver(r.key)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => drop(r.key)}
-                    onDragEnd={() => {
-                      dragFrom.current = null
-                      setDragOver(null)
-                    }}
+                    {...dragProps(r.key)}
                     className={cx(
                       'relative overflow-hidden rounded-lg border',
                       isOpen ? 'border-accent ring-1 ring-accent' : 'border-hairline',
-                      dragOver === r.key && 'ring-2 ring-accent',
+                      isOver(r.key) && 'ring-2 ring-accent',
                     )}
                   >
                     {/* The card face expands the tracklist; the on/off toggle is a SIBLING
@@ -144,18 +128,7 @@ export function MusicTools({
                         <span className="block font-space text-[9px] text-ink-faint">{plural(r.songs.length, 'song')}</span>
                       </div>
                     </button>
-                    <button
-                      type="button"
-                      aria-label={r.onSite ? `Take ${r.title || 'project'} off the site` : `Put ${r.title || 'project'} on the site`}
-                      aria-pressed={r.onSite}
-                      onClick={() => onToggleOnSite(r)}
-                      className={cx(
-                        'absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full transition-colors',
-                        r.onSite ? 'bg-accent text-white' : 'bg-paper text-ink shadow-sm hover:bg-accent hover:text-white',
-                      )}
-                    >
-                      <Icon name={r.onSite ? 'check' : 'plus'} size={12} />
-                    </button>
+                    <OnSiteDot on={r.onSite} subject={r.title || 'project'} onToggle={() => onToggleOnSite(r)} />
                   </div>
                 )
               })}

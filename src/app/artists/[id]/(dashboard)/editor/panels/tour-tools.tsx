@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
 import { cx } from '@/lib/cx'
+import { useDragReorder } from '../use-drag-reorder'
 import { Icon } from '@/components/ui/icons'
 import { type EditorTour } from '../inspector-types'
 import { OnSiteToggle } from '../inspector-shared'
@@ -64,7 +64,7 @@ export function TourTools({
   tours: EditorTour[]
   artistId: string
   onRemove: (t: EditorTour) => void
-  /** Reorder by ID. Only undated shows participate — see `draggable` below. */
+  /** Reorder by ID — every row drags (manual mode). */
   onReorder: (fromId: string, toId: string) => void
   onToggleOnSite: (t: EditorTour) => void
   /** Open this show full-panel — where its supporting acts are linked. The links used
@@ -76,15 +76,7 @@ export function TourTools({
   focusedKey?: string | null
   onFocus?: (target: SelectTarget) => void
 }) {
-  const dragFrom = useRef<string | null>(null)
-  const [dragOver, setDragOver] = useState<string | null>(null)
-
-  function drop(toId: string) {
-    const fromId = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (fromId && fromId !== toId) onReorder(fromId, toId)
-  }
+  const { dragProps, isOver } = useDragReorder(onReorder)
 
   return (
     <div className="space-y-2.5 px-5 py-4">
@@ -98,19 +90,11 @@ export function TourTools({
         <TourRow
           key={t.id}
           focused={focusedKey === `item:tour_date:${t.id}`}
-          draggable
-          onDragStart={() => (dragFrom.current = t.id)}
-          onDragEnter={() => setDragOver(t.id)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => drop(t.id)}
-          onDragEnd={() => {
-            dragFrom.current = null
-            setDragOver(null)
-          }}
+          {...dragProps(t.id)}
           className={cx(
             'flex items-start gap-2.5 rounded-lg border p-2.5',
             focusedKey === `item:tour_date:${t.id}` ? 'border-accent ring-2 ring-accent' : 'border-hairline',
-            dragOver === t.id && 'ring-2 ring-accent',
+            isOver(t.id) && 'ring-2 ring-accent',
           )}
         >
           <span className="mt-0.5 flex-none cursor-grab text-ink-faint" aria-hidden>

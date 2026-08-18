@@ -336,6 +336,42 @@ export function SlotGroupLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** The tile corner's circular on/off switch — the check/plus dot the Music cards wear,
+ *  extracted (2026-08-18 consolidation) after being hand-copied onto the slot tiles.
+ *  A SIBLING overlaid on the tile face (never a button inside a button); `corner`
+ *  places it. The pill variant below serves the row layouts. */
+export function OnSiteDot({
+  on,
+  subject,
+  corner = 'right-1 top-1',
+  onToggle,
+}: {
+  on: boolean
+  /** Names the aria label: "Take <subject> off the site" / "Put <subject> on the site". */
+  subject: string
+  corner?: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={on ? `Take ${subject} off the site` : `Put ${subject} on the site`}
+      aria-pressed={on}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+      className={cx(
+        'absolute flex h-5 w-5 items-center justify-center rounded-full transition-colors',
+        corner,
+        on ? 'bg-accent text-white' : 'bg-paper text-ink shadow-sm hover:bg-accent hover:text-white',
+      )}
+    >
+      <Icon name={on ? 'check' : 'plus'} size={12} />
+    </button>
+  )
+}
+
 /** Per-item "on the site" toggle (writes the `on_site` flag). Being in the library never
  *  implies on-site — the manager selects each item on. */
 export function OnSiteToggle({ on, onToggle, className }: { on: boolean; onToggle: () => void; className?: string }) {

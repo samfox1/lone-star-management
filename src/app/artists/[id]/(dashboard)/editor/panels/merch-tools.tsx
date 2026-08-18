@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
+import { useDragReorder } from '../use-drag-reorder'
 import { Icon } from '@/components/ui/icons'
 import { type EditorMerch } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
@@ -28,15 +28,7 @@ export function MerchTools({
   focusedKey?: string | null
   onFocus?: (target: SelectTarget) => void
 }) {
-  const dragFrom = useRef<string | null>(null)
-  const [dragOver, setDragOver] = useState<string | null>(null)
-
-  function drop(toId: string) {
-    const fromId = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (fromId && fromId !== toId) onReorder?.(fromId, toId)
-  }
+  const { dragProps, isOver } = useDragReorder((fromId, toId) => onReorder?.(fromId, toId))
 
   return (
     <div className="space-y-2.5 px-5 py-4">
@@ -46,19 +38,11 @@ export function MerchTools({
           return (
             <div
               key={m.id}
-              draggable
-              onDragStart={() => (dragFrom.current = m.id)}
-              onDragEnter={() => setDragOver(m.id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => drop(m.id)}
-              onDragEnd={() => {
-                dragFrom.current = null
-                setDragOver(null)
-              }}
+              {...dragProps(m.id)}
               className={cx(
                 'relative overflow-hidden rounded-lg border',
                 focused ? 'border-accent ring-2 ring-accent' : 'border-hairline',
-                dragOver === m.id && 'ring-2 ring-accent',
+                isOver(m.id) && 'ring-2 ring-accent',
               )}
             >
               <button

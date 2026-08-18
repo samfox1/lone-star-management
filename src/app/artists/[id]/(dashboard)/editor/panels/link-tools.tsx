@@ -19,6 +19,7 @@ import {
   useCollapseOnOutsideClick,
 } from '../inspector-shared'
 import { useSignal } from '../use-signal'
+import { useDragReorder } from '../use-drag-reorder'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
 import { AddSocialModal } from '../add-social-modal'
@@ -274,8 +275,7 @@ export function LinkTools({
     setLastFocusedLabel(focusedLabel)
     if (focusedRow) setOpen(focusedRow.id)
   }
-  const dragFrom = useRef<number | null>(null)
-  const [dragOver, setDragOver] = useState<number | null>(null)
+  const { dragProps, isOver } = useDragReorder(onReorder)
 
   // Both label and url are required — a blank one is dropped, not saved. The pending
   // row itself is what the (unmount) flush persists, so there is no separate values ref.
@@ -301,13 +301,6 @@ export function LinkTools({
     })
   }
 
-  function drop(to: number) {
-    const from = dragFrom.current
-    dragFrom.current = null
-    setDragOver(null)
-    if (from !== null && from !== to) onReorder(links[from].id, links[to].id)
-  }
-
   return (
     <div className="pb-2 pt-1">
       {links.map((l, i) => {
@@ -322,17 +315,9 @@ export function LinkTools({
             key={l.id}
             focused={isFocused}
             boundaryRef={isOpen ? rowOpenRef : undefined}
-            draggable
-            onDragStart={() => (dragFrom.current = i)}
-            onDragEnter={() => setDragOver(i)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => drop(i)}
-            onDragEnd={() => {
-              dragFrom.current = null
-              setDragOver(null)
-            }}
+            {...dragProps(l.id)}
             className={cx(
-              (dragOver === i || isFocused) && 'ring-2 ring-accent',
+              (isOver(l.id) || isFocused) && 'ring-2 ring-accent',
               rowInvalid && 'ring-1 ring-accent-red',
             )}
           >

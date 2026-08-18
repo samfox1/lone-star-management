@@ -8,7 +8,7 @@ import { componentSlotRole, type ComponentSlot, type ManifestComponent } from '@
 import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import { type Orientation } from '@/lib/site-editor/gallery'
 import { type EditorImageField, type GalleryPhoto, type ItemEdit } from '../inspector-types'
-import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, EYEBROW, NoSlots } from '../inspector-shared'
+import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, EYEBROW, NoSlots, OnSiteDot } from '../inspector-shared'
 import {
   PhotoThumb,
   EmptySlot,
@@ -361,21 +361,7 @@ function SlotTile({
             {/* The slot's on/off switch (Sam, 2026-08-18: "the hero background should be
                 a toggle"). Flips the media row's on_site — the wire's gate — so the image
                 leaves the page but stays placed here, ready to switch back on. */}
-            <button
-              type="button"
-              aria-label={placed.onSite ? `Hide ${label} on the site` : `Show ${label} on the site`}
-              aria-pressed={placed.onSite}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleOnSite(placed)
-              }}
-              className={cx(
-                'absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors',
-                placed.onSite ? 'bg-accent text-white' : 'bg-paper text-ink shadow-sm hover:bg-accent hover:text-white',
-              )}
-            >
-              <Icon name={placed.onSite ? 'check' : 'plus'} size={12} />
-            </button>
+            <OnSiteDot on={placed.onSite} subject={label} corner="left-1.5 top-1.5" onToggle={() => onToggleOnSite(placed)} />
           </SelectableTile>
           {/* Advisory, never blocking (Sam, 2026-07-21): a JPG in a PNG slot renders as a
               solid box on the site, so flag it — fixable, not a dead end. */}
