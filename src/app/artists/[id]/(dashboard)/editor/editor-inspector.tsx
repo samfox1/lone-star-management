@@ -180,6 +180,8 @@ export function EditorInspector({
   linkValues = {},
   selectedLink = null,
   selectedRegion = null,
+  measuredRegion = null,
+  onRequestMeasure,
   cursorValues = NO_STYLES,
   onApplyField,
   onApplyImage,
@@ -239,6 +241,11 @@ export function EditorInspector({
    *  open (Sam, 2026-08-14). A counter, not a flag: consecutive clicks are separate
    *  events, and a boolean would only ever fire once. */
   deselectedAt?: number
+  /** The frame's answer to the last `measure` request (bridge 0.25.2). */
+  measuredRegion?: { key: string; measured: RegionMeasurements } | null
+  /** Ask the frame to measure one region — item editors call it on open so their
+   *  sliders park on what the element actually renders. */
+  onRequestMeasure?: (key: string) => void
   /** Link-powered elements the site declared (USB/Merch buttons). From the FRAME's
    *  manifest at runtime for a custom site; [] for built-in templates. */
   linkRegions?: ManifestLinkRegion[]
@@ -378,6 +385,25 @@ export function EditorInspector({
     setStyleFocus(null)
     setStyleMeasured(null)
   }
+
+  /** The per-item style-region key an ItemEdit paints at — the same shapes
+   *  buildItemEditor uses (`slot:<role>` / `image:<id>` / `video:<id>`). */
+  const itemStyleKey = (it: ItemEdit): string =>
+    it.type === 'imageSlot' || it.type === 'videoSlot'
+      ? `slot:${it.role}`
+      : it.type === 'galleryPhoto'
+        ? `image:${it.id}`
+        : `video:${it.id}`
+
+  // MEASURE ON OPEN (bridge 0.25.2): the transparency slider on the hero backdrop
+  // parked mid-scale because the item's real 40% opacity lives in site code, invisible
+  // to any class-string reader — and a panel-opened editor has no frame click to carry
+  // a measurement. So the editor ASKS: the frame measures the region's element and the
+  // sliders park on the answer.
+  const editingItemKey = editingItem ? itemStyleKey(editingItem) : null
+  useEffect(() => {
+    if (editingItemKey) onRequestMeasure?.(editingItemKey)
+  }, [editingItemKey, onRequestMeasure])
 
   // Which panel owns an ITEM select, by the asset type skeen stamps on the element
   // (`data-lse-item="track:<id>"`). Images route through isImageRegion instead — they
@@ -671,6 +697,7 @@ export function EditorInspector({
         styleKey={cfg.key}
         label={item.label}
         initialClasses={styleValues[cfg.key] ?? ''}
+        measured={measuredRegion?.key === cfg.key ? measuredRegion.measured : undefined}
         palette={styleOptions}
         preview={cfg.preview}
         replace={{

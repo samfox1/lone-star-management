@@ -58,6 +58,16 @@ export type RegionMeasurements = {
   gapPx: number | null
   /** The first element child's rendered width — an icon row's icon size. */
   childWidthPx: number | null
+  /** Computed opacity 0–1 (0.25.2) — the transparency slider's parking value.
+   *  Optional: frames older than 0.25.2 don't send these four. */
+  opacity?: number
+  /** The computed transform's scale factor (matrix `a`), or null when untransformed —
+   *  the per-item Size/Zoom slider's parking value. */
+  transformScale?: number | null
+  /** border-top-width, px. */
+  borderWidthPx?: number
+  /** border-top-left-radius, px. */
+  radiusPx?: number
 }
 
 /** What the user selected in the frame (maps to a manifest field / slot / item /
@@ -86,6 +96,9 @@ export type FrameMessage =
   | { v: number; source: typeof FRAME_SOURCE; type: 'ready'; manifest?: TemplateManifest }
   | { v: number; source: typeof FRAME_SOURCE; type: 'select'; target: SelectTarget; rect: Rect; measured?: RegionMeasurements }
   | { v: number; source: typeof FRAME_SOURCE; type: 'deselect' }
+  /** Answer to the editor's `measure` request (0.25.2) — what the region's element
+   *  actually renders, so panel-opened editors can park sliders without a click. */
+  | { v: number; source: typeof FRAME_SOURCE; type: 'measured'; key: string; measured: RegionMeasurements }
 
 /** editor → frame. `init-data` hands the frame its draft so a custom site in edit
  *  mode renders it without its own DB access (D-C); `apply-style` previews a
@@ -124,6 +137,11 @@ export type EditorMessage =
   /** Pause (false) / resume (true) every playing video in the frame — the toolbar's
    *  pause/play toggle. ADDITIVE like its siblings. */
   | { v: number; source: typeof EDITOR_SOURCE; type: 'set-playback'; playing: boolean }
+  /** Ask the frame to measure one region's element (0.25.2): answered with `measured`.
+   *  ADDITIVE — an older frame ignores it and the editor keeps its class-string guess.
+   *  This is how PANEL-opened editors park sliders on reality: a tile's Edit button has
+   *  no click-in-the-frame to ride, so the editor asks instead. */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'measure'; key: string }
   /** Re-apply the site-wide cursor (image / click image / trail) live in the preview.
    *  ADDITIVE: the four values are ordinary site_content keys, so a frame that predates
    *  this message still gets the cursor on the next init-data — this just skips the

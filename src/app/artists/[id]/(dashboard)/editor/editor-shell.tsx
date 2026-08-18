@@ -214,6 +214,8 @@ export function EditorShell({
     selectedStyle,
     selectedLink,
     selectedRegion,
+    measuredRegion,
+    requestMeasure,
     deselectedAt,
   } = useFrameBridge({
     artistId,
@@ -302,6 +304,8 @@ export function EditorShell({
           mobileView: device === 'mobile',
         }}
         selectedStyle={selectedStyle}
+        measuredRegion={measuredRegion}
+        onRequestMeasure={requestMeasure}
         deselectedAt={deselectedAt}
         linkRegions={panels.linkRegions}
         linkValues={linkValues}

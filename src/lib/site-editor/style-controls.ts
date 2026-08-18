@@ -109,6 +109,10 @@ export type StyleControl =
        * that owns it deletes that scale's zero.
        */
       defaultOffScale?: boolean
+      /** Maps a frame measurement into THIS control's rank space — beats MEASURE_BY_ID
+       *  (which keys by id and cannot tell a rem text-size 'size' from a percent item
+       *  scale 'size'). */
+      measure?: (m: RegionMeasurements) => number | null
       /**
        * MEASURE an owned token, so a value that is not one of the steps can still be
        * placed on the scale. Returns the token's magnitude in the scale's own unit (rem
@@ -995,6 +999,14 @@ export function sliderSteps(control: StyleControl): StyleOption[] {
  * leading ratio, tracking em), and the frame measures the live layout — which in phone
  * view IS the phone rendering — so one map serves both.
  */
+/** The item families' measurement maps (0.25.2) — percent spaces, guarded for frames
+ *  older than 0.25.2 which don't send these fields. */
+const measureOpacityPct = (m: RegionMeasurements): number | null =>
+  m.opacity != null ? m.opacity * 100 : null
+const measureScalePct = (m: RegionMeasurements): number | null =>
+  // Untransformed (null) IS 100% — the honest park for a never-zoomed image.
+  m.transformScale === undefined ? null : (m.transformScale ?? 1) * 100
+
 const MEASURE_BY_ID: Record<string, (m: RegionMeasurements) => number | null> = {
   size: (m) => m.fontSizePx / 16, // rem — textSizeRank / sizeSmRank space
   leading: (m) => (m.lineHeightPx != null && m.fontSizePx > 0 ? m.lineHeightPx / m.fontSizePx : null),
@@ -1013,14 +1025,26 @@ export function sliderIndex(
   const middle = Math.floor((steps.length - 1) / 2)
   if (control.kind !== 'slider' || !steps.length) return { idx: 0, label: 'Default', exact: false }
 
+  // What the element MEASURABLY renders, in this control's rank space. A control's own
+  // `measure` wins over the by-id map (per-item scale is a percent while a text 'size'
+  // is rem — same id, different spaces).
+  const measuredTarget = measured
+    ? control.measure
+      ? control.measure(measured)
+      : (MEASURE_BY_ID[control.id]?.(measured) ?? null)
+    : null
+
   const exact = steps.findIndex((s) => s.value === current)
-  if (exact >= 0) return { idx: exact, label: steps[exact].label, exact: true }
+  // An EMPTY current means "nothing stored", not "the step whose class happens to be
+  // ''" — some scales encode a value as the empty class (opacity's 100%, scale's 100%).
+  // With a measurement in hand, reality beats that coincidence: atlas's backdrop renders
+  // 40% opaque via its own code, and the '' exact-match parked the handle at 100%.
+  if (exact >= 0 && !(current === '' && measuredTarget != null)) {
+    return { idx: exact, label: steps[exact].label, exact: true }
+  }
 
   const rank = control.rank
-  const target =
-    (current && rank ? rank(current) : null) ??
-    // Nothing stored — park on what the page MEASURABLY renders, when the frame told us.
-    (measured ? (MEASURE_BY_ID[control.id]?.(measured) ?? null) : null)
+  const target = (current && rank ? rank(current) : null) ?? measuredTarget
   if (target != null) {
     let best = -1
     let bestDistance = Infinity
@@ -1346,11 +1370,11 @@ function motionControls(): StyleControl[] {
 export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   // Per-item Size is a SCALE, and it was the control Sam caught cross-talking on the
   // hero logo — in phone scope it twins like everything else (0.23).
-  const scale: StyleControl = { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') && !t.startsWith('scalesm-') }
+  const scale: StyleControl = { id: 'size', label: 'Size', kind: 'slider', steps: SCALE_STEPS, rank: pctRank('scale'), owns: (t) => t.startsWith('scale-') && !t.startsWith('scalesm-'), measure: measureScalePct }
   return [
     phoneItemScope(opts) ? phoneTwin(scale) : scale,
-    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-') },
-    { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, rank: pxRank(BORDER_PX), owns: isBorderWidth },
+    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-'), measure: measureOpacityPct },
+    { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, rank: pxRank(BORDER_PX), owns: isBorderWidth, measure: (m) => m.borderWidthPx ?? null },
     {
       id: 'borderColor',
       label: 'Border color',
@@ -1368,7 +1392,7 @@ export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] 
       },
       toToken: (hex) => (hex ? colorClass('border', hex) : ''),
     },
-    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius },
+    { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius, measure: (m) => m.radiusPx ?? null },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
     // Slice-1 effects (2026-08-10). All lift inline, so they work on every deployed
     // site with nothing recompiled; the six filters COMPOSE (styles.ts).
@@ -1397,10 +1421,11 @@ export function buildBackgroundItemStyleControls(opts?: SiteStyleOptions): Style
     steps: SCALE_STEPS.filter((o) => (pctRank('scale')(o.value) ?? 0) >= 100),
     rank: pctRank('scale'),
     owns: (t) => t.startsWith('scale-') && !t.startsWith('scalesm-'),
+    measure: measureScalePct,
   }
   return [
     phoneItemScope(opts) ? phoneTwin(zoom) : zoom,
-    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-') },
+    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-'), measure: measureOpacityPct },
     ...filterControls(),
   ]
 }

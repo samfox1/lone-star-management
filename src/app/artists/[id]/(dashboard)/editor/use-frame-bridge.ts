@@ -92,6 +92,12 @@ export type FrameBridge = {
    *  Only field/slot/item selects land here — style/link route to their own panels. A
    *  bumped `nonce` re-fires the focus even when the same tile is clicked twice. */
   selectedRegion: { target: SelectTarget; nonce: number } | null
+  /** The frame's answer to the last `measure` request — what one region's element
+   *  actually renders (0.25.2). Panel-opened item editors park sliders on it. */
+  measuredRegion: { key: string; measured: RegionMeasurements } | null
+  /** Ask the frame to measure a region (`data-lse-style` key). Answered via
+   *  `measuredRegion`; silently nothing on older frames. */
+  requestMeasure: (key: string) => void
   /** Increments each time a preview click landed on nothing editable. The inspector
    *  collapses any open edit row on a change. */
   deselectedAt: number
@@ -116,6 +122,7 @@ export function useFrameBridge({
   // gesture (Sam, 2026-08-17: clicking Listen with another panel open did nothing —
   // the key hadn't changed, so the gate never re-fired).
   const [selectedLink, setSelectedLink] = useState<{ key: string; nonce: number } | null>(null)
+  const [measuredRegion, setMeasuredRegion] = useState<{ key: string; measured: RegionMeasurements } | null>(null)
   /** Ticks on every preview click that selected nothing — the panels read it as
    *  "collapse whatever is open". */
   const [deselectedAt, setDeselectedAt] = useState(0)
@@ -148,6 +155,7 @@ export function useFrameBridge({
     [post],
   )
   const applyLink = useCallback((key: string, url: string) => post({ type: 'apply-link', key, url }), [post])
+  const requestMeasure = useCallback((key: string) => post({ type: 'measure', key }), [post])
   /** Repaint the site-wide cursor (Site panel) without waiting on the revalidate. */
   const applyCursor = useCallback(
     (settings: CursorSettings) => post({ type: 'apply-cursor', settings }),
@@ -208,6 +216,8 @@ export function useFrameBridge({
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
         const key = msg.target.key
         setSelectedLink((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }))
+      } else if (msg.type === 'measured') {
+        setMeasuredRegion({ key: msg.key, measured: msg.measured })
       } else if (msg.type === 'deselect') {
         // A click in the preview that hit NOTHING editable. The frame has always posted
         // this; the editor used to drop it, which is why an open panel sat there while
@@ -288,6 +298,8 @@ export function useFrameBridge({
     frameMode,
     manifest,
     selectedStyle,
+    measuredRegion,
+    requestMeasure,
     selectedLink,
     selectedRegion,
     deselectedAt,

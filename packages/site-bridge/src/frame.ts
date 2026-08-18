@@ -189,6 +189,15 @@ function measureOf(el: Element): RegionMeasurements {
     padRightPx: px(cs.paddingRight) ?? 0,
     gapPx: px(cs.columnGap) ?? px(cs.rowGap),
     childWidthPx: child ? child.getBoundingClientRect().width || null : null,
+    // The per-item families (0.25.2): transparency, zoom, border, corners.
+    opacity: px(cs.opacity) ?? 1,
+    transformScale: (() => {
+      // matrix(a, b, c, d, tx, ty) — `a` is the x scale for a plain scale().
+      const m = /^matrix\((-?[\d.]+),/.exec(cs.transform);
+      return m ? Number(m[1]) : null;
+    })(),
+    borderWidthPx: px(cs.borderTopWidth) ?? 0,
+    radiusPx: px(cs.borderTopLeftRadius) ?? 0,
   };
 }
 
@@ -692,6 +701,13 @@ export function mountFrameBridge(options: {
       // that no longer exists.
       cancelWait?.();
       clearHighlightFromDom(document);
+    }
+    else if (msg.type === "measure" && "key" in msg && typeof msg.key === "string") {
+      // Measure ON DEMAND (0.25.2): a panel-opened editor has no click to ride, so the
+      // editor asks. Silence when the region isn't on the page — the editor keeps its
+      // class-string guess, exactly the older-frame behaviour.
+      const el = document.querySelector(attrSelector(STYLE_ATTR, msg.key));
+      if (el) post(stamp({ type: "measured", key: msg.key, measured: measureOf(el) }));
     }
     else if (msg.type === "set-mode" && "mode" in msg) {
       mode = msg.mode === "browse" ? "browse" : "edit";

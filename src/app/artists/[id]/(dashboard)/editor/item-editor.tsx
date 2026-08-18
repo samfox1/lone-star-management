@@ -6,6 +6,7 @@ import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shar
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
+import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import { LibraryPicker } from './inspector-grid'
 import { saveEditorStyleAction } from '../actions'
 
@@ -54,6 +55,7 @@ export function ItemEditor({
   onRemove,
   onApplyStyle,
   onBack,
+  measured,
 }: {
   artistId: string
   /** Per-item style-region key. The rule, not a list: `<kind>:<id>` — either
@@ -81,6 +83,9 @@ export function ItemEditor({
   onRemove: () => void
   onApplyStyle?: (key: string, className: string) => void
   onBack: () => void
+  /** What this item's element actually renders (bridge 0.25.2, measure-on-open) —
+   *  sliders with nothing stored park on it instead of mid-scale. */
+  measured?: RegionMeasurements
 }) {
   const [classes, setClasses] = useState(initialClasses)
   /** What is actually persisted — Revert's target, and what `dirty` compares against.
@@ -159,6 +164,7 @@ export function ItemEditor({
               cls={classes}
               swatches={swatches}
               palette={palette}
+              measured={measured}
               onChange={(v) => change(applyStyleValue(classes, control, v))}
             />
           ))}

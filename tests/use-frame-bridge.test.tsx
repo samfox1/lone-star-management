@@ -187,6 +187,16 @@ describe('inbound: origin + shape guards', () => {
 })
 
 describe('inbound: select routing', () => {
+  it("CRITICAL: a 'measured' reply lands in measuredRegion — panel editors park on it", () => {
+    // Bridge 0.25.2 (Sam: "The transparency slider isnt lined up properly, same error
+    // as before"): a panel-opened item editor asks the frame to measure; the answer
+    // must arrive here keyed, so the editor can match it to the open item.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    const measured = { fontSizePx: 16, lineHeightPx: null, letterSpacingPx: 0, padTopPx: 0, padBottomPx: 0, padLeftPx: 0, padRightPx: 0, gapPx: null, childWidthPx: null, opacity: 0.4, transformScale: null, borderWidthPx: 0, radiusPx: 0 }
+    frameSays({ type: 'measured', key: 'slot:backdrop_1_desktop', measured }, CUSTOM)
+    expect(result.current.measuredRegion).toEqual({ key: 'slot:backdrop_1_desktop', measured })
+  })
+
   it('reports a style-region click so the inspector can focus it — key, nonce, measurement', () => {
     const { result } = mount({ customSiteUrl: CUSTOM })
     const measured = { fontSizePx: 16, lineHeightPx: 27.2, letterSpacingPx: 0, padTopPx: 0, padBottomPx: 0, padLeftPx: 0, padRightPx: 0, gapPx: null, childWidthPx: null }
