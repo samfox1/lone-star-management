@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
@@ -13,7 +12,7 @@ import {
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
-import { type EditorStyleOptions, buildBackgroundItemStyleControls, buildVideoItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
+import { type EditorStyleOptions } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mediaUrl } from '@/lib/storage-url'
 import { isContactLink, looksLikeEmail } from '@/lib/url'
@@ -25,10 +24,9 @@ import { isContactLink, looksLikeEmail } from '@/lib/url'
  *  (2026-08-10 review). */
 const isContactish = (url: string) => isContactLink(url) || looksLikeEmail(url)
 import { Icon, type IconName } from '@/components/ui/icons'
-import { ItemEditor, type PickCandidate } from './item-editor'
-import { AddFirstLink, CardThumb, PhotoThumb, fileNameOf } from './inspector-grid'
-import { GallerySlotUploader } from '../media-uploader'
-import { budgetFor, budgetSlotKey, type AssetBudgets } from '@/lib/site-editor/asset-budget'
+import { ItemEditor } from './item-editor'
+import { buildItemEditorConfig } from './item-editor-config'
+import { budgetFor, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
   PhotoTools,
   TextTools,
@@ -49,14 +47,10 @@ import {
   deleteContentAction,
   placeGalleryPhotoAction,
   reorderContentAction,
-  saveEditorFieldAction,
-  saveEditorLinkAction,
-  saveEditorStyleAction,
   setOnSiteAction,
-  restorePublishedAction,
 } from '../actions'
-import { useSessionJournal } from './use-session-journal'
 import { useOptimisticRunner } from './use-optimistic'
+import { useSessionRevert } from './use-session-revert'
 import { useSignal } from './use-signal'
 import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
@@ -456,7 +450,6 @@ export function EditorInspector({
   // The SAME save path the Style panel uses, so a font set from a text field and one set
   // from the Style panel cannot disagree about what is stored or drift in debounce.
   const { save: saveTextStyle } = useStyleRegionSave(artistId, onApplyStyle)
-  const filename = (p: GalleryPhoto) => fileNameOf(p.storage_path)
 
   // Every colour the site already uses, for the palette's quick-pick row. Held in state and
   // updated as items are styled, so a colour chosen on one photo is offerable on the next
@@ -476,89 +469,21 @@ export function EditorInspector({
   useEffect(() => () => {
     if (recordTimer.current) clearTimeout(recordTimer.current)
   }, [])
-  /* ── Session journal: what every key was BEFORE this session first touched it ─────
-   * Autosave persists ~500ms behind each edit, so "Revert changes" needs its own memory
-   * of the session-start values. Every optimistic paint is the choke point all edits
-   * pass through BEFORE their save — the wrappers below record there. Reverting walks
-   * the ledger in reverse through the same actions + paints. */
-  const journal = useSessionJournal()
-  const [reverting, setReverting] = useState(false)
-  const router = useRouter()
-
-  const paintStyle = useCallback(
-    (key: string, className: string) => {
-      journal.record({ kind: 'style', key, before: styleValues[key] ?? null })
-      onApplyStyle?.(key, className)
-    },
-    [journal, styleValues, onApplyStyle],
-  )
-  const paintField = useCallback(
-    (key: string, value: string) => {
-      // Image fields also repaint via apply-field (their value is a URL, saved as a
-      // storage path elsewhere) — those aren't journal-revertable v1, so skip them.
-      const field = textFields.find((f) => f.key === key)
-      if (field) journal.record({ kind: 'field', key, before: field.value })
-      onApplyField?.(key, value)
-    },
-    [journal, textFields, onApplyField],
-  )
-  const paintLink = useCallback(
-    (key: string, url: string) => {
-      journal.record({ kind: 'link', key, before: linkValues[key] ?? '' })
-      onApplyLink?.(key, url)
-    },
-    [journal, linkValues, onApplyLink],
-  )
-
-  /**
-   * "Revert changes": walk every key this SESSION touched back to the value it had when
-   * the session started (Sam, 2026-08-17: "someone logs onto lone star, makes a few
-   * changes, and wants to undo them to the state it was at when they arrived" —
-   * reaffirming the 2026-08-15 semantics under the name he prefers). Nothing else —
-   * going back to a PUBLISHED version is a separate, deliberate act and lives behind
-   * Restore version, next to Publish.
-   *
-   * No confirmation: this undoes what the manager just did, which is the cheap, expected
-   * action. The dialog belongs in front of the one that reaches past the session.
-   */
-  async function revertSession() {
-    if (reverting) return
-    setReverting(true)
-    try {
-      // PUBLISHED-FIRST (Sam, 2026-08-17): "it should still be there until I hit
-      // publish or manually undo." The anchor a manager means is the last published
-      // edition — it survives refreshes the way the change itself does. The session
-      // walk below remains only for a NEVER-published artist, where there is nothing
-      // to restore to.
-      const restored = await restorePublishedAction(artistId)
-      if (restored.ok && restored.hasPublished) {
-        router.refresh() // the draft changed under every panel — re-read it
-        return
-      }
-      for (const e of [...journal.entries].reverse()) {
-        if (e.kind === 'style') {
-          // before=null → save '' → the override row is DELETED, not written empty.
-          onApplyStyle?.(e.key, e.before ?? '')
-          await saveEditorStyleAction(artistId, e.key, e.before ?? '')
-        } else if (e.kind === 'field') {
-          onApplyField?.(e.key, e.before)
-          await saveEditorFieldAction(artistId, e.key, e.before)
-        } else if (e.kind === 'link') {
-          onApplyLink?.(e.key, e.before)
-          await saveEditorLinkAction(artistId, e.key, e.before, linkRegions.find((r) => r.key === e.key)?.label ?? e.key)
-        } else {
-          // Re-place the previous holder: the shared optimistic half, then an AWAITED
-          // persist (not startTransition — a revert must not skip mid-transition).
-          const next = e.before ? (photos.find((p) => p.id === e.before) ?? null) : null
-          applySlotOptimistic(e.role, next)
-          await assignComponentSlotAction(artistId, e.role, next?.id ?? null)
-        }
-      }
-    } finally {
-      journal.clear()
-      setReverting(false)
-    }
-  }
+  // Revert changes — journal + paint wrappers + the published-first walk, one module
+  // (use-session-revert.ts). The paints RECORD, so every panel must apply through them.
+  const { paintField, paintStyle, paintLink, recordSlot, revertSession, reverting, journalCount } =
+    useSessionRevert({
+      artistId,
+      textFields,
+      styleValues,
+      linkValues,
+      linkRegions,
+      photos,
+      applySlotOptimistic,
+      onApplyField,
+      onApplyStyle,
+      onApplyLink,
+    })
 
   const applyItemStyle = useCallback(
     (key: string, className: string) => {
@@ -572,200 +497,6 @@ export function EditorInspector({
     [paintStyle],
   )
 
-  /** Build the full-panel editor for the item being edited, from the inspector's LIVE state
-   *  (so Replace candidates stay fresh) and its place handlers. Null if the item vanished.
-   *  Only what genuinely differs per media kind — the preview, the candidate list, and the
-   *  place/unplace semantics — is computed per branch; the ItemEditor call itself exists
-   *  once. Videos get the same visual controls as images (size, transparency, border,
-   *  corners, shadow); their overlay rides site_styles under the same colon-key contract. */
-  function buildItemEditor(item: ItemEdit) {
-    const back = () => setEditingItem(null)
-    const photoCandidates = (list: GalleryPhoto[], aspect: string): PickCandidate[] =>
-      list.map((p) => ({ id: p.id, label: filename(p), thumb: <PhotoThumb path={p.storage_path} aspect={aspect} fit="cover" /> }))
-    const videoCandidates = (list: EditorVideo[]): PickCandidate[] =>
-      list.map((v) => ({ id: v.id, label: v.title || 'Untitled video', thumb: <CardThumb poster={v.poster} previewUrl={v.previewUrl} /> }))
-    const videosPageLink = <AddFirstLink href={`/artists/${artistId}/videos`} label="Add a video first" />
-
-    let cfg: {
-      key: string
-      preview: React.ReactNode
-      candidates: PickCandidate[]
-      onPick: (id: string) => void
-      onRemove: () => void
-      uploader?: React.ReactNode
-      empty?: React.ReactNode
-      /** Overrides the default (image) visual control set — the video branches use it. */
-      controls?: StyleControl[]
-    }
-    if (item.type === 'imageSlot') {
-      const placed = photos.find((p) => p.siteRole === item.role)
-      if (!placed) return null
-      cfg = {
-        key: `slot:${item.role}`,
-        // A BACKGROUND slot (manifest `background: true`) trims the controls: no
-        // edges/border/corners/shadow on a frameless fill, and Zoom floors at 100%
-        // so it can never uncover the page behind it (Sam, 2026-08-18).
-        ...(item.background ? { controls: buildBackgroundItemStyleControls(styleOptions) } : {}),
-        preview: <PhotoThumb path={placed.storage_path} aspect="aspect-square" fit="cover" />,
-        candidates: photoCandidates(photos.filter((p) => !p.siteRole), 'aspect-square'),
-        onPick: (id) => placeInSlot(item.role, photos.find((p) => p.id === id) ?? null),
-        onRemove: () => placeInSlot(item.role, null),
-        uploader: (
-          <GallerySlotUploader
-            artistId={artistId}
-            orientation="horizontal"
-            label="Drop an image or click to upload"
-            // The SLOT's budget (`polaroid_1_photo` → `polaroid_photo`), not the general
-            // image one: the site declared a tighter cap because the card renders small.
-            budget={budgetFor(assetBudgets, 'image', budgetSlotKey(item.role))}
-            onUploaded={(m) => placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role })}
-          />
-        ),
-      }
-    } else if (item.type === 'galleryPhoto') {
-      const placed = photos.find((p) => p.id === item.id)
-      if (!placed) return null
-      const aspect = item.orientation === 'vertical' ? 'aspect-[2/3]' : 'aspect-[3/2]'
-      cfg = {
-        key: `image:${item.id}`,
-        preview: <PhotoThumb path={placed.storage_path} aspect={aspect} fit="cover" />,
-        candidates: photoCandidates(
-          photos.filter(
-            (p) =>
-              !p.onSite &&
-              !p.siteRole &&
-              (p.orientation === item.orientation || (item.orientation === 'horizontal' && p.orientation == null)),
-          ),
-          aspect,
-        ),
-        onPick: (id) => {
-          const next = photos.find((p) => p.id === id)
-          unplacePhoto(placed)
-          if (next) placePhoto(next, item.orientation)
-        },
-        onRemove: () => unplacePhoto(placed),
-        uploader: (
-          <GallerySlotUploader
-            artistId={artistId}
-            orientation={item.orientation}
-            budget={budgetFor(assetBudgets, 'image')}
-            onUploaded={addPhoto}
-          />
-        ),
-      }
-    } else if (item.type === 'videoSlot') {
-      const placed = videos.find((v) => v.siteRole === item.role)
-      if (!placed) return null
-      cfg = {
-        key: `slot:${item.role}`,
-        preview: <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />,
-        // Only uploaded videos, and not one already holding another background slot.
-        candidates: videoCandidates(videos.filter((v) => v.provider === 'uploaded' && !v.siteRole)),
-        onPick: (id) => assignHero(item.role, id),
-        onRemove: () => assignHero(item.role, null),
-        empty: videosPageLink,
-        // An uploaded background clip: playback is ours to control, so Speed applies.
-        controls: buildVideoItemStyleControls('file', styleOptions),
-      }
-    } else {
-      const placed = videos.find((v) => v.id === item.id)
-      if (!placed) return null
-      cfg = {
-        key: `video:${item.id}`,
-        preview: <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />,
-        // The band is YouTube embeds only (no uploads, no Shorts), same as its picker.
-        candidates: videoCandidates(videos.filter((v) => !v.onSite && v.provider === 'youtube' && !v.isShort)),
-        onPick: (id) => {
-          // Swap: the old video only leaves the site now that a replacement is chosen.
-          const next = videos.find((v) => v.id === id)
-          toggleVideoOnSite(placed)
-          if (next) toggleVideoOnSite(next)
-        },
-        onRemove: () => toggleVideoOnSite(placed),
-        empty: videosPageLink,
-        // A YouTube iframe: playback can't be touched from outside, so visual-only.
-        controls: buildVideoItemStyleControls('embed', styleOptions),
-      }
-    }
-    return (
-      <ItemEditor
-        key={cfg.key}
-        artistId={artistId}
-        styleKey={cfg.key}
-        label={item.label}
-        initialClasses={styleValues[cfg.key] ?? ''}
-        measured={measuredRegion?.key === cfg.key ? measuredRegion.measured : undefined}
-        palette={styleOptions}
-        preview={cfg.preview}
-        replace={{
-          title: `Replace ${item.label}`,
-          candidates: cfg.candidates,
-          onPick: cfg.onPick,
-          uploader: cfg.uploader,
-          empty: cfg.empty,
-        }}
-        controls={cfg.controls}
-        onRemove={() => {
-          cfg.onRemove()
-          back()
-        }}
-        swatches={siteColors}
-        onApplyStyle={applyItemStyle}
-        onBack={back}
-      />
-    )
-  }
-  const itemEditor = editingItem ? buildItemEditor(editingItem) : null
-  // Same panel slot as the other two, and mutually exclusive with them. Seeded with THIS
-  // date's act URLs only — the flat cross-date list is exactly what this replaced.
-  const tourEditor = editingTour ? (
-    <TourDateEditor
-      tour={editingTour.tour}
-      label={editingTour.label}
-      urls={Object.fromEntries(
-        supportLinks.filter((l) => l.tourDateId === editingTour.tour.id).map((l) => [l.name, l.url]),
-      )}
-      artistId={artistId}
-      onBack={() => setEditingTour(null)}
-    />
-  ) : null
-  // By ID, resolved against the LIVE list each render — a debounced save's
-  // router.refresh() replaces `merch`, and a captured row would show stale values.
-  const editingMerch = editingMerchId ? merch.find((m) => m.id === editingMerchId) : undefined
-  const merchEditor = editingMerch ? (
-    <MerchEditor
-      item={editingMerch}
-      artistId={artistId}
-      onBack={() => setEditingMerchId(null)}
-      onRemove={() => {
-        removeMerch(editingMerch)
-        setEditingMerchId(null)
-      }}
-    />
-  ) : null
-  // Same panel slot as the item editor, and mutually exclusive with it: opening one
-  // closes the other, so the panel is never showing two things at once.
-  const textEditor = editingText ? (
-    <TextFieldEditor
-      field={editingText}
-      value={textSave.values[editingText.key] ?? ''}
-      status={textSave.status}
-      styleValues={styleMap}
-      styleOptions={styleOptions}
-      onEdit={(v) => textSave.edit(editingText.key, v)}
-      // Paint AND persist. Unlike the item editor there is no Save button here: a
-      // sentence's font is a small, obvious change, and making the manager confirm it
-      // would sit oddly beside the words above it, which save as they type.
-      onStyle={(regionKey, className) => {
-        applyItemStyle(regionKey, className)
-        saveTextStyle(regionKey, className)
-      }}
-      onBack={() => {
-        setEditingText(null)
-        setFocused(null) // closing the editor deselects — the preview outline goes too
-      }}
-    />
-  ) : null
 
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
@@ -801,7 +532,7 @@ export function EditorInspector({
 
   function placeInSlot(role: string, photo: GalleryPhoto | null) {
     if (isPending) return
-    journal.record({ kind: 'slot', role, before: photos.find((p) => p.siteRole === role)?.id ?? null })
+    recordSlot(role, photos.find((p) => p.siteRole === role)?.id ?? null)
     const prev = photos
     run({
       apply: () => applySlotOptimistic(role, photo),
@@ -997,6 +728,104 @@ export function EditorInspector({
     )
   }
 
+  // The 4-branch "what can be full-panel edited" switch lives in item-editor-config.tsx
+  // now; the inspector renders ONE ItemEditor from the config it returns.
+  const itemEditorFor = (item: ItemEdit) => {
+    const cfg = buildItemEditorConfig(item, {
+      artistId,
+      photos,
+      videos,
+      styleOptions,
+      assetBudgets,
+      placeInSlot,
+      placePhoto,
+      unplacePhoto,
+      addPhoto,
+      assignHero,
+      toggleVideoOnSite,
+    })
+    if (!cfg) return null
+    const back = () => setEditingItem(null)
+    return (
+      <ItemEditor
+        key={cfg.key}
+        artistId={artistId}
+        styleKey={cfg.key}
+        label={item.label}
+        initialClasses={styleValues[cfg.key] ?? ''}
+        measured={measuredRegion?.key === cfg.key ? measuredRegion.measured : undefined}
+        palette={styleOptions}
+        preview={cfg.preview}
+        replace={{
+          title: `Replace ${item.label}`,
+          candidates: cfg.candidates,
+          onPick: cfg.onPick,
+          uploader: cfg.uploader,
+          empty: cfg.empty,
+        }}
+        controls={cfg.controls}
+        onRemove={() => {
+          cfg.onRemove()
+          back()
+        }}
+        swatches={siteColors}
+        onApplyStyle={applyItemStyle}
+        onBack={back}
+      />
+    )
+  }
+  const itemEditor = editingItem ? itemEditorFor(editingItem) : null
+  // Same panel slot as the other two, and mutually exclusive with them. Seeded with THIS
+  // date's act URLs only — the flat cross-date list is exactly what this replaced.
+  const tourEditor = editingTour ? (
+    <TourDateEditor
+      tour={editingTour.tour}
+      label={editingTour.label}
+      urls={Object.fromEntries(
+        supportLinks.filter((l) => l.tourDateId === editingTour.tour.id).map((l) => [l.name, l.url]),
+      )}
+      artistId={artistId}
+      onBack={() => setEditingTour(null)}
+    />
+  ) : null
+  // By ID, resolved against the LIVE list each render — a debounced save's
+  // router.refresh() replaces `merch`, and a captured row would show stale values.
+  const editingMerch = editingMerchId ? merch.find((m) => m.id === editingMerchId) : undefined
+  const merchEditor = editingMerch ? (
+    <MerchEditor
+      item={editingMerch}
+      artistId={artistId}
+      onBack={() => setEditingMerchId(null)}
+      onRemove={() => {
+        removeMerch(editingMerch)
+        setEditingMerchId(null)
+      }}
+    />
+  ) : null
+  // Same panel slot as the item editor, and mutually exclusive with it: opening one
+  // closes the other, so the panel is never showing two things at once.
+  const textEditor = editingText ? (
+    <TextFieldEditor
+      field={editingText}
+      value={textSave.values[editingText.key] ?? ''}
+      status={textSave.status}
+      styleValues={styleMap}
+      styleOptions={styleOptions}
+      onEdit={(v) => textSave.edit(editingText.key, v)}
+      // Paint AND persist. Unlike the item editor there is no Save button here: a
+      // sentence's font is a small, obvious change, and making the manager confirm it
+      // would sit oddly beside the words above it, which save as they type.
+      onStyle={(regionKey, className) => {
+        applyItemStyle(regionKey, className)
+        saveTextStyle(regionKey, className)
+      }}
+      onBack={() => {
+        setEditingText(null)
+        setFocused(null) // closing the editor deselects — the preview outline goes too
+      }}
+    />
+  ) : null
+
   /**
    * THE PANEL REGISTRY (2026-08-18 inspector split): one render thunk per Kind,
    * exhaustive by type — a new Kind that renders nothing is a COMPILE error, not a
@@ -1179,7 +1008,7 @@ export function EditorInspector({
           never-published artist). Shows while anything is unpublished OR touched this
           session; hidden while the ITEM editor is open (its own revert owns that
           surface). */}
-      {!itemEditor && !textEditor && !tourEditor && (journal.count > 0 || hasUnpublished) && (
+      {!itemEditor && !textEditor && !tourEditor && (journalCount > 0 || hasUnpublished) && (
         <SessionActions busy={reverting} onRemove={revertSession} />
       )}
     </aside>
