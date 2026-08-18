@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY, type SaveStatus } from './inspector-shared'
@@ -56,6 +56,7 @@ import {
   restorePublishedAction,
 } from '../actions'
 import { useSessionJournal } from './use-session-journal'
+import { useOptimisticRunner } from './use-optimistic'
 import { useSignal } from './use-signal'
 import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
@@ -283,7 +284,9 @@ export function EditorInspector({
   // One in-flight list mutation at a time: overlapping optimistic ops would each
   // capture a whole-array `prev`, and a later failure would revert to a snapshot that
   // predates a concurrent success — resurrecting a removed row / dropping a good change.
-  const [isPending, startTransition] = useTransition()
+  // The optimistic apply→persist→rollback rule, ONE home (use-optimistic.ts). Guarded
+  // ops share isPending; the on/off toggles pass guard:false (see the hook's docblock).
+  const { isPending, run } = useOptimisticRunner()
 
   // Clicking a styled region in the site opens the Style tools on it. This is the
   // whole point of the embedded-frame model (SITE_EDITOR_PLAN.md): click the thing,
@@ -800,10 +803,10 @@ export function EditorInspector({
     if (isPending) return
     journal.record({ kind: 'slot', role, before: photos.find((p) => p.siteRole === role)?.id ?? null })
     const prev = photos
-    applySlotOptimistic(role, photo)
-    startTransition(async () => {
-      const res = await assignComponentSlotAction(artistId, role, photo?.id ?? null)
-      if (res?.error) setPhotos(prev)
+    run({
+      apply: () => applySlotOptimistic(role, photo),
+      persist: () => assignComponentSlotAction(artistId, role, photo?.id ?? null),
+      rollback: () => setPhotos(prev),
     })
   }
 
@@ -811,18 +814,20 @@ export function EditorInspector({
   // the site (one write). This is how a plain uploaded asset gets its orientation — the
   // manager decides it by picking the photo into Horizontal or Vertical. Optimistic.
   function placePhoto(p: GalleryPhoto, orientation: Orientation) {
-    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, orientation, onSite: true } : x)))
-    startTransition(async () => {
-      const res = await placeGalleryPhotoAction(artistId, p.id, orientation)
-      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: p.onSite } : x)))
+    run({
+      guard: false,
+      apply: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, orientation, onSite: true } : x))),
+      persist: () => placeGalleryPhotoAction(artistId, p.id, orientation),
+      rollback: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: p.onSite } : x))),
     })
   }
   // Take a placed photo OFF the site, back into the library (never deletes). Optimistic.
   function unplacePhoto(p: GalleryPhoto) {
-    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: false } : x)))
-    startTransition(async () => {
-      const res = await setOnSiteAction('photo', p.id, artistId, false)
-      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: true } : x)))
+    run({
+      guard: false,
+      apply: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: false } : x))),
+      persist: () => setOnSiteAction('photo', p.id, artistId, false),
+      rollback: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: true } : x))),
     })
   }
   /** Show/hide a PLACED slot image WITHOUT unplacing it (Sam, 2026-08-18: "the hero
@@ -831,127 +836,135 @@ export function EditorInspector({
    *  no re-upload, no re-pick. */
   function togglePhotoOnSite(p: GalleryPhoto) {
     const next = !p.onSite
-    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: next } : x)))
-    startTransition(async () => {
-      const res = await setOnSiteAction('photo', p.id, artistId, next)
-      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: !next } : x)))
+    run({
+      guard: false,
+      apply: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: next } : x))),
+      persist: () => setOnSiteAction('photo', p.id, artistId, next),
+      rollback: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: !next } : x))),
     })
   }
   // Toggle a whole project on/off the site by flipping `on_site` on its songs — the
   // per-song flag is what the site actually gates on. `released` is untouched.
   function toggleProjectOnSite(r: EditorProject) {
     const next = !r.onSite
-    setReleases((list) => list.map((x) => (x.key === r.key ? { ...x, onSite: next } : x)))
-    startTransition(async () => {
-      const res = await setSongsOnSiteAction(artistId, r.songs.map((x) => x.id), next)
-      if (res?.error) setReleases((list) => list.map((x) => (x.key === r.key ? { ...x, onSite: !next } : x)))
+    run({
+      guard: false,
+      apply: () => setReleases((list) => list.map((x) => (x.key === r.key ? { ...x, onSite: next } : x))),
+      persist: () => setSongsOnSiteAction(artistId, r.songs.map((x) => x.id), next),
+      rollback: () => setReleases((list) => list.map((x) => (x.key === r.key ? { ...x, onSite: !next } : x))),
     })
   }
   function toggleLinkOnSite(l: EditorLink) {
     const next = !l.onSite
-    setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: next } : x)))
-    startTransition(async () => {
-      const res = await setOnSiteAction('link', l.id, artistId, next)
-      if (res?.error) setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: !next } : x)))
+    run({
+      guard: false,
+      apply: () => setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: next } : x))),
+      persist: () => setOnSiteAction('link', l.id, artistId, next),
+      rollback: () => setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, onSite: !next } : x))),
     })
   }
   function toggleVideoOnSite(v: EditorVideo) {
     const next = !v.onSite
-    setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: next } : x)))
-    startTransition(async () => {
-      const res = await setOnSiteAction('video', v.id, artistId, next)
-      if (res?.error) setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: !next } : x)))
+    run({
+      guard: false,
+      apply: () => setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: next } : x))),
+      persist: () => setOnSiteAction('video', v.id, artistId, next),
+      rollback: () => setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, onSite: !next } : x))),
     })
   }
   // Place (or clear) a video in a hero slot. Optimistic so the slot fills immediately —
   // vacate the role's current holder, then set the picked video. Mirrors assignHeroSlotAction.
   function assignHero(role: SiteVideoRole, videoId: string | null) {
     const prev = videos
-    setVideos((list) =>
-      list.map((x) => {
-        // Guard `x.id !== videoId`: re-picking the video ALREADY in this slot would
-        // otherwise hit the clear branch first and blank the slot until revalidation.
-        if (x.siteRole === role && x.id !== videoId) return { ...x, siteRole: null, onSite: false }
-        if (x.id === videoId) return { ...x, siteRole: role, onSite: true }
-        return x
-      }),
-    )
-    startTransition(async () => {
-      const res = await assignHeroSlotAction(artistId, role, videoId)
-      if (res?.error) setVideos(prev)
+    run({
+      guard: false,
+      apply: () =>
+        setVideos((list) =>
+          list.map((x) => {
+            // Guard `x.id !== videoId`: re-picking the video ALREADY in this slot would
+            // otherwise hit the clear branch first and blank the slot until revalidation.
+            if (x.siteRole === role && x.id !== videoId) return { ...x, siteRole: null, onSite: false }
+            if (x.id === videoId) return { ...x, siteRole: role, onSite: true }
+            return x
+          }),
+        ),
+      persist: () => assignHeroSlotAction(artistId, role, videoId),
+      rollback: () => setVideos(prev),
     })
   }
   function toggleTourOnSite(t: EditorTour) {
     const next = !t.onSite
-    setTours((list) => list.map((x) => (x.id === t.id ? { ...x, onSite: next } : x)))
-    startTransition(async () => {
-      const res = await setOnSiteAction('tour', t.id, artistId, next)
-      if (res?.error) setTours((list) => list.map((x) => (x.id === t.id ? { ...x, onSite: !next } : x)))
+    run({
+      guard: false,
+      apply: () => setTours((list) => list.map((x) => (x.id === t.id ? { ...x, onSite: next } : x))),
+      persist: () => setOnSiteAction('tour', t.id, artistId, next),
+      rollback: () => setTours((list) => list.map((x) => (x.id === t.id ? { ...x, onSite: !next } : x))),
     })
   }
 
   function removeLink(l: EditorLink) {
-    if (isPending) return
     const prev = links
-    setLinks((list) => list.filter((x) => x.id !== l.id)) // optimistic
-    startTransition(async () => {
-      const res = await deleteContentAction('link', l.id, artistId)
-      if (res?.error) setLinks(prev)
+    run({
+      apply: () => setLinks((list) => list.filter((x) => x.id !== l.id)),
+      persist: () => deleteContentAction('link', l.id, artistId),
+      rollback: () => setLinks(prev),
     })
   }
 
-  /** Reorder by ID, not by index: the panel renders links in TWO lists (Socials and
-   *  Contact), so a row's index within its own list is not its index in `links`. */
-  function reorderLinks(fromId: string, toId: string) {
-    if (isPending) return
-    const from = links.findIndex((l) => l.id === fromId)
-    const to = links.findIndex((l) => l.id === toId)
+  /** The four drag-reorders share one shape: move the row by ID (never index — a panel
+   *  may render one list as several groups), persist the full renumbered order, roll
+   *  back the whole list on error. */
+  function reorderBy<T>(
+    list: T[],
+    setList: (l: T[]) => void,
+    idOf: (x: T) => string,
+    fromId: string,
+    toId: string,
+    persist: (next: T[]) => Promise<{ error?: string } | void>,
+  ) {
+    const from = list.findIndex((x) => idOf(x) === fromId)
+    const to = list.findIndex((x) => idOf(x) === toId)
     if (from < 0 || to < 0 || from === to) return
-    const prev = links
-    const next = reorderList(links, from, to)
-    setLinks(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderContentAction('link', artistId, next.map((l) => l.id))
-      if (res?.error) setLinks(prev)
+    const prev = list
+    const next = reorderList(list, from, to)
+    run({
+      apply: () => setList(next),
+      persist: () => persist(next),
+      rollback: () => setList(prev),
     })
+  }
+
+  function reorderLinks(fromId: string, toId: string) {
+    reorderBy(links, setLinks, (l) => l.id, fromId, toId, (next) =>
+      reorderContentAction('link', artistId, next.map((l) => l.id)),
+    )
   }
 
   // Videos are placed into slots from the library (VideoTools), not deleted/reordered
   // here — deleting a video for good is a Videos-page action, and the band orders by
   // sort_order — so the editor no longer needs removeVideo/reorderVideos.
 
-  /** Drag a merch card onto another — same optimistic shape as links/tours/projects. */
   function reorderMerch(fromId: string, toId: string) {
-    if (isPending) return
-    const from = merch.findIndex((m) => m.id === fromId)
-    const to = merch.findIndex((m) => m.id === toId)
-    if (from < 0 || to < 0 || from === to) return
-    const prev = merch
-    const next = reorderList(merch, from, to)
-    setMerch(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderContentAction('merch', artistId, next.map((m) => m.id))
-      if (res?.error) setMerch(prev)
-    })
+    reorderBy(merch, setMerch, (m) => m.id, fromId, toId, (next) =>
+      reorderContentAction('merch', artistId, next.map((m) => m.id)),
+    )
   }
 
   function removeMerch(m: EditorMerch) {
-    if (isPending) return
     const prev = merch
-    setMerch((list) => list.filter((x) => x.id !== m.id)) // optimistic
-    startTransition(async () => {
-      const res = await deleteContentAction('merch', m.id, artistId)
-      if (res?.error) setMerch(prev)
+    run({
+      apply: () => setMerch((list) => list.filter((x) => x.id !== m.id)),
+      persist: () => deleteContentAction('merch', m.id, artistId),
+      rollback: () => setMerch(prev),
     })
   }
 
   function removeTour(t: EditorTour) {
-    if (isPending) return
     const prev = tours
-    setTours((list) => list.filter((x) => x.id !== t.id)) // optimistic
-    startTransition(async () => {
-      const res = await deleteContentAction('tour_date', t.id, artistId)
-      if (res?.error) setTours(prev)
+    run({
+      apply: () => setTours((list) => list.filter((x) => x.id !== t.id)),
+      persist: () => deleteContentAction('tour_date', t.id, artistId),
+      rollback: () => setTours(prev),
     })
   }
 
@@ -962,20 +975,11 @@ export function EditorInspector({
    * with the dragged row moved, keeping dated rows where the date sort put them.
    */
   function reorderTours(fromId: string, toId: string) {
-    if (isPending) return
-    // EVERY row, dated included (Sam, 2026-08-17). The whole list is renumbered because
-    // a numbered dated row is exactly what flips a connected site into manual mode —
-    // dragged order rules, date only breaks unnumbered ties.
-    const from = tours.findIndex((t) => t.id === fromId)
-    const to = tours.findIndex((t) => t.id === toId)
-    if (from < 0 || to < 0 || from === to) return
-    const prev = tours
-    const next = reorderList(tours, from, to)
-    setTours(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderContentAction('tour_date', artistId, next.map((t) => t.id))
-      if (res?.error) setTours(prev)
-    })
+    // EVERY row, dated included (Sam, 2026-08-17): a numbered dated row is what flips a
+    // connected site into manual mode — dragged order rules, date breaks unnumbered ties.
+    reorderBy(tours, setTours, (t) => t.id, fromId, toId, (next) =>
+      reorderContentAction('tour_date', artistId, next.map((t) => t.id)),
+    )
   }
 
   /**
@@ -986,17 +990,11 @@ export function EditorInspector({
    * wire order) into manual mode.
    */
   function reorderProjects(fromKey: string, toKey: string) {
-    if (isPending) return
-    const from = releases.findIndex((r) => r.key === fromKey)
-    const to = releases.findIndex((r) => r.key === toKey)
-    if (from < 0 || to < 0 || from === to) return
-    const prev = releases
-    const next = reorderList(releases, from, to)
-    setReleases(next) // optimistic
-    startTransition(async () => {
-      const res = await reorderContentAction('track', artistId, next.flatMap((r) => r.songs.map((s) => s.id)))
-      if (res?.error) setReleases(prev)
-    })
+    // Persists every TRACK in the new project order — the numbering is what flips
+    // groupTracksIntoProjects (and the wire) into manual mode.
+    reorderBy(releases, setReleases, (r) => r.key, fromKey, toKey, (next) =>
+      reorderContentAction('track', artistId, next.flatMap((r) => r.songs.map((s) => s.id))),
+    )
   }
 
   return (
