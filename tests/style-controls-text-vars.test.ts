@@ -129,12 +129,14 @@ describe('both shapes are owned — a stored class is replaced, never stacked', 
 })
 
 describe('sliders place stored values of either shape', () => {
-  it('a stored weight token and its legacy class land on the same step', () => {
+  it('a stored weight token and its legacy class light the SAME segment', () => {
+    // Weight is a button row now; canonical equivalence is what lights the segment, so
+    // both eras of a stored Bold press the same button.
     const c = byId(buildTextItemStyleControls(NOW), 'weight')
-    const fromToken = sliderIndex(c, 'weight-[700]')
-    const fromClass = sliderIndex(c, 'font-bold')
-    expect(fromToken.idx).toBe(fromClass.idx)
-    expect(sliderSteps(c)[fromToken.idx].label).toBe('Bold')
+    if (c.kind !== 'select' || !c.segmented) throw new Error('weight must be segmented')
+    const bold = c.options.find((o) => o.label === 'Bold')!
+    expect(sameClasses(bold.value, 'weight-[700]')).toBe(true)
+    expect(sameClasses(bold.value, 'font-bold')).toBe(true)
   })
 
   it('a stored lead token lands beside its ratio', () => {

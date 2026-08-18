@@ -69,7 +69,7 @@ import {
 } from '@samfox1/site-bridge/vocabulary'
 
 export type StyleControl =
-  | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean }
+  | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean; segmented?: boolean }
   | { id: string; label: string; kind: 'toggle'; onClass: string; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean }
   /** A hex picker. The plain form (border colour) is special-cased where it renders; a
    *  control that sets `hexOf`/`toToken` is GENERIC — the row reads the current hex out
@@ -348,6 +348,14 @@ const weightRank = (t: string): number | null => {
 const weightToken = (o: StyleOption): StyleOption =>
   ({ ...o, value: `weight-[${WEIGHT_NUM[o.value.slice('font-'.length)]}]` })
 
+/** The three weights a manager actually reaches for, era-appropriate. */
+const WEIGHT_SEGMENTS = (tokens: boolean): StyleOption[] =>
+  [
+    { value: 'font-normal', label: 'Normal' },
+    { value: 'font-bold', label: 'Bold' },
+    { value: 'font-black', label: 'Black' },
+  ].map((o) => (tokens ? weightToken(o) : o))
+
 const isAlignVar = (t: string) => t.startsWith('align-[')
 const alignToken = (o: StyleOption): StyleOption =>
   ({ ...o, value: `align-[${o.value.slice('text-'.length)}]` })
@@ -527,6 +535,8 @@ const ownsIconSize = (t: string) => t.startsWith('iconsize-[')
 // The centred dressing sliders: Auto sits mid-ladder and ranks like ~2px (a browser's
 // usual auto thickness), so sub-pixel steps sort left of it and 3px+ right of it.
 const thicknessRank = (t: string): number | null => (t === '' ? 2 : pxRank({})(t))
+/** '' parks at 0px — the browser's own offset — same off-scale shape as thickness. */
+const decoOffsetRank = (t: string): number | null => (t === '' ? 0 : pxRank({})(t))
 
 const SHADOW_RANK: Record<string, number> = {
   '': 0, 'shadow-none': 0, 'shadow-sm': 1, shadow: 2, 'shadow-md': 3,
@@ -656,11 +666,15 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
           owns: ownsSize,
         },
   )
+  // BUTTONS, not a slider or a nine-deep menu (Sam, 2026-08-17: "a lot of text only has
+  // 2 or 3 levels of thickness"): Default · Normal · Bold · Black. Ownership still spans
+  // every weight of either era, so a stored intermediate is replaced, never stacked.
   controls.push({
     id: 'weight',
     label: 'Boldness',
     kind: 'select',
-    options: [DEFAULT, ...(usesTextVars(opts) ? WEIGHT_OPTIONS.map(weightToken) : WEIGHT_OPTIONS)],
+    segmented: true,
+    options: [DEFAULT, ...WEIGHT_SEGMENTS(usesTextVars(opts))],
     owns: (t) => isWeightVar(t) || WEIGHTS.includes(fontSuffix(t)),
   })
   // ONE colour-picking format everywhere (Sam, 2026-08-12): the ColorPalette hex
@@ -707,8 +721,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   // The line's own dressing (Sam, 2026-08-11): colour, thickness, and how far an
   // underline sits from the word. One dressing serves both decorations.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
-  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, defaultOffScale: true, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
+  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, defaultOffScale: true, rank: decoOffsetRank, owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
     id: 'frost',
@@ -830,20 +844,15 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
           owns: ownsSize,
         },
   )
+  // BUTTONS (Sam, 2026-08-17): the five-step slider succeeded the nine-step one for the
+  // same reason this succeeds it — "a lot of text only has 2 or 3 levels of thickness."
+  // Default · Normal · Bold · Black, as one press each.
   controls.push({
     id: 'weight',
     label: 'Thickness',
-    kind: 'slider',
-    // Five distinct weights, not Tailwind's nine: most fonts ship a handful and the
-    // browser synthesizes the rest into near-duplicates, so nine steps meant dead
-    // notches on the slider (Sam, 2026-08-12). Derived by filtering the one table.
-    steps: [DEFAULT, ...WEIGHT_OPTIONS.filter((o) =>
-      ['font-light', 'font-normal', 'font-medium', 'font-bold', 'font-black'].includes(o.value),
-    ).map((o) => (usesTextVars(opts) ? weightToken(o) : o))],
-    defaultOffScale: true,
-    // The rank is what lets a stored value of EITHER shape land on its step — a token
-    // and its legacy class both resolve to the same number.
-    rank: weightRank,
+    kind: 'select',
+    segmented: true,
+    options: [DEFAULT, ...WEIGHT_SEGMENTS(usesTextVars(opts))],
     owns: (t) => isWeightVar(t) || WEIGHTS.includes(fontSuffix(t)),
   })
   // Sam, 2026-08-05: "allow all text input editor sections to edit these parts" — the gap
@@ -917,8 +926,8 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   // — the underline is the one decoration, so the dressing below is unambiguously its.
   // A stored line-through still renders; the section panel still offers it.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
-  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
+  controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, defaultOffScale: true, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
+  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, defaultOffScale: true, rank: decoOffsetRank, owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...motionControls())
   // 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
   // becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).

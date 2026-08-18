@@ -328,13 +328,12 @@ describe('TextFieldEditor — one field, full panel', () => {
     const onStyle = editor(styled, { hero_title: '' })
     const controls = buildTextItemStyleControls(OPTIONS)
     const sizeSteps = controls.find((c) => c.id === 'size')!
-    const weightSteps = controls.find((c) => c.id === 'weight')!
     const sIdx = sliderSteps(sizeSteps).length - 2 // not the mid resting position
     const sVal = sliderSteps(sizeSteps)[sIdx].value
-    const wIdx = sliderSteps(weightSteps).findIndex((s) => s.label === 'Bold')
 
     fireEvent.change(screen.getByLabelText('Hero title Size'), { target: { value: String(sIdx) } })
-    fireEvent.change(screen.getByLabelText('Hero title Thickness'), { target: { value: String(wIdx) } })
+    // Thickness is a button row now.
+    fireEvent.click(within(screen.getByRole('group', { name: 'Hero title Thickness' })).getByRole('button', { name: 'Bold' }))
 
     const last = onStyle.mock.calls.at(-1) as unknown as string[]
     expect(last[1]).toContain(sVal)
@@ -521,10 +520,7 @@ describe('CRITICAL: styling a region must not destroy the site’s own classes',
         onBack={vi.fn()}
       />,
     )
-    const control = buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'weight')!
-    fireEvent.change(screen.getByLabelText('Hero wordmark Thickness'), {
-      target: { value: String(sliderSteps(control).length - 1) },
-    })
+    fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark Thickness' })).getByRole('button', { name: 'Black' }))
     const [, className] = onStyle.mock.calls[0] as unknown as string[]
     // The stored size is kept; the base's original size does not come back.
     expect(className).toContain('clamp(1rem,3vw,1.25rem)')

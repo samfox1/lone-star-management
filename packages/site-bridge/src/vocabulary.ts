@@ -260,16 +260,21 @@ export const SECTION_HEIGHT_STEPS: StyleOption[] = [
  *  thickness should start in the middle, same with distance"). Left of centre is a
  *  real value: sub-pixel thickness draws a hairline, a negative offset pulls the line
  *  up into the word. Auto ranks ~2px in the editor, between the two halves. */
-const THIN_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75]
-const THICK_STEPS = [3, 4, 5, 6, 8, 10, 12]
-export const DECO_THICKNESS_STEPS: StyleOption[] = [
-  ...THIN_STEPS.map((n) => ({ value: `decothick-[${n}px]`, label: `${n}px` })),
-  { value: '', label: 'Auto' },
-  ...THICK_STEPS.map((n) => ({ value: `decothick-[${n}px]`, label: `${n}px` })),
-]
-export const DECO_OFFSET_STEPS: StyleOption[] = Array.from({ length: 33 }, (_, i) => {
-  const n = i - 16
-  return { value: n === 0 ? '' : `underoffset-[${n}px]`, label: n === 0 ? 'Auto' : `${n}px` }
+/* WHOLE pixels only (Sam, 2026-08-17): browsers round text-decoration-thickness, so the
+ * seven sub-pixel steps rendered identically — the handle moved, the line did not,
+ * which reads as a broken slider. And no '' step: Auto is the off-scale default
+ * (thicknessRank parks it beside 2px), same defaultOffScale shape as every other
+ * measuring slider. Removed values stay in tokens.css forever (append-only) so stored
+ * rows keep rendering. */
+export const DECO_THICKNESS_STEPS: StyleOption[] = [1, 2, 3, 4, 5, 6, 8, 10, 12].map(
+  (n) => ({ value: `decothick-[${n}px]`, label: `${n}px` }),
+)
+/* Barely up, plenty down (Sam: "users aren't going to slide it high up where it's cut
+ * off by the lettering"). Negative = INTO the glyphs; -3 is the most that reads as a
+ * strike-adjacent style rather than a collision. */
+export const DECO_OFFSET_STEPS: StyleOption[] = Array.from({ length: 16 }, (_, i) => {
+  const n = i - 3
+  return { value: `underoffset-[${n}px]`, label: `${n}px` }
 })
 const DECO_COLOR_PROBE: StyleOption[] = [{ value: 'decocolor-[#ff0000]', label: 'probe' }]
 

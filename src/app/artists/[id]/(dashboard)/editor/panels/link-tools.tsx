@@ -129,7 +129,15 @@ export function SiteLinkTools({
         const url = text[r.key] ?? ''
         const isOpen = openKey === r.key
         return (
-          <div key={r.key} ref={isOpen ? openRef : undefined}>
+          <div
+            key={r.key}
+            ref={isOpen ? openRef : undefined}
+            // The same accent ring every other selected thing wears. The row already
+            // OPENED on a frame click, but opening alone did not read as "this is the
+            // one you clicked" (Sam, 2026-08-17, wren's Listen button).
+            className={cx('rounded-lg', selected === r.key && 'ring-2 ring-accent')}
+            aria-current={selected === r.key ? 'true' : undefined}
+          >
             {/* The URL is plain text until the pencil opens the box (no "lit" editable
                 link, no bolt icon). The site's `description` rides the row's hover title
                 and the box's accessible description, so it never costs a row. */}

@@ -377,16 +377,16 @@ describe('the text tab, tuned (Sam, 2026-08-12)', () => {
     expect(text.find((c) => c.id === 'decoThickness')).toBeTruthy()
   })
 
-  it('Thickness offers only weights fonts render distinctly — five, not nine', () => {
-    // "Text thickness only has so many thicknesses that it can change to" — most
-    // fonts ship a handful of weights and the browser synthesizes the rest into
-    // near-duplicates; nine steps meant four dead notches.
+  it('Thickness is a BUTTON ROW: Default · Normal · Bold · Black (Sam, 2026-08-17)', () => {
+    // Third size of this control: nine slider steps → five → buttons, each shrink for
+    // the same reason ("a lot of text only has 2 or 3 levels of thickness").
     const w = text.find((c) => c.id === 'weight')!
-    if (w.kind !== 'slider') throw new Error('unreachable')
-    // Token era: same five weights, spoken as numbers the bridge lifts onto --lse-weight.
-    expect(w.steps.map((s) => s.value)).toEqual([
-      '', 'weight-[300]', 'weight-[400]', 'weight-[500]', 'weight-[700]', 'weight-[900]',
-    ])
+    if (w.kind !== 'select' || !w.segmented) throw new Error('weight must be a segmented select')
+    expect(w.options.map((o) => o.label)).toEqual(['Default', 'Normal', 'Bold', 'Black'])
+    // Ownership still spans EVERY weight of either era — a stored font-medium is
+    // replaced when a segment is pressed, never left to stack.
+    expect(w.owns('font-medium')).toBe(true)
+    expect(w.owns('weight-[500]')).toBe(true)
   })
 
   it("the offset slider is named 'Line Y position'", () => {
@@ -842,30 +842,35 @@ describe('the line dressing implies a line (2026-08-11)', () => {
   })
 })
 
-describe('the dressing sliders start in the middle (2026-08-11)', () => {
-  // Sam: "Line thickness should start in the middle, same with distance." Like Size
-  // and Tilt: the untouched '' step sits at the CENTRE of the ladder, so left of it
-  // is thinner/closer than Auto and right is thicker/farther. The monotonic-rank
-  // invariant above already proves the ranks agree with that ordering.
-  const textControls = buildTextItemStyleControls(PALETTE)
-
-  it.each(['decoThickness', 'decoOffset'])('CRITICAL: %s centres its Auto step', (id) => {
-    const c = textControls.find((x) => x.id === id)
-    if (!c || c.kind !== 'slider') throw new Error(id)
-    const idx = c.steps.findIndex((s) => s.value === '')
-    expect(idx, `${id} has an Auto step`).toBeGreaterThan(0)
-    expect(idx, `${id} Auto sits mid-ladder`).toBe(Math.floor(c.steps.length / 2))
+describe('the dressing sliders park OFF-SCALE at their browser defaults (2026-08-17)', () => {
+  // v1 centred a literal Auto step; v2 removes it: Auto is the off-scale default, the
+  // same shape as every measuring slider, and the scales themselves shrank — whole
+  // pixels only for thickness (browsers round text-decoration-thickness, so sub-pixel
+  // steps moved the handle without moving the line), and -3..12 for the Y position
+  // ("users aren't going to slide it high up where it's cut off by the lettering").
+  const text = buildTextItemStyleControls(PALETTE)
+  it('thickness: whole-px scale, unset rests at Default, a stored px parks exactly', () => {
+    const c = text.find((x) => x.id === 'decoThickness')!
+    if (c.kind !== 'slider') throw new Error('unreachable')
+    const steps = sliderSteps(c)
+    // Whole pixels only: browsers round text-decoration-thickness, so the old
+    // sub-pixel steps moved the handle without moving the line.
+    expect(steps.every((s) => /^decothick-\[\d+px\]$/.test(s.value))).toBe(true)
+    const unset = sliderIndex(c, '')
+    expect(unset.exact).toBe(false)
+    expect(unset.label).toBe('Default')
+    const stored = sliderIndex(c, 'decothick-[4px]')
+    expect(steps[stored.idx].label).toBe('4px')
+    expect(stored.exact).toBe(true)
   })
-
-  it('distance goes negative and thickness goes sub-pixel left of centre', () => {
-    const offset = textControls.find((x) => x.id === 'decoOffset')
-    const thickness = textControls.find((x) => x.id === 'decoThickness')
-    if (offset?.kind !== 'slider' || thickness?.kind !== 'slider') throw new Error('sliders')
-    expect(offset.steps.some((s) => /underoffset-\[-\d+px\]/.test(s.value))).toBe(true)
-    expect(thickness.steps.some((s) => /decothick-\[0\.\d+px\]/.test(s.value))).toBe(true)
-    // And the rank fn actually reads them — a regex still integer-only returns null.
-    expect(offset.rank!('underoffset-[-6px]')).toBeLessThan(offset.rank!('')!)
-    expect(thickness.rank!('decothick-[0.5px]')).toBeLessThan(thickness.rank!('')!)
+  it('Y position: barely up, plenty down, unset parks at 0', () => {
+    const c = text.find((x) => x.id === 'decoOffset')!
+    if (c.kind !== 'slider') throw new Error('unreachable')
+    const steps = sliderSteps(c)
+    expect(c.rank!(steps[0].value)).toBe(-3)
+    expect(c.rank!(steps[steps.length - 1].value)).toBe(12)
+    const stored = sliderIndex(c, 'underoffset-[4px]')
+    expect(steps[stored.idx].label).toBe('4px')
   })
 })
 

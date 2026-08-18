@@ -149,6 +149,36 @@ export function StyleControlRow({
       </ControlRow>
     )
   }
+  if (control.kind === 'select' && control.segmented) {
+    // BUTTON ROW (Sam, 2026-08-17, boldness): a couple of real choices pressed directly,
+    // not a menu opened for them. Active-state matching is canonical, so a stored
+    // font-bold lights the same segment as weight-[700]; a stored in-between weight
+    // (font-medium) lights nothing, which is honest — Default returns to the base.
+    const activeOf = (v: string) =>
+      v === '' ? current === '' : current !== '' && sameClasses(v, current)
+    return (
+      <ControlRow label={control.label} scopeTag={control.phoneScoped ? 'Mobile' : undefined}>
+        <span className="flex items-center gap-1" role="group" aria-label={aria}>
+          {control.options.map((o) => (
+            <button
+              key={o.value || 'default'}
+              type="button"
+              aria-pressed={activeOf(o.value)}
+              onClick={() => onChange(o.value)}
+              className={cx(
+                'rounded-md border px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.05em] transition-colors',
+                activeOf(o.value)
+                  ? 'border-ink bg-ink text-paper'
+                  : 'border-hairline text-ink-muted hover:border-ink hover:text-ink',
+              )}
+            >
+              {o.value === '' ? 'Auto' : o.label}
+            </button>
+          ))}
+        </span>
+      </ControlRow>
+    )
+  }
   // Show the current value even when it's a class the site declared no option for (e.g. a
   // base class), so nothing is silently dropped or mislabelled as Default. In the token
   // era that off-list case is EVERY legacy value — the options say `align-[center]` while

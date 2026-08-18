@@ -1358,7 +1358,10 @@ describe('EditorInspector — Style component (no-code controls)', () => {
 
   it('reads the base classes into the controls (Black weight, Uppercase on)', () => {
     focusStyle('hero_wordmark')
-    expect((screen.getByLabelText('Hero wordmark (SKEEN) Boldness') as HTMLSelectElement).value).toBe('font-black')
+    // Boldness is a BUTTON ROW now; the base's font-black lights the Black segment
+    // (canonical matching, so weight-[900] would light the same one).
+    const group = screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })
+    expect(within(group).getByRole('button', { name: 'Black' }).getAttribute('aria-pressed')).toBe('true')
     // The toggles are role=switch buttons (not checkboxes), so the on/off state is
     // aria-checked — the same signal a screen reader reads.
     expect(screen.getByLabelText('Hero wordmark (SKEEN) Uppercase').getAttribute('aria-checked')).toBe('true')
@@ -1367,7 +1370,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
   it('changing Boldness swaps the weight class and PRESERVES the rest, repainting live', () => {
     const onApplyStyle = vi.fn()
     focusStyle('hero_wordmark', { onApplyStyle })
-    fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'weight-[700]' } })
+    fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Bold' }))
     expect(onApplyStyle).toHaveBeenCalledWith('hero_wordmark', 'uppercase weight-[700]')
   })
 
@@ -1402,15 +1405,14 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     vi.useFakeTimers()
     try {
       focusStyle('hero_wordmark')
-      const weight = screen.getByLabelText('Hero wordmark (SKEEN) Boldness')
-      fireEvent.change(weight, { target: { value: 'weight-[700]' } })
+      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Bold' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'uppercase weight-[700]')
       // Back to the base weight — VIA ITS TOKEN. The base says `font-black`, the control
       // now offers `weight-[900]`; the two must read as the same meaning or returning to
       // the base pins an override every time (the exact regression the migration risked).
       // (Async advance: the second persist chains behind the first's promise.)
-      fireEvent.change(weight, { target: { value: 'weight-[900]' } })
+      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Black' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
     } finally {
@@ -1425,11 +1427,11 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     vi.useFakeTimers()
     try {
       focusStyle('hero_wordmark', { styleOptions: withStyleVars(undefined, '0.24.0') })
-      fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'weight-[700]' } })
+      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Bold' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'lse-delta weight-[700]')
       // Back to the base's weight: the delta empties and the row is DELETED.
-      fireEvent.change(screen.getByLabelText('Hero wordmark (SKEEN) Boldness'), { target: { value: 'weight-[900]' } })
+      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Black' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
     } finally {
