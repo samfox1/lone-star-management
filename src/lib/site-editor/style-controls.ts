@@ -56,7 +56,6 @@ import {
   SECTION_WIDTH_STEPS,
   SECTION_HEIGHT_STEPS,
   DECO_THICKNESS_STEPS,
-  DECO_OFFSET_STEPS,
   // ENTRANCE_OPTIONS, ENTRANCE_SPEED_STEPS, ENTRANCE_TRAVEL_STEPS — ENTRANCES PAUSED
   // (2026-08-12), see motionControls().
   HOVER_OPTIONS,
@@ -348,12 +347,12 @@ const weightRank = (t: string): number | null => {
 const weightToken = (o: StyleOption): StyleOption =>
   ({ ...o, value: `weight-[${WEIGHT_NUM[o.value.slice('font-'.length)]}]` })
 
-/** The three weights a manager actually reaches for, era-appropriate. */
+/** Two weights (Sam, 2026-08-17: "just normal or bold"), era-appropriate. Ownership
+ *  still spans every weight, so stored intermediates and Black-era picks replace fine. */
 const WEIGHT_SEGMENTS = (tokens: boolean): StyleOption[] =>
   [
     { value: 'font-normal', label: 'Normal' },
     { value: 'font-bold', label: 'Bold' },
-    { value: 'font-black', label: 'Black' },
   ].map((o) => (tokens ? weightToken(o) : o))
 
 const isAlignVar = (t: string) => t.startsWith('align-[')
@@ -535,8 +534,8 @@ const ownsIconSize = (t: string) => t.startsWith('iconsize-[')
 // The centred dressing sliders: Auto sits mid-ladder and ranks like ~2px (a browser's
 // usual auto thickness), so sub-pixel steps sort left of it and 3px+ right of it.
 const thicknessRank = (t: string): number | null => (t === '' ? 2 : pxRank({})(t))
-/** '' parks at 0px — the browser's own offset — same off-scale shape as thickness. */
-const decoOffsetRank = (t: string): number | null => (t === '' ? 0 : pxRank({})(t))
+/* Line Y position REMOVED entirely (Sam, 2026-08-17) — stored `underoffset-[…]` rows
+ * keep rendering via the bridge; there is just no control writing new ones. */
 
 const SHADOW_RANK: Record<string, number> = {
   '': 0, 'shadow-none': 0, 'shadow-sm': 1, shadow: 2, 'shadow-md': 3,
@@ -722,7 +721,6 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   // underline sits from the word. One dressing serves both decorations.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, defaultOffScale: true, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, defaultOffScale: true, rank: decoOffsetRank, owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...gradientPair('bggrad', 'Background gradient start', 'Background gradient end'))
   controls.push({
     id: 'frost',
@@ -927,7 +925,6 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   // A stored line-through still renders; the section panel still offers it.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, defaultOffScale: true, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push({ id: 'decoOffset', label: 'Line Y position', kind: 'slider', steps: DECO_OFFSET_STEPS, defaultOffScale: true, rank: decoOffsetRank, owns: (t) => t.startsWith('underoffset-['), impliesLine: true })
   controls.push(...motionControls())
   // 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
   // becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).

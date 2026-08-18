@@ -377,20 +377,22 @@ describe('the text tab, tuned (Sam, 2026-08-12)', () => {
     expect(text.find((c) => c.id === 'decoThickness')).toBeTruthy()
   })
 
-  it('Thickness is a BUTTON ROW: Default · Normal · Bold · Black (Sam, 2026-08-17)', () => {
-    // Third size of this control: nine slider steps → five → buttons, each shrink for
-    // the same reason ("a lot of text only has 2 or 3 levels of thickness").
+  it('Thickness is a BUTTON ROW: Default · Normal · Bold (Sam, 2026-08-17 ×2)', () => {
+    // Fourth size of this control: nine slider steps → five → three buttons → two
+    // ("just normal or bold"), each shrink for the same reason.
     const w = text.find((c) => c.id === 'weight')!
     if (w.kind !== 'select' || !w.segmented) throw new Error('weight must be a segmented select')
-    expect(w.options.map((o) => o.label)).toEqual(['Default', 'Normal', 'Bold', 'Black'])
+    expect(w.options.map((o) => o.label)).toEqual(['Default', 'Normal', 'Bold'])
     // Ownership still spans EVERY weight of either era — a stored font-medium is
     // replaced when a segment is pressed, never left to stack.
     expect(w.owns('font-medium')).toBe(true)
     expect(w.owns('weight-[500]')).toBe(true)
   })
 
-  it("the offset slider is named 'Line Y position'", () => {
-    expect(text.find((c) => c.id === 'decoOffset')?.label).toBe('Line Y position')
+  it('there is NO Line Y position control any more (Sam, 2026-08-17)', () => {
+    // Removed outright: nobody slides an underline up into the lettering, and stored
+    // underoffset rows keep rendering through the bridge without a control.
+    expect(text.find((c) => c.id === 'decoOffset')).toBeUndefined()
   })
 })
 
@@ -411,7 +413,7 @@ describe('buildStyleControls', () => {
     // stays palette-gated (a font class the site never compiled is a silent no-op).
     expect(bare).toEqual([
       'size', 'weight', 'textColor', 'bgColor', 'align', 'textShadow', 'textStroke', 'textGlow',
-      'underline', 'strike', 'decoColor', 'decoThickness', 'decoOffset',
+      'underline', 'strike', 'decoColor', 'decoThickness',
       'bggradFrom', 'bggradTo',
       'frost', 'pad', 'uppercase', 'italic',
       // Entrances PAUSED 2026-08-12 (see motionControls) — hover stays.
@@ -813,7 +815,9 @@ describe('the line dressing implies a line (2026-08-11)', () => {
   })
 
   it('a line already present is kept, not doubled — strikethrough stays strikethrough', () => {
-    const next = applyStyleValue('line-through', byId('decoOffset'), 'underoffset-[6px]')
+    // Via thickness now — the Y-position control is gone, but the rule it exercised
+    // (dressing never doubles the line) belongs to every dressing control.
+    const next = applyStyleValue('line-through', byId('decoThickness'), 'decothick-[4px]')
     const tokens = next.split(/\s+/)
     expect(tokens).toContain('line-through')
     expect(tokens).not.toContain('underline')
@@ -862,15 +866,6 @@ describe('the dressing sliders park OFF-SCALE at their browser defaults (2026-08
     const stored = sliderIndex(c, 'decothick-[4px]')
     expect(steps[stored.idx].label).toBe('4px')
     expect(stored.exact).toBe(true)
-  })
-  it('Y position: barely up, plenty down, unset parks at 0', () => {
-    const c = text.find((x) => x.id === 'decoOffset')!
-    if (c.kind !== 'slider') throw new Error('unreachable')
-    const steps = sliderSteps(c)
-    expect(c.rank!(steps[0].value)).toBe(-3)
-    expect(c.rank!(steps[steps.length - 1].value)).toBe(12)
-    const stored = sliderIndex(c, 'underoffset-[4px]')
-    expect(steps[stored.idx].label).toBe('4px')
   })
 })
 

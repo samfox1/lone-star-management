@@ -243,7 +243,7 @@ export function EditorInspector({
   /** Current URL for each link region, keyed by its role (from the DB). */
   linkValues?: Record<string, string>
   /** Link region the frame reported a click on — jumps to the Site-links panel. */
-  selectedLink?: string | null
+  selectedLink?: { key: string; nonce: number } | null
   /** Image region (field / slot / gallery item) the frame reported a click on — opens the
    *  Images panel and focuses the matching tile. Bumped `nonce` re-fires on a repeat click. */
   selectedRegion?: { target: SelectTarget; nonce: number } | null
@@ -300,9 +300,9 @@ export function EditorInspector({
 
   // Same click-the-thing behaviour for a link-powered element: selecting skeen's USB
   // button in the frame opens the Links panel (its "Buttons" group) focused on it.
-  const [lastSelectedLink, setLastSelectedLink] = useState<string | null>(null)
-  if (selectedLink && selectedLink !== lastSelectedLink) {
-    setLastSelectedLink(selectedLink)
+  const [lastSelectedLink, setLastSelectedLink] = useState<number>(0)
+  if (selectedLink && selectedLink.nonce !== lastSelectedLink) {
+    setLastSelectedLink(selectedLink.nonce)
     setActive(COMPONENTS.find((c) => c.kind === 'links') ?? null)
   }
 
@@ -1140,7 +1140,7 @@ function EditingView({
   deselectedAt: number
   linkRegions: ManifestLinkRegion[]
   linkValues: Record<string, string>
-  selectedLink: string | null
+  selectedLink: { key: string; nonce: number } | null
   cursorValues: Record<string, string>
   onApplyField?: (key: string, value: string) => void
   onApplyStyle?: (key: string, className: string) => void

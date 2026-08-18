@@ -201,6 +201,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     city: (r.city as string | null) ?? null,
     state: (r.state as string | null) ?? null,
     country: (r.country as string | null) ?? null,
+    ticketUrl: (r.ticket_url as string | null) ?? null,
     support: (r.support as string[] | null) ?? [],
     // New/synced dates land off-site (INSERT_OFF_SITE) and are chosen here.
     onSite: (r.on_site as boolean | null) ?? false,

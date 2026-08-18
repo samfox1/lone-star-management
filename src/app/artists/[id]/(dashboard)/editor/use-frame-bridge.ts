@@ -83,7 +83,7 @@ export type FrameBridge = {
   /** Region key the frame last reported a click on, so the inspector can focus it. */
   selectedStyle: string | null
   /** Link-region key the frame last reported a click on, to focus the Site-links panel. */
-  selectedLink: string | null
+  selectedLink: { key: string; nonce: number } | null
   /** The IMAGE region (field / slot / item) the frame last reported a click on, so the
    *  inspector can open Images and focus the matching tile (the reverse of applyHighlight).
    *  Only field/slot/item selects land here — style/link route to their own panels. A
@@ -109,7 +109,10 @@ export function useFrameBridge({
    *  init-data effect. Not returned — nothing displays it (yet). */
   const [connected, setConnected] = useState(false)
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
-  const [selectedLink, setSelectedLink] = useState<string | null>(null)
+  // Key + NONCE, like selectedRegion: a repeat click on the same element is a new
+  // gesture (Sam, 2026-08-17: clicking Listen with another panel open did nothing —
+  // the key hadn't changed, so the gate never re-fired).
+  const [selectedLink, setSelectedLink] = useState<{ key: string; nonce: number } | null>(null)
   /** Ticks on every preview click that selected nothing — the panels read it as
    *  "collapse whatever is open". */
   const [deselectedAt, setDeselectedAt] = useState(0)
@@ -198,7 +201,8 @@ export function useFrameBridge({
       } else if (msg.type === 'select' && msg.target.kind === 'style') {
         setSelectedStyle(msg.target.key)
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
-        setSelectedLink(msg.target.key)
+        const key = msg.target.key
+        setSelectedLink((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }))
       } else if (msg.type === 'deselect') {
         // A click in the preview that hit NOTHING editable. The frame has always posted
         // this; the editor used to drop it, which is why an open panel sat there while

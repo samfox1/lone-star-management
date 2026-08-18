@@ -39,7 +39,7 @@ export function SiteLinkTools({
 }: {
   regions: ManifestLinkRegion[]
   values: Record<string, string>
-  selected: string | null
+  selected: { key: string; nonce: number } | null
   /** Ticks when a preview click hit nothing editable — collapse the open row. */
   collapseAt?: number
   artistId: string
@@ -98,14 +98,16 @@ export function SiteLinkTools({
   // (the repo's sanctioned pattern), not in an effect — an effect setState cascades a
   // render and the lint rule rightly rejects it. The scroll/focus is a real side effect,
   // so it stays in the effect below, keyed off the now-open row.
-  const [lastSelected, setLastSelected] = useState<string | null>(null)
-  if (selected && selected !== lastSelected) {
-    setLastSelected(selected)
-    setOpenKey(selected)
+  // Nonce-gated, like every other routed select: a REPEAT click on the same element is
+  // a new gesture and must re-open/re-scroll (Sam, 2026-08-17).
+  const [lastSelected, setLastSelected] = useState<number>(0)
+  if (selected && selected.nonce !== lastSelected) {
+    setLastSelected(selected.nonce)
+    setOpenKey(selected.key)
   }
   useEffect(() => {
     if (!selected) return
-    const el = fieldRefs.current.get(selected)
+    const el = fieldRefs.current.get(selected.key)
     el?.scrollIntoView?.({ block: 'center' })
     el?.focus()
   }, [selected])
@@ -135,8 +137,8 @@ export function SiteLinkTools({
             // The same accent ring every other selected thing wears. The row already
             // OPENED on a frame click, but opening alone did not read as "this is the
             // one you clicked" (Sam, 2026-08-17, wren's Listen button).
-            className={cx('rounded-lg', selected === r.key && 'ring-2 ring-accent')}
-            aria-current={selected === r.key ? 'true' : undefined}
+            className={cx('rounded-lg', selected?.key === r.key && 'ring-2 ring-accent')}
+            aria-current={selected?.key === r.key ? 'true' : undefined}
           >
             {/* The URL is plain text until the pencil opens the box (no "lit" editable
                 link, no bolt icon). The site's `description` rides the row's hover title

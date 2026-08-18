@@ -131,6 +131,8 @@ export type EditorTour = {
   /** Two-letter US state code (TX). null for out-of-country dates. */
   state: string | null
   country: string | null
+  /** Where Tickets points — editable in the per-show editor (Sam, 2026-08-17). */
+  ticketUrl: string | null
   /** The other acts on the bill. Never null — the column is NOT NULL DEFAULT '{}'. */
   support: string[]
   onSite: boolean

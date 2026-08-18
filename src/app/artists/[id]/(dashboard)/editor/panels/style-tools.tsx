@@ -172,7 +172,7 @@ export function StyleControlRow({
                   : 'border-hairline text-ink-muted hover:border-ink hover:text-ink',
               )}
             >
-              {o.value === '' ? 'Auto' : o.label}
+              {o.label}
             </button>
           ))}
         </span>

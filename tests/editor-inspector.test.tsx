@@ -188,7 +188,7 @@ function renderInspector(
     showGallery?: boolean
     linkRegions?: ManifestLinkRegion[]
     linkValues?: Record<string, string>
-    selectedLink?: string | null
+    selectedLink?: { key: string; nonce: number } | null
     imageFields?: EditorImageField[]
     selectedRegion?: { target: SelectTarget; nonce: number } | null
     deselectedAt?: number
@@ -1360,8 +1360,12 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     focusStyle('hero_wordmark')
     // Boldness is a BUTTON ROW now; the base's font-black lights the Black segment
     // (canonical matching, so weight-[900] would light the same one).
+    // The base is font-black; the pair offers Normal/Bold, so no segment lights — which
+    // is honest ("just normal or bold", Sam 2026-08-17): Default returns to the base.
     const group = screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })
-    expect(within(group).getByRole('button', { name: 'Black' }).getAttribute('aria-pressed')).toBe('true')
+    for (const label of ['Normal', 'Bold']) {
+      expect(within(group).getByRole('button', { name: label }).getAttribute('aria-pressed')).toBe('false')
+    }
     // The toggles are role=switch buttons (not checkboxes), so the on/off state is
     // aria-checked — the same signal a screen reader reads.
     expect(screen.getByLabelText('Hero wordmark (SKEEN) Uppercase').getAttribute('aria-checked')).toBe('true')
@@ -1412,7 +1416,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
       // now offers `weight-[900]`; the two must read as the same meaning or returning to
       // the base pins an override every time (the exact regression the migration risked).
       // (Async advance: the second persist chains behind the first's promise.)
-      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Black' }))
+      // Default = back to the base's own weight (font-black) → row deleted.
+      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Default' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
     } finally {
@@ -1430,8 +1435,8 @@ describe('EditorInspector — Style component (no-code controls)', () => {
       fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Bold' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', 'lse-delta weight-[700]')
-      // Back to the base's weight: the delta empties and the row is DELETED.
-      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Black' }))
+      // Default restores the base's weight: the delta empties, the row is DELETED.
+      fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark (SKEEN) Boldness' })).getByRole('button', { name: 'Default' }))
       await vi.advanceTimersByTimeAsync(500)
       expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'hero_wordmark', '')
     } finally {
@@ -1859,9 +1864,9 @@ describe('EditorInspector — what is ON the site is unambiguous', () => {
  * which is what makes it safe to sit alongside the Tour page's own toggle.
  */
 const TOURS: EditorTour[] = [
-  { id: 't1', date: '2026-09-12', venue: 'Mohawk', city: 'Austin', state: 'TX', country: null, support: ['Arlo', 'Crosby, Stills & Nash'], onSite: true },
-  { id: 't2', date: '2026-10-02', venue: 'Empty Bottle', city: 'Chicago', state: 'IL', country: null, support: [], onSite: false },
-  { id: 't3', date: null, venue: 'TBA', city: null, state: null, country: null, support: [], onSite: false },
+  { id: 't1', date: '2026-09-12', venue: 'Mohawk', city: 'Austin', state: 'TX', country: null, ticketUrl: null, support: ['Arlo', 'Crosby, Stills & Nash'], onSite: true },
+  { id: 't2', date: '2026-10-02', venue: 'Empty Bottle', city: 'Chicago', state: 'IL', country: null, ticketUrl: null, support: [], onSite: false },
+  { id: 't3', date: null, venue: 'TBA', city: null, state: null, country: null, ticketUrl: null, support: [], onSite: false },
 ]
 
 describe('EditorInspector — a show’s supporting acts are linked ON the show', () => {
@@ -2104,8 +2109,8 @@ describe('EditorInspector — tour tools', () => {
 
   it('persists only the undated shows, in their new order', () => {
     const undated: EditorTour[] = [
-      { id: 'u1', date: null, venue: 'Well Studios', city: null, state: null, country: null, support: [], onSite: true },
-      { id: 'u2', date: null, venue: 'REDLINE', city: null, state: null, country: null, support: [], onSite: true },
+      { id: 'u1', date: null, venue: 'Well Studios', city: null, state: null, country: null, ticketUrl: null, support: [], onSite: true },
+      { id: 'u2', date: null, venue: 'REDLINE', city: null, state: null, country: null, ticketUrl: null, support: [], onSite: true },
     ]
     renderInspector([], { tours: [TOURS[0], ...undated] })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))

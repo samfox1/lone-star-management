@@ -520,7 +520,7 @@ describe('CRITICAL: styling a region must not destroy the site’s own classes',
         onBack={vi.fn()}
       />,
     )
-    fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark Thickness' })).getByRole('button', { name: 'Black' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Hero wordmark Thickness' })).getByRole('button', { name: 'Bold' }))
     const [, className] = onStyle.mock.calls[0] as unknown as string[]
     // The stored size is kept; the base's original size does not come back.
     expect(className).toContain('clamp(1rem,3vw,1.25rem)')

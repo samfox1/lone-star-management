@@ -80,7 +80,7 @@ const VIDEOS: EditorVideo[] = [
 ]
 
 const TOURS: EditorTour[] = [
-  { id: 'td1', date: '2026-09-01', venue: 'Mohawk', city: 'Austin', state: 'TX', country: null, support: [], onSite: true },
+  { id: 'td1', date: '2026-09-01', venue: 'Mohawk', city: 'Austin', state: 'TX', country: null, ticketUrl: null, support: [], onSite: true },
 ]
 
 function renderInspector(over: Partial<React.ComponentProps<typeof EditorInspector>> = {}) {

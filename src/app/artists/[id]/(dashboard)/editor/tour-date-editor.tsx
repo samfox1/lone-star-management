@@ -120,6 +120,9 @@ export function TourDateEditor({
     city: tour.city ?? '',
     state: tour.state ?? '',
     country: tour.country ?? '',
+    // The Tickets URL belongs with the show it sells (Sam, 2026-08-17) — same reasoning
+    // that moved the support-act links here from the flat Links list.
+    ticket_url: tour.ticketUrl ?? '',
   })
 
   function editDetail(field: string, value: string) {
@@ -144,6 +147,16 @@ export function TourDateEditor({
           </FieldRow>
           <FieldRow label="City">
             <input aria-label="City" value={details.city} onChange={(e) => editDetail('city', e.target.value)} className={FIELD} />
+          </FieldRow>
+          <FieldRow label="Tickets link">
+            <input
+              aria-label="Tickets link"
+              type="url"
+              value={details.ticket_url}
+              onChange={(e) => editDetail('ticket_url', e.target.value)}
+              placeholder="https://…"
+              className={FIELD}
+            />
           </FieldRow>
           <div className="grid grid-cols-2 gap-2">
             <FieldRow label="State">
