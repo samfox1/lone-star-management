@@ -56,6 +56,7 @@ import {
   restorePublishedAction,
 } from '../actions'
 import { useSessionJournal } from './use-session-journal'
+import { useSignal } from './use-signal'
 import { useTextFieldSave } from './use-text-save'
 import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
@@ -329,23 +330,19 @@ export function EditorInspector({
   // What the clicked element renders (bridge 0.25.0) — rides beside the focus so the
   // focused region's sliders park on measured reality, not a class-string guess.
   const [styleMeasured, setStyleMeasured] = useState<RegionMeasurements | null>(null)
-  const [lastSelected, setLastSelected] = useState<number>(0)
-  if (selectedStyle && selectedStyle.nonce !== lastSelected) {
-    setLastSelected(selectedStyle.nonce)
+  useSignal(selectedStyle, (s) => {
     closeEditors()
-    setStyleFocus(selectedStyle.key)
-    setStyleMeasured(selectedStyle.measured ?? null)
+    setStyleFocus(s.key)
+    setStyleMeasured(s.measured ?? null)
     setActive(COMPONENTS.find((c) => c.kind === 'style') ?? null)
-  }
+  })
 
   // Same click-the-thing behaviour for a link-powered element: selecting skeen's USB
   // button in the frame opens the Links panel (its "Buttons" group) focused on it.
-  const [lastSelectedLink, setLastSelectedLink] = useState<number>(0)
-  if (selectedLink && selectedLink.nonce !== lastSelectedLink) {
-    setLastSelectedLink(selectedLink.nonce)
+  useSignal(selectedLink, () => {
     closeEditors()
     setActive(COMPONENTS.find((c) => c.kind === 'links') ?? null)
-  }
+  })
 
   // Two-way image selection. `focused` is the ONE image region highlighted right now — a
   // tile the manager clicked, OR an image they clicked in the live frame. It drives the
@@ -420,39 +417,36 @@ export function EditorInspector({
     link: 'links',
   }
 
-  // Frame → editor: a click on a marked region opens ITS panel — the same render-time
-  // "reset state on prop change" pattern as selectedStyle; the nonce lets a repeat click
-  // on the same region re-fire. Images focus their tile; a TEXT field opens straight
-  // into its field editor (the panel list alone would leave the manager hunting for the
-  // thing they just pointed at); an item lands on its panel with `focused` carrying the
-  // outline. Style / link selects route via their own state above.
-  const [lastRegionNonce, setLastRegionNonce] = useState(0)
-  if (selectedRegion && selectedRegion.nonce !== lastRegionNonce) {
-    const target = selectedRegion.target
+  // Frame → editor: a click on a marked region opens ITS panel. Images focus their
+  // tile; a TEXT field opens straight into its field editor (the panel list alone would
+  // leave the manager hunting for the thing they just pointed at); an item lands on its
+  // panel with `focused` carrying the outline. Style / link selects route via their own
+  // signals above. Returning false leaves an UNROUTABLE select unconsumed, so a select
+  // racing its data (a text-field click before the fields fetch lands) fires late
+  // instead of vanishing.
+  useSignal(selectedRegion, ({ target }) => {
     const textField =
       target.kind === 'field' ? textFields.find((f) => f.key === target.key) : undefined
     const itemPanel = target.kind === 'item' ? PANEL_BY_ASSET[target.assetType] : undefined
     // A routed select DISMISSES whatever full-panel editor is open (closeEditors above),
     // in every branch, before opening what it asked for.
     if (isImageRegion(target)) {
-      setLastRegionNonce(selectedRegion.nonce)
       closeEditors()
       setActive(COMPONENTS.find((c) => c.kind === 'images') ?? null)
       setFocused(target)
     } else if (textField) {
-      setLastRegionNonce(selectedRegion.nonce)
       closeEditors()
       setActive(COMPONENTS.find((c) => c.kind === 'text') ?? null)
       setEditingText(textField) // …then open the one this select asked for
       setFocused(target)
     } else if (itemPanel) {
-      setLastRegionNonce(selectedRegion.nonce)
       closeEditors()
       setActive(COMPONENTS.find((c) => c.kind === itemPanel) ?? null)
       setFocused(target)
+    } else {
+      return false // unroutable — leave the signal for a later render
     }
-    // else: unroutable — consume nothing, exactly the old behaviour for non-image kinds.
-  }
+  })
   // Text values live HERE, above both the list and the editor, so the two windows onto
   // one field can never show different text or race each other's debounced save.
   const textSave = useTextFieldSave(artistId, textFields, onApplyField)

@@ -18,6 +18,7 @@ import {
   FIELD_ON_TINT,
   useCollapseOnOutsideClick,
 } from '../inspector-shared'
+import { useSignal } from '../use-signal'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
 import { AddSocialModal } from '../add-social-modal'
@@ -100,11 +101,7 @@ export function SiteLinkTools({
   // so it stays in the effect below, keyed off the now-open row.
   // Nonce-gated, like every other routed select: a REPEAT click on the same element is
   // a new gesture and must re-open/re-scroll (Sam, 2026-08-17).
-  const [lastSelected, setLastSelected] = useState<number>(0)
-  if (selected && selected.nonce !== lastSelected) {
-    setLastSelected(selected.nonce)
-    setOpenKey(selected.key)
-  }
+  useSignal(selected, (s) => setOpenKey(s.key))
   useEffect(() => {
     if (!selected) return
     const el = fieldRefs.current.get(selected.key)

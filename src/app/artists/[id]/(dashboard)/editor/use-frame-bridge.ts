@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PublicSitePayload } from '@/lib/site'
 import { editorMessage, isFrameMessage, type FrameMode, type RegionMeasurements, type SelectTarget } from '@samfox1/site-bridge/protocol'
 import type { CursorSettings } from '@samfox1/site-bridge/cursor'
+import { bumpNonce } from './use-signal'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 
 /**
@@ -207,12 +208,12 @@ export function useFrameBridge({
           frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
         }
       } else if (msg.type === 'select' && msg.target.kind === 'style') {
-        const key = msg.target.key
-        const measured = msg.measured
-        setSelectedStyle((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1, measured }))
+        const { key } = msg.target
+        const { measured } = msg
+        setSelectedStyle((prev) => bumpNonce<{ key: string; measured?: RegionMeasurements }>(prev, { key, measured }))
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
-        const key = msg.target.key
-        setSelectedLink((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }))
+        const { key } = msg.target
+        setSelectedLink((prev) => bumpNonce(prev, { key }))
       } else if (msg.type === 'measured') {
         setMeasuredRegion({ key: msg.key, measured: msg.measured })
       } else if (msg.type === 'deselect') {
@@ -227,7 +228,7 @@ export function useFrameBridge({
         // which knows which of these are images and opens the Images panel on them.
         // The nonce lets a repeat click on the same region re-fire the focus.
         const target = msg.target
-        setSelectedRegion((prev) => ({ target, nonce: (prev?.nonce ?? 0) + 1 }))
+        setSelectedRegion((prev) => bumpNonce(prev, { target }))
       }
     }
     window.addEventListener('message', onMessage)
