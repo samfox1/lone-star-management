@@ -49,7 +49,7 @@ export type EditorTextField = {
 /** A single image/video opened for full-panel editing (Replace / Remove / styling). The
  *  inspector holds the live state + place handlers, so a tile passes only this descriptor. */
 export type ItemEdit =
-  | { type: 'imageSlot'; role: string; label: string }
+  | { type: 'imageSlot'; role: string; label: string; background?: boolean }
   | { type: 'galleryPhoto'; id: string; orientation: Orientation; label: string }
   /** A background video slot (hero landscape/portrait, bio) — style key `slot:<role>`. */
   | { type: 'videoSlot'; role: SiteVideoRole; label: string }

@@ -286,7 +286,7 @@ function ComponentTools({
                     artistId={artistId}
                     focused={focusedKey === selectTargetKey(fieldTarget(role))}
                     onFocus={() => onFocus(fieldTarget(role))}
-                    onEdit={() => onEditItem({ type: 'imageSlot', role, label })}
+                    onEdit={() => onEditItem({ type: 'imageSlot', role, label, background: slot.background })}
                     onPlaceSlot={onPlaceSlot}
                     onToggleOnSite={onToggleOnSite}
                   />

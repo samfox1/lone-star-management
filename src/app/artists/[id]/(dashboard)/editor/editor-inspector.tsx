@@ -13,7 +13,7 @@ import {
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
-import { type EditorStyleOptions, buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
+import { type EditorStyleOptions, buildBackgroundItemStyleControls, buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mediaUrl } from '@/lib/storage-url'
 import { isContactLink, looksLikeEmail } from '@/lib/url'
@@ -579,6 +579,10 @@ export function EditorInspector({
       if (!placed) return null
       cfg = {
         key: `slot:${item.role}`,
+        // A BACKGROUND slot (manifest `background: true`) trims the controls: no
+        // edges/border/corners/shadow on a frameless fill, and Zoom floors at 100%
+        // so it can never uncover the page behind it (Sam, 2026-08-18).
+        ...(item.background ? { controls: buildBackgroundItemStyleControls(styleOptions) } : {}),
         preview: <PhotoThumb path={placed.storage_path} aspect="aspect-square" fit="cover" />,
         candidates: photoCandidates(photos.filter((p) => !p.siteRole), 'aspect-square'),
         onPick: (id) => placeInSlot(item.role, photos.find((p) => p.id === id) ?? null),

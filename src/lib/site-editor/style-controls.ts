@@ -1383,6 +1383,29 @@ export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] 
 }
 
 /**
+ * The BACKGROUND image control set (Sam, 2026-08-18): a slot that fills a screen has no
+ * visible frame, so edges, borders, corners, shadow, matte and shape are noise — and
+ * Zoom never goes below 100%, because zooming a background OUT uncovers the page it
+ * exists to cover. What remains: zoom IN, transparency, and the photographic filters.
+ * Chosen by the slot's manifest `background: true` (ComponentSlot, bridge 0.25.1).
+ */
+export function buildBackgroundItemStyleControls(opts?: SiteStyleOptions): StyleControl[] {
+  const zoom: StyleControl = {
+    id: 'size',
+    label: 'Zoom',
+    kind: 'slider',
+    steps: SCALE_STEPS.filter((o) => (pctRank('scale')(o.value) ?? 0) >= 100),
+    rank: pctRank('scale'),
+    owns: (t) => t.startsWith('scale-') && !t.startsWith('scalesm-'),
+  }
+  return [
+    phoneItemScope(opts) ? phoneTwin(zoom) : zoom,
+    { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-') },
+    ...filterControls(),
+  ]
+}
+
+/**
  * The photographic FILTERS — shared by images, video embeds AND uploaded background
  * clips, because a filter acts on whatever pixels are in the box; a full-bleed hero
  * video dims and desaturates exactly like an image does (Sam, 2026-08-10).

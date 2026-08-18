@@ -2403,6 +2403,27 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo' },
   ]
 
+  it('CRITICAL: a BACKGROUND slot opens the trimmed editor — Zoom (no zoom out), no Border', () => {
+    // Sam, 2026-08-18: "if an image is being used as a background, there doesnt need to
+    // be certain editable tools like edges or borders … the zoom out shouldn't be
+    // available." The slot declares `background: true` (bridge 0.25.1).
+    renderInspector(
+      [{ id: 'bg1', storage_path: 'artist-1/gallery/bg.jpg', onSite: true, orientation: 'horizontal', siteRole: 'backdrop_1_desktop' }],
+      {
+        components: [
+          { key: 'backdrop', label: 'Hero background', count: 1, slots: [{ key: 'desktop', label: 'Desktop (horizontal)', background: true }] },
+        ],
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Desktop (horizontal)' }))
+    expect(screen.getByLabelText('Desktop (horizontal) Zoom')).toBeTruthy()
+    expect(screen.queryByLabelText('Desktop (horizontal) Border')).toBeNull()
+    expect(screen.queryByLabelText('Desktop (horizontal) Corners')).toBeNull()
+    expect(screen.queryByLabelText('Desktop (horizontal) Shadow')).toBeNull()
+    // A NORMAL slot still gets the full set — Size (25–175%), Border and friends.
+  })
+
   it('CRITICAL: a placed slot has an on/off switch — off HIDES the image, never unplaces', () => {
     // Sam, 2026-08-18: "the hero background should be a toggle. So the user can turn it
     // off or on." on_site is the wire's media gate: OFF removes the image from the page

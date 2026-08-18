@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.25.0'
+export const PACKAGE_VERSION = '0.25.1'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -182,6 +182,13 @@ export type ComponentSlot = {
    * visible and fixable while a blocked upload is a dead end mid-task.
    */
   prefersPng?: boolean
+  /**
+   * This slot fills a SCREEN as a background (a hero backdrop). The editor trims the
+   * item controls to what makes sense there — no edges, borders, corners or shadow on
+   * something with no visible frame, and zoom never goes below 100% because zooming a
+   * background OUT uncovers what it exists to cover (Sam, 2026-08-18).
+   */
+  background?: boolean
 }
 
 /** One offered value for a style control (a class the site can actually compile). */
