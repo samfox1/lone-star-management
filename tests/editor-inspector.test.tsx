@@ -2091,13 +2091,13 @@ describe('EditorInspector — tour tools', () => {
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
   }
 
-  it('offers a drag handle ONLY on undated shows', () => {
-    // A dated show sorts itself by date on the site forever, so a dragged position
-    // would not survive — only undated shows are reorderable (20260723120000).
+  it('offers a drag handle on EVERY show — dated included (Sam, 2026-08-17)', () => {
+    // The old undated-only gate assumed sites re-sort dated shows by date forever. The
+    // sites treat a numbered dated row as MANUAL MODE now, so a dragged order survives
+    // and every row is draggable.
     openTour()
     const rows = document.querySelectorAll('aside div[draggable="true"]')
-    expect(rows.length).toBe(1)
-    expect(rows[0].textContent).toContain('TBA')
+    expect(rows.length).toBe(TOURS.length)
   })
 
   it('persists only the undated shows, in their new order', () => {
@@ -2108,12 +2108,12 @@ describe('EditorInspector — tour tools', () => {
     renderInspector([], { tours: [TOURS[0], ...undated] })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
     const rows = document.querySelectorAll('aside div[draggable="true"]')
-    expect(rows.length).toBe(2)
-    fireEvent.dragStart(rows[0])
-    fireEvent.drop(rows[1])
-    // The DATED show (t1) is absent: its sort_order is never read, so renumbering it
-    // would overwrite a value for nothing.
-    expect(reorderContentMock).toHaveBeenCalledWith('tour_date', 'artist-1', ['u2', 'u1'])
+    expect(rows.length).toBe(3) // dated rows drag too now
+    fireEvent.dragStart(rows[1])
+    fireEvent.drop(rows[2])
+    // EVERY row is renumbered — the full ordered id list, dated included, because a
+    // numbered dated row is what flips the site into manual mode.
+    expect(reorderContentMock).toHaveBeenCalledWith('tour_date', 'artist-1', [TOURS[0].id, 'u2', 'u1'])
   })
 
   it('lists each date with its venue, place and lineup', () => {
@@ -2152,16 +2152,16 @@ describe('EditorInspector — tour tools', () => {
     expect(deleteContentMock).toHaveBeenCalledWith('tour_date', 't1', 'artist-1')
   })
 
-  it('never lets a DATED show be dragged — the site sorts those by date', () => {
-    // Superseded the blanket "no drag handles anywhere" rule (20260723120000 added
-    // sort_order as a tie-break for undated shows only). A dated show must still be
-    // undraggable: its position comes from its date, so a dragged one would snap back.
+  it('a DATED show drags like any other (manual mode, 2026-08-17)', () => {
+    // Two prior eras pinned the opposite: first no handles at all, then undated-only.
+    // Both assumed the site re-sorts dated rows by date; connected sites now honour a
+    // numbered dated row as the manager's order, so the gate is gone.
     openTour()
     const dated = [...document.querySelectorAll('aside div[draggable]')].filter((el) =>
       el.textContent?.includes('Mohawk'),
     )
     expect(dated.length).toBe(1)
-    expect(dated[0].getAttribute('draggable')).toBe('false')
+    expect(dated[0].getAttribute('draggable')).toBe('true')
   })
 
   it('points at the Tour page to add a date', () => {

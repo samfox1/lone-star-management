@@ -882,17 +882,17 @@ export function EditorInspector({
    */
   function reorderTours(fromId: string, toId: string) {
     if (isPending) return
-    const undated = tours.filter((t) => !t.date)
-    const from = undated.findIndex((t) => t.id === fromId)
-    const to = undated.findIndex((t) => t.id === toId)
+    // EVERY row, dated included (Sam, 2026-08-17). The whole list is renumbered because
+    // a numbered dated row is exactly what flips a connected site into manual mode —
+    // dragged order rules, date only breaks unnumbered ties.
+    const from = tours.findIndex((t) => t.id === fromId)
+    const to = tours.findIndex((t) => t.id === toId)
     if (from < 0 || to < 0 || from === to) return
-    const moved = reorderList(undated, from, to)
     const prev = tours
-    // Splice the new undated order back into the full list, in place.
-    let next = 0
-    setTours(tours.map((t) => (t.date ? t : moved[next++])))
+    const next = reorderList(tours, from, to)
+    setTours(next) // optimistic
     startTransition(async () => {
-      const res = await reorderContentAction('tour_date', artistId, moved.map((t) => t.id))
+      const res = await reorderContentAction('tour_date', artistId, next.map((t) => t.id))
       if (res?.error) setTours(prev)
     })
   }

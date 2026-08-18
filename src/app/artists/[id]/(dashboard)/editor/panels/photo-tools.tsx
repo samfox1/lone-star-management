@@ -451,6 +451,8 @@ export function PhotoTools({
   const belongs = (p: GalleryPhoto, group: Orientation) =>
     !p.siteRole && (p.orientation === group || (group === 'horizontal' && p.orientation == null))
   const nothing = imageFields.length === 0 && components.length === 0 && !showGallery
+  // Same shape as link-tools/video-tools: the bare line, not inside the padded body.
+  if (nothing) return <NoSlots noun="image" />
   return (
     <div className="py-2">
       {imageFields.length > 0 && (
@@ -514,7 +516,6 @@ export function PhotoTools({
             />
           </div>
         ))}
-      {nothing && <NoSlots noun="image" />}
     </div>
   )
 }

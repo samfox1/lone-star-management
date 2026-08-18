@@ -95,10 +95,11 @@ export function TourTools({
       {/* No empty-state copy (Sam, 2026-08-12): an empty Tour panel just shows nothing —
           dates are entered on the Tour page, and a "No dates yet." line is noise. */}
       {tours.map((t) => {
-        // A DATED show sorts itself by date on the site forever, so dragging it would be
-        // a lie — the order wouldn't survive. Only undated shows, which the site can't
-        // sequence on its own, get a handle (20260723120000).
-        const canDrag = !t.date
+        // EVERY show drags (Sam, 2026-08-17: "I should be able to drag them into place").
+        // The old rule gated dated shows because the site would re-sort them by date —
+        // true then, retired now: the first drag numbers every row and connected sites
+        // treat a numbered dated row as manual mode, so the dragged order survives.
+        const canDrag = true
         return (
         <TourRow
           key={t.id}

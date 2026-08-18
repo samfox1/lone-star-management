@@ -169,9 +169,13 @@ export function VideoTools({
   const groups: string[] = []
   for (const s of videoSlots) if (!groups.includes(s.group)) groups.push(s.group)
 
+  // ONE empty-state shape for Images/Videos/Links (Sam, 2026-08-17): the bare line,
+  // outside the padded body, exactly where link-tools puts it — rendering it INSIDE the
+  // container double-padded it and sat it lower than the Images tab's.
+  if (videoSlots.length === 0) return <NoSlots noun="video" />
+
   return (
     <div className="space-y-3 px-5 py-4">
-      {videoSlots.length === 0 && <NoSlots noun="video" />}
       {groups.map((group) => {
         const slots = videoSlots.filter((s) => s.group === group)
         return (
