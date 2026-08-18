@@ -62,11 +62,11 @@ export function bridgeOutdated(siteVersion: string | undefined, editorVersion = 
 
 /** The bridge release that taught a site's applier to lift `size-[…]` and `fontfam-[…]`
  *  onto `--lse-size` / `--lse-font`. */
-export const STYLE_VARS_SINCE = '0.16.0'
+const STYLE_VARS_SINCE = '0.16.0'
 
 /** The bridge release that taught the applier the SECOND-WAVE text tokens
  *  (`weight-[…]`, `align-[…]`, `lead-[…]`, `track-[…]`, `case-[…]`, `fstyle-[…]`). */
-export const TEXT_VARS_SINCE = '0.18.0'
+const TEXT_VARS_SINCE = '0.18.0'
 
 /**
  * Can the connected site turn the VALUE tokens into CSS? An older applier does not
@@ -91,7 +91,7 @@ export function bridgeSupportsTextVars(siteVersion: string | undefined): boolean
 
 /** The bridge release whose applier + tokens.css carry the MOBILE overrides
  *  (`sizesm-[…]`, `padsm-[…]`, the lse-msize/lse-mpad rules). */
-export const MOBILE_VARS_SINCE = '0.19.0'
+const MOBILE_VARS_SINCE = '0.19.0'
 
 /** And once more: may the editor write phone-only values? */
 export function bridgeSupportsMobileVars(siteVersion: string | undefined): boolean {
@@ -101,7 +101,7 @@ export function bridgeSupportsMobileVars(siteVersion: string | undefined): boole
 
 /** Phone twins for the WHOLE style set (weight/align/leading/tracking/case/italic/gap)
  *  arrived with 0.22.0's applier + tokens.css rules; size/pad keep the 0.19 floor. */
-export const MOBILE_TEXT_SINCE = '0.22.0'
+const MOBILE_TEXT_SINCE = '0.22.0'
 
 export function bridgeSupportsMobileText(siteVersion: string | undefined): boolean {
   if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
@@ -109,7 +109,7 @@ export function bridgeSupportsMobileText(siteVersion: string | undefined): boole
 }
 
 /** Per-ITEM phone twins (scale — the hero-logo Size) arrived with 0.23.0. */
-export const MOBILE_ITEM_SINCE = '0.23.0'
+const MOBILE_ITEM_SINCE = '0.23.0'
 
 export function bridgeSupportsMobileItem(siteVersion: string | undefined): boolean {
   if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
@@ -119,7 +119,7 @@ export function bridgeSupportsMobileItem(siteVersion: string | undefined): boole
 /** Delta overrides (`lse-delta …`) render on 0.24+ appliers; the editor must keep
  *  writing full strings to anything older — a delta there would render as replace
  *  semantics with a stray sentinel class. */
-export const DELTA_SINCE = '0.24.0'
+const DELTA_SINCE = '0.24.0'
 
 export function bridgeSupportsDeltas(siteVersion: string | undefined): boolean {
   if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false

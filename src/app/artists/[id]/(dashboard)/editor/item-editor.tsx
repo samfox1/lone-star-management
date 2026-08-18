@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Icon } from '@/components/ui/icons'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { applyStyleValue, buildItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
 import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shared'

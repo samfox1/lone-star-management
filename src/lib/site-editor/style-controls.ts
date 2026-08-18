@@ -65,7 +65,6 @@ import {
   SCALE_STEPS,
   SHADOW_STEPS,
   TRACKING_OPTIONS,
-  WEIGHT_OPTIONS,
 } from '@samfox1/site-bridge/vocabulary'
 
 export type StyleControl =
@@ -342,12 +341,6 @@ const WEIGHT_NUM: Record<string, number> = {
   semibold: 600, bold: 700, extrabold: 800, black: 900,
 }
 const isWeightVar = (t: string) => /^weight-\[\d{3}\]$/.test(t)
-const weightRank = (t: string): number | null => {
-  if (t === '') return null
-  const m = /^weight-\[(\d{3})\]$/.exec(t)
-  if (m) return Number(m[1])
-  return WEIGHT_NUM[fontSuffix(t)] ?? null
-}
 /** A class option → its token twin (`font-bold` → `weight-[700]`), label untouched. */
 const weightToken = (o: StyleOption): StyleOption =>
   ({ ...o, value: `weight-[${WEIGHT_NUM[o.value.slice('font-'.length)]}]` })
@@ -1315,25 +1308,6 @@ export function controlsForRegion(
   if (region.scope === 'site' && base.some((t) => ownsSectionSpacing(t))) out.push(SECTION_SPACING_CONTROL)
   return out
 }
-
-/* ENTRANCES PAUSED (2026-08-12) — the rank helpers rest with their sliders.
-
-// Entrance-speed tokens measure in ms; '' is the CSS default (1200ms), a real point
-// on the scale like Tilt's 0.
-const msRank = (t: string): number | null => {
-  if (t === '') return 1200
-  const m = /-\[(\d+)ms\]$/.exec(t)
-  return m ? Number(m[1]) : null
-}
-
-// Entrance-travel tokens measure in px, with vw as the "screen edge" tail — ranked
-// past every px step (no px step approaches 10000). '' is the CSS default (28/36px).
-const distRank = (t: string): number | null => {
-  if (t === '') return 30
-  const m = /-\[(\d+)(px|vw)\]$/.exec(t)
-  return m ? (m[2] === 'vw' ? 10_000 + Number(m[1]) : Number(m[1])) : null
-}
-*/
 
 /** Slice-3 motion (2026-08-11): entrance + its speed + hover, on every styleable
  *  surface. The classes are compiled CSS (tokens.css effects block), the speed lifts

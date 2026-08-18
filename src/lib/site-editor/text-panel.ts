@@ -79,7 +79,6 @@ export function textPanelEntries(
   regions: ManifestStyleRegion[] | undefined,
 ): TextPanelEntry[] {
   const allRegions = regions ?? []
-  const byKey = new Map(allRegions.map((r) => [r.key, r]))
 
   // The manager's own copy first — it is what they came to the Text panel for.
   const entries: TextPanelEntry[] = []

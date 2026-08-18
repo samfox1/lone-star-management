@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
 
 /**
- * The editor session's UNDO ledger (skeen brief, 2026-08-03): autosave stays — flush on
- * unmount is what guarantees a closed laptop never loses work — but every key remembers
- * what it was BEFORE this session first touched it, so one button can hand the whole
- * session back.
+ * The editor session's UNDO ledger (skeen brief, 2026-08-03) — now the MINORITY path:
+ * since 2026-08-17 "Revert changes" restores the LAST PUBLISH (restorePublishedAction),
+ * and this ledger is walked only for an artist who has never published, where there is
+ * no edition to restore. Every key remembers what it was BEFORE this session first
+ * touched it, so that one fallback can hand the whole session back.
  *
  * The first touch of a key records its session-start value; every later edit to the
  * same key leaves the entry alone. "Revert N changes" walks the ledger in reverse and

@@ -6,7 +6,7 @@ import { OnSiteToggle } from '../inspector-shared'
 import { AddLink, useScrollIntoFocus } from '../inspector-grid'
 import { type SelectTarget } from '@samfox1/site-bridge/protocol'
 
-/* ── Tour tools: pick which dates are on the site (no reorder — dates sort by date) ─ */
+/* ── Tour tools: pick which dates are on the site, drag to reorder them ─ */
 
 /** One row's shell: aria-current + scroll-into-view when a routed select lands on it —
  *  the same affordance the video cards and link rows carry. */
@@ -45,15 +45,11 @@ export function showLabel(t: EditorTour): string {
  * publish. Dates are ENTERED on the Tour page — venue, city, country, supporting acts
  * — so there are no fields here; the editor's job is placement, not data entry.
  *
- * No drag handles, unlike every other list: tour dates have no `sort_order` and the
- * public door orders them by `date`, so a manual order would be a lie.
- *
  * A date must be PUBLISHED once before its toggle reaches the site — the door serves
  * the published snapshot and gates it on this flag, so an unpublished date isn't there
  * to gate, and toggling it is a no-op on the live site until it's published from the
- * Tour page. The empty-state copy points there; the toggle itself carries no
- * per-row published-state indicator (the editor loads working rows, which don't know
- * publish status), so this is a known gap, not a guardrail.
+ * Tour page. The toggle carries no per-row published-state indicator (the editor
+ * loads working rows, which don't know publish status) — a known gap, not a guardrail.
  */
 export function TourTools({
   tours,
@@ -95,20 +91,18 @@ export function TourTools({
       {/* No empty-state copy (Sam, 2026-08-12): an empty Tour panel just shows nothing —
           dates are entered on the Tour page, and a "No dates yet." line is noise. */}
       {tours.map((t) => {
-        // EVERY show drags (Sam, 2026-08-17: "I should be able to drag them into place").
-        // The old rule gated dated shows because the site would re-sort them by date —
-        // true then, retired now: the first drag numbers every row and connected sites
-        // treat a numbered dated row as manual mode, so the dragged order survives.
-        const canDrag = true
+        // EVERY show drags (Sam, 2026-08-17): the first drag numbers every row, and
+        // connected sites treat a numbered dated row as manual mode, so the dragged
+        // order survives. (An undated-only gate lived here before that.)
         return (
         <TourRow
           key={t.id}
           focused={focusedKey === `item:tour_date:${t.id}`}
-          draggable={canDrag}
-          onDragStart={() => canDrag && (dragFrom.current = t.id)}
-          onDragEnter={() => canDrag && setDragOver(t.id)}
-          onDragOver={(e) => canDrag && e.preventDefault()}
-          onDrop={() => canDrag && drop(t.id)}
+          draggable
+          onDragStart={() => (dragFrom.current = t.id)}
+          onDragEnter={() => setDragOver(t.id)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => drop(t.id)}
           onDragEnd={() => {
             dragFrom.current = null
             setDragOver(null)
@@ -119,11 +113,9 @@ export function TourTools({
             dragOver === t.id && 'ring-2 ring-accent',
           )}
         >
-          {canDrag ? (
-            <span className="mt-0.5 flex-none cursor-grab text-ink-faint" aria-hidden>
-              <Icon name="grip" size={14} />
-            </span>
-          ) : null}
+          <span className="mt-0.5 flex-none cursor-grab text-ink-faint" aria-hidden>
+            <Icon name="grip" size={14} />
+          </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             {/* The row's face SELECTS — outlines this date on the site — matching every
                 other item panel. The toggle/Edit/Remove are SIBLINGS with their own

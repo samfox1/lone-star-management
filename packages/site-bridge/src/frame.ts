@@ -36,9 +36,7 @@ import {
   splitItemOverlay,
 } from "./styles";
 import {
-  BRIDGE_VERSION,
   EDITOR_SOURCE,
-  FRAME_SOURCE,
   frameMessage,
   isEditorMessage,
   type EditorMessage,

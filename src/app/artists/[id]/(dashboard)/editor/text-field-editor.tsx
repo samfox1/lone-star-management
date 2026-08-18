@@ -9,9 +9,7 @@ import {
   applyStyleValue,
   deltaFromEffective,
   buildTextItemStyleControls,
-  readStyleValue,
   sameClasses,
-  type SiteStyleOptions,
 } from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from './inspector-types'
 import { FIELD, SaveLine, type SaveStatus } from './inspector-shared'

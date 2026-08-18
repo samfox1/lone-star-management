@@ -204,7 +204,6 @@ export function EditorShell({
     applyStyle,
     applyLink,
     applyCursor,
-    // replayMotion, // ENTRANCES PAUSED (2026-08-12) — rests with the replay button below.
     setPlayback,
     applyHighlight,
     clearHighlight,
@@ -359,18 +358,9 @@ export function EditorShell({
               ))}
             </div>
 
-            {/* ENTRANCES PAUSED (Sam, 2026-08-12) — the replay button exists only for
-                them, so it rests too. See motionControls() in style-controls.ts for
-                the blocker and what resuming needs.
-            <button
-              type="button"
-              onClick={replayMotion}
-              aria-label="Replay motion"
-              title="Replay motion"
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-hairline bg-paper text-ink-faint hover:text-ink"
-            >
-              <Icon name="replay" size={13} />
-            </button> */}
+            {/* ENTRANCES PAUSED (Sam, 2026-08-12): the replay button rests with them —
+                see motionControls() in style-controls.ts for the blocker and what
+                resuming needs (the bridge's replay-entrances message still exists). */}
 
             {/* One switch for every playing video in the preview — background clips
                 loop loudly under the whole editing session otherwise. State lives

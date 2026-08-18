@@ -80,38 +80,8 @@ export function rebaseOverride(
   return missing.length ? [...storedTokens, ...missing].join(' ') : null
 }
 
-/** One region whose stored styling predates the site's current design. */
-export type DriftedRegion = { key: string; label: string; next: string; adds: string[] }
-
-/**
- * Every styled region that is behind the site's design, with what it would pick up.
- *
- * This is what lets the editor SAY SO. Drift was invisible: the site improved, the region
- * kept rendering the old string, and the only symptom was a control that looked wrong or a
- * layout that would not respond — Sam reported skeen's footer twice, as two separate bugs,
- * before the cause turned out to be one stale override (2026-08-15).
- */
-export function driftedRegions(
-  regions: { key: string; label: string; base?: string; scope?: string }[],
-  values: Record<string, string>,
-  controlsFor: (region: { key: string; label: string; base?: string; scope?: string }) => StyleControl[],
-): DriftedRegion[] {
-  const out: DriftedRegion[] = []
-  for (const region of regions) {
-    const stored = values[region.key]
-    // No stored override means the region already renders the live base — nothing to do.
-    if (!region.base || !stored?.trim()) continue
-    // A delta row cannot drift by construction (see rebaseOverride's guard).
-    if (isDeltaOverride(stored)) continue
-    const next = rebaseOverride(region.base, stored, controlsFor(region))
-    if (!next) continue
-    const before = new Set(stored.split(/\s+/).filter(Boolean))
-    out.push({
-      key: region.key,
-      label: region.label,
-      next,
-      adds: next.split(/\s+/).filter((t) => t && !before.has(t)),
-    })
-  }
-  return out
-}
+// driftedRegions / DriftedRegion (the Style-panel drift banner's data) were removed
+// 2026-08-18: the banner itself was dropped when delta overrides made fresh drift
+// impossible (0.24), and the functions' only remaining callers were their own tests.
+// `rebaseOverride` above stays — `npm run rebase:styles` migrates LEGACY full-string
+// rows, the one place drift still exists.

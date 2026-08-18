@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { GroupLabel, SCROLL_BODY, EYEBROW, plural, type SaveStatus } from './inspector-shared'
+import { GroupLabel, SCROLL_BODY, type SaveStatus } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
 import { type RegionMeasurements, type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import {
@@ -13,7 +13,7 @@ import {
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
-import { type EditorStyleOptions, buildBackgroundItemStyleControls, buildVideoItemStyleControls, type SiteStyleOptions, type StyleControl } from '@/lib/site-editor/style-controls'
+import { type EditorStyleOptions, buildBackgroundItemStyleControls, buildVideoItemStyleControls, type StyleControl } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mediaUrl } from '@/lib/storage-url'
 import { isContactLink, looksLikeEmail } from '@/lib/url'
@@ -1105,9 +1105,10 @@ export function EditorInspector({
  * dismissed this bar — and a second word for "save" next to Publish was the whole
  * confusion. What remains is the escape hatch: put everything back the way it was.
  *
- * The bar therefore stays visible for the rest of the session, and Revert always walks
- * back to the values this session STARTED from. Publish does not reset that baseline;
- * if it should, that is a deliberate follow-up, not a silent side effect.
+ * Revert is anchored to the LAST PUBLISH (Sam, 2026-08-17): it restores the published
+ * edition via restorePublishedAction and survives a refresh (`hasUnpublished` is
+ * computed server-side). The in-memory session-ledger walk remains only as the
+ * fallback for an artist who has never published.
  */
 function SessionActions({
   busy,
