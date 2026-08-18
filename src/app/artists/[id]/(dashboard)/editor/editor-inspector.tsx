@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { GroupLabel, SCROLL_BODY, type SaveStatus } from './inspector-shared'
+import { GroupLabel, SCROLL_BODY } from './inspector-shared'
 import { reorderList, type Orientation } from '@/lib/site-editor/gallery'
 import { type RegionMeasurements, type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import {
@@ -997,6 +997,166 @@ export function EditorInspector({
     )
   }
 
+  /**
+   * THE PANEL REGISTRY (2026-08-18 inspector split): one render thunk per Kind,
+   * exhaustive by type — a new Kind that renders nothing is a COMPILE error, not a
+   * "coming next" placeholder (the drift class panel-inputs.ts kills, enforced here
+   * too). This replaced `EditingView`, a 53-prop pass-through layer whose interface
+   * was as complex as its implementation; panels now render in the inspector's own
+   * scope, where the state they need already lives.
+   */
+  const focusedKey = focused ? selectTargetKey(focused) : null
+  const PANEL_RENDER: Record<Kind, () => React.ReactNode> = {
+    images: () => (
+      <PhotoTools
+        photos={photos}
+        imageFields={imageFields}
+        focusedKey={focusedKey}
+        onFocus={setFocused}
+        onEditItem={setEditingItem}
+        components={components}
+        showGallery={showGallery}
+        assetBudgets={assetBudgets}
+        artistId={artistId}
+        onAdd={addPhoto}
+        onPlace={placePhoto}
+        onUnplace={unplacePhoto}
+        onToggleOnSite={togglePhotoOnSite}
+        onPlaceSlot={placeInSlot}
+        onApplyField={paintField}
+      />
+    ),
+    text: () => (
+      <TextTools
+        textFields={textFields}
+        values={textSave.values}
+        status={textSave.status}
+        onEditField={(f) => {
+          closeEditors() // one editor in the panel at a time
+          setEditingText(f)
+          // Panel → preview: the outline follows the selection, so opening a field
+          // from the list highlights (and scrolls to) the words it edits.
+          setFocused({ kind: 'field', key: f.key })
+        }}
+      />
+    ),
+    // One Links panel, grouped by purpose: outbound social links, tour-support links
+    // (moved into the per-date editor, Sam 2026-08-09), then the declared link buttons.
+    links: () => (
+      <>
+        <GroupLabel>Socials</GroupLabel>
+        <LinkTools
+          links={links.filter((l) => !isContactish(l.url))}
+          group="Social"
+          collapseAt={deselectedAt}
+          artistId={artistId}
+          onRemove={removeLink}
+          onReorder={reorderLinks}
+          onToggleOnSite={toggleLinkOnSite}
+          inferPlatform
+          focusedKey={focusedKey}
+        />
+        {/* A booking address is a contact route, not a profile to follow — its own
+            group, split by SCHEME (mailto:/tel:), never by label. */}
+        {links.some((l) => isContactish(l.url)) && (
+          <>
+            <GroupLabel>Contact</GroupLabel>
+            <LinkTools
+              links={links.filter((l) => isContactish(l.url))}
+              group="Contact"
+              collapseAt={deselectedAt}
+              artistId={artistId}
+              onRemove={removeLink}
+              onReorder={reorderLinks}
+              onToggleOnSite={toggleLinkOnSite}
+              showAdd={false}
+            />
+          </>
+        )}
+        <GroupLabel>Buttons</GroupLabel>
+        <SiteLinkTools
+          regions={linkRegions}
+          values={linkValues}
+          selected={selectedLink}
+          collapseAt={deselectedAt}
+          artistId={artistId}
+          onApplyLink={paintLink}
+        />
+      </>
+    ),
+    videos: () => (
+      <VideoTools
+        focusedKey={focusedKey}
+        videos={videos}
+        videoSlots={videoSlots}
+        artistId={artistId}
+        onToggleOnSite={toggleVideoOnSite}
+        onAssignHero={assignHero}
+        onEditItem={setEditingItem}
+      />
+    ),
+    music: () => (
+      <MusicTools
+        releases={releases}
+        artistId={artistId}
+        onToggleOnSite={toggleProjectOnSite}
+        onReorder={reorderProjects}
+        focusedKey={focusedKey}
+        onFocus={setFocused}
+      />
+    ),
+    tour: () => (
+      <TourTools
+        tours={tours}
+        artistId={artistId}
+        onRemove={removeTour}
+        onReorder={reorderTours}
+        onToggleOnSite={toggleTourOnSite}
+        onEditTour={(t, label) => {
+          closeEditors() // one editor in the panel at a time
+          setEditingTour({ tour: t, label })
+        }}
+        focusedKey={focusedKey}
+        onFocus={setFocused}
+      />
+    ),
+    merch: () => (
+      <MerchTools
+        merch={merch}
+        artistId={artistId}
+        onEdit={(m) => {
+          closeEditors()
+          setEditingMerchId(m.id)
+        }}
+        onReorder={reorderMerch}
+        focusedKey={focusedKey}
+        onFocus={setFocused}
+      />
+    ),
+    style: () => (
+      <StyleTools
+        regions={styleRegions}
+        values={styleValues}
+        options={styleOptions}
+        selected={styleFocus}
+        measured={styleMeasured ?? undefined}
+        collapseAt={deselectedAt}
+        artistId={artistId}
+        onApplyStyle={paintStyle}
+      />
+    ),
+    site: () => (
+      <SiteTools
+        artistId={artistId}
+        photos={photos}
+        values={cursorValues}
+        swatches={siteSwatches(styleOptions, styleValues)}
+        budget={budgetFor(assetBudgets, 'image')}
+        onApplyCursor={onApplyCursor}
+      />
+    ),
+  }
+
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {bridgeOutdated && <BridgeOutdatedBanner />}
@@ -1009,74 +1169,9 @@ export function EditorInspector({
       ) : merchEditor ? (
         merchEditor
       ) : active ? (
-        <EditingView
-          component={active}
-          photos={photos}
-          assetBudgets={assetBudgets}
-          imageFields={imageFields}
-          focusedKey={focused ? selectTargetKey(focused) : null}
-          onFocus={setFocused}
-          onEditItem={setEditingItem}
-          textFields={textFields}
-          textValues={textSave.values}
-          textStatus={textSave.status}
-          onEditTextField={(f) => {
-            closeEditors() // one editor in the panel at a time
-            setEditingText(f)
-            // Panel → preview: the outline follows the selection, so opening a field
-            // from the list highlights (and scrolls to) the words it edits.
-            setFocused({ kind: 'field', key: f.key })
-          }}
-          onEditTour={(t) => {
-            closeEditors() // one editor in the panel at a time
-            setEditingTour(t)
-          }}
-          onEditMerch={(m) => {
-            closeEditors()
-            setEditingMerchId(m.id)
-          }}
-          links={links}
-          videos={videos}
-          videoSlots={videoSlots}
-          merch={merch}
-          releases={releases}
-          tours={tours}
-          artistId={artistId}
-          onAddPhoto={addPhoto}
-          onPlacePhoto={placePhoto}
-          onUnplacePhoto={unplacePhoto}
-          onTogglePhotoOnSite={togglePhotoOnSite}
-          onToggleProjectOnSite={toggleProjectOnSite}
-          onToggleLinkOnSite={toggleLinkOnSite}
-          onToggleVideoOnSite={toggleVideoOnSite}
-          onAssignHero={assignHero}
-          onToggleTourOnSite={toggleTourOnSite}
-          onRemoveTour={removeTour}
-          onReorderTour={reorderTours}
-          onReorderProject={reorderProjects}
-          onReorderMerch={reorderMerch}
-          components={components}
-          showGallery={showGallery}
-          onPlaceSlot={placeInSlot}
-          onRemoveLink={removeLink}
-          onReorderLink={reorderLinks}
-          styleRegions={styleRegions}
-          styleValues={styleValues}
-          styleOptions={styleOptions}
-          selectedStyle={styleFocus}
-          styleMeasured={styleMeasured ?? undefined}
-          deselectedAt={deselectedAt}
-          linkRegions={linkRegions}
-          linkValues={linkValues}
-          selectedLink={selectedLink}
-          cursorValues={cursorValues}
-          onApplyField={paintField}
-          onApplyStyle={paintStyle}
-          onApplyLink={paintLink}
-          onApplyCursor={onApplyCursor}
-          onBack={() => selectComponent(null)}
-          onSwitch={selectComponent}
-        />
+        <PanelChrome component={active} onBack={() => selectComponent(null)} onSwitch={selectComponent}>
+          {PANEL_RENDER[active.kind]()}
+        </PanelChrome>
       ) : (
         <BrowseView onOpen={selectComponent} />
       )}
@@ -1147,138 +1242,21 @@ function BrowseView({ onOpen }: { onOpen: (c: Component) => void }) {
   )
 }
 
-/* ── Editing: tools for the selected component ───────────────────────────────── */
-function EditingView({
+/* ── Panel chrome: the top bar, scroll body and switcher strip around ONE panel ──
+ * The presentational remainder of `EditingView` (deleted 2026-08-18): that layer
+ * threaded 53 props to reach these ~40 lines — the panels themselves render in the
+ * inspector's scope now (PANEL_RENDER), and this keeps only what it draws. */
+function PanelChrome({
   component,
-  photos,
-  assetBudgets,
-  imageFields,
-  focusedKey,
-  onFocus,
-  onEditItem,
-  textFields,
-  textValues,
-  textStatus,
-  onEditTextField,
-  links,
-  onEditTour,
-  videos,
-  videoSlots,
-  merch,
-  releases,
-  tours,
-  artistId,
-  onAddPhoto,
-  onPlacePhoto,
-  onUnplacePhoto,
-  onTogglePhotoOnSite,
-  onToggleProjectOnSite,
-  onToggleLinkOnSite,
-  onToggleVideoOnSite,
-  onAssignHero,
-  onToggleTourOnSite,
-  onRemoveTour,
-  onReorderTour,
-  onReorderProject,
-  onReorderMerch,
-  components,
-  showGallery,
-  onPlaceSlot,
-  onRemoveLink,
-  onReorderLink,
-  onEditMerch,
-  styleRegions,
-  styleValues,
-  styleOptions,
-  selectedStyle,
-  styleMeasured,
-  deselectedAt,
-  linkRegions,
-  linkValues,
-  selectedLink,
-  cursorValues,
-  onApplyField,
-  onApplyStyle,
-  onApplyLink,
-  onApplyCursor,
   onBack,
   onSwitch,
+  children,
 }: {
   component: Component
-  photos: GalleryPhoto[]
-  imageFields: EditorImageField[]
-  /** selectTargetKey of the focused image region, so a tile can ring itself. */
-  focusedKey: string | null
-  /** Focus a region (a tile click) — highlights it in the frame via the parent's effect. */
-  onFocus: (target: SelectTarget) => void
-  /** Open one image/video in the full-panel editor (its Edit button). */
-  onEditItem: (item: ItemEdit) => void
-  textFields: EditorTextField[]
-  /** Text state is owned by the inspector (one source for the list AND the full-panel
-   *  editor), so this view renders it rather than holding it. */
-  textValues: Record<string, string>
-  textStatus: SaveStatus
-  onEditTextField: (field: EditorTextField) => void
-  links: EditorLink[]
-  /** Open one show full-panel (its supporting acts and their links). */
-  onEditTour: (t: { tour: EditorTour; label: string }) => void
-  videos: EditorVideo[]
-  videoSlots: ManifestVideoSlot[]
-  merch: EditorMerch[]
-  releases: EditorProject[]
-  tours: EditorTour[]
-  artistId: string
-  onAddPhoto: (m: { id: string; storage_path: string; orientation: Orientation }) => void
-  onPlacePhoto: (p: GalleryPhoto, orientation: Orientation) => void
-  onUnplacePhoto: (p: GalleryPhoto) => void
-  /** Show/hide a placed slot image in place (never unplaces). */
-  onTogglePhotoOnSite: (p: GalleryPhoto) => void
-  onToggleProjectOnSite: (r: EditorProject) => void
-  onToggleLinkOnSite: (l: EditorLink) => void
-  onToggleVideoOnSite: (v: EditorVideo) => void
-  onAssignHero: (role: SiteVideoRole, videoId: string | null) => void
-  onToggleTourOnSite: (t: EditorTour) => void
-  onRemoveTour: (t: EditorTour) => void
-  onReorderTour: (fromId: string, toId: string) => void
-  /** Drag a project card onto another — reorders the whole catalog (manual mode). */
-  onReorderProject: (fromKey: string, toKey: string) => void
-  /** Drag a merch card onto another — renumbers merch.sort_order. */
-  onReorderMerch: (fromId: string, toId: string) => void
-  components: ManifestComponent[]
-  assetBudgets?: AssetBudgets
-  showGallery: boolean
-  onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
-  onRemoveLink: (l: EditorLink) => void
-  onReorderLink: (fromId: string, toId: string) => void
-  /** Open one product full-panel (the merch grid's Edit pencil). Remove lives there. */
-  onEditMerch: (m: EditorMerch) => void
-  styleRegions: ManifestStyleRegion[]
-  styleValues: Record<string, string>
-  styleOptions?: EditorStyleOptions
-  selectedStyle: string | null
-  /** The frame-clicked region's live measurements (bridge 0.25.0). */
-  styleMeasured?: RegionMeasurements
-  deselectedAt: number
-  linkRegions: ManifestLinkRegion[]
-  linkValues: Record<string, string>
-  selectedLink: { key: string; nonce: number } | null
-  cursorValues: Record<string, string>
-  onApplyField?: (key: string, value: string) => void
-  onApplyStyle?: (key: string, className: string) => void
-  onApplyLink?: (key: string, url: string) => void
-  onApplyCursor?: (settings: CursorSettings) => void
   onBack: () => void
   onSwitch: (c: Component) => void
+  children: React.ReactNode
 }) {
-  const isImages = component.kind === 'images'
-  const isText = component.kind === 'text'
-  const isLinks = component.kind === 'links'
-  const isVideos = component.kind === 'videos'
-  const isMerch = component.kind === 'merch'
-  const isMusic = component.kind === 'music'
-  const isTour = component.kind === 'tour'
-  const isStyle = component.kind === 'style'
-  const isSite = component.kind === 'site'
   return (
     <>
       {/* A compact top bar (Sam, 2026-08-12, "bar B"): a black X back to the grid, plus
@@ -1297,145 +1275,7 @@ function EditingView({
         </span>
       </div>
 
-      <div className={SCROLL_BODY}>
-        {isImages ? (
-          <PhotoTools
-            photos={photos}
-            imageFields={imageFields}
-            focusedKey={focusedKey}
-            onFocus={onFocus}
-            onEditItem={onEditItem}
-            components={components}
-            showGallery={showGallery}
-            assetBudgets={assetBudgets}
-            artistId={artistId}
-            onAdd={onAddPhoto}
-            onPlace={onPlacePhoto}
-            onUnplace={onUnplacePhoto}
-            onToggleOnSite={onTogglePhotoOnSite}
-            onPlaceSlot={onPlaceSlot}
-            onApplyField={onApplyField}
-          />
-        ) : isText ? (
-          <TextTools
-            textFields={textFields}
-            values={textValues}
-            status={textStatus}
-            onEditField={onEditTextField}
-          />
-        ) : isLinks ? (
-          // One Links panel, grouped by purpose: outbound social links, tour-support
-          // links, then the site's declared link buttons (USB / Merch).
-          <>
-            <GroupLabel>Socials</GroupLabel>
-            <LinkTools
-              links={links.filter((l) => !isContactish(l.url))}
-              group="Social"
-              collapseAt={deselectedAt}
-              artistId={artistId}
-              onRemove={onRemoveLink}
-              onReorder={onReorderLink}
-              onToggleOnSite={onToggleLinkOnSite}
-              inferPlatform
-              focusedKey={focusedKey}
-            />
-            {/* A booking address is a contact route, not a profile to follow, so it gets
-                its own group instead of sitting among the socials. Split by SCHEME
-                (mailto:/tel:), not by label — the link says what it is. */}
-            {links.some((l) => isContactish(l.url)) && (
-              <>
-                <GroupLabel>Contact</GroupLabel>
-                <LinkTools
-                  links={links.filter((l) => isContactish(l.url))}
-                  group="Contact"
-                  collapseAt={deselectedAt}
-                  artistId={artistId}
-                  onRemove={onRemoveLink}
-                  onReorder={onReorderLink}
-                  onToggleOnSite={onToggleLinkOnSite}
-                  showAdd={false}
-                />
-              </>
-            )}
-            {/* "Tour support" lived here as a flat list of every act across every date,
-                each row captioned with which show it belonged to — a fact about a show,
-                filed away from the show. It moved into the Tour panel's per-date editor
-                (Sam, 2026-08-09), where the act names already are. */}
-            <GroupLabel>Buttons</GroupLabel>
-            <SiteLinkTools
-              regions={linkRegions}
-              values={linkValues}
-              selected={selectedLink}
-              collapseAt={deselectedAt}
-              artistId={artistId}
-              onApplyLink={onApplyLink}
-            />
-          </>
-        ) : isVideos ? (
-          <VideoTools
-            focusedKey={focusedKey}
-            videos={videos}
-            videoSlots={videoSlots}
-            artistId={artistId}
-            onToggleOnSite={onToggleVideoOnSite}
-            onAssignHero={onAssignHero}
-            onEditItem={onEditItem}
-          />
-        ) : isTour ? (
-          <TourTools
-            tours={tours}
-            artistId={artistId}
-            onRemove={onRemoveTour}
-            onReorder={onReorderTour}
-            onToggleOnSite={onToggleTourOnSite}
-            onEditTour={(t, label) => onEditTour({ tour: t, label })}
-            focusedKey={focusedKey}
-            onFocus={onFocus}
-          />
-        ) : isMerch ? (
-          <MerchTools
-            merch={merch}
-            artistId={artistId}
-            onEdit={onEditMerch}
-            onReorder={onReorderMerch}
-            focusedKey={focusedKey}
-            onFocus={onFocus}
-          />
-        ) : isMusic ? (
-          <MusicTools
-            releases={releases}
-            artistId={artistId}
-            onToggleOnSite={onToggleProjectOnSite}
-            onReorder={onReorderProject}
-            focusedKey={focusedKey}
-            onFocus={onFocus}
-          />
-        ) : isStyle ? (
-          <StyleTools
-            regions={styleRegions}
-            values={styleValues}
-            options={styleOptions}
-            selected={selectedStyle}
-            measured={styleMeasured}
-            collapseAt={deselectedAt}
-            artistId={artistId}
-            onApplyStyle={onApplyStyle}
-          />
-        ) : isSite ? (
-          <SiteTools
-            artistId={artistId}
-            photos={photos}
-            values={cursorValues}
-            swatches={siteSwatches(styleOptions, styleValues)}
-            budget={budgetFor(assetBudgets, 'image')}
-            onApplyCursor={onApplyCursor}
-          />
-        ) : (
-          <p className="px-5 py-6 text-sm text-ink-muted">
-            Editing tools for {component.label} are coming next.
-          </p>
-        )}
-      </div>
+      <div className={SCROLL_BODY}>{children}</div>
 
       {/* The component switcher strip stays on a specific tab (Sam, 2026-08-12: only
           the LANDING view became a grid) — jump straight between panels without
