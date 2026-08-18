@@ -240,6 +240,7 @@ function ComponentTools({
   onFocus,
   onEditItem,
   onPlaceSlot,
+  onToggleOnSite,
 }: {
   components: ManifestComponent[]
   photos: GalleryPhoto[]
@@ -249,6 +250,7 @@ function ComponentTools({
   onFocus: (t: SelectTarget) => void
   onEditItem: (item: ItemEdit) => void
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  onToggleOnSite: (p: GalleryPhoto) => void
 }) {
   // One pass over the photo list for the whole wall, instead of every tile scanning it
   // twice: who holds which role, and the shared library of unplaced photos (a photo NOT
@@ -286,6 +288,7 @@ function ComponentTools({
                     onFocus={() => onFocus(fieldTarget(role))}
                     onEdit={() => onEditItem({ type: 'imageSlot', role, label })}
                     onPlaceSlot={onPlaceSlot}
+                    onToggleOnSite={onToggleOnSite}
                   />
                 )
               })}
@@ -311,6 +314,7 @@ function SlotTile({
   onFocus,
   onEdit,
   onPlaceSlot,
+  onToggleOnSite,
 }: {
   /** The tile's display name: the slot's own label, or "Slot n" on a repeated wall. */
   label: string
@@ -328,6 +332,8 @@ function SlotTile({
   /** Open this slot in the full-panel editor (its Edit button). */
   onEdit: () => void
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
+  /** The slot's on/off switch: hide the placed image on the site without unplacing it. */
+  onToggleOnSite: (p: GalleryPhoto) => void
 }) {
   const [picking, setPicking] = useState(false)
   const wrongFormat = !!placed && slot.prefersPng && !/\.png$/i.test(placed.storage_path)
@@ -344,9 +350,32 @@ function SlotTile({
             focused={focused}
             onSelect={onFocus}
             title={fileNameOf(placed.storage_path)}
-            thumb={<PhotoThumb path={placed.storage_path} aspect="aspect-square" fit="cover" />}
+            thumb={
+              // Off-site dims (the music-card treatment) so a hidden slot reads hidden.
+              <div className={cx(!placed.onSite && 'opacity-45')}>
+                <PhotoThumb path={placed.storage_path} aspect="aspect-square" fit="cover" />
+              </div>
+            }
           >
             <TileEditButton label={`Edit ${label}`} title="Customize this image" onClick={onEdit} />
+            {/* The slot's on/off switch (Sam, 2026-08-18: "the hero background should be
+                a toggle"). Flips the media row's on_site — the wire's gate — so the image
+                leaves the page but stays placed here, ready to switch back on. */}
+            <button
+              type="button"
+              aria-label={placed.onSite ? `Hide ${label} on the site` : `Show ${label} on the site`}
+              aria-pressed={placed.onSite}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleOnSite(placed)
+              }}
+              className={cx(
+                'absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors',
+                placed.onSite ? 'bg-accent text-white' : 'bg-paper text-ink shadow-sm hover:bg-accent hover:text-white',
+              )}
+            >
+              <Icon name={placed.onSite ? 'check' : 'plus'} size={12} />
+            </button>
           </SelectableTile>
           {/* Advisory, never blocking (Sam, 2026-07-21): a JPG in a PNG slot renders as a
               solid box on the site, so flag it — fixable, not a dead end. */}
@@ -424,6 +453,7 @@ export function PhotoTools({
   onAdd,
   onPlace,
   onUnplace,
+  onToggleOnSite,
   onPlaceSlot,
   onApplyField,
 }: {
@@ -447,6 +477,8 @@ export function PhotoTools({
   onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   onPlace: (p: GalleryPhoto, orientation: Orientation) => void
   onUnplace: (p: GalleryPhoto) => void
+  /** Show/hide a PLACED slot image without unplacing it — the slot's on/off switch. */
+  onToggleOnSite: (p: GalleryPhoto) => void
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onApplyField?: (key: string, value: string) => void
 }) {
@@ -480,6 +512,7 @@ export function PhotoTools({
           onFocus={onFocus}
           onEditItem={onEditItem}
           onPlaceSlot={onPlaceSlot}
+          onToggleOnSite={onToggleOnSite}
         />
       )}
       {showGallery && (

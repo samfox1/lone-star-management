@@ -2403,6 +2403,21 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo' },
   ]
 
+  it('CRITICAL: a placed slot has an on/off switch — off HIDES the image, never unplaces', () => {
+    // Sam, 2026-08-18: "the hero background should be a toggle. So the user can turn it
+    // off or on." on_site is the wire's media gate: OFF removes the image from the page
+    // while the slot stays filled here, so ON needs no re-pick.
+    renderInspector(HELD_SLOT, { components: [POLAROID] })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Slot 1 on the site' }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'mp', 'artist-1', false)
+    expect(assignSlotMock).not.toHaveBeenCalled() // the placement is untouched
+    // Optimistic flip: the switch now reads Show, and the tile still holds its image.
+    expect(screen.getByRole('button', { name: 'Show Slot 1 on the site' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show Slot 1 on the site' }))
+    expect(setOnSiteMock).toHaveBeenLastCalledWith('photo', 'mp', 'artist-1', true)
+  })
+
   /** Both polaroid PHOTO slots filled, for cross-item behaviour (styling one, then the
    *  other). Slots are flattened across cards, so card 2's photo is Slot 3 — card 1's
    *  caption is Slot 2. */

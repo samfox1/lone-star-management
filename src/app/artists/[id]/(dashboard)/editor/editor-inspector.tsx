@@ -800,6 +800,18 @@ export function EditorInspector({
       if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: true } : x)))
     })
   }
+  /** Show/hide a PLACED slot image WITHOUT unplacing it (Sam, 2026-08-18: "the hero
+   *  background should be a toggle"). `on_site` is the wire's media gate, so OFF removes
+   *  it from the page while the slot stays filled — flip it back and the image returns,
+   *  no re-upload, no re-pick. */
+  function togglePhotoOnSite(p: GalleryPhoto) {
+    const next = !p.onSite
+    setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: next } : x)))
+    startTransition(async () => {
+      const res = await setOnSiteAction('photo', p.id, artistId, next)
+      if (res?.error) setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: !next } : x)))
+    })
+  }
   // Toggle a whole project on/off the site by flipping `on_site` on its songs — the
   // per-song flag is what the site actually gates on. `released` is untouched.
   function toggleProjectOnSite(r: EditorProject) {
@@ -1010,6 +1022,7 @@ export function EditorInspector({
           onAddPhoto={addPhoto}
           onPlacePhoto={placePhoto}
           onUnplacePhoto={unplacePhoto}
+          onTogglePhotoOnSite={togglePhotoOnSite}
           onToggleProjectOnSite={toggleProjectOnSite}
           onToggleLinkOnSite={toggleLinkOnSite}
           onToggleVideoOnSite={toggleVideoOnSite}
@@ -1134,6 +1147,7 @@ function EditingView({
   onAddPhoto,
   onPlacePhoto,
   onUnplacePhoto,
+  onTogglePhotoOnSite,
   onToggleProjectOnSite,
   onToggleLinkOnSite,
   onToggleVideoOnSite,
@@ -1193,6 +1207,8 @@ function EditingView({
   onAddPhoto: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   onPlacePhoto: (p: GalleryPhoto, orientation: Orientation) => void
   onUnplacePhoto: (p: GalleryPhoto) => void
+  /** Show/hide a placed slot image in place (never unplaces). */
+  onTogglePhotoOnSite: (p: GalleryPhoto) => void
   onToggleProjectOnSite: (r: EditorProject) => void
   onToggleLinkOnSite: (l: EditorLink) => void
   onToggleVideoOnSite: (v: EditorVideo) => void
@@ -1272,6 +1288,7 @@ function EditingView({
             onAdd={onAddPhoto}
             onPlace={onPlacePhoto}
             onUnplace={onUnplacePhoto}
+            onToggleOnSite={onTogglePhotoOnSite}
             onPlaceSlot={onPlaceSlot}
             onApplyField={onApplyField}
           />
