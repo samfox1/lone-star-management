@@ -704,6 +704,7 @@ const REORDER_TABLE: Partial<Record<CrudEntity, string>> = {
   track: 'tracks',
   // Only the UNDATED shows are draggable; dated ones still sort by date (20260723120000).
   tour_date: 'tour_dates',
+  merch: 'merch',
 }
 export async function reorderContentAction(
   type: CrudEntity,

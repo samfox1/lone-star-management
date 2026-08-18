@@ -192,6 +192,9 @@ describe('a base wearing SEVERAL owned tokens measures the LARGEST (Sam, 2026-08
  * it — a slider with no owned token parks on the MEASURED value instead of the middle.
  */
 describe('sliderIndex — measured parking (bridge 0.25.0)', () => {
+  /** Narrow to the slider variant's rank — every control in this suite is a slider. */
+  const rankOf = (c: StyleControl) => (c.kind === 'slider' ? c.rank! : () => null)
+
   const MEASURED = {
     fontSizePx: 16,
     lineHeightPx: 27.2, // 1.7 ratio — atlas's bio, the exact region Sam dragged
@@ -211,9 +214,9 @@ describe('sliderIndex — measured parking (bridge 0.25.0)', () => {
     expect(exact).toBe(false)
     // Parked at the nearest step to 1.7, and the next notch right is LOOSER than what
     // is on screen — the property every parking fix exists to guarantee.
-    expect(c.rank!(steps[idx].value)!).toBeGreaterThan(1.4)
+    expect(rankOf(c)(steps[idx].value)!).toBeGreaterThan(1.4)
     if (idx < steps.length - 1) {
-      expect(c.rank!(steps[idx + 1].value)!).toBeGreaterThan(1.7)
+      expect(rankOf(c)(steps[idx + 1].value)!).toBeGreaterThan(1.7)
     }
   })
 
@@ -222,14 +225,14 @@ describe('sliderIndex — measured parking (bridge 0.25.0)', () => {
     const c = controlsForRegion(buildStyleControls(), region).find((x) => x.id === 'pad')!
     const steps = sliderSteps(c)
     const { idx } = sliderIndex(c, '', MEASURED)
-    expect(c.rank!(steps[idx].value)!).toBeGreaterThanOrEqual(48)
+    expect(rankOf(c)(steps[idx].value)!).toBeGreaterThanOrEqual(48)
   })
 
   it('a STORED value still beats the measurement', () => {
     const c = textControl('leading')
     const withToken = sliderIndex(c, 'lead-[1.25]', MEASURED)
     const steps = sliderSteps(c)
-    expect(c.rank!(steps[withToken.idx].value)).toBe(1.25)
+    expect(rankOf(c)(steps[withToken.idx].value)).toBe(1.25)
   })
 
   it('no measurement (an older frame) keeps the old middle-Default fallback', () => {
@@ -247,6 +250,6 @@ describe('sliderIndex — measured parking (bridge 0.25.0)', () => {
     const steps = sliderSteps(phone)
     const { idx } = sliderIndex(phone, '', MEASURED)
     // Same rank space as the desktop control (a ratio), so the same park point.
-    expect(phone.rank!(steps[idx].value)!).toBeGreaterThan(1.4)
+    expect(rankOf(phone)(steps[idx].value)!).toBeGreaterThan(1.4)
   })
 })

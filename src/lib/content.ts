@@ -205,8 +205,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // in_stock (20260818130000): content-level stock state — a sold-out item stays on
     // the site, rendered sold out. Rides the snapshot wholesale, no SQL change (the
     // `role` precedent on links).
-    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'created_at'],
-    orderBy: ['created_at'],
+    // sort_order (20260818150000): the merch grid drags like every other list now.
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at'],
+    orderBy: ['sort_order', 'created_at'],
   },
   link: {
     table: 'links',

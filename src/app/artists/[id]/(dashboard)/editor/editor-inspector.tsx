@@ -883,6 +883,21 @@ export function EditorInspector({
   // here — deleting a video for good is a Videos-page action, and the band orders by
   // sort_order — so the editor no longer needs removeVideo/reorderVideos.
 
+  /** Drag a merch card onto another — same optimistic shape as links/tours/projects. */
+  function reorderMerch(fromId: string, toId: string) {
+    if (isPending) return
+    const from = merch.findIndex((m) => m.id === fromId)
+    const to = merch.findIndex((m) => m.id === toId)
+    if (from < 0 || to < 0 || from === to) return
+    const prev = merch
+    const next = reorderList(merch, from, to)
+    setMerch(next) // optimistic
+    startTransition(async () => {
+      const res = await reorderContentAction('merch', artistId, next.map((m) => m.id))
+      if (res?.error) setMerch(prev)
+    })
+  }
+
   function removeMerch(m: EditorMerch) {
     if (isPending) return
     const prev = merch
@@ -1003,6 +1018,7 @@ export function EditorInspector({
           onRemoveTour={removeTour}
           onReorderTour={reorderTours}
           onReorderProject={reorderProjects}
+          onReorderMerch={reorderMerch}
           components={components}
           showGallery={showGallery}
           onPlaceSlot={placeInSlot}
@@ -1126,6 +1142,7 @@ function EditingView({
   onRemoveTour,
   onReorderTour,
   onReorderProject,
+  onReorderMerch,
   components,
   showGallery,
   onPlaceSlot,
@@ -1185,6 +1202,8 @@ function EditingView({
   onReorderTour: (fromId: string, toId: string) => void
   /** Drag a project card onto another — reorders the whole catalog (manual mode). */
   onReorderProject: (fromKey: string, toKey: string) => void
+  /** Drag a merch card onto another — renumbers merch.sort_order. */
+  onReorderMerch: (fromId: string, toId: string) => void
   components: ManifestComponent[]
   assetBudgets?: AssetBudgets
   showGallery: boolean
@@ -1337,6 +1356,7 @@ function EditingView({
             merch={merch}
             artistId={artistId}
             onEdit={onEditMerch}
+            onReorder={onReorderMerch}
             focusedKey={focusedKey}
             onFocus={onFocus}
           />

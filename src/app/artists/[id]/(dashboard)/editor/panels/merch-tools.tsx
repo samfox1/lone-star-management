@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type EditorMerch } from '../inspector-types'
@@ -7,11 +8,13 @@ import { AddLink } from '../inspector-grid'
 /* ── Merch tools: a cover grid like Music, one card per product (Sam, 2026-08-18).
  * The card face SELECTS (outlines the product on the site); the pencil opens the
  * full-panel MerchEditor — title / price / link / out-of-stock live there now, not in
- * always-open inline rows. Remove lives in the editor too. */
+ * always-open inline rows. Remove lives in the editor too. Cards DRAG to reorder,
+ * the same gesture as the Music cards and tour rows. */
 export function MerchTools({
   merch,
   artistId,
   onEdit,
+  onReorder,
   focusedKey,
   onFocus,
 }: {
@@ -19,10 +22,22 @@ export function MerchTools({
   artistId: string
   /** Open this product full-panel (the grid's Edit button). */
   onEdit: (m: EditorMerch) => void
+  /** Drag a card onto another — renumbers merch.sort_order (20260818150000). */
+  onReorder?: (fromId: string, toId: string) => void
   /** Two-way selection, the same contract every other item panel carries. */
   focusedKey?: string | null
   onFocus?: (target: SelectTarget) => void
 }) {
+  const dragFrom = useRef<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
+
+  function drop(toId: string) {
+    const fromId = dragFrom.current
+    dragFrom.current = null
+    setDragOver(null)
+    if (fromId && fromId !== toId) onReorder?.(fromId, toId)
+  }
+
   return (
     <div className="space-y-2.5 px-5 py-4">
       <div className="grid grid-cols-3 gap-2.5">
@@ -31,9 +46,19 @@ export function MerchTools({
           return (
             <div
               key={m.id}
+              draggable
+              onDragStart={() => (dragFrom.current = m.id)}
+              onDragEnter={() => setDragOver(m.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => drop(m.id)}
+              onDragEnd={() => {
+                dragFrom.current = null
+                setDragOver(null)
+              }}
               className={cx(
                 'relative overflow-hidden rounded-lg border',
                 focused ? 'border-accent ring-2 ring-accent' : 'border-hairline',
+                dragOver === m.id && 'ring-2 ring-accent',
               )}
             >
               <button

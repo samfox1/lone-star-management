@@ -1235,6 +1235,17 @@ describe('EditorInspector — Merch component', () => {
     }
   })
 
+  it('CRITICAL: dragging a card onto another persists the new merch order', () => {
+    // Sam, 2026-08-18: "add the same dragging to reorder to merchandise." Same gesture
+    // as the Music cards; writes merch.sort_order (20260818150000) for every row.
+    openMerch()
+    const cards = document.querySelectorAll('aside div[draggable="true"]')
+    expect(cards.length).toBe(MERCH.length)
+    fireEvent.dragStart(cards[0]) // Tour Tee…
+    fireEvent.drop(cards[1]) // …dropped on Vinyl LP
+    expect(reorderContentMock).toHaveBeenCalledWith('merch', 'artist-1', ['p2', 'p1'])
+  })
+
   it('removes a product from inside its editor via deleteContentAction', () => {
     openMerch()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
