@@ -93,7 +93,7 @@ export type ResolveArgs = {
   /** Per-category derivations that need more than a lookup (values joined from the
    *  draft). Injected so this module stays free of React and of the editor's internals. */
   derive: {
-    textFields: (m: TemplateManifest | null, values: SiteContent) => EditorTextField[]
+    textFields: (m: TemplateManifest | null, values: SiteContent, draft: PublicSitePayload | null) => EditorTextField[]
     imageFields: (m: TemplateManifest | null, draft: PublicSitePayload | null) => EditorImageField[]
   }
 }
@@ -111,7 +111,7 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
   const { customSiteUrl, manifest, draft, siteContent, local, derive } = args
   const announced = customSiteUrl ? manifest : null
   return {
-    textFields: customSiteUrl ? derive.textFields(manifest, siteContent) : local.textFields,
+    textFields: customSiteUrl ? derive.textFields(manifest, siteContent, draft) : local.textFields,
     imageFields: customSiteUrl ? derive.imageFields(manifest, draft) : local.imageFields,
     // Gated like every sibling. It read the UNGATED manifest until this refactor, so a
     // built-in that announced an image slot would have shown a gallery its template does

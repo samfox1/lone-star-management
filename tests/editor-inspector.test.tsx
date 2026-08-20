@@ -492,7 +492,8 @@ describe('EditorInspector — Text component', () => {
       expect(saveMock).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(500)
-      expect(saveMock).toHaveBeenCalledWith('artist-1', 'hero_tagline', 'Live Act')
+      // The 4th arg is the field's declared target — undefined for a site_content field.
+      expect(saveMock).toHaveBeenCalledWith('artist-1', 'hero_tagline', 'Live Act', undefined)
     } finally {
       vi.useRealTimers()
     }

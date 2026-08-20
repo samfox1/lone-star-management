@@ -133,6 +133,10 @@ export async function saveEditorField(
   template: string | null,
   fieldKey: string,
   value: string,
+  /** A custom site's declared target, from its ANNOUNCED manifest — untrusted
+   *  cross-origin JSON, so it is checked against the narrow allowlist here rather
+   *  than believed. Only the artist TEXT columns qualify. */
+  target?: { store: 'artist'; column: 'name' | 'bio' },
 ): Promise<{ ok: boolean; error?: string }> {
   const manifest = template === null ? undefined : manifestFor(template)
 
@@ -142,7 +146,23 @@ export async function saveEditorField(
 
   // A custom site's fields arrive over the bridge, so there is nothing to resolve them
   // against. Route before the membership check, which could only ever refuse them.
-  if (!manifest) return saveCustomField(supabase, artistId, fieldKey, trimmed)
+  if (!manifest) {
+    // An ARTIST-COLUMN target (name/bio) writes the column the site actually renders —
+    // site_content by key was the silent wrong home for these (ftbk, 2026-08-20). The
+    // allowlist is the defence: the target came over the bridge and proves nothing.
+    if (target?.store === 'artist' && (target.column === 'name' || target.column === 'bio')) {
+      // A blanked NAME stays the old name: the column is the artist's identity across
+      // the whole dashboard, and clearing it from a text box is never what was meant.
+      if (target.column === 'name' && trimmed === '') return { ok: false, error: 'Give the artist a name.' }
+      const { error } = await supabase
+        .from('artists')
+        .update({ [target.column]: trimmed === '' ? null : trimmed })
+        .eq('id', artistId)
+      if (error) return { ok: false, error: error.message }
+      return { ok: true }
+    }
+    return saveCustomField(supabase, artistId, fieldKey, trimmed)
+  }
 
   const field = fieldByKey(manifest, fieldKey)
   if (!field) return { ok: false, error: 'Unknown field.' }

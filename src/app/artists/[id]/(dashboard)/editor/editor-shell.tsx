@@ -46,12 +46,26 @@ import {
 export function runtimeTextFields(
   manifest: TemplateManifest | null,
   values: SiteContent,
+  /** The draft, for fields whose declared target is an ARTIST column (name/bio) —
+   *  their value lives there, not in site_content (ftbk, 2026-08-20). */
+  draft?: PublicSitePayload | null,
 ): EditorTextField[] {
+  const artistTarget = (f: { target?: unknown } | null | undefined) => {
+    const t = f?.target as { store?: string; column?: string } | undefined
+    return t?.store === 'artist' && (t.column === 'name' || t.column === 'bio')
+      ? { store: 'artist' as const, column: t.column as 'name' | 'bio' }
+      : undefined
+  }
   return textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
     key: e.key,
     label: e.label,
     type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
-    value: e.field ? (values[e.field.key] ?? '') : '',
+    target: artistTarget(e.field),
+    value: (() => {
+      const t = artistTarget(e.field)
+      if (t) return (draft?.artist?.[t.column] as string | null) ?? ''
+      return e.field ? (values[e.field.key] ?? '') : ''
+    })(),
     // Same multiline rule the built-in path uses, so a body-copy field gets a textarea
     // on a custom site too.
     multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),

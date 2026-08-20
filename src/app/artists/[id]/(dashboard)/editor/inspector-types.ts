@@ -40,6 +40,11 @@ export type EditorTextField = {
    *  told every one of them is "Empty". Custom sites keep their own fallbacks in code, so
    *  this is the only way we can know what is actually on screen. */
   defaultValue?: string
+  /** Where the value LIVES, from the announced manifest. Custom sites may target an
+   *  artist column (name/bio) — without this the save path wrote site_content by key
+   *  and the page (which renders artist.bio) never showed the edit (found wiring
+   *  ftbk, 2026-08-20). Absent → site_content by key, the historic behaviour. */
+  target?: { store: 'artist'; column: 'name' | 'bio' }
   /** The style region dressing this field's element, when the site declares one — the
    *  Text panel offers Font/Size/Boldness against it, so the words and how they look are
    *  edited in one place. Null when the site declares no region for this field, which is

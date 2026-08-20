@@ -314,6 +314,10 @@ export async function saveEditorFieldAction(
   artistId: string,
   fieldKey: string,
   value: string,
+  /** A custom site's declared target for this field. VALIDATED, never trusted: only
+   *  the two artist text columns are honoured (the image columns have their own
+   *  action). Absent → site_content by key, the historic path. */
+  target?: { store: 'artist'; column: 'name' | 'bio' },
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const {
@@ -329,7 +333,7 @@ export async function saveEditorFieldAction(
   if (!artist) return { ok: false, error: 'Artist not found.' }
 
   const template = isCustom(artist) ? null : (artist.template as string)
-  const res = await saveEditorField(supabase, artistId, template, fieldKey, value)
+  const res = await saveEditorField(supabase, artistId, template, fieldKey, value, target)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
 }

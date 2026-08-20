@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { type SaveStatus } from './inspector-shared'
 import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { saveEditorFieldAction } from '../actions'
@@ -21,7 +21,7 @@ import { saveEditorFieldAction } from '../actions'
  */
 export function useTextFieldSave(
   artistId: string,
-  initial: { key: string; value: string }[],
+  initial: { key: string; value: string; target?: { store: 'artist'; column: 'name' | 'bio' } }[],
   onApplyField?: (key: string, value: string) => void,
 ): {
   values: Record<string, string>
@@ -29,8 +29,15 @@ export function useTextFieldSave(
   edit: (key: string, value: string) => void
 } {
   const [edits, setEdits] = useState<Record<string, string>>({})
+  // A ref, not a dep: fields arrive late over the bridge and persist must read the
+  // CURRENT list without re-creating the debouncer.
+  const initialRef = useRef(initial)
+  initialRef.current = initial
   const { status, save } = useDebouncedFieldSave<string>({
-    persist: (key, value) => saveEditorFieldAction(artistId, key, value),
+    // The declared target rides along (validated server-side, never trusted) so a
+    // custom site's artist-column fields write the column the page actually renders.
+    persist: (key, value) =>
+      saveEditorFieldAction(artistId, key, value, initialRef.current.find((f) => f.key === key)?.target),
     onApply: onApplyField,
   })
 

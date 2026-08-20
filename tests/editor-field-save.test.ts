@@ -147,6 +147,33 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
     expect(manifestFor(data.template)).toBeDefined()
   })
 
+  it('CRITICAL: an ARTIST-COLUMN target writes the column the page renders — never site_content', async () => {
+    // ftbk, 2026-08-20: custom fields with declared artist targets (name/bio) silently
+    // wrote site_content by key, and the page — which renders artist.bio — never showed
+    // the edit. The target rides along from the announced manifest, validated here.
+    await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', 'artist_bio')
+    const res = await saveEditorField(asA, artistA, CUSTOM, 'artist_bio', '  Bio via target.  ', { store: 'artist', column: 'bio' })
+    expect(res.ok).toBe(true)
+    const { data } = await svc.from('artists').select('bio').eq('id', artistA).single<{ bio: string | null }>()
+    expect(data?.bio).toBe('Bio via target.')
+    // …and NOT the historic wrong home.
+    const { data: sc } = await svc.from('site_content').select('value').eq('artist_id', artistA).eq('key', 'artist_bio').maybeSingle()
+    expect(sc).toBeNull()
+  })
+
+  it('a blanked NAME is refused — the column is the identity of the whole dashboard', async () => {
+    const res = await saveEditorField(asA, artistA, CUSTOM, 'artist_name', '   ', { store: 'artist', column: 'name' })
+    expect(res.ok).toBe(false)
+  })
+
+  it('CRITICAL: a NON-ALLOWLISTED target is ignored, not honoured — the bridge proves nothing', async () => {
+    // hero_image_url is image-only; a text save must never reach an arbitrary column.
+    const res = await saveEditorField(asA, artistA, CUSTOM, KEY, 'x', { store: 'artist', column: 'hero_image_url' } as never)
+    expect(res.ok).toBe(true) // falls through to the site_content path…
+    const { data } = await svc.from('site_content').select('value').eq('artist_id', artistA).eq('key', KEY).maybeSingle<{ value: string }>()
+    expect(data?.value).toBe('x') // …written under the key, no column touched
+  })
+
   it('upserts the field key straight into site_content', async () => {
     await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', KEY)
     expect((await saveEditorField(asA, artistA, CUSTOM, KEY, '  / backstage /  ')).ok).toBe(true)
