@@ -246,16 +246,20 @@ export function applyCursor(doc: Document, settings: CursorSettings): Teardown {
       if (!ctx) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const now = Date.now();
-      while (points.length && now - points[0].t > LINE_POINT_LIFE_MS) points.shift();
+      while (points.length && now - points[0]!.t > LINE_POINT_LIFE_MS) points.shift();
       ctx.lineCap = "round";
       ctx.strokeStyle = color;
+      // Index accesses are guarded by the loop bounds; `!` states that invariant for
+      // consumers compiling with noUncheckedIndexedAccess (ftbk, 2026-08-20).
       for (let i = 1; i < points.length; i++) {
-        const age = (now - points[i].t) / LINE_POINT_LIFE_MS;
+        const prev = points[i - 1]!;
+        const point = points[i]!;
+        const age = (now - point.t) / LINE_POINT_LIFE_MS;
         ctx.globalAlpha = Math.max(0, 1 - age);
         ctx.lineWidth = 3 * (1 - age) + 1;
         ctx.beginPath();
-        ctx.moveTo(points[i - 1].x, points[i - 1].y);
-        ctx.lineTo(points[i].x, points[i].y);
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(point.x, point.y);
         ctx.stroke();
       }
       if (points.length) raf = win.requestAnimationFrame(draw);

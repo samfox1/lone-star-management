@@ -70,7 +70,7 @@ const LEGACY_NAMES = [
   "text-4xl", "text-5xl", "text-6xl", "text-7xl", "text-8xl", "text-9xl",
 ];
 export const LEGACY_TO_FLUID: Record<string, string> = Object.fromEntries(
-  LEGACY_NAMES.map((name, i) => [name, TEXT_SIZES[i].value]),
+  LEGACY_NAMES.map((name, i) => [name, TEXT_SIZES[i]!.value]),
 );
 
 /**
@@ -185,7 +185,7 @@ function claimedProps(base: string): Set<string> {
   const claims = new Set<string>();
   for (const token of base.split(/\s+/)) {
     const m = token.match(CLAIM_TOKEN);
-    if (m) for (const prop of m[1].split(",")) claims.add(prop);
+    if (m) for (const prop of m[1]!.split(",")) claims.add(prop);
   }
   return claims;
 }
@@ -291,7 +291,7 @@ function mobileToken(
   for (const fam of MOBILE_VARS) {
     const m = token.match(fam.re);
     if (!m) continue;
-    const value = fam.parse(m[1]);
+    const value = fam.parse(m[1]!);
     if (value == null) return { style: {} };
     return {
       style: { [fam.variable]: value },
@@ -311,13 +311,13 @@ function variableToken(
 ): Record<string, string> | null {
   let m = token.match(/^size-\[(\d{1,4})px\]$/);
   if (m) {
-    const style: Record<string, string> = { "--lse-size": sizeLength(Number(m[1])) };
+    const style: Record<string, string> = { "--lse-size": sizeLength(Number(m[1]!)) };
     if (!claims.has("size")) style.fontSize = "var(--lse-size)";
     return style;
   }
   m = token.match(/^fontfam-\[(.+)\]$/);
   if (m) {
-    const value = fontFamilyValue(m[1]);
+    const value = fontFamilyValue(m[1]!);
     if (!value) return {};
     const style: Record<string, string> = { "--lse-font": value };
     if (!claims.has("font")) style.fontFamily = "var(--lse-font)";
@@ -326,7 +326,7 @@ function variableToken(
   for (const fam of TEXT_VARS) {
     const hit = token.match(fam.re);
     if (!hit) continue;
-    const value = fam.parse(hit[1]);
+    const value = fam.parse(hit[1]!);
     if (value == null) return {};
     const style: Record<string, string> = { [fam.variable]: value };
     if (!claims.has(fam.claim)) style[fam.camel] = `var(${fam.variable})`;
@@ -407,16 +407,18 @@ export function familyOf(raw: string): string | null {
   // way OFF on a delta site — the toggle diffed to nothing and the row was deleted.
   if (/^border-[tblrxy]$/.test(t)) return "divider";
   const not = t.match(NOT_TOKEN);
-  if (not) return not[1];
+  if (not) return not[1]!;
 
   // Mobile twins first: their prefix embeds the family (`sizesm`, `scalesm`, …).
   const sm = t.match(/^([a-z]+)sm-\[/);
-  if (sm) return `${sm[1]}sm`;
+  if (sm) return `${sm[1]!}sm`;
 
   // Bracketed forms. The `text-[…]` shape is three families wearing one prefix.
   const arb = t.match(/^([a-z]+)-\[(.+)\]$/);
   if (arb) {
-    const [, prefix, payload] = arb;
+    // A match guarantees both groups; `!` states it for strict consumers (ftbk).
+    const prefix = arb[1]!;
+    const payload = arb[2]!;
     if (prefix === "text") {
       if (payload.startsWith("#")) return "textColor";
       // Only a measurable size shape is the size family; anything else in the bracket
@@ -472,7 +474,7 @@ export function familyOf(raw: string): string | null {
   if (/^scale-\d/.test(t)) return "scale";
   if (/^opacity-\d/.test(t)) return "opacity";
   const filter = t.match(/^(bw|sepia|brightness|contrast|saturate)-\d/);
-  if (filter) return filter[1];
+  if (filter) return filter[1]!;
   if (/^textshadow-/.test(t)) return "textshadow";
   // Bare-suffix families the bracket branch cannot see (found by the derived
   // invariant sweep the moment it existed — the same way border-t was found).
@@ -562,7 +564,7 @@ function inlineToken(token: string): Record<string, string> | null {
   m = token.match(/^rounded-\[(\d{1,3})px\]$/);
   if (m) return { borderRadius: `${m[1]}px` };
   if (token === "rounded-full") return { borderRadius: "9999px" };
-  if (token in SHADOWS) return { boxShadow: SHADOWS[token] };
+  if (token in SHADOWS) return { boxShadow: SHADOWS[token]! };
   return null;
 }
 
@@ -637,7 +639,7 @@ const CLIP_SHAPES: Record<string, string> = {
 
 /** Slice-2 ITEM lifts: cutout shapes and feathered edges. */
 function shapeToken(token: string): Record<string, string> | null {
-  if (token in CLIP_SHAPES) return { clipPath: CLIP_SHAPES[token] };
+  if (token in CLIP_SHAPES) return { clipPath: CLIP_SHAPES[token]! };
   const m = token.match(/^feather-(\d{1,2})$/);
   if (m) {
     // A mask that holds full ink until (100-N)% of the way out, then fades — reads as
@@ -660,7 +662,7 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
     return { textDecorationLine: token }; // composed below — the two can coexist
   let m = token.match(/^textgrad-(.+)$/);
   if (m) {
-    const pair = m[1].match(HEX_PAIR);
+    const pair = m[1]!.match(HEX_PAIR);
     if (!pair) return null;
     // Clip the gradient to the glyphs. `color: transparent` lets it show through;
     // WebkitTextFillColor beats any inherited fill on WebKit.
@@ -674,12 +676,12 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   }
   m = token.match(/^bggrad-(.+)$/);
   if (m) {
-    const pair = m[1].match(HEX_PAIR);
+    const pair = m[1]!.match(HEX_PAIR);
     if (!pair) return null;
     return { backgroundImage: `linear-gradient(135deg, ${pair[1]}, ${pair[2]})` };
   }
   m = token.match(/^decocolor-\[(#[0-9a-fA-F]{3,8})\]$/);
-  if (m) return { textDecorationColor: m[1] };
+  if (m) return { textDecorationColor: m[1]! };
   // Sub-pixel thickness and negative offset are the LEFT half of the centred sliders.
   m = token.match(/^decothick-\[(\d{1,2}(?:\.\d{1,2})?)px\]$/);
   if (m) return { textDecorationThickness: `${m[1]}px` };
@@ -695,7 +697,7 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // Hover colour: the hex lifts here, the `hovercolor` marker class (compiled) applies
   // it on :hover — inline styles cannot express pseudo-classes.
   m = token.match(/^hovercolor-\[(#[0-9a-fA-F]{3,8})\]$/);
-  if (m) return { "--lse-hover-color": m[1] };
+  if (m) return { "--lse-hover-color": m[1]! };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
@@ -721,7 +723,7 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // / right. justify-content positions the packed tracks, so it only shows once the
   // region's columns are auto-sized rather than 1fr-filling the width.
   m = token.match(/^just-\[(start|center|end)\]$/);
-  if (m) return { justifyContent: m[1] };
+  if (m) return { justifyContent: m[1]! };
   // The gutter between a region's items (grid/flex gap) — the hero name↔portrait space.
   m = token.match(/^gap-\[(\d{1,3})px\]$/);
   if (m) return { gap: `${m[1]}px` };
@@ -843,8 +845,8 @@ const MAX_PLAYBACK_RATE = 16;
  *  from ANY string: no build can compile 16.7M of them, so they were never classes. */
 function colorStyle(token: string): Record<string, string> | null {
   const m = token.match(/^([a-z]+)-\[(#[0-9a-fA-F]{3,8})\]$/);
-  const prop = m ? COLOR_PROPS[m[1]] : undefined;
-  return m && prop ? { [prop]: m[2] } : null;
+  const prop = m ? COLOR_PROPS[m[1]!] : undefined;
+  return m && prop ? { [prop]: m[2]! } : null;
 }
 
 /** `speed-[Nx]` → a rate a media element will actually accept, or null. */
@@ -934,8 +936,8 @@ export type ManagedColorProp = "borderColor" | "color" | "backgroundColor";
 /** `<prefix>-[#hex]` → its CSS property + hex, or null if not an arbitrary colour. */
 export function colorToken(token: string): { prop: ManagedColorProp; value: string } | null {
   const m = token.match(/^([a-z]+)-\[(#[0-9a-fA-F]{3,8})\]$/);
-  const prop = m ? COLOR_PROPS[m[1]] : undefined;
-  return m && prop ? { prop, value: m[2] } : null;
+  const prop = m ? COLOR_PROPS[m[1]!] : undefined;
+  return m && prop ? { prop, value: m[2]! } : null;
 }
 
 /** The arbitrary-colour utility for a prefix — the write half of `colorToken`. */
