@@ -162,6 +162,9 @@ export type FontSlotMap = Partial<Record<FontSlot, string>>
  *  component-slot role so gallery layouts and placed components render from the draft
  *  exactly as they will from the published site. */
 export type WireMedia = {
+  /** The media row id (ftbk connection) — what an image ITEM marker carries
+   *  (`image:<id>`) so clicks route to the editor's tile. Absent on older revisions. */
+  id?: string | null
   purpose: MediaPurpose
   path: string
   orientation?: 'horizontal' | 'vertical' | null

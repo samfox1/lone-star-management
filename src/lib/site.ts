@@ -168,7 +168,7 @@ export async function getWorkingSitePayload(
     workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
-      .select('purpose, storage_path, sort_order, on_site, orientation, site_role, label')
+      .select('id, purpose, storage_path, sort_order, on_site, orientation, site_role, label')
       .eq('artist_id', artistId)
       .order('sort_order')
       .order('created_at') // secondary key — matches get_public_site's media order
@@ -208,6 +208,7 @@ export async function getWorkingSitePayload(
   )
     .filter((m) => m.purpose !== 'gallery_image' || m.on_site !== false)
     .map((m) => ({
+      id: (m as { id?: string }).id ?? null,
       purpose: m.purpose,
       path: m.storage_path,
       orientation: m.orientation ?? null,
