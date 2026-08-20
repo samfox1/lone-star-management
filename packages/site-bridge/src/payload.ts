@@ -166,6 +166,9 @@ export type WireMedia = {
   path: string
   orientation?: 'horizontal' | 'vertical' | null
   site_role?: string | null
+  /** The works-pool display name (20260820120000) — what a desktop-style site shows
+   *  under the piece's icon (ftbk). Absent on older revisions — read with `?? null`. */
+  label?: string | null
 }
 
 export type PublicSitePayload = {

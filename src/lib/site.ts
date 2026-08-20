@@ -168,7 +168,7 @@ export async function getWorkingSitePayload(
     workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
-      .select('purpose, storage_path, sort_order, on_site, orientation, site_role')
+      .select('purpose, storage_path, sort_order, on_site, orientation, site_role, label')
       .eq('artist_id', artistId)
       .order('sort_order')
       .order('created_at') // secondary key — matches get_public_site's media order
@@ -212,6 +212,7 @@ export async function getWorkingSitePayload(
       path: m.storage_path,
       orientation: m.orientation ?? null,
       site_role: m.site_role ?? null,
+      label: (m as { label?: string | null }).label ?? null,
     }))
 
   // Same key→value shape get_public_site's jsonb_object_agg produces, so preview

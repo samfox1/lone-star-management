@@ -245,7 +245,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // each photo out by shape — get_public_site cherry-picks it into the media payload.
     // `site_role` binds a photo to a component slot (`polaroid_3_photo`); null means an
     // ordinary gallery photo. get_public_site cherry-picks it into the media payload.
-    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role'],
+    // `label` (20260820120000): the works-pool name shown under a desktop icon
+    // (ftbk). Null everywhere else; the door cherry-picks it (20260820130000).
+    snapshot: ['purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role', 'label'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the
