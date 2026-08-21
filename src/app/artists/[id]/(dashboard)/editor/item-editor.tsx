@@ -23,6 +23,38 @@ import { saveEditorStyleAction } from '../actions'
  * over the element's own classes.
  */
 
+/**
+ * The item's name, saved as it is typed (debounced) rather than staged with the styles.
+ * On a site that locks its look this is the ONLY thing about a piece the manager owns:
+ * the art is the artist's, the caption is theirs (Sam, 2026-08-21).
+ */
+function ItemTitleField({ label, title }: { label: string; title: { value: string; onSave: (next: string) => void } }) {
+  const [text, setText] = useState(title.value)
+  // Re-seed when the panel is handed a DIFFERENT item (the editor is one component
+  // reused across items), without clobbering what is being typed into this one.
+  const [seeded, setSeeded] = useState(title.value)
+  if (seeded !== title.value) {
+    setSeeded(title.value)
+    setText(title.value)
+  }
+  return (
+    <>
+      <GroupLabel>Title</GroupLabel>
+      <div className="px-5 pb-3">
+        <input
+          value={text}
+          aria-label={`Title for ${label}`}
+          onChange={(e) => {
+            setText(e.target.value)
+            title.onSave(e.target.value)
+          }}
+          className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+      </div>
+    </>
+  )
+}
+
 /** One candidate in the Replace picker — an id plus how to show it. */
 export type PickCandidate = { id: string; label: string; thumb: React.ReactNode }
 
@@ -52,6 +84,7 @@ export function ItemEditor({
   swatches = [],
   palette,
   onRemove,
+  title,
   onApplyStyle,
   onBack,
   measured,
@@ -80,6 +113,11 @@ export function ItemEditor({
    *  rather than a "no colour" mark (Sam, 2026-08-15). */
   palette?: SiteStyleOptions
   onRemove: () => void
+  /** The item's editable TITLE — what the site shows under it. Present only where the
+   *  site reads one (a gallery photo's `media.label`). Saved on its own, LIVE: it is a
+   *  name, not a staged style change, and pairing it with Save/Revert would mean a
+   *  manager typing a caption is asked what to do about sliders they never touched. */
+  title?: { value: string; onSave: (next: string) => void }
   onApplyStyle?: (key: string, className: string) => void
   onBack: () => void
   /** What this item's element actually renders (bridge 0.25.2, measure-on-open) —
@@ -154,7 +192,9 @@ export function ItemEditor({
           </div>
         </div>
 
-        <GroupLabel>Style</GroupLabel>
+        {title && <ItemTitleField label={label} title={title} />}
+
+        {controls.length > 0 && <GroupLabel>Style</GroupLabel>}
         <div className="px-5 pb-3">
           {/* Every control — border colour included — goes through StyleControlRow now
               (2026-08-12 consolidation): borderColor gained its own hexOf/toToken, so it

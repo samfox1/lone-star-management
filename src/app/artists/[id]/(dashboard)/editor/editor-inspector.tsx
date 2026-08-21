@@ -47,12 +47,14 @@ import {
   deleteContentAction,
   placeGalleryPhotoAction,
   reorderContentAction,
+  setMediaLabelAction,
   setOnSiteAction,
 } from '../actions'
 import { useOptimisticRunner } from './use-optimistic'
 import { useSessionRevert } from './use-session-revert'
 import { useSignal } from './use-signal'
 import { useTextFieldSave } from './use-text-save'
+import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
 import { TourDateEditor } from './tour-date-editor'
@@ -506,7 +508,7 @@ export function EditorInspector({
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
   function addPhoto(m: { id: string; storage_path: string; orientation: Orientation }) {
-    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null, collection: null }]))
+    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null, collection: null, label: null }]))
   }
 
   /**
@@ -563,6 +565,16 @@ export function EditorInspector({
         setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: p.onSite, collection: p.collection } : x))),
     })
   }
+  /** Rename a photo — its TITLE on the site (`media.label`). Debounced like every other
+   *  typed field, and optimistic in the panel so the input never lags the keystroke. */
+  const photoRename = useDebouncedFieldSave<string>({
+    persist: (id, value) => setMediaLabelAction(artistId, id, value).then((r) => ({ ok: !r.error, error: r.error })),
+  })
+  function renamePhoto(id: string, label: string) {
+    setPhotos((list) => list.map((p) => (p.id === id ? { ...p, label } : p)))
+    photoRename.save(id, label)
+  }
+
   // Take a placed photo OFF the site, back into the library (never deletes). Optimistic.
   function unplacePhoto(p: GalleryPhoto) {
     run({
@@ -751,6 +763,8 @@ export function EditorInspector({
       placeInSlot,
       placePhoto,
       unplacePhoto,
+      renamePhoto,
+      itemStyling,
       addPhoto,
       assignHero,
       toggleVideoOnSite,
@@ -759,6 +773,7 @@ export function EditorInspector({
     const back = () => setEditingItem(null)
     return (
       <ItemEditor
+        title={cfg.title}
         key={cfg.key}
         artistId={artistId}
         styleKey={cfg.key}
@@ -864,7 +879,6 @@ export function EditorInspector({
         onToggleOnSite={togglePhotoOnSite}
         onPlaceSlot={placeInSlot}
         onApplyField={paintField}
-        itemStyling={itemStyling}
       />
     ),
     text: () => (

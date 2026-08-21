@@ -551,6 +551,31 @@ export async function placeGalleryPhotoAction(
 }
 
 /**
+ * Rename one photo — the TITLE a site shows under it (ftbk's desktop icons read
+ * `media.label`, 20260820120000). The only editable thing about a piece on a site that
+ * locks its look: the art is the artist's, the caption is the manager's (Sam,
+ * 2026-08-21). Draft until republished, like any content edit. RLS scopes the write.
+ */
+export async function setMediaLabelAction(
+  artistId: string,
+  mediaId: string,
+  label: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  // Blank CLEARS it (the site falls back to its own default name) rather than storing
+  // an empty string that renders as a caption-shaped hole.
+  const trimmed = label.trim()
+  const { error } = await supabase
+    .from('media')
+    .update({ label: trimmed || null })
+    .eq('id', mediaId)
+    .eq('artist_id', artistId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
  * Toggle whether one asset is ON THE SITE (presence) — writes the `on_site` flag, live
  * (ADR 0009; the registry and the rules are in `LIVE_TOGGLE`, lib/content.ts). An asset
  * is on the public site only when toggled on AND published: toggling a row that has

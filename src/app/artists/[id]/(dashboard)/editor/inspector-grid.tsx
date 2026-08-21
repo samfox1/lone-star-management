@@ -452,23 +452,13 @@ export function MediaGrid<T>({
   select?: {
     onSelect: (v: T) => void
     isFocused: (v: T) => boolean
-    /** WHAT the hover Edit button does. A union, not a flag plus optional handlers, so a
-     *  locked site cannot half-configure a styling editor it has no controls for:
-     *   • `editor` — hand the card to the full-panel item editor (styling + Replace).
-     *   • `menu`   — cover the card with Replace / Remove and nothing else. What a site
-     *     that declares `itemStyling: false` gets: its images are CONTENT, and this is
-     *     the same two-button menu the fixed image slots have always used (Sam,
-     *     2026-08-20: "when I click edit, only the replace or remove image should be an
-     *     option"). */
-    action:
-      | { kind: 'editor'; onEdit: (v: T, i: number) => void }
-      | { kind: 'menu'; onReplace: (v: T, i: number) => void; onRemove: (v: T, i: number) => void }
+    /** Hand the card to the full-panel item editor. A locked site opens the SAME editor
+     *  with no style controls in it (its title, Replace and Remove), so there is one
+     *  edit path for a photo rather than one per kind of site. */
+    action: { kind: 'editor'; onEdit: (v: T, i: number) => void }
   }
 }) {
   const [picking, setPicking] = useState(false)
-  // Which card is showing its Replace/Remove cover, by key — `menu` mode only.
-  const [menuFor, setMenuFor] = useState<string | null>(null)
-  useDismiss(menuFor !== null, () => setMenuFor(null))
 
   return (
     <div className="space-y-3 px-5 py-4">
@@ -496,29 +486,11 @@ export function MediaGrid<T>({
                 </>
               }
             >
-              {select.action.kind === 'menu' && menuFor === k ? (
-                <CoverEditMenu
-                  replaceAria={`Replace ${noun} ${i + 1}`}
-                  removeAria={`Remove ${noun} ${i + 1}`}
-                  onReplace={() => {
-                    setMenuFor(null)
-                    if (select.action.kind === 'menu') select.action.onReplace(item, i)
-                  }}
-                  onRemove={() => {
-                    setMenuFor(null)
-                    if (select.action.kind === 'menu') select.action.onRemove(item, i)
-                  }}
-                />
-              ) : (
-                <TileEditButton
-                  label={`Edit ${noun} ${i + 1}`}
-                  title={select.action.kind === 'menu' ? 'Replace or remove this image' : 'Customize this image'}
-                  onClick={() => {
-                    if (select.action.kind === 'menu') setMenuFor(k)
-                    else select.action.onEdit(item, i)
-                  }}
-                />
-              )}
+              <TileEditButton
+                label={`Edit ${noun} ${i + 1}`}
+                title="Edit this image"
+                onClick={() => select.action.onEdit(item, i)}
+              />
             </SelectableTile>
           ) : (
             <div key={k} className="overflow-hidden rounded-lg border border-hairline">

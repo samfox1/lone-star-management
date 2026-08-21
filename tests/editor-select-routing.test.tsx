@@ -214,7 +214,7 @@ describe('a routed select is VISIBLE where it lands', () => {
       components: [{ key: 'polaroid', label: 'Polaroid', count: 5, slots: [{ key: 'photo', label: 'Photo' }] }],
       // The slot must be FILLED: an empty slot renders a drop target with nothing to
       // ring, and the click Sam described lands on a photo that exists.
-      photos: [{ id: 'p3', storage_path: 'artist-1/gallery/p3.jpg', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_3_photo', collection: null }],
+      photos: [{ id: 'p3', storage_path: 'artist-1/gallery/p3.jpg', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_3_photo', collection: null, label: null }],
       selectedRegion: select({ kind: 'field', key: 'polaroid_3_photo' }),
     })
     // Slots number sequentially across instances: polaroid_3_photo is Slot 3.

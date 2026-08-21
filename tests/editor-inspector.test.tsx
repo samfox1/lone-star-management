@@ -16,6 +16,7 @@ import {
   renameVideoAction,
   reorderContentAction,
   placeGalleryPhotoAction,
+  setMediaLabelAction,
   saveEditorFieldAction,
   saveEditorLinkAction,
   saveEditorStyleAction,
@@ -55,6 +56,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   renameVideoAction: vi.fn(async () => ({})),
   setOnSiteAction: vi.fn(async () => ({})),
   placeGalleryPhotoAction: vi.fn(async () => ({})),
+  setMediaLabelAction: vi.fn(async () => ({})),
   setSupportUrlAction: vi.fn(async () => ({})),
   assignHeroSlotAction: vi.fn(async () => ({})),
   assignComponentSlotAction: vi.fn(async () => ({})),
@@ -107,6 +109,7 @@ const addContentMock = vi.mocked(addContentAction)
 const renameVideoMock = vi.mocked(renameVideoAction)
 const setOnSiteMock = vi.mocked(setOnSiteAction)
 const placePhotoMock = vi.mocked(placeGalleryPhotoAction)
+const renameMock = vi.mocked(setMediaLabelAction)
 const setSupportUrlMock = vi.mocked(setSupportUrlAction)
 const saveStyleMock = vi.mocked(saveEditorStyleAction)
 const saveLinkMock = vi.mocked(saveEditorLinkAction)
@@ -115,12 +118,12 @@ const assignSlotMock = vi.mocked(assignComponentSlotAction)
 const setSongsOnSiteMock = vi.mocked(setSongsOnSiteAction)
 
 const PHOTOS: GalleryPhoto[] = [
-  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null },
+  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null, label: null },
   // Off-site horizontal → a candidate in the Horizontal picker.
-  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null },
-  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical', siteRole: null, collection: null },
+  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null, label: null },
+  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical', siteRole: null, collection: null, label: null },
   // Off-site vertical → a candidate in the Vertical picker.
-  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical', siteRole: null, collection: null },
+  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical', siteRole: null, collection: null, label: null },
 ]
 
 const TEXT_FIELDS: EditorTextField[] = [
@@ -331,8 +334,8 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
   it('CRITICAL: each declared collection shows only ITS OWN photos', () => {
     renderInspector(
       [
-        { id: 'w1', storage_path: 'artist-1/gallery/piece.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'works' },
-        { id: 'p1', storage_path: 'artist-1/gallery/holiday.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'photos' },
+        { id: 'w1', storage_path: 'artist-1/gallery/piece.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'works', label: null },
+        { id: 'p1', storage_path: 'artist-1/gallery/holiday.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'photos', label: null },
       ],
       { imageCollections: TWO_POOLS },
     )
@@ -352,7 +355,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
 
   it("CRITICAL: an UNTAGGED photo lives in the FIRST collection — which is why no site needed a backfill", () => {
     renderInspector(
-      [{ id: 'old', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null }],
+      [{ id: 'old', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null, label: null }],
       { imageCollections: TWO_POOLS },
     )
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
@@ -368,7 +371,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     // The bug this pins: a holiday snap added to Photos turning up among the artist's
     // pieces, because the write went in untagged and untagged means "the first pool".
     renderInspector(
-      [{ id: 'lib', storage_path: 'artist-1/gallery/new.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null }],
+      [{ id: 'lib', storage_path: 'artist-1/gallery/new.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null, label: null }],
       { imageCollections: TWO_POOLS },
     )
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
@@ -393,7 +396,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     // Regression: an untagged photo (legacy row / Drive import) that's live on the site
     // must not disappear from the editor.
     renderInspector([
-      { id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null, siteRole: null, collection: null },
+      { id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null, siteRole: null, collection: null, label: null },
     ])
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     const imgs = Array.from(document.querySelectorAll('aside img')) as HTMLImageElement[]
@@ -413,29 +416,34 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal', undefined)
   })
 
-  it('CRITICAL: a LOCKED site (itemStyling:false, ftbk) covers Edit with Replace / Remove — never the style editor', () => {
-    // Sam, 2026-08-20: "editing should be disabled, on this site, for the desktop
-    // images. When i click edit, only the replace or remove image should be an option."
-    // The tile keeps its Edit button (and its panel row); what it OPENS is the same
-    // two-button cover the fixed image slots use, not the styling panel.
+  it('CRITICAL: a LOCKED site opens the SAME panel with NO style controls — just the title', () => {
+    // Sam, 2026-08-21: "these images should have their own editing panel, but it should
+    // just be for the title of the image." The lock removes the styling, not the panel:
+    // one edit path for a photo, whatever kind of site it lives on.
     renderInspector(PHOTOS, { itemStyling: false })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
-    // The item editor would have taken the WHOLE panel under this heading.
-    expect(screen.queryByRole('heading', { name: 'Edit Photo 1' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Replace photo 1' }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /h-lib\.jpg/ }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false) // old off
-    expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal', 'gallery') // own shape, same pool
+    expect(screen.getByRole('heading', { name: /Edit/ })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: /^Title for/ })).toBeTruthy()
+    // No styling anywhere in it — that is what the manifest's lock means.
+    expect(screen.queryByText('Style')).toBeNull()
   })
 
-  it("a LOCKED site's Remove takes the photo OFF the site — it never deletes the artist's work", () => {
+  it('an UNLOCKED site gets the title AND the style controls', () => {
+    // The mirror of the test above: without it, a bug that dropped every style control
+    // everywhere would still look correct from the locked side.
+    openImages()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    expect(screen.getByRole('textbox', { name: /^Title for/ })).toBeTruthy()
+    expect(screen.getByText('Style')).toBeTruthy()
+  })
+
+  it("CRITICAL: typing a title saves it to the photo's own row — the caption is the manager's", () => {
     renderInspector(PHOTOS, { itemStyling: false })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false)
-    expect(deleteMock).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('textbox', { name: /^Title for/ }), { target: { value: 'Szept' } })
+    return vi.waitFor(() => expect(renameMock).toHaveBeenCalledWith('artist-1', 'm1', 'Szept'))
   })
 
   it('uploading adds to the library (no placement)', () => {
@@ -2461,7 +2469,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
   it('a slot-held photo LEAVES the gallery groups', () => {
     // Otherwise a handwriting PNG would show up in the photo collage.
     const held: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/hand.png', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_1_caption', collection: null },
+      { id: 'mp', storage_path: 'artist-1/gallery/hand.png', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_1_caption', collection: null, label: null },
       ...PHOTOS,
     ]
     openImages(held)
@@ -2473,7 +2481,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
 
   it('warns (but does not block) when a PNG-preferring slot holds a non-PNG', () => {
     const jpg: GalleryPhoto[] = [
-      { id: 'mj', storage_path: 'artist-1/gallery/hand.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null },
+      { id: 'mj', storage_path: 'artist-1/gallery/hand.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null, label: null },
     ]
     openImages(jpg)
     expect(screen.getByText(/transparent PNG/i)).toBeTruthy()
@@ -2483,14 +2491,14 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
 
   it('does NOT warn when that slot holds a real PNG', () => {
     const png: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/hand.PNG', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null },
+      { id: 'mp', storage_path: 'artist-1/gallery/hand.PNG', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null, label: null },
     ]
     openImages(png)
     expect(screen.queryByText(/transparent PNG/i)).toBeNull()
   })
 
   const HELD_SLOT: GalleryPhoto[] = [
-    { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null },
+    { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null, label: null },
   ]
 
   it('CRITICAL: a BACKGROUND slot opens the trimmed editor — Zoom (no zoom out), no Border', () => {
@@ -2498,7 +2506,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     // be certain editable tools like edges or borders … the zoom out shouldn't be
     // available." The slot declares `background: true` (bridge 0.25.1).
     renderInspector(
-      [{ id: 'bg1', storage_path: 'artist-1/gallery/bg.jpg', onSite: true, orientation: 'horizontal', siteRole: 'backdrop_1_desktop', collection: null }],
+      [{ id: 'bg1', storage_path: 'artist-1/gallery/bg.jpg', onSite: true, orientation: 'horizontal', siteRole: 'backdrop_1_desktop', collection: null, label: null }],
       {
         components: [
           { key: 'backdrop', label: 'Hero background', count: 1, slots: [{ key: 'desktop', label: 'Desktop (horizontal)', background: true }] },
@@ -2534,7 +2542,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
    *  caption is Slot 2. */
   const TWO_SLOTS: GalleryPhoto[] = [
     ...HELD_SLOT,
-    { id: 'mq', storage_path: 'artist-1/gallery/b.jpg', onSite: true, orientation: null, siteRole: 'polaroid_2_photo', collection: null },
+    { id: 'mq', storage_path: 'artist-1/gallery/b.jpg', onSite: true, orientation: null, siteRole: 'polaroid_2_photo', collection: null, label: null },
   ]
 
   it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls, Revert', () => {
@@ -2854,7 +2862,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
   it('a placed slot is selectable and highlights its region in the frame', () => {
     const onHighlight = vi.fn()
     const held: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null },
+      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null, label: null },
     ]
     renderInspector(held, { components: [POLAROID], onHighlight })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))

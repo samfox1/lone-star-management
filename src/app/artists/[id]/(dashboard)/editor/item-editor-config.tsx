@@ -20,6 +20,8 @@ import type { EditorVideo, GalleryPhoto, ItemEdit, SiteVideoRole } from './inspe
  * (Merch went its own way — `MerchEditor` is field-shaped, not media-shaped.)
  */
 export type ItemEditorConfig = {
+  /** The item's editable name, where the site reads one. */
+  title?: { value: string; onSave: (next: string) => void }
   key: string
   preview: React.ReactNode
   candidates: PickCandidate[]
@@ -41,6 +43,11 @@ export type ItemEditorDeps = {
   placeInSlot: (role: string, photo: GalleryPhoto | null) => void
   /** Omit the collection to keep the photo in whatever pool it is replacing. */
   placePhoto: (p: GalleryPhoto, orientation: Orientation, collection?: string) => void
+  /** Rename one photo — debounced through the inspector, saved to `media.label`. */
+  renamePhoto: (id: string, label: string) => void
+  /** False on a site that locks its look: the panel opens with the title, Replace and
+   *  Remove, and no style controls at all. Absent = true. */
+  itemStyling?: boolean
   unplacePhoto: (p: GalleryPhoto) => void
   addPhoto: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   assignHero: (role: SiteVideoRole, videoId: string | null) => void
@@ -49,7 +56,7 @@ export type ItemEditorDeps = {
 
 /** Null when the item vanished from the live lists (deleted under an open editor). */
 export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): ItemEditorConfig | null {
-  const { artistId, photos, videos, styleOptions, assetBudgets } = deps
+  const { artistId, photos, videos, styleOptions, assetBudgets, itemStyling = true } = deps
   const photoCandidates = (list: GalleryPhoto[], aspect: string): PickCandidate[] =>
     list.map((p) => ({ id: p.id, label: fileNameOf(p.storage_path), thumb: <PhotoThumb path={p.storage_path} aspect={aspect} fit="cover" /> }))
   const videoCandidates = (list: EditorVideo[]): PickCandidate[] =>
@@ -77,7 +84,7 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
           // The SLOT's budget (`polaroid_1_photo` → `polaroid_photo`), not the general
           // image one: the site declared a tighter cap because the card renders small.
           budget={budgetFor(assetBudgets, 'image', budgetSlotKey(item.role))}
-          onUploaded={(m) => deps.placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role, collection: null })}
+          onUploaded={(m) => deps.placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role, collection: null, label: null })}
         />
       ),
     }
@@ -106,6 +113,13 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
         if (next) deps.placePhoto(next, item.orientation, placed.collection ?? undefined)
       },
       onRemove: () => deps.unplacePhoto(placed),
+      // The piece's NAME — what ftbk's desktop prints under its icon. The only thing a
+      // locked site lets the manager change about the art itself.
+      title: { value: placed.label ?? '', onSave: (next: string) => deps.renamePhoto(placed.id, next) },
+      // A locked site (manifest itemStyling:false) gets the SAME panel with no style
+      // controls: Sam, 2026-08-21 — "these images should have their own editing panel,
+      // but it should just be for the title of the image".
+      ...(itemStyling ? {} : { controls: [] }),
       uploader: (
         <GallerySlotUploader
           artistId={artistId}

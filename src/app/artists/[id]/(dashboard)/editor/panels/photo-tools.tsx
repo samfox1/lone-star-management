@@ -402,7 +402,7 @@ function SlotTile({
               label="Drop an image or click to upload"
               budget={budget}
               onUploaded={(m) => {
-                onPlaceSlot(role, { ...m, onSite: true, siteRole: role, collection: null })
+                onPlaceSlot(role, { ...m, onSite: true, siteRole: role, collection: null, label: null })
                 setPicking(false)
               }}
             />
@@ -455,7 +455,6 @@ export function PhotoTools({
   onToggleOnSite,
   onPlaceSlot,
   onApplyField,
-  itemStyling = true,
 }: {
   photos: GalleryPhoto[]
   /** Single-occupancy image fields (hero image, profile photo) — the "Set slots" group. */
@@ -482,11 +481,6 @@ export function PhotoTools({
   onToggleOnSite: (p: GalleryPhoto) => void
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onApplyField?: (key: string, value: string) => void
-  /** False on a site that declares `itemStyling: false` (ftbk): its gallery is CONTENT —
-   *  a tile's Edit button covers it with Replace / Remove, never the per-item style
-   *  editor (Sam, 2026-08-20: "editing should be disabled … only the replace or remove
-   *  image should be an option"). */
-  itemStyling?: boolean
 }) {
   // A photo holding a component slot is NOT a gallery photo — it belongs to that slot,
   // and showing it here would invite placing a handwriting PNG in the photo wall
@@ -538,7 +532,6 @@ export function PhotoTools({
           onAdd={onAdd}
           onPlace={onPlace}
           onUnplace={onUnplace}
-          itemStyling={itemStyling}
         />
       ))}
     </div>
@@ -560,7 +553,6 @@ function CollectionGrid({
   onAdd,
   onPlace,
   onUnplace,
-  itemStyling,
 }: {
   collection: { key: string; label: string }
   isFirst: boolean
@@ -575,12 +567,7 @@ function CollectionGrid({
   onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   onPlace: (p: GalleryPhoto, orientation: Orientation, collection: string) => void
   onUnplace: (p: GalleryPhoto) => void
-  itemStyling: boolean
 }) {
-  // The style-less REPLACE flow (itemStyling false): the tile's cover menu opens this
-  // picker — same swap semantics as the item editor's Replace (old off, new placed with
-  // its own shape), without the style panel around it.
-  const [replacing, setReplacing] = useState<GalleryPhoto | null>(null)
   const mine = photos.filter((p) => p.onSite && inCollection(p, collection.key, isFirst))
   // The library is every off-site photo, whatever it was last tagged with: a photo not
   // on the site belongs to no pool, and hiding it from this picker would strand it.
@@ -621,49 +608,23 @@ function CollectionGrid({
         select={{
           onSelect: (p) => onFocus(galleryTarget(p.id)),
           isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
-          action: itemStyling
-            ? {
-                kind: 'editor',
-                onEdit: (p, i) =>
-                  onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` }),
-              }
-            : // A locked site: the two things a manager may still do to the artist's
-              // own work. Remove takes it OFF the site (back to the library) — it
-              // never deletes, exactly like every other Remove in this panel.
-              { kind: 'menu', onReplace: (p) => setReplacing(p), onRemove: (p) => onUnplace(p) },
+          // ONE path for every site (Sam, 2026-08-21: "these images should have their
+          // own editing panel, but it should just be for the title"). The panel is the
+          // same; a LOCKED site's copy carries no style controls, which the item-editor
+          // config decides from the manifest — so a photo has one edit path, not one
+          // per kind of site. The tile's caption is the photo's own name once it has one.
+          action: {
+            kind: 'editor',
+            onEdit: (p, i) =>
+              onEditItem({
+                type: 'galleryPhoto',
+                id: p.id,
+                orientation: p.orientation ?? 'horizontal',
+                label: p.label || `Photo ${i + 1}`,
+              }),
+          },
         }}
       />
-      {replacing && (
-        <LibraryPicker<GalleryPhoto>
-          title={`Replace ${fileNameOf(replacing.storage_path)}`}
-          candidates={library}
-          keyOf={(p) => p.id}
-          labelOf={(p) => fileNameOf(p.storage_path)}
-          renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
-          empty={<p className="py-2 text-center text-xs text-ink-muted">No unused photos in your library.</p>}
-          footer={
-            <GallerySlotUploader
-              artistId={artistId}
-              orientation={replacing.orientation ?? 'horizontal'}
-              budget={budgetFor(assetBudgets, 'image')}
-              onUploaded={(m) => {
-                onAdd(m)
-                onUnplace(replacing)
-                onPlace({ ...m, onSite: false, siteRole: null, collection: null }, m.orientation, collection.key)
-                setReplacing(null)
-              }}
-            />
-          }
-          onPick={(next) => {
-            // The item editor's swap rule, verbatim: old off, new placed with its
-            // own measured shape — into THIS collection, not the one it last sat in.
-            onUnplace(replacing)
-            onPlace(next, next.orientation ?? 'horizontal', collection.key)
-            setReplacing(null)
-          }}
-          onCancel={() => setReplacing(null)}
-        />
-      )}
     </div>
   )
 }
