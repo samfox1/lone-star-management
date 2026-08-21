@@ -39,6 +39,33 @@ const PALETTE: SiteStyleOptions = {
 const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
 
+describe('controlsForRegion — a MEDIA region is a picture, not a paragraph', () => {
+  const portrait = { key: 'portrait', label: 'Portrait', scope: 'media' as const, base: 'opacity-80 grayscale' }
+
+  it('CRITICAL: no typography on a photograph', () => {
+    // Sam, 2026-08-21: he opened ftbk's wallpaper portrait and was offered Boldness,
+    // Font color and Underline. Element-scoped regions default to the TEXT set, which is
+    // right for nearly all of them and absurd on an image.
+    const ids = controlsForRegion(controls, portrait, PALETTE).map((c) => c.id)
+    for (const typographic of ['weight', 'textColor', 'underline', 'align', 'leading', 'tracking', 'font'])
+      expect(ids, typographic).not.toContain(typographic)
+  })
+
+  it('CRITICAL: it gets the PICTURE set instead', () => {
+    // The positive half: without it, returning [] would pass the test above.
+    const ids = controlsForRegion(controls, portrait, PALETTE).map((c) => c.id)
+    expect(ids).toContain('size')
+    expect(ids).toContain('opacity')
+    expect(ids).toContain('borderWidth')
+  })
+
+  it('an element region with NO scope still gets the text set — the default is unchanged', () => {
+    // The guard against over-correcting: `media` must be opt-in, not a new default.
+    const ids = controlsForRegion(controls, { key: 'headline', label: 'Headline' }).map((c) => c.id)
+    expect(ids).toContain('weight')
+  })
+})
+
 describe('controlsForRegion — a site-wide region styles the SURFACE only', () => {
   it('CRITICAL: the page BACKGROUND offers ONE color and nothing else — no padding', () => {
     // Sam, 2026-08-12: "just one color, no gradient"; text Size + frost left as reads-as-

@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.27.0'
+export const PACKAGE_VERSION = '0.28.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -119,8 +119,14 @@ export type ManifestStyleRegion = {
    *  must not list it as a text area and styling stays click-to-edit on the item.
    *  Additive; absent means element-scoped (click-to-edit). 'icons' is an icon GROUP (the
    *  socials row): a curated set — icon size, colour, hover colour, gap — that cascades to
-   *  every icon so they stay consistent. */
-  scope?: 'site' | 'chrome' | 'item' | 'icons'
+   *  every icon so they stay consistent.
+   *
+   *  'media' is an IMAGE or video surface (ftbk's wallpaper portrait, 0.28.0): it gets the
+   *  picture set — size, transparency, border, corners, shadow, filters — and none of the
+   *  typography. Element-scoped regions default to the TEXT set, which is right for the
+   *  overwhelming majority of them and absurd on a photograph: Sam opened his portrait and
+   *  was offered Boldness, Font color and Underline (2026-08-21). */
+  scope?: 'site' | 'chrome' | 'item' | 'icons' | 'media'
 }
 
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by

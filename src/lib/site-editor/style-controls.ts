@@ -1254,6 +1254,9 @@ const GROUP_HOVER_COLOR_CONTROL: StyleControl = {
 export function controlsForRegion(
   controls: StyleControl[],
   region: ManifestStyleRegion,
+  /** The site's palette, for the scopes that build their own controls rather than
+   *  filtering the text set (media). */
+  opts?: SiteStyleOptions,
 ): StyleControl[] {
   // An icon GROUP (the socials row): a curated, cascading set so every icon stays
   // consistent — size, colour (currentColor), hover colour (per-icon via an inherited
@@ -1269,6 +1272,12 @@ export function controlsForRegion(
       ...(isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [maybePhoneGap(controls)] : []),
     ]
   }
+  // A MEDIA surface (0.28.0): a photograph gets the picture set, not typography. The
+  // default for an element-scoped region is the TEXT set, which is right for almost every
+  // region and absurd on an image — Sam opened ftbk's wallpaper portrait and was offered
+  // Boldness, Font color and Underline (2026-08-21). `opts` rides through so the colour
+  // pickers still know the site's palette.
+  if (region.scope === 'media') return buildItemStyleControls(opts)
   if (region.scope !== 'site' && region.scope !== 'chrome') return controls
   const out = controls.filter((c) => SITE_SCOPE_CONTROL_IDS.has(c.id))
   // The chrome bars (header/footer) keep NORMAL all-sides padding — the same 'pad' control

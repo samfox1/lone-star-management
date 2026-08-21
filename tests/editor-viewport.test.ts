@@ -4,7 +4,7 @@
  * visitor actually sees — not the tablet layout a ~900px iframe would trigger.
  */
 import { describe, expect, it } from 'vitest'
-import { CANVAS_WIDTH, fitViewport, zoomLabel } from '@/lib/site-editor/viewport'
+import { CANVAS_WIDTH, DEVICE_OPTIONS, fitViewport, isPhone, zoomLabel } from '@/lib/site-editor/viewport'
 
 describe('fitViewport — desktop', () => {
   it('gives the SITE a 1440px viewport even in a narrow panel, and scales to fit', () => {
@@ -61,5 +61,31 @@ describe('zoomLabel', () => {
   it('reads as a percentage', () => {
     expect(zoomLabel(1)).toBe('100%')
     expect(zoomLabel(0.625)).toBe('63%')
+  })
+})
+
+
+describe('the device menu (Sam, 2026-08-21: more phones)', () => {
+  it('CRITICAL: every canvas width is offered — a device nobody can pick is not a device', () => {
+    // Derived from CANVAS_WIDTH, so adding a width without a menu entry fails HERE
+    // rather than being discovered by not finding it in the dropdown.
+    expect(DEVICE_OPTIONS.map((d) => d.value).sort()).toEqual(Object.keys(CANVAS_WIDTH).sort())
+  })
+
+  it('CRITICAL: every PHONE canvas is phone-scoped — a phone edit cannot depend on which phone', () => {
+    // The mobile style twins (`--lse-*-m`) key off isPhone, not off one device name.
+    // If 430 were not a phone, editing there would silently write DESKTOP values.
+    expect(isPhone('mobile')).toBe(true)
+    expect(isPhone('phone-sm')).toBe(true)
+    expect(isPhone('phone-lg')).toBe(true)
+    expect(isPhone('desktop')).toBe(false)
+  })
+
+  it('the phones bracket the real range, and `mobile` still means 390', () => {
+    // `mobile` is the stored value of every session open today — renaming it would show
+    // a blank select.
+    expect(CANVAS_WIDTH.mobile).toBe(390)
+    expect(CANVAS_WIDTH['phone-sm']).toBe(375)
+    expect(CANVAS_WIDTH['phone-lg']).toBe(430)
   })
 })

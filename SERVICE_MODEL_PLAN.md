@@ -81,6 +81,105 @@ nobody buys because nobody knows what they need.
 **Out of scope:** mixing, mastering, distribution, PR campaigns, tour booking.
 Different businesses, different failure modes, and none of them feed the library.
 
+## Accounts, roles, and access
+
+_Decided 2026-08-21. This answers the "who is the customer" question below: it is
+both, on one account, with different access._
+
+### The customer
+
+The account belongs to the **artist**, whether the artist pays for it themselves or a
+manager or management team pays on their behalf. A manager-paid account still
+requires the artist's active engagement. The artist is never a passive subject of
+their own brand system.
+
+### Roles
+
+Access is **per artist**, not global. One person can be a manager on five artists and
+the artist on none.
+
+| Role | Who | Holds |
+| --- | --- | --- |
+| `owner` | whoever pays | billing, invites, removals, deleting the account |
+| `artist` | the artist | voice and likeness: bio, photos, what appears on the site |
+| `manager` | manager or management team | business: booking, tour, publishing, integrations |
+| `contributor` | writer, designer, photographer | one scoped job, time-boxed |
+| `admin` | Lone Star staff | everything (already exists as a global role) |
+
+`owner` is a flag layered on `artist` or `manager`, not a separate person. Both
+patterns are normal: a self-funding artist is `artist` plus `owner`; a signed artist
+is `artist`, and their manager is `manager` plus `owner`.
+
+### How this maps onto what exists
+
+The schema already has the join. `artist_managers(user_id, artist_id)` is a per-artist
+membership table with a composite primary key, and `is_manager_of(artist_id)` is the
+predicate every RLS policy in the app already reads.
+
+So the change is **additive, not a rewrite**:
+
+1. Add a `role` column to `artist_managers` (rename it `artist_members`).
+2. `is_manager_of()` keeps meaning "is a member of this artist" and every existing
+   policy keeps working unchanged.
+3. Add a narrower predicate (`has_artist_role(artist_id, role)`) and use it ONLY on
+   the surfaces that actually split.
+
+The global `profiles.role` (`admin` / `manager`) stays as it is. It is about Lone Star
+staff, not about a person's relationship to an artist.
+
+### Separate enquiries
+
+`enquiries.purpose` already exists with a CHECK of `booking` / `demo` / `other`, and
+`artist_mail_settings.booking_email` is already rung one of the recipient ladder. So
+splitting the inbox by role extends machinery that exists rather than adding new
+machinery.
+
+Proposed default: booking goes to the manager, demo goes to both, everything else
+goes to the artist.
+
+**The sharp edge, and the rule that resolves it:** a split inbox means one party can
+have mail the other cannot see. The music industry has a long and ugly history of a
+manager sitting on an offer the artist never heard about. So:
+
+> The inbox splits by DEFAULT VIEW. It does not create secrets from the account
+> owner. The `owner` can always see every enquiry.
+
+If the artist needs genuinely private mail that a manager cannot read, that is a
+deliberate feature with its own name and its own consent, not a side effect of role
+defaults. OPEN: does Sam want that?
+
+### Contributors
+
+A writer or designer is scoped to a **job**, not to an artist.
+
+- Time-boxed. The grant expires when the job is delivered or the clock runs out.
+- Sees the brand library and the specific fields they were hired to fill.
+- Never sees enquiries, analytics, billing, or integrations.
+- **Cannot publish.** Contributor work lands as a draft.
+
+That last point reuses something already built: the review-and-approve window from
+`SITE_EDITOR_PLAN.md`. A contributor's delivery is just another pending change in the
+approval list. The writer fills the bio field, the owner approves it, it goes live.
+No new publish path.
+
+### Still to decide
+
+The exact artist / manager edit split. Proposed starting point, to be corrected:
+
+| Surface | Artist | Manager |
+| --- | --- | --- |
+| Bio, photos, brand | edit | view |
+| What is on the site | edit | edit |
+| Music, released flags | edit | edit |
+| Tour dates | view | edit |
+| Booking enquiries | view | edit |
+| Analytics | view | view |
+| Publish | ? | ? |
+| Billing, invites | owner only | owner only |
+
+Publish is the contested one. The artist arguably should hold the final word on
+anything bearing their name, but the manager is usually the one doing the work.
+
 ## The packages
 
 One base subscription plus a small number of NAMED packages. Three or four, not a
@@ -199,9 +298,10 @@ media library, publish history, EPK generation, analytics, contact enquiries.
 - Brand book surface (living, shareable, holds logo files and rules)
 - Rights and credits fields on assets
 - Onboarding questionnaire and gap detection
-- Contributor access for writers and designers (a scoped role, not the manager
-  login). Note: roles were deliberately deferred. This is the first real reason
-  to revisit that.
+- Per-artist roles: a `role` column on `artist_managers`, plus a scoped, time-boxed
+  contributor grant. See "Accounts, roles, and access" above. Roles were
+  deliberately deferred; this is the reason they are no longer deferrable.
+- Role-split enquiry inbox (extends `enquiries.purpose`, already in the schema)
 - Format derivatives engine (Phase 3)
 - Template renderer (Phase 3)
 
@@ -218,8 +318,11 @@ media library, publish history, EPK generation, analytics, contact enquiries.
 
 ## Open questions
 
-- Who is the customer: the artist, or the management company? Different sale,
-  different price, different feature needs.
+- ~~Who is the customer~~ ANSWERED 2026-08-21: the artist owns the account, paid for
+  by themselves or by their manager. See "Accounts, roles, and access".
+- Does the artist get genuinely private mail a manager cannot read, or does the
+  owner always see everything?
+- Who holds Publish: the artist, the manager, or either?
 - Do designers work inside Lone Star, or deliver files that we ingest? Affects the
   contributor role and how hard Phase 2 is.
 - Is Words founder-only for longer than the other add-ons, given it is the

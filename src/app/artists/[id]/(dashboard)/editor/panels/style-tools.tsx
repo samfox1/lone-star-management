@@ -408,7 +408,7 @@ export function StyleTools({
                     {/* Site-wide regions get SURFACE controls only (controlsForRegion):
                         text styling on the page itself is noise. Every colour picker
                         gets the colours-on-site swatch row — the one format. */}
-                    {controlsForRegion(controls, r).map((control) => (
+                    {controlsForRegion(controls, r, options).map((control) => (
                       <StyleControlRow
                         key={control.id}
                         regionLabel={r.label}

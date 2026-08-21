@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
-import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
+import { DEVICE_OPTIONS, fitViewport, isPhone, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { bridgeOutdated } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
@@ -328,7 +328,7 @@ export function EditorShell({
             manifest?.bridgeVersion,
           ),
           // The device toggle scopes Size/Padding: phone view writes the …sm-[…] twin.
-          mobileView: device === 'mobile',
+          mobileView: isPhone(device),
         }}
         selectedStyle={selectedStyle}
         measuredRegion={measuredRegion}
@@ -361,8 +361,11 @@ export function EditorShell({
               onChange={(e) => setDevice(e.target.value as Device)}
               className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint outline-none hover:text-ink focus:border-ink-faint"
             >
-              <option value="desktop">Desktop</option>
-              <option value="mobile">Mobile</option>
+              {DEVICE_OPTIONS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
             </select>
 
             {/* EDIT vs BROWSE. Every click on a marked region is swallowed in edit mode so

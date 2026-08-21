@@ -15,11 +15,45 @@
  * Pure functions, so the arithmetic is unit-testable without a DOM.
  */
 
-/** Canvas width per device. 1440 is the standard desktop design width (and the
- *  usable width of a 15-16" laptop); 390 is the iPhone 14/15 logical width. */
-export const CANVAS_WIDTH = { desktop: 1440, mobile: 390 } as const
+/**
+ * Canvas width per device — the width the SITE believes it has.
+ *
+ * 1440 is the standard desktop design width (and the usable width of a 15-16" laptop).
+ * The phones are the three logical widths that actually matter, because between them they
+ * bracket every iPhone in use: 375 (SE / 13 mini — the tightest layout anyone will see),
+ * 390 (the 12-15 mainstream), 430 (the Pro Max / Plus). A layout that survives 375 and 430
+ * survives everything in between (Sam, 2026-08-21: "offer other dimensions of other phones
+ * so we can see its responsiveness on more screens").
+ *
+ * `mobile` is KEPT as an alias of 390 rather than renamed: it is the stored value of every
+ * editor session open today, and a select whose current value has vanished shows blank.
+ */
+export const CANVAS_WIDTH = {
+  desktop: 1440,
+  mobile: 390,
+  'phone-sm': 375,
+  'phone-lg': 430,
+} as const
 
 export type Device = keyof typeof CANVAS_WIDTH
+
+/** Every phone-width canvas. The MOBILE-scope style controls (`--lse-*-m`) key off this,
+ *  not off one device name — editing at 430 must write the same phone twin as 390, or a
+ *  manager's phone edits would silently depend on which phone they happened to preview. */
+const PHONES = new Set<Device>(['mobile', 'phone-sm', 'phone-lg'])
+
+export function isPhone(device: Device): boolean {
+  return PHONES.has(device)
+}
+
+/** What the device picker offers, in order. Derived from CANVAS_WIDTH so a device added
+ *  above cannot be missing from the menu (AGENTS.md rule 4). */
+export const DEVICE_OPTIONS: readonly { value: Device; label: string }[] = [
+  { value: 'desktop', label: 'Desktop' },
+  { value: 'phone-sm', label: 'iPhone SE · 375' },
+  { value: 'mobile', label: 'iPhone · 390' },
+  { value: 'phone-lg', label: 'iPhone Max · 430' },
+]
 
 export type Viewport = {
   /** CSS pixel width to give the iframe — the width the SITE sees. */
