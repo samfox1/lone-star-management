@@ -56,7 +56,7 @@ export type ManifestCategory = (typeof MANIFEST_CATEGORIES)[number]
  */
 export const CATEGORY_CONSUMERS: Record<ManifestCategory, readonly (keyof PanelInputs)[]> = {
   fields: ['textFields', 'imageFields'],
-  slots: ['showGallery'],
+  slots: ['imageCollections'],
   itemStyling: ['itemStyling'],
   styles: ['styleRegions'],
   links: ['linkRegions'],
@@ -70,8 +70,12 @@ export const CATEGORY_CONSUMERS: Record<ManifestCategory, readonly (keyof PanelI
 export type PanelInputs = {
   textFields: EditorTextField[]
   imageFields: EditorImageField[]
-  /** The orientation collages exist only if the site declares somewhere to render one. */
-  showGallery: boolean
+  /** The site's declared image COLLECTIONS, in declaration order — one labelled grid
+   *  each in the Images panel. Empty means the site renders no open photo pool at all,
+   *  which is why this replaced a `showGallery` boolean: "how many, and what are they
+   *  called" is the same question as "is there one", and one list answers both. The
+   *  FIRST is where untagged photos live (every photo placed before collections). */
+  imageCollections: readonly { key: string; label: string }[]
   /** False when the site locks its look (manifest itemStyling: false): gallery tiles
    *  offer Replace, never the per-item style editor. */
   itemStyling: boolean
@@ -121,7 +125,9 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
     // Gated like every sibling. It read the UNGATED manifest until this refactor, so a
     // built-in that announced an image slot would have shown a gallery its template does
     // not render — the same class of bug, arriving from the other direction.
-    showGallery: (announced?.slots ?? []).some((sl) => sl.accepts === 'image'),
+    imageCollections: (announced?.slots ?? [])
+      .filter((sl) => sl.accepts === 'image')
+      .map((sl) => ({ key: sl.key, label: sl.label })),
     // Absent = true: every site and built-in template before ftbk styled items.
     itemStyling: announced?.itemStyling !== false,
     components: announced?.components ?? [],
@@ -140,18 +146,16 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
  * a panel" check the coverage test asserts with. LOAD-BEARING: if this said yes to
  * everything, that test would pass with every panel empty.
  *
- * Two Stryker mutants survive here and are EQUIVALENT, recorded so the next reader does
- * not spend an afternoon on them: deleting the `Array.isArray` line changes nothing,
+ * One Stryker mutant survives here and is EQUIVALENT, recorded so the next reader does
+ * not spend an afternoon on it: deleting the `Array.isArray` line changes nothing,
  * because `Object.keys([x]).length` answers identically for a dense array. The branch
  * stays for the reader — an array is not an object to most people — and because a sparse
- * array would diverge. The other lives on `?? []` in `showGallery` above: any junk
- * default answers `false` to the same `.some()`.
+ * array would diverge.
  */
 /** What each BOOLEAN input resolves to with no manifest at all. A boolean is
  *  "populated" when it DIFFERS from this — `itemStyling: false` is a declaration
  *  reaching the panels, not an empty value (the truthy check called it missing). */
 const BOOLEAN_DEFAULTS: Partial<Record<keyof PanelInputs, boolean>> = {
-  showGallery: false,
   itemStyling: true,
 }
 

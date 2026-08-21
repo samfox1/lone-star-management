@@ -91,19 +91,36 @@ describe('a connected site’s declared categories all reach a panel', () => {
   })
 })
 
-describe('the gallery appears only where a site declares one', () => {
-  it('a custom site whose slots hold no IMAGE slot gets no collage', () => {
+describe('photo pools appear only where a site declares them', () => {
+  it('a custom site whose slots hold no IMAGE slot gets no collection', () => {
     // The positive alone would pass if the predicate ignored `accepts` entirely — a
     // surviving mutant said so (Stryker, 2026-08-10: replacing the empty-slots default
     // with a junk array changed nothing, because nothing asserted the FALSE case).
     const noImages = { ...FULL, slots: [{ key: 'music', label: 'Music', accepts: 'track' }] } as unknown as TemplateManifest
-    expect(resolve({ manifest: noImages }).showGallery).toBe(false)
-    expect(resolve().showGallery).toBe(true)
+    expect(resolve({ manifest: noImages }).imageCollections).toEqual([])
+    expect(resolve().imageCollections.length).toBe(1)
   })
 
-  it('a custom site that declares NO slots at all gets no collage', () => {
+  it('a custom site that declares NO slots at all gets no collection', () => {
     const none = { ...FULL, slots: [] } as unknown as TemplateManifest
-    expect(resolve({ manifest: none }).showGallery).toBe(false)
+    expect(resolve({ manifest: none }).imageCollections).toEqual([])
+  })
+
+  it('CRITICAL: every declared image slot becomes its own collection, IN ORDER', () => {
+    // ftbk declares two pools — the desktop works and the Photos app — and the first is
+    // where untagged photos live, so the order is load-bearing, not cosmetic.
+    const two = {
+      ...FULL,
+      slots: [
+        { key: 'works', label: 'Works', accepts: 'image' },
+        { key: 'music', label: 'Music', accepts: 'track' },
+        { key: 'photos', label: 'Photos app', accepts: 'image' },
+      ],
+    } as unknown as TemplateManifest
+    expect(resolve({ manifest: two }).imageCollections).toEqual([
+      { key: 'works', label: 'Works' },
+      { key: 'photos', label: 'Photos app' },
+    ])
   })
 })
 
@@ -112,23 +129,21 @@ describe('inputIsPopulated — the predicate the coverage test leans on', () => 
   // would pass with every panel empty — a green suite proving nothing. Stryker found it
   // untested: mutating each branch changed no test's result.
   it('CRITICAL: nothing counts as populated', () => {
-    expect(inputIsPopulated('showGallery', undefined)).toBe(false)
+    expect(inputIsPopulated('imageCollections', undefined)).toBe(false)
     // `null` too. The types say a panel input is never null, but the guard reads it and
     // an unasserted branch is an unwatched one (Stryker survivor, 2026-08-10).
-    expect(inputIsPopulated('showGallery', null as never)).toBe(false)
-    expect(inputIsPopulated('showGallery', [])).toBe(false)
-    expect(inputIsPopulated('showGallery', false)).toBe(false)
-    expect(inputIsPopulated('showGallery', {} as never)).toBe(false)
+    expect(inputIsPopulated('imageCollections', null as never)).toBe(false)
+    expect(inputIsPopulated('imageCollections', [])).toBe(false)
+    expect(inputIsPopulated('itemStyling', true)).toBe(false)
+    expect(inputIsPopulated('imageCollections', {} as never)).toBe(false)
   })
 
   it('CRITICAL: a boolean is populated when it DIFFERS from its no-manifest default', () => {
-    // itemStyling defaults TRUE, so its meaningful declaration is FALSE (ftbk's lock);
-    // showGallery defaults false, so its meaningful declaration is true. The old truthy
-    // check called a declared itemStyling:false "missing" and the coverage sweep red.
+    // itemStyling defaults TRUE, so its meaningful declaration is FALSE (ftbk's lock).
+    // The old truthy check called a declared itemStyling:false "missing" and turned the
+    // coverage sweep red.
     expect(inputIsPopulated('itemStyling', false)).toBe(true)
     expect(inputIsPopulated('itemStyling', true)).toBe(false)
-    expect(inputIsPopulated('showGallery', true)).toBe(true)
-    expect(inputIsPopulated('showGallery', false)).toBe(false)
   })
 
   it('an EMPTY array is not populated, while a non-empty one is', () => {
@@ -142,7 +157,7 @@ describe('inputIsPopulated — the predicate the coverage test leans on', () => 
 
   it('CRITICAL: something counts as populated', () => {
     expect(inputIsPopulated('styleRegions', [{ key: 'x' }] as never)).toBe(true)
-    expect(inputIsPopulated('showGallery', true)).toBe(true)
+    expect(inputIsPopulated('imageCollections', [{ key: 'g', label: 'Gallery' }])).toBe(true)
     expect(inputIsPopulated('styleOptions', { fonts: [] } as never)).toBe(true)
   })
 })
@@ -167,9 +182,9 @@ describe('a BUILT-IN template is not fed by what its frame announces', () => {
     // (phase 4). If the `?? []` default regressed to a skeen default, only the
     // component test would catch it; the resolver's own suite must bite here.
     expect(inputs.videoSlots).toEqual([])
-    // The gallery too: it read the UNGATED manifest before this refactor, so a built-in
-    // announcing an image slot would have shown a collage its template cannot render.
-    expect(inputs.showGallery).toBe(false)
+    // The photo pools too: they read the UNGATED manifest before this refactor, so a
+    // built-in announcing an image slot would have shown a collage it cannot render.
+    expect(inputs.imageCollections).toEqual([])
   })
 
   it('a CUSTOM site that declares no videoSlots resolves to [] — no inherited slots', () => {

@@ -164,7 +164,7 @@ export function EditorInspector({
   releases: initialReleases = [],
   tours: initialTours = [],
   components = [],
-  showGallery = false,
+  imageCollections = [],
   itemStyling = true,
   assetBudgets,
   styleRegions = [],
@@ -212,9 +212,10 @@ export function EditorInspector({
   /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
    *  edit-list at runtime; a site that declares none simply has no component section. */
   components?: ManifestComponent[]
-  /** Does the site declare a photo collage (an image slot)? Defaults FALSE — a group is
-   *  shown because the site asked for it, never just because the editor can render one. */
-  showGallery?: boolean
+  /** The open photo pools the site DECLARES (its image slots), in order — one grid each
+   *  in the Images panel. Defaults EMPTY: a group is shown because the site asked for
+   *  it, never just because the editor can render one. */
+  imageCollections?: readonly { key: string; label: string }[]
   /** False when the site declares `itemStyling: false` (a fully locked look, ftbk):
    *  gallery tiles offer Replace, never the per-item style editor. */
   itemStyling?: boolean
@@ -505,7 +506,7 @@ export function EditorInspector({
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
   function addPhoto(m: { id: string; storage_path: string; orientation: Orientation }) {
-    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null }]))
+    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null, collection: null }]))
   }
 
   /**
@@ -545,15 +546,21 @@ export function EditorInspector({
     })
   }
 
-  // Place a gallery photo into an orientation group: assign its orientation AND put it on
-  // the site (one write). This is how a plain uploaded asset gets its orientation — the
-  // manager decides it by picking the photo into Horizontal or Vertical. Optimistic.
-  function placePhoto(p: GalleryPhoto, orientation: Orientation) {
+  // Place a gallery photo into a COLLECTION: assign its orientation, tag which pool it
+  // fills, and put it on the site (one write). This is how a plain uploaded asset gets
+  // its orientation — the manager decides it by picking the photo into a grid.
+  // Optimistic.
+  function placePhoto(p: GalleryPhoto, orientation: Orientation, collection?: string) {
+    // An omitted collection LEAVES the tag alone (the item editor's Replace: the new
+    // photo takes the old one's place, in the pool that place belongs to).
+    const tag = collection === undefined ? {} : { collection }
     run({
       guard: false,
-      apply: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, orientation, onSite: true } : x))),
-      persist: () => placeGalleryPhotoAction(artistId, p.id, orientation),
-      rollback: () => setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: p.onSite } : x))),
+      apply: () =>
+        setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, orientation, ...tag, onSite: true } : x))),
+      persist: () => placeGalleryPhotoAction(artistId, p.id, orientation, collection),
+      rollback: () =>
+        setPhotos((list) => list.map((x) => (x.id === p.id ? { ...x, onSite: p.onSite, collection: p.collection } : x))),
     })
   }
   // Take a placed photo OFF the site, back into the library (never deletes). Optimistic.
@@ -848,7 +855,7 @@ export function EditorInspector({
         onFocus={setFocused}
         onEditItem={setEditingItem}
         components={components}
-        showGallery={showGallery}
+        imageCollections={imageCollections}
         assetBudgets={assetBudgets}
         artistId={artistId}
         onAdd={addPhoto}

@@ -84,6 +84,22 @@ Declare only the surfaces you actually have. A site with no footer declares no f
 region, and the panel simply does not show one. The panel reads the same across sites
 because every site describes itself the same way, not because every site is the same.
 
+### An image slot is a photo COLLECTION (0.26.0)
+
+Every `accepts: 'image'` slot becomes its own labelled grid in the Images panel, with its
+own Add tile and library picker. A photo placed there is tagged with that slot's `key`
+(`media.collection` on the wire), so two pools stay apart: ftbk declares `works` (the
+pieces scattered on its desktop) and `photos` (the personal shots in its Photos app), and
+a manager adding to one never touches the other.
+
+- Declare them in the order you want them read. An UNTAGGED photo — every row published
+  before collections existed — belongs to the **first** declared image slot, which is why
+  no existing site needed a backfill.
+- One image slot behaves exactly as the single gallery always did.
+- Mark each collection's container with `data-lse-slot="<key>"` like any other slot. If
+  it lives inside something the visitor has to open (a window, a tab), remember §7's
+  union rule: the DOM you hand `checkContract` must include it.
+
 ---
 
 ## 3. Mark the elements

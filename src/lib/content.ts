@@ -247,7 +247,10 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // ordinary gallery photo. get_public_site cherry-picks it into the media payload.
     // `label` (20260820120000): the works-pool name shown under a desktop icon
     // (ftbk). Null everywhere else; the door cherry-picks it (20260820130000).
-    snapshot: ['id', 'purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role', 'label'],
+    // `collection` (20260821120000): which declared image pool the photo fills, for a
+    // site that renders more than one (ftbk: works vs the Photos app). Null = the
+    // first declared collection; the door cherry-picks it (20260821130000).
+    snapshot: ['id', 'purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role', 'label', 'collection'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the

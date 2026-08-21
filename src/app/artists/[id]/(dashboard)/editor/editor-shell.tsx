@@ -304,7 +304,7 @@ export function EditorShell({
         tours={tours}
         components={panels.components}
         videoSlots={panels.videoSlots}
-        showGallery={panels.showGallery}
+        imageCollections={panels.imageCollections}
         itemStyling={panels.itemStyling}
         assetBudgets={panels.assetBudgets}
         styleRegions={panels.styleRegions}

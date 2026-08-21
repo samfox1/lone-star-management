@@ -172,6 +172,12 @@ export type WireMedia = {
   /** The works-pool display name (20260820120000) — what a desktop-style site shows
    *  under the piece's icon (ftbk). Absent on older revisions — read with `?? null`. */
   label?: string | null
+  /** Which declared image COLLECTION this photo fills — the manifest slot key
+   *  (20260821120000). A site that declares one image slot can ignore it; a site with
+   *  two pools (ftbk: desktop works vs the Photos app) filters on it. Null/absent means
+   *  the FIRST declared collection, so every pre-collection revision keeps rendering
+   *  exactly where it did. */
+  collection?: string | null
 }
 
 export type PublicSitePayload = {

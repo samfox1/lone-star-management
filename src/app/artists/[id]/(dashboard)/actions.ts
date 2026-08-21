@@ -515,25 +515,34 @@ export async function deleteMediaAction(
 }
 
 /**
- * Place a gallery photo into an orientation group (the editor's Images panel): set its
- * `orientation` AND put it on the site in one write. Photos are uploaded as plain assets
- * (orientation null, off-site) elsewhere; the editor is where the manager PICKS one into
- * the Horizontal or Vertical collage, which is when its orientation is decided. RLS
- * scopes the write to the caller's tenant.
+ * Place a gallery photo into a COLLECTION (the editor's Images panel): set its
+ * `orientation`, tag which declared pool it fills, AND put it on the site in one write.
+ * Photos are uploaded as plain assets (orientation null, off-site) elsewhere; the editor
+ * is where the manager PICKS one into a grid, which is when both are decided. RLS scopes
+ * the write to the caller's tenant.
+ *
+ * `collection` is validated HERE, not trusted: it is a manifest slot key sent by the
+ * browser, and the column's CHECK (20260821120000) would otherwise reject the write with
+ * a raw constraint error the manager cannot act on. Omitted keeps the old meaning — the
+ * site's first declared collection — so a caller that has no collections still works.
  */
 export async function placeGalleryPhotoAction(
   artistId: string,
   photoId: string,
   orientation: 'horizontal' | 'vertical',
+  collection?: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Not signed in.' }
+  if (collection !== undefined && !/^[a-z0-9_]{1,64}$/.test(collection)) {
+    return { error: 'Unknown photo collection.' }
+  }
   const { error } = await supabase
     .from('media')
-    .update({ orientation, on_site: true })
+    .update({ orientation, on_site: true, ...(collection === undefined ? {} : { collection }) })
     .eq('id', photoId)
     .eq('artist_id', artistId)
   if (error) return { error: error.message }

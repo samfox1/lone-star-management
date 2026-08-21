@@ -402,7 +402,7 @@ function SlotTile({
               label="Drop an image or click to upload"
               budget={budget}
               onUploaded={(m) => {
-                onPlaceSlot(role, { ...m, onSite: true, siteRole: role })
+                onPlaceSlot(role, { ...m, onSite: true, siteRole: role, collection: null })
                 setPicking(false)
               }}
             />
@@ -418,13 +418,26 @@ function SlotTile({
   )
 }
 
-/* ── Gallery: ONE section, named for the section it fills (Sam, 2026-08-18) ─────────
+/* ── Collections: one grid per open photo pool the site declares ────────────────────
  * The gallery listed as two top-level "Horizontal / Vertical" groups organized the
  * panel around a property of the FILES instead of the page: "the horizontal/vertical
  * images only really come into play when an image or video is the entire background of
- * a screen" — and those are component slots now (a desktop + mobile pair), not the
- * gallery. One header, one grid; each photo keeps its measured orientation (the
- * uploader reads the pixels), the site's collage still lays out by it. */
+ * a screen" (Sam, 2026-08-18) — and those are component slots now (a desktop + mobile
+ * pair). Each photo keeps its measured orientation (the uploader reads the pixels); the
+ * site's collage still lays out by it.
+ *
+ * A site may declare MORE THAN ONE image slot, and then each is its own labelled grid
+ * with its own library picker: ftbk's desktop works and the personal photos in its
+ * Photos app are different pools, and a manager adding a holiday snap to Photos must
+ * not have it turn up among the artist's pieces (Sam, 2026-08-20). Membership is the
+ * photo's `collection` tag; an UNTAGGED photo belongs to the first declared collection,
+ * which is every photo that existed before collections did. */
+
+/** Which collection a photo belongs to, given the site's declared order. Untagged rows
+ *  fall to the first — the reason no site needed a backfill. */
+function inCollection(p: GalleryPhoto, key: string, isFirst: boolean): boolean {
+  return p.collection ? p.collection === key : isFirst
+}
 
 export function PhotoTools({
   photos,
@@ -433,7 +446,7 @@ export function PhotoTools({
   onFocus,
   onEditItem,
   components,
-  showGallery,
+  imageCollections,
   assetBudgets,
   artistId,
   onAdd,
@@ -454,15 +467,16 @@ export function PhotoTools({
   /** Open one image in the full-panel editor (a tile's Edit button). */
   onEditItem: (item: ItemEdit) => void
   components: ManifestComponent[]
-  /** Whether the SITE renders a photo collage (it declares an image slot). When it does
-   *  not, the orientation groups are hidden: an editor slot with nothing behind it on the
-   *  site is a place to put work that never appears (Sam, 2026-07-21). */
-  showGallery: boolean
+  /** The open photo pools the SITE declares, in order — one labelled grid each. Empty
+   *  hides them entirely: an editor slot with nothing behind it on the site is a place
+   *  to put work that never appears (Sam, 2026-07-21). */
+  imageCollections: readonly { key: string; label: string }[]
   /** The site's upload budgets — the compression gate on each uploader below. */
   assetBudgets?: AssetBudgets
   artistId: string
   onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
-  onPlace: (p: GalleryPhoto, orientation: Orientation) => void
+  /** Put a photo on the site IN a collection — the tag is what keeps two pools apart. */
+  onPlace: (p: GalleryPhoto, orientation: Orientation, collection: string) => void
   onUnplace: (p: GalleryPhoto) => void
   /** Show/hide a PLACED slot image without unplacing it — the slot's on/off switch. */
   onToggleOnSite: (p: GalleryPhoto) => void
@@ -479,11 +493,7 @@ export function PhotoTools({
   // (20260724120000). A null-orientation photo (a legacy row, a Drive import never
   // measured) stays visible and manageable; placing it assigns 'horizontal'.
   const inGallery = (p: GalleryPhoto) => !p.siteRole
-  // The style-less REPLACE flow (itemStyling false): the tile's cover menu opens this
-  // picker — same swap semantics as the item editor's Replace (old off, new placed with
-  // its own shape), without the style panel around it.
-  const [replacing, setReplacing] = useState<GalleryPhoto | null>(null)
-  const nothing = imageFields.length === 0 && components.length === 0 && !showGallery
+  const nothing = imageFields.length === 0 && components.length === 0 && imageCollections.length === 0
   // Same shape as link-tools/video-tools: the bare line, not inside the padded body.
   if (nothing) return <NoSlots noun="image" />
   return (
@@ -511,82 +521,148 @@ export function PhotoTools({
           onToggleOnSite={onToggleOnSite}
         />
       )}
-      {showGallery && (
-        <div>
-          <div className="px-5 pt-3">
-            <SlotGroupLabel>Gallery</SlotGroupLabel>
-          </div>
-          <MediaGrid
-            onSiteItems={photos.filter((p) => p.onSite && inGallery(p))}
-            library={photos.filter((p) => !p.onSite && inGallery(p))}
-            noun="photo"
-            keyOf={(p) => p.id}
-            labelOf={(_, i) => `Photo ${i + 1}`}
-            renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" fit="cover" />}
-            aspect="aspect-square"
-            cols="grid-cols-3"
-            pickTitle="Add a photo"
-            addLabel="Add photo"
-            empty={<p className="py-2 text-center text-xs text-ink-muted">No photos in your library yet.</p>}
-            pickerFooter={
-              <GallerySlotUploader
-                artistId={artistId}
-                // Fallback ONLY — the uploader measures the file's real pixels.
-                orientation="horizontal"
-                budget={budgetFor(assetBudgets, 'image')}
-                onUploaded={onAdd}
-              />
-            }
-            // Placing keeps the photo's own measured shape; only a never-measured
-            // legacy row falls to horizontal.
-            onSetOnSite={(p, next) => (next ? onPlace(p, p.orientation ?? 'horizontal') : onUnplace(p))}
-            select={{
-              onSelect: (p) => onFocus(galleryTarget(p.id)),
-              isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
-              action: itemStyling
-                ? {
-                    kind: 'editor',
-                    onEdit: (p, i) =>
-                      onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` }),
-                  }
-                : // A locked site: the two things a manager may still do to the artist's
-                  // own work. Remove takes it OFF the site (back to the library) — it
-                  // never deletes, exactly like every other Remove in this panel.
-                  { kind: 'menu', onReplace: (p) => setReplacing(p), onRemove: (p) => onUnplace(p) },
-            }}
+      {imageCollections.map((c, i) => (
+        <CollectionGrid
+          key={c.key}
+          collection={c}
+          // Untagged photos live in the first declared collection.
+          isFirst={i === 0}
+          // Only ONE label, so a single-collection site reads exactly as it always
+          // did: its one grid is "Gallery" unless it named the slot something else.
+          photos={photos.filter(inGallery)}
+          assetBudgets={assetBudgets}
+          artistId={artistId}
+          focusedKey={focusedKey}
+          onFocus={onFocus}
+          onEditItem={onEditItem}
+          onAdd={onAdd}
+          onPlace={onPlace}
+          onUnplace={onUnplace}
+          itemStyling={itemStyling}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** One declared photo pool: its own header, grid, picker and Replace flow. Everything
+ *  inside is scoped to this collection — placing from its Add tile tags the photo with
+ *  this key, so the same library feeds every pool without the pools bleeding together. */
+function CollectionGrid({
+  collection,
+  isFirst,
+  photos,
+  assetBudgets,
+  artistId,
+  focusedKey,
+  onFocus,
+  onEditItem,
+  onAdd,
+  onPlace,
+  onUnplace,
+  itemStyling,
+}: {
+  collection: { key: string; label: string }
+  isFirst: boolean
+  /** Every gallery photo (component-slot rows already filtered out) — this grid picks
+   *  its own members and offers the REST of the off-site library as candidates. */
+  photos: GalleryPhoto[]
+  assetBudgets?: AssetBudgets
+  artistId: string
+  focusedKey: string | null
+  onFocus: (t: SelectTarget) => void
+  onEditItem: (item: ItemEdit) => void
+  onAdd: (m: { id: string; storage_path: string; orientation: Orientation }) => void
+  onPlace: (p: GalleryPhoto, orientation: Orientation, collection: string) => void
+  onUnplace: (p: GalleryPhoto) => void
+  itemStyling: boolean
+}) {
+  // The style-less REPLACE flow (itemStyling false): the tile's cover menu opens this
+  // picker — same swap semantics as the item editor's Replace (old off, new placed with
+  // its own shape), without the style panel around it.
+  const [replacing, setReplacing] = useState<GalleryPhoto | null>(null)
+  const mine = photos.filter((p) => p.onSite && inCollection(p, collection.key, isFirst))
+  // The library is every off-site photo, whatever it was last tagged with: a photo not
+  // on the site belongs to no pool, and hiding it from this picker would strand it.
+  const library = photos.filter((p) => !p.onSite)
+  return (
+    // Named in the markup: with two pools on screen, "which grid is this" has to be
+    // answerable from the DOM — by a test, and by anyone reading it in devtools.
+    <div data-collection={collection.key}>
+      <div className="px-5 pt-3">
+        <SlotGroupLabel>{collection.label}</SlotGroupLabel>
+      </div>
+      <MediaGrid
+        onSiteItems={mine}
+        library={library}
+        noun="photo"
+        keyOf={(p) => p.id}
+        labelOf={(_, i) => `Photo ${i + 1}`}
+        renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" fit="cover" />}
+        aspect="aspect-square"
+        cols="grid-cols-3"
+        pickTitle={`Add a photo to ${collection.label}`}
+        addLabel="Add photo"
+        empty={<p className="py-2 text-center text-xs text-ink-muted">No photos in your library yet.</p>}
+        pickerFooter={
+          <GallerySlotUploader
+            artistId={artistId}
+            // Fallback ONLY — the uploader measures the file's real pixels.
+            orientation="horizontal"
+            budget={budgetFor(assetBudgets, 'image')}
+            onUploaded={onAdd}
           />
-          {replacing && (
-            <LibraryPicker<GalleryPhoto>
-              title={`Replace ${fileNameOf(replacing.storage_path)}`}
-              candidates={photos.filter((p) => !p.onSite && !p.siteRole)}
-              keyOf={(p) => p.id}
-              labelOf={(p) => fileNameOf(p.storage_path)}
-              renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
-              empty={<p className="py-2 text-center text-xs text-ink-muted">No unused photos in your library.</p>}
-              footer={
-                <GallerySlotUploader
-                  artistId={artistId}
-                  orientation={replacing.orientation ?? 'horizontal'}
-                  budget={budgetFor(assetBudgets, 'image')}
-                  onUploaded={(m) => {
-                    onAdd(m)
-                    onUnplace(replacing)
-                    onPlace({ ...m, onSite: false, siteRole: null }, m.orientation)
-                    setReplacing(null)
-                  }}
-                />
+        }
+        // Placing keeps the photo's own measured shape; only a never-measured
+        // legacy row falls to horizontal.
+        onSetOnSite={(p, next) =>
+          next ? onPlace(p, p.orientation ?? 'horizontal', collection.key) : onUnplace(p)
+        }
+        select={{
+          onSelect: (p) => onFocus(galleryTarget(p.id)),
+          isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
+          action: itemStyling
+            ? {
+                kind: 'editor',
+                onEdit: (p, i) =>
+                  onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` }),
               }
-              onPick={(next) => {
-                // The item editor's swap rule, verbatim: old off, new placed with its
-                // own measured shape.
+            : // A locked site: the two things a manager may still do to the artist's
+              // own work. Remove takes it OFF the site (back to the library) — it
+              // never deletes, exactly like every other Remove in this panel.
+              { kind: 'menu', onReplace: (p) => setReplacing(p), onRemove: (p) => onUnplace(p) },
+        }}
+      />
+      {replacing && (
+        <LibraryPicker<GalleryPhoto>
+          title={`Replace ${fileNameOf(replacing.storage_path)}`}
+          candidates={library}
+          keyOf={(p) => p.id}
+          labelOf={(p) => fileNameOf(p.storage_path)}
+          renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
+          empty={<p className="py-2 text-center text-xs text-ink-muted">No unused photos in your library.</p>}
+          footer={
+            <GallerySlotUploader
+              artistId={artistId}
+              orientation={replacing.orientation ?? 'horizontal'}
+              budget={budgetFor(assetBudgets, 'image')}
+              onUploaded={(m) => {
+                onAdd(m)
                 onUnplace(replacing)
-                onPlace(next, next.orientation ?? 'horizontal')
+                onPlace({ ...m, onSite: false, siteRole: null, collection: null }, m.orientation, collection.key)
                 setReplacing(null)
               }}
-              onCancel={() => setReplacing(null)}
             />
-          )}
-        </div>
+          }
+          onPick={(next) => {
+            // The item editor's swap rule, verbatim: old off, new placed with its
+            // own measured shape — into THIS collection, not the one it last sat in.
+            onUnplace(replacing)
+            onPlace(next, next.orientation ?? 'horizontal', collection.key)
+            setReplacing(null)
+          }}
+          onCancel={() => setReplacing(null)}
+        />
       )}
     </div>
   )

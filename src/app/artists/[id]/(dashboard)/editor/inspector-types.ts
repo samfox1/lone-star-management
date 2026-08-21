@@ -21,6 +21,10 @@ export type GalleryPhoto = {
    *  ordinary gallery photo. A photo with a role belongs to a COMPONENT and is excluded
    *  from the gallery groups, so a handwriting PNG never joins the collage. */
   siteRole: string | null
+  /** Which declared image COLLECTION this photo fills (20260821120000) — the manifest
+   *  slot key. Null means the site's FIRST declared collection: every photo placed
+   *  before collections existed, and every photo on a site that declares just one. */
+  collection: string | null
 }
 export type EditorTextField = {
   key: string

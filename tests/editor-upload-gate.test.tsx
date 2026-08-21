@@ -86,7 +86,7 @@ function renderEditor(assetBudgets?: AssetBudgets) {
       releases={[]}
       tours={[]}
       components={[]}
-      showGallery={false}
+      imageCollections={[]}
       styleRegions={[]}
       styleValues={{}}
       selectedStyle={null}

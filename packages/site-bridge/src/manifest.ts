@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.25.9'
+export const PACKAGE_VERSION = '0.26.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -72,9 +72,17 @@ export const LIBRARY_ASSETS = ['track', 'video', 'image', 'merch', 'tour_date', 
 export type LibraryAsset = (typeof LIBRARY_ASSETS)[number]
 
 /** A section that holds a reorderable list of library items — one
- *  `data-lse-slot="<key>"` region, with `data-lse-item="<asset>:<id>"` per item. */
+ *  `data-lse-slot="<key>"` region, with `data-lse-item="<asset>:<id>"` per item.
+ *
+ *  An `accepts: 'image'` slot is also a named COLLECTION: the editor gives each one its
+ *  own labelled grid in the Images panel, and a photo placed there is tagged with this
+ *  `key` (media.collection, 20260821120000). Declare two and the site gets two
+ *  independent pools — ftbk's desktop works and the personal photos in its Photos app —
+ *  which is the only way a manager can add to one without touching the other. Declare
+ *  one (skeen) and nothing changes: photos with no tag belong to the FIRST declared
+ *  image slot, so no site needs a backfill. */
 export type ManifestSlot = {
-  /** Stable id; the DOM marker value. */
+  /** Stable id; the DOM marker value, and — for an image slot — the collection tag. */
   key: string
   label: string
   /** The single library type this slot accepts. */

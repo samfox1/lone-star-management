@@ -39,7 +39,8 @@ export type ItemEditorDeps = {
   assetBudgets?: AssetBudgets
   /** The inspector's live place/toggle handlers — the config binds them per branch. */
   placeInSlot: (role: string, photo: GalleryPhoto | null) => void
-  placePhoto: (p: GalleryPhoto, orientation: Orientation) => void
+  /** Omit the collection to keep the photo in whatever pool it is replacing. */
+  placePhoto: (p: GalleryPhoto, orientation: Orientation, collection?: string) => void
   unplacePhoto: (p: GalleryPhoto) => void
   addPhoto: (m: { id: string; storage_path: string; orientation: Orientation }) => void
   assignHero: (role: SiteVideoRole, videoId: string | null) => void
@@ -76,7 +77,7 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
           // The SLOT's budget (`polaroid_1_photo` → `polaroid_photo`), not the general
           // image one: the site declared a tighter cap because the card renders small.
           budget={budgetFor(assetBudgets, 'image', budgetSlotKey(item.role))}
-          onUploaded={(m) => deps.placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role })}
+          onUploaded={(m) => deps.placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role, collection: null })}
         />
       ),
     }
@@ -100,7 +101,9 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
       onPick: (id) => {
         const next = photos.find((p) => p.id === id)
         deps.unplacePhoto(placed)
-        if (next) deps.placePhoto(next, item.orientation)
+        // Into the SAME pool the replaced photo filled (undefined = untagged, which is
+        // the first declared collection).
+        if (next) deps.placePhoto(next, item.orientation, placed.collection ?? undefined)
       },
       onRemove: () => deps.unplacePhoto(placed),
       uploader: (

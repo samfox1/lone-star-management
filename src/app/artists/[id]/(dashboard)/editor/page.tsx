@@ -65,7 +65,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
       .from('media')
-      .select('id, purpose, storage_path, on_site, orientation, site_role')
+      .select('id, purpose, storage_path, on_site, orientation, site_role, collection')
       .eq('artist_id', id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
@@ -145,6 +145,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       onSite: (m.on_site as boolean | null) ?? false,
       orientation: (m.orientation as 'horizontal' | 'vertical' | null) ?? null,
       siteRole: (m.site_role as string | null) ?? null,
+      collection: (m.collection as string | null) ?? null,
     }))
 
 
