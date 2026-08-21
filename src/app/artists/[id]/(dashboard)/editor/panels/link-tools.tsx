@@ -135,7 +135,9 @@ export function SiteLinkTools({
             // The same accent ring every other selected thing wears. The row already
             // OPENED on a frame click, but opening alone did not read as "this is the
             // one you clicked" (Sam, 2026-08-17, wren's Listen button).
-            className={cx('rounded-lg', selected?.key === r.key && 'ring-2 ring-accent')}
+            // INSET: these rows span the panel's full width, and an outside ring is
+            // clipped by the aside's overflow-hidden (Sam's screenshot, 2026-08-20).
+            className={cx('rounded-lg', selected?.key === r.key && 'ring-2 ring-accent ring-inset')}
             aria-current={selected?.key === r.key ? 'true' : undefined}
           >
             {/* The URL is plain text until the pencil opens the box (no "lit" editable
@@ -317,7 +319,7 @@ export function LinkTools({
             boundaryRef={isOpen ? rowOpenRef : undefined}
             {...dragProps(l.id)}
             className={cx(
-              (isOver(l.id) || isFocused) && 'ring-2 ring-accent',
+              (isOver(l.id) || isFocused) && 'ring-2 ring-accent ring-inset',
               rowInvalid && 'ring-1 ring-accent-red',
             )}
           >

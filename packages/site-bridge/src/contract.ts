@@ -142,7 +142,7 @@ export function checkContract(input: ContractInput): ContractFinding[] {
     if (leaked.length) {
       findings.push({
         check: "public-markers",
-        detail: `${attr} survives to the public page on <${leaked[0].tagName.toLowerCase()}> (${leaked.length} element${leaked.length > 1 ? "s" : ""})`,
+        detail: `${attr} survives to the public page on <${leaked[0]!.tagName.toLowerCase()}> (${leaked.length} element${leaked.length > 1 ? "s" : ""})`,
       });
     }
   }
@@ -217,7 +217,7 @@ export function checkContract(input: ContractInput): ContractFinding[] {
     const claims = new Set<string>();
     for (const token of (region.base ?? "").split(/\s+/)) {
       const m = token.match(CLAIM_TOKEN);
-      if (m) for (const p of m[1].split(",")) claims.add(p);
+      if (m) for (const p of m[1]!.split(",")) claims.add(p);
     }
     if (!claims.size) continue;
     const el = withAttr(editableDom, STYLE_ATTR).find(
