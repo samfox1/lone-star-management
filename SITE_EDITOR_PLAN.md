@@ -333,3 +333,38 @@ into a corner.
 Phase 0.5 (decouple, standalone) ‖ Phase 0 (rulebook) → 1 → 2 (ship slice A) → 3
 (ship v1) → 4 (review window). Phase 0.5 and Phase 4 can each proceed in parallel
 with the frame work.
+
+## Next (noted 2026-08-20): the editor a site ASKS FOR
+
+Sam, while connecting ftbk: *"Sites and their control access depends on the website
+that I inject, and the needs of the artist … The editor, while its basic features need
+to be accessible to all sites, should adapt to the site, and sometimes that has to be
+determined by the user."*
+
+**The gap today.** A manifest can declare its regions (fields / slots / styles / links /
+components / videoSlots) and, since 0.25.9, whether items are styleable at all
+(`itemStyling`). It cannot say which LIBRARIES the site renders. `COMPONENTS` in
+editor-inspector.tsx is a fixed list, so ftbk — a desktop-OS portfolio with no shows,
+no store, and no song list — still shows its manager a Tour tab, a Merch tab and a
+Music tab. Anything typed there is saved and rendered nowhere: the exact failure mode
+the panel-inputs registry was built to end, arriving from the one direction that
+registry does not cover.
+
+**The shape of the fix** (not built):
+
+1. `TemplateManifest.libraries?: readonly LibraryAsset[]` — the vocabulary already
+   exists (`LIBRARY_ASSETS`: track / video / image / merch / tour_date / link). Absent
+   means "all", exactly like `itemStyling`, so no existing site changes. The tab strip
+   filters on it, through `resolvePanelInputs` like every other category, so the
+   Record-exhaustiveness check keeps the wiring honest.
+2. Per-artist OVERRIDES on top of the site's declaration — an artist who does not tour
+   should not see a Tour tab even on a template that renders one. Site declaration is
+   the ceiling (what the code can render); the artist's answer is the filter (what this
+   artist wants to manage).
+3. Collect (2) at onboarding: a short questionnaire when an artist is created — do you
+   tour, do you sell merch, do you release music, is your site's look yours to change or
+   ours to lock. Answers land on the artist row and feed the same resolver.
+
+The invariant to hold on to: **a control exists only where something behind it actually
+renders.** A site says what it can show; an artist says what they care about; the editor
+is the intersection, never a superset of either.
