@@ -468,9 +468,10 @@ export function PhotoTools({
   onToggleOnSite: (p: GalleryPhoto) => void
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onApplyField?: (key: string, value: string) => void
-  /** False on a site that declares ZERO style regions (ftbk): its gallery is CONTENT —
-   *  tiles offer Replace directly, never the per-item style editor (Sam, 2026-08-20:
-   *  "users can replace them, but they should have no edit button"). */
+  /** False on a site that declares `itemStyling: false` (ftbk): its gallery is CONTENT —
+   *  a tile's Edit button covers it with Replace / Remove, never the per-item style
+   *  editor (Sam, 2026-08-20: "editing should be disabled … only the replace or remove
+   *  image should be an option"). */
   itemStyling?: boolean
 }) {
   // A photo holding a component slot is NOT a gallery photo — it belongs to that slot,
@@ -478,9 +479,9 @@ export function PhotoTools({
   // (20260724120000). A null-orientation photo (a legacy row, a Drive import never
   // measured) stays visible and manageable; placing it assigns 'horizontal'.
   const inGallery = (p: GalleryPhoto) => !p.siteRole
-  // The style-less REPLACE flow (itemStyling false): the tile's hover button opens
-  // this picker directly — same swap semantics as the item editor's Replace (old off,
-  // new placed with its own shape), without the style panel around it.
+  // The style-less REPLACE flow (itemStyling false): the tile's cover menu opens this
+  // picker — same swap semantics as the item editor's Replace (old off, new placed with
+  // its own shape), without the style panel around it.
   const [replacing, setReplacing] = useState<GalleryPhoto | null>(null)
   const nothing = imageFields.length === 0 && components.length === 0 && !showGallery
   // Same shape as link-tools/video-tools: the bare line, not inside the padded body.
@@ -542,11 +543,16 @@ export function PhotoTools({
             select={{
               onSelect: (p) => onFocus(galleryTarget(p.id)),
               isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
-              onEdit: itemStyling
-                ? (p, i) =>
-                    onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` })
-                : (p) => setReplacing(p),
-              editLabel: itemStyling ? undefined : 'Replace',
+              action: itemStyling
+                ? {
+                    kind: 'editor',
+                    onEdit: (p, i) =>
+                      onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` }),
+                  }
+                : // A locked site: the two things a manager may still do to the artist's
+                  // own work. Remove takes it OFF the site (back to the library) — it
+                  // never deletes, exactly like every other Remove in this panel.
+                  { kind: 'menu', onReplace: (p) => setReplacing(p), onRemove: (p) => onUnplace(p) },
             }}
           />
           {replacing && (

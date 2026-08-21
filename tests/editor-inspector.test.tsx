@@ -351,17 +351,29 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed
   })
 
-  it("CRITICAL: a LOCKED site (itemStyling:false, ftbk) offers Replace on tiles — no style editor", () => {
-    // Sam, 2026-08-20: "They should still be in the images panel so that users can
-    // replace them, but they should have no edit button." The hover action becomes
-    // Replace, opening the picker directly with the item editor's swap rule.
+  it('CRITICAL: a LOCKED site (itemStyling:false, ftbk) covers Edit with Replace / Remove — never the style editor', () => {
+    // Sam, 2026-08-20: "editing should be disabled, on this site, for the desktop
+    // images. When i click edit, only the replace or remove image should be an option."
+    // The tile keeps its Edit button (and its panel row); what it OPENS is the same
+    // two-button cover the fixed image slots use, not the styling panel.
     renderInspector(PHOTOS, { itemStyling: false })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    expect(screen.queryByRole('button', { name: 'Edit photo 1' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    // The item editor would have taken the WHOLE panel under this heading.
+    expect(screen.queryByRole('heading', { name: 'Edit Photo 1' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Replace photo 1' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /h-lib\.jpg/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false) // old off
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed, own shape
+  })
+
+  it("a LOCKED site's Remove takes the photo OFF the site — it never deletes the artist's work", () => {
+    renderInspector(PHOTOS, { itemStyling: false })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false)
+    expect(deleteMock).not.toHaveBeenCalled()
   })
 
   it('uploading adds to the library (no placement)', () => {

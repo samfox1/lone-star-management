@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { type SaveStatus } from './inspector-shared'
 import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { saveEditorFieldAction } from '../actions'
@@ -30,9 +30,13 @@ export function useTextFieldSave(
 } {
   const [edits, setEdits] = useState<Record<string, string>>({})
   // A ref, not a dep: fields arrive late over the bridge and persist must read the
-  // CURRENT list without re-creating the debouncer.
+  // CURRENT list without re-creating the debouncer. Written in an effect, not during
+  // render — the React Compiler forbids the latter, and there is no race: a persist can
+  // only follow a keystroke, which is long after the commit that refreshed this.
   const initialRef = useRef(initial)
-  initialRef.current = initial
+  useEffect(() => {
+    initialRef.current = initial
+  }, [initial])
   const { status, save } = useDebouncedFieldSave<string>({
     // The declared target rides along (validated server-side, never trusted) so a
     // custom site's artist-column fields write the column the page actually renders.
