@@ -106,13 +106,26 @@ export function useFrameBridge({
   artistId,
   customSiteUrl,
   draft,
+  onFieldChange,
 }: {
   artistId: string
   customSiteUrl?: string | null
   draft?: PublicSitePayload | null
+  /** The site saved a DECLARED field the manager changed on the page (0.27.0) — an
+   *  arrangement no panel control could express. Already checked against the announced
+   *  manifest here, so the shell can save it without re-validating. */
+  onFieldChange?: (key: string, value: string) => void
 }): FrameBridge {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [manifest, setManifest] = useState<TemplateManifest | null>(null)
+  /** The announced manifest and the shell's save callback, as refs: the message listener
+   *  is subscribed once and must read the CURRENT value of both without re-subscribing
+   *  (a re-subscribe mid-drag would drop the drop). */
+  const manifestRef = useRef<TemplateManifest | null>(null)
+  const onFieldChangeRef = useRef(onFieldChange)
+  useEffect(() => {
+    onFieldChangeRef.current = onFieldChange
+  }, [onFieldChange])
   /** Has the frame answered at all? Internal: it drives the `hello` retries and the
    *  init-data effect. Not returned — nothing displays it (yet). */
   const [connected, setConnected] = useState(false)
@@ -202,7 +215,10 @@ export function useFrameBridge({
         // this listener must not re-subscribe per mode change).
         if (frameModeRef.current !== 'edit')
           frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'set-mode', mode: frameModeRef.current }), origin)
-        if (msg.manifest) setManifest(msg.manifest)
+        if (msg.manifest) {
+          setManifest(msg.manifest)
+          manifestRef.current = msg.manifest
+        }
         if (draft) {
           deliveredDraft.current = draft
           frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'init-data', site: draft }), origin)
@@ -214,6 +230,13 @@ export function useFrameBridge({
       } else if (msg.type === 'select' && msg.target.kind === 'link') {
         const { key } = msg.target
         setSelectedLink((prev) => bumpNonce(prev, { key }))
+      } else if (msg.type === 'field-change') {
+        // THE ONE WRITE THAT FLOWS SITE → EDITOR (0.27.0). The manifest is the whole
+        // authorization: a frame is a separate origin, and without this check it could
+        // name any site_content key it liked. `manifestRef`, not `manifest`, so this
+        // listener does not re-subscribe every time a manifest lands.
+        const declared = (manifestRef.current?.fields ?? []).some((f) => f.key === msg.key)
+        if (declared) onFieldChangeRef.current?.(msg.key, msg.value)
       } else if (msg.type === 'measured') {
         setMeasuredRegion({ key: msg.key, measured: msg.measured })
       } else if (msg.type === 'deselect') {

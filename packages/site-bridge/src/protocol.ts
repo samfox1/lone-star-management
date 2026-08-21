@@ -99,6 +99,21 @@ export type FrameMessage =
   /** Answer to the editor's `measure` request (0.25.2) — what the region's element
    *  actually renders, so panel-opened editors can park sliders without a click. */
   | { v: number; source: typeof FRAME_SOURCE; type: 'measured'; key: string; measured: RegionMeasurements }
+  /**
+   * THE MANAGER CHANGED A DECLARED FIELD **ON THE PAGE** (0.27.0) — the first write that
+   * flows site → editor.
+   *
+   * Some things can only be said by doing them. ftbk's manager arranges the desktop by
+   * dragging icons around it, and no panel control could express that arrangement; the
+   * site is where the gesture happens, so the site is what knows the answer. It posts
+   * the new value here and the editor saves it exactly as if it had been typed into the
+   * Text panel: draft, then published like any other content.
+   *
+   * The editor MUST ignore a key the announced manifest does not declare as a field.
+   * A frame is a separate origin; "trust what the site sends" would let it name any
+   * key it liked, and the declaration is the only thing making a key legitimate.
+   */
+  | { v: number; source: typeof FRAME_SOURCE; type: 'field-change'; key: string; value: string }
 
 /** editor → frame. `init-data` hands the frame its draft so a custom site in edit
  *  mode renders it without its own DB access (D-C); `apply-style` previews a

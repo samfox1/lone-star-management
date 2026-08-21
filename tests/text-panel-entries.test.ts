@@ -174,3 +174,32 @@ describe('grouping a long text list', () => {
     expect(groupByPrefix([])).toEqual([])
   })
 })
+
+describe('a SITE-WRITTEN field is stored, published — and never typed (0.27.0)', () => {
+  it("CRITICAL: it is not listed in the Text panel", () => {
+    // ftbk's desktop arrangement is a declared field the SITE writes when the manager
+    // drops an icon. Its value is a serialized layout: a text box over it is a way to
+    // corrupt it, and this panel is for words someone types.
+    const layout: ManifestField = {
+      key: 'desktop_layout',
+      label: 'Desktop layout',
+      type: 'text',
+      target: { store: 'site_content', key: 'desktop_layout' },
+      siteWritten: true,
+    }
+    const entries = textPanelEntries([field('artist_bio', 'Bio'), layout], [])
+    expect(entries.map((e) => e.key)).toEqual(['artist_bio'])
+  })
+
+  it('the SAME field without the flag IS listed — the flag is what hides it, not the key', () => {
+    // Guards against passing the test above for the wrong reason (a key filter, a
+    // target check, the panel dropping every second field).
+    const typed: ManifestField = {
+      key: 'desktop_layout',
+      label: 'Desktop layout',
+      type: 'text',
+      target: { store: 'site_content', key: 'desktop_layout' },
+    }
+    expect(textPanelEntries([typed], []).map((e) => e.key)).toEqual(['desktop_layout'])
+  })
+})

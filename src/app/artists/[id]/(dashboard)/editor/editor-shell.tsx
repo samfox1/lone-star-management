@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
 import { fitViewport, zoomLabel, type Device } from '@/lib/site-editor/viewport'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
@@ -16,6 +16,8 @@ import { Icon } from '@/components/ui/icons'
 import { EditorPublish } from './editor-publish'
 import { RestoreVersionMenu } from './restore-version'
 import { useFrameBridge } from './use-frame-bridge'
+import { saveEditorFieldAction } from '../actions'
+import { toast } from '../toast'
 import {
   EditorInspector,
   type EditorImageField,
@@ -234,6 +236,17 @@ export function EditorShell({
     artistId,
     customSiteUrl,
     draft,
+    // The site saved a declared field by the manager acting on the page (0.27.0 —
+    // ftbk's desktop arrangement). Straight to the SAME server action a typed field
+    // uses: draft now, public on publish, no separate save path to drift.
+    onFieldChange: useCallback(
+      (key: string, value: string) => {
+        void saveEditorFieldAction(artistId, key, value).then((res) => {
+          if (!res.ok) toast(res.error ?? 'Could not save the layout.', 'error')
+        })
+      },
+      [artistId],
+    ),
   })
 
   // Measure the frame panel so the canvas can be scaled to fit it. The panel

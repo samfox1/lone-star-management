@@ -501,8 +501,14 @@ export function mountFrameBridge(options: {
    * Deliberately NOT automatic on init-data: only the caller knows when its content has
    * actually painted, and announcing a beat too early would re-ship the same empty list
    * with more confidence.
+   *
+   * `writeField` saves a DECLARED field the manager changed by acting on the page —
+   * dropping an icon where they want it (0.27.0). The editor treats it exactly like a
+   * typed value, and ignores any key the manifest does not declare, so a site cannot
+   * write outside what it asked for. Call it on the gesture's END, not during: every call
+   * is a save.
    */
-  onMounted?: (handle: { announce: () => void }) => void;
+  onMounted?: (handle: { announce: () => void; writeField: (key: string, value: string) => void }) => void;
   /** The site's region registry lookup (its `regionBase`). Bound synchronously before
    *  any listener attaches — see the ordering note on `regionBaseLookup`. */
   regionBase?: (key: string) => string;
@@ -749,6 +755,7 @@ export function mountFrameBridge(options: {
   // flash the shell back to "not connected" after it had settled.
   options.onMounted?.({
     announce: () => post(stamp({ type: "ready", manifest: manifest() })),
+    writeField: (key, value) => post(stamp({ type: "field-change", key, value })),
   });
   announce = setInterval(() => {
     // Bounded (~10s): opened directly, with no editor parent, this must not spin forever.

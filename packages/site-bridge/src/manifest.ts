@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.26.0'
+export const PACKAGE_VERSION = '0.27.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -62,6 +62,16 @@ export type ManifestField = {
    * broken one.
    */
   styleKey?: string
+  /**
+   * True when the SITE writes this value itself, by the manager doing something on the
+   * page rather than typing into a box (0.27.0 — ftbk's desktop arrangement, saved when
+   * an icon is dropped). The editor stores it and publishes it like any other field, but
+   * offers NO control: a JSON layout in a text input is a way to corrupt it, not edit it.
+   *
+   * Declaring it is still required — the editor refuses a `field-change` for a key the
+   * manifest does not declare, and this flag is what says the site is allowed to send it.
+   */
+  siteWritten?: boolean
 }
 
 /** The library asset types a slot can hold, AS A VALUE — so item-marker parsers can

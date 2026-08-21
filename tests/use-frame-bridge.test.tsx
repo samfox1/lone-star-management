@@ -54,10 +54,21 @@ function fakeFrame() {
 }
 
 /** Mount the hook with a fake frame already attached, as the real iframe ref would be. */
-function mount(opts: { customSiteUrl?: string | null; draft?: PublicSitePayload | null } = {}) {
+function mount(
+  opts: {
+    customSiteUrl?: string | null
+    draft?: PublicSitePayload | null
+    onFieldChange?: (key: string, value: string) => void
+  } = {},
+) {
   const frame = fakeFrame()
   const hook = renderHook(() =>
-    useFrameBridge({ artistId: 'a1', customSiteUrl: opts.customSiteUrl ?? null, draft: opts.draft ?? null }),
+    useFrameBridge({
+      artistId: 'a1',
+      customSiteUrl: opts.customSiteUrl ?? null,
+      draft: opts.draft ?? null,
+      onFieldChange: opts.onFieldChange,
+    }),
   )
   hook.result.current.frameRef.current = frame.el
   return { ...hook, frame }
@@ -337,5 +348,58 @@ describe('the editor’s mode survives a frame reload', () => {
     const { frame } = mount({ customSiteUrl: CUSTOM_SITE })
     frameSays({ type: 'ready' }, CUSTOM_SITE)
     expect(posted(frame, 'set-mode')).toHaveLength(0)
+  })
+})
+
+
+/* ── field-change: the one write that flows SITE → EDITOR (0.27.0) ──────────────────
+ * ftbk's manager arranges the desktop by dragging icons; no panel control can express
+ * that, so the site saves it. The manifest is the whole authorization. */
+describe('a site saving a field it changed on the page', () => {
+  /** Announce a manifest declaring one site-written field, then post a change. */
+  function connectedWith(fields: { key: string; siteWritten?: boolean }[]) {
+    const onFieldChange = vi.fn()
+    const h = mount({ customSiteUrl: CUSTOM, onFieldChange })
+    frameSays(
+      {
+        type: 'ready',
+        manifest: {
+          template: 'ftbk',
+          fields: fields.map((f) => ({ ...f, label: f.key, type: 'text', target: { store: 'site_content', key: f.key } })),
+          slots: [],
+          styles: [],
+          links: [],
+        },
+      },
+      CUSTOM,
+    )
+    return { onFieldChange }
+  }
+
+  it('CRITICAL: a DECLARED field reaches the save path', () => {
+    const { onFieldChange } = connectedWith([{ key: 'desktop_layout', siteWritten: true }])
+    frameSays({ type: 'field-change', key: 'desktop_layout', value: '{"a":1}' }, CUSTOM)
+    expect(onFieldChange).toHaveBeenCalledWith('desktop_layout', '{"a":1}')
+  })
+
+  it("CRITICAL: an UNDECLARED key is refused — a frame is a separate origin and may claim anything", () => {
+    // Without this check the site could write any site_content key it named. The
+    // declaration is the only thing that makes a key legitimate.
+    const { onFieldChange } = connectedWith([{ key: 'desktop_layout', siteWritten: true }])
+    frameSays({ type: 'field-change', key: 'artist_bio', value: 'hijacked' }, CUSTOM)
+    expect(onFieldChange).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: a field-change from the WRONG ORIGIN is dropped like every other message', () => {
+    const { onFieldChange } = connectedWith([{ key: 'desktop_layout', siteWritten: true }])
+    frameSays({ type: 'field-change', key: 'desktop_layout', value: 'evil' }, 'https://attacker.example')
+    expect(onFieldChange).not.toHaveBeenCalled()
+  })
+
+  it('a change arriving BEFORE any manifest is refused (nothing is declared yet)', () => {
+    const onFieldChange = vi.fn()
+    mount({ customSiteUrl: CUSTOM, onFieldChange })
+    frameSays({ type: 'field-change', key: 'desktop_layout', value: 'x' }, CUSTOM)
+    expect(onFieldChange).not.toHaveBeenCalled()
   })
 })

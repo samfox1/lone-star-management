@@ -85,6 +85,11 @@ export function textPanelEntries(
   const claimed = new Set<string>()
   for (const f of fields ?? []) {
     if (f.type !== 'text' && f.type !== 'email') continue
+    // A SITE-WRITTEN field (0.27.0) is stored and published like any other, but the
+    // manager sets it by acting on the page — dragging ftbk's icons into an arrangement.
+    // Its value is a serialized layout; a text box over it is a way to corrupt it, and
+    // this panel is for words someone types.
+    if (f.siteWritten) continue
     const region = styleRegionForField(f, allRegions)
     if (region) claimed.add(region.key)
     entries.push({ key: f.key, label: f.label, field: f, styleRegion: region })
