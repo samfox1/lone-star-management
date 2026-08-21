@@ -19,6 +19,17 @@ beforeAll(async () => {
   artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
 
+  // Self-heal: a run killed between insert and afterAll orphans the fixture, and the
+  // unique (artist_id, key) then fails every later run's insert (seen 2026-08-18, when
+  // a backgrounded suite was killed under Stryker load). Scoped to the exact fixture
+  // VALUE so a real hero_tagline could never be swept up (rule 6).
+  await svc
+    .from('site_content')
+    .delete()
+    .eq('artist_id', artistB)
+    .eq('key', 'hero_tagline')
+    .eq('value', 'B private tagline')
+
   const { data, error } = await svc
     .from('site_content')
     .insert({ artist_id: artistB, key: 'hero_tagline', value: 'B private tagline' })
