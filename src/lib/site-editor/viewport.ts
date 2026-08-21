@@ -18,29 +18,25 @@
 /**
  * Canvas width per device — the width the SITE believes it has.
  *
- * 1440 is the standard desktop design width (and the usable width of a 15-16" laptop).
- * The phones are the three logical widths that actually matter, because between them they
- * bracket every iPhone in use: 375 (SE / 13 mini — the tightest layout anyone will see),
- * 390 (the 12-15 mainstream), 430 (the Pro Max / Plus). A layout that survives 375 and 430
- * survives everything in between (Sam, 2026-08-21: "offer other dimensions of other phones
- * so we can see its responsiveness on more screens").
+ * 1440 is the standard desktop design width (and the usable width of a 15-16" laptop);
+ * 390 is the iPhone 12-15 logical width, the mainstream phone.
  *
- * `mobile` is KEPT as an alias of 390 rather than renamed: it is the stored value of every
- * editor session open today, and a select whose current value has vanished shows blank.
+ * ONE phone, on purpose (Sam, 2026-08-21: "Just have 1 mobile view for now"). A menu of
+ * 375/390/430 briefly existed here: it is the right idea for a responsiveness pass, and a
+ * distraction while the phone layout itself is still being shaped — three widths to check
+ * after every change is three times the work to find the same problems. `isPhone` stays
+ * because the mobile style twins should never key off ONE device name; when the extra
+ * widths come back, nothing but this table needs to change.
  */
-export const CANVAS_WIDTH = {
-  desktop: 1440,
-  mobile: 390,
-  'phone-sm': 375,
-  'phone-lg': 430,
-} as const
+export const CANVAS_WIDTH = { desktop: 1440, mobile: 390 } as const
 
 export type Device = keyof typeof CANVAS_WIDTH
 
-/** Every phone-width canvas. The MOBILE-scope style controls (`--lse-*-m`) key off this,
- *  not off one device name — editing at 430 must write the same phone twin as 390, or a
- *  manager's phone edits would silently depend on which phone they happened to preview. */
-const PHONES = new Set<Device>(['mobile', 'phone-sm', 'phone-lg'])
+/** Every phone-width canvas. The MOBILE-scope style controls (`--lse-*-m`) key off THIS,
+ *  never off one device name: the day a second phone width returns, editing at 430 must
+ *  write the same phone twin as 390, or a manager's phone edits would silently depend on
+ *  which phone they happened to be previewing. */
+const PHONES = new Set<Device>(['mobile'])
 
 export function isPhone(device: Device): boolean {
   return PHONES.has(device)
@@ -50,9 +46,7 @@ export function isPhone(device: Device): boolean {
  *  above cannot be missing from the menu (AGENTS.md rule 4). */
 export const DEVICE_OPTIONS: readonly { value: Device; label: string }[] = [
   { value: 'desktop', label: 'Desktop' },
-  { value: 'phone-sm', label: 'iPhone SE · 375' },
-  { value: 'mobile', label: 'iPhone · 390' },
-  { value: 'phone-lg', label: 'iPhone Max · 430' },
+  { value: 'mobile', label: 'Mobile' },
 ]
 
 export type Viewport = {
