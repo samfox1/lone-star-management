@@ -4,6 +4,30 @@ _Drafted 2026-08-21. This is a BUSINESS plan, not a technical one. The other
 `*_PLAN.md` files at this root describe what the software does. This one describes
 what the company sells and in what order._
 
+## Where we left off
+
+_Paused 2026-08-21. Nothing here is built. This document is the whole record of the
+session; the conversation it came from is closed._
+
+**Settled:** the reframe, the A-vs-B decision (B long term, A-flavoured to build a
+portfolio first), the non-negotiables, the four packages, the phases, the account and
+role model, and how roles map onto the existing schema.
+
+**Not settled, pick up here:**
+
+1. **Private mail.** Does the artist get mail a manager cannot read, or does the
+   `owner` always see everything? Recommendation in "Separate enquiries" below.
+2. **Who holds Publish** on a shared artist/manager account.
+3. **The artist / manager edit split.** A starting table is drafted in "Still to
+   decide"; it has not been reviewed.
+4. **Pricing.** Deliberately deferred until after Phase 1.
+5. Do designers work inside Lone Star, or deliver files we ingest?
+6. Is Words founder-only for longer than the other add-ons?
+7. What is the minimum brand book that beats a PDF?
+
+**Next concrete step, when this resumes:** work through the edit-split table, since it
+determines the shape of `has_artist_role()` and therefore the migration.
+
 ## The reframe
 
 Lone Star is not a website product with services bolted on. It is the artist's
