@@ -188,6 +188,7 @@ function renderInspector(
     selectedStyle?: string | null
     components?: ManifestComponent[]
     showGallery?: boolean
+    itemStyling?: boolean
     linkRegions?: ManifestLinkRegion[]
     linkValues?: Record<string, string>
     selectedLink?: { key: string; nonce: number } | null
@@ -234,6 +235,7 @@ function inspector(
       tours={opts.tours ?? []}
       components={opts.components ?? []}
       showGallery={opts.showGallery ?? true}
+      itemStyling={opts.itemStyling ?? true}
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
       styleOptions={opts.styleOptions}
@@ -347,6 +349,19 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /h-lib\.jpg/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false) // old off
     expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed
+  })
+
+  it("CRITICAL: a LOCKED site (itemStyling:false, ftbk) offers Replace on tiles — no style editor", () => {
+    // Sam, 2026-08-20: "They should still be in the images panel so that users can
+    // replace them, but they should have no edit button." The hover action becomes
+    // Replace, opening the picker directly with the item editor's swap rule.
+    renderInspector(PHOTOS, { itemStyling: false })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    expect(screen.queryByRole('button', { name: 'Edit photo 1' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Replace photo 1' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /h-lib\.jpg/ }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('photo', 'm1', 'artist-1', false) // old off
+    expect(placePhotoMock).toHaveBeenCalledWith('artist-1', 'm2', 'horizontal') // new placed, own shape
   })
 
   it('uploading adds to the library (no placement)', () => {

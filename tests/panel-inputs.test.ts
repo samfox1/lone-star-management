@@ -39,6 +39,7 @@ const FULL: TemplateManifest = {
   videoSlots: [{ kind: 'hero', role: 'hero_landscape', label: 'Landscape', group: 'Landing page' }],
   styleOptions: { fonts: [{ value: 'font-serif', label: 'Serif' }] },
   assetBudgets: { image: { maxBytes: 1_000_000 } },
+  itemStyling: false,
 } as unknown as TemplateManifest
 
 const DRAFT = { artist: { hero_image_url: null }, media: [], styles: {} } as unknown as PublicSitePayload
@@ -65,7 +66,7 @@ describe('a connected site’s declared categories all reach a panel', () => {
       // satisfied by text alone — which is precisely how images went missing for four
       // days while a green suite watched. The fixture declares content for every
       // consumer, so `every` is the honest bar.
-      const missing = consumers.filter((key) => !inputIsPopulated(inputs[key]))
+      const missing = consumers.filter((key) => !inputIsPopulated(key, inputs[key]))
       expect(missing, `"${category}" declared but did not reach: ${missing.join(', ')}`).toEqual([])
     }
   })
@@ -111,28 +112,38 @@ describe('inputIsPopulated — the predicate the coverage test leans on', () => 
   // would pass with every panel empty — a green suite proving nothing. Stryker found it
   // untested: mutating each branch changed no test's result.
   it('CRITICAL: nothing counts as populated', () => {
-    expect(inputIsPopulated(undefined)).toBe(false)
+    expect(inputIsPopulated('showGallery', undefined)).toBe(false)
     // `null` too. The types say a panel input is never null, but the guard reads it and
     // an unasserted branch is an unwatched one (Stryker survivor, 2026-08-10).
-    expect(inputIsPopulated(null as never)).toBe(false)
-    expect(inputIsPopulated([])).toBe(false)
-    expect(inputIsPopulated(false)).toBe(false)
-    expect(inputIsPopulated({} as never)).toBe(false)
+    expect(inputIsPopulated('showGallery', null as never)).toBe(false)
+    expect(inputIsPopulated('showGallery', [])).toBe(false)
+    expect(inputIsPopulated('showGallery', false)).toBe(false)
+    expect(inputIsPopulated('showGallery', {} as never)).toBe(false)
+  })
+
+  it('CRITICAL: a boolean is populated when it DIFFERS from its no-manifest default', () => {
+    // itemStyling defaults TRUE, so its meaningful declaration is FALSE (ftbk's lock);
+    // showGallery defaults false, so its meaningful declaration is true. The old truthy
+    // check called a declared itemStyling:false "missing" and the coverage sweep red.
+    expect(inputIsPopulated('itemStyling', false)).toBe(true)
+    expect(inputIsPopulated('itemStyling', true)).toBe(false)
+    expect(inputIsPopulated('showGallery', true)).toBe(true)
+    expect(inputIsPopulated('showGallery', false)).toBe(false)
   })
 
   it('an EMPTY array is not populated, while a non-empty one is', () => {
     // Pins the array branch itself: without it, `[]` still answered false via the
     // object-keys fallback below, so deleting the branch changed nothing.
-    expect(inputIsPopulated([] as never)).toBe(false)
-    expect(inputIsPopulated([{ key: 'only' }] as never)).toBe(true)
+    expect(inputIsPopulated('styleRegions', [] as never)).toBe(false)
+    expect(inputIsPopulated('styleRegions', [{ key: 'only' }] as never)).toBe(true)
     // A non-empty array whose entries are falsy still counts — length is the question.
-    expect(inputIsPopulated([undefined] as never)).toBe(true)
+    expect(inputIsPopulated('styleRegions', [undefined] as never)).toBe(true)
   })
 
   it('CRITICAL: something counts as populated', () => {
-    expect(inputIsPopulated([{ key: 'x' }] as never)).toBe(true)
-    expect(inputIsPopulated(true)).toBe(true)
-    expect(inputIsPopulated({ fonts: [] } as never)).toBe(true)
+    expect(inputIsPopulated('styleRegions', [{ key: 'x' }] as never)).toBe(true)
+    expect(inputIsPopulated('showGallery', true)).toBe(true)
+    expect(inputIsPopulated('styleOptions', { fonts: [] } as never)).toBe(true)
   })
 })
 
@@ -168,6 +179,17 @@ describe('a BUILT-IN template is not fed by what its frame announces', () => {
   })
 })
 
+describe('itemStyling — the locked-look declaration (ftbk)', () => {
+  it('CRITICAL: itemStyling:false reaches the panels; absent means TRUE (every older site)', () => {
+    const locked = resolve({ customSiteUrl: 'https://site.example', manifest: FULL })
+    expect(locked.itemStyling).toBe(false) // FULL declares it off
+    const historic = resolve({ customSiteUrl: 'https://site.example', manifest: { ...FULL, itemStyling: undefined } })
+    expect(historic.itemStyling).toBe(true)
+    // Built-in templates (no announced manifest at all) keep styling too.
+    expect(resolve({ customSiteUrl: null, manifest: null }).itemStyling).toBe(true)
+  })
+})
+
 describe('the registry is the list', () => {
   it('CATEGORY_CONSUMERS covers exactly MANIFEST_CATEGORIES', () => {
     // A Record<ManifestCategory, …> makes a MISSING key a compile error; this catches the
@@ -188,6 +210,7 @@ describe('the registry is the list', () => {
     const exhaustive: Record<ManifestCategory, true> = {
       fields: true, slots: true, styles: true, links: true,
       components: true, videoSlots: true, styleOptions: true, assetBudgets: true,
+      itemStyling: true,
     }
     expect(Object.keys(exhaustive).length).toBe(MANIFEST_CATEGORIES.length)
   })

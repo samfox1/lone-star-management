@@ -192,7 +192,7 @@ export function CoverEditMenu({
  *  the tile's edit affordance (a CoverEditMenu, or the full-panel item editor). One
  *  component so the treatment can't drift per panel. Appears on `group/slot` hover,
  *  which `SelectableTile` provides. */
-export function TileEditButton({ label, title, onClick }: { label: string; title?: string; onClick: () => void }) {
+export function TileEditButton({ label, title, icon = 'edit', onClick }: { label: string; title?: string; icon?: 'edit' | 'refresh'; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -201,7 +201,7 @@ export function TileEditButton({ label, title, onClick }: { label: string; title
       onClick={onClick}
       className="absolute right-1.5 top-1.5 rounded-lg bg-black/60 p-2 text-white/90 opacity-0 transition-opacity hover:bg-black/75 hover:text-white group-hover/slot:opacity-100"
     >
-      <Icon name="edit" size={16} />
+      <Icon name={icon} size={16} />
     </button>
   )
 }
@@ -453,6 +453,8 @@ export function MediaGrid<T>({
     onSelect: (v: T) => void
     isFocused: (v: T) => boolean
     onEdit: (v: T, i: number) => void
+    /** Renames the hover action ('Replace' on a style-less site) — the icon follows. */
+    editLabel?: string
   }
 }) {
   const [picking, setPicking] = useState(false)
@@ -483,7 +485,12 @@ export function MediaGrid<T>({
                 </>
               }
             >
-              <TileEditButton label={`Edit ${noun} ${i + 1}`} title="Customize this image" onClick={() => select.onEdit(item, i)} />
+              <TileEditButton
+                label={`${select.editLabel ?? 'Edit'} ${noun} ${i + 1}`}
+                title={select.editLabel === 'Replace' ? 'Swap this image' : 'Customize this image'}
+                icon={select.editLabel === 'Replace' ? 'refresh' : 'edit'}
+                onClick={() => select.onEdit(item, i)}
+              />
             </SelectableTile>
           ) : (
             <div key={k} className="overflow-hidden rounded-lg border border-hairline">

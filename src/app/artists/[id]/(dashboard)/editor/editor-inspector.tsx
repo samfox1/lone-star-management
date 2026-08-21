@@ -165,6 +165,7 @@ export function EditorInspector({
   tours: initialTours = [],
   components = [],
   showGallery = false,
+  itemStyling = true,
   assetBudgets,
   styleRegions = [],
   styleValues = NO_STYLES,
@@ -214,6 +215,9 @@ export function EditorInspector({
   /** Does the site declare a photo collage (an image slot)? Defaults FALSE — a group is
    *  shown because the site asked for it, never just because the editor can render one. */
   showGallery?: boolean
+  /** False when the site declares `itemStyling: false` (a fully locked look, ftbk):
+   *  gallery tiles offer Replace, never the per-item style editor. */
+  itemStyling?: boolean
   /** The site's upload budgets (manifest.assetBudgets) — drives the compression gate on
    *  every image uploader below. Absent = no gate, the pre-budget behaviour. */
   assetBudgets?: AssetBudgets
@@ -853,6 +857,7 @@ export function EditorInspector({
         onToggleOnSite={togglePhotoOnSite}
         onPlaceSlot={placeInSlot}
         onApplyField={paintField}
+        itemStyling={itemStyling}
       />
     ),
     text: () => (

@@ -41,6 +41,7 @@ export const MANIFEST_CATEGORIES = [
   'videoSlots',
   'styleOptions',
   'assetBudgets',
+  'itemStyling',
 ] as const
 
 export type ManifestCategory = (typeof MANIFEST_CATEGORIES)[number]
@@ -56,6 +57,7 @@ export type ManifestCategory = (typeof MANIFEST_CATEGORIES)[number]
 export const CATEGORY_CONSUMERS: Record<ManifestCategory, readonly (keyof PanelInputs)[]> = {
   fields: ['textFields', 'imageFields'],
   slots: ['showGallery'],
+  itemStyling: ['itemStyling'],
   styles: ['styleRegions'],
   links: ['linkRegions'],
   components: ['components'],
@@ -70,6 +72,9 @@ export type PanelInputs = {
   imageFields: EditorImageField[]
   /** The orientation collages exist only if the site declares somewhere to render one. */
   showGallery: boolean
+  /** False when the site locks its look (manifest itemStyling: false): gallery tiles
+   *  offer Replace, never the per-item style editor. */
+  itemStyling: boolean
   components: NonNullable<TemplateManifest['components']>
   videoSlots: NonNullable<TemplateManifest['videoSlots']>
   styleRegions: TemplateManifest['styles']
@@ -117,6 +122,8 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
     // built-in that announced an image slot would have shown a gallery its template does
     // not render — the same class of bug, arriving from the other direction.
     showGallery: (announced?.slots ?? []).some((sl) => sl.accepts === 'image'),
+    // Absent = true: every site and built-in template before ftbk styled items.
+    itemStyling: announced?.itemStyling !== false,
     components: announced?.components ?? [],
     // The Videos panel is built from THESE, not a hardcoded list — a site that declares
     // none (Juniper) shows no video slots at all (phase 4, 2026-08-12).
@@ -140,9 +147,17 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
  * array would diverge. The other lives on `?? []` in `showGallery` above: any junk
  * default answers `false` to the same `.some()`.
  */
-export function inputIsPopulated(value: PanelInputs[keyof PanelInputs]): boolean {
+/** What each BOOLEAN input resolves to with no manifest at all. A boolean is
+ *  "populated" when it DIFFERS from this — `itemStyling: false` is a declaration
+ *  reaching the panels, not an empty value (the truthy check called it missing). */
+const BOOLEAN_DEFAULTS: Partial<Record<keyof PanelInputs, boolean>> = {
+  showGallery: false,
+  itemStyling: true,
+}
+
+export function inputIsPopulated(key: keyof PanelInputs, value: PanelInputs[keyof PanelInputs]): boolean {
   if (value === undefined || value === null) return false
-  if (typeof value === 'boolean') return value
+  if (typeof value === 'boolean') return value !== (BOOLEAN_DEFAULTS[key] ?? false)
   if (Array.isArray(value)) return value.length > 0
   return Object.keys(value).length > 0
 }

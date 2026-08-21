@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.25.8'
+export const PACKAGE_VERSION = '0.25.9'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -284,6 +284,14 @@ export type TemplateManifest = {
   /** Per-kind / per-slot upload budgets. The editor's upload gate reads these; absent
    *  (older manifests) means no gate beyond the editor's own floor. */
   assetBudgets?: AssetBudgets
+  /**
+   * False when the site's LOOK is fully locked and library items must not carry the
+   * per-item style editor (ftbk, 2026-08-20: the works are the artist's own pieces —
+   * "users can replace them, but they should have no edit button"). The editor then
+   * offers Replace on gallery tiles instead of the style editor. Absent = true, the
+   * historic behaviour for every site and template.
+   */
+  itemStyling?: boolean
 }
 
 /** Field keys the manifest declares as TEXT. NOTE (2026-08-07 review): only

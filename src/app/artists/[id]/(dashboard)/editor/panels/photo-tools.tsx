@@ -442,6 +442,7 @@ export function PhotoTools({
   onToggleOnSite,
   onPlaceSlot,
   onApplyField,
+  itemStyling = true,
 }: {
   photos: GalleryPhoto[]
   /** Single-occupancy image fields (hero image, profile photo) — the "Set slots" group. */
@@ -467,12 +468,20 @@ export function PhotoTools({
   onToggleOnSite: (p: GalleryPhoto) => void
   onPlaceSlot: (role: string, photo: GalleryPhoto | null) => void
   onApplyField?: (key: string, value: string) => void
+  /** False on a site that declares ZERO style regions (ftbk): its gallery is CONTENT —
+   *  tiles offer Replace directly, never the per-item style editor (Sam, 2026-08-20:
+   *  "users can replace them, but they should have no edit button"). */
+  itemStyling?: boolean
 }) {
   // A photo holding a component slot is NOT a gallery photo — it belongs to that slot,
   // and showing it here would invite placing a handwriting PNG in the photo wall
   // (20260724120000). A null-orientation photo (a legacy row, a Drive import never
   // measured) stays visible and manageable; placing it assigns 'horizontal'.
   const inGallery = (p: GalleryPhoto) => !p.siteRole
+  // The style-less REPLACE flow (itemStyling false): the tile's hover button opens
+  // this picker directly — same swap semantics as the item editor's Replace (old off,
+  // new placed with its own shape), without the style panel around it.
+  const [replacing, setReplacing] = useState<GalleryPhoto | null>(null)
   const nothing = imageFields.length === 0 && components.length === 0 && !showGallery
   // Same shape as link-tools/video-tools: the bare line, not inside the padded body.
   if (nothing) return <NoSlots noun="image" />
@@ -533,10 +542,44 @@ export function PhotoTools({
             select={{
               onSelect: (p) => onFocus(galleryTarget(p.id)),
               isFocused: (p) => focusedKey === selectTargetKey(galleryTarget(p.id)),
-              onEdit: (p, i) =>
-                onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` }),
+              onEdit: itemStyling
+                ? (p, i) =>
+                    onEditItem({ type: 'galleryPhoto', id: p.id, orientation: p.orientation ?? 'horizontal', label: `Photo ${i + 1}` })
+                : (p) => setReplacing(p),
+              editLabel: itemStyling ? undefined : 'Replace',
             }}
           />
+          {replacing && (
+            <LibraryPicker<GalleryPhoto>
+              title={`Replace ${fileNameOf(replacing.storage_path)}`}
+              candidates={photos.filter((p) => !p.onSite && !p.siteRole)}
+              keyOf={(p) => p.id}
+              labelOf={(p) => fileNameOf(p.storage_path)}
+              renderThumb={(p) => <PhotoThumb path={p.storage_path} aspect="aspect-square" />}
+              empty={<p className="py-2 text-center text-xs text-ink-muted">No unused photos in your library.</p>}
+              footer={
+                <GallerySlotUploader
+                  artistId={artistId}
+                  orientation={replacing.orientation ?? 'horizontal'}
+                  budget={budgetFor(assetBudgets, 'image')}
+                  onUploaded={(m) => {
+                    onAdd(m)
+                    onUnplace(replacing)
+                    onPlace({ ...m, onSite: false, siteRole: null }, m.orientation)
+                    setReplacing(null)
+                  }}
+                />
+              }
+              onPick={(next) => {
+                // The item editor's swap rule, verbatim: old off, new placed with its
+                // own measured shape.
+                onUnplace(replacing)
+                onPlace(next, next.orientation ?? 'horizontal')
+                setReplacing(null)
+              }}
+              onCancel={() => setReplacing(null)}
+            />
+          )}
         </div>
       )}
     </div>
