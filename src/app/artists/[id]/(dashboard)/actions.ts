@@ -1123,6 +1123,35 @@ export async function setTrackOnSiteAction(
   return {}
 }
 
+/**
+ * Set a SONG's type — single / EP / album / remix / live / featured.
+ *
+ * A release card has had type chips forever; a song only ever showed a read-only badge,
+ * so the type picked at add time was the type for good (Sam, 2026-08-21: "Theres no way
+ * to edit the details of the music"). That bit hardest on a STANDALONE song, which has no
+ * release row to edit instead — which is how a live set sat filed as a remix.
+ *
+ * No lock column here, unlike `setReleaseTypeAction`. Sync's own track write is already
+ * scoped `.eq('release_type', 'single')` — it only ever promotes songs still sitting at
+ * the default — so a song tagged Live or Remix is out of its reach by construction. RLS
+ * scopes the write.
+ */
+export async function setTrackTypeAction(
+  trackId: string,
+  artistId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const release_type = toReleaseType(String(formData.get('release_type') ?? ''))
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('tracks')
+    .update({ release_type })
+    .eq('id', trackId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 export async function setTrackParentReleaseAction(
   trackId: string,
   artistId: string,

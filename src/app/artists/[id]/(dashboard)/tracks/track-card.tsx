@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
+import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
@@ -17,6 +17,7 @@ import {
   setTrackOnSiteAction,
   setTrackParentReleaseAction,
   setTrackReleaseAction,
+  setTrackTypeAction,
   updateContentAction,
 } from '../actions'
 
@@ -69,6 +70,7 @@ export function TrackCard({
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [typeDraft, setTypeDraft] = useState<ReleaseType>(track.release_type)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [titleDraft, setTitleDraft] = useState(track.title)
   const [releaseDraft, setReleaseDraft] = useState(track.release_id ?? '')
@@ -123,6 +125,7 @@ export function TrackCard({
     setReleaseDraft(track.release_id ?? '')
     setParentDraft(track.parent_release_id ?? '')
     setReleaseDateDraft(track.release_date?.slice(0, 10) ?? '')
+    setTypeDraft(track.release_type)
     setEditOpen(true)
   }
 
@@ -150,6 +153,18 @@ export function TrackCard({
       const fd = new FormData()
       fd.set('release_id', releaseDraft)
       const res = await setTrackReleaseAction(track.id, artistId, fd)
+      if (res?.error) {
+        toast(res.error, 'error')
+        return
+      }
+      saved = true
+    }
+    // Only when it actually CHANGED. A no-op write would stamp the type on every save,
+    // which matters because the value is what puts the song in its Music-page section.
+    if (typeDraft !== track.release_type) {
+      const fd = new FormData()
+      fd.set('release_type', typeDraft)
+      const res = await setTrackTypeAction(track.id, artistId, fd)
       if (res?.error) {
         toast(res.error, 'error')
         return
@@ -426,6 +441,31 @@ export function TrackCard({
               className="block rounded-lg bg-surface px-2.5 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
             />
           </label>
+          {/* SONG TYPE — the same chips a release card has had all along. Straight off
+              RELEASE_TYPES, so a type added to the registry appears here the day it lands
+              rather than needing a second hand-kept list (which is exactly how 'live'
+              shipped unpickable). */}
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
+            <div className="flex flex-wrap gap-2">
+              {RELEASE_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTypeDraft(t)}
+                  aria-pressed={typeDraft === t}
+                  className={cx(
+                    'rounded-lg border px-3 py-2 font-space text-xs font-semibold transition-colors',
+                    typeDraft === t
+                      ? 'border-ink bg-ink text-white'
+                      : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
+                  )}
+                >
+                  {RELEASE_TYPE_LABEL[t]}
+                </button>
+              ))}
+            </div>
+          </div>
           {releases.length > 0 && (
             <>
               <label className="block space-y-1.5">
