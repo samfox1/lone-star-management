@@ -134,6 +134,11 @@ export type EditorProject = {
   songs: { id: string; title: string }[]
   /** On the site iff any of its songs is on-site. */
   onSite: boolean
+  /** Out in the last week — wears a NEW badge (Sam, 2026-08-21). Computed server-side
+   *  from the project's date via the bridge's `isNewRelease`, the SAME law the site's
+   *  grid renders its badge from, so the panel and the site never disagree about which
+   *  covers are wearing one. Optional: a caller that doesn't date its projects gets none. */
+  isNew?: boolean
 }
 export type EditorTour = {
   id: string

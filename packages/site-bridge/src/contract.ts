@@ -78,7 +78,10 @@ export type ContractFinding = {
     | "undeclared-value"
     | "invented-content"
     | "no-empty-render"
-    | "claim-ignored";
+    | "claim-ignored"
+    /** The site's CSS never imports tokens.css, so nothing the editor applies as a class
+     *  is compiled — every non-colour control silently does nothing. */
+    | "tokens-not-compiled";
   detail: string;
 };
 
@@ -97,6 +100,20 @@ export type ContractInput = {
    * published" is exactly what went wrong.
    */
   publishedValues?: string[];
+  /**
+   * The site's main stylesheet, as text.
+   *
+   * Optional, and the single most valuable thing a connecting site can pass. Everything
+   * the editor applies that is not a colour is a Tailwind CLASS, and those classes arrive
+   * from the DATABASE at runtime — the scanner never sees them, so nothing is compiled and
+   * every one of them silently no-ops. `tokens.css` is this package's own vocabulary as
+   * `@source inline(...)` directives, and importing it is what makes them real.
+   *
+   * Its header has called this "the drift bug of 2026-08-05, three times"; ftbk was the
+   * fourth, and the symptom each time is a manager reporting that the sliders do nothing.
+   * A comment in a file nobody opens was not enough, so it is a check.
+   */
+  mainCss?: string;
 };
 
 /** `lse-owns-[size]` / `lse-owns-[size,font]` in a base → the properties claimed. */
@@ -135,6 +152,17 @@ function hasKey(root: Element, attr: string, key: string): boolean {
 export function checkContract(input: ContractInput): ContractFinding[] {
   const { manifest, publicDom, editableDom, emptyDom, publishedValues } = input;
   const findings: ContractFinding[] = [];
+
+  /* 0. The editor's vocabulary must be COMPILED. Cheapest possible check, biggest
+   *    recurring failure: without this import every non-colour control silently does
+   *    nothing on the live site, and nothing anywhere says why. */
+  if (input.mainCss !== undefined && !input.mainCss.includes("@samfox1/site-bridge/tokens.css")) {
+    findings.push({
+      check: "tokens-not-compiled",
+      detail:
+        'the site\'s CSS does not import "@samfox1/site-bridge/tokens.css" — every style class the editor applies arrives at runtime, so Tailwind compiles none of them and every control except colour silently does nothing',
+    });
+  }
 
   /* 1. No editor furniture on the public page. */
   for (const attr of MARKER_ATTRS) {

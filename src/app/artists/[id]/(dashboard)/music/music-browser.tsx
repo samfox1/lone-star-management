@@ -75,6 +75,7 @@ const TYPE_LABEL: Record<ReleaseType, string> = {
   ep: 'EPs',
   album: 'Albums',
   remix: 'Remixes',
+  live: 'Live',
   featured: 'Featured',
 }
 const TYPE_ORDER = RELEASE_TYPES

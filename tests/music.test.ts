@@ -198,6 +198,20 @@ describe('groupTracksIntoProjects', () => {
     expect(p.map((x) => x.title)).toEqual(['You Were There', 'Heatwaves & Horizons', 'OutWest'])
   })
 
+  it("a standalone song's OWN release_date dates its project", () => {
+    // Before this a parent-less song had no date at all, so it fell in the undated tail
+    // of the newest-first sort and could never wear the NEW badge (2026-08-21).
+    const p = groupTracksIntoProjects([{ ...ptrk('sc', null), release_date: '2026-08-20' }], lookup)
+    expect(p[0].releaseDate).toBe('2026-08-20')
+  })
+
+  it("the parent RELEASE's date still wins over a song's own", () => {
+    // Songs on a record are dated by the record; a stray value on one track must not
+    // move the project out from under the others.
+    const p = groupTracksIntoProjects([{ ...ptrk('a', 'relOut'), release_date: '2026-08-20' }], lookup)
+    expect(p[0].releaseDate).toBe(lookup('relOut')!.release_date)
+  })
+
   it('a project is on-site iff ANY of its songs is', () => {
     const p = groupTracksIntoProjects([ptrk('a', 'relOut', 'ep', false), ptrk('b', 'relOut', 'ep', true)], lookup)
     expect(p.find((x) => x.title === 'OutWest')!.anyOnSite).toBe(true)

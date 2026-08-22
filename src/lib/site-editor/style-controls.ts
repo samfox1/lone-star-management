@@ -1251,7 +1251,60 @@ const GROUP_HOVER_COLOR_CONTROL: StyleControl = {
  * set is an ALLOWLIST, so a control added later stays off site/chrome regions unless it
  * opts in.
  */
+/**
+ * What one region's panel actually offers, in three steps:
+ *
+ *   1. its SCOPE decides the vocabulary (a page background gets a colour, a picture gets
+ *      the picture set, a text element gets typography);
+ *   2. the site's OWN sliders are added (`customControls`) — knobs only it can implement;
+ *   3. an explicit `controls` allowlist NARROWS the result to exactly what the site named.
+ *
+ * The order is the point. Custom controls join before the allowlist so a site can name
+ * one there like any other, and the allowlist runs last so it can only ever take away —
+ * an id the editor does not know is dropped rather than invented.
+ */
 export function controlsForRegion(
+  controls: StyleControl[],
+  region: ManifestStyleRegion,
+  opts?: SiteStyleOptions,
+): StyleControl[] {
+  const offered = [...scopedControls(controls, region, opts), ...(region.customControls ?? []).map(customSlider)]
+  if (!region.controls) return offered
+  const wanted = new Set(region.controls)
+  return offered.filter((c) => wanted.has(c.id))
+}
+
+/**
+ * One site-declared slider (`ManifestStyleRegion.customControls`) as an editor control.
+ *
+ * The token is `<id>-[<n><unit>]`, the same bracketed shape every other token wears, so
+ * the delta machinery, the drift check and `owns`-based replacement all work on it
+ * unchanged — a custom control is not a special case anywhere downstream.
+ */
+function customSlider(spec: { id: string; label: string; steps: readonly number[]; unit?: string }): StyleControl {
+  const unit = spec.unit ?? '%'
+  const token = (n: number) => `${spec.id}-[${n}${unit}]`
+  return {
+    id: spec.id,
+    label: spec.label,
+    kind: 'slider',
+    steps: spec.steps.map((n) => ({ value: token(n), label: `${n}${unit}` })),
+    // The FIRST step is what an unset region renders as, so '' ranks there rather than
+    // off-scale: the handle parks on what the manager can actually see.
+    rank: (t) => {
+      if (t === '') return spec.steps[0] ?? 0
+      const m = new RegExp(`^${spec.id}-\\[(-?[\\d.]+)`).exec(t)
+      return m ? Number(m[1]) : null
+    },
+    owns: (t) => t.startsWith(`${spec.id}-[`),
+  }
+}
+
+/**
+ * The controls a region's SCOPE gives it, before the site's own additions and narrowing.
+ * Wrapped by `controlsForRegion` below, which is what callers use.
+ */
+function scopedControls(
   controls: StyleControl[],
   region: ManifestStyleRegion,
   /** The site's palette, for the scopes that build their own controls rather than
@@ -1272,6 +1325,10 @@ export function controlsForRegion(
       ...(isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [maybePhoneGap(controls)] : []),
     ]
   }
+  // AN EXPLICIT ALLOWLIST (0.29.0) — the site named the controls it wants, so it gets
+  // those and nothing else. Applied to whatever the scope would have produced, so it can
+  // only ever NARROW: an id the editor does not know (a newer site, an older editor) is
+  // dropped rather than invented.
   // A MEDIA surface (0.28.0): a photograph gets the picture set, not typography. The
   // default for an element-scoped region is the TEXT set, which is right for almost every
   // region and absurd on an image — Sam opened ftbk's wallpaper portrait and was offered

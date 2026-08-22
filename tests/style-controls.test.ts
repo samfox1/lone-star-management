@@ -39,6 +39,86 @@ const PALETTE: SiteStyleOptions = {
 const controls = buildStyleControls(PALETTE)
 const byId = (id: string) => controls.find((c) => c.id === id)!
 
+describe('controlsForRegion — a site can declare its OWN slider (0.30.0)', () => {
+  const portrait = {
+    key: 'portrait',
+    label: 'Portrait',
+    scope: 'media' as const,
+    base: 'opacity-80',
+    customControls: [{ id: 'fade', label: 'Fade', steps: [0, 25, 50, 75, 100] }],
+  }
+
+  it('CRITICAL: it appears, and stores the token the SITE will read back', () => {
+    // ftbk's wallpaper fades into the desktop through a radial mask. Nothing in the
+    // editor's vocabulary is that, and nothing should be — it is one site's idea.
+    const fade = controlsForRegion(controls, portrait, PALETTE).find((c) => c.id === 'fade')!
+    expect(fade).toBeTruthy()
+    expect(fade.kind).toBe('slider')
+    expect(fade.kind === 'slider' && fade.steps.map((s) => s.value)).toEqual([
+      'fade-[0%]',
+      'fade-[25%]',
+      'fade-[50%]',
+      'fade-[75%]',
+      'fade-[100%]',
+    ])
+  })
+
+  it("CRITICAL: it OWNS its own tokens — picking a new value replaces the old, never stacks", () => {
+    // The `owns` predicate is what every replacement downstream keys off. Without it a
+    // region would accumulate fade-[0%] fade-[25%] fade-[50%] and render the first.
+    const fade = controlsForRegion(controls, portrait, PALETTE).find((c) => c.id === 'fade')!
+    expect(fade.owns('fade-[25%]')).toBe(true)
+    expect(fade.owns('opacity-80')).toBe(false)
+    // …and the handle parks on the FIRST step when nothing is stored, which is what an
+    // unset region actually renders.
+    expect(fade.kind === 'slider' && fade.rank?.('')).toBe(0)
+    expect(fade.kind === 'slider' && fade.rank?.('fade-[75%]')).toBe(75)
+  })
+
+  it('a site-declared control can be narrowed by the allowlist like any other', () => {
+    const onlyFade = { ...portrait, controls: ['fade'] }
+    expect(controlsForRegion(controls, onlyFade, PALETTE).map((c) => c.id)).toEqual(['fade'])
+  })
+})
+
+describe('controlsForRegion — a site can name EXACTLY the controls it wants (0.29.0)', () => {
+  it('CRITICAL: the allowlist is the whole panel', () => {
+    // Sam, 2026-08-21: ftbk's dock is one Size slider and nothing else, because
+    // everything else about that bar is the site's own design. Scope 'media' is what
+    // makes "size" mean SCALE — the whole object growing proportionally — rather than
+    // font size, which is what the same id means in the text set.
+    const dock = { key: 'dock', label: 'Dock', scope: 'media' as const, base: 'flex px-3 py-2', controls: ['size'] }
+    expect(controlsForRegion(controls, dock, PALETTE).map((c) => c.id)).toEqual(['size'])
+  })
+
+  it('CRITICAL: it narrows the scope it is GIVEN — the same id means different things', () => {
+    // 'size' is font size in the text set and scale in the picture set. The allowlist
+    // filters whatever the scope produced; it never reaches across for an id.
+    const chromeDock = { key: 'dock', label: 'Dock', scope: 'chrome' as const, base: 'flex px-3 py-2', controls: ['size'] }
+    expect(controlsForRegion(controls, chromeDock, PALETTE)).toEqual([]) // chrome has no scale
+  })
+
+  it('CRITICAL: it can only NARROW — an unknown id is dropped, never invented', () => {
+    // A site built against a newer editor must degrade to fewer controls, not to a
+    // broken one; and naming a control its scope never had must not conjure it.
+    const region = {
+      key: 'dock',
+      label: 'Dock',
+      scope: 'chrome' as const,
+      base: 'flex px-3 py-2',
+      controls: ['size', 'nonsense-control', 'underline'],
+    }
+    const ids = controlsForRegion(controls, region, PALETTE).map((c) => c.id)
+    expect(ids).not.toContain('nonsense-control')
+    expect(ids).not.toContain('underline') // chrome never had it
+  })
+
+  it('a region with NO allowlist is unchanged — the field is opt-in', () => {
+    const bare = { key: 'dock', label: 'Dock', scope: 'chrome' as const, base: 'flex px-3 py-2' }
+    expect(controlsForRegion(controls, bare, PALETTE).length).toBeGreaterThan(1)
+  })
+})
+
 describe('controlsForRegion — a MEDIA region is a picture, not a paragraph', () => {
   const portrait = { key: 'portrait', label: 'Portrait', scope: 'media' as const, base: 'opacity-80 grayscale' }
 

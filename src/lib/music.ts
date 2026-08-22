@@ -22,6 +22,7 @@ export {
   type ReleaseProvenance,
   type TrackProvenance,
 } from '@lone-star/music-rules'
+import { orderMusicProjects } from '@samfox1/site-bridge/music'
 
 /** The platform id/link columns a union-model track can carry (subset of TrackProvenance). */
 export type TrackPlatformIds = {
@@ -87,6 +88,11 @@ export type ProjectTrack = {
   /** The library position — the Music panel's drag order. Optional so older callers
    *  (and tests) that never number tracks keep the date sort below. */
   sort_order?: number | null
+  /** The song's OWN release date. Only consulted for a STANDALONE song — a parented one
+   *  is dated by its record, so a stray value on one track can't move the project out
+   *  from under the others. Before 2026-08-21 a parent-less song had no date at all, so
+   *  it fell in the undated tail and could never wear the NEW badge. */
+  release_date?: string | null
 }
 export type ReleaseMeta = {
   title: string | null
@@ -107,7 +113,7 @@ export function groupTracksIntoProjects(
   tracks: ProjectTrack[],
   releaseById: (id: string) => ReleaseMeta | undefined,
 ): MusicProject[] {
-  type G = { key: string; releaseId: string | null; type: string; title: string | null; ids: string[]; anyOnSite: boolean; minSort: number }
+  type G = { key: string; releaseId: string | null; type: string; title: string | null; ids: string[]; anyOnSite: boolean; minSort: number; ownDate: string | null }
   const groups = new Map<string, G>()
   for (const t of tracks) {
     // The parent release groups; a parent-less song is its own project. The two key
@@ -115,7 +121,7 @@ export function groupTracksIntoProjects(
     const key = t.release_id ? `release:${t.release_id}` : `track:${t.id}`
     const g =
       groups.get(key) ??
-      { key, releaseId: t.release_id ?? null, type: t.release_type ?? 'single', title: t.title ?? null, ids: [], anyOnSite: false, minSort: Number.MAX_SAFE_INTEGER }
+      { key, releaseId: t.release_id ?? null, type: t.release_type ?? 'single', title: t.title ?? null, ids: [], anyOnSite: false, minSort: Number.MAX_SAFE_INTEGER, ownDate: t.release_date ?? null }
     g.ids.push(t.id)
     g.minSort = Math.min(g.minSort, t.sort_order ?? 0)
     // A null on_site is OFF here. This is the OPPOSITE of every SQL door, which does
@@ -127,33 +133,33 @@ export function groupTracksIntoProjects(
     groups.set(key, g)
   }
 
-  // MANUAL MODE, the tour-dates rule (2026-08-18): a drag in the editor's Music panel
-  // renumbers every track, so DISTINCT project minimums mean the manager ordered them —
-  // their order IS the order. A never-dragged catalog (synced rows all sort_order 0,
-  // or one project) keeps the newest-first date sort below.
-  const mins = [...groups.values()].map((g) => g.minSort)
-  const manual = new Set(mins).size > 1
-  const ordered = manual
-    ? [...groups.values()].sort((a, b) => a.minSort - b.minSort)
-    : [...groups.values()]
-  return ordered
-    .map((g) => {
+  // Ordering is `orderMusicProjects` in the BRIDGE, not a rule restated here: the panel
+  // and the connected site's grid have to agree about which cover is top-left, and the
+  // two copies of this drifted until a dragged SoundCloud single sat first in the panel
+  // and last on the site (2026-08-21). Resolve each project's date first so the law sees
+  // the same `date` the site does.
+  return orderMusicProjects(
+    [...groups.values()].map((g) => {
       const r = g.releaseId ? releaseById(g.releaseId) : undefined
       return {
         key: g.key,
         title: r?.title ?? g.title ?? 'Untitled',
         releaseType: g.type,
-        releaseDate: r?.release_date ?? null,
+        releaseDate: r?.release_date ?? g.ownDate,
         trackIds: g.ids,
         anyOnSite: g.anyOnSite,
+        minSort: g.minSort,
+        date: r?.release_date ?? g.ownDate,
       }
-    })
-    .sort((a, b) => {
-      if (manual) return 0 // dragged order already applied above; keep it stable
-      // Newest first; a project with no date sorts last (a stable, if arbitrary, tail).
-      if (!a.releaseDate && !b.releaseDate) return 0
-      if (!a.releaseDate) return 1
-      if (!b.releaseDate) return -1
-      return b.releaseDate.localeCompare(a.releaseDate)
-    })
+    }),
+    // Rebuilt explicitly rather than rest-spread: `minSort`/`date` exist only to feed the
+    // ordering law, and naming the six fields that survive is clearer than dropping two.
+  ).map((p) => ({
+    key: p.key,
+    title: p.title,
+    releaseType: p.releaseType,
+    releaseDate: p.releaseDate,
+    trackIds: p.trackIds,
+    anyOnSite: p.anyOnSite,
+  }))
 }

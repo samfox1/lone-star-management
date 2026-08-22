@@ -31,7 +31,7 @@ const COVER_RULES = {
 }
 
 type Step = 'choose' | 'manual' | 'streaming' | 'streaming-review'
-type Format = 'single' | 'ep' | 'album' | 'remix'
+type Format = 'single' | 'ep' | 'album' | 'remix' | 'live'
 type Released = 'released' | 'unreleased'
 type SongRow = { id: string; title: string; contributors: string; file: File | null }
 
@@ -40,6 +40,32 @@ type SongRow = { id: string; title: string; contributors: string; file: File | n
 // never a ref accessed during render.
 let rowSeq = 0
 const newRow = (): SongRow => ({ id: `r${rowSeq++}`, title: '', contributors: '', file: null })
+
+/**
+ * What ONE streaming link can be. A link is a single song, so this is the song's kind —
+ * never EP/album, which are uploads of several songs. 'live' joined in 2026-08-21.
+ */
+const STREAMING_TYPES = ['single', 'remix', 'live'] as const
+type StreamingType = (typeof STREAMING_TYPES)[number]
+const STREAMING_TYPE_LABEL: Record<StreamingType, string> = {
+  single: 'Original',
+  remix: 'Remix',
+  live: 'Live',
+}
+
+/**
+ * Best-guess a pasted link's type from its resolved title, for the manager to confirm.
+ *
+ * REMIX WINS a title holding both ("Live Wire [Skeen Remix]"): a remix of a live cut is
+ * still a remix, whereas the reverse reading — a live performance that is also a remix —
+ * is not a thing the catalog has. Live needs the word on a boundary, so "Living Room"
+ * and "Olive" do not become concert recordings.
+ */
+export function guessStreamingType(title: string): StreamingType {
+  if (/\bremix\b/i.test(title)) return 'remix'
+  if (/\blive\b/i.test(title)) return 'live'
+  return 'single'
+}
 
 /**
  * THE add-music flow (the Music page's single + button). Two ways in:
@@ -62,8 +88,11 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   const [released, setReleased] = useState<Released | null>(null) // deliberate: no default
   const [urls, setUrls] = useState<StreamingUrls>({})
   // A streaming link (SoundCloud etc.) carries no album/type, so the manager tags it.
-  // Only single | remix — an EP/album is an upload of multiple songs, not one link.
-  const [streamingType, setStreamingType] = useState<'single' | 'remix' | null>(null)
+  // One link is one song, so the choice is what KIND of song: an original, a remix, or a
+  // recording of a performance (Sam, 2026-08-21 — his Navy Pier set arrived as exactly
+  // this and had to be filed under 'remix' for want of anywhere else to put it). EP/album
+  // is absent because that is an upload of multiple songs, not one link.
+  const [streamingType, setStreamingType] = useState<StreamingType | null>(null)
   const [coverFile, setCoverFile] = useState<File | null>(null)
   // The streaming REVIEW step: what the service resolved (or blanks it couldn't), which the
   // manager confirms/fills before the row is written. reviewCoverUrl is the detected cover;
@@ -139,9 +168,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
       setReviewTitle(title)
       setReviewContributors(resolved.ok ? resolved.song.contributors.join(', ') : '')
       setReviewCoverUrl(resolved.ok ? resolved.song.cover_url : null)
-      // Best-guess the remix flag from the title ("… [remix]", "… Remix") — the manager
+      // Best-guess the type from the title ("… [remix]", "LIVE @ …") — the manager
       // confirms it on the review step, so a wrong guess is one click to fix.
-      setStreamingType(/\bremix\b/i.test(title) ? 'remix' : 'single')
+      setStreamingType(guessStreamingType(title))
       setStep('streaming-review')
     } finally {
       setBusyBoth(false)
@@ -196,7 +225,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
         }
       } else {
         // ----- manual: single OR a grouped record (EP/album) -----------------
-        if (!format) return setError('Pick single, EP, or album.')
+        if (!format) return setError('Pick a format.')
         if (grouped && !releaseTitle.trim()) return setError(`Give the ${format.toUpperCase()} a title.`)
         if (!released) return setError('Choose released or unreleased.')
         for (const [i, r] of rows.entries()) {
@@ -469,6 +498,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               <div className="mt-4 grid grid-cols-2 gap-2.5">
                 {tile(() => { setFormat('single'); setRows([newRow()]) }, 'tracks', 'Single')}
                 {tile(() => { setFormat('remix'); setRows([newRow()]) }, 'tracks', 'Remix')}
+                {tile(() => { setFormat('live'); setRows([newRow()]) }, 'tracks', 'Live')}
                 {tile(() => { setFormat('ep'); setRows([newRow(), newRow()]) }, 'releases', 'EP')}
                 {tile(() => { setFormat('album'); setRows([newRow(), newRow()]) }, 'releases', 'Album')}
               </div>
@@ -574,20 +604,20 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     />
                   )}
                 </div>
-                {/* Required: the manager confirms the machine's remix guess (from the title). */}
+                {/* Required: the manager confirms the machine's guess (from the title). */}
                 <div>
                   <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                    Is this a remix?
+                    Song type
                   </span>
                   <div className="flex gap-2">
-                    {(['single', 'remix'] as const).map((t) => (
+                    {STREAMING_TYPES.map((t) => (
                       <button
                         key={t}
                         type="button"
                         onClick={() => setStreamingType(t)}
                         className={buttonClass(streamingType === t ? 'solid' : 'ghost')}
                       >
-                        {t === 'remix' ? 'Yes, a remix' : 'No, original'}
+                        {STREAMING_TYPE_LABEL[t]}
                       </button>
                     ))}
                   </div>

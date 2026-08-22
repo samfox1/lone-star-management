@@ -153,6 +153,9 @@ export async function getWorkingSitePayload(
             album_name: (s.album_name as string | null) ?? null,
             release_id: (s.release_id as string | null) ?? null,
             sort_order: (s.sort_order as number) ?? 0,
+            // A song's OWN date (20260821, snapshotted from this release onward). Only
+            // meaningful for a standalone — one on a record is dated by the record.
+            release_date: (s.release_date as string | null) ?? null,
             source: (s.source as string | null) ?? null,
             spotify_id: (s.spotify_id as string | null) ?? null,
             apple_id: (s.apple_id as string | null) ?? null,

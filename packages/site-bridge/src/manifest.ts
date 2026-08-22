@@ -23,7 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
-export const PACKAGE_VERSION = '0.28.0'
+export const PACKAGE_VERSION = '0.32.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -127,6 +127,40 @@ export type ManifestStyleRegion = {
    *  overwhelming majority of them and absurd on a photograph: Sam opened his portrait and
    *  was offered Boldness, Font color and Underline (2026-08-21). */
   scope?: 'site' | 'chrome' | 'item' | 'icons' | 'media'
+  /**
+   * EXACTLY the controls this region offers, by id, overriding whatever its scope would
+   * have given it (0.29.0). For a region whose editing is genuinely narrower than any
+   * scope: ftbk's dock is one Size slider and nothing else, because everything else about
+   * that bar is the site's design (Sam, 2026-08-21: "for the footer, it is only size,
+   * that is the only slider").
+   *
+   * An id the editor does not know is DROPPED rather than invented — a site built against
+   * a newer editor must degrade to fewer controls, never to a broken one. Listing an id
+   * its scope never had is the same: the allowlist narrows, it cannot conjure.
+   */
+  controls?: readonly string[]
+  /**
+   * SLIDERS THIS SITE INVENTS (0.30.0) — for a knob only the site can implement.
+   *
+   * ftbk's wallpaper fades into the desktop behind it through a radial mask; nothing in
+   * the editor's vocabulary is that, and nothing should be — it is one site's idea (Sam,
+   * 2026-08-21: "Add a fade slider… There are going to be some custom editing panels for
+   * this site"). So the site declares the slider and OWNS the meaning: the editor renders
+   * it, stores `<id>-[<value><unit>]` in the region's classes like any other token, and
+   * the site reads it back and does whatever it means.
+   *
+   * The editor deliberately does NOT try to apply these — a class it invented rules for
+   * would collide with the site's own the moment the site changed its mind.
+   */
+  customControls?: readonly {
+    /** Token prefix AND control id. Lowercase, no dashes (`fade` → `fade-[40%]`). */
+    id: string
+    label: string
+    /** Low → high. The FIRST is what an unset region reads as. */
+    steps: readonly number[]
+    /** Appended to the number inside the brackets (`%`, `px`). Default `%`. */
+    unit?: string
+  }[]
 }
 
 /** A link-powered element — one `data-lse-link="<key>"` <a> whose href is editable by

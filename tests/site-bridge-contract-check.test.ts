@@ -262,3 +262,30 @@ describe("5. a claimed property is a variable, never an inline value", () => {
     expect(checkContract({ ...base, manifest: unclaimed, editableDom: inlined })).toEqual([]);
   });
 });
+
+
+describe('the tokens.css check — the cheapest rule, and the most repeated failure', () => {
+  it('CRITICAL: a site whose CSS never imports tokens.css is flagged', () => {
+    // Without it every style class the editor applies arrives at runtime, Tailwind
+    // compiles none of them, and every control except colour silently does nothing. Its
+    // own header calls this "the drift bug of 2026-08-05, three times"; ftbk was the
+    // fourth, and each time the symptom is a manager saying the sliders do nothing.
+    const findings = checkContract({ ...base, mainCss: '@import "tailwindcss";' })
+    expect(findings.map((f) => f.check)).toContain('tokens-not-compiled')
+  })
+
+  it('CRITICAL: a site that DOES import it passes', () => {
+    // The other half: without this the check could pass by flagging everything.
+    const findings = checkContract({
+      ...base,
+      mainCss: '@import "tailwindcss";\n@import "@samfox1/site-bridge/tokens.css";',
+    })
+    expect(findings.map((f) => f.check)).not.toContain('tokens-not-compiled')
+  })
+
+  it('a site that passes no CSS is not accused — the input is optional', () => {
+    // Older connected sites call checkContract without it; silence must not become a
+    // failure for them.
+    expect(checkContract(base).map((f) => f.check)).not.toContain('tokens-not-compiled')
+  })
+})

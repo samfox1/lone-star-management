@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, listContent } from '@/lib/content'
 import { groupTracksIntoProjects } from '@/lib/music'
+import { isNewRelease } from '@samfox1/site-bridge/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
@@ -238,6 +239,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   // The Music panel lists PROJECTS, not songs, newest-first: songs grouped by their PARENT
   // release (groupTracksIntoProjects), a parent-less song standing alone. `on_site` on the
   // songs is the only visibility gate; a project's cover is its first song's art.
+  // ONE "today" for the whole page — the same seam the site threads into its own badge,
+  // so the panel and the grid can never disagree about which covers are new.
+  const today = new Date().toISOString().slice(0, 10)
   const releaseById = new Map(releaseRows.map((r) => [r.id as string, r]))
   const trackById = new Map(trackRows.map((t) => [t.id as string, t]))
   const releases: EditorProject[] = groupTracksIntoProjects(
@@ -248,6 +252,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       title: (t.title as string | null) ?? null,
       on_site: (t.on_site as boolean | null) ?? false,
       sort_order: (t.sort_order as number | null) ?? null,
+      release_date: (t.release_date as string | null) ?? null,
     })),
     (rid) => {
       const r = releaseById.get(rid)
@@ -260,6 +265,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     kind: p.releaseType,
     songs: p.trackIds.map((id) => ({ id, title: (trackById.get(id)?.title as string | null) ?? 'Untitled' })),
     onSite: p.anyOnSite,
+    // Out in the last week. `today` is stamped once for the whole render (below) rather
+    // than per project, so every card on one screen is judged against the same day.
+    isNew: isNewRelease(p.releaseDate, today),
   }))
 
   // Draft ≠ published? Computed server-side so Revert changes survives a refresh

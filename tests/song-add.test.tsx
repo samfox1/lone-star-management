@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
-import { SongAddButton, parseContributors } from '@/app/artists/[id]/(dashboard)/music/song-add'
+import { SongAddButton, guessStreamingType, parseContributors } from '@/app/artists/[id]/(dashboard)/music/song-add'
 import { resolveStreamingSongAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 const inserted: Record<string, unknown>[] = []
@@ -141,11 +141,49 @@ describe('SongAddButton', () => {
     const title = await within(dialog).findByPlaceholderText('Song title')
     expect(title).toHaveValue('')
     fireEvent.change(title, { target: { value: 'Hand Typed' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, a remix' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remix' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(1))
     expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Hand Typed', release_type: 'remix', released: true })
+  })
+
+  /**
+   * LIVE PERFORMANCE (Sam, 2026-08-21). Both entry points are HAND-LISTED tile sets, not
+   * derived from RELEASE_TYPES — so adding the type to the registry alone leaves a
+   * manager with no way to pick it. These two pin the way in; without them the feature
+   * ships invisible.
+   */
+  it('streaming: a live recording can be tagged Live and stores release_type live', async () => {
+    vi.mocked(resolveStreamingSongAction).mockResolvedValueOnce({ ok: false as const, error: 'no metadata' })
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
+    fireEvent.change(within(dialog).getByPlaceholderText('https://soundcloud.com/…'), {
+      target: { value: 'https://soundcloud.com/skeen/navy-pier' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+
+    const title = await within(dialog).findByPlaceholderText('Song title')
+    fireEvent.change(title, { target: { value: 'Skeen LIVE @ Navy Pier' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Live' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(inserted).toHaveLength(1))
+    expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Skeen LIVE @ Navy Pier', release_type: 'live' })
+  })
+
+  it('manual: a Live tile writes release_type live on the song', async () => {
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Add Manually'))
+    fireEvent.click(within(dialog).getByText('Live'))
+    fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Navy Pier Set' } })
+    dropAudio(dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'released' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(inserted).toHaveLength(1))
+    // A live recording is ONE song, like a single — not a grouped release with rows.
+    expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Navy Pier Set', release_type: 'live', release_id: null })
   })
 
   it('single: one song, required released choice blocks until picked', async () => {
@@ -242,5 +280,31 @@ describe('SongAddButton', () => {
       await waitFor(() => expect(inserted).toHaveLength(1))
       expect(inserted[0]).toMatchObject({ __table: 'tracks', released: true, on_site: true })
     })
+  })
+})
+
+/**
+ * The pasted-link type guess. Every case here is one the manager would otherwise have to
+ * correct by hand on every SoundCloud add — and the two negatives are the reason it is a
+ * word-boundary match rather than a substring one.
+ */
+describe('guessStreamingType', () => {
+  it('reads a live recording out of the title', () => {
+    expect(guessStreamingType('Skeen LIVE @ Navy Pier Open Air')).toBe('live')
+    expect(guessStreamingType('Small Talk (Live)')).toBe('live')
+  })
+
+  it('lets REMIX win a title that claims both', () => {
+    // A remix of a live cut is still a remix; the reverse is not a thing.
+    expect(guessStreamingType('Live Wire [Skeen Remix]')).toBe('remix')
+  })
+
+  it('does not find a concert inside an ordinary word', () => {
+    expect(guessStreamingType('Living Room')).toBe('single')
+    expect(guessStreamingType('Olive')).toBe('single')
+  })
+
+  it('falls back to an original when the title claims nothing', () => {
+    expect(guessStreamingType('Rushing Back')).toBe('single')
   })
 })

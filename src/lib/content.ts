@@ -169,7 +169,11 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // 20260706170000, and 20260709120000 removed the last string-match fallback
     // from get_release. It is kept ONLY because skeen-website still reads it as a
     // subtitle/title fallback (lib/mapSite.ts). Never key logic off it.
-    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released'],
+    // `release_date` is a song's OWN date. It was an editable field that was never
+    // snapshotted, so a standalone single's date reached the site as null — no NEW badge
+    // could light for one, and the date sort put every dated SoundCloud song in the
+    // undated tail (2026-08-21).
+    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'release_date', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {

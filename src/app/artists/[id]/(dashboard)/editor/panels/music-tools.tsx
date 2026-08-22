@@ -122,6 +122,16 @@ export function MusicTools({
                         <span className="absolute left-1 top-1 rounded bg-ink/70 px-1 py-0.5 font-space text-[8px] font-bold uppercase tracking-[0.06em] text-paper">
                           {RELEASE_TYPE_LABEL[r.kind as ReleaseType] ?? r.kind}
                         </span>
+                        {/* Out in the last week. BOTTOM-left, not top-right: OnSiteDot owns
+                            `right-1 top-1` on this same card, and a badge under the one
+                            control that turns a project on is a badge nobody can read.
+                            Accent rather than the type tag's ink wash — it is the one thing
+                            on this cover that expires. */}
+                        {r.isNew && (
+                          <span className="absolute bottom-1 left-1 rounded bg-accent px-1 py-0.5 font-space text-[8px] font-bold uppercase tracking-[0.06em] text-paper">
+                            NEW
+                          </span>
+                        )}
                       </div>
                       <div className={cx('px-1.5 py-1', dim)}>
                         <span className="block truncate text-[11px] text-ink">{r.title || 'Untitled'}</span>

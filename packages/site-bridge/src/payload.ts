@@ -42,6 +42,12 @@ export type SiteTrack = {
   /** The release this track is assigned to (umbrella membership), or null. */
   release_id: string | null
   sort_order: number
+  /** The song's OWN release date (`YYYY-MM-DD`), or null. Only meaningful for a
+   *  STANDALONE song — one on a record is dated by the record, which rides
+   *  `get_public_releases`. Added 2026-08-21 so a dated SoundCloud single can sort by
+   *  date and wear the NEW badge; ABSENT on every revision published before that, so
+   *  always read it with `?? null`. */
+  release_date?: string | null
   /** Provenance (who created the row + which platforms carry it). Rides the
    *  snapshot for the doors' Released/Unreleased gate; public-safe (the ids are
    *  platform-URL components). Absent on revisions published before the union

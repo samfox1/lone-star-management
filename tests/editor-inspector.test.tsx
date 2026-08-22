@@ -1363,6 +1363,21 @@ describe('EditorInspector — Music panel (projects)', () => {
     renderInspector([], { releases })
     fireEvent.click(screen.getByRole('button', { name: /Music/ }))
   }
+  /**
+   * The NEW badge (Sam, 2026-08-21). The panel is where the manager checks their own
+   * work, so it has to show the same badge the fans will see — the site's grid renders
+   * it from the same `isNewRelease` law.
+   */
+  it('CRITICAL: a project released in the last week wears a NEW badge', () => {
+    openMusic([{ ...RELEASES[0], isNew: true }, RELEASES[1]])
+    expect(screen.getAllByText('NEW')).toHaveLength(1)
+  })
+
+  it('an older project wears none', () => {
+    openMusic([RELEASES[0], RELEASES[1]])
+    expect(screen.queryByText('NEW')).toBeNull()
+  })
+
 
   it('the grid tile is just icon + label — no on-site count (Sam, 2026-08-12)', () => {
     renderInspector([], { releases: RELEASES })
