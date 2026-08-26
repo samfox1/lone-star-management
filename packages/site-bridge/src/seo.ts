@@ -69,10 +69,18 @@ export type JsonLdOptions = {
   releases?: readonly SiteRelease[] | null
   /** The artist's logo/photo URL for `image`/`logo`. */
   imageUrl?: string | null
-  /** Turns a media `path` into its public URL. Omit and no image entries are emitted. */
-  mediaUrl?: (path: string) => string
+  /**
+   * The images the page actually SHOWS, and how: return the rendered `<img src>` (the
+   * same URL, so Google can pair the node with the picture) and the alt it carries, or
+   * null to leave that media row out. Omit and no image entries are emitted — the bridge
+   * cannot know which rows a site places. Pass the same function that renders your alts.
+   */
+  listImage?: (m: WireMedia) => { url: string; alt?: string | null } | null
   /** Turns an uploaded video's `storage_path` into its public URL (VideoObject.contentUrl). */
   videoUrl?: (path: string) => string
+  /** A poster image URL for an uploaded video, when the site has one. Without a thumbnail
+   *  an uploaded video is left out (Google requires thumbnailUrl). */
+  videoPoster?: (v: SiteVideo) => string | null | undefined
   /** ISO date (YYYY-MM-DD). Shows on or after it are upcoming; omit to trust `is_past`. */
   today?: string
   /** The /about page URL when the bio lives there, so the graph can point at it. */
@@ -89,8 +97,11 @@ const RELEASE_TYPE: Record<string, string> = {
 
 function isUpcoming(show: SiteTourDate, today?: string): boolean {
   if (!show.date) return false
+  // The manager's flag wins over the calendar: a show marked past (done, cancelled) is
+  // never advertised, whatever its date says — the page lists it under Past too.
+  if (show.is_past === true) return false
   if (today) return show.date.slice(0, 10) >= today
-  return show.is_past !== true
+  return true
 }
 
 /** Social profile URLs only (a platform the bridge knows), https, de-duplicated. */
@@ -114,8 +125,9 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
   const location = (a.location ?? '').trim()
   const sameAs = sameAsFrom(payload)
   const person = a.schema_type === 'Person'
-  // `foundingLocation` is an Organization property (MusicGroup is one); a Person has
-  // `homeLocation`. Same fact, the property schema.org defines for that type.
+  // `foundingLocation`, `logo` and `genre` are Organization/MusicGroup properties; a
+  // Person has `homeLocation` and `image`, and no genre. Same facts, the properties
+  // schema.org defines for that type — anything else fails the validator.
   const place = location ? { '@type': 'Place', name: location } : null
   return {
     '@type': person ? 'Person' : 'MusicGroup',
@@ -123,15 +135,18 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
     name: a.name,
     url: `${opts.origin}/`,
     ...(seo.description ? { description: seo.description } : {}),
-    ...(opts.imageUrl ? { image: opts.imageUrl, logo: opts.imageUrl } : {}),
-    ...(genre.length ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
+    ...(opts.imageUrl ? (person ? { image: opts.imageUrl } : { image: opts.imageUrl, logo: opts.imageUrl }) : {}),
+    ...(genre.length && !person ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
     ...(place ? (person ? { homeLocation: place } : { foundingLocation: place }) : {}),
     ...(sameAs.length ? { sameAs } : {}),
     ...(opts.aboutUrl ? { mainEntityOfPage: opts.aboutUrl } : {}),
   }
 }
 
-function eventNode(show: SiteTourDate, payload: PublicSitePayload, opts: JsonLdOptions): Node {
+function eventNode(show: SiteTourDate, payload: PublicSitePayload, opts: JsonLdOptions): Node | null {
+  // Google requires `location` on an Event. A show with no venue and no city (TBA) has
+  // none to state, so it is left out of the sheet rather than shipped as an error.
+  if (!show.venue && !show.city) return null
   const artist = { '@id': `${opts.origin}/#artist` }
   const where = [show.venue, show.city].filter(Boolean).join(', ')
   const ticket = safeHttpUrl(show.ticket_url)
@@ -196,16 +211,20 @@ function albumNode(r: SiteRelease, payload: PublicSitePayload, opts: JsonLdOptio
     ...(cover ? { image: cover } : {}),
     ...(type ? { albumReleaseType: `https://schema.org/${type}` } : {}),
     ...(sameAs.size ? { sameAs: [...sameAs] } : {}),
-    ...(tracks.length ? { numTracks: tracks.length, track: tracks.map((t) => recordingNode(t, id, opts)) } : {}),
+    // No numTracks: the wire carries on-site songs only, so a count would be a fact about
+    // the page, not the record.
+    ...(tracks.length ? { track: tracks.map((t) => recordingNode(t, id, opts)) } : {}),
   }
 }
 
 function imageNode(m: WireMedia, payload: PublicSitePayload, opts: JsonLdOptions): Node | null {
-  if (!opts.mediaUrl || m.kind === 'none') return null
+  if (!opts.listImage || m.kind === 'none') return null
   if (m.purpose !== 'gallery_image') return null
-  const url = safeHttpUrl(opts.mediaUrl(m.path))
+  const shown = opts.listImage(m)
+  if (!shown) return null
+  const url = safeHttpUrl(shown.url)
   if (!url) return null
-  const text = (m.alt ?? '').trim() || recommendAlt({ artist: payload.artist.name, caption: m.label, kind: m.kind })
+  const text = (shown.alt ?? '').trim() || (m.alt ?? '').trim() || recommendAlt({ artist: payload.artist.name, caption: m.label, kind: m.kind })
   if (m.kind === 'artwork') {
     return {
       '@type': 'VisualArtwork',
@@ -228,20 +247,29 @@ function youtubeThumb(url: string): string | null {
   return m ? `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg` : null
 }
 
-/** One VideoObject per on-site video: an embed (YouTube/SoundCloud) or an upload. Only
- *  what is known is stated — no uploadDate is invented, so Google may not show a rich
- *  result, but the fact sheet never lies. */
+/**
+ * One VideoObject per on-site VIDEO (SoundCloud is an audio player, not a video, and is
+ * left out). Google requires name, thumbnailUrl, uploadDate and description, so a node is
+ * emitted only when all four are known: the thumbnail from YouTube (or the site's
+ * `videoPoster` hook for uploads), the date from when the manager added it. Nothing is
+ * invented; a video that cannot be stated fully is not stated.
+ */
 function videoNode(v: SiteVideo, payload: PublicSitePayload, opts: JsonLdOptions): Node | null {
-  const embed = safeHttpUrl(v.embed_url)
+  if (v.provider === 'soundcloud') return null
+  const embed = v.provider === 'youtube' ? safeHttpUrl(v.embed_url) : null
   const content = v.provider === 'uploaded' && v.storage_path && opts.videoUrl ? safeHttpUrl(opts.videoUrl(v.storage_path)) : null
   if (!embed && !content) return null
-  const thumb = embed ? youtubeThumb(embed) : null
+  const thumb = embed ? youtubeThumb(embed) : safeHttpUrl(opts.videoPoster?.(v))
+  const uploadDate = v.created_at ?? null
+  if (!thumb || !uploadDate || !v.title) return null
   return {
     '@type': 'VideoObject',
     name: v.title,
+    description: `${v.title} by ${payload.artist.name}`,
+    thumbnailUrl: thumb,
+    uploadDate,
     ...(embed ? { embedUrl: embed } : {}),
     ...(content ? { contentUrl: content } : {}),
-    ...(thumb ? { thumbnailUrl: thumb } : {}),
     creator: { '@id': `${opts.origin}/#artist` },
   }
 }
@@ -261,7 +289,11 @@ export function jsonLdGraph(payload: PublicSitePayload, opts: JsonLdOptions): { 
       inLanguage: 'en',
     },
   ]
-  for (const show of payload.tour_dates ?? []) if (isUpcoming(show, opts.today)) graph.push(eventNode(show, payload, opts))
+  for (const show of payload.tour_dates ?? []) {
+    if (!isUpcoming(show, opts.today)) continue
+    const node = eventNode(show, payload, opts)
+    if (node) graph.push(node)
+  }
   for (const r of opts.releases ?? []) graph.push(albumNode(r, payload, opts))
   for (const v of payload.videos ?? []) {
     const node = videoNode(v, payload, opts)
@@ -300,7 +332,9 @@ export function lastModifiedFrom(payload: Pick<PublicSitePayload, 'published_at'
   if (payload.published_at) candidates.push(payload.published_at)
   if (today) {
     for (const s of payload.tour_dates ?? []) {
-      if (s.date && s.date.slice(0, 10) <= today) candidates.push(s.date.slice(0, 10))
+      // Strictly before today: on the day itself the page still lists the show as
+      // upcoming (isUpcoming is `>= today`), so nothing has changed yet.
+      if (s.date && s.date.slice(0, 10) < today) candidates.push(s.date.slice(0, 10))
     }
   }
   const stamps = candidates.map((c) => Date.parse(c)).filter((n) => Number.isFinite(n))

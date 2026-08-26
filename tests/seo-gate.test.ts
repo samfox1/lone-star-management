@@ -16,6 +16,8 @@ describe('seoValueError', () => {
   it('CRITICAL: og_image is https only — a javascript: URL never reaches og:image', () => {
     expect(seoValueError('og_image', 'https://cdn.example.com/card.png')).toBeNull()
     expect(seoValueError('og_image', 'javascript:alert(1)')).toBeTruthy()
+    // http:// is a mixed-content preview image on an https site — most scrapers drop it.
+    expect(seoValueError('og_image', 'http://cdn.example.com/card.png')).toBeTruthy()
     expect(seoValueError('og_image', 'data:image/png;base64,AAAA')).toBeTruthy()
   })
   it('about_placement must be in the registry', () => {

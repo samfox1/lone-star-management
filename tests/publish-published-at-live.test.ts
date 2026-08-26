@@ -56,4 +56,13 @@ describe('published_at on the wire', () => {
       .single()
     expect(Date.parse(after!)).toBe(Date.parse(newest!.published_at as string))
   })
+
+  it('CRITICAL: deleting content and publishing MOVES the stamp too (tombstones count, 20260826170000)', async () => {
+    const before = await publishedAt()
+    await asA.from('media').delete().eq('id', mediaId!)
+    await publishContent(asA, 'media', artistA)
+    const after = await publishedAt()
+    expect(Date.parse(after!)).toBeGreaterThan(Date.parse(before!))
+    mediaId = null // already gone; teardown has nothing to remove
+  })
 })

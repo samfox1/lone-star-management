@@ -2,6 +2,7 @@
 
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import { renameMedia } from '@/lib/media-rename'
+import { artistFactUpdate } from '@/lib/artist-facts'
 
 /**
  * Content server actions for one artist's dashboard. Generic over content type
@@ -271,7 +272,12 @@ export async function saveSiteContentAction(artistId: string, formData: FormData
  */
 export async function saveSeoAction(artistId: string, formData: FormData) {
   const supabase = await createClient()
-  await upsertSiteContentFields(supabase, artistId, SEO_FIELDS, formData)
+  // Through the SEO gate, key by key — the same rules the Site tab enforces (caps, https
+  // social image, the about placement enum). This page bypassed them on day one.
+  for (const field of SEO_FIELDS) {
+    if (!formData.has(field.key)) continue
+    await saveSeoField(supabase, artistId, field.key, String(formData.get(field.key) ?? ''))
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
 
@@ -587,17 +593,9 @@ export async function saveArtistFactAction(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not signed in.' }
-  const trimmed = value.replace(/\s+/g, ' ').trim()
-  let next: string | null = trimmed || null
-  if (column === 'schema_type') {
-    if (trimmed !== 'MusicGroup' && trimmed !== 'Person') return { ok: false, error: 'Unknown artist type.' }
-    next = trimmed
-  } else if (column === 'genre' || column === 'location') {
-    if (trimmed.length > 120) return { ok: false, error: 'Keep it under 120 characters.' }
-  } else {
-    return { ok: false, error: 'Unknown field.' }
-  }
-  const { error } = await supabase.from('artists').update({ [column]: next }).eq('id', artistId)
+  const upd = artistFactUpdate(column, value)
+  if ('error' in upd) return { ok: false, error: upd.error }
+  const { error } = await supabase.from('artists').update({ [upd.column]: upd.value }).eq('id', artistId)
   if (error) return { ok: false, error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return { ok: true }

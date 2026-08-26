@@ -140,7 +140,7 @@ export const SEO_LIMITS: Record<string, number> = {
 export function seoValueError(key: string, value: string): string | null {
   if (!SEO_FIELDS.some((f) => f.key === key)) return 'Unknown SEO field.'
   if (!value) return null
-  if (key === 'og_image') return safeHttpUrl(value) ? null : 'The social image must be an https URL.'
+  if (key === 'og_image') return safeHttpUrl(value) && /^https:/i.test(value) ? null : 'The social image must be an https URL.'
   if (key === 'about_placement') {
     return (ABOUT_PLACEMENTS as readonly string[]).includes(value) ? null : 'Unknown about placement.'
   }

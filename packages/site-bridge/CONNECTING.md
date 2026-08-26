@@ -330,8 +330,9 @@ What it checks, and what each one is about:
 4. **An empty payload invents nothing.** Pass `publishedValues`: strings that exist only
    because someone published them. None may appear when nothing is published.
 5. **A claimed property arrives as a variable** and is never inlined over (§5).
-6. **The public page is findable** — `auditSeo({ home, edit })` from
-   `@samfox1/site-bridge/seo` over your BUILT html returns `[]`: a real meta
+6. **The public page is findable** — NOT part of `checkContract` (it needs the built
+   html, not a DOM): `auditSeo({ home, edit })` from `@samfox1/site-bridge/seo` over your
+   BUILT html returns `[]`: a real meta
    description, a canonical, one `h1`, a heading in every `section[id]`, an `alt` on
    every content image, no `/_next/image` src, JSON-LD that parses, `/edit` noindex.
    Run it in the build-output test, not a unit test: the alt and the headings come from

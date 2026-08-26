@@ -4,6 +4,7 @@
  * clears). RLS scopes every write to the caller's tenant. Runs against the live DB
  * as the seeded manager, restoring what it touches.
  */
+import { SEO_FIELDS } from '@/lib/site-content-schema'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { saveCursorField, saveEditorField } from '@/lib/site-editor/save'
@@ -247,7 +248,9 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
   })
 
   it('REFUSES the SEO keys, which lib/seo.ts reads for every artist', async () => {
-    for (const key of ['seo_title', 'seo_description', 'og_image']) {
+    // Derived from the registry (AGENTS.md rule 4): a key added to SEO_FIELDS is reserved
+    // AND proven reserved on the same day.
+    for (const key of SEO_FIELDS.map((f) => f.key)) {
       expect((await saveEditorField(asA, artistA, CUSTOM, key, 'x')).ok).toBe(false)
     }
   })

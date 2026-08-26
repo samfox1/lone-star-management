@@ -121,7 +121,7 @@ export async function getWorkingSitePayload(
   // The artist row and every section are independent, so fetch them in ONE wave — the
   // artist row used to serially gate the other eight for no reason (a full round-trip
   // before any section query started). A missing artist just discards the rest below.
-  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows, fontRows] =
+  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows] =
     await Promise.all([
       supabase
         .from('artists')
@@ -188,6 +188,13 @@ export async function getWorkingSitePayload(
       .select('region_key, class_names')
       .eq('artist_id', artistId)
       .then(({ data }) => data ?? []),
+    supabase
+      .from('revisions')
+      .select('published_at')
+      .eq('artist_id', artistId)
+      .order('published_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => (data?.[0]?.published_at as string | undefined) ?? null),
     supabase
       .from('artist_fonts_with_slots') // the VIEW: the font plus the slots it fills
       .select('family, label, storage_path, format, slots')

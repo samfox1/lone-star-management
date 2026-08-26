@@ -233,7 +233,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // is_short IS public so the site can split normal videos from Shorts; storage_path
     // IS public so the site can play an uploaded (self-hosted) video. site_role places
     // a video in a named background slot (hero landscape/portrait) — see 20260716200000.
-    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order', 'site_role'],
+    // `created_at` (20260826170000): VideoObject.uploadDate in the JSON-LD fact sheet —
+    // when the manager added it, the one date we actually know.
+    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order', 'site_role', 'created_at'],
     orderBy: ['sort_order', 'created_at'],
   },
   release: {
