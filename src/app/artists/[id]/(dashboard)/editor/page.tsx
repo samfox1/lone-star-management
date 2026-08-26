@@ -1,3 +1,4 @@
+import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, listContent } from '@/lib/content'
 import { groupTracksIntoProjects } from '@/lib/music'
@@ -66,7 +67,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase
       .from('media')
-      .select('id, purpose, storage_path, on_site, orientation, site_role, collection, label')
+      .select('id, purpose, storage_path, on_site, orientation, site_role, collection, label, alt, kind')
       .eq('artist_id', id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
@@ -148,6 +149,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       siteRole: (m.site_role as string | null) ?? null,
       collection: (m.collection as string | null) ?? null,
       label: (m.label as string | null) ?? null,
+      alt: (m.alt as string | null) ?? null,
+      kind: (m.kind as MediaKind | null) ?? null,
     }))
 
 

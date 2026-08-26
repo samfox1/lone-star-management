@@ -262,8 +262,8 @@ declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
 ## Where we are
 
 - [x] Skeen audit committed (`skeen-website` main `1cf370d`)
-- [ ] Phase 1
-- [ ] Phase 2
+- [ ] Phase 1: 1.1 alt text DONE (skeen `9c186b6`) + `seo-check.sh` + baseline
+- [ ] Phase 2: B6b alt + kind DONE 2026-08-26 (migration 20260826120000, Images panel item editor, wire + preview); slug still to do
 - [ ] Phase 3
 - [ ] Phase 4
 

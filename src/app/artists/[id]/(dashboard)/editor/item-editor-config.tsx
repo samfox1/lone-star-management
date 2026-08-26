@@ -1,3 +1,4 @@
+import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { budgetFor, budgetSlotKey, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
   buildBackgroundItemStyleControls,
@@ -22,6 +23,9 @@ import type { EditorVideo, GalleryPhoto, ItemEdit, SiteVideoRole } from './inspe
 export type ItemEditorConfig = {
   /** The item's editable name, where the site reads one. */
   title?: { value: string; onSave: (next: string) => void }
+  /** The image's alt text and JSON-LD kind (SEO_GEO_PLAN B6b) — gallery photos only. */
+  alt?: { value: string; onSave: (next: string) => void }
+  kind?: { value: MediaKind | null; onSave: (next: MediaKind) => void }
   key: string
   preview: React.ReactNode
   candidates: PickCandidate[]
@@ -45,6 +49,8 @@ export type ItemEditorDeps = {
   placePhoto: (p: GalleryPhoto, orientation: Orientation, collection?: string) => void
   /** Rename one photo — debounced through the inspector, saved to `media.label`. */
   renamePhoto: (id: string, label: string) => void
+  setPhotoAlt: (id: string, alt: string) => void
+  setPhotoKind: (id: string, kind: MediaKind) => void
   /** False on a site that locks its look: the panel opens with the title, Replace and
    *  Remove, and no style controls at all. Absent = true. */
   itemStyling?: boolean
@@ -84,7 +90,7 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
           // The SLOT's budget (`polaroid_1_photo` → `polaroid_photo`), not the general
           // image one: the site declared a tighter cap because the card renders small.
           budget={budgetFor(assetBudgets, 'image', budgetSlotKey(item.role))}
-          onUploaded={(m) => deps.placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role, collection: null, label: null })}
+          onUploaded={(m) => deps.placeInSlot(item.role, { ...m, onSite: true, siteRole: item.role, collection: null, label: null, alt: null, kind: null })}
         />
       ),
     }
@@ -116,6 +122,8 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
       // The piece's NAME — what ftbk's desktop prints under its icon. The only thing a
       // locked site lets the manager change about the art itself.
       title: { value: placed.label ?? '', onSave: (next: string) => deps.renamePhoto(placed.id, next) },
+      alt: { value: placed.alt ?? '', onSave: (next: string) => deps.setPhotoAlt(placed.id, next) },
+      kind: { value: placed.kind, onSave: (next: MediaKind) => deps.setPhotoKind(placed.id, next) },
       // A locked site (manifest itemStyling:false) gets the SAME panel with no style
       // controls: Sam, 2026-08-21 — "these images should have their own editing panel,
       // but it should just be for the title of the image".

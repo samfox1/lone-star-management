@@ -1,3 +1,4 @@
+import { MEDIA_KINDS, type MediaKind } from '@samfox1/site-bridge/payload'
 import { useMemo, useState } from 'react'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { applyStyleValue, buildItemStyleControls, fromItemStored, toItemStored, type StyleControl } from '@/lib/site-editor/style-controls'
@@ -23,12 +24,29 @@ import { saveEditorStyleAction } from '../actions'
  * over the element's own classes.
  */
 
+/** Plain words for the fact-sheet kinds. `Record<MediaKind, …>` is the compile guard:
+ *  a kind added to the registry with no label here fails tsc. */
+const KIND_LABEL: Record<MediaKind, string> = { photo: 'Photo', artwork: 'Artwork', none: 'Not listed' }
+
 /**
  * The item's name, saved as it is typed (debounced) rather than staged with the styles.
  * On a site that locks its look this is the ONLY thing about a piece the manager owns:
  * the art is the artist's, the caption is theirs (Sam, 2026-08-21).
  */
 function ItemTitleField({ label, title }: { label: string; title: { value: string; onSave: (next: string) => void } }) {
+  return <ItemTextField heading="Title" label={label} field={title} />
+}
+
+/** One typed-and-saved text row (title, alt text): the same live-save shape for both. */
+function ItemTextField({
+  heading,
+  label,
+  field: title,
+}: {
+  heading: string
+  label: string
+  field: { value: string; onSave: (next: string) => void }
+}) {
   const [text, setText] = useState(title.value)
   // Re-seed when the panel is handed a DIFFERENT item (the editor is one component
   // reused across items), without clobbering what is being typed into this one.
@@ -39,11 +57,11 @@ function ItemTitleField({ label, title }: { label: string; title: { value: strin
   }
   return (
     <>
-      <GroupLabel>Title</GroupLabel>
+      <GroupLabel>{heading}</GroupLabel>
       <div className="px-5 pb-3">
         <input
           value={text}
-          aria-label={`Title for ${label}`}
+          aria-label={`${heading} for ${label}`}
           onChange={(e) => {
             setText(e.target.value)
             title.onSave(e.target.value)
@@ -85,6 +103,8 @@ export function ItemEditor({
   palette,
   onRemove,
   title,
+  alt,
+  kind,
   onApplyStyle,
   onBack,
   measured,
@@ -118,6 +138,9 @@ export function ItemEditor({
    *  name, not a staged style change, and pairing it with Save/Revert would mean a
    *  manager typing a caption is asked what to do about sliders they never touched. */
   title?: { value: string; onSave: (next: string) => void }
+  /** Alt text + JSON-LD kind (SEO_GEO_PLAN B6b). Saved live, like the title. */
+  alt?: { value: string; onSave: (next: string) => void }
+  kind?: { value: MediaKind | null; onSave: (next: MediaKind) => void }
   onApplyStyle?: (key: string, className: string) => void
   onBack: () => void
   /** What this item's element actually renders (bridge 0.25.2, measure-on-open) —
@@ -193,6 +216,29 @@ export function ItemEditor({
         </div>
 
         {title && <ItemTitleField label={label} title={title} />}
+        {alt && <ItemTextField heading="Alt text" label={label} field={alt} />}
+        {kind && (
+          <>
+            <GroupLabel>Type</GroupLabel>
+            <div className="px-5 pb-3">
+              <select
+                value={kind.value ?? ''}
+                aria-label={`Type for ${label}`}
+                onChange={(e) => {
+                  if (e.target.value) kind.onSave(e.target.value as MediaKind)
+                }}
+                className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+              >
+                <option value="">—</option>
+                {MEDIA_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
 
         {controls.length > 0 && <GroupLabel>Style</GroupLabel>}
         <div className="px-5 pb-3">

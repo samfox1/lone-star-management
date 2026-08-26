@@ -5,6 +5,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publishContent } from '@/lib/content'
+import { getWorkingSitePayload } from '@/lib/site'
+import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -17,8 +19,10 @@ const PATH = '%ARTIST%/profile/phase0-media-test.jpg'
 let mediaId: string | null = null
 /** The collection-tagged row the second test plants — deleted by id, same rule. */
 let taggedId: string | null = null
+/** The alt/kind row the third test plants — deleted by id, same rule. */
+let namedId: string | null = null
 
-type WireMediaRow = { path: string; collection?: string | null; label?: string | null }
+type WireMediaRow = { path: string; collection?: string | null; label?: string | null; alt?: string | null; kind?: string | null }
 
 async function publicMedia(): Promise<WireMediaRow[]> {
   const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
@@ -35,14 +39,14 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  for (const id of [mediaId, taggedId]) {
+  for (const id of [mediaId, taggedId, namedId]) {
     if (!id) continue
     await svc.from('media').delete().eq('id', id)
     await svc.from('revisions').delete().eq('entity_id', id)
   }
   // The tagged row was published, so it lives in the media snapshot until the next
   // publish tombstones it — otherwise it lingers on the seed artist's public site.
-  if (taggedId) await publishContent(asA, 'media', artistA)
+  if (taggedId || namedId) await publishContent(asA, 'media', artistA)
 })
 
 describe('media is draft until published', () => {
@@ -97,5 +101,42 @@ describe('media is draft until published', () => {
     // cannot pass by finding some other artist's photo.
     const untagged = (await publicMedia()).find((m) => m.path.endsWith('phase0-media-test.jpg'))
     if (untagged) expect(untagged.collection ?? null).toBeNull()
+  })
+
+  it("CRITICAL: a photo's ALT TEXT and KIND reach the wire AND the preview (SEO_GEO_PLAN B6b)", async () => {
+    // Same three-way agreement as `collection`: column (20260826120000), snapshot list,
+    // door cherry-pick. Plus a fourth: getWorkingSitePayload, which the editor preview
+    // and custom-site draft read — `collection` was missing there and nothing failed.
+    const fullPath = `${artistA}/gallery/phase0-alt-kind-test.jpg`
+    const kind = MEDIA_KINDS[1] // 'artwork' — from the registry, not a literal
+    const { data: row, error } = await asA
+      .from('media')
+      .insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: fullPath, on_site: true, collection: 'photos', alt: 'Skeen at Smartbar, 2024', kind })
+      .select('id')
+      .single()
+    expect(error).toBeNull()
+    namedId = row!.id as string
+
+    await publishContent(asA, 'media', artistA)
+    const wire = (await publicMedia()).find((m) => m.path === fullPath)
+    expect(wire).toBeTruthy()
+    expect(wire!.alt).toBe('Skeen at Smartbar, 2024')
+    expect(wire!.kind).toBe(kind)
+
+    const working = (await getWorkingSitePayload(asA, artistA))!.media.find((m) => m.path === fullPath)
+    expect(working).toBeTruthy()
+    // Every key the door emits, the preview emits with the same value.
+    for (const key of Object.keys(wire!)) {
+      expect((working as Record<string, unknown>)[key], key).toEqual((wire as Record<string, unknown>)[key])
+    }
+  })
+
+  it('rejects a kind outside the registry (CHECK 23514, not RLS: the manager owns the row)', async () => {
+    const { error } = await asA
+      .from('media')
+      .insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/phase0-bad-kind.jpg`, kind: 'sculpture' })
+      .select('id')
+      .single()
+    expect(error?.code).toBe('23514')
   })
 })

@@ -31,6 +31,7 @@ export type {
   MediaPurpose,
   SiteContent,
   SiteStyles,
+  MediaKind,
 } from '@samfox1/site-bridge/payload'
 // Imported AGAIN for local use: `export type ... from` re-exports without binding names
 // in this module's scope, and the query builders below reference them directly.
@@ -44,6 +45,7 @@ import type {
   SiteVideo,
   SiteContent,
   SiteStyles,
+  MediaKind,
 } from '@samfox1/site-bridge/payload'
 
 export type SiteMedia = {
@@ -171,7 +173,7 @@ export async function getWorkingSitePayload(
     workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
-      .select('id, purpose, storage_path, sort_order, on_site, orientation, site_role, label')
+      .select('id, purpose, storage_path, sort_order, on_site, orientation, site_role, label, collection, alt, kind')
       .eq('artist_id', artistId)
       .order('sort_order')
       .order('created_at') // secondary key — matches get_public_site's media order
@@ -217,6 +219,11 @@ export async function getWorkingSitePayload(
       orientation: m.orientation ?? null,
       site_role: m.site_role ?? null,
       label: (m as { label?: string | null }).label ?? null,
+      // Every key the door emits, or the preview drifts from the live site (`collection`
+      // was missing here from 20260821 to 20260826 and nothing failed).
+      collection: (m as { collection?: string | null }).collection ?? null,
+      alt: (m as { alt?: string | null }).alt ?? null,
+      kind: (m as { kind?: MediaKind | null }).kind ?? null,
     }))
 
   // Same key→value shape get_public_site's jsonb_object_agg produces, so preview

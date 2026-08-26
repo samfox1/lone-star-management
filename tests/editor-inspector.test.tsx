@@ -17,6 +17,8 @@ import {
   reorderContentAction,
   placeGalleryPhotoAction,
   setMediaLabelAction,
+  setMediaAltAction,
+  setMediaKindAction,
   saveEditorFieldAction,
   saveEditorLinkAction,
   saveEditorStyleAction,
@@ -33,6 +35,7 @@ import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from 
 import { buildStyleControls, withStyleVars, type SiteStyleOptions,
 } from '@/lib/site-editor/style-controls'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
+import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import type {
   EditorImageField,
   EditorLink,
@@ -57,6 +60,8 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setOnSiteAction: vi.fn(async () => ({})),
   placeGalleryPhotoAction: vi.fn(async () => ({})),
   setMediaLabelAction: vi.fn(async () => ({})),
+  setMediaAltAction: vi.fn(async () => ({})),
+  setMediaKindAction: vi.fn(async () => ({})),
   setSupportUrlAction: vi.fn(async () => ({})),
   assignHeroSlotAction: vi.fn(async () => ({})),
   assignComponentSlotAction: vi.fn(async () => ({})),
@@ -110,6 +115,8 @@ const renameVideoMock = vi.mocked(renameVideoAction)
 const setOnSiteMock = vi.mocked(setOnSiteAction)
 const placePhotoMock = vi.mocked(placeGalleryPhotoAction)
 const renameMock = vi.mocked(setMediaLabelAction)
+const altMock = vi.mocked(setMediaAltAction)
+const kindMock = vi.mocked(setMediaKindAction)
 const setSupportUrlMock = vi.mocked(setSupportUrlAction)
 const saveStyleMock = vi.mocked(saveEditorStyleAction)
 const saveLinkMock = vi.mocked(saveEditorLinkAction)
@@ -118,12 +125,12 @@ const assignSlotMock = vi.mocked(assignComponentSlotAction)
 const setSongsOnSiteMock = vi.mocked(setSongsOnSiteAction)
 
 const PHOTOS: GalleryPhoto[] = [
-  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null, label: null },
+  { id: 'm1', storage_path: 'artist-1/gallery/h-on.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null, label: null, alt: null, kind: null },
   // Off-site horizontal → a candidate in the Horizontal picker.
-  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null, label: null },
-  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical', siteRole: null, collection: null, label: null },
+  { id: 'm2', storage_path: 'artist-1/gallery/h-lib.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null, label: null, alt: null, kind: null },
+  { id: 'm3', storage_path: 'artist-1/gallery/v-on.jpg', onSite: true, orientation: 'vertical', siteRole: null, collection: null, label: null, alt: null, kind: null },
   // Off-site vertical → a candidate in the Vertical picker.
-  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical', siteRole: null, collection: null, label: null },
+  { id: 'm4', storage_path: 'artist-1/gallery/v-lib.jpg', onSite: false, orientation: 'vertical', siteRole: null, collection: null, label: null, alt: null, kind: null },
 ]
 
 const TEXT_FIELDS: EditorTextField[] = [
@@ -334,8 +341,8 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
   it('CRITICAL: each declared collection shows only ITS OWN photos', () => {
     renderInspector(
       [
-        { id: 'w1', storage_path: 'artist-1/gallery/piece.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'works', label: null },
-        { id: 'p1', storage_path: 'artist-1/gallery/holiday.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'photos', label: null },
+        { id: 'w1', storage_path: 'artist-1/gallery/piece.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'works', label: null, alt: null, kind: null },
+        { id: 'p1', storage_path: 'artist-1/gallery/holiday.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: 'photos', label: null, alt: null, kind: null },
       ],
       { imageCollections: TWO_POOLS },
     )
@@ -355,7 +362,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
 
   it("CRITICAL: an UNTAGGED photo lives in the FIRST collection — which is why no site needed a backfill", () => {
     renderInspector(
-      [{ id: 'old', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null, label: null }],
+      [{ id: 'old', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: 'horizontal', siteRole: null, collection: null, label: null, alt: null, kind: null }],
       { imageCollections: TWO_POOLS },
     )
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
@@ -371,7 +378,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     // The bug this pins: a holiday snap added to Photos turning up among the artist's
     // pieces, because the write went in untagged and untagged means "the first pool".
     renderInspector(
-      [{ id: 'lib', storage_path: 'artist-1/gallery/new.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null, label: null }],
+      [{ id: 'lib', storage_path: 'artist-1/gallery/new.jpg', onSite: false, orientation: 'horizontal', siteRole: null, collection: null, label: null, alt: null, kind: null }],
       { imageCollections: TWO_POOLS },
     )
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
@@ -396,7 +403,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     // Regression: an untagged photo (legacy row / Drive import) that's live on the site
     // must not disappear from the editor.
     renderInspector([
-      { id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null, siteRole: null, collection: null, label: null },
+      { id: 'mnull', storage_path: 'artist-1/gallery/legacy.jpg', onSite: true, orientation: null, siteRole: null, collection: null, label: null, alt: null, kind: null },
     ])
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     const imgs = Array.from(document.querySelectorAll('aside img')) as HTMLImageElement[]
@@ -444,6 +451,26 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
     fireEvent.change(screen.getByRole('textbox', { name: /^Title for/ }), { target: { value: 'Szept' } })
     return vi.waitFor(() => expect(renameMock).toHaveBeenCalledWith('artist-1', 'm1', 'Szept'))
+  })
+
+  it("CRITICAL: typing alt text saves it to the photo's own row (SEO_GEO_PLAN B6b)", () => {
+    renderInspector(PHOTOS, { itemStyling: false })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /^Alt text for/ }), { target: { value: 'Skeen at Smartbar' } })
+    return vi.waitFor(() => expect(altMock).toHaveBeenCalledWith('artist-1', 'm1', 'Skeen at Smartbar'))
+  })
+
+  it("CRITICAL: choosing a kind saves it to the photo's own row, offering every registry value", async () => {
+    renderInspector(PHOTOS, { itemStyling: false })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    const select = screen.getByRole('combobox', { name: /^Type for/ }) as HTMLSelectElement
+    // Derived from the registry: a kind added later must show up here or the site can never
+    // receive it (the hand-listed-fixture lesson, AGENTS.md rule 4).
+    expect([...select.options].map((o) => o.value).filter(Boolean).sort()).toEqual([...MEDIA_KINDS].sort())
+    fireEvent.change(select, { target: { value: MEDIA_KINDS[1] } })
+    await vi.waitFor(() => expect(kindMock).toHaveBeenCalledWith('artist-1', 'm1', MEDIA_KINDS[1]))
   })
 
   it('uploading adds to the library (no placement)', () => {
@@ -2484,7 +2511,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
   it('a slot-held photo LEAVES the gallery groups', () => {
     // Otherwise a handwriting PNG would show up in the photo collage.
     const held: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/hand.png', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_1_caption', collection: null, label: null },
+      { id: 'mp', storage_path: 'artist-1/gallery/hand.png', onSite: true, orientation: 'horizontal', siteRole: 'polaroid_1_caption', collection: null, label: null, alt: null, kind: null },
       ...PHOTOS,
     ]
     openImages(held)
@@ -2496,7 +2523,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
 
   it('warns (but does not block) when a PNG-preferring slot holds a non-PNG', () => {
     const jpg: GalleryPhoto[] = [
-      { id: 'mj', storage_path: 'artist-1/gallery/hand.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null, label: null },
+      { id: 'mj', storage_path: 'artist-1/gallery/hand.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null, label: null, alt: null, kind: null },
     ]
     openImages(jpg)
     expect(screen.getByText(/transparent PNG/i)).toBeTruthy()
@@ -2506,14 +2533,14 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
 
   it('does NOT warn when that slot holds a real PNG', () => {
     const png: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/hand.PNG', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null, label: null },
+      { id: 'mp', storage_path: 'artist-1/gallery/hand.PNG', onSite: true, orientation: null, siteRole: 'polaroid_1_caption', collection: null, label: null, alt: null, kind: null },
     ]
     openImages(png)
     expect(screen.queryByText(/transparent PNG/i)).toBeNull()
   })
 
   const HELD_SLOT: GalleryPhoto[] = [
-    { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null, label: null },
+    { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null, label: null, alt: null, kind: null },
   ]
 
   it('CRITICAL: a BACKGROUND slot opens the trimmed editor — Zoom (no zoom out), no Border', () => {
@@ -2521,7 +2548,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     // be certain editable tools like edges or borders … the zoom out shouldn't be
     // available." The slot declares `background: true` (bridge 0.25.1).
     renderInspector(
-      [{ id: 'bg1', storage_path: 'artist-1/gallery/bg.jpg', onSite: true, orientation: 'horizontal', siteRole: 'backdrop_1_desktop', collection: null, label: null }],
+      [{ id: 'bg1', storage_path: 'artist-1/gallery/bg.jpg', onSite: true, orientation: 'horizontal', siteRole: 'backdrop_1_desktop', collection: null, label: null, alt: null, kind: null }],
       {
         components: [
           { key: 'backdrop', label: 'Hero background', count: 1, slots: [{ key: 'desktop', label: 'Desktop (horizontal)', background: true }] },
@@ -2557,7 +2584,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
    *  caption is Slot 2. */
   const TWO_SLOTS: GalleryPhoto[] = [
     ...HELD_SLOT,
-    { id: 'mq', storage_path: 'artist-1/gallery/b.jpg', onSite: true, orientation: null, siteRole: 'polaroid_2_photo', collection: null, label: null },
+    { id: 'mq', storage_path: 'artist-1/gallery/b.jpg', onSite: true, orientation: null, siteRole: 'polaroid_2_photo', collection: null, label: null, alt: null, kind: null },
   ]
 
   it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls, Revert', () => {
@@ -2877,7 +2904,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
   it('a placed slot is selectable and highlights its region in the frame', () => {
     const onHighlight = vi.fn()
     const held: GalleryPhoto[] = [
-      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null, label: null },
+      { id: 'mp', storage_path: 'artist-1/gallery/a.jpg', onSite: true, orientation: null, siteRole: 'polaroid_1_photo', collection: null, label: null, alt: null, kind: null },
     ]
     renderInspector(held, { components: [POLAROID], onHighlight })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))

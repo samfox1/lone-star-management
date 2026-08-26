@@ -1,5 +1,7 @@
 'use server'
 
+import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
+
 /**
  * Content server actions for one artist's dashboard. Generic over content type
  * (track / tour_date / merch / link). Each builds the request-bound Supabase
@@ -556,6 +558,45 @@ export async function placeGalleryPhotoAction(
  * locks its look: the art is the artist's, the caption is the manager's (Sam,
  * 2026-08-21). Draft until republished, like any content edit. RLS scopes the write.
  */
+/** Alt text for one image (SEO_GEO_PLAN B6b). Blank clears it: the site then derives
+ *  one from the title or caption rather than shipping an empty description. Capped so a
+ *  pasted paragraph cannot become an alt attribute. */
+export async function setMediaAltAction(
+  artistId: string,
+  mediaId: string,
+  alt: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const trimmed = alt.trim().slice(0, 300)
+  const { error } = await supabase
+    .from('media')
+    .update({ alt: trimmed || null })
+    .eq('id', mediaId)
+    .eq('artist_id', artistId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/** The image's JSON-LD kind (SEO_GEO_PLAN B4b). Checked against the registry here so
+ *  the manager gets a message, not the column CHECK's raw constraint error. */
+export async function setMediaKindAction(
+  artistId: string,
+  mediaId: string,
+  kind: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  if (!(MEDIA_KINDS as readonly string[]).includes(kind)) return { error: 'Unknown image type.' }
+  const { error } = await supabase
+    .from('media')
+    .update({ kind })
+    .eq('id', mediaId)
+    .eq('artist_id', artistId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
 export async function setMediaLabelAction(
   artistId: string,
   mediaId: string,

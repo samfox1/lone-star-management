@@ -254,7 +254,9 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // `collection` (20260821120000): which declared image pool the photo fills, for a
     // site that renders more than one (ftbk: works vs the Photos app). Null = the
     // first declared collection; the door cherry-picks it (20260821130000).
-    snapshot: ['id', 'purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role', 'label', 'collection'],
+    // `alt` + `kind` (20260826120000): the manager's alt text and the image's JSON-LD
+    // kind. The door cherry-picks both (same migration).
+    snapshot: ['id', 'purpose', 'storage_path', 'sort_order', 'created_at', 'on_site', 'orientation', 'site_role', 'label', 'collection', 'alt', 'kind'],
     orderBy: ['sort_order', 'created_at'],
   },
   // Editable site text (key/value). entity_id = row id; the snapshot carries the

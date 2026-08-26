@@ -1,5 +1,6 @@
 'use client'
 
+import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY } from './inspector-shared'
@@ -48,6 +49,8 @@ import {
   placeGalleryPhotoAction,
   reorderContentAction,
   setMediaLabelAction,
+  setMediaAltAction,
+  setMediaKindAction,
   setOnSiteAction,
 } from '../actions'
 import { useOptimisticRunner } from './use-optimistic'
@@ -508,7 +511,7 @@ export function EditorInspector({
   // A picker upload already wrote the media row (orientation + on_site=false); append it
   // to the LIBRARY so it shows as a candidate in that orientation's picker right away.
   function addPhoto(m: { id: string; storage_path: string; orientation: Orientation }) {
-    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null, collection: null, label: null }]))
+    setPhotos((list) => (list.some((x) => x.id === m.id) ? list : [...list, { ...m, onSite: false, siteRole: null, collection: null, label: null, alt: null, kind: null }]))
   }
 
   /**
@@ -573,6 +576,22 @@ export function EditorInspector({
   function renamePhoto(id: string, label: string) {
     setPhotos((list) => list.map((p) => (p.id === id ? { ...p, label } : p)))
     photoRename.save(id, label)
+  }
+  /** Alt text — same live, debounced, optimistic shape as the title (SEO_GEO_PLAN B6b). */
+  const photoAlt = useDebouncedFieldSave<string>({
+    persist: (id, value) => setMediaAltAction(artistId, id, value).then((r) => ({ ok: !r.error, error: r.error })),
+  })
+  function setPhotoAlt(id: string, alt: string) {
+    setPhotos((list) => list.map((p) => (p.id === id ? { ...p, alt } : p)))
+    photoAlt.save(id, alt)
+  }
+  /** JSON-LD kind — a select, so no debounce; optimistic with rollback. */
+  function setPhotoKind(id: string, kind: MediaKind) {
+    const prev = photos.find((p) => p.id === id)?.kind ?? null
+    setPhotos((list) => list.map((p) => (p.id === id ? { ...p, kind } : p)))
+    void setMediaKindAction(artistId, id, kind).then((r) => {
+      if (r.error) setPhotos((list) => list.map((p) => (p.id === id ? { ...p, kind: prev } : p)))
+    })
   }
 
   // Take a placed photo OFF the site, back into the library (never deletes). Optimistic.
@@ -764,6 +783,8 @@ export function EditorInspector({
       placePhoto,
       unplacePhoto,
       renamePhoto,
+      setPhotoAlt,
+      setPhotoKind,
       itemStyling,
       addPhoto,
       assignHero,
@@ -774,6 +795,8 @@ export function EditorInspector({
     return (
       <ItemEditor
         title={cfg.title}
+        alt={cfg.alt}
+        kind={cfg.kind}
         key={cfg.key}
         artistId={artistId}
         styleKey={cfg.key}

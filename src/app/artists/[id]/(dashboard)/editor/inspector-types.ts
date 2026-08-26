@@ -1,3 +1,4 @@
+import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { type Orientation } from '@/lib/site-editor/gallery'
 
 /**
@@ -28,6 +29,10 @@ export type GalleryPhoto = {
    *  slot key. Null means the site's FIRST declared collection: every photo placed
    *  before collections existed, and every photo on a site that declares just one. */
   collection: string | null
+  /** The manager's alt text (20260826120000); null = the site derives one. */
+  alt: string | null
+  /** JSON-LD kind (see MEDIA_KINDS); null = unset. */
+  kind: MediaKind | null
 }
 export type EditorTextField = {
   key: string

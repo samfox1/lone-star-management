@@ -402,7 +402,7 @@ function SlotTile({
               label="Drop an image or click to upload"
               budget={budget}
               onUploaded={(m) => {
-                onPlaceSlot(role, { ...m, onSite: true, siteRole: role, collection: null, label: null })
+                onPlaceSlot(role, { ...m, onSite: true, siteRole: role, collection: null, label: null, alt: null, kind: null })
                 setPicking(false)
               }}
             />

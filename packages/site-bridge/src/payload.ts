@@ -167,6 +167,12 @@ export type FontSlotMap = Partial<Record<FontSlot, string>>
  *  the receiving site builds URLs against its own Supabase origin), plus orientation and
  *  component-slot role so gallery layouts and placed components render from the draft
  *  exactly as they will from the published site. */
+/** What an image IS for the JSON-LD fact sheet (SEO_GEO_PLAN B4b, 20260826120000):
+ *  `photo` → ImageObject, `artwork` → VisualArtwork, `none` → left out of the graph.
+ *  The registry every select and fixture derives from — never hand-list these. */
+export const MEDIA_KINDS = ['photo', 'artwork', 'none'] as const
+export type MediaKind = (typeof MEDIA_KINDS)[number]
+
 export type WireMedia = {
   /** The media row id (ftbk connection) — what an image ITEM marker carries
    *  (`image:<id>`) so clicks route to the editor's tile. Absent on older revisions. */
@@ -184,6 +190,11 @@ export type WireMedia = {
    *  the FIRST declared collection, so every pre-collection revision keeps rendering
    *  exactly where it did. */
   collection?: string | null
+  /** The manager's alt text (20260826120000). Null/absent = the site derives one from
+   *  what it knows (title, caption, artist name) — never invents. */
+  alt?: string | null
+  /** See MEDIA_KINDS. Null/absent = unset; the site picks its default by artist. */
+  kind?: MediaKind | null
 }
 
 export type PublicSitePayload = {
