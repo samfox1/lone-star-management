@@ -23,7 +23,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
     // Beside SEO on purpose: both own how the artist is REPRESENTED elsewhere (tab icon,
     // social card) rather than what the site contains.
     { seg: 'brand', icon: 'photo', title: 'Brand', desc: 'Logos & browser tab icon' },
-    { seg: 'tools/seo', icon: 'search', title: 'SEO', desc: 'Search & social preview' },
+    { seg: 'tools/seo', icon: 'search', title: 'SEO / GEO', desc: 'Search, social & AI answers' },
     { seg: 'links', icon: 'links', title: 'Links', desc: 'Social & external links' },
     { seg: 'epk', icon: 'epk', title: 'Press kit', desc: 'Shareable EPK one-pager' },
     { seg: 'subscribers', icon: 'list', title: 'Subscribers', desc: 'Emails from the site popup' },

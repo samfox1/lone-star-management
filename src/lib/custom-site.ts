@@ -57,3 +57,18 @@ export async function customSiteUrl(supabase: SupabaseClient, slug: string): Pro
 export function isCustom(row: { site_kind?: string | null; custom_site_url?: string | null } | null): boolean {
   return !!row && row.site_kind === 'custom' && redirectTarget(row.custom_site_url) !== null
 }
+
+/**
+ * The absolute origin of the artist's PUBLIC site, for anything that fetches it as a
+ * crawler would (the SEO page's live check, links to Google's testers): the custom site
+ * when one is connected, else the hosted `/[slug]` page on this app's own origin
+ * (NEXT_PUBLIC_APP_URL), else null.
+ */
+export function publicSiteOrigin(
+  row: { slug?: string | null; site_kind?: string | null; custom_site_url?: string | null } | null,
+): string | null {
+  if (!row) return null
+  if (isCustom(row)) return redirectTarget(row.custom_site_url)!.replace(/\/+$/, '')
+  const app = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+  return app && row.slug ? `${app}/${row.slug}` : null
+}

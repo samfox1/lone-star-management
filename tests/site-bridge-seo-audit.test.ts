@@ -3,7 +3,7 @@
  * page that breaks ONLY it; a page with all of them passes with [].
  */
 import { describe, expect, it } from 'vitest'
-import { auditSeo } from '@samfox1/site-bridge/seo'
+import { auditJsonLd, auditSeo } from '@samfox1/site-bridge/seo'
 
 const GOOD = `<html><head>
 <meta name="description" content="Meet Skeen, a Chicago DJ, producer and filmmaker making house and techno for dark rooms.">
@@ -42,5 +42,35 @@ describe('auditSeo', () => {
     expect(rules(auditSeo({ home: GOOD.replace('<head>', '<head><meta name="robots" content="noindex">') }))).toEqual(['robots'])
     expect(rules(auditSeo({ home: GOOD, edit: '<html><head></head></html>' }))).toEqual(['robots'])
     expect(auditSeo({ home: GOOD, edit: null })).toEqual([])
+  })
+})
+
+describe('auditJsonLd — the fields Google requires', () => {
+  const graph = (nodes: unknown[]) => JSON.stringify({ '@context': 'https://schema.org', '@graph': nodes })
+  it('a complete sheet passes and is counted by type', () => {
+    const r = auditJsonLd(graph([
+      { '@type': 'MusicGroup', name: 'Skeen', url: 'https://x/' },
+      { '@type': 'WebSite', name: 'Skeen', url: 'https://x/' },
+      { '@type': 'MusicEvent', name: 'Skeen at V', startDate: '2026-09-01', location: { '@type': 'Place', name: 'V' } },
+      { '@type': 'MusicAlbum', name: 'EP', byArtist: { '@id': 'a' }, track: [{ '@type': 'MusicRecording', name: 'S', byArtist: { '@id': 'a' } }] },
+    ]))
+    expect(r.findings).toEqual([])
+    expect(r.counts).toEqual({ MusicGroup: 1, WebSite: 1, MusicEvent: 1, MusicAlbum: 1, MusicRecording: 1 })
+  })
+  it('CRITICAL: a missing required field is named, per node — nested tracks included', () => {
+    const r = auditJsonLd(graph([
+      { '@type': 'MusicEvent', name: 'X', startDate: '2026-09-01' },
+      { '@type': 'VideoObject', name: 'V', thumbnailUrl: 'https://t', uploadDate: '2026-01-01' },
+      { '@type': 'MusicAlbum', name: 'EP', byArtist: { '@id': 'a' }, track: [{ '@type': 'MusicRecording', byArtist: { '@id': 'a' } }] },
+    ]))
+    expect(r.findings.map((f) => f.problem)).toEqual([
+      'MusicEvent #1 is missing location',
+      'VideoObject #2 is missing description',
+      'MusicAlbum #3 track 1 is missing name',
+    ])
+  })
+  it('junk input is a finding, never a throw', () => {
+    expect(auditJsonLd('{not json').findings[0].rule).toBe('json-ld')
+    expect(auditJsonLd({ '@context': 'x' }).findings[0].problem).toBe('no @graph array')
   })
 })

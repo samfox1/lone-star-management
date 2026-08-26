@@ -3,6 +3,8 @@
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import { renameMedia } from '@/lib/media-rename'
 import { artistFactUpdate } from '@/lib/artist-facts'
+import { auditLiveSite, type LiveAudit } from '@/lib/seo-audit'
+import { publicSiteOrigin } from '@/lib/custom-site'
 
 /**
  * Content server actions for one artist's dashboard. Generic over content type
@@ -565,6 +567,19 @@ export async function placeGalleryPhotoAction(
  * locks its look: the art is the artist's, the caption is the manager's (Sam,
  * 2026-08-21). Draft until republished, like any content edit. RLS scopes the write.
  */
+/** The SEO / GEO page's live check: fetch the public site and run the bridge audits. */
+export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { url: '', ok: false, rules: [], graph: {}, sitemap: null, robots: null, error: 'Not signed in.' }
+  const { data: artist } = await supabase.from('artists').select('slug, site_kind, custom_site_url').eq('id', artistId).single()
+  const origin = publicSiteOrigin(artist)
+  if (!origin) return { url: '', ok: false, rules: [], graph: {}, sitemap: null, robots: null, error: 'No public site URL to check.' }
+  return auditLiveSite(origin)
+}
+
 /** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
 export async function saveSeoFieldAction(
   artistId: string,

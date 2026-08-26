@@ -425,3 +425,50 @@ export function auditSeo(input: { home: string; edit?: string | null }): SeoFind
   if (edit != null && !/<meta\s+name="robots"[^>]*noindex/i.test(edit)) out.push({ rule: 'robots', problem: '/edit is not noindex' })
   return out
 }
+
+/* ----------------------------------------------------------------------------------
+ * audit — is the fact sheet one Google's Rich Results test would accept?
+ * -------------------------------------------------------------------------------- */
+
+/** The fields Google marks REQUIRED per type (developers.google.com/search/docs). A
+ *  node missing one is reported as an error there, not merely "no rich result". */
+export const JSON_LD_REQUIRED: Record<string, readonly string[]> = {
+  MusicGroup: ['name', 'url'],
+  Person: ['name', 'url'],
+  WebSite: ['name', 'url'],
+  MusicEvent: ['name', 'startDate', 'location'],
+  MusicAlbum: ['name', 'byArtist'],
+  MusicRecording: ['name', 'byArtist'],
+  VideoObject: ['name', 'thumbnailUrl', 'uploadDate', 'description'],
+  ImageObject: ['contentUrl'],
+  VisualArtwork: ['image', 'creator'],
+}
+
+export type JsonLdSummary = { counts: Record<string, number>; findings: SeoFinding[] }
+
+/** Parse an ld+json string (or take the object) and check every `@graph` node. */
+export function auditJsonLd(input: string | unknown): JsonLdSummary {
+  let graph: unknown
+  try {
+    graph = typeof input === 'string' ? JSON.parse(input) : input
+  } catch {
+    return { counts: {}, findings: [{ rule: 'json-ld', problem: 'ld+json does not parse' }] }
+  }
+  const nodes = (graph as { '@graph'?: unknown })?.['@graph']
+  if (!Array.isArray(nodes)) return { counts: {}, findings: [{ rule: 'json-ld', problem: 'no @graph array' }] }
+  const counts: Record<string, number> = {}
+  const findings: SeoFinding[] = []
+  const check = (node: Record<string, unknown>, where: string) => {
+    const type = String(node['@type'] ?? '')
+    counts[type] = (counts[type] ?? 0) + 1
+    for (const field of JSON_LD_REQUIRED[type] ?? []) {
+      const v = node[field]
+      if (v === undefined || v === null || v === '') findings.push({ rule: type, problem: `${where} is missing ${field}` })
+    }
+    if (type === 'MusicAlbum' && Array.isArray(node.track)) {
+      for (const [i, t] of (node.track as Record<string, unknown>[]).entries()) check(t, `${where} track ${i + 1}`)
+    }
+  }
+  for (const [i, n] of (nodes as Record<string, unknown>[]).entries()) check(n, `${String(n['@type'] ?? 'node')} #${i + 1}`)
+  return { counts, findings }
+}
