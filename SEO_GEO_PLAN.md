@@ -262,7 +262,7 @@ declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
 ## Where we are
 
 - [x] Skeen audit committed (`skeen-website` main `1cf370d`)
-- [ ] Phase 1: 1.1 alt text DONE (skeen `9c186b6`) + `seo-check.sh` + baseline
+- [x] Phase 1 DONE 2026-08-26 on skeen main (not yet pushed/deployed): 1.1 alt, 1.2 sr-only h2s, 1.3 /edit noindex, 1.4 vercel header, 1.5 404, 1.6 regex; `seo-check.sh` + baseline
 - [ ] Phase 2: B6b DONE 2026-08-26: alt + kind (20260826120000/130000) + slug rename-by-copy (20260826140000); `Edit alt tag` link → modal (alt, type, file name); `recommendAlt`/`recommendSlug` in the bridge (`@samfox1/site-bridge/alt`). Matte slider removed from image items.
 - [ ] Phase 3
 - [ ] Phase 4
