@@ -159,6 +159,33 @@ skeen's `lib/seo.test.ts` cases and lone-star's `tests/seo.test.ts`; pin the
 override precedence (currently unpinned anywhere); each JSON-LD type has a
 fixture derived from the payload type, not hand-listed.
 
+**B4b. JSON-LD fact sheet (Sam, 2026-08-26).** Invisible to viewers; a
+standardized fact sheet for bots. Focus fields: `@type`, `event`,
+`location`, `track`.
+
+- `artists.schema_type`: `MusicGroup` (default) | `Person` (visual artists).
+  Sets the root `@type`.
+- `media.kind`: `photo` (→ `ImageObject`) | `artwork` (→ `VisualArtwork`) |
+  `none`. Chosen when the image is added, editable after. Default by artist:
+  musicians `photo`, visual artists `artwork`. Logos/favicons: `none`.
+- Graph shape:
+  - root `MusicGroup`/`Person` with `@id`, `name`, `description` (bio),
+    `genre`, `foundingLocation`, `image`, `sameAs`
+  - `track[]`: `MusicRecording` per on-site song (`name`, `byArtist`,
+    `inAlbum`, `url` = stream link)
+  - `album[]`: `MusicAlbum` per release (needs `fetchPublicReleases`)
+  - `event[]`: `MusicEvent` per dated upcoming show. `location` =
+    `Place { name: venue, address { addressLocality: city,
+    addressRegion: state, addressCountry } }`, `offers.url` = ticket link,
+    `performer` = artist + support
+  - one `VisualArtwork` per `artwork` media (`name` = alt or label, `image`,
+    `creator` → artist `@id`); one `ImageObject` per `photo` (`contentUrl`,
+    `caption` = alt)
+  - `WebSite` with `publisher` → artist `@id`
+- All from published data only. Tests: fixture derived from the payload
+  type; Rich Results Test clean; one `MusicEvent` per dated show, none for
+  undated.
+
 **B5. `auditSeo(html: string)`** in the bridge's audit module, run by sites in
 their build-output tests. Takes the HTML string (build tests run in node, no
 DOM); parse with `linkedom` inside the bridge. Checks: meta description present and >60 chars, exactly
@@ -174,7 +201,7 @@ Location. Bio row opens the existing `artist_bio` text editor.
 **B6b. Slug + alt on images.** Migration: `media.slug`, `media.alt`; backfill
 slug from `storage_path`. `renameMediaAction` validates the slug, moves the
 object, updates the row (one transaction; on move failure the row is
-untouched). Images panel tile gets two fields. Tests: slug collision
+untouched). Images panel tile gets three fields: slug, alt, kind (B4b). Tests: slug collision
 rejected; move failure leaves `storage_path` unchanged; `alt` appears in the
 publish snapshot (derive the snapshot fixture from `PUBLISHABLE.media`). Then delete
 `tools/seo` (its Publish button was only there because the page was outside
