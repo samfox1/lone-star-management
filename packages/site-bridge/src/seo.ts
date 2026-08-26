@@ -312,3 +312,45 @@ export function aboutPlacement(payload: Pick<PublicSitePayload, 'site_content'>,
   if (chosen && allowed.has(chosen)) return chosen
   return about?.default && allowed.has(about.default) ? about.default : 'hidden'
 }
+
+/* ----------------------------------------------------------------------------------
+ * audit — does the BUILT html carry what a crawler needs? (CONNECTING §7 rule 6)
+ * -------------------------------------------------------------------------------- */
+
+export type SeoFinding = { rule: string; problem: string }
+
+/**
+ * Run over the prerendered html strings of `/` and (optionally) `/edit`. Regex on
+ * purpose: build tests run in node with no DOM, and every check here is a tag-level
+ * fact, not a layout question. Returns [] when the page is findable.
+ */
+export function auditSeo(input: { home: string; edit?: string | null }): SeoFinding[] {
+  const out: SeoFinding[] = []
+  const { home, edit } = input
+  const desc = home.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1] ?? ''
+  if (desc.length <= 60) out.push({ rule: 'description', problem: `meta description is ${desc.length} chars; needs more than 60` })
+  if (!/<link[^>]*rel="canonical"/i.test(home)) out.push({ rule: 'canonical', problem: 'no canonical link' })
+  const h1 = (home.match(/<h1[\s>]/gi) ?? []).length
+  if (h1 !== 1) out.push({ rule: 'h1', problem: `${h1} h1 elements; needs exactly one` })
+  for (const m of home.matchAll(/<section[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/section>/gi)) {
+    if (!/<h[12][\s>]/i.test(m[2])) out.push({ rule: 'headings', problem: `section #${m[1]} has no h1/h2` })
+  }
+  for (const m of home.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = m[0]
+    if (/\balt=""/.test(tag) && !/aria-hidden/.test(tag)) out.push({ rule: 'alt', problem: `content image with empty alt: ${tag.slice(0, 80)}` })
+    if (!/\balt=/.test(tag)) out.push({ rule: 'alt', problem: `image with no alt attribute: ${tag.slice(0, 80)}` })
+    if (/\bsrc="\/_next\/image/.test(tag)) out.push({ rule: 'src', problem: `image src goes through /_next/image (filename lost): ${tag.slice(0, 80)}` })
+  }
+  const ld = home.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
+  if (!ld) out.push({ rule: 'json-ld', problem: 'no application/ld+json script' })
+  else {
+    try {
+      JSON.parse(ld[1])
+    } catch {
+      out.push({ rule: 'json-ld', problem: 'ld+json does not parse' })
+    }
+  }
+  if (/<meta\s+name="robots"[^>]*noindex/i.test(home)) out.push({ rule: 'robots', problem: 'the homepage is noindex' })
+  if (edit != null && !/<meta\s+name="robots"[^>]*noindex/i.test(edit)) out.push({ rule: 'robots', problem: '/edit is not noindex' })
+  return out
+}

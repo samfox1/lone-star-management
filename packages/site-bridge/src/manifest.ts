@@ -24,7 +24,7 @@
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
 import type { ManifestAbout } from './seo'
-export const PACKAGE_VERSION = '0.32.0'
+export const PACKAGE_VERSION = '0.33.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */

@@ -330,6 +330,12 @@ What it checks, and what each one is about:
 4. **An empty payload invents nothing.** Pass `publishedValues`: strings that exist only
    because someone published them. None may appear when nothing is published.
 5. **A claimed property arrives as a variable** and is never inlined over (§5).
+6. **The public page is findable** — `auditSeo({ home, edit })` from
+   `@samfox1/site-bridge/seo` over your BUILT html returns `[]`: a real meta
+   description, a canonical, one `h1`, a heading in every `section[id]`, an `alt` on
+   every content image, no `/_next/image` src, JSON-LD that parses, `/edit` noindex.
+   Run it in the build-output test, not a unit test: the alt and the headings come from
+   real data. See §10.
 
 Write this one test rather than one per component. skeen had five per-component versions
 of rule 1, all passing, while every heading on its live site carried `data-lse-field` —
@@ -390,6 +396,44 @@ the frame half of this package measures automatically. Older frames simply don't
 it, and the editor falls back to reading the class string as before. (This closes the
 recurring "slider opens mid-scale and the first drag shrinks things" class — six
 sightings, from icon size to line spacing.)
+
+## 10. Be findable (0.33.0)
+
+Search engines index the plumbing; AI answer engines quote the words. A connected site
+supplies both from the published payload, through the builders in
+`@samfox1/site-bridge/seo` — the bridge never writes your `<head>`, it hands you values.
+
+```ts
+import { resolveSeo, jsonLdGraph, jsonLdScript, sitemapEntries, robotsRules, aboutPlacement }
+  from '@samfox1/site-bridge/seo'
+import { fetchPublicReleases } from '@samfox1/site-bridge'
+```
+
+- **`generateMetadata`** — `resolveSeo(payload)` gives `title`, `description`, `ogImage`
+  with ONE precedence everywhere: the manager's override → the artist's own data → a
+  dull, honest default. Put them in `<title>`, `description`, Open Graph and Twitter.
+- **Fact sheet** — inline `jsonLdScript(jsonLdGraph(payload, { origin, releases, mediaUrl,
+  today }))` in `<head>`. It carries the artist (or Person), the site, one `MusicEvent`
+  per dated upcoming show, one `MusicAlbum` per release with its songs, and the photos
+  and artworks the manager listed (`media.kind`, `media.alt`). Nothing in it is invented.
+- **`sitemap.ts` / `robots.ts`** — `sitemapEntries(payload, { origin, pages, today })`
+  and `robotsRules(origin)`. `lastModified` is `published_at` (or the newest show that
+  has passed), never `new Date()`: a lastmod that changes every request is one Google
+  learns to ignore.
+- **Headings** — one `h1`, and an `h2` in every section (visually hidden is fine: it is
+  the section's NAME, structure you own, not editor copy).
+- **Images** — a plain `<img>` in server html, `src` straight at the storage URL (the
+  object or `render/image` endpoint; never `/_next/image`, never a proxy), `alt` =
+  `media.alt` else `recommendAlt(...)` from `@samfox1/site-bridge/alt`. The file name IS
+  the slug the manager chose; do not rewrite it.
+- **The bio** — declare `about: { placements: ['home', 'page'], default: 'page' }` in
+  your manifest. `aboutPlacement(payload, manifest.about)` says where it renders:
+  `home` (a section), `page` (a real `/about` route styled like the rest of the site,
+  linked from the footer, in the sitemap), or `hidden` (meta + JSON-LD still carry it).
+  A site that declares nothing shows none, and the editor offers only Hidden.
+- **`/edit`** — `robots: { index: false, follow: false }` from a server layout.
+
+Then rule 6 of §7 proves all of it on the built html, every build.
 
 ## Known rough edges
 
