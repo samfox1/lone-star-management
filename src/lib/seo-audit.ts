@@ -13,6 +13,8 @@ export type LiveAudit = {
   rules: { rule: string; label: string; problems: string[] }[]
   /** What the fact sheet states, by @type. */
   graph: Record<string, number>
+  /** Releases by kind (album / ep / single / other): every release is a MusicAlbum node. */
+  releaseKinds: Record<string, number>
   /** Sitemap facts a crawler would see. */
   sitemap: { urls: string[]; lastmod: string | null } | null
   robots: { ok: boolean; sitemap: boolean } | null
@@ -49,14 +51,16 @@ export async function auditLiveSite(origin: string, fetcher: typeof fetch = fetc
     text(`${base}/robots.txt`, fetcher),
   ])
   if (!home) {
-    return { url: base, ok: false, rules: [], graph: {}, sitemap: null, robots: null, error: 'Could not fetch the site.' }
+    return { url: base, ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'Could not fetch the site.' }
   }
   const findings: SeoFinding[] = auditSeo({ home, edit })
   const ld = home.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
   let graph: Record<string, number> = {}
+  let releaseKinds: Record<string, number> = {}
   if (ld) {
     const summary = auditJsonLd(ld[1])
     graph = summary.counts
+    releaseKinds = summary.kinds
     for (const f of summary.findings) findings.push({ rule: f.rule === 'json-ld' ? 'json-ld' : 'facts', problem: f.problem })
   }
   const rules = AUDIT_RULES.map((r) => ({ ...r, problems: findings.filter((f) => f.rule === r.rule).map((f) => f.problem) }))
@@ -67,5 +71,5 @@ export async function auditLiveSite(origin: string, fetcher: typeof fetch = fetc
       }
     : null
   const robots = robotsTxt ? { ok: true, sitemap: /Sitemap:/i.test(robotsTxt) } : null
-  return { url: base, ok: rules.every((r) => r.problems.length === 0), rules, graph, sitemap, robots }
+  return { url: base, ok: rules.every((r) => r.problems.length === 0), rules, graph, releaseKinds, sitemap, robots }
 }

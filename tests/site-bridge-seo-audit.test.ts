@@ -56,6 +56,17 @@ describe('auditJsonLd — the fields Google requires', () => {
     ]))
     expect(r.findings).toEqual([])
     expect(r.counts).toEqual({ MusicGroup: 1, WebSite: 1, MusicEvent: 1, MusicAlbum: 1, MusicRecording: 1 })
+    expect(r.kinds).toEqual({ other: 1 }) // no albumReleaseType stated
+  })
+  it('releases are counted by KIND — a single is a MusicAlbum node too (Sam: "they just aren\'t all albums")', () => {
+    const r = auditJsonLd(graph([
+      { '@type': 'MusicAlbum', name: 'A', byArtist: { '@id': 'a' }, albumReleaseType: 'https://schema.org/AlbumRelease' },
+      { '@type': 'MusicAlbum', name: 'B', byArtist: { '@id': 'a' }, albumReleaseType: 'https://schema.org/SingleRelease' },
+      { '@type': 'MusicAlbum', name: 'C', byArtist: { '@id': 'a' }, albumReleaseType: 'https://schema.org/SingleRelease' },
+      { '@type': 'MusicAlbum', name: 'D', byArtist: { '@id': 'a' }, albumReleaseType: 'https://schema.org/EPRelease' },
+    ]))
+    expect(r.counts.MusicAlbum).toBe(4)
+    expect(r.kinds).toEqual({ album: 1, single: 2, ep: 1 })
   })
   it('CRITICAL: a missing required field is named, per node — nested tracks included', () => {
     const r = auditJsonLd(graph([

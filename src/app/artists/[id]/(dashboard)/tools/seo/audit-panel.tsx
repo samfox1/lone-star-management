@@ -80,7 +80,17 @@ export function AuditPanel({ artistId, siteUrl }: { artistId: string; siteUrl: s
               <ul className="mt-2 space-y-1 font-space text-xs">
                 {Object.entries(result.graph).map(([type, n]) => (
                   <li key={type} className="flex justify-between gap-3">
-                    <span className="text-ink-muted">{GRAPH_LABEL[type] ?? type}</span>
+                    <span className="text-ink-muted">
+                      {GRAPH_LABEL[type] ?? type}
+                      {type === 'MusicAlbum' && Object.keys(result.releaseKinds).length > 0 && (
+                        <span className="text-ink-faint">
+                          {' '}
+                          ({Object.entries(result.releaseKinds)
+                            .map(([k, c]) => `${c} ${k === 'ep' ? 'EP' : k}${c === 1 || k === 'ep' ? '' : 's'}`)
+                            .join(', ')})
+                        </span>
+                      )}
+                    </span>
                     <span className="font-bold">{n}</span>
                   </li>
                 ))}

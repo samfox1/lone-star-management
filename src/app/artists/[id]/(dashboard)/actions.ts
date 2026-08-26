@@ -573,10 +573,10 @@ export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return { url: '', ok: false, rules: [], graph: {}, sitemap: null, robots: null, error: 'Not signed in.' }
+  if (!user) return { url: '', ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'Not signed in.' }
   const { data: artist } = await supabase.from('artists').select('slug, site_kind, custom_site_url').eq('id', artistId).single()
   const origin = publicSiteOrigin(artist)
-  if (!origin) return { url: '', ok: false, rules: [], graph: {}, sitemap: null, robots: null, error: 'No public site URL to check.' }
+  if (!origin) return { url: '', ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'No public site URL to check.' }
   return auditLiveSite(origin)
 }
 
