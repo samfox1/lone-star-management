@@ -74,6 +74,10 @@ export const SEO_FIELDS: SiteContentField[] = [
   { key: 'seo_title', label: 'Browser & tab title', type: 'text', default: '' },
   { key: 'seo_description', label: 'Search & social description', type: 'text', default: '' },
   { key: 'og_image', label: 'Social preview image URL', type: 'text', default: '' },
+  // SEO_GEO_PLAN (2026-08-26): where the bio renders (home | page | hidden — the site
+  // declares which it supports, bridge seo.aboutPlacement resolves) and its heading.
+  { key: 'about_placement', label: 'About placement', type: 'text', default: '' },
+  { key: 'about_heading', label: 'About heading', type: 'text', default: '' },
 ]
 
 /**

@@ -197,6 +197,20 @@ export type WireMedia = {
   kind?: MediaKind | null
 }
 
+/** A published release as `get_public_releases` returns it (fetchPublicReleases). The
+ *  snapshot list is lib/content.ts PUBLISHABLE.release; extra keys may ride along. */
+export type SiteRelease = {
+  id: string
+  title: string
+  slug?: string | null
+  cover_url: string | null
+  release_date: string | null
+  release_type?: string | null
+  links?: Record<string, string> | null
+  spotify_id?: string | null
+  sort_order?: number | null
+}
+
 export type PublicSitePayload = {
   artist: {
     id: string

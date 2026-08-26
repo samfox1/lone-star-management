@@ -146,6 +146,11 @@ describe('get_public_site — public-safe shape', () => {
         'slug',
         'spotify_artist_id',
         'template',
+        // SEO/GEO facts (20260826160000): genre, location and the JSON-LD root type are
+        // published ON PURPOSE — they are the fact sheet AI answers quote.
+        'genre',
+        'location',
+        'schema_type',
       ].sort(),
     )
   })

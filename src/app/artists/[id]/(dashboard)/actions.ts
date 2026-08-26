@@ -42,7 +42,7 @@ import {
   updateContent,
 } from '@/lib/content'
 import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
-import { saveCursorField, saveEditorField, saveEditorLink, saveEditorStyle, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
+import { saveCursorField, saveEditorField, saveEditorLink, saveEditorStyle, saveSeoField, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
 import { linkAddError } from '@/lib/site-editor/link-vocabulary'
 import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
@@ -559,6 +559,50 @@ export async function placeGalleryPhotoAction(
  * locks its look: the art is the artist's, the caption is the manager's (Sam,
  * 2026-08-21). Draft until republished, like any content edit. RLS scopes the write.
  */
+/** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
+export async function saveSeoFieldAction(
+  artistId: string,
+  key: string,
+  value: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+  const r = await saveSeoField(supabase, artistId, key, value)
+  if (r.ok) revalidatePath(`/artists/${artistId}`, 'layout')
+  return r
+}
+
+/** Artist FACTS for the fact sheet (20260826160000): genre, location, schema type. An
+ *  allowlist of columns, never a caller-named one. Draft until the profile is published. */
+export async function saveArtistFactAction(
+  artistId: string,
+  column: 'genre' | 'location' | 'schema_type',
+  value: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+  const trimmed = value.replace(/\s+/g, ' ').trim()
+  let next: string | null = trimmed || null
+  if (column === 'schema_type') {
+    if (trimmed !== 'MusicGroup' && trimmed !== 'Person') return { ok: false, error: 'Unknown artist type.' }
+    next = trimmed
+  } else if (column === 'genre' || column === 'location') {
+    if (trimmed.length > 120) return { ok: false, error: 'Keep it under 120 characters.' }
+  } else {
+    return { ok: false, error: 'Unknown field.' }
+  }
+  const { error } = await supabase.from('artists').update({ [column]: next }).eq('id', artistId)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
 /** Rename one image's FILE to a descriptive slug (SEO_GEO_PLAN B6b). Copy + row update
  *  in lib/media-rename.ts; the new storage_path comes back so the panel can follow it. */
 export async function renameMediaAction(

@@ -14,7 +14,7 @@
  * Next import. A caller that wants ISR passes `{ next: { revalidate: 60 } }` through
  * `fetchOptions` — Next reads it, everything else ignores it.
  */
-import type { PublicSitePayload } from "./payload";
+import type { PublicSitePayload, SiteRelease } from "./payload";
 
 export type PublicSiteConfig = {
   /** `https://<project>.supabase.co` — the project's REST root. */
@@ -64,4 +64,30 @@ export async function fetchPublicSite(
   // An artist with nothing published returns an empty body, not `null` JSON.
   const text = await res.text();
   return text ? (JSON.parse(text) as PublicSitePayload) : null;
+}
+
+/**
+ * The artist's published, on-site, released releases (`get_public_releases`) — what a
+ * MusicAlbum fact sheet needs (seo.jsonLdGraph). Same config and cache rules as
+ * fetchPublicSite; an unconfigured site gets `[]`, never a throw.
+ */
+export async function fetchPublicReleases(
+  config: Partial<PublicSiteConfig> | undefined,
+  fetchOptions?: RequestInit,
+): Promise<SiteRelease[]> {
+  if (!isConfigured(config)) return [];
+  const res = await fetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_releases`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: config.anonKey,
+      Authorization: `Bearer ${config.anonKey}`,
+    },
+    body: JSON.stringify({ p_slug: config.slug }),
+    ...fetchOptions,
+  });
+  if (!res.ok) throw new Error(`get_public_releases failed: ${res.status}`);
+  const text = await res.text();
+  const parsed: unknown = text ? JSON.parse(text) : [];
+  return Array.isArray(parsed) ? (parsed as SiteRelease[]) : [];
 }

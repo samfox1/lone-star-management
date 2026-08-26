@@ -106,6 +106,11 @@ export const ARTIST_SNAPSHOT = [
   // EPK is entirely published content rather than published copy plus a draft rider.
   'tech_rider_path',
   'stage_plot_path',
+  // SEO/GEO facts (20260826160000): genre, location, and the JSON-LD root type. Absent on
+  // older revisions — read with `?? null` / default 'MusicGroup'.
+  'genre',
+  'location',
+  'schema_type',
 ] as const
 
 export type ContentRow = Record<string, unknown> & {

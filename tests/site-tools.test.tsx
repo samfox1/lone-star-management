@@ -9,11 +9,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SiteTools } from '@/app/artists/[id]/(dashboard)/editor/panels/site-tools'
-import { saveCursorFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { saveArtistFactAction, saveCursorFieldAction, saveSeoFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { ABOUT_PLACEMENTS } from '@samfox1/site-bridge/seo'
 import { CURSOR_CONTENT_KEYS, type CursorSettings } from '@samfox1/site-bridge/cursor'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   saveCursorFieldAction: vi.fn(async () => ({ ok: true })),
+  saveSeoFieldAction: vi.fn(async () => ({ ok: true })),
+  saveArtistFactAction: vi.fn(async () => ({ ok: true })),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   GallerySlotUploader: () => null,
@@ -98,5 +101,48 @@ describe('SiteTools — the save loop', () => {
     // The trail reverted; the removed cursor image did NOT come back.
     expect(applied.at(-1)?.trail).toBe('')
     expect(applied.at(-1)?.image).toBe('')
+  })
+})
+
+describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
+  const seoMock = vi.mocked(saveSeoFieldAction)
+  const factMock = vi.mocked(saveArtistFactAction)
+
+  it("CRITICAL: typing a title saves through the SEO gate, not the generic field path", async () => {
+    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{ seo_title: '' }} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'SKEEN' } })
+    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('artist-1', 'seo_title', 'SKEEN'))
+  })
+
+  it('genre and location save to the ARTIST, and the type select too', async () => {
+    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Genre' }), { target: { value: 'House' } })
+    await vi.waitFor(() => expect(factMock).toHaveBeenCalledWith('artist-1', 'genre', 'House'))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Artist type' }), { target: { value: 'Person' } })
+    await vi.waitFor(() => expect(factMock).toHaveBeenCalledWith('artist-1', 'schema_type', 'Person'))
+  })
+
+  it("CRITICAL: About offers only what the site declares, plus hidden — and 'Site default' names the site's default", async () => {
+    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} about={{ placements: ['page'], default: 'page' }} />)
+    const select = screen.getByRole('combobox', { name: 'About placement' }) as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toEqual(['', 'page', 'hidden'])
+    expect(select.options[0].textContent).toContain('Its own page')
+    fireEvent.change(select, { target: { value: 'hidden' } })
+    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('artist-1', 'about_placement', 'hidden'))
+  })
+
+  it('a site that declares nothing about its bio offers hidden only', () => {
+    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} about={null} />)
+    const select = screen.getByRole('combobox', { name: 'About placement' }) as HTMLSelectElement
+    expect([...select.options].map((o) => o.value).filter(Boolean)).toEqual(['hidden'])
+    // Registry-derived: every placement is either offered or explicitly gated.
+    expect(ABOUT_PLACEMENTS).toContain('hidden')
+  })
+
+  it('Bio opens the text editor', () => {
+    const onEditBio = vi.fn()
+    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} onEditBio={onEditBio} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit bio' }))
+    expect(onEditBio).toHaveBeenCalled()
   })
 })

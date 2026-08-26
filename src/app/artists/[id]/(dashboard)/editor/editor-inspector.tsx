@@ -1,6 +1,8 @@
 'use client'
 
 import type { MediaKind } from '@samfox1/site-bridge/payload'
+import type { ManifestAbout } from '@samfox1/site-bridge/seo'
+import type { ArtistFacts } from './panels/site-tools'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY } from './inspector-shared'
@@ -186,6 +188,9 @@ export function EditorInspector({
   measuredRegion = null,
   onRequestMeasure,
   cursorValues = NO_STYLES,
+  seoValues = NO_STYLES,
+  artistFacts,
+  manifestAbout = null,
   onApplyField,
   onApplyImage,
   onApplyStyle,
@@ -265,6 +270,10 @@ export function EditorInspector({
   selectedRegion?: { target: SelectTarget; nonce: number } | null
   /** Current cursor settings from the draft's site_content (Site panel). */
   cursorValues?: Record<string, string>
+  /** SEO keys off the draft's site_content (Site panel, SEO_GEO_PLAN B6). */
+  seoValues?: Record<string, string>
+  artistFacts?: ArtistFacts
+  manifestAbout?: ManifestAbout | null
   onApplyField?: (key: string, value: string) => void
   /** Optimistically repaint ONE image region in the frame (a slot placement) — the
    *  init-data refresh stays as the consistency backstop, not the only path. */
@@ -1039,6 +1048,16 @@ export function EditorInspector({
         artistId={artistId}
         photos={photos}
         values={cursorValues}
+        seo={seoValues}
+        facts={artistFacts}
+        about={manifestAbout}
+        onEditBio={() => {
+          const bio = textFields.find((f) => f.key === 'artist_bio')
+          if (!bio) return
+          closeEditors()
+          setEditingText(bio)
+          setFocused({ kind: 'field', key: bio.key })
+        }}
         swatches={siteSwatches(styleOptions, styleValues)}
         budget={budgetFor(assetBudgets, 'image')}
         onApplyCursor={onApplyCursor}

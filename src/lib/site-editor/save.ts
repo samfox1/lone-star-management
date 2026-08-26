@@ -20,6 +20,7 @@ import { acceptsValue, CURSOR_KEYS, cursorValueError, fieldsFor, SEO_FIELDS, TEM
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
+import { ABOUT_PLACEMENTS, safeHttpUrl } from '@samfox1/site-bridge/seo'
 import { safeHref } from '@/lib/url'
 
 /**
@@ -121,6 +122,46 @@ export async function saveCursorField(
 ): Promise<{ ok: boolean; error?: string }> {
   const trimmed = value.trim()
   const invalid = cursorValueError(key, trimmed)
+  if (invalid) return { ok: false, error: invalid }
+  return writeSiteContentValue(supabase, artistId, key, trimmed)
+}
+
+/** Length caps for the SEO strings. Google shows ~60 title / ~160 description chars;
+ *  the caps are generous so a manager is never cut mid-word, and derived from ONE
+ *  table so the gate and any preview agree. */
+export const SEO_LIMITS: Record<string, number> = {
+  seo_title: 70,
+  seo_description: 300,
+  about_heading: 60,
+}
+
+/** What a manager may store under an SEO key — derived from SEO_FIELDS, so a key added
+ *  to the schema without a rule here is refused, never silently accepted. */
+export function seoValueError(key: string, value: string): string | null {
+  if (!SEO_FIELDS.some((f) => f.key === key)) return 'Unknown SEO field.'
+  if (!value) return null
+  if (key === 'og_image') return safeHttpUrl(value) ? null : 'The social image must be an https URL.'
+  if (key === 'about_placement') {
+    return (ABOUT_PLACEMENTS as readonly string[]).includes(value) ? null : 'Unknown about placement.'
+  }
+  const max = SEO_LIMITS[key]
+  if (max === undefined) return 'Unknown SEO field.'
+  return value.length > max ? `Keep it under ${max} characters.` : null
+}
+
+/**
+ * Write ONE SEO / GEO setting (SEO_GEO_PLAN B6). The only path that can touch an
+ * SEO_FIELDS row: the keys are reserved out of the custom-field path above because they
+ * rewrite <head>. Blank deletes the row (= "auto"), like every other site_content key.
+ */
+export async function saveSeoField(
+  supabase: SupabaseClient,
+  artistId: string,
+  key: string,
+  value: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = value.replace(/\s+/g, ' ').trim()
+  const invalid = seoValueError(key, trimmed)
   if (invalid) return { ok: false, error: invalid }
   return writeSiteContentValue(supabase, artistId, key, trimmed)
 }

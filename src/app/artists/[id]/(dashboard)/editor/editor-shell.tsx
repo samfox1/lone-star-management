@@ -9,7 +9,7 @@ import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withStyleVars, withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
-import { CURSOR_KEYS } from '@/lib/site-content-schema'
+import { CURSOR_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
@@ -285,6 +285,15 @@ export function EditorShell({
     const content = (draft?.site_content ?? siteContent ?? {}) as Record<string, string>
     return Object.fromEntries(CURSOR_KEYS.map((k) => [k, content[k] ?? '']))
   }, [draft, siteContent])
+  // SEO keys the same way — derived from SEO_FIELDS, never listed here.
+  const seoValues = useMemo(() => {
+    const content = (draft?.site_content ?? siteContent ?? {}) as Record<string, string>
+    return Object.fromEntries(SEO_FIELDS.map((f) => [f.key, content[f.key] ?? '']))
+  }, [draft, siteContent])
+  const artistFacts = useMemo(() => {
+    const a = (draft?.artist ?? {}) as { genre?: string | null; location?: string | null; schema_type?: string | null }
+    return { genre: a.genre ?? '', location: a.location ?? '', schema_type: a.schema_type ?? 'MusicGroup' }
+  }, [draft])
 
   const panels = useMemo(
     () =>
@@ -339,6 +348,9 @@ export function EditorShell({
         selectedLink={selectedLink}
         selectedRegion={selectedRegion}
         cursorValues={cursorValues}
+        seoValues={seoValues}
+        artistFacts={artistFacts}
+        manifestAbout={manifest?.about ?? null}
         onApplyField={applyField}
         onApplyImage={applyImage}
         onApplyStyle={applyStyle}

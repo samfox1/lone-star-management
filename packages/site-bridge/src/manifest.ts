@@ -23,6 +23,7 @@
  * KEEP IN SYNC with package.json `version`. (Hardcoded rather than imported: the package is
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
+import type { ManifestAbout } from './seo'
 export const PACKAGE_VERSION = '0.32.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
@@ -315,6 +316,9 @@ export type AssetBudgets = {
  *  custom site's declared id. */
 export type TemplateManifest = {
   template: string
+  /** Where the bio may render and where it goes by default (SEO_GEO_PLAN B2). Absent =
+   *  the site shows no bio; the editor offers only `hidden`. */
+  about?: ManifestAbout
   /** The version of THIS package the site was built against (`BRIDGE_VERSION`). The
    *  editor compares it to its own: when the site is behind, a control may emit a token
    *  the site's bundled applier can't lift yet, so the editor flags "republish to apply".

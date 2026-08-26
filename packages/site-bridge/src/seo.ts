@@ -8,7 +8,7 @@
  * the published payload (the artist's facts, the manager's SEO overrides, the shows
  * and songs); an unset field is left out of the graph, never filled with a guess.
  */
-import type { PublicSitePayload, SiteTourDate, SiteTrack, WireMedia } from './payload'
+import type { PublicSitePayload, SiteRelease, SiteTourDate, SiteTrack, WireMedia } from './payload'
 import { platformFromUrl } from './social'
 import { recommendAlt } from './alt'
 
@@ -58,17 +58,7 @@ export function resolveSeo(payload: SeoSource): SiteSeo {
  * JSON-LD
  * -------------------------------------------------------------------------------- */
 
-/** A published release, as `get_public_releases` returns it (fetchPublicReleases). */
-export type SiteRelease = {
-  id: string
-  title: string
-  slug?: string | null
-  cover_url: string | null
-  release_date: string | null
-  release_type?: string | null
-  links?: Record<string, string> | null
-  spotify_id?: string | null
-}
+export type { SiteRelease } from './payload'
 
 export type JsonLdOptions = {
   /** `https://www.example.com` — no trailing slash. */
@@ -310,6 +300,8 @@ export function robotsRules(origin: string): {
 
 export const ABOUT_PLACEMENTS = ['home', 'page', 'hidden'] as const
 export type AboutPlacement = (typeof ABOUT_PLACEMENTS)[number]
+/** What a site declares about its bio (manifest.about): where it CAN go, and where it
+ *  goes when the manager has not chosen — the site's call, never the editor's. */
 export type ManifestAbout = { placements: readonly ('home' | 'page')[]; default: AboutPlacement }
 
 /** Where the bio renders: the manager's choice if the site supports it, else the site's

@@ -20,13 +20,14 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
-import { ControlRow, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
+import { ControlRow, EYEBROW, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
 import type { AssetBudget } from '@/lib/site-editor/asset-budget'
 import type { GalleryPhoto } from '../inspector-types'
-import { saveCursorFieldAction } from '../../actions'
+import { saveArtistFactAction, saveCursorFieldAction, saveSeoFieldAction } from '../../actions'
+import { ABOUT_PLACEMENTS, type AboutPlacement, type ManifestAbout } from '@samfox1/site-bridge/seo'
 
 /** Derived, not hand-listed: a new style in the package shows up here on its own. */
 const TRAIL_OPTIONS: { value: string; label: string }[] = [
@@ -34,10 +35,17 @@ const TRAIL_OPTIONS: { value: string; label: string }[] = [
   ...CURSOR_TRAIL_STYLES.map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) })),
 ]
 
+/** Artist facts the fact sheet reads (artists.genre / location / schema_type). */
+export type ArtistFacts = { genre: string; location: string; schema_type: string }
+
 export function SiteTools({
   artistId,
   photos,
   values: initial,
+  seo: initialSeo = {},
+  facts: initialFacts = { genre: '', location: '', schema_type: 'MusicGroup' },
+  about = null,
+  onEditBio,
   swatches = [],
   budget = null,
   onApplyCursor,
@@ -47,6 +55,13 @@ export function SiteTools({
   photos: GalleryPhoto[]
   /** Current cursor values from the draft's site_content, keyed by CURSOR_CONTENT_KEYS. */
   values: Record<string, string>
+  /** Current SEO keys off the draft's site_content (seo_title, …, about_placement). */
+  seo?: Record<string, string>
+  facts?: ArtistFacts
+  /** What the site declares about its bio; null = it shows none. */
+  about?: ManifestAbout | null
+  /** Opens the bio in the text editor (the ONE bio feeds About, meta and JSON-LD). */
+  onEditBio?: () => void
   /** Site palette + already-used colours for the trail colour picker. */
   swatches?: string[]
   /** The site's image budget — the cursor uploader compresses like every other slot. */
@@ -89,8 +104,78 @@ export function SiteTools({
   const trail = vals[CURSOR_CONTENT_KEYS.trail] ?? ''
   const wantsColor = trail !== '' && trail !== 'image'
 
+  // SEO / GEO (SEO_GEO_PLAN B6). Strings save debounced like any typed field; the two
+  // selects save at once. Optimistic, reverting to the mounted value on a refusal.
+  const [seo, setSeo] = useState<Record<string, string>>(initialSeo)
+  const [facts, setFacts] = useState<ArtistFacts>(initialFacts)
+  const seoSave = useDebouncedFieldSave<string>({
+    persist: (key, value) =>
+      saveSeoFieldAction(artistId, key, value).then((r) => {
+        if (!r.ok) setSeo((s) => ({ ...s, [key]: initialSeo[key] ?? '' }))
+        return { ok: r.ok, error: r.error }
+      }),
+  })
+  const factSave = useDebouncedFieldSave<string>({
+    persist: (column, value) =>
+      saveArtistFactAction(artistId, column as keyof ArtistFacts, value).then((r) => {
+        if (!r.ok) setFacts((f) => ({ ...f, [column]: initialFacts[column as keyof ArtistFacts] }))
+        return { ok: r.ok, error: r.error }
+      }),
+  })
+  const setSeoKey = (key: string, value: string) => {
+    setSeo((s) => ({ ...s, [key]: value }))
+    seoSave.save(key, value)
+  }
+  const setFact = (column: keyof ArtistFacts, value: string) => {
+    setFacts((f) => ({ ...f, [column]: value }))
+    factSave.save(column, value)
+  }
+  // Derived from the site's declaration + the registry, never hand-listed: `hidden` is
+  // always offered; `home`/`page` only when the site can render them.
+  const placements: AboutPlacement[] = ABOUT_PLACEMENTS.filter((p) => p === 'hidden' || about?.placements.includes(p))
+  const placementLabel: Record<AboutPlacement, string> = { home: 'On the homepage', page: 'Its own page', hidden: 'Hidden' }
+
   return (
     <>
+      <GroupLabel>SEO / GEO</GroupLabel>
+      <div className={PANEL_BODY}>
+        <SeoTextRow label="Title" value={seo.seo_title ?? ''} onChange={(v) => setSeoKey('seo_title', v)} />
+        <SeoTextRow label="Description" value={seo.seo_description ?? ''} onChange={(v) => setSeoKey('seo_description', v)} />
+        <ControlRow label="Social card">
+          <a href={`/artists/${artistId}/tools/seo`} className={`${EYEBROW} text-ink underline underline-offset-2`}>
+            Open
+          </a>
+        </ControlRow>
+        <ControlRow label="Bio">
+          <button type="button" onClick={onEditBio} aria-label="Edit bio" className={`${EYEBROW} text-ink underline underline-offset-2`}>
+            Edit
+          </button>
+        </ControlRow>
+        <ControlRow label="About">
+          <select
+            aria-label="About placement"
+            value={placements.includes(seo.about_placement as AboutPlacement) ? seo.about_placement : ''}
+            onChange={(e) => setSeoKey('about_placement', e.target.value)}
+            className={SELECT}
+          >
+            <option value="">{about?.default ? `Site default (${placementLabel[about.default]})` : 'Site default'}</option>
+            {placements.map((p) => (
+              <option key={p} value={p}>
+                {placementLabel[p]}
+              </option>
+            ))}
+          </select>
+        </ControlRow>
+        <SeoTextRow label="Genre" value={facts.genre} onChange={(v) => setFact('genre', v)} />
+        <SeoTextRow label="Location" value={facts.location} onChange={(v) => setFact('location', v)} />
+        <ControlRow label="Type">
+          <select aria-label="Artist type" value={facts.schema_type || 'MusicGroup'} onChange={(e) => setFact('schema_type', e.target.value)} className={SELECT}>
+            <option value="MusicGroup">Musician</option>
+            <option value="Person">Visual artist</option>
+          </select>
+        </ControlRow>
+      </div>
+
       <GroupLabel>Cursor</GroupLabel>
       <div className={PANEL_BODY}>
         <CursorImageRow
@@ -169,6 +254,17 @@ export function SiteTools({
  *  The picker's footer is the same uploader the image slots use, so a cursor PNG that
  *  isn't in the library yet is one drop away — and it lands in the Images library too,
  *  which is where Sam said cursor files should live. */
+const SELECT = 'w-[168px] rounded-md border border-hairline bg-paper px-2 py-1 font-space text-[11px] outline-none focus:border-accent'
+
+/** [label] [text input] — the same row shape as the cursor controls. */
+function SeoTextRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <ControlRow label={label}>
+      <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={SELECT} />
+    </ControlRow>
+  )
+}
+
 function CursorImageRow({
   label,
   hint,
