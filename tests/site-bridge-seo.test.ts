@@ -49,7 +49,11 @@ function payload(over: Partial<PublicSitePayload> = {}): PublicSitePayload {
       { id: 'l2', label: 'Website', url: 'https://skeenmusic.com', sort_order: 2 },
       { id: 'l3', label: 'Evil', url: 'javascript:alert(1)', sort_order: 3 },
     ],
-    videos: [],
+    videos: [
+      { id: 'v1', title: 'Night Drive (live)', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/abc123XYZ', storage_path: null, sort_order: 1 },
+      { id: 'v2', title: 'Studio', provider: 'uploaded', embed_url: null, storage_path: 'a1/videos/studio.mp4', sort_order: 2 },
+      { id: 'v3', title: 'Broken', provider: 'youtube', embed_url: null, storage_path: null, sort_order: 3 },
+    ],
     media: [
       { id: 'm1', purpose: 'gallery_image', path: 'a1/gallery/skeen-oslo.jpg', kind: 'photo', alt: 'Skeen, Oslo' },
       { id: 'm2', purpose: 'gallery_image', path: 'a1/gallery/blue-study.jpg', kind: 'artwork', alt: null, label: 'Blue Study' },
@@ -104,9 +108,27 @@ describe('jsonLdGraph', () => {
     expect(a.description).toBe('Chicago DJ, producer and filmmaker. Second paragraph.')
     expect(a.image).toBe('https://cdn.example.com/logo.png')
   })
-  it('Person when the artist says so', () => {
+  it('Person when the artist says so — with homeLocation, where a MusicGroup has foundingLocation', () => {
     const g = jsonLdGraph(payload({ artist: { ...payload().artist, schema_type: 'Person' } }), { origin: ORIGIN })
-    expect((g['@graph'][0] as Record<string, unknown>)['@type']).toBe('Person')
+    const p = g['@graph'][0] as Record<string, unknown>
+    expect(p['@type']).toBe('Person')
+    expect(p.homeLocation).toEqual({ '@type': 'Place', name: 'Chicago' })
+    expect(p.foundingLocation).toBeUndefined()
+    expect(byType('MusicGroup')[0].homeLocation).toBeUndefined()
+  })
+  it('VideoObject per on-site video: embed (with the YouTube thumbnail) or upload; nothing for a video with neither; no invented uploadDate', () => {
+    const g = jsonLdGraph(payload(), { origin: ORIGIN, videoUrl: (p) => `https://cdn.example.com/videos/${p}` })
+    const vids = (g['@graph'] as Record<string, unknown>[]).filter((n) => n['@type'] === 'VideoObject')
+    expect(vids).toEqual([
+      { '@type': 'VideoObject', name: 'Night Drive (live)', embedUrl: 'https://www.youtube.com/embed/abc123XYZ', thumbnailUrl: 'https://i.ytimg.com/vi/abc123XYZ/hqdefault.jpg', creator: { '@id': `${ORIGIN}/#artist` } },
+      { '@type': 'VideoObject', name: 'Studio', contentUrl: 'https://cdn.example.com/videos/a1/videos/studio.mp4', creator: { '@id': `${ORIGIN}/#artist` } },
+    ])
+    expect(byType('VideoObject').map((v) => v.name)).toEqual(['Night Drive (live)']) // no videoUrl → uploads left out
+  })
+  it('CRITICAL: songs are NESTED in their album (track[] of MusicRecording), never loose in the graph', () => {
+    expect(byType('MusicRecording')).toEqual([])
+    const [alb] = byType('MusicAlbum')
+    expect((alb.track as Record<string, unknown>[]).map((t) => t['@type'])).toEqual(['MusicRecording'])
   })
   it('CRITICAL: one MusicEvent per DATED UPCOMING show — none for past or undated', () => {
     const events = byType('MusicEvent')

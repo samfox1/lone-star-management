@@ -8,7 +8,7 @@
  * the published payload (the artist's facts, the manager's SEO overrides, the shows
  * and songs); an unset field is left out of the graph, never filled with a guess.
  */
-import type { PublicSitePayload, SiteRelease, SiteTourDate, SiteTrack, WireMedia } from './payload'
+import type { PublicSitePayload, SiteRelease, SiteTourDate, SiteTrack, SiteVideo, WireMedia } from './payload'
 import { platformFromUrl } from './social'
 import { recommendAlt } from './alt'
 
@@ -71,6 +71,8 @@ export type JsonLdOptions = {
   imageUrl?: string | null
   /** Turns a media `path` into its public URL. Omit and no image entries are emitted. */
   mediaUrl?: (path: string) => string
+  /** Turns an uploaded video's `storage_path` into its public URL (VideoObject.contentUrl). */
+  videoUrl?: (path: string) => string
   /** ISO date (YYYY-MM-DD). Shows on or after it are upcoming; omit to trust `is_past`. */
   today?: string
   /** The /about page URL when the bio lives there, so the graph can point at it. */
@@ -111,15 +113,19 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
     .filter(Boolean)
   const location = (a.location ?? '').trim()
   const sameAs = sameAsFrom(payload)
+  const person = a.schema_type === 'Person'
+  // `foundingLocation` is an Organization property (MusicGroup is one); a Person has
+  // `homeLocation`. Same fact, the property schema.org defines for that type.
+  const place = location ? { '@type': 'Place', name: location } : null
   return {
-    '@type': a.schema_type === 'Person' ? 'Person' : 'MusicGroup',
+    '@type': person ? 'Person' : 'MusicGroup',
     '@id': `${opts.origin}/#artist`,
     name: a.name,
     url: `${opts.origin}/`,
     ...(seo.description ? { description: seo.description } : {}),
     ...(opts.imageUrl ? { image: opts.imageUrl, logo: opts.imageUrl } : {}),
     ...(genre.length ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
-    ...(location ? { foundingLocation: { '@type': 'Place', name: location } } : {}),
+    ...(place ? (person ? { homeLocation: place } : { foundingLocation: place }) : {}),
     ...(sameAs.length ? { sameAs } : {}),
     ...(opts.aboutUrl ? { mainEntityOfPage: opts.aboutUrl } : {}),
   }
@@ -216,6 +222,30 @@ function imageNode(m: WireMedia, payload: PublicSitePayload, opts: JsonLdOptions
   }
 }
 
+/** YouTube's stable thumbnail for a watch/embed URL, or null for any other provider. */
+function youtubeThumb(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([A-Za-z0-9_-]{6,})/)
+  return m ? `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg` : null
+}
+
+/** One VideoObject per on-site video: an embed (YouTube/SoundCloud) or an upload. Only
+ *  what is known is stated — no uploadDate is invented, so Google may not show a rich
+ *  result, but the fact sheet never lies. */
+function videoNode(v: SiteVideo, payload: PublicSitePayload, opts: JsonLdOptions): Node | null {
+  const embed = safeHttpUrl(v.embed_url)
+  const content = v.provider === 'uploaded' && v.storage_path && opts.videoUrl ? safeHttpUrl(opts.videoUrl(v.storage_path)) : null
+  if (!embed && !content) return null
+  const thumb = embed ? youtubeThumb(embed) : null
+  return {
+    '@type': 'VideoObject',
+    name: v.title,
+    ...(embed ? { embedUrl: embed } : {}),
+    ...(content ? { contentUrl: content } : {}),
+    ...(thumb ? { thumbnailUrl: thumb } : {}),
+    creator: { '@id': `${opts.origin}/#artist` },
+  }
+}
+
 /** The whole fact sheet as one `@graph`: artist, website, upcoming events, albums with
  *  their songs, and the photos/artworks the manager listed. */
 export function jsonLdGraph(payload: PublicSitePayload, opts: JsonLdOptions): { '@context': string; '@graph': Node[] } {
@@ -233,6 +263,10 @@ export function jsonLdGraph(payload: PublicSitePayload, opts: JsonLdOptions): { 
   ]
   for (const show of payload.tour_dates ?? []) if (isUpcoming(show, opts.today)) graph.push(eventNode(show, payload, opts))
   for (const r of opts.releases ?? []) graph.push(albumNode(r, payload, opts))
+  for (const v of payload.videos ?? []) {
+    const node = videoNode(v, payload, opts)
+    if (node) graph.push(node)
+  }
   for (const m of payload.media ?? []) {
     const node = imageNode(m, payload, opts)
     if (node) graph.push(node)
