@@ -200,3 +200,94 @@ declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
 - [ ] Phase 2
 - [ ] Phase 3
 - [ ] Phase 4
+
+## Checklist, with how to prove each one helped
+
+SEO signals take 2–6 weeks to move. So: **capture a baseline now**, re-run
+the same checks after each phase, and compare. Local checks prove the
+change shipped; the tools prove Google and the AI engines noticed.
+
+### Tools (set up once)
+
+| Tool | Why | Cost |
+| --- | --- | --- |
+| Google Search Console (GSC) for `skeenmusic.com` | impressions, clicks, indexed pages, URL Inspection, Enhancements reports | free; verify the domain via DNS TXT |
+| Bing Webmaster Tools | Bing feeds ChatGPT and Copilot; import from GSC in one click | free |
+| Rich Results Test · `search.google.com/test/rich-results` | validates JSON-LD as Google reads it | free |
+| Schema validator · `validator.schema.org` | catches schema errors Google tolerates silently | free |
+| Lighthouse (Chrome DevTools → Lighthouse → SEO + Accessibility) | scores alt text, headings, meta, crawlability | free |
+| `scripts/seo-check.sh` (to write in 1.0) | curl-based local checks below, one command | ours |
+| AI citation probe (manual, 5 fixed prompts) | the only direct GEO measure | 10 min |
+
+### 0. Baseline (before any change)
+
+Record in `SEO_GEO_BASELINE.md` in skeen-website, dated:
+
+- [ ] GSC, last 28 days: impressions, clicks, average position for `skeen`,
+  `skeen dj`, `skeen music`, `skeen chicago`. Pages indexed count.
+- [ ] Visible text length: `curl -s https://www.skeenmusic.com | sed 's/<[^>]*>//g' | tr -s ' \n' | wc -c` (audit said ~1,386)
+- [ ] `curl -s https://www.skeenmusic.com | grep -o 'alt=""' | wc -l` (audit said 19)
+- [ ] Heading outline: `curl -s https://www.skeenmusic.com | grep -o '<h[1-6][^>]*>' | sort | uniq -c`
+- [ ] Lighthouse SEO + Accessibility scores, mobile.
+- [ ] Rich Results Test on the homepage: which types it detects (expect
+  MusicGroup / WebSite only, no events).
+- [ ] `site:skeenmusic.com` in Google: how many results, and does `/edit` appear.
+- [ ] AI citation probe. Ask each of ChatGPT (search on), Perplexity,
+  Google AI Mode, Copilot the same 5 prompts and record cited / not cited
+  and whether facts are right:
+  1. "Who is Skeen, the Chicago DJ and producer?"
+  2. "What genre of music does Skeen make?"
+  3. "When is Skeen playing next?"
+  4. "What has Skeen released recently?"
+  5. "Skeen music official website"
+
+### Phase 1 — Skeen quick wins
+
+- [ ] **1.1 Alt text**
+  - shipped: `alt=""` count drops to the decorative ones only (cursor image); build test red when an alt is removed
+  - improved: Lighthouse Accessibility "Image elements have alt" passes; GSC Performance → Search type: Image shows impressions after ~4 weeks (today: none expected); Google Images `site:skeenmusic.com` returns covers
+- [ ] **1.2 Section headings**
+  - shipped: outline shows `h1` → `h2` Tour / Music / About / Videos; build test red when an `h2` is dropped
+  - improved: Lighthouse SEO "heading elements in order" passes; GSC sitelinks for the brand query start showing section anchors (`#work`, `#shows`) after a few weeks
+- [ ] **1.3 `/edit` noindex**
+  - shipped: `curl -s https://www.skeenmusic.com/edit | grep -c 'name="robots"'` = 1, homepage = 0
+  - improved: GSC URL Inspection on `/edit` says "Excluded by noindex tag"; `site:skeenmusic.com/edit` returns nothing
+- [ ] **1.4 vercel.app header**
+  - shipped: `curl -sI https://<skeen>.vercel.app | grep -i x-robots-tag` → `noindex`; the www host has none
+  - improved: `site:vercel.app skeen` returns nothing after re-crawl
+- [ ] **1.5 404 page**
+  - shipped: `curl -sI https://www.skeenmusic.com/nope | head -1` → 404
+  - improved: GSC Pages → "Not found (404)" rows stay as 404, none flip to "Soft 404"
+- [ ] **1.0 `scripts/seo-check.sh`** in skeen-website: runs every curl line above against a host argument and prints pass/fail. Re-run after each deploy.
+
+### Phase 2 — Bridge + editor
+
+- [ ] **B1 `published_at`**: RPC test proves the timestamp moves only on publish
+- [ ] **B4 `resolveSeo`, `jsonLdGraph`, `sitemapEntries`, `robotsRules`**: unit tests green, mutation run shows no survivors in the new module
+- [ ] **B5 `auditSeo`**: run against skeen's current build → it must FAIL on the items skeen hasn't fixed yet (that's how we know it bites)
+- [ ] **B6 Site tab SEO/GEO group**: edit Title / Genre / Location / About placement, publish, then `curl` the homepage and see the values in `<title>`, JSON-LD, and the about section
+- [ ] **B7 CONNECTING.md §10** written; `checkContract` gains rule 6
+
+### Phase 3 — Skeen adopts
+
+- [ ] **3.2 Bio visible (About section or `/about`)**
+  - shipped: visible text length ≥ 2,500 chars (from ~1,386); with `page`, `curl -s /about` contains the bio and the homepage footer links to it; with `hidden`, `/about` returns 404
+  - improved (SEO): GSC URL Inspection on `/about` → "Indexed"; `site:skeenmusic.com` grows by one; brand-query impressions up vs baseline at 4 weeks
+  - improved (GEO): re-run the 5-prompt probe. Target: prompts 1, 2, 5 cite skeenmusic.com in at least 2 of 4 engines, and the genre/location facts match what's in the editor
+- [ ] **3.3 MusicEvent + MusicAlbum JSON-LD**
+  - shipped: Rich Results Test detects "Event" items, one per dated upcoming show; Schema validator shows 0 errors
+  - improved: GSC Enhancements → "Events" report appears with valid items; Google search "skeen tour" shows the concert carousel; prompt 3 answers with the real next show
+- [ ] **3.4 Sitemap lastmod**
+  - shipped: fetch `/sitemap.xml` twice five minutes apart, `lastmod` identical; publish from the editor, `lastmod` changes
+  - improved: GSC Sitemaps → "Last read" updates within days of a publish, not on every crawl
+- [ ] **3.1 / 3.5**: local copies deleted, `auditSeo` green in `npm run test:build`
+
+### Phase 4 — Roll out
+
+- [ ] ftbk and wren: `seo-check.sh` green, `auditSeo` green, Rich Results Test clean, GSC property added, baseline recorded before deploy
+- [ ] `tools/seo` deleted; no route left that publishes SEO outside the editor
+
+### Re-measure dates
+
+- [ ] +2 weeks after Phase 3 deploy: GSC + AI probe
+- [ ] +6 weeks: GSC + AI probe, compare to baseline, write results at the top of this file
