@@ -1483,7 +1483,10 @@ export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] 
     ...cropControls(),
     { id: 'shape', label: 'Shape', kind: 'select', options: SHAPE_STEPS, owns: (t) => t.startsWith('shape-') },
     { id: 'feather', label: 'Feather', kind: 'slider', steps: FEATHER_STEPS, rank: pctRank0('feather'), owns: (t) => /^feather-\d/.test(t) },
-    { id: 'pad', label: 'Matte', kind: 'slider', steps: PAD_STEPS, rank: pxRank({}), owns: (t) => t.startsWith('pad-[') },
+    // Matte (pad-[Npx] on the image) REMOVED 2026-08-26 (Sam: "this doesn't look good…
+    // you can remove the matte slider"). Padding on an <img> inside a clipping window
+    // just shrinks the photo over the window's background. Stored pad- tokens on old
+    // items still lift; they simply have no control now.
     ...motionControls(),
   ]
 }

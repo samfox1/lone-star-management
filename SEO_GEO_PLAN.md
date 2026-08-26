@@ -86,7 +86,7 @@ Existing `seo_title`, `seo_description`, `og_image` stay as they are.
 
 | Column | Default | Rule |
 | --- | --- | --- |
-| `slug` | slugified original filename | `a-z0-9-`, unique per artist. Changing it MOVES the object to `{artistId}/{category}/{slug}.{ext}` and updates `storage_path`, so the URL carries the name |
+| `slug` | recommended from the alt (`recommendSlug`) | `a-z0-9-`, unique per artist. Changing it COPIES the object to `{artistId}/{category}/{slug}.{ext}` and updates `storage_path` (a move would break the live snapshot until republish; GC sweeps the old object after) |
 | `alt` | empty → site derives (caption, title, artist name) | plain description, not keywords. Editable in the Images panel, one field, no instruction copy |
 
 Both ride the existing media snapshot (`alt` added; `path` already there).
@@ -263,7 +263,7 @@ declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
 
 - [x] Skeen audit committed (`skeen-website` main `1cf370d`)
 - [ ] Phase 1: 1.1 alt text DONE (skeen `9c186b6`) + `seo-check.sh` + baseline
-- [ ] Phase 2: B6b alt + kind DONE 2026-08-26 (migration 20260826120000, Images panel item editor, wire + preview); slug still to do
+- [ ] Phase 2: B6b DONE 2026-08-26: alt + kind (20260826120000/130000) + slug rename-by-copy (20260826140000); `Edit alt tag` link → modal (alt, type, file name); `recommendAlt`/`recommendSlug` in the bridge (`@samfox1/site-bridge/alt`). Matte slider removed from image items.
 - [ ] Phase 3
 - [ ] Phase 4
 

@@ -420,6 +420,16 @@ describe('isOwnedStoragePath', () => {
     }
   })
 
+  it('accepts a descriptive SLUG filename too (20260826140000), still tenant-pinned', () => {
+    expect(isOwnedStoragePath(A, `${A}/gallery/skeen-tour-with-jigitz.jpg`)).toBe(true)
+    expect(isOwnedStoragePath(B, `${A}/gallery/skeen-tour-with-jigitz.jpg`)).toBe(false)
+    // Not a slug: uppercase, spaces, dots in the name, an over-long name.
+    expect(isOwnedStoragePath(A, `${A}/gallery/Skeen.jpg`)).toBe(false)
+    expect(isOwnedStoragePath(A, `${A}/gallery/skeen tour.jpg`)).toBe(false)
+    expect(isOwnedStoragePath(A, `${A}/gallery/skeen.tour.jpg`)).toBe(false)
+    expect(isOwnedStoragePath(A, `${A}/gallery/${'a'.repeat(81)}.jpg`)).toBe(false)
+  })
+
   it("CRITICAL: rejects another artist's folder", () => {
     expect(isOwnedStoragePath(A, buildStoragePath(B, 'brand', 'png'))).toBe(false)
   })
@@ -440,8 +450,10 @@ describe('isOwnedStoragePath', () => {
     expect(isOwnedStoragePath(A, `${A}-evil/brand/${A}.png`)).toBe(false)
   })
 
-  it('rejects a non-uuid filename, a missing folder, and junk', () => {
-    for (const bad of [`${A}/brand/evil.png`, `${A}/x.png`, `${A}/brand/`, '', 'x']) {
+  it('rejects a missing folder, an empty name, and junk', () => {
+    // `evil.png` used to be here: since 20260826140000 a slug-shaped name is a legal
+    // file name (media-rename.ts). The tenant prefix is what keeps it harmless.
+    for (const bad of [`${A}/x.png`, `${A}/brand/`, `${A}/brand/.png`, '', 'x']) {
       expect(isOwnedStoragePath(A, bad), bad).toBe(false)
     }
   })

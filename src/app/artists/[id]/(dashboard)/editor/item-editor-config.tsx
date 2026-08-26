@@ -1,4 +1,6 @@
 import type { MediaKind } from '@samfox1/site-bridge/payload'
+import { recommendAlt, recommendSlug } from '@samfox1/site-bridge/alt'
+import type { EditorTextField } from './inspector-types'
 import { budgetFor, budgetSlotKey, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
   buildBackgroundItemStyleControls,
@@ -24,8 +26,10 @@ export type ItemEditorConfig = {
   /** The item's editable name, where the site reads one. */
   title?: { value: string; onSave: (next: string) => void }
   /** The image's alt text and JSON-LD kind (SEO_GEO_PLAN B6b) — gallery photos only. */
-  alt?: { value: string; onSave: (next: string) => void }
+  alt?: { value: string; preset: string; onSave: (next: string) => void }
   kind?: { value: MediaKind | null; onSave: (next: MediaKind) => void }
+  /** The object's file name (sans extension) and the recommended one; saved on Done. */
+  slug?: { value: string; preset: string; onSave: (next: string) => void }
   key: string
   preview: React.ReactNode
   candidates: PickCandidate[]
@@ -50,7 +54,11 @@ export type ItemEditorDeps = {
   /** Rename one photo — debounced through the inspector, saved to `media.label`. */
   renamePhoto: (id: string, label: string) => void
   setPhotoAlt: (id: string, alt: string) => void
+  /** The editor's text fields, read for the alt PRESET (a slot's caption, the artist
+   *  name) so the manager sees what ships before typing anything. */
+  textFields?: EditorTextField[]
   setPhotoKind: (id: string, kind: MediaKind) => void
+  setPhotoSlug: (id: string, slug: string) => void
   /** False on a site that locks its look: the panel opens with the title, Replace and
    *  Remove, and no style controls at all. Absent = true. */
   itemStyling?: boolean
@@ -62,7 +70,27 @@ export type ItemEditorDeps = {
 
 /** Null when the item vanished from the live lists (deleted under an open editor). */
 export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): ItemEditorConfig | null {
-  const { artistId, photos, videos, styleOptions, assetBudgets, itemStyling = true } = deps
+  const { artistId, photos, videos, styleOptions, assetBudgets, itemStyling = true, textFields = [] } = deps
+  const textValue = (key: string) => textFields.find((f) => f.key === key)?.value?.trim() || ''
+  /** What the site derives when no alt is typed: "<artist>, <caption or title>", else just
+   *  the artist's name. A caption alone ("Tour w: Jigitz") says where, not who — the
+   *  name is the word image search is asked for (Sam, 2026-08-26). Same order every site
+   *  is told to use (CONNECTING §10). */
+  const altPreset = (placed: GalleryPhoto) =>
+    recommendAlt({
+      artist: textValue('artist_name'),
+      caption: (placed.siteRole ? textValue(placed.siteRole.replace(/_photo$/, '_caption')) : '') || placed.label,
+      kind: placed.kind,
+    })
+  const altKind = (placed: GalleryPhoto) => ({
+    alt: { value: placed.alt ?? '', preset: altPreset(placed), onSave: (next: string) => deps.setPhotoAlt(placed.id, next) },
+    kind: { value: placed.kind, onSave: (next: MediaKind) => deps.setPhotoKind(placed.id, next) },
+    slug: {
+      value: fileNameOf(placed.storage_path).replace(/\.[a-z0-9]+$/i, ''),
+      preset: recommendSlug(placed.alt || altPreset(placed)),
+      onSave: (next: string) => deps.setPhotoSlug(placed.id, next),
+    },
+  })
   const photoCandidates = (list: GalleryPhoto[], aspect: string): PickCandidate[] =>
     list.map((p) => ({ id: p.id, label: fileNameOf(p.storage_path), thumb: <PhotoThumb path={p.storage_path} aspect={aspect} fit="cover" /> }))
   const videoCandidates = (list: EditorVideo[]): PickCandidate[] =>
@@ -83,8 +111,7 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
       onPick: (id) => deps.placeInSlot(item.role, photos.find((p) => p.id === id) ?? null),
       onRemove: () => deps.placeInSlot(item.role, null),
       // The slot's photo is a media row like any other: it needs its alt + kind too.
-      alt: { value: placed.alt ?? '', onSave: (next: string) => deps.setPhotoAlt(placed.id, next) },
-      kind: { value: placed.kind, onSave: (next: MediaKind) => deps.setPhotoKind(placed.id, next) },
+      ...altKind(placed),
       uploader: (
         <GallerySlotUploader
           artistId={artistId}
@@ -125,8 +152,7 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
       // The piece's NAME — what ftbk's desktop prints under its icon. The only thing a
       // locked site lets the manager change about the art itself.
       title: { value: placed.label ?? '', onSave: (next: string) => deps.renamePhoto(placed.id, next) },
-      alt: { value: placed.alt ?? '', onSave: (next: string) => deps.setPhotoAlt(placed.id, next) },
-      kind: { value: placed.kind, onSave: (next: MediaKind) => deps.setPhotoKind(placed.id, next) },
+      ...altKind(placed),
       // A locked site (manifest itemStyling:false) gets the SAME panel with no style
       // controls: Sam, 2026-08-21 — "these images should have their own editing panel,
       // but it should just be for the title of the image".

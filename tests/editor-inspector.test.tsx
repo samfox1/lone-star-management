@@ -19,6 +19,7 @@ import {
   setMediaLabelAction,
   setMediaAltAction,
   setMediaKindAction,
+  renameMediaAction,
   saveEditorFieldAction,
   saveEditorLinkAction,
   saveEditorStyleAction,
@@ -62,6 +63,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setMediaLabelAction: vi.fn(async () => ({})),
   setMediaAltAction: vi.fn(async () => ({})),
   setMediaKindAction: vi.fn(async () => ({})),
+  renameMediaAction: vi.fn(async () => ({ storage_path: 'artist-1/gallery/renamed.jpg' })),
   setSupportUrlAction: vi.fn(async () => ({})),
   assignHeroSlotAction: vi.fn(async () => ({})),
   assignComponentSlotAction: vi.fn(async () => ({})),
@@ -117,6 +119,7 @@ const placePhotoMock = vi.mocked(placeGalleryPhotoAction)
 const renameMock = vi.mocked(setMediaLabelAction)
 const altMock = vi.mocked(setMediaAltAction)
 const kindMock = vi.mocked(setMediaKindAction)
+const renameFileMock = vi.mocked(renameMediaAction)
 const setSupportUrlMock = vi.mocked(setSupportUrlAction)
 const saveStyleMock = vi.mocked(saveEditorStyleAction)
 const saveLinkMock = vi.mocked(saveEditorLinkAction)
@@ -457,6 +460,9 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     renderInspector(PHOTOS, { itemStyling: false })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    // Folded by default: one line + a small text button (Sam, 2026-08-26).
+    expect(screen.queryByRole('textbox', { name: /^Alt text for/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Edit alt for/ }))
     fireEvent.change(screen.getByRole('textbox', { name: /^Alt text for/ }), { target: { value: 'Skeen at Smartbar' } })
     return vi.waitFor(() => expect(altMock).toHaveBeenCalledWith('artist-1', 'm1', 'Skeen at Smartbar'))
   })
@@ -465,6 +471,7 @@ describe('EditorInspector — opening Images (orientation groups + asset picker)
     renderInspector(PHOTOS, { itemStyling: false })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Edit alt for/ }))
     const select = screen.getByRole('combobox', { name: /^Type for/ }) as HTMLSelectElement
     // Derived from the registry: a kind added later must show up here or the site can never
     // receive it (the hand-listed-fixture lesson, AGENTS.md rule 4).
@@ -2590,10 +2597,60 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
   it("CRITICAL: a placed SLOT photo gets Alt text + Type too, saved to its own row (Sam, 2026-08-26: 'I dont see it')", async () => {
     openImages(HELD_SLOT)
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Edit alt for/ }))
     fireEvent.change(screen.getByRole('textbox', { name: /^Alt text for/ }), { target: { value: 'Skeen, Oslo' } })
     await vi.waitFor(() => expect(altMock).toHaveBeenCalledWith('artist-1', HELD_SLOT[0].id, 'Skeen, Oslo'))
     fireEvent.change(screen.getByRole('combobox', { name: /^Type for/ }), { target: { value: MEDIA_KINDS[0] } })
     await vi.waitFor(() => expect(kindMock).toHaveBeenCalledWith('artist-1', HELD_SLOT[0].id, MEDIA_KINDS[0]))
+  })
+
+  it('shows a PRESET alt before anything is typed: "<artist>, <caption>"', () => {
+    const captionKey = (HELD_SLOT[0].siteRole as string).replace(/_photo$/, '_caption')
+    renderInspector(HELD_SLOT, {
+      components: [POLAROID],
+      textFields: [
+        ...TEXT_FIELDS,
+        { key: captionKey, label: 'Caption', type: 'text', value: 'Backstage, Oslo', multiline: false },
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    // The panel shows ONLY the link (Sam, 2026-08-26: "not the name"); the recommendation
+    // (recommendAlt, the bridge: who, then what) is the modal input's placeholder.
+    expect(screen.queryByText(/Skeen, Backstage, Oslo/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Edit alt for/ }))
+    // …in a MODAL, not more side panel (Sam, 2026-08-26).
+    const dialog = screen.getByRole('dialog', { name: /^Alt text for/ })
+    expect((within(dialog).getByRole('textbox', { name: /^Alt text for/ }) as HTMLInputElement).placeholder).toBe('Skeen, Backstage, Oslo')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog', { name: /^Alt text for/ })).toBeNull()
+  })
+
+  it('CRITICAL: the file name saves on Done (a storage copy), with the alt as its recommended slug', async () => {
+    const captionKey = (HELD_SLOT[0].siteRole as string).replace(/_photo$/, '_caption')
+    renderInspector(HELD_SLOT, {
+      components: [POLAROID],
+      textFields: [...TEXT_FIELDS, { key: captionKey, label: 'Caption', type: 'text', value: 'Tour w: Jigitz', multiline: false }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Edit alt for/ }))
+    const dialog = screen.getByRole('dialog', { name: /^Alt text for/ })
+    const file = within(dialog).getByRole('textbox', { name: /^File name for/ }) as HTMLInputElement
+    expect(file.value).toBe('a') // today's name, sans extension
+    expect(file.placeholder).toBe('skeen-tour-with-jigitz')
+    fireEvent.change(file, { target: { value: 'skeen-oslo' } })
+    expect(renameFileMock).not.toHaveBeenCalled() // not per keystroke
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    await vi.waitFor(() => expect(renameFileMock).toHaveBeenCalledWith('artist-1', HELD_SLOT[0].id, 'skeen-oslo'))
+  })
+
+  it('falls back to the artist name as the preset when there is no caption', () => {
+    renderInspector(HELD_SLOT, { components: [POLAROID], textFields: TEXT_FIELDS })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Edit alt for/ }))
+    expect((screen.getByRole('textbox', { name: /^Alt text for/ }) as HTMLInputElement).placeholder).toBe('Skeen')
   })
 
   it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls, Revert', () => {

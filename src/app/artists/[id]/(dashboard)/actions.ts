@@ -1,6 +1,7 @@
 'use server'
 
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
+import { renameMedia } from '@/lib/media-rename'
 
 /**
  * Content server actions for one artist's dashboard. Generic over content type
@@ -558,6 +559,23 @@ export async function placeGalleryPhotoAction(
  * locks its look: the art is the artist's, the caption is the manager's (Sam,
  * 2026-08-21). Draft until republished, like any content edit. RLS scopes the write.
  */
+/** Rename one image's FILE to a descriptive slug (SEO_GEO_PLAN B6b). Copy + row update
+ *  in lib/media-rename.ts; the new storage_path comes back so the panel can follow it. */
+export async function renameMediaAction(
+  artistId: string,
+  mediaId: string,
+  slug: string,
+): Promise<{ error?: string; storage_path?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+  const r = await renameMedia(supabase, artistId, mediaId, slug)
+  if (!r.error) revalidatePath(`/artists/${artistId}`, 'layout')
+  return r
+}
+
 /** Alt text for one image (SEO_GEO_PLAN B6b). Blank clears it: the site then derives
  *  one from the title or caption rather than shipping an empty description. Capped so a
  *  pasted paragraph cannot become an alt attribute. */

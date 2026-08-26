@@ -211,14 +211,16 @@ export function buildStoragePath(artistId: string, category: string, ext: string
  * still can't cross tenants), which is why this is a hardening step rather than a
  * breach fix — but it was the one boundary here held by convention alone.
  *
- * Deliberately strict: the tenant prefix, a simple folder name, a UUID filename, a short
- * extension. Everything the app writes goes through `buildStoragePath`, so anything that
- * fails this was not written by the normal path.
+ * Deliberately strict: the tenant prefix, a simple folder name, a filename of lowercase
+ * letters, digits and dashes (a UUID, or a descriptive slug since 20260826140000 — see
+ * media-rename.ts), a short extension. Everything the app writes goes through
+ * `buildStoragePath` or `slugStoragePath`, so anything that fails this was not written
+ * by the normal path.
  */
 export function isOwnedStoragePath(artistId: string, path: string): boolean {
   if (typeof path !== 'string' || path.includes('..')) return false
   const re = new RegExp(
-    `^${artistId.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}/[a-z0-9-]{1,32}/[0-9a-f-]{36}\\.[a-z0-9]{2,5}$`,
+    `^${artistId.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}/[a-z0-9-]{1,32}/[a-z0-9-]{1,80}\\.[a-z0-9]{2,5}$`,
   )
   return re.test(path)
 }

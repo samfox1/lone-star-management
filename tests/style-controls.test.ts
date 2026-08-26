@@ -539,7 +539,8 @@ describe('buildItemStyleControls (per-image/video)', () => {
     expect(item.map((c) => c.id)).toEqual([
       'size', 'opacity', 'borderWidth', 'borderColor', 'radius', 'shadow',
       'grayscale', 'sepia', 'brightness', 'contrast', 'saturate', 'soften', 'tilt', 'fit', 'fitPosition',
-      'shape', 'feather', 'pad',
+      // Matte ('pad') removed 2026-08-26 — see buildItemStyleControls.
+      'shape', 'feather',
       // Entrances PAUSED 2026-08-12 (see motionControls) — hover stays.
       'hover', 'hoverColor',
     ])

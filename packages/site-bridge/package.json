@@ -34,6 +34,10 @@
       "types": "./src/music.ts",
       "default": "./src/music.ts"
     },
+    "./alt": {
+      "types": "./src/alt.ts",
+      "default": "./src/alt.ts"
+    },
     "./markers": {
       "types": "./src/markers.ts",
       "default": "./src/markers.ts"

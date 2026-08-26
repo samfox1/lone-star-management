@@ -21,6 +21,7 @@ let mediaId: string | null = null
 let taggedId: string | null = null
 /** The alt/kind row the third test plants — deleted by id, same rule. */
 let namedId: string | null = null
+let defaultId: string | null = null
 
 type WireMediaRow = { path: string; collection?: string | null; label?: string | null; alt?: string | null; kind?: string | null }
 
@@ -39,7 +40,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  for (const id of [mediaId, taggedId, namedId]) {
+  for (const id of [mediaId, taggedId, namedId, defaultId]) {
     if (!id) continue
     await svc.from('media').delete().eq('id', id)
     await svc.from('revisions').delete().eq('entity_id', id)
@@ -129,6 +130,16 @@ describe('media is draft until published', () => {
     for (const key of Object.keys(wire!)) {
       expect((working as Record<string, unknown>)[key], key).toEqual((wire as Record<string, unknown>)[key])
     }
+  })
+
+  it("an image uploaded with NO kind ships as 'photo' — the preset (20260826130000)", async () => {
+    // The first test's row was inserted without a kind and is published above; the
+    // column default, not the site, is what assigns the preset.
+    const wire = (await publicMedia()).find((m) => m.path.endsWith('phase0-alt-kind-test.jpg'))
+    expect(wire).toBeTruthy()
+    const { data } = await asA.from('media').insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/phase0-default-kind.jpg` }).select('id, kind').single()
+    defaultId = (data?.id as string) ?? null
+    expect(data?.kind).toBe(MEDIA_KINDS[0])
   })
 
   it('rejects a kind outside the registry (CHECK 23514, not RLS: the manager owns the row)', async () => {

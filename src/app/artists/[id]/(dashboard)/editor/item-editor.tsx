@@ -1,4 +1,5 @@
 import { MEDIA_KINDS, type MediaKind } from '@samfox1/site-bridge/payload'
+import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { useMemo, useState } from 'react'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { applyStyleValue, buildItemStyleControls, fromItemStored, toItemStored, type StyleControl } from '@/lib/site-editor/style-controls'
@@ -27,6 +28,122 @@ import { saveEditorStyleAction } from '../actions'
 /** Plain words for the fact-sheet kinds. `Record<MediaKind, …>` is the compile guard:
  *  a kind added to the registry with no label here fails tsc. */
 const KIND_LABEL: Record<MediaKind, string> = { photo: 'Photo', artwork: 'Artwork', none: 'Not listed' }
+
+/**
+ * Alt text + fact-sheet kind live behind ONE thin, underlined, centred "Edit alt tag"
+ * link (Sam, 2026-08-26: "this seems like too much… just needs to say edit alt tag on the
+ * main panel, not the name"). It opens a small modal; the recommended alt sits in the
+ * input as its placeholder.
+ */
+function AltRow({
+  label,
+  alt,
+  kind,
+  slug,
+}: {
+  label: string
+  alt: { value: string; preset: string; onSave: (next: string) => void }
+  kind: { value: MediaKind | null; onSave: (next: MediaKind) => void }
+  slug?: { value: string; preset: string; onSave: (next: string) => void }
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    // pt-4 above; the Style label brings its own pt-4 below: equal air both sides.
+    <div className="flex justify-center px-5 pt-4">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Edit alt for ${label}`}
+        className="text-[11px] font-normal text-ink-muted underline underline-offset-2 hover:text-ink"
+      >
+        Edit alt tag
+      </button>
+      {open && <AltModal label={label} alt={alt} kind={kind} slug={slug} onClose={() => setOpen(false)} />}
+    </div>
+  )
+}
+
+/** The little window "Edit alt" opens (Sam, 2026-08-26: a modal, not more side panel).
+ *  Same overlay/card as the other editor dialogs; saves live as the title does. */
+function AltModal({
+  label,
+  alt,
+  kind,
+  slug,
+  onClose,
+}: {
+  label: string
+  alt: { value: string; preset: string; onSave: (next: string) => void }
+  kind: { value: MediaKind | null; onSave: (next: MediaKind) => void }
+  slug?: { value: string; preset: string; onSave: (next: string) => void }
+  onClose: () => void
+}) {
+  const [text, setText] = useState(alt.value)
+  const [name, setName] = useState(slug?.value ?? '')
+  // The file name is a storage copy, so it saves on Done — not per keystroke.
+  const done = () => {
+    const next = name.trim() || slug?.preset || ''
+    if (slug && next && next !== slug.value) slug.onSave(next)
+    onClose()
+  }
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Alt text for ${label}`}
+      className={modalOverlayClass}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className={`${modalCardClass} w-[420px] gap-3`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className={EYEBROW}>Alt text</div>
+          <button type="button" onClick={onClose} aria-label="Close" className={`${EYEBROW} text-ink-faint hover:text-ink`}>
+            Close
+          </button>
+        </div>
+        <input
+          autoFocus
+          value={text}
+          placeholder={alt.preset}
+          aria-label={`Alt text for ${label}`}
+          onChange={(e) => {
+            setText(e.target.value)
+            alt.onSave(e.target.value)
+          }}
+          className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <div className={`${EYEBROW} mt-1`}>Type</div>
+        <select
+          value={kind.value ?? 'photo'}
+          aria-label={`Type for ${label}`}
+          onChange={(e) => kind.onSave(e.target.value as MediaKind)}
+          className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+        >
+          {MEDIA_KINDS.map((o) => (
+            <option key={o} value={o}>
+              {KIND_LABEL[o]}
+            </option>
+          ))}
+        </select>
+        {slug && (
+          <>
+            <div className={`${EYEBROW} mt-1`}>File name</div>
+            <input
+              value={name}
+              placeholder={slug.preset}
+              aria-label={`File name for ${label}`}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 font-space text-sm outline-none focus:border-accent"
+            />
+          </>
+        )}
+        <button type="button" onClick={done} className="mt-1 self-end rounded-lg border border-hairline px-4 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] hover:bg-paper">
+          Done
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /**
  * The item's name, saved as it is typed (debounced) rather than staged with the styles.
@@ -105,6 +222,7 @@ export function ItemEditor({
   title,
   alt,
   kind,
+  slug,
   onApplyStyle,
   onBack,
   measured,
@@ -139,8 +257,9 @@ export function ItemEditor({
    *  manager typing a caption is asked what to do about sliders they never touched. */
   title?: { value: string; onSave: (next: string) => void }
   /** Alt text + JSON-LD kind (SEO_GEO_PLAN B6b). Saved live, like the title. */
-  alt?: { value: string; onSave: (next: string) => void }
+  alt?: { value: string; preset: string; onSave: (next: string) => void }
   kind?: { value: MediaKind | null; onSave: (next: MediaKind) => void }
+  slug?: { value: string; preset: string; onSave: (next: string) => void }
   onApplyStyle?: (key: string, className: string) => void
   onBack: () => void
   /** What this item's element actually renders (bridge 0.25.2, measure-on-open) —
@@ -216,29 +335,7 @@ export function ItemEditor({
         </div>
 
         {title && <ItemTitleField label={label} title={title} />}
-        {alt && <ItemTextField heading="Alt text" label={label} field={alt} />}
-        {kind && (
-          <>
-            <GroupLabel>Type</GroupLabel>
-            <div className="px-5 pb-3">
-              <select
-                value={kind.value ?? ''}
-                aria-label={`Type for ${label}`}
-                onChange={(e) => {
-                  if (e.target.value) kind.onSave(e.target.value as MediaKind)
-                }}
-                className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
-              >
-                <option value="">—</option>
-                {MEDIA_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {KIND_LABEL[k]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
+        {alt && kind && <AltRow label={label} alt={alt} kind={kind} slug={slug} />}
 
         {controls.length > 0 && <GroupLabel>Style</GroupLabel>}
         <div className="px-5 pb-3">

@@ -51,6 +51,7 @@ import {
   setMediaLabelAction,
   setMediaAltAction,
   setMediaKindAction,
+  renameMediaAction,
   setOnSiteAction,
 } from '../actions'
 import { useOptimisticRunner } from './use-optimistic'
@@ -585,6 +586,13 @@ export function EditorInspector({
     setPhotos((list) => list.map((p) => (p.id === id ? { ...p, alt } : p)))
     photoAlt.save(id, alt)
   }
+  /** File name — a copy in storage, so explicit (on Done), never debounced. The row's
+   *  new storage_path comes back and the panel follows it. */
+  function setPhotoSlug(id: string, slug: string) {
+    void renameMediaAction(artistId, id, slug).then((r) => {
+      if (r.storage_path) setPhotos((list) => list.map((p) => (p.id === id ? { ...p, storage_path: r.storage_path! } : p)))
+    })
+  }
   /** JSON-LD kind — a select, so no debounce; optimistic with rollback. */
   function setPhotoKind(id: string, kind: MediaKind) {
     const prev = photos.find((p) => p.id === id)?.kind ?? null
@@ -785,6 +793,8 @@ export function EditorInspector({
       renamePhoto,
       setPhotoAlt,
       setPhotoKind,
+      setPhotoSlug,
+      textFields,
       itemStyling,
       addPhoto,
       assignHero,
@@ -797,6 +807,7 @@ export function EditorInspector({
         title={cfg.title}
         alt={cfg.alt}
         kind={cfg.kind}
+        slug={cfg.slug}
         key={cfg.key}
         artistId={artistId}
         styleKey={cfg.key}
