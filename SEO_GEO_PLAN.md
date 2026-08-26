@@ -55,6 +55,16 @@ produces HTML. Nothing rendered is ever invented copy.
    standalone `tools/seo` page is retired once the Site tab has parity.
 4. **Skeen first**, then the bridge generalises what skeen proved, then ftbk
    and wren adopt it.
+5. **The site declares the default placement** (2026-08-26). Skeen removed
+   its bio on purpose; deploying must not put it back. Manifest:
+   `about: { placements: ['home','page'], default: 'page' }`.
+6. **Genre and location are artist facts** (2026-08-26): columns on
+   `artists` next to `bio`, in `ARTIST_SNAPSHOT`, so the EPK and copilot get
+   them too. Not `site_content`.
+7. **Images get descriptive slugs AND alt text, both editable** (2026-08-26).
+   Auto-filled, manager can change either. Both must land in the final HTML:
+   plain `<img src alt>` pointing straight at the storage URL. No
+   `/_next/image`, no client-only rendering, no redirect chains.
 
 ## New content keys (all `site_content`, all optional, unset = auto)
 
@@ -62,10 +72,27 @@ produces HTML. Nothing rendered is ever invented copy.
 | --- | --- | --- |
 | `about_placement` | `home` \| `page` \| `hidden` | where the bio renders. Default `home` if the site declares it, else `page`, else `hidden`. `hidden` still emits the bio in meta + JSON-LD, so search still gets it |
 | `about_heading` | text | heading over the bio (default: "About") |
-| `seo_genre` | text, comma-separated | `MusicGroup.genre`. Real GEO value: "Chicago DJ" answers come from facts like this |
-| `seo_location` | text | `MusicGroup.foundingLocation` / "based in" |
 
 Existing `seo_title`, `seo_description`, `og_image` stay as they are.
+
+## New artist columns (`artists`, in `ARTIST_SNAPSHOT`)
+
+| Column | Used for |
+| --- | --- |
+| `genre` | `MusicGroup.genre`, EPK. "Chicago DJ" style AI answers come from facts like this |
+| `location` | `MusicGroup.foundingLocation` / "based in", EPK |
+
+## Images: slug + alt (`media`, and release covers)
+
+| Column | Default | Rule |
+| --- | --- | --- |
+| `slug` | slugified original filename | `a-z0-9-`, unique per artist. Changing it MOVES the object to `{artistId}/{category}/{slug}.{ext}` and updates `storage_path`, so the URL carries the name |
+| `alt` | empty → site derives (caption, title, artist name) | plain description, not keywords. Editable in the Images panel, one field, no instruction copy |
+
+Both ride the existing media snapshot (`alt` added; `path` already there).
+Decorative images (cursor, ornaments) are the site's call: `aria-hidden`,
+empty alt, never a manager setting. Skeen's `render/image` URLs are fine:
+same host, one hop, filename in the path.
 
 Add the new keys to `SEO_FIELDS` so they inherit the reserved-key rule, and
 give them one validated write path (`saveSeoField`). Values are strings; the
@@ -84,7 +111,7 @@ for "ships in real HTML" guards.
 | 1.1 | Alt text: covers get the release/song title; polaroids get their caption | `components/MusicGrid.tsx:159,219,276`, `components/About.tsx:104` | built HTML: no `<img alt="">` outside `aria-hidden` |
 | 1.2 | `<h2>` for Music, About, Videos. Use `<Text as="h2" field=…>` so they stay editable (a bare literal is invisible to the editor's DOM-derived manifest). Sr-only if the design forbids visible ones | `Work.tsx`, `About.tsx`, `Videos.tsx`, keys in `lib/siteText.ts` | built HTML: every `main > section[id]` contains an `h2`; `lib/editList.test.ts` key-collision guard |
 | 1.3 | `/edit` noindex: new server `app/edit/layout.tsx` exporting `robots: { index: false, follow: false }`. Do NOT redeclare icons (build test pins exactly one `rel=icon`) | `app/edit/layout.tsx` | built `edit.html` has `<meta name="robots" content="noindex`; `index.html` does not |
-| 1.4 | `X-Robots-Tag: noindex` header scoped to the `*.vercel.app` host | `next.config.ts` headers with `has: [{type:'host', value:'.*\\.vercel\\.app'}]` | config unit test: header present for vercel host, absent for www |
+| 1.4 | `X-Robots-Tag: noindex` header scoped to the `*.vercel.app` host | `next.config.ts` headers with `has: [{type:'host', value:'.*\\.vercel\\.app'}]` | none that bites locally (a config test would copy the implementation). `seo-check.sh` checks the live header after deploy |
 | 1.5 | `app/not-found.tsx` on-brand 404 | skeen | returns 404 status (already does); cosmetic |
 | 1.6 | Fix stale `vitest.config.ts:14` inline regex (`@lone-star/site-bridge` → `@samfox1/site-bridge`) | skeen | n/a, housekeeping |
 
@@ -102,9 +129,10 @@ will trip it in Phase 3.
 `published_at` for the slug; publishing bumps it; a never-published slug
 returns null.
 
-**B2. Manifest declares about placements.** `TemplateManifest.about?:
-readonly ('home' | 'page')[]`. The editor offers only what the site declares
-(editor-adapts-to-site rule); `hidden` is always offered. Test: `Record<AboutPlacement, true>`
+**B2. Manifest declares about placements and the default.**
+`TemplateManifest.about?: { placements: readonly ('home' | 'page')[]; default: AboutPlacement }`.
+The editor offers only what the site declares (editor-adapts-to-site rule);
+`hidden` is always offered; unset = the site's default. Test: `Record<AboutPlacement, true>`
 compile guard; server rejects a placement the manifest does not declare.
 
 **B3. `fetchPublicReleases` in the bridge.** Wraps `get_public_releases`
@@ -120,7 +148,7 @@ jsonLdGraph(payload, { origin, releases?, aboutUrl? })
                                         // MusicGroup(+genre, foundingLocation, sameAs) + WebSite
                                         // + MusicEvent per dated upcoming show
                                         // + MusicAlbum per release (only when releases passed)
-sitemapEntries(payload, { origin, pages }) // lastModified from payload.published_at
+sitemapEntries(payload, { origin, pages, today }) // lastModified = max(published_at, latest show date now past)
 robotsRules(origin)                     // { rules, sitemap, host }
 aboutPlacement(payload, manifestAbout)  // resolves the default described above
 ```
@@ -131,8 +159,9 @@ skeen's `lib/seo.test.ts` cases and lone-star's `tests/seo.test.ts`; pin the
 override precedence (currently unpinned anywhere); each JSON-LD type has a
 fixture derived from the payload type, not hand-listed.
 
-**B5. `auditSeo(document)`** in the bridge's audit module, run by sites in
-their build-output tests: meta description present and >60 chars, exactly
+**B5. `auditSeo(html: string)`** in the bridge's audit module, run by sites in
+their build-output tests. Takes the HTML string (build tests run in node, no
+DOM); parse with `linkedom` inside the bridge. Checks: meta description present and >60 chars, exactly
 one `h1`, an `h2` in every `section[id]`, no content `<img alt="">`, one
 `ld+json` block that parses, canonical present, noindex on `/edit`.
 Add to `checkContract` §7 as rule 6 "the public page is findable".
@@ -140,16 +169,25 @@ Add to `checkContract` §7 as rule 6 "the public page is findable".
 **B6. SEO / GEO group in the Site tab.** Rows (version-A key/value + hover
 pencil, per the panel consistency rule): Title, Description, Social card
 (reuse the og picker), About placement (select, filtered by B2), Genre,
-Location. Bio row opens the existing `artist_bio` text editor. Then delete
+Location. Bio row opens the existing `artist_bio` text editor.
+
+**B6b. Slug + alt on images.** Migration: `media.slug`, `media.alt`; backfill
+slug from `storage_path`. `renameMediaAction` validates the slug, moves the
+object, updates the row (one transaction; on move failure the row is
+untouched). Images panel tile gets two fields. Tests: slug collision
+rejected; move failure leaves `storage_path` unchanged; `alt` appears in the
+publish snapshot (derive the snapshot fixture from `PUBLISHABLE.media`). Then delete
 `tools/seo` (its Publish button was only there because the page was outside
 the editor). Tests: component test for each row's save call; reserved-key
 refusal still pinned in `tests/editor-field-save.test.ts`.
 
 **B7. CONNECTING.md §10 "Be findable."** The rule sheet for new sites:
 emit `resolveSeo` in `generateMetadata`, inline `jsonLdGraph`, `sitemap.ts` +
-`robots.ts` from the builders, one `h1`, an `h2` per section, alt from
-titles, `/edit` noindex, honour `about_placement` with a real `/about` route
-when you declare `page`. Add "SEO" to the sample manifest.
+`robots.ts` from the builders, one `h1`, an `h2` per section, `/edit`
+noindex, honour `about_placement` with a real `/about` route when you
+declare `page`. Images: plain `<img>` in server HTML, `src` straight at the
+storage URL (object or render/image, never `/_next/image` or a site proxy),
+`alt` = `media.alt` else the site's derived text. Add "SEO" to the sample manifest.
 
 Bridge bump to **0.33.0** (`package.json` + `PACKAGE_VERSION`), publish, then
 sites redeploy **without build cache** (memory: bridge-deploy-cache-gotcha).
@@ -161,7 +199,8 @@ sites redeploy **without build cache** (memory: bridge-deploy-cache-gotcha).
 | 3.1 | Replace `lib/seo.ts`, `lib/jsonLd.ts` with bridge builders; delete the local copies | existing `layout.test.ts` still green against bridge output |
 | 3.2 | About: render bio per `about_placement`. `home` → paragraphs in the About section (polaroid wall keeps its place); `page` → new `app/about/page.tsx` using the site's fonts/tokens/nav/footer, footer link "About", sitemap entry | built HTML: with `page`, `/about` ships the bio text and `index.html` links to it; with `home`, `index.html` contains the bio; with `hidden`, neither, but the meta description and JSON-LD still carry it |
 | 3.3 | JSON-LD: MusicEvent + MusicAlbum via `jsonLdGraph` with `fetchPublicReleases` | build test parses the graph, finds one `MusicEvent` per dated upcoming show and one `MusicAlbum` per release |
-| 3.4 | `sitemap.ts` from `sitemapEntries`: `lastModified = published_at` | unit: same payload → same lastmod (no clock); `/about` present iff placement is `page` |
+| 3.6 | Bing: add the property in Bing Webmaster Tools (import from GSC), submit the sitemap. IndexNow ping on publish is optional | live: Bing `site:skeenmusic.com` shows the pages |
+| 3.4 | `sitemap.ts` from `sitemapEntries`: `lastModified = max(published_at, latest past show)` | unit: same payload → same lastmod (no clock); `/about` present iff placement is `page` |
 | 3.5 | `auditSeo` wired into `test/build-output.test.ts` | the audit itself |
 
 Deploy: push skeen `main` (never `vercel --prod`). Verify live with
@@ -265,6 +304,7 @@ Record in `SEO_GEO_BASELINE.md` in skeen-website, dated:
 - [ ] **B1 `published_at`**: RPC test proves the timestamp moves only on publish
 - [ ] **B4 `resolveSeo`, `jsonLdGraph`, `sitemapEntries`, `robotsRules`**: unit tests green, mutation run shows no survivors in the new module
 - [ ] **B5 `auditSeo`**: run against skeen's current build → it must FAIL on the items skeen hasn't fixed yet (that's how we know it bites)
+- [ ] **B6b slug + alt**: rename an image in the editor, publish, `curl` the homepage: the `<img>` has the slug in `src` and the alt text in `alt`, in the raw HTML (not after JS)
 - [ ] **B6 Site tab SEO/GEO group**: edit Title / Genre / Location / About placement, publish, then `curl` the homepage and see the values in `<title>`, JSON-LD, and the about section
 - [ ] **B7 CONNECTING.md §10** written; `checkContract` gains rule 6
 
