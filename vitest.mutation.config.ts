@@ -34,6 +34,7 @@ export default defineConfig({
       'tests/**/*.isolation.test.ts',
       'tests/analytics.test.ts',
       'tests/media-rename-live.test.ts',
+      'tests/publish-published-at-live.test.ts',
       'tests/analytics-rate-limit.test.ts',
       'tests/audio-signed-url.test.ts',
       'tests/audio-storage.test.ts',

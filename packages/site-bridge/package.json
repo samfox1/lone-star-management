@@ -38,6 +38,10 @@
       "types": "./src/alt.ts",
       "default": "./src/alt.ts"
     },
+    "./seo": {
+      "types": "./src/seo.ts",
+      "default": "./src/seo.ts"
+    },
     "./markers": {
       "types": "./src/markers.ts",
       "default": "./src/markers.ts"

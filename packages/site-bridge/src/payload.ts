@@ -215,7 +215,15 @@ export type PublicSitePayload = {
      *  fan. Only the EPK PDF builder reads them, server-side. */
     tech_rider_path?: string | null
     stage_plot_path?: string | null
+    /** SEO_GEO_PLAN: artist facts for the JSON-LD fact sheet. Optional on the wire until
+     *  the columns land (Phase 2 B6); a site reads them with `?? null`. */
+    genre?: string | null
+    location?: string | null
+    schema_type?: 'MusicGroup' | 'Person' | null
   }
+  /** When the site last changed: max(revisions.published_at) for the artist
+   *  (20260826150000). Absent on a door older than that — read with `?? null`. */
+  published_at?: string | null
   tracks: SiteTrack[]
   tour_dates: SiteTourDate[]
   merch: SiteMerch[]
