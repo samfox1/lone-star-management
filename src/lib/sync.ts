@@ -569,6 +569,7 @@ export function syncYouTubeVideos(
           provider: v.provider,
           embed_url: v.embed_url,
           is_short: v.is_short,
+          published_at: v.published_at ?? null,
           ...(v.views != null ? { youtube_views: v.views, youtube_views_at: new Date().toISOString() } : {}),
         },
       })),

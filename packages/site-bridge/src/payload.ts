@@ -125,9 +125,11 @@ export type SiteVideo = {
    *  `hero_portrait` / `bio_background`), or null for the band/library
    *  (20260716200000). How a site picks its hero clip. */
   site_role?: string | null
-  /** When the manager added it (20260826170000) — VideoObject.uploadDate. Absent on
-   *  older revisions. */
+  /** When the manager added it (20260826170000). Absent on older revisions. */
   created_at?: string | null
+  /** When the PLATFORM published it (20260826180000; YouTube sync fills it) —
+   *  VideoObject.uploadDate. Null/absent = unknown, and the video is not stated. */
+  published_at?: string | null
 }
 
 export type MediaPurpose =

@@ -51,8 +51,9 @@ produces HTML. Nothing rendered is ever invented copy.
    section or `/about`, the meta description fallback, JSON-LD `description`,
    and the EPK. Edited in the existing text editor. (Open: whether a site ever
    needs a separate, longer web bio. Not now.)
-3. **SEO / GEO lives in the editor's Site tab**, as its own group. The
-   standalone `tools/seo` page is retired once the Site tab has parity.
+3. **SEO / GEO lives in the editor's Site tab**, as its own group, for quick
+   edits. (Revised 2026-08-26: `tools/seo` is NOT retired — it is the full SEO / GEO
+   page: explanations, the live check, the AI probe.)
 4. **Skeen first**, then the bridge generalises what skeen proved, then ftbk
    and wren adopt it.
 5. **The site declares the default placement** (2026-08-26). Skeen removed
@@ -237,7 +238,7 @@ Google's Rich Results test and a fetch of `/sitemap.xml`, `/robots.txt`, `/about
 
 ftbk (merge its unmerged 0.32 branch first), then wren. Each site: bump the
 bridge, run `checkContract` + `auditSeo`, declare `about`, add `/about` if
-declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
+declared, redeploy no-cache. `tools/seo` stays (the SEO / GEO page).
 
 ## Out of scope (noted, not planned)
 
@@ -266,6 +267,7 @@ declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
 - [ ] Phase 2: B2 DONE (manifest.about) · B3 DONE (fetchPublicReleases) · B6 DONE (Site tab SEO/GEO group, saveSeoField gate, artists.genre/location/schema_type 20260826160000) · B5 DONE (auditSeo, regex over built html) · B7 DONE (CONNECTING §7 rule 6 + §10) · bridge bumped to 0.33.0 locally, NOT published · LEFT: publish 0.33.0, retire tools/seo after Phase 3 · B1 DONE (published_at on the wire, 20260826150000) · B4 DONE (`@samfox1/site-bridge/seo`: resolveSeo, jsonLdGraph, jsonLdScript, sitemapEntries, lastModifiedFrom, robotsRules, aboutPlacement; 20 tests, 4-way mutation check) · B6b DONE 2026-08-26: alt + kind (20260826120000/130000) + slug rename-by-copy (20260826140000); `Edit alt tag` link → modal (alt, type, file name); `recommendAlt`/`recommendSlug` in the bridge (`@samfox1/site-bridge/alt`). Matte slider removed from image items.
 - [x] Review 2026-08-26 (3 of 5 lenses ran; verification pass hit the session limit, triaged by hand). Fixed: media.alt never reached skeen's page (HIGH); tools/seo bypassed the SEO gate (HIGH); events need a place + honour is_past; VideoObject only with Google's required fields, SoundCloud excluded; Person drops genre/logo; images listed = images shown (listImage hook); published_at counts tombstones; /about only with a bio; empty Videos keeps its h2; /about keeps og image; prod vercel alias 308s to www; og_image https-only; artistFactUpdate allowlist tested; reserved-key test derived. Bridge 0.33.3.
 - [x] Phase 3 DEPLOYED to skeenmusic.com 2026-08-26 (skeen main f644436): all seo-check.sh checks pass, /about live + in sitemap, lastmod = last publish, 1 MusicEvent + 7 MusicAlbum in the graph. Manual next: Google Search Console + Bing property, Rich Results Test, the 5-prompt AI probe (baseline still needs these).
+- [x] Review 2 (2026-08-26, 4 lenses, 20/20 confirmed): robots no longer disallows /edit; sameAs = profile URLs only; artist description = the whole bio; events need a city; VideoObject.uploadDate = the platform's publish date (videos.published_at, YouTube sync fills it; unknown = not stated); live check gains facts-geo + bio-visible, rules derived from SEO_RULES; probe prompts frozen v1 with no fact leak; /about carries only the artist + site nodes. OPEN for Sam: Genre + Based in (empty on skeen), a longer bio (≥ 2,500 chars visible), GSC/Bing, the probe baseline.
 - [x] SEO / GEO page (Sam, 2026-08-26): `tools/seo` rebuilt — six sections (live check, the words search shows + social card, the fact sheet's facts, the bio, pictures, the AI probe), each with what it does + how to check; `runSeoAuditAction` fetches the public site and runs auditSeo + auditJsonLd (Google's required fields). Live skeen: all clear, 1 event / 7 albums / 15 songs / 5 photos.
 - [ ] (was) Phase 3: BUILT on skeen main 2026-08-26 (bridge 0.33.1, /about, fact sheet, sitemap lastmod, auditSeo in the build test) — NOT yet pushed/deployed. Bridge 0.33.0/0.33.1 published.
 - [ ] Phase 4
@@ -312,50 +314,50 @@ Record in `SEO_GEO_BASELINE.md` in skeen-website, dated:
 
 ### Phase 1 — Skeen quick wins
 
-- [ ] **1.1 Alt text**
+- [x] **1.1 Alt text** (live 2026-08-26)
   - shipped: `alt=""` count drops to the decorative ones only (cursor image); build test red when an alt is removed
   - improved: Lighthouse Accessibility "Image elements have alt" passes; GSC Performance → Search type: Image shows impressions after ~4 weeks (today: none expected); Google Images `site:skeenmusic.com` returns covers
-- [ ] **1.2 Section headings**
+- [x] **1.2 Section headings**
   - shipped: outline shows `h1` → `h2` Tour / Music / About / Videos; build test red when an `h2` is dropped
   - improved: Lighthouse SEO "heading elements in order" passes; GSC sitelinks for the brand query start showing section anchors (`#work`, `#shows`) after a few weeks
-- [ ] **1.3 `/edit` noindex**
+- [x] **1.3 `/edit` noindex** (review fix: robots.txt no longer disallows /edit, so Google can fetch it and honour the tag)
   - shipped: `curl -s https://www.skeenmusic.com/edit | grep -c 'name="robots"'` = 1, homepage = 0
   - improved: GSC URL Inspection on `/edit` says "Excluded by noindex tag"; `site:skeenmusic.com/edit` returns nothing
-- [ ] **1.4 vercel.app header**
+- [x] **1.4 vercel.app**: production alias 308s to www; previews noindex
   - shipped: `curl -sI https://<skeen>.vercel.app | grep -i x-robots-tag` → `noindex`; the www host has none
   - improved: `site:vercel.app skeen` returns nothing after re-crawl
-- [ ] **1.5 404 page**
+- [x] **1.5 404 page**
   - shipped: `curl -sI https://www.skeenmusic.com/nope | head -1` → 404
   - improved: GSC Pages → "Not found (404)" rows stay as 404, none flip to "Soft 404"
-- [ ] **1.0 `scripts/seo-check.sh`** in skeen-website: runs every curl line above against a host argument and prints pass/fail. Re-run after each deploy.
+- [x] **1.0 `scripts/seo-check.sh`** in skeen-website: runs every curl line above against a host argument and prints pass/fail. Re-run after each deploy.
 
 ### Phase 2 — Bridge + editor
 
-- [ ] **B1 `published_at`**: RPC test proves the timestamp moves only on publish
-- [ ] **B4 `resolveSeo`, `jsonLdGraph`, `sitemapEntries`, `robotsRules`**: unit tests green, mutation run shows no survivors in the new module
-- [ ] **B5 `auditSeo`**: run against skeen's current build → it must FAIL on the items skeen hasn't fixed yet (that's how we know it bites)
-- [ ] **B6b slug + alt**: rename an image in the editor, publish, `curl` the homepage: the `<img>` has the slug in `src` and the alt text in `alt`, in the raw HTML (not after JS)
-- [ ] **B6 Site tab SEO/GEO group**: edit Title / Genre / Location / About placement, publish, then `curl` the homepage and see the values in `<title>`, JSON-LD, and the about section
-- [ ] **B7 CONNECTING.md §10** written; `checkContract` gains rule 6
+- [x] **B1 `published_at`** (counts tombstones since 20260826170000): RPC test proves the timestamp moves only on publish
+- [x] **B4 `resolveSeo`, `jsonLdGraph`, `sitemapEntries`, `robotsRules`** (mutation-checked by hand; bridge modules cannot join the Stryker slice — workspace symlink caveat in stryker.config.json): unit tests green, mutation run shows no survivors in the new module
+- [x] **B5 `auditSeo`** (+ auditJsonLd, auditGeoFacts, SEO_RULES registry): run against skeen's current build → it must FAIL on the items skeen hasn't fixed yet (that's how we know it bites)
+- [x] **B6b slug + alt**: rename an image in the editor, publish, `curl` the homepage: the `<img>` has the slug in `src` and the alt text in `alt`, in the raw HTML (not after JS)
+- [x] **B6 Site tab SEO/GEO group** (code) — DATA STILL EMPTY for skeen: Genre + Based in must be filled and published: edit Title / Genre / Location / About placement, publish, then `curl` the homepage and see the values in `<title>`, JSON-LD, and the about section
+- [x] **B7 CONNECTING.md §10** written; `checkContract` gains rule 6
 
 ### Phase 3 — Skeen adopts
 
-- [ ] **3.2 Bio visible (About section or `/about`)**
+- [ ] **3.2 Bio visible (About section or `/about`)** — SHIPPED (/about live, linked, in the sitemap) but the ≥ 2,500 chars gate is UNMET: 1,317 + 338. The bio is 288 chars. Content task for Sam.
   - shipped: visible text length ≥ 2,500 chars (from ~1,386); with `page`, `curl -s /about` contains the bio and the homepage footer links to it; with `hidden`, `/about` returns 404
   - improved (SEO): GSC URL Inspection on `/about` → "Indexed"; `site:skeenmusic.com` grows by one; brand-query impressions up vs baseline at 4 weeks
   - improved (GEO): re-run the 5-prompt probe. Target: prompts 1, 2, 5 cite skeenmusic.com in at least 2 of 4 engines, and the genre/location facts match what's in the editor
-- [ ] **3.3 MusicEvent + MusicAlbum JSON-LD**
+- [x] **3.3 MusicEvent + MusicAlbum JSON-LD** (+ VideoObject once a platform publish date is on the wire)
   - shipped: Rich Results Test detects "Event" items, one per dated upcoming show; Schema validator shows 0 errors
   - improved: GSC Enhancements → "Events" report appears with valid items; Google search "skeen tour" shows the concert carousel; prompt 3 answers with the real next show
-- [ ] **3.4 Sitemap lastmod**
+- [x] **3.4 Sitemap lastmod** (skeen 3537b05: the route revalidates; it had been frozen at build)
   - shipped: fetch `/sitemap.xml` twice five minutes apart, `lastmod` identical; publish from the editor, `lastmod` changes
   - improved: GSC Sitemaps → "Last read" updates within days of a publish, not on every crawl
-- [ ] **3.1 / 3.5**: local copies deleted, `auditSeo` green in `npm run test:build`
+- [x] **3.1 / 3.5**: local copies deleted, `auditSeo` green in `npm run test:build`
 
 ### Phase 4 — Roll out
 
 - [ ] ftbk and wren: `seo-check.sh` green, `auditSeo` green, Rich Results Test clean, GSC property added, baseline recorded before deploy
-- [ ] `tools/seo` deleted; no route left that publishes SEO outside the editor
+- [x] `tools/seo` kept as the SEO / GEO page; it saves through the same gate as the editor
 
 ### Re-measure dates
 

@@ -4,7 +4,7 @@
  * html it gets back — the same rules a connected site's build test runs, so the page
  * and the build can never disagree about what "findable" means.
  */
-import { auditJsonLd, auditSeo, type SeoFinding } from '@samfox1/site-bridge/seo'
+import { SEO_RULES, auditGeoFacts, auditJsonLd, auditSeo, type SeoFinding } from '@samfox1/site-bridge/seo'
 
 export type LiveAudit = {
   url: string
@@ -21,17 +21,8 @@ export type LiveAudit = {
   error?: string
 }
 
-export const AUDIT_RULES: { rule: string; label: string }[] = [
-  { rule: 'description', label: 'Meta description (60+ chars)' },
-  { rule: 'canonical', label: 'Canonical URL' },
-  { rule: 'h1', label: 'Exactly one H1' },
-  { rule: 'headings', label: 'A heading in every section' },
-  { rule: 'alt', label: 'Alt text on every content image' },
-  { rule: 'src', label: 'Image URLs are direct (no /_next/image)' },
-  { rule: 'json-ld', label: 'Fact sheet (JSON-LD) present and parses' },
-  { rule: 'robots', label: 'Homepage indexable; /edit noindex' },
-  { rule: 'facts', label: 'Fact sheet has every field Google requires' },
-]
+/** Derived from the bridge's registry (AGENTS.md rule 4), never listed here. */
+export const AUDIT_RULES: readonly { rule: string; label: string }[] = SEO_RULES
 
 async function text(url: string, fetcher: typeof fetch): Promise<string | null> {
   try {
@@ -42,7 +33,22 @@ async function text(url: string, fetcher: typeof fetch): Promise<string | null> 
   }
 }
 
-export async function auditLiveSite(origin: string, fetcher: typeof fetch = fetch): Promise<LiveAudit> {
+/** Visible text of an html page, roughly: scripts/styles dropped, tags stripped. */
+function visibleText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export async function auditLiveSite(
+  origin: string,
+  fetcher: typeof fetch = fetch,
+  opts: { bio?: string | null } = {},
+): Promise<LiveAudit> {
   const base = origin.replace(/\/+$/, '')
   const [home, edit, sitemapXml, robotsTxt] = await Promise.all([
     text(`${base}/`, fetcher),
@@ -62,14 +68,37 @@ export async function auditLiveSite(origin: string, fetcher: typeof fetch = fetc
     graph = summary.counts
     releaseKinds = summary.kinds
     for (const f of summary.findings) findings.push({ rule: f.rule === 'json-ld' ? 'json-ld' : 'facts', problem: f.problem })
+    try {
+      findings.push(...auditGeoFacts(JSON.parse(ld[1])))
+    } catch {
+      /* already reported by auditJsonLd */
+    }
   }
-  const rules = AUDIT_RULES.map((r) => ({ ...r, problems: findings.filter((f) => f.rule === r.rule).map((f) => f.problem) }))
   const sitemap = sitemapXml
     ? {
         urls: [...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]),
         lastmod: sitemapXml.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? null,
       }
     : null
+  // GEO: the bio must be VISIBLE somewhere a crawler lands — the homepage or any page the
+  // sitemap names (that is where /about lives). The first sentence is the witness.
+  const bio = (opts.bio ?? '').replace(/\s+/g, ' ').trim()
+  if (bio) {
+    const needle = bio.slice(0, 60).toLowerCase()
+    const pages = [home]
+    for (const u of (sitemap?.urls ?? []).filter((x) => x.replace(/\/$/, '') !== base).slice(0, 10)) {
+      const t = await text(u, fetcher)
+      if (t) pages.push(t)
+    }
+    if (!pages.some((p) => visibleText(p).toLowerCase().includes(needle))) {
+      findings.push({ rule: 'bio-visible', problem: 'the bio is not visible on the homepage or any sitemap page (only in meta / JSON-LD)' })
+    }
+  }
+  const known = new Set(AUDIT_RULES.map((r) => r.rule))
+  const rules = AUDIT_RULES.map((r) => ({
+    ...r,
+    problems: findings.filter((f) => (r.rule === 'other' ? !known.has(f.rule) : f.rule === r.rule)).map((f) => f.problem),
+  })).filter((r) => r.rule !== 'other' || r.problems.length > 0)
   const robots = robotsTxt ? { ok: true, sitemap: /Sitemap:/i.test(robotsTxt) } : null
   return { url: base, ok: rules.every((r) => r.problems.length === 0), rules, graph, releaseKinds, sitemap, robots }
 }

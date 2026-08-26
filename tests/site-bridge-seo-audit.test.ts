@@ -51,7 +51,7 @@ describe('auditJsonLd — the fields Google requires', () => {
     const r = auditJsonLd(graph([
       { '@type': 'MusicGroup', name: 'Skeen', url: 'https://x/' },
       { '@type': 'WebSite', name: 'Skeen', url: 'https://x/' },
-      { '@type': 'MusicEvent', name: 'Skeen at V', startDate: '2026-09-01', location: { '@type': 'Place', name: 'V' } },
+      { '@type': 'MusicEvent', name: 'Skeen at V', startDate: '2026-09-01', location: { '@type': 'Place', name: 'V', address: { '@type': 'PostalAddress', addressLocality: 'C' } } },
       { '@type': 'MusicAlbum', name: 'EP', byArtist: { '@id': 'a' }, track: [{ '@type': 'MusicRecording', name: 'S', byArtist: { '@id': 'a' } }] },
     ]))
     expect(r.findings).toEqual([])
@@ -79,6 +79,10 @@ describe('auditJsonLd — the fields Google requires', () => {
       'VideoObject #2 is missing description',
       'MusicAlbum #3 track 1 is missing name',
     ])
+  })
+  it('a MusicEvent location must carry an ADDRESS (Google requires it)', () => {
+    const r = auditJsonLd(graph([{ '@type': 'MusicEvent', name: 'X', startDate: '2026-09-01', location: { '@type': 'Place', name: 'V' } }]))
+    expect(r.findings.map((f) => f.problem)).toEqual(['MusicEvent #1 location has no address'])
   })
   it('junk input is a finding, never a throw', () => {
     expect(auditJsonLd('{not json').findings[0].rule).toBe('json-ld')

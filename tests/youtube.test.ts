@@ -27,8 +27,8 @@ function client(fetchImpl: typeof fetch) {
 const channelsResp = (uploads: string) =>
   res({ body: { items: [{ contentDetails: { relatedPlaylists: { uploads } } }] } })
 
-const item = (id: string, title: string) => ({
-  snippet: { title, resourceId: { kind: 'youtube#video', videoId: id } },
+const item = (id: string, title: string, publishedAt?: string) => ({
+  snippet: { title, ...(publishedAt ? { publishedAt } : {}), resourceId: { kind: 'youtube#video', videoId: id } },
 })
 
 describe('getChannelVideos', () => {
@@ -36,7 +36,7 @@ describe('getChannelVideos', () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes('/shorts/')) return notShort() as unknown as Response
       if (url.includes('/channels')) return channelsResp('UU123') as unknown as Response
-      return res({ body: { items: [item('vid1', 'My Video')] } }) as unknown as Response
+      return res({ body: { items: [item('vid1', 'My Video', '2025-10-05T23:00:06Z')] } }) as unknown as Response
     })
     const out = await client(fetchImpl as unknown as typeof fetch).getChannelVideos('CH1')
     expect(out).toEqual([
@@ -46,6 +46,8 @@ describe('getChannelVideos', () => {
         provider: 'youtube',
         embed_url: 'https://www.youtube.com/embed/vid1',
         is_short: false,
+        // snippet.publishedAt → the video's OWN date, for VideoObject.uploadDate (20260826180000)
+        published_at: '2025-10-05T23:00:06Z',
       },
     ])
     // proves the cheap path: channels + playlistItems, never search.list
@@ -79,6 +81,7 @@ describe('getChannelVideos', () => {
         provider: 'youtube',
         embed_url: 'https://www.youtube.com/embed/v2',
         is_short: false,
+        published_at: null,
       },
     ])
   })

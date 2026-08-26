@@ -8,7 +8,10 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import {
+  SEO_RULES,
   aboutPlacement,
+  auditGeoFacts,
+  isProfileUrl,
   jsonLdGraph,
   jsonLdScript,
   lastModifiedFrom,
@@ -43,7 +46,7 @@ function payload(over: Partial<PublicSitePayload> = {}): PublicSitePayload {
       { id: 's2', date: '2026-08-01', venue: 'Past Venue', city: 'Detroit', country: 'US', ticket_url: null },
       { id: 's3', date: null, venue: 'TBA', city: null, country: null, ticket_url: null },
       // Dated and upcoming but venue-less: Google requires location, so it is NOT stated.
-      { id: 's4', date: '2026-10-01', venue: null, city: null, country: 'US', ticket_url: 'https://tix.example.com/4' },
+      { id: 's4', date: '2026-10-01', venue: 'Somewhere', city: null, country: 'US', ticket_url: 'https://tix.example.com/4' },
       // Future date but the manager marked it past (cancelled): never advertised.
       { id: 's5', date: '2026-12-01', venue: 'V', city: 'C', country: 'US', ticket_url: null, is_past: true },
     ],
@@ -52,14 +55,17 @@ function payload(over: Partial<PublicSitePayload> = {}): PublicSitePayload {
       { id: 'l1', label: 'Instagram', url: 'https://instagram.com/skeen', sort_order: 1 },
       { id: 'l2', label: 'Website', url: 'https://skeenmusic.com', sort_order: 2 },
       { id: 'l3', label: 'Evil', url: 'javascript:alert(1)', sort_order: 3 },
+      // A playlist is not an identity page: sameAs must not claim it (review, 2026-08-26).
+      { id: 'l4', label: 'USB', url: 'https://open.spotify.com/playlist/0MLdp3LsWM?si=abc', sort_order: 4 },
+      { id: 'l5', label: 'SoundCloud set', url: 'https://soundcloud.com/skeen/sets/mix', sort_order: 5 },
     ],
     videos: [
-      { id: 'v1', title: 'Night Drive (live)', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/abc123XYZ', storage_path: null, sort_order: 1, created_at: '2026-05-01T00:00:00.000Z' },
-      { id: 'v2', title: 'Studio', provider: 'uploaded', embed_url: null, storage_path: 'a1/videos/studio.mp4', sort_order: 2, created_at: '2026-05-02T00:00:00.000Z' },
+      { id: 'v1', title: 'Night Drive (live)', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/abc123XYZ', storage_path: null, sort_order: 1, created_at: '2026-07-01T00:00:00.000Z', published_at: '2026-05-01T00:00:00.000Z' },
+      { id: 'v2', title: 'Studio', provider: 'uploaded', embed_url: null, storage_path: 'a1/videos/studio.mp4', sort_order: 2, created_at: '2026-07-02T00:00:00.000Z', published_at: '2026-05-02T00:00:00.000Z' },
       { id: 'v3', title: 'Broken', provider: 'youtube', embed_url: null, storage_path: null, sort_order: 3 },
       { id: 'v4', title: 'Mix', provider: 'soundcloud', embed_url: 'https://w.soundcloud.com/player/?url=x', storage_path: null, sort_order: 4, created_at: '2026-05-03T00:00:00.000Z' },
-      // A YouTube embed with no created_at (older revision): uploadDate unknown → left out.
-      { id: 'v5', title: 'Old', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/old000000', storage_path: null, sort_order: 5 },
+      // A YouTube embed with only created_at (the day it was ADDED): uploadDate unknown → left out.
+      { id: 'v5', title: 'Old', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/old000000', storage_path: null, sort_order: 5, created_at: '2026-07-05T00:00:00.000Z' },
     ],
     media: [
       { id: 'm1', purpose: 'gallery_image', path: 'a1/gallery/skeen-oslo.jpg', kind: 'photo', alt: 'Skeen, Oslo' },
@@ -116,7 +122,10 @@ describe('jsonLdGraph', () => {
     expect(a.genre).toEqual(['House', 'Techno'])
     expect(a.foundingLocation).toEqual({ '@type': 'Place', name: 'Chicago' })
     expect(a.sameAs).toEqual(['https://instagram.com/skeen', 'https://open.spotify.com/artist/abc123'])
+    // The WHOLE bio (collapsed), not the 160-char meta description: this is the text AI answers quote.
     expect(a.description).toBe('Chicago DJ, producer and filmmaker. Second paragraph.')
+    const long = jsonLdGraph(payload({ artist: { ...payload().artist, bio: 'x'.repeat(400) } }), { origin: ORIGIN })['@graph'][0] as Record<string, unknown>
+    expect((long.description as string).length).toBe(400)
     expect(a.image).toBe('https://cdn.example.com/logo.png')
   })
   it('Person when the artist says so — with homeLocation, where a MusicGroup has foundingLocation', () => {
@@ -130,7 +139,7 @@ describe('jsonLdGraph', () => {
     expect(p.logo).toBeUndefined()
     expect(byType('MusicGroup')[0].homeLocation).toBeUndefined()
   })
-  it('CRITICAL: VideoObject only when Google\'s required fields are all known — YouTube (thumbnail derived) or an upload with a poster; SoundCloud is audio; no created_at → left out', () => {
+  it('CRITICAL: VideoObject only when Google\'s required fields are all known — uploadDate is the PLATFORM publish date (never the day it was added); SoundCloud is audio', () => {
     const g = jsonLdGraph(payload(), { origin: ORIGIN, videoUrl: (p) => `https://cdn.example.com/videos/${p}`, videoPoster: (v) => (v.id === 'v2' ? 'https://cdn.example.com/poster.jpg' : null) })
     const vids = (g['@graph'] as Record<string, unknown>[]).filter((n) => n['@type'] === 'VideoObject')
     expect(vids).toEqual([
@@ -145,7 +154,7 @@ describe('jsonLdGraph', () => {
     const [alb] = byType('MusicAlbum')
     expect((alb.track as Record<string, unknown>[]).map((t) => t['@type'])).toEqual(['MusicRecording'])
   })
-  it('CRITICAL: one MusicEvent per DATED UPCOMING show WITH a place — none for past, undated, venue-less, or manager-marked-past', () => {
+  it('CRITICAL: one MusicEvent per DATED UPCOMING show WITH a city — none for past, undated, city-less (no address to state), or manager-marked-past', () => {
     const events = byType('MusicEvent')
     expect(events.length).toBe(1)
     const [e] = events
@@ -216,8 +225,23 @@ describe('sitemap + robots', () => {
     expect(e[1].lastModified).toEqual(e[0].lastModified)
     expect(e[0].priority).toBe(1)
   })
-  it('robots: allow all, block /edit, name the sitemap + host', () => {
-    expect(robotsRules(ORIGIN)).toEqual({ rules: [{ userAgent: '*', allow: '/', disallow: ['/edit'] }], sitemap: `${ORIGIN}/sitemap.xml`, host: ORIGIN })
+  it('CRITICAL: robots allows everything — /edit is NOT disallowed, or Google never fetches it and never sees its noindex', () => {
+    expect(robotsRules(ORIGIN)).toEqual({ rules: [{ userAgent: '*', allow: '/', disallow: [] }], sitemap: `${ORIGIN}/sitemap.xml`, host: ORIGIN })
+  })
+  it('sameAs: profile pages only', () => {
+    for (const ok of ['https://open.spotify.com/artist/abc', 'https://soundcloud.com/skeen', 'https://www.youtube.com/@skeen', 'https://youtube.com/channel/UCx', 'https://instagram.com/skeen', 'https://music.apple.com/us/artist/skeen/1'])
+      expect(isProfileUrl(ok), ok).toBe(true)
+    for (const no of ['https://open.spotify.com/playlist/x', 'https://open.spotify.com/track/x', 'https://soundcloud.com/skeen/sets/mix', 'https://www.youtube.com/watch?v=x', 'https://instagram.com/p/abc'])
+      expect(isProfileUrl(no), no).toBe(false)
+  })
+  it('auditGeoFacts: a MusicGroup without genre or location is a finding; a Person needs only a location', () => {
+    expect(auditGeoFacts({ '@graph': [{ '@type': 'MusicGroup', name: 'S' }] }).map((f) => f.rule)).toEqual(['facts-geo', 'facts-geo'])
+    expect(auditGeoFacts({ '@graph': [{ '@type': 'MusicGroup', name: 'S', genre: 'House', foundingLocation: { '@type': 'Place', name: 'Chicago' } }] })).toEqual([])
+    expect(auditGeoFacts({ '@graph': [{ '@type': 'Person', name: 'S', homeLocation: { '@type': 'Place', name: 'Oslo' } }] })).toEqual([])
+    expect(auditGeoFacts({ '@graph': [] })[0].problem).toContain('no artist node')
+  })
+  it('SEO_RULES is the registry every list derives from', () => {
+    expect(SEO_RULES.map((r) => r.rule)).toEqual(expect.arrayContaining(['description', 'robots', 'facts', 'facts-geo', 'bio-visible', 'other']))
   })
 })
 

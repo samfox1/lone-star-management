@@ -104,12 +104,32 @@ function isUpcoming(show: SiteTourDate, today?: string): boolean {
   return true
 }
 
-/** Social profile URLs only (a platform the bridge knows), https, de-duplicated. */
+/** Is this a PROFILE page on its platform, not a playlist, a track, a video or a set?
+ *  `sameAs` asserts identity; a playlist link asserts nothing about who the artist is. */
+export function isProfileUrl(url: string): boolean {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return false
+  }
+  const host = u.hostname.replace(/^www\./, '')
+  const segs = u.pathname.split('/').filter(Boolean)
+  if (host.endsWith('spotify.com')) return segs[0] === 'artist' || segs[0] === 'user'
+  if (host.endsWith('soundcloud.com')) return segs.length === 1
+  if (host.endsWith('youtube.com')) return segs.length === 1 ? segs[0].startsWith('@') : ['channel', 'c', 'user'].includes(segs[0] ?? '')
+  if (host.endsWith('music.apple.com')) return segs.includes('artist')
+  if (host.endsWith('bandcamp.com')) return segs.length === 0
+  return segs.length <= 1
+}
+
+/** Social PROFILE URLs only (a platform the bridge knows, profile-shaped), https,
+ *  de-duplicated. */
 export function sameAsFrom(payload: Pick<PublicSitePayload, 'links' | 'artist'>): string[] {
   const out = new Set<string>()
   for (const l of payload.links ?? []) {
     const url = safeHttpUrl(l.url)
-    if (url && platformFromUrl(url)) out.add(url)
+    if (url && platformFromUrl(url) && isProfileUrl(url)) out.add(url)
   }
   const spotify = payload.artist?.spotify_artist_id
   if (spotify && /^[A-Za-z0-9]+$/.test(spotify)) out.add(`https://open.spotify.com/artist/${spotify}`)
@@ -118,6 +138,10 @@ export function sameAsFrom(payload: Pick<PublicSitePayload, 'links' | 'artist'>)
 
 function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSeo): Node {
   const a = payload.artist
+  // The WHOLE bio, whitespace-collapsed — the fact sheet has no 160-char limit, and the
+  // description is the text AI engines quote. The meta description only when there is no bio.
+  const bio = (a.bio ?? '').replace(/\s+/g, ' ').trim()
+  const description = bio || seo.description
   const genre = (a.genre ?? '')
     .split(',')
     .map((g) => g.trim())
@@ -134,7 +158,7 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
     '@id': `${opts.origin}/#artist`,
     name: a.name,
     url: `${opts.origin}/`,
-    ...(seo.description ? { description: seo.description } : {}),
+    ...(description ? { description } : {}),
     ...(opts.imageUrl ? (person ? { image: opts.imageUrl } : { image: opts.imageUrl, logo: opts.imageUrl }) : {}),
     ...(genre.length && !person ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
     ...(place ? (person ? { homeLocation: place } : { foundingLocation: place }) : {}),
@@ -144,9 +168,10 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
 }
 
 function eventNode(show: SiteTourDate, payload: PublicSitePayload, opts: JsonLdOptions): Node | null {
-  // Google requires `location` on an Event. A show with no venue and no city (TBA) has
-  // none to state, so it is left out of the sheet rather than shipped as an error.
-  if (!show.venue && !show.city) return null
+  // Google requires `location` with an ADDRESS on an Event. A show with no city has no
+  // address to state (a venue name alone is not one), so it is left out rather than
+  // shipped as an error.
+  if (!show.city) return null
   const artist = { '@id': `${opts.origin}/#artist` }
   const where = [show.venue, show.city].filter(Boolean).join(', ')
   const ticket = safeHttpUrl(show.ticket_url)
@@ -260,7 +285,9 @@ function videoNode(v: SiteVideo, payload: PublicSitePayload, opts: JsonLdOptions
   const content = v.provider === 'uploaded' && v.storage_path && opts.videoUrl ? safeHttpUrl(opts.videoUrl(v.storage_path)) : null
   if (!embed && !content) return null
   const thumb = embed ? youtubeThumb(embed) : safeHttpUrl(opts.videoPoster?.(v))
-  const uploadDate = v.created_at ?? null
+  // The platform's publish date, never the day the manager added the link (that was the
+  // 2026-08-26 mistake): unknown = not stated.
+  const uploadDate = v.published_at ?? null
   if (!thumb || !uploadDate || !v.title) return null
   return {
     '@type': 'VideoObject',
@@ -358,8 +385,11 @@ export function robotsRules(origin: string): {
   sitemap: string
   host: string
 } {
+  // No Disallow for /edit: a disallowed URL is never FETCHED, so Google never sees the
+  // meta noindex on it and can still index it URL-only ("indexed, though blocked"). The
+  // page's own `noindex, nofollow` is the whole mechanism; robots.txt just names the map.
   return {
-    rules: [{ userAgent: '*', allow: '/', disallow: ['/edit'] }],
+    rules: [{ userAgent: '*', allow: '/', disallow: [] }],
     sitemap: `${origin}/sitemap.xml`,
     host: origin,
   }
@@ -468,6 +498,9 @@ export function auditJsonLd(input: string | unknown): JsonLdSummary {
       const v = node[field]
       if (v === undefined || v === null || v === '') findings.push({ rule: type, problem: `${where} is missing ${field}` })
     }
+    if (type === 'MusicEvent' && node.location && !(node.location as Record<string, unknown>).address) {
+      findings.push({ rule: type, problem: `${where} location has no address` })
+    }
     if (type === 'MusicAlbum') {
       const kind = String(node.albumReleaseType ?? '').replace(/^.*\//, '').replace(/Release$/, '').toLowerCase() || 'other'
       kinds[kind] = (kinds[kind] ?? 0) + 1
@@ -478,4 +511,36 @@ export function auditJsonLd(input: string | unknown): JsonLdSummary {
   }
   for (const [i, n] of (nodes as Record<string, unknown>[]).entries()) check(n, `${String(n['@type'] ?? 'node')} #${i + 1}`)
   return { counts, kinds, findings }
+}
+
+/**
+ * The findability rules, ONE registry: the site's build test, the live check and the
+ * SEO / GEO page all derive their lists from it, so a rule added here appears everywhere
+ * (and one nobody listed can never be silently dropped).
+ */
+export const SEO_RULES: readonly { rule: string; label: string }[] = [
+  { rule: 'description', label: 'Meta description (60+ chars)' },
+  { rule: 'canonical', label: 'Canonical URL' },
+  { rule: 'h1', label: 'Exactly one H1' },
+  { rule: 'headings', label: 'A heading in every section' },
+  { rule: 'alt', label: 'Alt text on every content image' },
+  { rule: 'src', label: 'Image URLs are direct (no /_next/image)' },
+  { rule: 'json-ld', label: 'Fact sheet (JSON-LD) present and parses' },
+  { rule: 'robots', label: 'Homepage indexable; /edit noindex' },
+  { rule: 'facts', label: 'Fact sheet has every field Google requires' },
+  { rule: 'facts-geo', label: 'Fact sheet states genre and location' },
+  { rule: 'bio-visible', label: 'The bio is visible text on a page' },
+  { rule: 'other', label: 'Other' },
+]
+
+/** GEO: the artist node states the facts AI answers are asked for. */
+export function auditGeoFacts(graph: unknown): SeoFinding[] {
+  const nodes = (graph as { '@graph'?: Record<string, unknown>[] })?.['@graph']
+  if (!Array.isArray(nodes)) return []
+  const artist = nodes.find((n) => n['@type'] === 'MusicGroup' || n['@type'] === 'Person')
+  if (!artist) return [{ rule: 'facts-geo', problem: 'no artist node (MusicGroup / Person)' }]
+  const out: SeoFinding[] = []
+  if (artist['@type'] === 'MusicGroup' && !artist.genre) out.push({ rule: 'facts-geo', problem: 'artist has no genre — set it on the SEO / GEO page and publish' })
+  if (!artist.foundingLocation && !artist.homeLocation) out.push({ rule: 'facts-geo', problem: 'artist has no location — set "Based in" on the SEO / GEO page and publish' })
+  return out
 }

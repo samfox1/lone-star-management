@@ -20,13 +20,18 @@ import { CopyButton } from './copy-button'
  * is the manager's window onto them.
  */
 
-/** The five prompts of the AI probe — ask them, note who cites the site. Fixed, so the
- *  comparison stays honest across months. */
-function probePrompts(name: string, location: string): string[] {
-  const who = location ? `${name}, the ${location} artist` : name
+/**
+ * The five prompts of the AI probe (PROBE_PROMPTS v1) — ask them, note who cites the site.
+ * FROZEN: they read the name and the artist TYPE only, never a fact the site is supposed
+ * to teach (leaking "Chicago" into the question would hand the engine the answer).
+ * Change the wording only with a new version, or months stop comparing.
+ */
+export const PROBE_VERSION = 'v1'
+export function probePrompts(name: string, schemaType: string): string[] {
+  const role = schemaType === 'Person' ? 'the artist' : 'the musician'
   return [
-    `Who is ${who}?`,
-    `What genre of music does ${name} make?`,
+    `Who is ${name}, ${role}?`,
+    `What kind of music does ${name} make, and where are they based?`,
     `When is ${name} playing next?`,
     `What has ${name} released recently?`,
     `${name} official website`,
@@ -178,11 +183,11 @@ export default async function SeoPage({ params }: { params: Promise<{ id: string
       <Section
         n="6"
         title="The AI probe"
-        what="There is no dashboard for 'Perplexity cited you'. The only measure is to ask. Ask each of ChatGPT (search on), Perplexity, Google AI Mode and Copilot these five prompts, and note: cited or not, and whether the facts are right. Same five, every time, so months compare."
+        what="There is no dashboard for 'Perplexity cited you'. The only measure is to ask. Ask each of ChatGPT (search on), Perplexity, Google AI Mode and Copilot these five prompts in a fresh, signed-out session, and note: cited or not, and whether the facts are right. The five are frozen (v1) and never contain a fact the site should teach, so months compare. Record the answers in the site's SEO_GEO_BASELINE.md with the date."
         check="Target after the bio and fact sheet are live: prompts 1, 2 and 5 cite the site in at least two of the four engines, with the genre and location right."
       >
         <ol className="space-y-2">
-          {probePrompts(artist.name, artistFacts.location).map((p, i) => (
+          {probePrompts(artist.name, artistFacts.schema_type).map((p, i) => (
             <li key={i} className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2 text-sm">
               <span>
                 <span className="mr-2 font-space text-[11px] text-ink-faint">{i + 1}</span>

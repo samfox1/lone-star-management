@@ -235,7 +235,8 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // a video in a named background slot (hero landscape/portrait) — see 20260716200000.
     // `created_at` (20260826170000): VideoObject.uploadDate in the JSON-LD fact sheet —
     // when the manager added it, the one date we actually know.
-    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order', 'site_role', 'created_at'],
+    // `published_at` (20260826180000): the platform's own publish date, for uploadDate.
+    snapshot: ['id', 'title', 'provider', 'embed_url', 'storage_path', 'is_short', 'sort_order', 'site_role', 'created_at', 'published_at'],
     orderBy: ['sort_order', 'created_at'],
   },
   release: {

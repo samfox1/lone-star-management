@@ -20,6 +20,8 @@ export type YouTubeVideoInput = {
   is_short: boolean
   /** Global YouTube view count, filled by the client's `viewCounts` (optional). */
   views?: number | null
+  /** When YouTube published it (playlistItems snippet.publishedAt) — VideoObject.uploadDate. */
+  published_at?: string | null
 }
 
 type YtChannels = { items?: { contentDetails?: { relatedPlaylists?: { uploads?: string } } }[] }
@@ -46,7 +48,7 @@ export function channelSelector(raw: string): string {
   return `forHandle=${encodeURIComponent('@' + v.replace(/^@/, ''))}`
 }
 type YtPlaylistItems = {
-  items?: { snippet?: { title?: string; resourceId?: { videoId?: string } } }[]
+  items?: { snippet?: { title?: string; publishedAt?: string; resourceId?: { videoId?: string } } }[]
   nextPageToken?: string
 }
 
@@ -150,6 +152,7 @@ export function createYouTubeClient(opts: Options = {}) {
           provider: 'youtube',
           embed_url: `https://www.youtube.com/embed/${videoId}`,
           is_short: false,
+          published_at: it.snippet?.publishedAt ?? null,
         })
       }
       pageToken = page.nextPageToken

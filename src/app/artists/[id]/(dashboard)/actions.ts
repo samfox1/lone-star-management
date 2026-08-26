@@ -574,10 +574,10 @@ export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { url: '', ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'Not signed in.' }
-  const { data: artist } = await supabase.from('artists').select('slug, site_kind, custom_site_url').eq('id', artistId).single()
+  const { data: artist } = await supabase.from('artists').select('slug, site_kind, custom_site_url, bio').eq('id', artistId).single()
   const origin = publicSiteOrigin(artist)
   if (!origin) return { url: '', ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'No public site URL to check.' }
-  return auditLiveSite(origin)
+  return auditLiveSite(origin, fetch, { bio: (artist?.bio as string | null) ?? null })
 }
 
 /** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
