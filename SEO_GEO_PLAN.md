@@ -1,0 +1,202 @@
+# SEO / GEO — Lone Star wide plan
+
+_Drafted 2026-08-25. Grows out of the skeen audit
+(`~/Desktop/skeen-website/SEO_GEO_PLAN.md`, 2026-08-17), which stays as the
+per-site findings list. This file is the plan of record for doing it once,
+in the bridge and the editor, so every connected site gets the same pattern._
+
+## Goal
+
+Every Lone Star site is easy for Google to index AND easy for AI answer engines
+to quote. Skeen is the reference implementation; ftbk and wren follow the same
+steps; new sites get the rules from CONNECTING.md.
+
+SEO = the plumbing Google reads (meta, canonical, sitemap, robots, structured
+data, headings, alt text). GEO = visible, quotable text about who the artist
+is. Skeen has the first and almost none of the second.
+
+## The principle, applied
+
+"The editor supplies values. The site owns presentation." (CONNECTING.md §1)
+
+So: the **editor stores strings and choices** in `site_content`, the **bridge
+ships pure builders** (metadata, JSON-LD, sitemap entries, robots rules), and
+**each site emits its own `<head>` and markup** from them. The bridge never
+produces HTML. Nothing rendered is ever invented copy.
+
+## What exists today (2026-08-25)
+
+| Piece | Where | State |
+| --- | --- | --- |
+| `seo_title`, `seo_description`, `og_image` | `src/lib/site-content-schema.ts:73` (`SEO_FIELDS`), plain `site_content` keys | shipped; edited on `tools/seo` page, NOT in the visual editor |
+| Social card generator | `tools/seo/og-image-picker.tsx`, `src/lib/og-card.ts` | shipped |
+| Bio | `artists.bio` (plain text, `\n` paragraphs) → `payload.artist.bio` | shipped; edited via editor text field `artist_bio` |
+| Site tab in editor | `editor/panels/site-tools.tsx` | cursor settings only; docblock names it the home for site-wide things |
+| Reserved-key gate | `src/lib/site-editor/save.ts:49-56,83` | SEO keys refuse the generic field save; need their own gate (the `saveCursorField` pattern) |
+| Metadata resolution | `src/lib/seo.ts` AND `skeen-website/lib/seo.ts` | two copies of the same precedence logic |
+| JSON-LD | skeen `lib/jsonLd.ts` only (MusicGroup + WebSite) | lone-star templates emit none |
+| Publish timestamp on the wire | none | `get_public_site` computes `published_at` internally, never returns it; `publish_moments` is authenticated-only |
+| Releases on the wire | separate RPC `get_public_releases`, not wrapped by the bridge | skeen calls it by hand |
+| Bridge SEO helpers | none | zero hits for sitemap/robots/ld+json under `packages/` |
+
+## Decisions (Sam, 2026-08-25)
+
+1. **Bio placement is the artist's choice.** Some artists do not want a bio on
+   the homepage. For them the site has a real `/about` page, styled like the
+   rest of the site, holding the bio. It is a **page, not a redirect**: a
+   redirect would bounce crawlers back to the homepage and index nothing. The
+   page is linked from the footer and listed in the sitemap, which is how
+   crawlers find it.
+2. **One bio.** `artists.bio` stays the single source: it feeds the About
+   section or `/about`, the meta description fallback, JSON-LD `description`,
+   and the EPK. Edited in the existing text editor. (Open: whether a site ever
+   needs a separate, longer web bio. Not now.)
+3. **SEO / GEO lives in the editor's Site tab**, as its own group. The
+   standalone `tools/seo` page is retired once the Site tab has parity.
+4. **Skeen first**, then the bridge generalises what skeen proved, then ftbk
+   and wren adopt it.
+
+## New content keys (all `site_content`, all optional, unset = auto)
+
+| Key | Values | Used for |
+| --- | --- | --- |
+| `about_placement` | `home` \| `page` \| `hidden` | where the bio renders. Default `home` if the site declares it, else `page`, else `hidden`. `hidden` still emits the bio in meta + JSON-LD, so search still gets it |
+| `about_heading` | text | heading over the bio (default: "About") |
+| `seo_genre` | text, comma-separated | `MusicGroup.genre`. Real GEO value: "Chicago DJ" answers come from facts like this |
+| `seo_location` | text | `MusicGroup.foundingLocation` / "based in" |
+
+Existing `seo_title`, `seo_description`, `og_image` stay as they are.
+
+Add the new keys to `SEO_FIELDS` so they inherit the reserved-key rule, and
+give them one validated write path (`saveSeoField`). Values are strings; the
+enum for `about_placement` is checked server-side against what the site's
+manifest declares (see bridge step B2).
+
+## Phases
+
+### Phase 1 — Skeen quick wins (no bridge change, ~1 day)
+
+Each lands with a test that can fail. `test/build-output.test.ts` is the home
+for "ships in real HTML" guards.
+
+| # | Fix | Where | Test |
+| --- | --- | --- | --- |
+| 1.1 | Alt text: covers get the release/song title; polaroids get their caption | `components/MusicGrid.tsx:159,219,276`, `components/About.tsx:104` | built HTML: no `<img alt="">` outside `aria-hidden` |
+| 1.2 | `<h2>` for Music, About, Videos. Use `<Text as="h2" field=…>` so they stay editable (a bare literal is invisible to the editor's DOM-derived manifest). Sr-only if the design forbids visible ones | `Work.tsx`, `About.tsx`, `Videos.tsx`, keys in `lib/siteText.ts` | built HTML: every `main > section[id]` contains an `h2`; `lib/editList.test.ts` key-collision guard |
+| 1.3 | `/edit` noindex: new server `app/edit/layout.tsx` exporting `robots: { index: false, follow: false }`. Do NOT redeclare icons (build test pins exactly one `rel=icon`) | `app/edit/layout.tsx` | built `edit.html` has `<meta name="robots" content="noindex`; `index.html` does not |
+| 1.4 | `X-Robots-Tag: noindex` header scoped to the `*.vercel.app` host | `next.config.ts` headers with `has: [{type:'host', value:'.*\\.vercel\\.app'}]` | config unit test: header present for vercel host, absent for www |
+| 1.5 | `app/not-found.tsx` on-brand 404 | skeen | returns 404 status (already does); cosmetic |
+| 1.6 | Fix stale `vitest.config.ts:14` inline regex (`@lone-star/site-bridge` → `@samfox1/site-bridge`) | skeen | n/a, housekeeping |
+
+Watch-outs: markers only emit in edit mode, so public markup is safe, but 1.2
+adds `site_content` keys and manifest entries; `components/bridgeManifest.test.tsx`
+will need its expected set updated (derive it, don't hand-list it). The
+build test forbids any email address in the HTML; a bio containing an `@`
+will trip it in Phase 3.
+
+### Phase 2 — Bridge + editor (the generalisation)
+
+**B1. `published_at` on the wire.** Additive field on `get_public_site`
+(the `live` CTE already computes it). Bridge payload type gains
+`published_at: string | null`. Test: RPC returns the max revision
+`published_at` for the slug; publishing bumps it; a never-published slug
+returns null.
+
+**B2. Manifest declares about placements.** `TemplateManifest.about?:
+readonly ('home' | 'page')[]`. The editor offers only what the site declares
+(editor-adapts-to-site rule); `hidden` is always offered. Test: `Record<AboutPlacement, true>`
+compile guard; server rejects a placement the manifest does not declare.
+
+**B3. `fetchPublicReleases` in the bridge.** Wraps `get_public_releases`
+next to `fetchPublicSite`. Needed for MusicAlbum JSON-LD. Test: pure
+mapping test against a snapshot.
+
+**B4. New bridge module `seo`** (subpath `@samfox1/site-bridge/seo`), pure
+functions, zero DOM:
+
+```ts
+resolveSeo(payload)                     // title, description, ogImage — ONE copy, replaces src/lib/seo.ts + skeen lib/seo.ts
+jsonLdGraph(payload, { origin, releases?, aboutUrl? })
+                                        // MusicGroup(+genre, foundingLocation, sameAs) + WebSite
+                                        // + MusicEvent per dated upcoming show
+                                        // + MusicAlbum per release (only when releases passed)
+sitemapEntries(payload, { origin, pages }) // lastModified from payload.published_at
+robotsRules(origin)                     // { rules, sitemap, host }
+aboutPlacement(payload, manifestAbout)  // resolves the default described above
+```
+
+Rules baked in: https-only `sameAs`, undated shows skipped, `<` escaped for
+inline scripts, description collapsed + truncated at 160. Tests: port
+skeen's `lib/seo.test.ts` cases and lone-star's `tests/seo.test.ts`; pin the
+override precedence (currently unpinned anywhere); each JSON-LD type has a
+fixture derived from the payload type, not hand-listed.
+
+**B5. `auditSeo(document)`** in the bridge's audit module, run by sites in
+their build-output tests: meta description present and >60 chars, exactly
+one `h1`, an `h2` in every `section[id]`, no content `<img alt="">`, one
+`ld+json` block that parses, canonical present, noindex on `/edit`.
+Add to `checkContract` §7 as rule 6 "the public page is findable".
+
+**B6. SEO / GEO group in the Site tab.** Rows (version-A key/value + hover
+pencil, per the panel consistency rule): Title, Description, Social card
+(reuse the og picker), About placement (select, filtered by B2), Genre,
+Location. Bio row opens the existing `artist_bio` text editor. Then delete
+`tools/seo` (its Publish button was only there because the page was outside
+the editor). Tests: component test for each row's save call; reserved-key
+refusal still pinned in `tests/editor-field-save.test.ts`.
+
+**B7. CONNECTING.md §10 "Be findable."** The rule sheet for new sites:
+emit `resolveSeo` in `generateMetadata`, inline `jsonLdGraph`, `sitemap.ts` +
+`robots.ts` from the builders, one `h1`, an `h2` per section, alt from
+titles, `/edit` noindex, honour `about_placement` with a real `/about` route
+when you declare `page`. Add "SEO" to the sample manifest.
+
+Bridge bump to **0.33.0** (`package.json` + `PACKAGE_VERSION`), publish, then
+sites redeploy **without build cache** (memory: bridge-deploy-cache-gotcha).
+
+### Phase 3 — Skeen adopts the bridge version
+
+| # | Fix | Test |
+| --- | --- | --- |
+| 3.1 | Replace `lib/seo.ts`, `lib/jsonLd.ts` with bridge builders; delete the local copies | existing `layout.test.ts` still green against bridge output |
+| 3.2 | About: render bio per `about_placement`. `home` → paragraphs in the About section (polaroid wall keeps its place); `page` → new `app/about/page.tsx` using the site's fonts/tokens/nav/footer, footer link "About", sitemap entry | built HTML: with `page`, `/about` ships the bio text and `index.html` links to it; with `home`, `index.html` contains the bio; with `hidden`, neither, but the meta description and JSON-LD still carry it |
+| 3.3 | JSON-LD: MusicEvent + MusicAlbum via `jsonLdGraph` with `fetchPublicReleases` | build test parses the graph, finds one `MusicEvent` per dated upcoming show and one `MusicAlbum` per release |
+| 3.4 | `sitemap.ts` from `sitemapEntries`: `lastModified = published_at` | unit: same payload → same lastmod (no clock); `/about` present iff placement is `page` |
+| 3.5 | `auditSeo` wired into `test/build-output.test.ts` | the audit itself |
+
+Deploy: push skeen `main` (never `vercel --prod`). Verify live with
+Google's Rich Results test and a fetch of `/sitemap.xml`, `/robots.txt`, `/about`.
+
+### Phase 4 — Roll out
+
+ftbk (merge its unmerged 0.32 branch first), then wren. Each site: bump the
+bridge, run `checkContract` + `auditSeo`, declare `about`, add `/about` if
+declared, redeploy no-cache. Then `tools/seo` is deleted in lone-star.
+
+## Out of scope (noted, not planned)
+
+- Per-release or per-show pages on connected sites (skeen is one page by
+  design). Lone-star's hosted templates already have `/r/[release]`.
+- Bandsintown event feeds: M7 stays blocked on app_id + terms compliance.
+- Venue street addresses / geo for `MusicEvent.location`: lat/lng are
+  dashboard-only on purpose. `Place` ships with name + city only.
+- `llms.txt`: cheap, low proven value. Revisit after Phase 3 if wanted.
+- Rich text for the bio: the bridge reserves `richtext` but nothing
+  implements it. Plain text with `\n` paragraphs is enough for this.
+
+## Test discipline reminders (AGENTS.md)
+
+- Every guard above must be seen red once: delete the alt, remove the `h2`,
+  drop the noindex, and watch the build test fail before trusting it.
+- Expected sets come from the registry: `SEO_FIELDS`, `Object.keys` of the
+  manifest, the payload type. No hand-listed key arrays in tests.
+- Add the new bridge `seo` module to `mutate` in `stryker.config.json` once
+  it has DB-free tests, or Stryker never looks at it.
+
+## Where we are
+
+- [x] Skeen audit committed (`skeen-website` main `1cf370d`)
+- [ ] Phase 1
+- [ ] Phase 2
+- [ ] Phase 3
+- [ ] Phase 4
