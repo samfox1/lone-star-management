@@ -2587,6 +2587,15 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     { id: 'mq', storage_path: 'artist-1/gallery/b.jpg', onSite: true, orientation: null, siteRole: 'polaroid_2_photo', collection: null, label: null, alt: null, kind: null },
   ]
 
+  it("CRITICAL: a placed SLOT photo gets Alt text + Type too, saved to its own row (Sam, 2026-08-26: 'I dont see it')", async () => {
+    openImages(HELD_SLOT)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /^Alt text for/ }), { target: { value: 'Skeen, Oslo' } })
+    await vi.waitFor(() => expect(altMock).toHaveBeenCalledWith('artist-1', HELD_SLOT[0].id, 'Skeen, Oslo'))
+    fireEvent.change(screen.getByRole('combobox', { name: /^Type for/ }), { target: { value: MEDIA_KINDS[0] } })
+    await vi.waitFor(() => expect(kindMock).toHaveBeenCalledWith('artist-1', HELD_SLOT[0].id, MEDIA_KINDS[0]))
+  })
+
   it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls, Revert', () => {
     openImages(HELD_SLOT)
     // Not editing yet — the wall is shown, not the item editor.

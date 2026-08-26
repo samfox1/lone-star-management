@@ -82,6 +82,9 @@ export function buildItemEditorConfig(item: ItemEdit, deps: ItemEditorDeps): Ite
       candidates: photoCandidates(photos.filter((p) => !p.siteRole), 'aspect-square'),
       onPick: (id) => deps.placeInSlot(item.role, photos.find((p) => p.id === id) ?? null),
       onRemove: () => deps.placeInSlot(item.role, null),
+      // The slot's photo is a media row like any other: it needs its alt + kind too.
+      alt: { value: placed.alt ?? '', onSave: (next: string) => deps.setPhotoAlt(placed.id, next) },
+      kind: { value: placed.kind, onSave: (next: MediaKind) => deps.setPhotoKind(placed.id, next) },
       uploader: (
         <GallerySlotUploader
           artistId={artistId}
