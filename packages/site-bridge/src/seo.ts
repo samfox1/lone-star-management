@@ -24,8 +24,10 @@ export type SiteSeo = {
 export const MAX_DESCRIPTION = 160
 
 /** http(s) URLs only: a `javascript:` or `data:` value in a meta tag is a sink. */
-export function safeHttpUrl(raw: string | null | undefined): string | null {
-  const s = (raw ?? '').trim()
+export function safeHttpUrl(raw: unknown): string | null {
+  // `unknown` on purpose: values arrive from JSON (a release's links jsonb, a manager's
+  // site_content); anything that is not a string is not a URL, not a crash.
+  const s = typeof raw === 'string' ? raw.trim() : ''
   if (!/^https?:\/\//i.test(s)) return null
   try {
     return new URL(s).toString()
@@ -171,7 +173,8 @@ function albumNode(r: SiteRelease, payload: PublicSitePayload, opts: JsonLdOptio
   const id = `${opts.origin}/#release-${r.id}`
   const cover = safeHttpUrl(r.cover_url)
   const sameAs = new Set<string>()
-  for (const v of Object.values(r.links ?? {})) {
+  const linkValues = Array.isArray(r.links) ? r.links.map((l) => l?.url) : Object.values(r.links ?? {})
+  for (const v of linkValues) {
     const u = safeHttpUrl(v)
     if (u) sameAs.add(u)
   }

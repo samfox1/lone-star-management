@@ -206,7 +206,9 @@ export type SiteRelease = {
   cover_url: string | null
   release_date: string | null
   release_type?: string | null
-  links?: Record<string, string> | null
+  /** `[{ label, url }]` as the dashboard stores it (releases.links jsonb). Older
+   *  snapshots may hold a `{ label: url }` record; readers accept both. */
+  links?: { label?: string | null; url?: string | null }[] | Record<string, string> | null
   spotify_id?: string | null
   sort_order?: number | null
 }

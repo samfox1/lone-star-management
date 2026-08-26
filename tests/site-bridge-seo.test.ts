@@ -87,7 +87,10 @@ describe('resolveSeo', () => {
 
 describe('jsonLdGraph', () => {
   const graph = jsonLdGraph(payload(), { origin: ORIGIN, today: '2026-08-26', mediaUrl: (p) => `https://cdn.example.com/${p}`, imageUrl: 'https://cdn.example.com/logo.png', releases: [
-    { id: 'r1', title: 'Night Drive EP', cover_url: 'https://cdn.example.com/cover.jpg', release_date: '2026-06-01', release_type: 'ep', links: { apple: 'https://music.apple.com/x', bad: 'javascript:1' }, spotify_id: 'alb1' },
+    // links as the dashboard stores them: an ARRAY of {label,url} (a record of urls is
+    // the older shape; both are read). A non-string value must be skipped, not thrown on —
+    // the 2026-08-26 skeen build died prerendering "/" on exactly that.
+    { id: 'r1', title: 'Night Drive EP', cover_url: 'https://cdn.example.com/cover.jpg', release_date: '2026-06-01', release_type: 'ep', links: [{ label: 'Apple', url: 'https://music.apple.com/x' }, { label: 'Bad', url: 'javascript:1' }, { label: 'Broken' } as { label: string }], spotify_id: 'alb1' },
   ] })
   const nodes = graph['@graph'] as Record<string, unknown>[]
   const byType = (t: string) => nodes.filter((n) => n['@type'] === t)
@@ -127,6 +130,12 @@ describe('jsonLdGraph', () => {
     expect(alb.sameAs).toEqual(['https://music.apple.com/x', 'https://open.spotify.com/album/alb1'])
     expect(alb.numTracks).toBe(1)
     expect((alb.track as Record<string, unknown>[])[0]).toMatchObject({ '@type': 'MusicRecording', name: 'Night Drive', url: 'https://open.spotify.com/track/1' })
+  })
+  it('CRITICAL: a record-shaped links map still works, and junk values never throw', () => {
+    const g = jsonLdGraph(payload(), { origin: ORIGIN, releases: [{ id: 'r9', title: 'X', cover_url: null, release_date: null, links: { apple: 'https://music.apple.com/y', junk: { nested: true } as unknown as string } }] })
+    const alb = (g['@graph'] as Record<string, unknown>[]).find((n) => n['@type'] === 'MusicAlbum')!
+    expect(alb.sameAs).toEqual(['https://music.apple.com/y'])
+    expect(() => jsonLdGraph(payload({ site_content: { og_image: 42 as unknown as string } }), { origin: ORIGIN })).not.toThrow()
   })
   it('no releases passed → no albums', () => {
     const g = jsonLdGraph(payload(), { origin: ORIGIN })
