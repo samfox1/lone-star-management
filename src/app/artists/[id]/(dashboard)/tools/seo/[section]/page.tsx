@@ -1,10 +1,12 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
+import { FAQ_EXTRA, FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import { mediaUrl } from '@/lib/storage-url'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { requireArtist } from '../../../_data'
 import { isSeoSection } from '../sections'
+import { autoFaqAnswer } from '@samfox1/site-bridge/seo'
+import { listContent } from '@/lib/content'
 import { ListingSection } from '../sections/listing'
 import { LogoSection } from '../sections/logo'
 import { FactsSection } from '../sections/facts'
@@ -43,7 +45,22 @@ export default async function SeoSectionPage({ params }: { params: Promise<{ id:
     return <FactsSection artistId={id} initial={{ genre: (facts?.genre as string | null) ?? '', location: (facts?.location as string | null) ?? '', schema_type: schemaType }} />
   }
   if (section === 'about') return <AboutSection artistId={id} initialBio={bio} initial={seo} />
-  if (section === 'ai') return <AiSection artistId={id} name={artist.name} schemaType={schemaType} initial={Object.fromEntries(FAQ_KEYS.map((k) => [k, content[k] ?? '']))} />
+  if (section === 'ai') {
+    // The automatic answers, from the DRAFT data the manager sees (what they publish is
+    // what the site answers with).
+    const [tours, releases] = await Promise.all([listContent(supabase, 'tour_date', id), listContent(supabase, 'release', id)])
+    const src = {
+      artist: { ...artist, bio, genre: (facts?.genre as string | null) ?? null, location: (facts?.location as string | null) ?? null, schema_type: schemaType as 'MusicGroup' | 'Person' },
+      site_content: content,
+      tour_dates: tours as unknown as import('@samfox1/site-bridge/payload').SiteTourDate[],
+      releases: releases as unknown as import('@samfox1/site-bridge/payload').SiteRelease[],
+      origin: siteUrl ?? undefined,
+      today: new Date().toISOString().slice(0, 10),
+    }
+    const auto = [1, 2, 3, 4, 5].map((n) => autoFaqAnswer(n, src))
+    const initial = Object.fromEntries([...FAQ_KEYS, ...FAQ_EXTRA.flatMap((e) => [e.q, e.a])].map((k) => [k, content[k] ?? '']))
+    return <AiSection artistId={id} name={artist.name} schemaType={schemaType} initial={initial} auto={auto} />
+  }
   if (section === 'test') return <TestSection artistId={id} siteUrl={siteUrl} />
   if (section === 'logo') {
     const LABEL: Record<string, string> = { logo_primary: 'Primary logo', logo_secondary: 'Secondary logo', profile_photo: 'Profile photo' }

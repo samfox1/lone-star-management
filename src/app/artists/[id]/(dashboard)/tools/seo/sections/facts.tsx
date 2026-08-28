@@ -4,11 +4,10 @@ import { useState } from 'react'
 import { useDebouncedFieldSave } from '../../../editor/use-debounced-field-save'
 import { saveArtistFactAction } from '../../../actions'
 import type { ArtistFacts } from '../../../editor/panels/site-tools'
-import { Body, ControlRow, GroupLabel, SaveLine, SeeIt, SELECT } from './rows'
+import { Body, ControlRow, GroupLabel, INPUT, SaveLine, SeeIt, SELECT } from './rows'
 import { cx } from '@/lib/cx'
-import { FIELD_ON_TINT } from '../../../editor/inspector-shared'
 
-const F = cx(FIELD_ON_TINT, 'w-[240px]')
+const F = cx(INPUT, 'w-[260px]')
 
 /** The two facts search engines and AI assistants ask for most, plus the artist type. */
 export function FactsSection({ artistId, initial }: { artistId: string; initial: ArtistFacts }) {

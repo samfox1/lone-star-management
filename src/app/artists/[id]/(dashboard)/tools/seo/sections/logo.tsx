@@ -6,7 +6,7 @@ export function LogoSection({ artistId, sources, currentUrl }: { artistId: strin
   return (
     <div>
       <GroupLabel>Share image</GroupLabel>
-      <div className="rounded-b-xl bg-surface px-5 pb-4 pt-3">
+      <div className="rounded-2xl border border-hairline bg-paper p-5">
         <OgImagePicker artistId={artistId} sources={sources} currentUrl={currentUrl} />
       </div>
       <SeeIt>paste the site&rsquo;s address into iMessage or X and look at the card.</SeeIt>

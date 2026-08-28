@@ -8,6 +8,7 @@
  * the routes are what they were, the pages lose their copy-pasted "‹ Manager tools" links.
  */
 import Link from 'next/link'
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
@@ -17,7 +18,7 @@ export { TOOLS, toolFor }
 import { SEO_SECTIONS } from './tools/seo/sections'
 
 // 71px = the dashboard header's rendered height (assets-rail.tsx says the same).
-export function ToolsRail({ artistId, active, collapsed = false }: { artistId: string; active: string; collapsed?: boolean }) {
+export function ToolsRail({ artistId, active, collapsed = false, onPick }: { artistId: string; active: string; collapsed?: boolean; onPick?: (seg: string) => void }) {
   return (
     // COLLAPSED (a tool with its own sections is open — Sam, 2026-08-28): the panel slides
     // off to the left, leaving a 10px edge; hovering that edge slides it back OVER the
@@ -28,9 +29,15 @@ export function ToolsRail({ artistId, active, collapsed = false }: { artistId: s
         aria-label="Manager tools"
         className={cx(
           'group/tools fixed left-0 top-[71px] z-20 flex h-[calc(100vh-71px)] w-[232px] flex-col overflow-y-auto border-r border-hairline bg-paper font-space transition-transform duration-200 [scrollbar-width:none]',
-          collapsed && '-translate-x-[222px] shadow-none hover:translate-x-0 hover:shadow-xl',
+          collapsed && '-translate-x-[222px] overflow-visible shadow-none hover:translate-x-0 hover:shadow-xl',
         )}
       >
+        {/* The tab that says "there is a panel here" while collapsed (Sam, 2026-08-28). */}
+        {collapsed && (
+          <span aria-hidden className="absolute right-0 top-1/2 flex h-12 w-[10px] -translate-y-1/2 items-center justify-center bg-surface text-ink-faint">
+            <Icon name="chevronRight" size={10} />
+          </span>
+        )}
         {/* One flat list, no group captions (Sam, 2026-08-28). */}
         <div className="flex flex-col gap-0.5 px-3 pt-4">
           {TOOLS.map((t) => {
@@ -40,6 +47,7 @@ export function ToolsRail({ artistId, active, collapsed = false }: { artistId: s
                 key={t.seg}
                 href={`/artists/${artistId}/${t.seg}`}
                 aria-current={on ? 'page' : undefined}
+                onClick={() => onPick?.(t.seg)}
                 className={cx(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition-colors',
                   on ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
@@ -95,14 +103,22 @@ export function SeoSubRail({ artistId, pathname }: { artistId: string; pathname:
   )
 }
 
+/** Tools whose page has its own section panel — the tools panel steps aside for them. */
+const HAS_SECTIONS = new Set(['tools/seo'])
+
 export function ToolsShell({ artistId, children }: { artistId: string; children: React.ReactNode }) {
   const pathname = usePathname() ?? ''
   const tool = toolFor(pathname, artistId)
+  // Collapse the moment such a tool is CLICKED, not when its route finishes loading
+  // (Sam, 2026-08-28). The pick is remembered WITH the pathname it was made on, so it
+  // only counts until navigation completes — no effect, no setState-in-effect.
+  const [picked, setPicked] = useState<{ seg: string; from: string } | null>(null)
   if (!tool) return <>{children}</>
-  const sub = tool.seg === 'tools/seo'
+  const pending = picked && picked.from === pathname ? picked.seg : null
+  const sub = HAS_SECTIONS.has(pending ?? tool.seg)
   return (
     <div className="flex gap-8">
-      <ToolsRail artistId={artistId} active={tool.seg} collapsed={sub} />
+      <ToolsRail artistId={artistId} active={tool.seg} collapsed={sub} onPick={(seg) => setPicked({ seg, from: pathname })} />
       {sub && <SeoSubRail artistId={artistId} pathname={pathname} />}
       <div className="min-w-0 flex-1">{children}</div>
     </div>

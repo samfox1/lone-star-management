@@ -63,7 +63,8 @@ describe('sections save through the gates', () => {
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', 'about_placement', 'hidden'))
   })
   it('CRITICAL: five answers, one per FROZEN prompt, each to its FAQ key', async () => {
-    render(<AiSection artistId="a1" name="Skeen" schemaType="MusicGroup" initial={{}} />)
+    render(<AiSection artistId="a1" name="Skeen" schemaType="MusicGroup" initial={{}} auto={["", "Skeen makes House.", "", "", ""]} />)
+    expect((screen.getByRole('textbox', { name: 'Answer 2' }) as HTMLTextAreaElement).placeholder).toBe('Skeen makes House.')
     expect(probePrompts('Skeen', 'MusicGroup')).toHaveLength(FAQ_KEYS.length)
     expect(probePrompts('Skeen', 'MusicGroup')[0]).toBe('Who is Skeen, the musician?')
     fireEvent.change(screen.getByRole('textbox', { name: 'Answer 2' }), { target: { value: 'House, from Chicago.' } })

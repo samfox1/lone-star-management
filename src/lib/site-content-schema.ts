@@ -82,10 +82,17 @@ export const SEO_FIELDS: SiteContentField[] = [
   // published to /faqsheet — a page crawlers and AI engines get from the sitemap, never
   // linked from the site's own navigation. Blank = the question is left out.
   ...[1, 2, 3, 4, 5].map((n) => ({ key: `faq_answer_${n}`, label: `FAQ answer ${n}`, type: 'text' as const, default: '' })),
+  // The manager's OWN extra questions (Sam, 2026-08-28): on the sheet, outside the
+  // measurement. Five slots.
+  ...[1, 2, 3, 4, 5].flatMap((n) => [
+    { key: `faq_extra_${n}_q`, label: `Extra question ${n}`, type: 'text' as const, default: '' },
+    { key: `faq_extra_${n}_a`, label: `Extra answer ${n}`, type: 'text' as const, default: '' },
+  ]),
 ]
 
 /** The FAQ answer keys, in prompt order — derived from SEO_FIELDS. */
 export const FAQ_KEYS = SEO_FIELDS.filter((f) => f.key.startsWith('faq_answer_')).map((f) => f.key)
+export const FAQ_EXTRA = [1, 2, 3, 4, 5].map((n) => ({ q: `faq_extra_${n}_q`, a: `faq_extra_${n}_a` }))
 
 /**
  * Site-wide cursor settings (Sam, 2026-08-11). Ordinary `site_content` keys — they

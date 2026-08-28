@@ -7,12 +7,13 @@ import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { cx } from '@/lib/cx'
 import { useDebouncedFieldSave } from '../../../editor/use-debounced-field-save'
 import { renameMediaAction, setMediaAltAction } from '../../../actions'
-import { Body, GroupLabel, INPUT, SaveLine, SeeIt } from './rows'
+import { GroupLabel, INPUT, SaveLine, SeeIt } from './rows'
 
 export type AltPhoto = { id: string; url: string; alt: string; slug: string; caption: string | null }
 
-/** Every photo on the site: its thumbnail (click for a larger look), its alt text and
- *  its file name. Blank alt = the automatic one shown as the placeholder. */
+/** Every photo on the site as a tile — the images page's grid — with its alt text and
+ *  file name under it. Click the picture for a full-size look. Blank alt = the automatic
+ *  one, shown as the placeholder. */
 export function AltSection({ artistId, artistName, photos: initial }: { artistId: string; artistName: string; photos: AltPhoto[] }) {
   const [photos, setPhotos] = useState(initial)
   const [preview, setPreview] = useState<AltPhoto | null>(null)
@@ -28,16 +29,23 @@ export function AltSection({ artistId, artistName, photos: initial }: { artistId
   }
   return (
     <div>
-      <GroupLabel>{photos.length} photos on the site</GroupLabel>
-      <Body className="divide-y divide-hairline">
-        {photos.map((p) => {
-          const preset = recommendAlt({ artist: artistName, caption: p.caption })
-          return (
-            <div key={p.id} className="flex items-start gap-4 py-3">
-              <button type="button" onClick={() => setPreview(p)} aria-label={`Preview ${p.slug}`} className="flex-none overflow-hidden rounded-lg ring-1 ring-hairline">
-                <img src={p.url} alt="" className="h-16 w-16 object-cover" />
-              </button>
-              <div className="min-w-0 flex-1 space-y-2">
+      <GroupLabel>
+        {photos.length} {photos.length === 1 ? 'photo' : 'photos'} on the site
+      </GroupLabel>
+      {photos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-hairline px-6 py-16 text-center">
+          <div className="text-sm font-semibold text-ink">No photos on the site yet</div>
+          <div className="font-space text-xs text-ink-muted">Place photos in the site editor first.</div>
+        </div>
+      ) : (
+        <div className="grid gap-x-5 gap-y-8 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
+          {photos.map((p) => {
+            const preset = recommendAlt({ artist: artistName, caption: p.caption })
+            return (
+              <div key={p.id} className="space-y-2">
+                <button type="button" onClick={() => setPreview(p)} aria-label={`Preview ${p.slug}`} className="group block w-full overflow-hidden rounded-2xl border border-hairline">
+                  <img src={p.url} alt="" className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                </button>
                 <input aria-label={`Alt text for ${p.slug}`} value={p.alt} placeholder={preset} onChange={(e) => setAlt(p.id, e.target.value)} className={INPUT} />
                 <input
                   aria-label={`File name for ${p.slug}`}
@@ -47,13 +55,12 @@ export function AltSection({ artistId, artistName, photos: initial }: { artistId
                   className={cx(INPUT, 'font-space text-[11px]')}
                 />
               </div>
-            </div>
-          )
-        })}
-        {photos.length === 0 && <p className="py-6 text-center font-space text-[11px] text-ink-faint">No photos on the site yet.</p>}
-        <SaveLine status={altSave.status} />
-      </Body>
-      <SeeIt>the alt text is what Google Images reads and what a screen reader says. The file name is the picture&rsquo;s web address.</SeeIt>
+            )
+          })}
+        </div>
+      )}
+      <SaveLine status={altSave.status} />
+      <SeeIt>the first box is what Google Images reads and a screen reader says; the second is the picture&rsquo;s web address.</SeeIt>
       {preview && (
         <div role="dialog" aria-modal="true" aria-label={`Preview ${preview.slug}`} className={modalOverlayClass} onClick={(e) => e.target === e.currentTarget && setPreview(null)}>
           <div className={cx(modalCardClass, 'w-[720px] gap-3')}>

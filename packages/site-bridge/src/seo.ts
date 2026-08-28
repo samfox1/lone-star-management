@@ -569,22 +569,81 @@ export function probePrompts(name: string, schemaType?: string | null): string[]
 
 export type FaqEntry = { question: string; answer: string }
 
-/** The answered questions, in order: `site_content.faq_answer_N` for prompt N. A blank
- *  answer leaves its question out. Empty = no sheet. */
-export function faqEntries(payload: Pick<PublicSitePayload, 'artist' | 'site_content'>): FaqEntry[] {
-  const prompts = probePrompts(payload.artist.name, payload.artist.schema_type)
+function fmtDate(iso: string): string {
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
+export type FaqSource = {
+  artist: Pick<PublicSitePayload['artist'], 'name'> & Partial<Pick<PublicSitePayload['artist'], 'bio' | 'genre' | 'location' | 'schema_type'>>
+  site_content?: PublicSitePayload['site_content'] | null
+  tour_dates?: PublicSitePayload['tour_dates'] | null
+  releases?: readonly SiteRelease[] | null
+  origin?: string
+  today?: string
+}
+
+/**
+ * The AUTOMATIC answer to prompt N (1-based), from published data only — nothing is
+ * invented; '' when the data is not there. The manager's own answer always wins.
+ */
+export function autoFaqAnswer(n: number, src: FaqSource): string {
+  const a = src.artist
+  const name = a.name
+  const genre = (a.genre ?? '').trim()
+  const where = (a.location ?? '').trim()
+  const bio = (a.bio ?? '').replace(/\s+/g, ' ').trim()
+  const role = a.schema_type === 'Person' ? 'artist' : 'musician'
+  if (n === 1) {
+    if (bio) return bio
+    const bits = [genre ? `${genre} ${role}` : role, where ? `based in ${where}` : ''].filter(Boolean).join(', ')
+    return genre || where ? `${name} is a ${bits}.` : ''
+  }
+  if (n === 2) {
+    if (!genre && !where) return ''
+    return [genre ? `${name} makes ${genre}.` : '', where ? `${name} is based in ${where}.` : ''].filter(Boolean).join(' ')
+  }
+  if (n === 3) {
+    const next = (src.tour_dates ?? [])
+      .filter((s) => s.date && s.is_past !== true && (!src.today || s.date.slice(0, 10) >= src.today))
+      .sort((x, y) => (x.date! < y.date! ? -1 : 1))[0]
+    if (!next) return ''
+    const place = [next.venue, next.city].filter(Boolean).join(', ')
+    return `${name} plays ${place ? `${place} on ` : ''}${fmtDate(next.date!)}.`
+  }
+  if (n === 4) {
+    const recent = [...(src.releases ?? [])].filter((r) => r.release_date).sort((x, y) => (x.release_date! > y.release_date! ? -1 : 1)).slice(0, 3)
+    if (!recent.length) return ''
+    return `${name}'s latest releases: ${recent.map((r) => `${r.title} (${fmtDate(r.release_date!)})`).join(', ')}.`
+  }
+  if (n === 5) return src.origin ? `${name}'s official website is ${src.origin.replace(/^https?:\/\//, '')}.` : ''
+  return ''
+}
+
+/** The sheet's questions and answers, in order: the manager's `faq_answer_N` when
+ *  written, else the automatic answer, else the question is left out. Then any EXTRA
+ *  questions the manager added (`faq_extra_N_q` / `_a`) — theirs, on the sheet, outside
+ *  the measurement. Empty = no sheet. */
+export function faqEntries(src: FaqSource): FaqEntry[] {
+  const prompts = probePrompts(src.artist.name, src.artist.schema_type)
+  const c = src.site_content ?? {}
   const out: FaqEntry[] = []
   prompts.forEach((question, i) => {
-    const answer = (payload.site_content?.[`faq_answer_${i + 1}`] ?? '').replace(/\s+/g, ' ').trim()
+    const answer = (c[`faq_answer_${i + 1}`] ?? '').replace(/\s+/g, ' ').trim() || autoFaqAnswer(i + 1, src)
     if (answer) out.push({ question, answer })
   })
+  for (let n = 1; n <= 5; n++) {
+    const q = (c[`faq_extra_${n}_q`] ?? '').replace(/\s+/g, ' ').trim()
+    const a = (c[`faq_extra_${n}_a`] ?? '').replace(/\s+/g, ' ').trim()
+    if (q && a) out.push({ question: q, answer: a })
+  }
   return out
 }
 
 /** FAQPage markup for the /faqsheet route: the artist as the page's subject, one
  *  Question/Answer pair per answered prompt. Null when nothing is answered. */
-export function faqPageJsonLd(payload: Pick<PublicSitePayload, 'artist' | 'site_content'>, opts: { origin: string; path?: string }) {
-  const entries = faqEntries(payload)
+export function faqPageJsonLd(payload: FaqSource, opts: { origin: string; path?: string }) {
+  const entries = faqEntries({ ...payload, origin: payload.origin ?? opts.origin })
   if (!entries.length) return null
   const path = opts.path ?? '/faqsheet'
   return {

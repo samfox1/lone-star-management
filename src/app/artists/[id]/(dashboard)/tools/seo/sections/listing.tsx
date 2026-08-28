@@ -19,7 +19,7 @@ export function ListingSection({ artistId, name, bio, siteUrl, initial }: { arti
     <div>
       <GroupLabel>How it looks on Google</GroupLabel>
       <Body>
-        <div className="rounded-lg bg-paper px-4 py-3 ring-1 ring-hairline">
+        <div className="rounded-lg bg-surface px-4 py-3">
           <div className="truncate font-space text-[11px] text-ink-faint">{siteUrl ?? 'your site'}</div>
           <div className="mt-0.5 truncate text-[16px] text-accent">{title}</div>
           <div className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-ink-muted">{desc || 'Add a description or a bio.'}</div>

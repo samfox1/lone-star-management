@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import {
   SEO_RULES,
+  autoFaqAnswer,
   faqEntries,
   faqPageJsonLd,
   probePrompts,
@@ -271,18 +272,39 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(probePrompts('Wren', 'Person')[0]).toBe('Who is Wren, the artist?')
     for (const q of p) expect(q).not.toMatch(/Chicago|house|techno/i)
   })
-  it('answers pair with their prompt by number; blanks are left out; none = no sheet', () => {
+  it('answers pair with their prompt by number; the manager\'s words beat the automatic ones; no data at all = no sheet', () => {
     const p = payload({ site_content: { faq_answer_1: ' Skeen is a Chicago DJ. ', faq_answer_3: 'Smartbar, Sept 10.' } })
-    expect(faqEntries(p)).toEqual([
-      { question: 'Who is Skeen, the musician?', answer: 'Skeen is a Chicago DJ.' },
-      { question: 'When is Skeen playing next?', answer: 'Smartbar, Sept 10.' },
-    ])
-    expect(faqPageJsonLd(payload(), { origin: ORIGIN })).toBeNull()
+    const entries = faqEntries(p)
+    expect(entries[0]).toEqual({ question: 'Who is Skeen, the musician?', answer: 'Skeen is a Chicago DJ.' })
+    expect(entries.find((e) => e.question.startsWith('When'))).toEqual({ question: 'When is Skeen playing next?', answer: 'Smartbar, Sept 10.' })
+    // Q2 is automatic here (genre + location are in the fixture); Q4/Q5 have no data (no releases, no origin).
+    expect(entries.map((e) => e.question.slice(0, 4))).toEqual(['Who ', 'What', 'When'])
+    const bare = payload({ artist: { ...payload().artist, bio: null, genre: null, location: null }, tour_dates: [], site_content: {} })
+    expect(faqPageJsonLd({ ...bare, origin: undefined }, { origin: '' })).toBeNull()
     const sheet = faqPageJsonLd(p, { origin: ORIGIN })!
     const page = (sheet['@graph'] as Record<string, unknown>[])[0]
     expect(page['@type']).toBe('FAQPage')
     expect(page.url).toBe(`${ORIGIN}/faqsheet`)
     expect(page.about).toEqual({ '@id': `${ORIGIN}/#artist` })
-    expect((page.mainEntity as Record<string, unknown>[]).map((q) => q['@type'])).toEqual(['Question', 'Question'])
+    expect((page.mainEntity as Record<string, unknown>[]).every((q) => q['@type'] === 'Question')).toBe(true)
+  })
+  it('CRITICAL: automatic answers come from published data only — and the manager\'s own answer wins', () => {
+    const src = { ...payload(), origin: ORIGIN, today: '2026-08-26', releases: [
+      { id: 'r1', title: 'Night Drive EP', cover_url: null, release_date: '2026-06-01' },
+      { id: 'r2', title: 'Loose', cover_url: null, release_date: '2026-03-15' },
+    ] }
+    expect(autoFaqAnswer(1, src)).toBe('Chicago DJ, producer and filmmaker. Second paragraph.') // the bio
+    expect(autoFaqAnswer(2, src)).toBe('Skeen makes House, Techno. Skeen is based in Chicago.')
+    expect(autoFaqAnswer(3, src)).toBe('Skeen plays Smartbar, Chicago on September 10, 2026.') // the next dated, not-past show
+    expect(autoFaqAnswer(4, src)).toBe("Skeen's latest releases: Night Drive EP (June 1, 2026), Loose (March 15, 2026).")
+    expect(autoFaqAnswer(5, src)).toBe("Skeen's official website is www.example.com.")
+    // No data → no answer → the question is left out, never a made-up line.
+    expect(autoFaqAnswer(3, { ...src, tour_dates: [] })).toBe('')
+    expect(autoFaqAnswer(2, { ...src, artist: { ...src.artist, genre: null, location: null } })).toBe('')
+    // The manager's words replace the automatic ones; extra questions follow.
+    const mine = faqEntries({ ...src, site_content: { faq_answer_1: 'My own words.', faq_extra_1_q: 'Can I book Skeen?', faq_extra_1_a: 'Yes, through the contact form.' } })
+    expect(mine[0]).toEqual({ question: 'Who is Skeen, the musician?', answer: 'My own words.' })
+    expect(mine.at(-1)).toEqual({ question: 'Can I book Skeen?', answer: 'Yes, through the contact form.' })
+    expect(mine).toHaveLength(6)
   })
 })
