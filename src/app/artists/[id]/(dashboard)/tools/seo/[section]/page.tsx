@@ -18,10 +18,19 @@ export default async function SeoSectionPage({ params }: { params: Promise<{ id:
   const { id, section } = await params
   if (!isSeoSection(section)) notFound()
   const supabase = await createClient()
-  const artist = await requireArtist(id)
-  const [{ data: rows }, { data: facts }] = await Promise.all([
+  // ONE round of round trips (2026-08-28 trim): the ownership gate, the content and the
+  // facts fly together — every query is RLS-scoped, so nothing waits on the gate to be
+  // safe; it only waits to render. The section-specific query joins the batch below.
+  const [artist, { data: rows }, { data: facts }, { data: mediaRows }, { data: gallery }] = await Promise.all([
+    requireArtist(id),
     supabase.from('site_content').select('key, value').eq('artist_id', id),
     supabase.from('artists').select('bio, genre, location, schema_type, hero_image_url').eq('id', id).single(),
+    section === 'logo'
+      ? supabase.from('media').select('purpose, storage_path').eq('artist_id', id).in('purpose', ['logo_primary', 'logo_secondary', 'profile_photo'])
+      : Promise.resolve({ data: null }),
+    section === 'alt'
+      ? supabase.from('media').select('id, storage_path, alt, slug, site_role').eq('artist_id', id).eq('purpose', 'gallery_image').eq('on_site', true).order('sort_order')
+      : Promise.resolve({ data: null }),
   ])
   const content = Object.fromEntries((rows ?? []).map((r) => [r.key as string, (r.value as string | null) ?? '']))
   const seo = Object.fromEntries(SEO_FIELDS.map((f) => [f.key, content[f.key] ?? '']))
@@ -37,7 +46,6 @@ export default async function SeoSectionPage({ params }: { params: Promise<{ id:
   if (section === 'ai') return <AiSection artistId={id} name={artist.name} schemaType={schemaType} initial={Object.fromEntries(FAQ_KEYS.map((k) => [k, content[k] ?? '']))} />
   if (section === 'test') return <TestSection artistId={id} siteUrl={siteUrl} />
   if (section === 'logo') {
-    const { data: mediaRows } = await supabase.from('media').select('purpose, storage_path').eq('artist_id', id).in('purpose', ['logo_primary', 'logo_secondary', 'profile_photo'])
     const LABEL: Record<string, string> = { logo_primary: 'Primary logo', logo_secondary: 'Secondary logo', profile_photo: 'Profile photo' }
     const ORDER = ['logo_primary', 'logo_secondary', 'profile_photo']
     const sources: OgSource[] = (mediaRows ?? [])
@@ -48,13 +56,6 @@ export default async function SeoSectionPage({ params }: { params: Promise<{ id:
     return <LogoSection artistId={id} sources={sources} currentUrl={content.og_image ?? ''} />
   }
   // alt
-  const { data: gallery } = await supabase
-    .from('media')
-    .select('id, storage_path, alt, slug, site_role')
-    .eq('artist_id', id)
-    .eq('purpose', 'gallery_image')
-    .eq('on_site', true)
-    .order('sort_order')
   const photos: AltPhoto[] = (gallery ?? []).map((m) => {
     const path = m.storage_path as string
     const role = (m.site_role as string | null) ?? null
