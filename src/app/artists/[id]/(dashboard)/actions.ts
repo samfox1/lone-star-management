@@ -580,6 +580,24 @@ export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
   return auditLiveSite(origin, fetch, { bio: (artist?.bio as string | null) ?? null })
 }
 
+/** The floating Publish bar's action on the SEO / GEO pages: everything that editor
+ *  changes (media, site text, then the profile LAST — the live-gate invariant), behind
+ *  the same password gate as every other publish. */
+export async function publishSiteWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+  try {
+    await publishContent(supabase, 'media', artistId, gate.userId)
+    await publishContent(supabase, 'site_content', artistId, gate.userId)
+    await publishProfile(supabase, artistId, gate.userId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
 /** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
 export async function saveSeoFieldAction(
   artistId: string,

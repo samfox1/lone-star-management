@@ -1,4 +1,5 @@
-import { dashboardDiff } from '../../_data'
+import { dashboardDiff, requireArtist } from '../../_data'
+import { publicSiteOrigin } from '@/lib/custom-site'
 import { SeoTopRow } from './top-row'
 
 /**
@@ -7,12 +8,12 @@ import { SeoTopRow } from './top-row'
  */
 export default async function SeoLayout({ params, children }: { params: Promise<{ id: string }>; children: React.ReactNode }) {
   const { id } = await params
-  const diff = await dashboardDiff(id)
+  const [artist, diff] = await Promise.all([requireArtist(id), dashboardDiff(id)])
   const unpublished = diff.profile.dirty || diff.site_content.dirty || diff.media.dirty
   return (
-    <div className="flex flex-col gap-6">
-      <SeoTopRow artistId={id} unpublished={unpublished} />
-      <div className="max-w-[760px]">{children}</div>
+    <div className="flex flex-col gap-8 pb-24">
+      <SeoTopRow artistId={id} unpublished={unpublished} siteUrl={publicSiteOrigin(artist)} />
+      <div className="min-w-0">{children}</div>
     </div>
   )
 }
