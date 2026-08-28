@@ -43,6 +43,15 @@ describe('ToolsShell', () => {
     const sub = screen.getByRole('navigation', { name: 'SEO / GEO sections' })
     for (const s of SEO_SECTIONS) expect(sub.querySelector(`a[href="/artists/a1/tools/seo/${s.seg}"]`), s.seg).not.toBeNull()
     expect(sub.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/artists/a1/tools/seo/facts')
+    // …and the tools panel is COLLAPSED (slid off-left, hover brings it back), still in the DOM.
+    const tools = screen.getByRole('navigation', { name: 'Manager tools' })
+    expect(tools.parentElement?.getAttribute('data-collapsed')).toBe('true')
+    expect(tools.className).toMatch(/hover:translate-x-0/)
+  })
+  it('on a plain tool the tools panel holds its column (not collapsed)', () => {
+    pathname = '/artists/a1/brand'
+    render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+    expect(screen.getByRole('navigation', { name: 'Manager tools' }).parentElement?.getAttribute('data-collapsed')).toBeNull()
   })
   it('no second panel on other tools', () => {
     pathname = '/artists/a1/brand'

@@ -17,12 +17,19 @@ export { TOOLS, toolFor }
 import { SEO_SECTIONS } from './tools/seo/sections'
 
 // 71px = the dashboard header's rendered height (assets-rail.tsx says the same).
-export function ToolsRail({ artistId, active }: { artistId: string; active: string }) {
+export function ToolsRail({ artistId, active, collapsed = false }: { artistId: string; active: string; collapsed?: boolean }) {
   return (
-    <div className="hidden w-[232px] flex-none md:block">
+    // COLLAPSED (a tool with its own sections is open — Sam, 2026-08-28): the panel slides
+    // off to the left, leaving a 10px edge; hovering that edge slides it back OVER the
+    // section panel, and it hides again when the pointer leaves. Expanded: it holds its
+    // own column, as before.
+    <div className={cx('hidden md:block', collapsed ? 'w-0' : 'w-[232px] flex-none')} data-collapsed={collapsed || undefined}>
       <nav
         aria-label="Manager tools"
-        className="fixed left-0 top-[71px] flex h-[calc(100vh-71px)] w-[232px] flex-col overflow-y-auto border-r border-hairline bg-paper font-space [scrollbar-width:none]"
+        className={cx(
+          'group/tools fixed left-0 top-[71px] z-20 flex h-[calc(100vh-71px)] w-[232px] flex-col overflow-y-auto border-r border-hairline bg-paper font-space transition-transform duration-200 [scrollbar-width:none]',
+          collapsed && '-translate-x-[222px] shadow-none hover:translate-x-0 hover:shadow-xl',
+        )}
       >
         {/* One flat list, no group captions (Sam, 2026-08-28). */}
         <div className="flex flex-col gap-0.5 px-3 pt-4">
@@ -57,10 +64,12 @@ export function SeoSubRail({ artistId, pathname }: { artistId: string; pathname:
   const base = `/artists/${artistId}/tools/seo`
   const active = pathname.slice(base.length).replace(/^\//, '').split('/')[0] || SEO_SECTIONS[0].seg
   return (
-    <div className="hidden w-[200px] flex-none md:block">
+    // Takes the tools panel's place (left: 0); the collapsed tools panel peeks 10px at its
+    // left edge and slides over it on hover.
+    <div className="hidden w-[232px] flex-none md:block">
       <nav
         aria-label="SEO / GEO sections"
-        className="fixed left-[232px] top-[71px] flex h-[calc(100vh-71px)] w-[200px] flex-col border-r border-hairline bg-surface font-space"
+        className="fixed left-0 top-[71px] z-10 flex h-[calc(100vh-71px)] w-[232px] flex-col border-r border-hairline bg-paper pl-[10px] font-space"
       >
         <div className="flex flex-col gap-0.5 px-3 pt-4">
           {SEO_SECTIONS.map((s) => {
@@ -93,7 +102,7 @@ export function ToolsShell({ artistId, children }: { artistId: string; children:
   const sub = tool.seg === 'tools/seo'
   return (
     <div className="flex gap-8">
-      <ToolsRail artistId={artistId} active={tool.seg} />
+      <ToolsRail artistId={artistId} active={tool.seg} collapsed={sub} />
       {sub && <SeoSubRail artistId={artistId} pathname={pathname} />}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
