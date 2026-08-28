@@ -8,12 +8,15 @@ export type ButtonVariant = 'solid' | 'accent' | 'ghost'
 /** Button classes, exported so links that should look like buttons (e.g. a
  *  next/link) can share them without nesting a <button> inside an <a>. */
 export function buttonClass(variant: ButtonVariant = 'solid', className?: string): string {
+  // The editor's button voice, everywhere (Sam, 2026-08-28: "you keep coming back to
+  // these style of buttons"): Space Mono, small caps, hairline or ink. One definition, so
+  // the roster, the dashboard, the tools and the modals cannot drift apart again.
   const base =
-    'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors disabled:opacity-50'
+    'inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] transition-colors disabled:opacity-50'
   const styles: Record<ButtonVariant, string> = {
-    solid: 'bg-ink text-white hover:bg-black',
-    accent: 'bg-accent text-white hover:bg-accent-hover',
-    ghost: 'border border-hairline bg-paper text-ink hover:border-ink-faint',
+    solid: 'border-ink bg-ink text-paper hover:opacity-85',
+    accent: 'border-accent bg-accent text-white hover:bg-accent-hover',
+    ghost: 'border-hairline bg-paper text-ink-muted hover:border-accent hover:text-accent',
   }
   return cx(base, styles[variant], className)
 }
