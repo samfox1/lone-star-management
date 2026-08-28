@@ -13,19 +13,15 @@ import { AuditPanel } from './audit-panel'
 import { CopyButton } from './copy-button'
 
 /**
- * SEO / GEO (SEO_GEO_PLAN, Sam 2026-08-26): one page that explains every tool the site
- * uses to be found — by search engines AND by AI answer engines — lets the manager edit
- * what is theirs to edit, and says how to check each one is working. The rules live in
- * the bridge (`@samfox1/site-bridge/seo`) and ship on every connected site; this page
- * is the manager's window onto them.
+ * SEO / GEO (SEO_GEO_PLAN). One screen: the live check on top, then the things the
+ * manager owns as cards — the search listing, the facts, the bio, the pictures, the AI
+ * probe. Each card carries one line on what it is and one on how to check it (Sam,
+ * 2026-08-28: clean and consistent, not paragraphs). The rules live in the bridge
+ * (`@samfox1/site-bridge/seo`) and ship on every connected site.
  */
 
-/**
- * The five prompts of the AI probe (PROBE_PROMPTS v1) — ask them, note who cites the site.
- * FROZEN: they read the name and the artist TYPE only, never a fact the site is supposed
- * to teach (leaking "Chicago" into the question would hand the engine the answer).
- * Change the wording only with a new version, or months stop comparing.
- */
+/** PROBE_PROMPTS v1 — FROZEN. They read the name and the artist TYPE only, never a fact the
+ *  site is supposed to teach. Change the wording only with a new version. */
 export const PROBE_VERSION = 'v1'
 export function probePrompts(name: string, schemaType: string): string[] {
   const role = schemaType === 'Person' ? 'the artist' : 'the musician'
@@ -73,153 +69,108 @@ export default async function SeoPage({ params }: { params: Promise<{ id: string
   const enc = siteUrl ? encodeURIComponent(siteUrl + '/') : ''
   const external = siteUrl
     ? [
-        { label: 'Rich Results Test', href: `https://search.google.com/test/rich-results?url=${enc}` },
-        { label: 'Schema validator', href: `https://validator.schema.org/#url=${enc}` },
-        { label: 'PageSpeed / Lighthouse', href: `https://pagespeed.web.dev/analysis?url=${enc}` },
+        { label: 'Rich Results', href: `https://search.google.com/test/rich-results?url=${enc}` },
+        { label: 'Schema', href: `https://validator.schema.org/#url=${enc}` },
+        { label: 'Lighthouse', href: `https://pagespeed.web.dev/analysis?url=${enc}` },
         { label: 'Search Console', href: 'https://search.google.com/search-console' },
-        { label: 'Bing Webmaster', href: 'https://www.bing.com/webmasters' },
+        { label: 'Bing', href: 'https://www.bing.com/webmasters' },
       ]
     : []
 
   return (
-    <div className="max-w-3xl space-y-10">
-      <Link href={`/artists/${id}/tools`} className="inline-flex items-center gap-1 font-space text-xs text-ink-muted transition-colors hover:text-ink">
-        <Icon name="chevronLeft" size={15} /> Manager tools
-      </Link>
-
-      <div className="flex items-end justify-between border-b border-hairline pb-3">
-        <div>
-          <h1 className="text-[19px] font-bold tracking-[-0.01em]">SEO / GEO</h1>
-          <p className="mt-1 font-space text-xs text-ink-faint">
-            How {artist.name}&rsquo;s site is found by search engines (SEO) and quoted by AI answers (GEO).
-            Edits are drafts until the site is published.
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Actions, right-aligned like every other tool page. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {external.map((l) => (
+          <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={buttonClass('ghost', 'text-[11px]')}>
+            {l.label} <Icon name="external" size={12} />
+          </a>
+        ))}
         <form action={publishSiteAction.bind(null, id)}>
-          <button type="submit" className={buttonClass('ghost')}>
+          <button type="submit" className={buttonClass('solid')}>
             Publish site
           </button>
         </form>
       </div>
 
-      {/* 1. Live check */}
-      <Section
-        n="1"
-        title="Is the site findable right now?"
-        what="Fetches the public site the way Google does and checks the plumbing: a real description, one main heading, a heading per section, alt text on every picture, direct image URLs, a fact sheet that parses, the editor page hidden. Green here means the changes SHIPPED."
-        check="Run it after every publish. Then, once a month, the tools below tell you whether Google and the AI engines noticed."
-      >
+      <Tile label="Live check" what="Fetches the public site as a crawler would and checks every findability rule." check="Run after each publish.">
         <AuditPanel artistId={id} siteUrl={siteUrl} />
-        {external.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {external.map((l) => (
-              <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={buttonClass('ghost', 'text-[11px]')}>
-                {l.label} <Icon name="external" size={12} />
-              </a>
-            ))}
+      </Tile>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Tile label="Search listing" what="The link and the grey line under it. Blank = the name and the bio." check="Search the name; Search Console → Performance.">
+          <SeoWords artistId={id} name={artist.name} initial={seo} />
+          <div className="mt-5 border-t border-hairline pt-4">
+            <KLabel>Social card</KLabel>
+            <div className="mt-3">
+              <OgImagePicker artistId={id} sources={sources} currentUrl={content.og_image ?? ''} />
+            </div>
           </div>
-        )}
-      </Section>
+        </Tile>
 
-      {/* 2. The words search shows */}
-      <Section
-        n="2"
-        title="The words search results show"
-        what="The title is the blue link; the description is the grey line under it, and what a shared link previews. Blank means automatic: the artist's name, and the bio."
-        check="Google: search the artist's name and read the result. Search Console → Performance shows impressions and clicks for it over time."
-      >
-        <SeoWords artistId={id} name={artist.name} initial={seo} />
-        <div className="mt-6 space-y-2 border-t border-hairline pt-5">
-          <KLabel>Social preview image</KLabel>
-          <p className="font-space text-xs text-ink-faint">The card shown when the site is shared on iMessage, X, Instagram. Defaults to the hero image.</p>
-          <OgImagePicker artistId={id} sources={sources} currentUrl={content.og_image ?? ''} />
+        <div className="grid content-start gap-6">
+          <Tile label="Facts" what="What the fact sheet states about the artist. Shows, releases and videos fill in from what is published." check="Rich Results; ask an AI engine the genre.">
+            <SeoFacts artistId={id} initial={artistFacts} />
+          </Tile>
+
+          <Tile label="Bio" what="Visible words are what AI answers quote. Hidden still feeds search." check="Open /about; Search Console → Pages.">
+            <SeoAbout artistId={id} initial={seo} />
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <span className={`font-space text-[11px] ${bio ? 'text-ink-faint' : 'text-status-pending'}`}>{bio ? `${bio.length} characters` : 'No bio yet'}</span>
+              <Link href={`/artists/${id}/editor`} className={buttonClass('ghost', 'text-[11px]')}>
+                Edit bio <Icon name="edit" size={12} />
+              </Link>
+            </div>
+          </Tile>
+
+          <Tile label="Pictures" what="Every photo carries alt text and a named file; both are recommended automatically." check="Google Images; Lighthouse → Accessibility.">
+            <div className="flex items-end justify-between gap-4">
+              <div className="grid grid-cols-3 gap-6">
+                <Stat value={photos.length} label="on the site" />
+                <Stat value={withAlt} label="own alt text" />
+                <Stat value={withSlug} label="named file" />
+              </div>
+              <Link href={`/artists/${id}/editor`} className={buttonClass('ghost', 'text-[11px]')}>
+                Images <Icon name="photo" size={12} />
+              </Link>
+            </div>
+          </Tile>
         </div>
-      </Section>
 
-      {/* 3. The fact sheet */}
-      <Section
-        n="3"
-        title="The fact sheet (JSON-LD)"
-        what="Invisible text in the page that tells bots, in a standard language, who the artist is: name, genre, where they are based, links, upcoming shows, releases and their songs, videos, listed photos. Shows, releases and videos fill in on their own from what is published; these three facts are yours."
-        check="Rich Results Test above: it should list the artist, and an Event for each upcoming show. Search Console → Enhancements → Events appears once Google has read it. Ask an AI engine what genre the artist makes: the answer should match this."
-      >
-        <SeoFacts artistId={id} initial={artistFacts} />
-      </Section>
-
-      {/* 4. The bio */}
-      <Section
-        n="4"
-        title="Something to quote"
-        what="AI answers quote visible words. A site with a great fact sheet and no paragraphs gives them nothing. The one bio you keep here feeds the About section or the /about page, the description above, and the fact sheet. Hidden still feeds search; it just does not show on the site."
-        check="Open /about on the site. Search Console → Pages should list it as indexed within a few weeks. The AI probe below is the direct test."
-      >
-        <SeoAbout artistId={id} initial={seo} />
-        <div className="mt-4 flex items-center gap-3 font-space text-xs">
-          <span className={bio ? 'text-ink-muted' : 'text-status-pending'}>{bio ? `Bio: ${bio.length} characters` : 'No bio yet'}</span>
-          <Link href={`/artists/${id}/editor`} className={buttonClass('ghost', 'text-[11px]')}>
-            Edit the bio <Icon name="edit" size={12} />
-          </Link>
-        </div>
-      </Section>
-
-      {/* 5. Images */}
-      <Section
-        n="5"
-        title="Pictures with names"
-        what="Every photo carries alt text (what it shows, read aloud and quoted) and a descriptive file name (what its URL says). Both are recommended automatically from the artist and caption; edit either from Images → Edit alt tag in the editor."
-        check="Google Images: search the artist's name. Lighthouse (above) → Accessibility: image elements have alt. Search Console → Performance → Search type: Image."
-      >
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Stat value={photos.length} label="photos on the site" />
-          <Stat value={withAlt} label="with their own alt text" />
-          <Stat value={withSlug} label="with a named file" />
-        </div>
-        <Link href={`/artists/${id}/editor`} className={buttonClass('ghost', 'mt-4 text-[11px]')}>
-          Open Images <Icon name="photo" size={12} />
-        </Link>
-      </Section>
-
-      {/* 6. AI probe */}
-      <Section
-        n="6"
-        title="The AI probe"
-        what="There is no dashboard for 'Perplexity cited you'. The only measure is to ask. Ask each of ChatGPT (search on), Perplexity, Google AI Mode and Copilot these five prompts in a fresh, signed-out session, and note: cited or not, and whether the facts are right. The five are frozen (v1) and never contain a fact the site should teach, so months compare. Record the answers in the site's SEO_GEO_BASELINE.md with the date."
-        check="Target after the bio and fact sheet are live: prompts 1, 2 and 5 cite the site in at least two of the four engines, with the genre and location right."
-      >
-        <ol className="space-y-2">
-          {probePrompts(artist.name, artistFacts.schema_type).map((p, i) => (
-            <li key={i} className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2 text-sm">
-              <span>
-                <span className="mr-2 font-space text-[11px] text-ink-faint">{i + 1}</span>
-                {p}
-              </span>
-              <CopyButton text={p} />
-            </li>
-          ))}
-        </ol>
-      </Section>
+        <Tile
+          label={`AI probe · ${PROBE_VERSION}`}
+          what="Ask ChatGPT, Perplexity, Google AI Mode and Copilot, signed out. Note: cited or not, facts right or wrong."
+          check="Target: prompts 1, 2, 5 cite the site in two of four engines."
+          className="lg:col-span-2"
+        >
+          <ol className="grid gap-2 md:grid-cols-2">
+            {probePrompts(artist.name, artistFacts.schema_type).map((p, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2 text-sm">
+                <span className="min-w-0 truncate">
+                  <span className="mr-2 font-space text-[11px] text-ink-faint">{i + 1}</span>
+                  {p}
+                </span>
+                <CopyButton text={p} />
+              </li>
+            ))}
+          </ol>
+        </Tile>
+      </div>
     </div>
   )
 }
 
-function Section({ n, title, what, check, children }: { n: string; title: string; what: string; check: string; children: React.ReactNode }) {
+/** One card: mono eyebrow, a line on what it is, the controls, a mono "check" line. */
+function Tile({ label, what, check, className, children }: { label: string; what: string; check: string; className?: string; children: React.ReactNode }) {
   return (
-    <Card className="p-6">
-      <div className="flex items-baseline gap-3">
-        <span className="font-space text-[11px] font-bold text-ink-faint">{n}</span>
-        <h2 className="text-[15px] font-bold tracking-[-0.01em]">{title}</h2>
-      </div>
-      <p className="mt-2 text-sm leading-relaxed text-ink-muted">{what}</p>
-      <div className="mt-5">{children}</div>
-      <div className="mt-5 flex gap-2 border-t border-hairline pt-4">
-        <span className="mt-0.5 flex-none text-ink-faint">
-          <Icon name="check" size={13} />
-        </span>
-        <p className="font-space text-xs leading-relaxed text-ink-faint">
-          <b className="font-bold text-ink-muted">How to check: </b>
-          {check}
-        </p>
-      </div>
+    <Card className={`flex flex-col p-5 ${className ?? ''}`}>
+      <KLabel>{label}</KLabel>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{what}</p>
+      <div className="mt-4 flex-1">{children}</div>
+      <p className="mt-5 border-t border-hairline-soft pt-3 font-space text-[10px] text-ink-faint">
+        <span className="font-bold uppercase tracking-[0.1em]">Check </span>
+        {check}
+      </p>
     </Card>
   )
 }
@@ -227,7 +178,7 @@ function Section({ n, title, what, check, children }: { n: string; title: string
 function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div>
-      <div className="font-space text-[25px] font-bold tracking-[-0.02em]">{value}</div>
+      <div className="font-space text-[22px] font-bold tracking-[-0.02em]">{value}</div>
       <div className="mt-1 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">{label}</div>
     </div>
   )

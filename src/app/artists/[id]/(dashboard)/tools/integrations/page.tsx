@@ -1,5 +1,3 @@
-import Link from 'next/link'
-import { Icon } from '@/components/ui/icons'
 import { KLabel } from '@/components/ui/ui'
 import { SyncPanel } from '../../sync-panel'
 import { ShopifyPanel } from '../../shopify-panel'
@@ -22,20 +20,6 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ i
 
   return (
     <div className="space-y-10">
-      <Link
-        href={`/artists/${id}/tools`}
-        className="inline-flex items-center gap-1 font-space text-xs text-ink-muted transition-colors hover:text-ink"
-      >
-        <Icon name="chevronLeft" size={15} /> Manager tools
-      </Link>
-      <div>
-        <h1 className="text-[19px] font-bold tracking-[-0.01em]">Integrations</h1>
-        <p className="mt-1 font-space text-xs text-ink-faint">
-          Data sources for {artist.name}. Each artist connects their own — pulls land in draft rows,
-          your manual edits are never overwritten. Connect more than one music service and their
-          catalogs merge into one list.
-        </p>
-      </div>
 
       {/* Every integration, grouped by the section it feeds (Music shows all connected services) */}
       {(Object.keys(SECTION_LABEL) as Array<keyof typeof SECTION_LABEL>).map((section) => {

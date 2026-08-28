@@ -1,3 +1,4 @@
+import { ToolsShell } from './tools-rail'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Icon } from '@/components/ui/icons'
@@ -89,7 +90,10 @@ export default async function DashboardLayout({
       {/* mobile section strip */}
       <ArtistNav artistId={id} dirty={dirty} layout="strip" />
 
-      <main className="w-full px-7 py-8">{children}</main>
+      <main className="w-full px-7 py-8">
+        {/* On a tool route this adds the tools side panel; elsewhere it is the page alone. */}
+        <ToolsShell artistId={id}>{children}</ToolsShell>
+      </main>
       <Toaster />
     </div>
   )

@@ -9,13 +9,6 @@ import { EnquiryTable } from './enquiry-table'
 export const metadata = { title: 'Enquiries — Lone Star Management' }
 
 /** Where the manager can change the address that resolved, in plain language. */
-const SOURCE_LABEL: Record<string, string> = {
-  mail_settings: 'set by Lone Star admin',
-  link: 'from your booking link',
-  site_content: 'from your site text',
-  default: 'the Lone Star fallback — set a booking address to route these yourself',
-}
-
 export default async function EnquiriesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -48,16 +41,10 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
 
   return (
     <SectionShell title="Enquiries" artistId={id}>
+      {/* Only the broken state speaks (Sam, 2026-08-28: no explanatory copy on tool pages).
+          A working recipient says nothing; a missing one is a warning the manager must act on. */}
       <div className="space-y-1">
-        {current ? (
-          <p className="text-sm text-ink-muted">
-            New enquiries go to <span className="font-medium text-ink">{current.to_email}</span>{' '}
-            <span className="text-ink-faint">
-              ({SOURCE_LABEL[current.recipient_source] ?? current.recipient_source})
-            </span>
-            . Changes take effect immediately — no publish needed.
-          </p>
-        ) : (
+        {current ? null : (
           <p className="flex items-center gap-1.5 text-sm text-ink-muted">
             <Icon name="alert" size={15} />
             No booking address is set, so enquiries cannot be delivered. Add one in Site text

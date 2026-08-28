@@ -15,10 +15,11 @@ export function SectionShell({
   artistId: string
   children: React.ReactNode
 }) {
+  // No page title (Sam, 2026-08-28: the side panel names the tool; a repeated heading
+  // and a rule under it were the "headers" he asked to lose). The action row stays.
   return (
     <section>
-      <div className="flex items-center justify-between border-b border-hairline pb-3">
-        <h1 className="text-[19px] font-bold tracking-[-0.01em]">{title}</h1>
+      <div className="flex items-center justify-end">
         {publishType && (
           <ActionButton
             action={publishSectionAction.bind(null, publishType, artistId)}
@@ -30,7 +31,7 @@ export function SectionShell({
           </ActionButton>
         )}
       </div>
-      <div className="mt-6 space-y-8">{children}</div>
+      <div className="mt-4 space-y-8">{children}</div>
     </section>
   )
 }

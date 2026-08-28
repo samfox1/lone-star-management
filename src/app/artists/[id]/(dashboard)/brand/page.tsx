@@ -1,9 +1,7 @@
-import Link from 'next/link'
 import { loadFraming } from '@/lib/brand'
 import { listArtistFonts } from '@/lib/fonts'
 import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
 import { createClient } from '@/lib/supabase/server'
-import { Icon } from '@/components/ui/icons'
 import { requireArtist } from '../_data'
 import { FaviconEditor } from './favicon-editor'
 import { FontManager } from './font-manager'
@@ -49,21 +47,7 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
   const primary = primaryPath ? mediaUrl(primaryPath) : null
 
   return (
-    <div className="max-w-2xl space-y-10">
-      <Link
-        href={`/artists/${id}/tools`}
-        className="inline-flex items-center gap-1 font-space text-xs text-ink-muted transition-colors hover:text-ink"
-      >
-        <Icon name="chevronLeft" size={15} /> Manager tools
-      </Link>
-
-      <div>
-        <h1 className="text-[19px] font-bold tracking-[-0.01em]">Brand</h1>
-        <p className="mt-2 font-space text-sm leading-relaxed text-ink-muted">
-          <b className="font-bold text-ink">{artist.name}</b>&rsquo;s logos. Used on the press kit, the
-          browser tab, and anywhere else a logo is needed. Draft until you publish the site.
-        </p>
-      </div>
+    <div className="max-w-3xl space-y-10">
 
       <section className="space-y-3">
         <h2 className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">

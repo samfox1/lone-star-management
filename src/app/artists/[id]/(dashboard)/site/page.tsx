@@ -29,8 +29,7 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
 
   return (
     <section>
-      <div className="flex items-center justify-between border-b border-hairline pb-3">
-        <h1 className="text-[19px] font-bold tracking-[-0.01em]">Site</h1>
+      <div className="flex items-center justify-end">
         <form action={publishSiteAction.bind(null, id)}>
           <button type="submit" className={buttonClass('ghost')}>
             Publish site
@@ -38,7 +37,7 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
         </form>
       </div>
 
-      <div className="mt-6 space-y-8">
+      <div className="mt-4 space-y-8">
         <div>
           <h2 className="text-[15px] font-bold tracking-[-0.01em]">Template</h2>
           <form action={saveTemplateAction.bind(null, id)} className="mt-2 flex items-center gap-2">

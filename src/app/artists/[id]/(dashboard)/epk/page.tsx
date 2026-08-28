@@ -48,16 +48,7 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
   } | null
 
   return (
-    <div className="max-w-2xl space-y-10">
-      <div>
-        <h1 className="text-[19px] font-bold tracking-[-0.01em]">Press kit (EPK)</h1>
-        <p className="mt-2 font-space text-sm leading-relaxed text-ink-muted">
-          A one-page PDF you can send a promoter, built from your{' '}
-          <strong className="font-bold text-ink">published</strong> bio, photo, releases and
-          contact, plus what you add below. The stage plot and tech rider are stapled to the
-          back, so it goes out as a single attachment.
-        </p>
-      </div>
+    <div className="max-w-3xl space-y-10">
 
       {/* The gate. It states what is missing and why, because this is the only place the
           manager finds out why the button is off. */}
