@@ -6,7 +6,7 @@ import { dashboardDiff, getShopifyDomain, requireArtist } from '../_data'
 import { connectedCount } from '../integrations'
 import { dirtyBySeg } from '../sections'
 import { publishAction } from '../actions'
-import { TOOLS } from '../tools-rail'
+import { TOOLS } from '../tools-registry'
 
 /**
  * The Overview of the manager-tools dashboard (Sam, 2026-08-28): what state the site is

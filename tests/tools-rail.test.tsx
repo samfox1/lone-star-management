@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { TOOLS, ToolsShell, toolFor } from '@/app/artists/[id]/(dashboard)/tools-rail'
+import { SEO_SECTIONS } from '@/app/artists/[id]/(dashboard)/tools/seo/sections'
 
 let pathname = '/artists/a1/tools'
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }))
@@ -35,5 +36,17 @@ describe('ToolsShell', () => {
     render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
     expect(screen.queryByRole('navigation', { name: 'Manager tools' })).toBeNull()
     expect(screen.getByText('page')).toBeTruthy()
+  })
+  it("CRITICAL: on the SEO / GEO tool, a second panel lists EVERY section with the current one marked", () => {
+    pathname = '/artists/a1/tools/seo/facts'
+    render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+    const sub = screen.getByRole('navigation', { name: 'SEO / GEO sections' })
+    for (const s of SEO_SECTIONS) expect(sub.querySelector(`a[href="/artists/a1/tools/seo/${s.seg}"]`), s.seg).not.toBeNull()
+    expect(sub.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/artists/a1/tools/seo/facts')
+  })
+  it('no second panel on other tools', () => {
+    pathname = '/artists/a1/brand'
+    render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+    expect(screen.queryByRole('navigation', { name: 'SEO / GEO sections' })).toBeNull()
   })
 })

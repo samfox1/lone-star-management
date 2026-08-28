@@ -78,7 +78,14 @@ export const SEO_FIELDS: SiteContentField[] = [
   // declares which it supports, bridge seo.aboutPlacement resolves) and its heading.
   { key: 'about_placement', label: 'About placement', type: 'text', default: '' },
   { key: 'about_heading', label: 'About heading', type: 'text', default: '' },
+  // AI visibility (Sam, 2026-08-28): the artist's own answers to the five probe questions,
+  // published to /faqsheet — a page crawlers and AI engines get from the sitemap, never
+  // linked from the site's own navigation. Blank = the question is left out.
+  ...[1, 2, 3, 4, 5].map((n) => ({ key: `faq_answer_${n}`, label: `FAQ answer ${n}`, type: 'text' as const, default: '' })),
 ]
+
+/** The FAQ answer keys, in prompt order — derived from SEO_FIELDS. */
+export const FAQ_KEYS = SEO_FIELDS.filter((f) => f.key.startsWith('faq_answer_')).map((f) => f.key)
 
 /**
  * Site-wide cursor settings (Sam, 2026-08-11). Ordinary `site_content` keys — they

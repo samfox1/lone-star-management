@@ -4,7 +4,7 @@
  * rule here is refused, never silently accepted.
  */
 import { describe, expect, it } from 'vitest'
-import { SEO_FIELDS } from '@/lib/site-content-schema'
+import { FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import { SEO_LIMITS, seoValueError } from '@/lib/site-editor/save'
 import { ABOUT_PLACEMENTS } from '@samfox1/site-bridge/seo'
 
@@ -28,6 +28,13 @@ describe('seoValueError', () => {
     for (const [key, max] of Object.entries(SEO_LIMITS)) {
       expect(seoValueError(key, 'x'.repeat(max)), key).toBeNull()
       expect(seoValueError(key, 'x'.repeat(max + 1)), key).toBeTruthy()
+    }
+  })
+  it('FAQ answers are SEO keys too: gated, capped, five of them in order', () => {
+    expect(FAQ_KEYS).toEqual([1, 2, 3, 4, 5].map((n) => `faq_answer_${n}`))
+    for (const k of FAQ_KEYS) {
+      expect(seoValueError(k, 'x'.repeat(1200))).toBeNull()
+      expect(seoValueError(k, 'x'.repeat(1201))).toBeTruthy()
     }
   })
 })

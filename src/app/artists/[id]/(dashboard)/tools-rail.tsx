@@ -10,32 +10,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { Icon, type IconName } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icons'
+import { TOOLS, toolFor } from './tools-registry'
 
-/** The registry: what the panel lists, in order. `seg` is the route segment under
- *  /artists/[id]/. Derive from this — never hand-list tools elsewhere. */
-export const TOOLS: readonly { seg: string; icon: IconName; label: string; desc: string }[] = [
-  { seg: 'tools', icon: 'grid', label: 'Overview', desc: 'Status, publish, quick links' },
-  { seg: 'site', icon: 'site', label: 'Site & profile', desc: 'Template, site text, photos & video' },
-  { seg: 'brand', icon: 'photo', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
-  { seg: 'links', icon: 'links', label: 'Links', desc: 'Social & external links' },
-  { seg: 'tools/seo', icon: 'search', label: 'SEO / GEO', desc: 'Search, social & AI answers' },
-  { seg: 'epk', icon: 'epk', label: 'Press kit', desc: 'Shareable EPK one-pager' },
-  { seg: 'subscribers', icon: 'list', label: 'Subscribers', desc: 'Emails from the site popup' },
-  { seg: 'enquiries', icon: 'note', label: 'Enquiries', desc: 'Booking & contact messages' },
-  { seg: 'tools/integrations', icon: 'integrations', label: 'Integrations', desc: 'Connected data sources' },
-  { seg: 'settings', icon: 'settings', label: 'Settings', desc: 'Artist settings' },
-]
-
-/** The tool a pathname is on, or null when the pathname is not a tool route. Longest
- *  segment wins so `tools/seo` beats `tools`. */
-export function toolFor(pathname: string, artistId: string): (typeof TOOLS)[number] | null {
-  const base = `/artists/${artistId}/`
-  if (!pathname.startsWith(base)) return null
-  const rest = pathname.slice(base.length).replace(/\/+$/, '')
-  const hits = TOOLS.filter((t) => rest === t.seg || rest.startsWith(`${t.seg}/`))
-  return hits.sort((a, b) => b.seg.length - a.seg.length)[0] ?? null
-}
+export { TOOLS, toolFor }
+import { SEO_SECTIONS } from './tools/seo/sections'
 
 // 71px = the dashboard header's rendered height (assets-rail.tsx says the same).
 export function ToolsRail({ artistId, active }: { artistId: string; active: string }) {
@@ -72,13 +51,50 @@ export function ToolsRail({ artistId, active }: { artistId: string; active: stri
 
 /** Wraps the dashboard's page: on a tool route, the panel plus the page; elsewhere the
  *  page alone. One place, so every tool gets the panel and no tool can forget it. */
+/** The SEO / GEO editor's sub-sections: a second panel to the right of the tools panel
+ *  (Sam, 2026-08-28). Same language, one step narrower. */
+export function SeoSubRail({ artistId, pathname }: { artistId: string; pathname: string }) {
+  const base = `/artists/${artistId}/tools/seo`
+  const active = pathname.slice(base.length).replace(/^\//, '').split('/')[0] || SEO_SECTIONS[0].seg
+  return (
+    <div className="hidden w-[200px] flex-none md:block">
+      <nav
+        aria-label="SEO / GEO sections"
+        className="fixed left-[232px] top-[71px] flex h-[calc(100vh-71px)] w-[200px] flex-col border-r border-hairline bg-surface font-space"
+      >
+        <div className="flex flex-col gap-0.5 px-3 pt-4">
+          {SEO_SECTIONS.map((s) => {
+            const on = s.seg === active
+            return (
+              <Link
+                key={s.seg}
+                href={`${base}/${s.seg}`}
+                aria-current={on ? 'page' : undefined}
+                className={cx(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition-colors',
+                  on ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:bg-paper hover:text-ink',
+                )}
+              >
+                <Icon name={s.icon} size={15} />
+                <span className="truncate">{s.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+    </div>
+  )
+}
+
 export function ToolsShell({ artistId, children }: { artistId: string; children: React.ReactNode }) {
-  const pathname = usePathname()
-  const tool = toolFor(pathname ?? '', artistId)
+  const pathname = usePathname() ?? ''
+  const tool = toolFor(pathname, artistId)
   if (!tool) return <>{children}</>
+  const sub = tool.seg === 'tools/seo'
   return (
     <div className="flex gap-8">
       <ToolsRail artistId={artistId} active={tool.seg} />
+      {sub && <SeoSubRail artistId={artistId} pathname={pathname} />}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   )

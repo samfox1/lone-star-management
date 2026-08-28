@@ -372,6 +372,9 @@ export function sitemapEntries(
   payload: Pick<PublicSitePayload, 'published_at' | 'tour_dates'>,
   opts: { origin: string; pages?: readonly string[]; today?: string },
 ): SitemapEntry[] {
+  // `pages` is what a site chooses to list beyond the homepage — /about when the bio
+  // lives there, /faqsheet when any question is answered. Listed, but never linked from
+  // the site's own navigation: that is the whole point of the sheet.
   const lastModified = lastModifiedFrom(payload, opts.today)
   const stamp = lastModified ? { lastModified } : {}
   return [
@@ -543,4 +546,62 @@ export function auditGeoFacts(graph: unknown): SeoFinding[] {
   if (artist['@type'] === 'MusicGroup' && !artist.genre) out.push({ rule: 'facts-geo', problem: 'artist has no genre — set it on the SEO / GEO page and publish' })
   if (!artist.foundingLocation && !artist.homeLocation) out.push({ rule: 'facts-geo', problem: 'artist has no location — set "Based in" on the SEO / GEO page and publish' })
   return out
+}
+
+/* ----------------------------------------------------------------------------------
+ * The FAQ sheet — the artist's own answers to the five probe questions
+ * -------------------------------------------------------------------------------- */
+
+/** PROBE_PROMPTS v1 — FROZEN. Name and artist TYPE only; never a fact the site should
+ *  teach (leaking "Chicago" into the question hands the engine the answer). Change the
+ *  wording only with a new version, or months stop comparing. */
+export const PROBE_VERSION = 'v1'
+export function probePrompts(name: string, schemaType?: string | null): string[] {
+  const role = schemaType === 'Person' ? 'the artist' : 'the musician'
+  return [
+    `Who is ${name}, ${role}?`,
+    `What kind of music does ${name} make, and where are they based?`,
+    `When is ${name} playing next?`,
+    `What has ${name} released recently?`,
+    `${name} official website`,
+  ]
+}
+
+export type FaqEntry = { question: string; answer: string }
+
+/** The answered questions, in order: `site_content.faq_answer_N` for prompt N. A blank
+ *  answer leaves its question out. Empty = no sheet. */
+export function faqEntries(payload: Pick<PublicSitePayload, 'artist' | 'site_content'>): FaqEntry[] {
+  const prompts = probePrompts(payload.artist.name, payload.artist.schema_type)
+  const out: FaqEntry[] = []
+  prompts.forEach((question, i) => {
+    const answer = (payload.site_content?.[`faq_answer_${i + 1}`] ?? '').replace(/\s+/g, ' ').trim()
+    if (answer) out.push({ question, answer })
+  })
+  return out
+}
+
+/** FAQPage markup for the /faqsheet route: the artist as the page's subject, one
+ *  Question/Answer pair per answered prompt. Null when nothing is answered. */
+export function faqPageJsonLd(payload: Pick<PublicSitePayload, 'artist' | 'site_content'>, opts: { origin: string; path?: string }) {
+  const entries = faqEntries(payload)
+  if (!entries.length) return null
+  const path = opts.path ?? '/faqsheet'
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'FAQPage',
+        '@id': `${opts.origin}${path}#faq`,
+        url: `${opts.origin}${path}`,
+        name: `${payload.artist.name} — questions and answers`,
+        about: { '@id': `${opts.origin}/#artist` },
+        mainEntity: entries.map((e) => ({
+          '@type': 'Question',
+          name: e.question,
+          acceptedAnswer: { '@type': 'Answer', text: e.answer },
+        })),
+      },
+    ],
+  }
 }

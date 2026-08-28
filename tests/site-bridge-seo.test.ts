@@ -9,6 +9,9 @@ import { describe, expect, it } from 'vitest'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import {
   SEO_RULES,
+  faqEntries,
+  faqPageJsonLd,
+  probePrompts,
   aboutPlacement,
   auditGeoFacts,
   isProfileUrl,
@@ -257,5 +260,29 @@ describe('aboutPlacement', () => {
   it('a choice the site does not declare falls back to the default; no declaration = hidden', () => {
     expect(aboutPlacement({ site_content: { about_placement: 'home' } }, { placements: ['page'], default: 'page' })).toBe('page')
     expect(aboutPlacement({ site_content: { about_placement: 'home' } }, null)).toBe('hidden')
+  })
+})
+
+describe('the FAQ sheet (AI visibility)', () => {
+  it('CRITICAL: the five prompts are frozen and never carry a fact the site should teach', () => {
+    const p = probePrompts('Skeen', 'MusicGroup')
+    expect(p).toHaveLength(5)
+    expect(p[0]).toBe('Who is Skeen, the musician?')
+    expect(probePrompts('Wren', 'Person')[0]).toBe('Who is Wren, the artist?')
+    for (const q of p) expect(q).not.toMatch(/Chicago|house|techno/i)
+  })
+  it('answers pair with their prompt by number; blanks are left out; none = no sheet', () => {
+    const p = payload({ site_content: { faq_answer_1: ' Skeen is a Chicago DJ. ', faq_answer_3: 'Smartbar, Sept 10.' } })
+    expect(faqEntries(p)).toEqual([
+      { question: 'Who is Skeen, the musician?', answer: 'Skeen is a Chicago DJ.' },
+      { question: 'When is Skeen playing next?', answer: 'Smartbar, Sept 10.' },
+    ])
+    expect(faqPageJsonLd(payload(), { origin: ORIGIN })).toBeNull()
+    const sheet = faqPageJsonLd(p, { origin: ORIGIN })!
+    const page = (sheet['@graph'] as Record<string, unknown>[])[0]
+    expect(page['@type']).toBe('FAQPage')
+    expect(page.url).toBe(`${ORIGIN}/faqsheet`)
+    expect(page.about).toEqual({ '@id': `${ORIGIN}/#artist` })
+    expect((page.mainEntity as Record<string, unknown>[]).map((q) => q['@type'])).toEqual(['Question', 'Question'])
   })
 })

@@ -16,7 +16,7 @@
  * being edited. Deciding custom-ness by "no manifest found" would therefore never fire.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { acceptsValue, CURSOR_KEYS, cursorValueError, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
+import { acceptsValue, CURSOR_KEYS, cursorValueError, FAQ_KEYS, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
@@ -133,6 +133,7 @@ export const SEO_LIMITS: Record<string, number> = {
   seo_title: 70,
   seo_description: 300,
   about_heading: 60,
+  ...Object.fromEntries(FAQ_KEYS.map((k) => [k, 1200])),
 }
 
 /** What a manager may store under an SEO key — derived from SEO_FIELDS, so a key added
