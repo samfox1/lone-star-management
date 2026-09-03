@@ -226,7 +226,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // Public-safe — a product gid appears in every Storefront response and is not a
     // credential. Chosen over `handle`, which changes when an artist renames a product
     // and would silently break the join until the next publish.
-    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants', 'shopify_product_id'],
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants', 'shopify_product_id', 'shipping_estimate', 'preorder_note', 'record_label', 'shipping_days'],
     orderBy: ['sort_order', 'created_at'],
   },
   link: {

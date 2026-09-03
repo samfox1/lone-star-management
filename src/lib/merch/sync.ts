@@ -60,6 +60,11 @@ export function syncShopifyMerch(
         description: p.description,
         images: p.images,
         variants: p.variants,
+        // Metafields (20260903120000). preorder_note doubles as the pre-order flag.
+        shipping_estimate: p.shippingEstimate,
+        preorder_note: p.preorderNote,
+        record_label: p.recordLabel,
+        shipping_days: p.shippingDays,
       },
     })),
     insertDefaults: { on_site: false },

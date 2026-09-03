@@ -129,6 +129,21 @@ export type SiteMerch = {
    *  live price and availability at render (MERCH_PLAN, "two lanes").
    *  Null on a manual product and absent before 20260902120000 — read with `?? []`. */
   variants?: SiteMerchVariant[] | null
+  /** When a pre-order ships, in the artist team's own words ("october 2026"). Free text,
+   *  because "when the vinyl is pressed" is more honest than a date nobody can commit to.
+   *  Absent before 20260903120000 — read with `?? null`. */
+  shipping_estimate?: string | null
+  /** The sentence a buyer must acknowledge before ordering. NON-NULL MEANS PRE-ORDER —
+   *  it is the flag and the text at once, so the two cannot disagree.
+   *  Absent before 20260903120000 — read with `?? null`. */
+  preorder_note?: string | null
+  /** The record label behind the product ("r&r digital").
+   *  Absent before 20260903130000 — read with `?? null`. */
+  record_label?: string | null
+  /** Days from order to shipping. A site turns this into a DATE at render time, so it
+   *  never goes stale the way a typed-in month does; it wins over `shipping_estimate`
+   *  when both are set. Absent before 20260903140000 — read with `?? null`. */
+  shipping_days?: number | null
 }
 
 export type SiteLink = {

@@ -35,6 +35,10 @@ function product(id: string, title: string, over: Partial<ShopifyMerch> = {}): S
     price: '20.00',
     url: null,
     variants: [],
+    shippingEstimate: null,
+    preorderNote: null,
+    recordLabel: null,
+    shippingDays: null,
     ...over,
   }
 }

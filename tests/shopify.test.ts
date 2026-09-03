@@ -22,6 +22,8 @@ type VariantNode = {
   price: { amount: string; currencyCode: string } | null
 }
 
+type MetafieldNode = { key: string; value: string } | null
+
 type EdgeNode = {
   id: string
   handle: string | null
@@ -32,6 +34,7 @@ type EdgeNode = {
   images: { edges: { node: { url: string } }[] } | null
   priceRange: { minVariantPrice: { amount: string } } | null
   variants: { edges: { node: VariantNode }[] } | null
+  metafields: MetafieldNode[] | null
 }
 
 function variantEdge(id: string, title: string, over: Partial<VariantNode> = {}) {
@@ -59,6 +62,7 @@ function productEdge(id: string, title: string, cursor: string, over: Partial<Ed
       images: null,
       priceRange: { minVariantPrice: { amount: '25.00' } },
       variants: null,
+      metafields: null,
       ...over,
     } as EdgeNode,
   }
@@ -99,6 +103,10 @@ describe('getProducts', () => {
       price: '25.00',
       url: 'https://shop.example/gid://p1',
       variants: [],
+      shippingEstimate: null,
+      preorderNote: null,
+      recordLabel: null,
+      shippingDays: null,
     })
     expect(products[1].title).toBe('Hoodie')
   })
@@ -153,6 +161,10 @@ describe('getProducts', () => {
       price: null,
       url: null,
       variants: [],
+      shippingEstimate: null,
+      preorderNote: null,
+      recordLabel: null,
+      shippingDays: null,
     })
   })
 })
@@ -233,6 +245,57 @@ describe('product detail', () => {
 })
 
 /**
+ * Metafields carry the facts Shopify has no column for: when a pre-order actually ships,
+ * and the sentence a buyer must acknowledge before they can order one. They are the
+ * artist's team's to fill in, and this is the only place their names are written down.
+ */
+describe('metafields', () => {
+  it('maps the shipping estimate and the pre-order note', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      metafields: [
+        { key: 'shipping_estimate', value: 'october 2026' },
+        { key: 'preorder_note', value: 'i acknowledge this is a pre-order' },
+      ],
+    })
+    const fetchImpl = vi.fn(async () => page([tee], false, null) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].shippingEstimate).toBe('october 2026')
+    expect(out[0].preorderNote).toBe('i acknowledge this is a pre-order')
+  })
+
+  it('reads by KEY, so a null hole does not shift the other value', async () => {
+    const tee = productEdge('gid://p2', 'Tee', 'c1', {
+      metafields: [null, { key: 'preorder_note', value: 'ships when pressed' }],
+    })
+    const fetchImpl = vi.fn(async () => page([tee], false, null) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].shippingEstimate).toBeNull()
+    expect(out[0].preorderNote).toBe('ships when pressed')
+  })
+
+  it('treats a blank metafield as absent', async () => {
+    const tee = productEdge('gid://p3', 'Tee', 'c1', {
+      metafields: [{ key: 'shipping_estimate', value: '   ' }],
+    })
+    const fetchImpl = vi.fn(async () => page([tee], false, null) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].shippingEstimate).toBeNull()
+  })
+
+  it('asks for both metafields by namespace and key', async () => {
+    let sent = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body ?? '{}')).query
+      return page([], false, null) as unknown as Response
+    })
+    await client(fetchImpl as unknown as typeof fetch).getProducts()
+    for (const bit of ['metafields', 'shipping_estimate', 'preorder_note', 'custom']) {
+      expect(sent).toContain(bit)
+    }
+  })
+})
+
+/**
  * Storefront rejects a query whose COST exceeds 1000 points outright
  * (MAX_COST_EXCEEDED), and a nested connection multiplies: products(first: N) with
  * variants(first: V) and images(first: I) costs roughly N × (1 + V + I). Asking for
@@ -244,7 +307,7 @@ describe('product detail', () => {
 describe('query cost budget', () => {
   it('stays under the Storefront 1000-point max query cost', async () => {
     const { PAGE_SIZES } = await import('@/lib/merch/shopify')
-    const cost = PAGE_SIZES.products * (1 + PAGE_SIZES.variants + PAGE_SIZES.images)
+    const cost = PAGE_SIZES.products * (1 + PAGE_SIZES.variants + PAGE_SIZES.images + PAGE_SIZES.metafields)
     expect(cost).toBeLessThan(1000)
   })
 })

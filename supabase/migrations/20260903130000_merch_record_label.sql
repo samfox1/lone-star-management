@@ -1,0 +1,11 @@
+-- The record label behind a product ("r&r digital") — the third fact on Sam's reference
+-- product page, alongside the shipping estimate (20260903120000) and the description.
+--
+-- Another Shopify METAFIELD (namespace `custom`, key `record_label` — see
+-- src/lib/merch/shopify.ts METAFIELDS), so like the other two it must be PUBLISHED to the
+-- Storefront API by the artist's team or it arrives absent with no error.
+--
+-- Nullable, no default, for the reason 20260902120000 spells out at length: a default
+-- would make every merch row published before today read as EDITED in the
+-- unpublished-changes diff.
+alter table merch add column record_label text;

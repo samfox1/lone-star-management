@@ -36,6 +36,26 @@ export type ShopifyVariant = {
 }
 
 /** The shape the merch sync consumes (one Shopify product). */
+/**
+ * The Shopify METAFIELDS this reads, and the only place their names are written down.
+ *
+ * Shopify has no column for "when does this pre-order actually ship" or "what must a
+ * buyer acknowledge before ordering one", so both are custom fields the artist's team
+ * fills in. Two consequences worth knowing at onboarding time:
+ *  - a metafield must be PUBLISHED to the Storefront API (its definition has a
+ *    visibility setting) or it simply is not in the response, with no error;
+ *  - `preorder_note` doubles as the flag. A note means the product is a pre-order and
+ *    the note is the sentence shown beside the tick box. No note, no pre-order — one
+ *    field instead of a boolean that can disagree with its own text.
+ */
+export const METAFIELDS = {
+  namespace: 'custom',
+  shippingEstimate: 'shipping_estimate',
+  preorderNote: 'preorder_note',
+  recordLabel: 'record_label',
+  shippingDays: 'shipping_days',
+} as const
+
 export type ShopifyMerch = {
   shopify_product_id: string
   /** Shopify's URL slug. The per-product route is /merch/[handle] because
@@ -49,6 +69,16 @@ export type ShopifyMerch = {
   price: string | null
   url: string | null
   variants: ShopifyVariant[]
+  /** When a pre-order actually ships, in the team's own words ("october 2026"). */
+  shippingEstimate: string | null
+  /** Non-null means PRE-ORDER: the sentence a buyer must tick before they can order. */
+  preorderNote: string | null
+  /** The record label behind the product ("r&r digital"). */
+  recordLabel: string | null
+  /** Days from order to shipping. The SITE turns this into a date on every render, so
+   *  it never goes stale the way a typed-in month does. Null when not set, or when the
+   *  team typed something that is not a sane number of days. */
+  shippingDays: number | null
 }
 
 type VariantNode = {
@@ -68,6 +98,10 @@ type ProductNode = {
   images?: { edges: { node: { url?: string } }[] } | null
   priceRange?: { minVariantPrice?: { amount?: string } } | null
   variants?: { edges: { node: VariantNode }[] } | null
+  /** Shopify pads this array to line up with the identifiers asked for, so a missing
+   *  field is a null HOLE rather than a shorter list — read it by `key`, never by
+   *  position, or one unset field silently shifts the other's value into it. */
+  metafields?: ({ key?: string | null; value?: string | null } | null)[] | null
 }
 
 type ProductsResponse = {
@@ -107,7 +141,8 @@ function retryAfterMs(header: string | null): number {
  * products × (1 + variants + images). The original 50 products, once variants were
  * added at Shopify's 100-per-product ceiling, would have been ~5000 — every sync
  * failing on its first call, for every store. 10 × (1 + 50 + 10) = 610 leaves real
- * headroom against Shopify's own costing, which is only approximated here.
+ * headroom against Shopify's own costing, which is only approximated here. `metafields`
+ * is the COUNT of identifiers asked for, and must match the list in the query below.
  *
  * Paging 10 at a time is more round trips than 50, but a merch catalogue is tens of
  * products and this is a background pull. Truncation is the worse failure: a product
@@ -115,7 +150,7 @@ function retryAfterMs(header: string | null): number {
  * generous and `products` absorbs the cost. `tests/shopify.test.ts` fails if the
  * arithmetic ever crosses the cap.
  */
-export const PAGE_SIZES = { products: 10, variants: 50, images: 10 } as const
+export const PAGE_SIZES = { products: 10, variants: 50, images: 10, metafields: 4 } as const
 
 /**
  * PNG, not Shopify's default.
@@ -146,6 +181,12 @@ const PRODUCTS_QUERY = `
         variants(first: ${PAGE_SIZES.variants}) {
           edges { node { id title availableForSale price { amount currencyCode } } }
         }
+        metafields(identifiers: [
+          {namespace: "${METAFIELDS.namespace}", key: "${METAFIELDS.shippingEstimate}"},
+          {namespace: "${METAFIELDS.namespace}", key: "${METAFIELDS.preorderNote}"},
+          {namespace: "${METAFIELDS.namespace}", key: "${METAFIELDS.recordLabel}"},
+          {namespace: "${METAFIELDS.namespace}", key: "${METAFIELDS.shippingDays}"}
+        ]) { key value }
       } }
       pageInfo { hasNextPage endCursor }
     }
@@ -220,6 +261,29 @@ export function createShopifyClient(opts: Options = {}) {
     }
   }
 
+  /** One metafield's value by KEY, or null. Blank counts as absent: an empty custom
+   *  field is a field the team has not filled in, not a product that ships on "". */
+  function metafield(node: ProductNode, key: string): string | null {
+    const hit = (node.metafields ?? []).find((m) => m?.key === key)
+    const value = (hit?.value ?? '').trim()
+    return value || null
+  }
+
+  /**
+   * A metafield read as a whole number of days, or null.
+   *
+   * A metafield is free text even when its definition says integer, so "60 days", "" and
+   * "soon" all reach here. Anything that is not a plain positive integer inside the
+   * DB's own bounds is dropped rather than coerced: a bad value that becomes 0 would
+   * render "ships today" on a product that ships in two months.
+   */
+  function metafieldDays(node: ProductNode, key: string): number | null {
+    const raw = metafield(node, key)
+    if (raw === null || !/^\d+$/.test(raw)) return null
+    const n = Number(raw)
+    return n > 0 && n <= 3650 ? n : null
+  }
+
   function mapNode(node: ProductNode): ShopifyMerch {
     return {
       shopify_product_id: node.id,
@@ -231,6 +295,10 @@ export function createShopifyClient(opts: Options = {}) {
       price: node.priceRange?.minVariantPrice?.amount ?? null,
       url: node.onlineStoreUrl ?? null,
       variants: (node.variants?.edges ?? []).map((e) => mapVariant(e.node)),
+      shippingEstimate: metafield(node, METAFIELDS.shippingEstimate),
+      preorderNote: metafield(node, METAFIELDS.preorderNote),
+      recordLabel: metafield(node, METAFIELDS.recordLabel),
+      shippingDays: metafieldDays(node, METAFIELDS.shippingDays),
     }
   }
 
