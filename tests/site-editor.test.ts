@@ -66,6 +66,13 @@ describe('manifest — style + link regions', () => {
         expect(r.key, `${m.template} region key`).toMatch(/^[A-Za-z0-9_]+$/)
         expect(r.label.length, `${m.template} ${r.key} label`).toBeGreaterThan(0)
       }
+      // HONEST LIMIT (AGENTS.md rule 2 — a denial needs a planted witness): the built-in
+      // templates declare `styles: []`, so this uniqueness check runs over an empty list
+      // and is VACUOUS here. Deleting it changes nothing. It is kept only because these
+      // manifests may one day declare style regions, and it is the assertion that would
+      // then matter. The duplicate-key rule that actually bites lives in
+      // tests/site-bridge-pages.test.ts against `mergeManifests`, where a duplicate is
+      // planted and the drop is asserted — see SITE_PAGES_PLAN.md A6.
       const keys = m.styles.map((r) => r.key)
       expect(new Set(keys).size).toBe(keys.length)
     }

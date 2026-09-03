@@ -6,6 +6,7 @@ import { editorMessage, isFrameMessage, type FrameMode, type RegionMeasurements,
 import type { CursorSettings } from '@samfox1/site-bridge/cursor'
 import { bumpNonce } from './use-signal'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
+import { mergeManifests, type DroppedRegion, type ManifestPage } from '@samfox1/site-bridge/manifest'
 
 /**
  * The editor's whole conversation with the site frame, in one place
@@ -78,7 +79,20 @@ export type FrameBridge = {
   frameMode: FrameMode
   /** A custom site's own edit-list, received on `ready` (D-D). Null for a built-in
    *  template, which has none to send. */
+  /** Every page announced so far, FOLDED (SITE_PAGES_PLAN.md D4). Never just the page
+   *  currently in the frame: a per-page announce can only describe the DOM in front of
+   *  it, so replacing this would empty the Text panel for every other page. */
   manifest: TemplateManifest | null
+  /** The page the FRAME says it is showing. Only the frame can know — a connected site
+   *  is a different origin, and the manager navigates by clicking its own nav in browse
+   *  mode. Null until a multi-page site says otherwise. */
+  framePage: string | null
+  /** Ask the frame to show a page (the switcher). A single-page frame ignores it. */
+  setPage: (page: string) => void
+  /** Region keys refused by the fold because a page had already claimed them. Nothing
+   *  else in the system catches this, and a shared key means two pages fight over one
+   *  `site_styles` row (A6). */
+  droppedRegions: DroppedRegion[]
   /** Region key the frame last reported a click on, so the inspector can focus it.
    *  Key + nonce: a repeat click on the same region is a new gesture (the Listen-button
    *  lesson, 2026-08-17 — a bare key never re-fires). `measured` is what the element
@@ -122,6 +136,15 @@ export function useFrameBridge({
    *  is subscribed once and must read the CURRENT value of both without re-subscribing
    *  (a re-subscribe mid-drag would drop the drop). */
   const manifestRef = useRef<TemplateManifest | null>(null)
+  const [framePage, setFramePage] = useState<string | null>(null)
+  const [droppedRegions, setDroppedRegions] = useState<DroppedRegion[]>([])
+  /** ONE ANNOUNCE PER PAGE, keyed by `manifest.page` (D4). The held manifest is derived
+   *  from this map, never accumulated into — that is what lets a region the site STOPS
+   *  declaring leave the panels. A flat fold that only ever added kept it for the whole
+   *  session, still selectable, still writing `site_content` rows for something nothing
+   *  renders (2026-09-03 review, finding 14). A single-page site announces one key ('')
+   *  and this behaves exactly as replace-on-`ready` always did. */
+  const announcesRef = useRef<Map<string, TemplateManifest>>(new Map())
   const onFieldChangeRef = useRef(onFieldChange)
   useEffect(() => {
     onFieldChangeRef.current = onFieldChange
@@ -190,6 +213,18 @@ export function useFrameBridge({
     [post],
   )
 
+  /** Show a page in the frame. The shell swaps its own rendered page in client state and
+   *  re-announces; it must NOT navigate, because `/edit` is a route and the bridge is
+   *  mounted in that route's effect (A1). `framePage` is deliberately NOT set here — the
+   *  frame's own `page-change` is the confirmation the switch happened, so an older frame
+   *  that ignores `set-page` leaves the switcher truthfully on the page still showing. */
+  const setPage = useCallback(
+    (page: string) => {
+      post({ type: 'set-page', page })
+    },
+    [post],
+  )
+
   /** The draft last handed to the frame, so the `ready` handler and the connected
    *  effect below (either of which may fire first) don't each post the largest message
    *  in the protocol — the whole site payload — for the same handshake. A frame that
@@ -216,8 +251,43 @@ export function useFrameBridge({
         if (frameModeRef.current !== 'edit')
           frameRef.current?.contentWindow?.postMessage(editorMessage({ type: 'set-mode', mode: frameModeRef.current }), origin)
         if (msg.manifest) {
-          setManifest(msg.manifest)
-          manifestRef.current = msg.manifest
+          // The frame announces per PAGE — its field list is read out of the live DOM, so
+          // one announce can only ever describe the page in front of it. Replacing the
+          // held manifest would empty the Text panel for every other page; accumulating
+          // into it would never let a region leave. So: replace THIS PAGE's entry, then
+          // re-derive the whole thing from the map.
+          announcesRef.current.set(msg.manifest.page ?? '', msg.manifest)
+
+          // Fold in DECLARED page order, never arrival order. `mergeManifests` resolves a
+          // duplicate key first-wins, so folding in visit order would make the winner
+          // depend on which page the manager happened to open first — and the same site
+          // would show two different panels to two managers.
+          const pages = [...announcesRef.current.values()].reduce<ManifestPage[]>(
+            (found, m) => (m.pages?.length ? m.pages : found),
+            [],
+          )
+          const rank = (key: string) => {
+            if (key === '') return -1
+            const i = pages.findIndex((p) => p.key === key)
+            // A page the site tags but never declares sorts LAST rather than vanishing:
+            // degrade to misplaced, never to invisible.
+            return i === -1 ? pages.length : i
+          }
+          const ordered = [...announcesRef.current.entries()].sort(([a], [b]) => rank(a) - rank(b))
+
+          let folded: TemplateManifest | null = null
+          const dropped: DroppedRegion[] = []
+          for (const [, announce] of ordered) {
+            const step = mergeManifests(folded, announce)
+            folded = step.manifest
+            dropped.push(...step.dropped)
+          }
+          setManifest(folded)
+          manifestRef.current = folded
+          // REPLACED, not appended: the frame re-announces the same page constantly
+          // (after paint, and on every `hello`), and an appended list would grow without
+          // bound while describing the same one conflict.
+          setDroppedRegions(dropped)
         }
         if (draft) {
           deliveredDraft.current = draft
@@ -237,6 +307,13 @@ export function useFrameBridge({
         // listener does not re-subscribe every time a manifest lands.
         const declared = (manifestRef.current?.fields ?? []).some((f) => f.key === msg.key)
         if (declared) onFieldChangeRef.current?.(msg.key, msg.value)
+      } else if (msg.type === 'page-change') {
+        // Checked against the DECLARATION for the same reason `field-change` is: a frame
+        // is a separate origin and could name any page it liked. An undeclared key is
+        // ignored rather than trusted — the switcher would otherwise show a page no panel
+        // can filter to.
+        const declared = (manifestRef.current?.pages ?? []).some((p) => p.key === msg.page)
+        if (declared) setFramePage(msg.page)
       } else if (msg.type === 'measured') {
         setMeasuredRegion({ key: msg.key, measured: msg.measured })
       } else if (msg.type === 'deselect') {
@@ -317,6 +394,9 @@ export function useFrameBridge({
     setMode,
     frameMode,
     manifest,
+    framePage,
+    setPage,
+    droppedRegions,
     selectedStyle,
     measuredRegion,
     requestMeasure,

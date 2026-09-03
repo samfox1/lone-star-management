@@ -403,3 +403,101 @@ describe('a site saving a field it changed on the page', () => {
     expect(onFieldChange).not.toHaveBeenCalled()
   })
 })
+
+describe('multi-page: the fold holds ONE manifest per page (SITE_PAGES_PLAN.md D4)', () => {
+  const PAGES = [
+    { key: 'home', label: 'Home', path: '/' },
+    { key: 'merch', label: 'Merch', path: '/merch' },
+  ]
+  /** An announce as the frame sends it: `page` names which page it describes, and the
+   *  regions carry the same tag. */
+  const announce = (page: string, styleKeys: string[]) => ({
+    template: 'skeen',
+    page,
+    pages: PAGES,
+    fields: [],
+    slots: [],
+    links: [],
+    styles: styleKeys.map((key) => ({ key, label: key, page })),
+  })
+
+  it('keeps an earlier page’s regions when another page announces', () => {
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['hero']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['merch_grid']) }, CUSTOM)
+
+    expect(result.current.manifest?.styles.map((s) => s.key)).toEqual(['hero', 'merch_grid'])
+  })
+
+  it('REMOVES a region the page stops declaring, instead of keeping it forever', () => {
+    // Finding 14 from the 2026-09-03 review. A flat fold that only ever ADDS leaves a
+    // region in the panels after the site is redeployed without it — still selectable,
+    // still writing `site_content` rows for something nothing renders. The old
+    // replace-on-`ready` semantics dropped it, so the fold must not be a regression.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['hero', 'retired_band']) }, CUSTOM)
+    expect(result.current.manifest?.styles).toHaveLength(2)
+
+    // The site redeploys without `retired_band` and re-announces the SAME page.
+    frameSays({ type: 'ready', manifest: announce('home', ['hero']) }, CUSTOM)
+
+    expect(result.current.manifest?.styles.map((s) => s.key)).toEqual(['hero'])
+  })
+
+  it('a re-announce of one page does not disturb another page’s regions', () => {
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['hero']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['merch_grid']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('home', ['hero', 'contact']) }, CUSTOM)
+
+    expect(result.current.manifest?.styles.map((s) => s.key)).toEqual([
+      'hero',
+      'contact',
+      'merch_grid',
+    ])
+  })
+
+  it('duplicate resolution does not depend on VISIT order', () => {
+    // First-DECLARED wins, so the same site yields the same panel whichever page the
+    // manager happened to open first. Folding the held announces in arrival order would
+    // have made the winner whatever they clicked.
+    const homeFirst = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['shared']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['shared']) }, CUSTOM)
+    const a = homeFirst.result.current.manifest?.styles[0]?.page
+    homeFirst.unmount()
+
+    const merchFirst = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('merch', ['shared']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('home', ['shared']) }, CUSTOM)
+    const b = merchFirst.result.current.manifest?.styles[0]?.page
+
+    expect(a).toBe('home')
+    expect(b).toBe('home')
+  })
+
+  it('reports the dropped duplicate WITHOUT accumulating it on every re-announce', () => {
+    // The frame re-announces per page constantly (after paint, on every `hello`). A
+    // dropped list that appended each time would grow without bound.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['shared']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['shared']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['shared']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['shared']) }, CUSTOM)
+
+    expect(result.current.droppedRegions).toHaveLength(1)
+    expect(result.current.droppedRegions[0]).toMatchObject({ key: 'shared', page: 'merch' })
+  })
+
+  it('SINGLE-PAGE REGRESSION: an announce with no `page` still replaces cleanly', () => {
+    // Every site deployed today announces no `page` and no `pages`. Two announces must
+    // behave exactly as replace-on-`ready` always did.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    const one = { template: 'skeen', fields: [], slots: [], links: [], styles: [{ key: 'a', label: 'a' }, { key: 'gone', label: 'gone' }] }
+    const two = { template: 'skeen', fields: [], slots: [], links: [], styles: [{ key: 'a', label: 'a' }] }
+    frameSays({ type: 'ready', manifest: one }, CUSTOM)
+    frameSays({ type: 'ready', manifest: two }, CUSTOM)
+
+    expect(result.current.manifest?.styles.map((s) => s.key)).toEqual(['a'])
+  })
+})

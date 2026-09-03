@@ -33,7 +33,13 @@ export type {
   ManifestVideoSlot,
   ComponentSlot,
   TemplateManifest,
+  ManifestPage,
+  DroppedRegion,
+  MergedManifest,
 } from '@samfox1/site-bridge/manifest'
+// The per-page FOLD (SITE_PAGES_PLAN.md D4). A value, not a type, so it is re-exported
+// separately — the editor's frame bridge is its only caller.
+export { mergeManifests } from '@samfox1/site-bridge/manifest'
 import type { ManifestField, ManifestStyleRegion, TemplateManifest } from '@samfox1/site-bridge/manifest'
 import { PACKAGE_VERSION } from '@samfox1/site-bridge/manifest'
 export { PACKAGE_VERSION } from '@samfox1/site-bridge/manifest'

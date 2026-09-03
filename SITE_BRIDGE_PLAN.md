@@ -579,6 +579,29 @@ editor affordances over machinery that already exists.
 > and the plan below is ready to execute when it is worth the interruption. Do it BEFORE
 > the scaffold ships (phase 5), because that is the moment a per-site `next.config.ts`
 > workaround starts being copied into every new artist site.
+>
+> **STILL OPEN, re-confirmed 2026-09-03.** The package is on `0.33.5` and still ships raw
+> `src/*.ts` across **22** subpath exports (the plan below says 12 and `0.3.0`; both
+> numbers are stale, the work is not). Nothing below has been done.
+>
+> **What it cost today, measured.** Skeen dev on `--webpack`: a cold route compile of
+> `/merch/preview` took **33.8s**, the warm hit **0.26s**; `/about` 0.55s → 0.11s. Sam,
+> 2026-09-03: "why does everything lag so much when I move from page to page". So the dev
+> lag is real and it is entirely this. But the lag is the SMALL reason and should not be
+> what triggers the work.
+>
+> **The trigger to actually watch for is the next site.** Every site that connects pays
+> the workaround twice — `transpilePackages` in `next.config.ts` AND losing Turbopack —
+> and that instruction now lives in the bridge's own `CONNECTING.md`, which is supposed to
+> be the sheet that makes a new site cheap. Three consumers today. **Do this before site
+> #4 is connected**, so that site is the first one to install the package and have it
+> simply work.
+>
+> **The cost, honestly.** 22 entry points of JS + `.d.ts`, plus a publish step that can go
+> stale — a `src/` edit that is never rebuilt ships old JS to every site. The current
+> no-build setup cannot have that bug. Traps 4 (`prepublishOnly` + a dist smoke test) and
+> 3 (generators import SOURCE) below exist precisely to buy that risk back; do not skip
+> them to save an hour.
 
 **The trigger.** Next 16 runs `next dev` on Turbopack, and Turbopack refuses a `.ts` file
 inside `node_modules` no matter what `transpilePackages` says — "Unknown module type".

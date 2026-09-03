@@ -40,7 +40,42 @@ export type FieldTarget =
   | { store: 'media'; purpose: 'hero_video' | 'profile_photo' }
 
 /** A single editable atom — one `data-lse-field="<key>"` region on the page. */
-export type ManifestField = {
+/**
+ * ONE PAGE of a site (SITE_PAGES_PLAN.md D1).
+ *
+ * A site with more than one editable page declares them here, and the editor's page
+ * switcher is built from exactly this list. Absent means a one-page site, which is every
+ * site built before 0.34 — so nothing about a single-page manifest changes.
+ *
+ * The site owns this list for the same reason it owns everything else in the manifest: a
+ * page the site cannot render is a switcher entry that leads nowhere. `path` is the
+ * PUBLIC url of the page (`/merch`), for labelling and for the site's own nav to match
+ * against; the editor never navigates to it, because a page switch is client state inside
+ * the site's `/edit` shell, never a route change (A1 — `/edit` is a route, so navigating
+ * away unmounts the bridge).
+ */
+export type ManifestPage = {
+  /** Stable id. The value carried by `page` on every region belonging to this page. */
+  key: string
+  /** What the switcher calls it ("Merch"). */
+  label: string
+  /** The page's public path ("/merch"). Home is "/". */
+  path: string
+}
+
+/** WHICH PAGE a region lives on (SITE_PAGES_PLAN.md D3).
+ *
+ *  A TAG, deliberately, and not a prefix baked into the key. Style overrides,
+ *  `site_content` rows and revisions are all keyed by the bare region key, and
+ *  lone-star's key grammar rejects `.` outright — so a `merch.card.title` syntax would
+ *  have cost a migration of every stored override AND a save-path change. Tagging means
+ *  the storage layer never learns that pages exist.
+ *
+ *  Absent means "the first declared page", which is what makes every existing
+ *  single-page manifest correct without touching it. */
+type PageScoped = { page?: string }
+
+export type ManifestField = PageScoped & {
   /** What the SITE renders when this field has no stored row. Custom sites keep their
    *  fallbacks in code, so their manifest is the only way we can learn them — the Text
    *  panel would otherwise list a page full of words as "Empty". Optional: built-in
@@ -92,7 +127,7 @@ export type LibraryAsset = (typeof LIBRARY_ASSETS)[number]
  *  which is the only way a manager can add to one without touching the other. Declare
  *  one (skeen) and nothing changes: photos with no tag belong to the FIRST declared
  *  image slot, so no site needs a backfill. */
-export type ManifestSlot = {
+export type ManifestSlot = PageScoped & {
   /** Stable id; the DOM marker value, and — for an image slot — the collection tag. */
   key: string
   label: string
@@ -103,7 +138,7 @@ export type ManifestSlot = {
 /** A re-styleable region — one `data-lse-style="<key>"` element whose CSS class
  *  string is editable. `base` is the region's default classes (what the inspector
  *  seeds the field with; a stored override REPLACES it — SITE_STYLING_PLAN.md D-B). */
-export type ManifestStyleRegion = {
+export type ManifestStyleRegion = PageScoped & {
   key: string
   label: string
   base?: string
@@ -168,7 +203,7 @@ export type ManifestStyleRegion = {
  *  KEY (not by guessing from its label). The editor maps a URL to it and the site binds
  *  the link to the element by this key (`links.role`). `description` explains what the
  *  link powers ("Disco-ball playlist link"), shown in the inspector. */
-export type ManifestLinkRegion = {
+export type ManifestLinkRegion = PageScoped & {
   key: string
   label: string
   description?: string
@@ -194,7 +229,7 @@ export type ManifestLinkRegion = {
  * by `media.site_role`, whose value is `<key>_<n>_<slot.key>` (e.g. `polaroid_3_photo`),
  * matching the field keys the site declares.
  */
-export type ManifestComponent = {
+export type ManifestComponent = PageScoped & {
   /** Component type id, e.g. 'polaroid'. Lowercase/underscore — it becomes a site_role. */
   key: string
   /** Singular label for one instance, e.g. 'Polaroid'. The manager may rename each. */
@@ -206,7 +241,8 @@ export type ManifestComponent = {
 }
 
 /** One video slot the site renders — declared, not hardcoded (phase 4). */
-export type ManifestVideoSlot =
+export type ManifestVideoSlot = PageScoped &
+  (
   | {
       /** A background clip: one UPLOADED video assigned to a site_role. */
       kind: 'hero'
@@ -227,6 +263,7 @@ export type ManifestVideoSlot =
       /** The group heading it sits under ("Videos band"). */
       group: string
     }
+  )
 
 /** One image drop target inside a component instance. */
 export type ComponentSlot = {
@@ -316,6 +353,21 @@ export type AssetBudgets = {
  *  custom site's declared id. */
 export type TemplateManifest = {
   template: string
+  /** WHICH PAGE this announce describes (SITE_PAGES_PLAN.md D4).
+   *
+   *  Stated, never inferred from the regions. The editor holds ONE announce per page and
+   *  REPLACES that page's entry, which is what lets a region the site stopped declaring
+   *  disappear from the panels — a fold that only ever added left it there for the whole
+   *  session, still editable, writing rows for something nothing renders (2026-09-03
+   *  review, finding 14). Inferring the page from the first region's tag would break on
+   *  the one announce that matters: a page that has just lost its last region.
+   *
+   *  Absent = the single-page site every deployed build is today. */
+  page?: string
+  /** The site's editable PAGES, in switcher order (D1). Absent = a one-page site, the
+   *  historic behaviour for every site and template. The FIRST entry is home, and is what
+   *  an untagged region belongs to. */
+  pages?: ManifestPage[]
   /** Where the bio may render and where it goes by default (SEO_GEO_PLAN B2). Absent =
    *  the site shows no bio; the editor offers only `hidden`. */
   about?: ManifestAbout
@@ -376,3 +428,135 @@ export function textFieldKeys(editList: unknown): Set<string> {
   return new Set(keys);
 }
 
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * MERGING PER-PAGE ANNOUNCES (SITE_PAGES_PLAN.md D4)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** A region the fold refused, because its key was already taken.
+ *
+ *  Reported rather than swallowed: the DB has `unique (artist_id, region_key)`, so two
+ *  regions sharing a key share ONE `site_styles` row and edits leak between pages with no
+ *  error anywhere. Nothing else in the system catches this today (A6). */
+export type DroppedRegion = {
+  /** Which manifest list it came from. */
+  kind: 'fields' | 'slots' | 'styles' | 'links' | 'components' | 'videoSlots'
+  key: string
+  /** The page whose entry was refused. */
+  page?: string
+  /** The page whose entry was kept. Equal to `page` for a duplicate within one page. */
+  keptPage?: string
+}
+
+export type MergedManifest = { manifest: TemplateManifest; dropped: DroppedRegion[] }
+
+/**
+ * Fold one page's announce into what the editor already knows.
+ *
+ * WHY THIS EXISTS. A site's `/edit` shell renders one page at a time, and its field list
+ * is read out of the live DOM (`withDomTextFields`) — so an announce can only ever
+ * describe the page in front of it. Replacing the held manifest on each `ready` would
+ * empty the Text panel for every page the manager is not currently looking at, which
+ * reads as "the editor lost my content" and is the failure D4 was written to prevent.
+ *
+ * FIRST DECLARED WINS, and the loser is named. Deterministic beats last-write, because
+ * the frame re-announces the same page more than once by design (after paint, and again
+ * on every `hello`) — under last-write, which announce landed most recently would decide
+ * what the panel showed.
+ *
+ * ORDER COMES FROM `pages`, NEVER FROM VISIT ORDER (A7). This module's own rule is that
+ * an untagged photo belongs to the FIRST declared image slot; ordering by arrival would
+ * make "first" mean "whichever page the manager happened to open first", and skeen's
+ * untagged gallery photos would change collection depending on where they clicked. A
+ * region with no `page` sorts with the first page — which is what leaves every
+ * single-page manifest byte-identical.
+ */
+export function mergeManifests(
+  prev: TemplateManifest | null,
+  next: TemplateManifest,
+): MergedManifest {
+  const pages = next.pages ?? prev?.pages
+  const dropped: DroppedRegion[] = []
+
+  /** Where a region sorts. Untagged → with the first page. Tagged with a page the site
+   *  did not declare → the END, so a site whose list and tags disagree shows the region
+   *  in the wrong place rather than not at all. Degrade to misplaced, never to invisible. */
+  const rank = (page?: string): number => {
+    if (!page || !pages) return 0
+    const i = pages.findIndex((p) => p.key === page)
+    return i === -1 ? pages.length : i
+  }
+
+  function fold<T extends { page?: string }>(
+    kind: DroppedRegion['kind'],
+    before: T[] | undefined,
+    after: T[] | undefined,
+    idOf: (item: T) => string,
+  ): T[] | undefined {
+    if (!before && !after) return undefined
+    // Which SIDE an entry came from is part of the decision, so it is carried rather than
+    // recomputed from indices — that arithmetic was wrong twice while writing this.
+    const incoming = [
+      ...(before ?? []).map((item) => ({ item, held: true })),
+      ...(after ?? []).map((item) => ({ item, held: false })),
+    ]
+    const kept = new Map<string, { item: T; held: boolean }>()
+    for (const entry of incoming) {
+      const id = idOf(entry.item)
+      const seen = kept.get(id)
+      if (seen) {
+        // Re-announcing the SAME page is the normal case, not a conflict: the frame posts
+        // `ready` again after paint and on every `hello`. A clash worth reporting is a
+        // different page, or a repeat inside ONE announce.
+        const idempotent = seen.held && !entry.held && seen.item.page === entry.item.page
+        if (!idempotent)
+          dropped.push({ kind, key: id, page: entry.item.page, keptPage: seen.item.page })
+        continue
+      }
+      kept.set(id, entry)
+    }
+    // Stable, so regions within one page keep the order the site declared them in.
+    return [...kept.values()].map((e) => e.item).sort((a, b) => rank(a.page) - rank(b.page))
+  }
+
+  const merged: TemplateManifest = {
+    // Site-WIDE declarations are facts about the site, not the page, so a page that omits
+    // one must not blank it. Every page SHOULD declare them identically; when one does
+    // not, the last stated value stands rather than reverting to nothing.
+    template: next.template || prev?.template || '',
+    ...(pages ? { pages } : {}),
+    about: next.about ?? prev?.about,
+    bridgeVersion: next.bridgeVersion ?? prev?.bridgeVersion,
+    styleOptions: next.styleOptions ?? prev?.styleOptions,
+    assetBudgets: next.assetBudgets ?? prev?.assetBudgets,
+    itemStyling: next.itemStyling ?? prev?.itemStyling,
+    fields: fold('fields', prev?.fields, next.fields, (f) => f.key) ?? [],
+    slots: fold('slots', prev?.slots, next.slots, (s) => s.key) ?? [],
+    styles: fold('styles', prev?.styles, next.styles, (s) => s.key) ?? [],
+    links: fold('links', prev?.links, next.links, (l) => l.key) ?? [],
+  }
+
+  // Components and video slots are folded on the SAME terms as the four above. They were
+  // nearly left out as "probably always declared on home" — which is exactly the
+  // hand-reasoning AGENTS.md rule 4 warns about: a site that declared its video band on
+  // one page would have watched the Videos panel empty itself on every page switch.
+  const components = fold(
+    'components',
+    prev?.components,
+    next.components,
+    (c) => c.key,
+  )
+  if (components) merged.components = components
+
+  const videoSlots = fold(
+    'videoSlots',
+    prev?.videoSlots,
+    next.videoSlots,
+    // A video slot carries no key of its own: a hero slot is identified by the site_role
+    // it fills, a band by the heading it sits under.
+    (v) => (v.kind === 'hero' ? `hero:${v.role}` : `band:${v.group}:${v.label}`),
+  )
+  if (videoSlots) merged.videoSlots = videoSlots
+
+  return { manifest: merged, dropped }
+}

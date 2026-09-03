@@ -114,6 +114,24 @@ export type FrameMessage =
    * key it liked, and the declaration is the only thing making a key legitimate.
    */
   | { v: number; source: typeof FRAME_SOURCE; type: 'field-change'; key: string; value: string }
+  /**
+   * THE FRAME IS NOW SHOWING A DIFFERENT PAGE (SITE_PAGES_PLAN.md A1 / Trap 7).
+   *
+   * The ONLY way the editor can ever learn this. A connected site is a different origin,
+   * so reading the iframe's `location` throws — and the manager is expected to navigate
+   * by clicking the site's OWN nav while in `browse` mode, which the editor cannot see.
+   * Without this message the page switcher would silently disagree with the frame, and
+   * every panel would filter to the wrong page.
+   *
+   * Sent whenever the shell's current page changes, from either cause: the site's own nav
+   * or the editor's `set-page`. Echoing our own `set-page` back is deliberate — it is the
+   * confirmation that the switch actually happened, rather than the editor assuming it.
+   *
+   * `page` is a key from the announced manifest's `pages`. The editor MUST ignore a key
+   * the manifest does not declare, for the same reason `field-change` is checked against
+   * the declaration: a frame is a separate origin and could name anything it liked.
+   */
+  | { v: number; source: typeof FRAME_SOURCE; type: 'page-change'; page: string }
 
 /** editor → frame. `init-data` hands the frame its draft so a custom site in edit
  *  mode renders it without its own DB access (D-C); `apply-style` previews a
@@ -196,6 +214,23 @@ export type EditorMessage =
    * that predates it ignores an unknown type, so BRIDGE_VERSION does not move.
    */
   | { v: number; source: typeof EDITOR_SOURCE; type: 'hello' }
+  /**
+   * SHOW THIS PAGE (SITE_PAGES_PLAN.md A1) — the editor's page switcher.
+   *
+   * The shell swaps its own rendered page in CLIENT STATE and re-announces; it must not
+   * navigate. `/edit` is a route, and the bridge is mounted in that route's effect, so a
+   * real navigation unmounts the bridge and leaves the editor holding a dead frame. That
+   * is also why the first draft of this plan — switching pages by reloading the iframe at
+   * `/edit?page=x` — could never have worked: the same reload happens when a manager
+   * clicks the site's own nav in `browse` mode.
+   *
+   * `mountFrameBridge` already hands the shell an `announce` handle for exactly this
+   * shape of situation (new DOM, announce again), so no new frame machinery is needed.
+   *
+   * ADDITIVE: a frame that predates this ignores an unknown type and stays on its one
+   * page, which is every site deployed today. BRIDGE_VERSION does not move.
+   */
+  | { v: number; source: typeof EDITOR_SOURCE; type: 'set-page'; page: string }
 
 /**
  * Accept the current version and any OLDER one; refuse anything NEWER.
