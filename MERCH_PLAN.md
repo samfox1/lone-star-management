@@ -18,7 +18,7 @@ page per product, with a right-hand cart drawer; checkout is Shopify's, branded 
 | Connect flow | **Guided self-serve now, OAuth app long term.** |
 | Nav button | Hidden entirely when no merch is published — same rule as `/about`. |
 | Page shape | **Per-product routes**: `/merch` grid → `/merch/[handle]`. |
-| Buy flow | **Storefront Cart API + right-hand cart drawer** → Shopify checkout. |
+| Buy flow | **Local cart + right-hand drawer** → one multi-line Shopify cart permalink. |
 | Editor control in v1 | **Layout tokens only** (grid, gap, width, card aspect). |
 | Design | **Mocked before building.** |
 
@@ -67,24 +67,26 @@ So: the snapshot stays the *selection and presentation* record. The site resolve
 price/stock live off `shopify_product_id`, falling back to snapshot values for first
 paint and for manually-added products with no Shopify row behind them.
 
-## Where the Storefront token lives — decide before building the cart
+## Where the Storefront token lives — settled, and it never goes public
 
-A browser-side cart calls Shopify directly, which needs the storefront token **in the
-browser**. Two options, and this is the one call made without asking:
+The plan originally accepted publishing each store's storefront token in the public site
+payload, because a cart drawer looked like it needed the token in the browser.
 
-- **Recommended: put the storefront token in the public site payload.** Shopify designs
-  storefront tokens for exactly this — they are the public half of the Storefront API and
-  carry only `unauthenticated_read_*` scopes. The catalogue they expose is already public.
-  Checkout then stays independent of Lone Star's uptime: skeen's browser talks straight to
-  Shopify. **Hard requirement if we do this:** `connect_shopify` must verify at connect
-  time that the token is a Storefront token with unauthenticated scopes only, and reject
-  anything else, so an Admin API token can never be pasted into a field that ends up
-  public. Without that guard this option is unsafe.
-- **Alternative: proxy cart mutations through a Lone Star route.** Token never leaves
-  Vault. Costs an extra network hop on every cart action and makes an artist's checkout
-  depend on Lone Star being up, to protect a credential Shopify already considers public.
+**It doesn't.** A cart drawer is local state: the lines live in `localStorage`, the
+running total computes from prices the page already holds, and checkout is a single
+multi-line cart permalink —
+`https://{shop}.myshopify.com/cart/{variantA}:{qty},{variantB}:{qty}` — which Shopify
+turns into a real cart and drops the buyer straight onto checkout. Zero Shopify calls
+from the browser, zero token exposure, and the drawer from the jigitz reference intact.
 
-Going with the first. Say so if you'd rather have the proxy — it changes step 4 below.
+What that costs: no live stock re-check between "add to cart" and checkout (Shopify
+catches it at checkout anyway), and no cart syncing across a buyer's devices.
+
+With the browser out of the picture, the only remaining Shopify call is the live
+price/stock lookup, and that runs **server-side on Lone Star** (`/api/merch/[slug]`),
+where the token already sits in Vault. So the token is never published anywhere, and the
+scope-guard requirement that made the old plan safe is no longer load-bearing — it is
+still worth adding at connect time, but as defence in depth rather than a precondition.
 
 ## Variants, handles, and the fields the reference design needs
 
@@ -130,7 +132,26 @@ so it's the single control that does the most visual work.
 
 ## Progress
 
-**Step 1 (variants + handle in the sync) — DONE. Migration applied 2026-09-02.**
+**Steps 1 and 2 — DONE, committed 2026-09-02** (`1b8cc3b`, `1acffc6`). Next is the
+design round (step 3).
+
+**Step 2 (live lane).**
+
+- `shopify_store_for_slug` (20260902130000) + `/api/merch/[slug]` serve current price,
+  availability and variants. The token is read server-side and never appears in the
+  response. `unstable_cache` at 60s per slug, because the route is public and Shopify is
+  rate-limited per store.
+- The door cannot check `is_manager_of` (a slug identifies an artist, not a caller), so
+  it is revoked from `authenticated` too and granted to `service_role` alone. Its denial
+  tests plant a real store and prove `service_role` reads the token back FIRST — without
+  that witness they would pass against an artist with no store and prove nothing.
+- `toLiveProducts` deliberately drops title/images/description: serving them would let a
+  Shopify edit overwrite the editorial layer through a path that never goes near a
+  publish. A product with no variants is reported NOT buyable.
+- `shopify_product_id` is the join key, not `handle` — a handle changes on rename and
+  would break the join silently until the next publish.
+
+**Step 1 (variants + handle in the sync).**
 
 - `src/lib/merch/` now owns the whole Shopify pipeline (Sam, 2026-09-02):
   `shopify.ts` (Storefront client), `sync.ts` (products → merch rows), `index.ts`
@@ -179,13 +200,14 @@ Each step ships and leaves the system working.
 2. **Live lane on the read path.** Site resolves price/availability from Shopify at render
    (ISR ~60s, same as `get_public_site`), snapshot as fallback. Proof: change a price in
    Shopify, reload, see it — without publishing.
-3. **Design round.** `/design-variations-html` for the grid, product page and cart drawer
+3. **Design round.** ← NEXT. `/design-variations-html` for the grid, product page and cart drawer
    in skeen's real tokens (black, cream, `flash-1` red, `font-alt`, lowercase), against the
    jigitz reference. Sam picks, then build.
 4. **`/merch` + `/merch/[handle]` + cart drawer** on skeen. Declared layout regions,
-   variant picker, quantity steppers, running total, `cart.checkoutUrl` on checkout. Cart
-   id in `localStorage` so a reload doesn't empty it. Contract check and `audit:regions`
-   green.
+   variant picker, quantity steppers, running total, and a multi-line cart permalink on
+   checkout. Cart lines in `localStorage` so a reload doesn't empty it. The page overlays
+   `/api/merch/[slug]` onto its published rows by `shopify_product_id`, falling back to
+   published values when that call fails. Contract check and `audit:regions` green.
 5. **Uncomment the nav button** (`Hero.tsx:114`, `editList.ts:482`), pointed at `/merch`,
    hidden when nothing is published — mirroring `aboutPlacement === "page"`. Sam asked for
    it between Contact and About; the old commented line sat before Contact, so it moves.
