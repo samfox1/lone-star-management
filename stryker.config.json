@@ -15,6 +15,7 @@
   "_mutate_comment": "ONLY modules whose behaviour is pinned by DB-FREE tests (vitest.mutation.config.ts). A module tested solely through the live-DB suites would report false survivors here and teach everyone to ignore the report. Grow this list when a module gains DB-free coverage; do not grow it to chase a number.",
   "_workspace_caveat": "packages/music-rules is DELIBERATELY absent. npm workspaces symlink it into node_modules, and Stryker's sandbox resolves that symlink back to the REAL file \u2014 so it mutates a copy nothing loads and reports 0%/all-no-coverage for code tests/music.test.ts genuinely covers. A knowingly false number teaches everyone to ignore the report, so the module is excluded until the resolution is fixed; its rules stay pinned by music.test.ts and the TS-vs-SQL mirror test. packages/site-bridge is absent for the SAME reason \u2014 its cursor/styles/frame rules stay pinned by the site-bridge-*.test.ts suites.",
   "mutate": [
+    "src/lib/artist-facts.ts",
     "src/lib/color.ts",
     "src/lib/content-form.ts",
     "src/lib/embed.ts",
@@ -25,6 +26,7 @@
     "src/lib/merch/live.ts",
     "src/lib/merch/shopify.ts",
     "src/lib/og.ts",
+    "src/lib/seo-audit.ts",
     "src/lib/seo.ts",
     "src/lib/site-content-schema.ts",
     "src/lib/site-editor/asset-budget.ts",
@@ -41,7 +43,7 @@
     "src/lib/url.ts",
     "supabase/functions/contact/validate.ts"
   ],
-  "_thresholds_comment": "break is a RATCHET, not a target: raise it as the score rises, never lower it to make a red build green. A drop means a new line went unwatched or an existing test stopped biting \u2014 that is the report doing its job. First honest baseline was 70.7% (2026-08-05); 72.59% on 2026-08-10 after link-vocabulary.ts and panel-inputs.ts joined the slice, so break moves to 70; the aggregate is dragged down by the DB-backed halves of song-merge.ts and storage-gc.ts, whose lines no DB-free test executes (Stryker counts those as no-coverage). The per-file survivor list is the actionable output, not this number. high/low only colour the HTML report.",
+  "_thresholds_comment": "break is a RATCHET, not a target: raise it as the score rises, never lower it to make a red build green. A drop means a new line went unwatched or an existing test stopped biting \u2014 that is the report doing its job. First honest baseline was 70.7% (2026-08-05); 72.59% on 2026-08-10 after link-vocabulary.ts and panel-inputs.ts joined the slice, so break moves to 70; the aggregate is dragged down by the DB-backed halves of song-merge.ts and storage-gc.ts, whose lines no DB-free test executes (Stryker counts those as no-coverage). 2026-09-03: artist-facts.ts and seo-audit.ts joined the slice (they were pure with DB-free tests and unwatched — the omission AGENTS.md names). A targeted run over just those two: artist-facts.ts 93.55%, seo-audit.ts 62.55%, and they add 282 of the slice's 5302 mutants, so the aggregate moves ~0.3pp — break stays 70, and seo-audit.ts's 68 survivors are the work, not the threshold. The per-file survivor list is the actionable output, not this number. high/low only colour the HTML report.",
   "thresholds": {
     "high": 90,
     "low": 70,

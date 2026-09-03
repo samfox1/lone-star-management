@@ -35,6 +35,11 @@ export default defineConfig({
       'tests/analytics.test.ts',
       'tests/media-rename-live.test.ts',
       'tests/publish-published-at-live.test.ts',
+      // Both plant rows on a throwaway artist to prove the snapshot-defaults fix and the
+      // payload's published_at (2026-09-03 review, H2/M5/M6), so both cross to the hosted
+      // project and neither belongs in the DB-free slice.
+      'tests/publish-snapshot-defaults.test.ts',
+      'tests/site-published-at-payload.test.ts',
       'tests/analytics-rate-limit.test.ts',
       'tests/audio-signed-url.test.ts',
       'tests/audio-storage.test.ts',

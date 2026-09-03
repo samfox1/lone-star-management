@@ -5,6 +5,7 @@
  * and the build can never disagree about what "findable" means.
  */
 import { SEO_RULES, auditGeoFacts, auditJsonLd, auditSeo, type SeoFinding } from '@samfox1/site-bridge/seo'
+import { isPublicSiteUrl } from './custom-site'
 
 export type LiveAudit = {
   url: string
@@ -24,24 +25,91 @@ export type LiveAudit = {
 /** Derived from the bridge's registry (AGENTS.md rule 4), never listed here. */
 export const AUDIT_RULES: readonly { rule: string; label: string }[] = SEO_RULES
 
-async function text(url: string, fetcher: typeof fetch): Promise<string | null> {
-  try {
-    const r = await fetcher(url, { headers: { 'user-agent': 'lone-star-seo-check/1.0' }, cache: 'no-store' })
-    return r.ok ? await r.text() : null
-  } catch {
-    return null
+/** What a fetch found: the body when it was 2xx, and the http status (null = it threw,
+ *  was refused before it left, or ran out of redirect hops). */
+type Fetched = { status: number | null; body: string | null }
+
+const NOT_FETCHED: Fetched = { status: null, body: null }
+/** apex → www is one hop, http → https another. Three is generous; the fourth is a loop. */
+const MAX_HOPS = 3
+
+/**
+ * Fetch a url the server was told about by a MANAGER, never following it anywhere it
+ * should not go. Every hop is re-checked against `isPublicSiteUrl`, because a public host
+ * can 302 straight to `http://169.254.169.254/` and node's fetch would follow it happily.
+ * Redirects are therefore taken by hand (`redirect: 'manual'`) rather than by the client.
+ */
+async function fetchGuarded(url: string, fetcher: typeof fetch): Promise<Fetched> {
+  let target = url
+  for (let hop = 0; hop <= MAX_HOPS; hop++) {
+    if (!isPublicSiteUrl(target)) return NOT_FETCHED
+    let r: Response
+    try {
+      r = await fetcher(target, { headers: { 'user-agent': 'lone-star-seo-check/1.0' }, cache: 'no-store', redirect: 'manual' })
+    } catch {
+      return NOT_FETCHED
+    }
+    const status = typeof r.status === 'number' ? r.status : r.ok ? 200 : 0
+    if (status >= 300 && status < 400) {
+      const location = r.headers?.get?.('location') ?? null
+      let next: string | null = null
+      try {
+        next = location ? new URL(location, target).toString() : null
+      } catch {
+        next = null
+      }
+      if (!next) return { status, body: null }
+      target = next
+      continue
+    }
+    return { status, body: r.ok ? await r.text() : null }
   }
+  return NOT_FETCHED
 }
 
-/** Visible text of an html page, roughly: scripts/styles dropped, tags stripped. */
+async function text(url: string, fetcher: typeof fetch): Promise<string | null> {
+  return (await fetchGuarded(url, fetcher)).body
+}
+
+const NAMED_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+
+/** `&#x27;` → `'`. React escapes the apostrophes, quotes and ampersands a bio is full of,
+ *  so text compared against the RAW bio has to be decoded, not blanked (review, M2). */
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, body: string) => {
+    const lower = body.toLowerCase()
+    if (lower.startsWith('#x')) {
+      const code = Number.parseInt(body.slice(2), 16)
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole
+    }
+    if (lower.startsWith('#')) {
+      const code = Number.parseInt(body.slice(1), 10)
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole
+    }
+    return NAMED_ENTITIES[lower] ?? whole
+  })
+}
+
+/** Visible text of an html page, roughly: scripts/styles dropped, tags stripped,
+ *  entities turned back into the characters the manager actually typed. */
 function visibleText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&[a-z#0-9]+;/gi, ' ')
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/** Same scheme, host and port as the site being audited. */
+function sameOrigin(url: string, base: string): boolean {
+  try {
+    return new URL(url).origin === new URL(base).origin
+  } catch {
+    return false
+  }
 }
 
 export async function auditLiveSite(
@@ -50,16 +118,22 @@ export async function auditLiveSite(
   opts: { bio?: string | null } = {},
 ): Promise<LiveAudit> {
   const base = origin.replace(/\/+$/, '')
+  const blank = { url: base, ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null } satisfies Omit<LiveAudit, 'error'>
+  // The one place the server fetches a manager-supplied address. A private / loopback /
+  // link-local target is the server's own network, and this check reports fragments of
+  // what it reads back to the browser — so it is refused here, before any request.
+  if (!isPublicSiteUrl(base)) return { ...blank, error: 'That address is not a public website.' }
   const [home, edit, sitemapXml, robotsTxt] = await Promise.all([
     text(`${base}/`, fetcher),
-    text(`${base}/edit`, fetcher),
+    fetchGuarded(`${base}/edit`, fetcher),
     text(`${base}/sitemap.xml`, fetcher),
     text(`${base}/robots.txt`, fetcher),
   ])
-  if (!home) {
-    return { url: base, ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'Could not fetch the site.' }
-  }
-  const findings: SeoFinding[] = auditSeo({ home, edit })
+  if (!home) return { ...blank, error: 'Could not fetch the site.' }
+  // A 404 is an ANSWER — this site has no /edit page, so there is nothing to be indexed.
+  // Anything else (429, 500, a thrown fetch) means nobody LOOKED, which is not a pass.
+  const editError = edit.body == null && edit.status !== 404 ? (edit.status ? `HTTP ${edit.status}` : 'no response') : null
+  const findings: SeoFinding[] = auditSeo({ home, edit: edit.body, editError })
   const ld = home.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
   let graph: Record<string, number> = {}
   let releaseKinds: Record<string, number> = {}
@@ -86,7 +160,10 @@ export async function auditLiveSite(
   if (bio) {
     const needle = bio.slice(0, 60).toLowerCase()
     const pages = [home]
-    for (const u of (sitemap?.urls ?? []).filter((x) => x.replace(/\/$/, '') !== base).slice(0, 10)) {
+    // A <loc> is text from a document the server was pointed at, so it is a request the
+    // ATTACKER writes. Same-origin only: the bio lives on the artist's own site, and
+    // nothing else here is worth a server-side fetch (review 2026-09-03, H1).
+    for (const u of (sitemap?.urls ?? []).filter((x) => sameOrigin(x, base) && x.replace(/\/$/, '') !== base).slice(0, 10)) {
       const t = await text(u, fetcher)
       if (t) pages.push(t)
     }

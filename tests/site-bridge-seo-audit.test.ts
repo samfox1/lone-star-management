@@ -43,6 +43,15 @@ describe('auditSeo', () => {
     expect(rules(auditSeo({ home: GOOD, edit: '<html><head></head></html>' }))).toEqual(['robots'])
     expect(auditSeo({ home: GOOD, edit: null })).toEqual([])
   })
+  it('CRITICAL: a /edit nobody could LOOK at is reported, never passed', () => {
+    // `edit: null` means "there is no /edit page here" and is a pass. It must not also
+    // mean "the fetch blew up" — one 429 would then paint the rule green while /edit is
+    // live and indexable. The caller says which it is; the audit states it either way.
+    const findings = auditSeo({ home: GOOD, edit: null, editError: 'HTTP 429' })
+    expect(findings).toEqual([{ rule: 'robots', problem: 'could not check whether /edit is noindex (HTTP 429)' }])
+    // And an /edit that WAS read still decides on its own content.
+    expect(auditSeo({ home: GOOD, edit: EDIT, editError: null })).toEqual([])
+  })
 })
 
 describe('auditJsonLd — the fields Google requires', () => {

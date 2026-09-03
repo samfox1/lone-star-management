@@ -97,16 +97,24 @@ type ProductNode = {
   featuredImage?: { url?: string } | null
   images?: { edges: { node: { url?: string } }[] } | null
   priceRange?: { minVariantPrice?: { amount?: string } } | null
-  variants?: { edges: { node: VariantNode }[] } | null
+  variants?: { edges: { node: VariantNode }[]; pageInfo?: PageInfo | null } | null
   /** Shopify pads this array to line up with the identifiers asked for, so a missing
    *  field is a null HOLE rather than a shorter list — read it by `key`, never by
    *  position, or one unset field silently shifts the other's value into it. */
   metafields?: ({ key?: string | null; value?: string | null } | null)[] | null
 }
 
-type ProductsResponse = {
-  data?: { products?: { edges: { node: ProductNode }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }
-  errors?: { message: string; extensions?: { code?: string } }[]
+type PageInfo = { hasNextPage: boolean; endCursor: string | null }
+
+type GraphQLResponse = { errors?: { message: string; extensions?: { code?: string } }[] }
+
+type ProductsResponse = GraphQLResponse & {
+  data?: { products?: { edges: { node: ProductNode }[]; pageInfo: PageInfo } }
+}
+
+/** The variant follow-up: `node(id:)` re-reads ONE product's variant connection. */
+type VariantsResponse = GraphQLResponse & {
+  data?: { node?: { variants?: { edges: { node: VariantNode }[]; pageInfo?: PageInfo | null } | null } | null }
 }
 
 /**
@@ -115,7 +123,7 @@ type ProductsResponse = {
  * big enough to page would otherwise fail its whole merch sync on the first
  * throttle, because every `errors[]` entry reads as a hard query error.
  */
-function isThrottled(body: ProductsResponse): boolean {
+function isThrottled(body: GraphQLResponse): boolean {
   return body.errors?.some((e) => e.extensions?.code === 'THROTTLED') ?? false
 }
 
@@ -145,12 +153,23 @@ function retryAfterMs(header: string | null): number {
  * is the COUNT of identifiers asked for, and must match the list in the query below.
  *
  * Paging 10 at a time is more round trips than 50, but a merch catalogue is tens of
- * products and this is a background pull. Truncation is the worse failure: a product
- * with more than `variants` options would silently lose sizes, so that number stays
- * generous and `products` absorbs the cost. `tests/shopify.test.ts` fails if the
- * arithmetic ever crosses the cap.
+ * products and this is a background pull. `variants` stays generous and `products`
+ * absorbs the cost, but it is a PAGE size, not a limit: a product that reports more
+ * variants than fit is followed up with `VARIANTS_QUERY` below.
+ * `tests/shopify.test.ts` fails if the arithmetic ever crosses the cap.
  */
 export const PAGE_SIZES = { products: 10, variants: 50, images: 10, metafields: 4 } as const
+
+/**
+ * The most variants this will collect for one product, across every page.
+ *
+ * Shopify's own ceiling for a standard product is 250 (100 options × … only with
+ * variant expansion beyond that), so this is a real product's real maximum and not an
+ * arbitrary cut. It exists because `hasNextPage` is UPSTREAM data: a store that always
+ * answers true would otherwise page until the process died, the same failure the
+ * product loop's cursor-equality break exists to prevent.
+ */
+export const MAX_VARIANTS_PER_PRODUCT = 250
 
 /**
  * PNG, not Shopify's default.
@@ -180,6 +199,7 @@ const PRODUCTS_QUERY = `
         priceRange { minVariantPrice { amount } }
         variants(first: ${PAGE_SIZES.variants}) {
           edges { node { id title availableForSale price { amount currencyCode } } }
+          pageInfo { hasNextPage endCursor }
         }
         metafields(identifiers: [
           {namespace: "${METAFIELDS.namespace}", key: "${METAFIELDS.shippingEstimate}"},
@@ -189,6 +209,32 @@ const PRODUCTS_QUERY = `
         ]) { key value }
       } }
       pageInfo { hasNextPage endCursor }
+    }
+  }
+`
+
+/**
+ * Page 2+ of ONE product's variants (REVIEW_2026-09-03 L1).
+ *
+ * `variants(first: 50)` inside the product query is a cost budget, and a 5-colour ×
+ * 12-size garment has 60 options. Truncation was silent, and `toLiveProducts` derives
+ * `available` from the variant list — so a garment whose first 50 options happened to
+ * be sold out rendered SOLD OUT on a product Shopify would have sold, and the sizes
+ * past the cut were unbuyable anyway, because a cart line is built from a
+ * ProductVariant gid the page never received.
+ *
+ * Costs 1 + 50 against the same 1000-point cap, and only runs for a product that says
+ * it has more — the ordinary catalogue never issues it.
+ */
+const VARIANTS_QUERY = `
+  query ProductVariants($id: ID!, $cursor: String) {
+    node(id: $id) {
+      ... on Product {
+        variants(first: ${PAGE_SIZES.variants}, after: $cursor) {
+          edges { node { id title availableForSale price { amount currencyCode } } }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
     }
   }
 `
@@ -208,7 +254,12 @@ export function createShopifyClient(opts: Options = {}) {
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const maxRetries = opts.maxRetries ?? 3
 
-  async function graphql(cursor: string | null): Promise<ProductsResponse> {
+  /** One authenticated Storefront POST, with the throttle/retry policy applied. Both
+   *  queries go through here so a variant follow-up cannot quietly skip it. */
+  async function graphql<T extends GraphQLResponse>(
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<T> {
     if (!domain || !token) {
       throw new Error('Shopify store not configured (missing domain or token).')
     }
@@ -221,14 +272,14 @@ export function createShopifyClient(opts: Options = {}) {
           'Content-Type': 'application/json',
           'X-Shopify-Storefront-Access-Token': token,
         },
-        body: JSON.stringify({ query: PRODUCTS_QUERY, variables: { cursor } }),
+        body: JSON.stringify({ query, variables }),
       })
       if (res.status === 429) {
         await sleep(retryAfterMs(res.headers.get('retry-after')))
         continue
       }
       if (!res.ok) throw new Error(`Shopify API error ${res.status} for ${domain}`)
-      const body = (await res.json()) as ProductsResponse
+      const body = (await res.json()) as T
       if (isThrottled(body)) {
         await sleep(THROTTLE_BACKOFF_MS)
         continue
@@ -302,6 +353,31 @@ export function createShopifyClient(opts: Options = {}) {
     }
   }
 
+  /**
+   * The variants a product has BEYOND its first page, in order.
+   *
+   * Termination mirrors the product loop and for the same reason: `hasNextPage` and
+   * `endCursor` are upstream data, so a cursor that is null or that repeats stops the
+   * loop, and MAX_VARIANTS_PER_PRODUCT caps it even if both keep advancing. A missing
+   * `node` (the product was deleted between the two calls) drops the extra pages and
+   * keeps the product on the 50 already in hand — a short picker beats no product.
+   */
+  async function remainingVariants(productId: string, after: string, have: number): Promise<ShopifyVariant[]> {
+    const out: ShopifyVariant[] = []
+    let cursor: string | null = after
+    while (cursor !== null && have + out.length < MAX_VARIANTS_PER_PRODUCT) {
+      const body: VariantsResponse = await graphql(VARIANTS_QUERY, { id: productId, cursor })
+      const conn = body.data?.node?.variants
+      if (!conn) break
+      for (const edge of conn.edges) out.push(mapVariant(edge.node))
+      if (!conn.pageInfo?.hasNextPage) break
+      const next = conn.pageInfo.endCursor
+      if (next === null || next === cursor) break
+      cursor = next
+    }
+    return out
+  }
+
   /** Every product in the store, following Storefront pagination cursors. */
   async function getProducts(): Promise<ShopifyMerch[]> {
     const out: ShopifyMerch[] = []
@@ -310,10 +386,21 @@ export function createShopifyClient(opts: Options = {}) {
     // unchanged) so a misbehaving hasNextPage:true response can't spin and
     // accumulate duplicates. The equality break guarantees termination.
     while (true) {
-      const body: ProductsResponse = await graphql(cursor)
+      const body: ProductsResponse = await graphql(PRODUCTS_QUERY, { cursor })
       const products = body.data?.products
       if (!products) break
-      for (const edge of products.edges) out.push(mapNode(edge.node))
+      for (const edge of products.edges) {
+        const merch = mapNode(edge.node)
+        // Only for a product that says it has more — the ordinary catalogue, whose
+        // products have a handful of sizes, issues no extra request at all.
+        const info = edge.node.variants?.pageInfo
+        if (info?.hasNextPage && info.endCursor !== null && info.endCursor !== undefined) {
+          merch.variants = merch.variants.concat(
+            await remainingVariants(merch.shopify_product_id, info.endCursor, merch.variants.length),
+          )
+        }
+        out.push(merch)
+      }
       if (!products.pageInfo.hasNextPage) break
       const next = products.pageInfo.endCursor
       if (next === null || next === cursor) break

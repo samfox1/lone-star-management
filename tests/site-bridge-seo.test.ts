@@ -65,7 +65,10 @@ function payload(over: Partial<PublicSitePayload> = {}): PublicSitePayload {
     ],
     videos: [
       { id: 'v1', title: 'Night Drive (live)', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/abc123XYZ', storage_path: null, sort_order: 1, created_at: '2026-07-01T00:00:00.000Z', published_at: '2026-05-01T00:00:00.000Z' },
-      { id: 'v2', title: 'Studio', provider: 'uploaded', embed_url: null, storage_path: 'a1/videos/studio.mp4', sort_order: 2, created_at: '2026-07-02T00:00:00.000Z', published_at: '2026-05-02T00:00:00.000Z' },
+      // An UPLOAD as the database actually stores one: `published_at` is written by the
+      // YouTube sync alone, so it is null here forever. The fixture used to carry one,
+      // which is the only reason this file ever saw an uploaded VideoObject.
+      { id: 'v2', title: 'Studio', provider: 'uploaded', embed_url: null, storage_path: 'a1/videos/studio.mp4', sort_order: 2, created_at: '2026-07-02T00:00:00.000Z' },
       { id: 'v3', title: 'Broken', provider: 'youtube', embed_url: null, storage_path: null, sort_order: 3 },
       { id: 'v4', title: 'Mix', provider: 'soundcloud', embed_url: 'https://w.soundcloud.com/player/?url=x', storage_path: null, sort_order: 4, created_at: '2026-05-03T00:00:00.000Z' },
       // A YouTube embed with only created_at (the day it was ADDED): uploadDate unknown → left out.
@@ -143,15 +146,32 @@ describe('jsonLdGraph', () => {
     expect(p.logo).toBeUndefined()
     expect(byType('MusicGroup')[0].homeLocation).toBeUndefined()
   })
-  it('CRITICAL: VideoObject only when Google\'s required fields are all known — uploadDate is the PLATFORM publish date (never the day it was added); SoundCloud is audio', () => {
+  it('CRITICAL: VideoObject only when Google\'s required fields are all known — uploadDate is the PLATFORM publish date for an EMBED, the upload date for an UPLOAD; SoundCloud is audio', () => {
     const g = jsonLdGraph(payload(), { origin: ORIGIN, videoUrl: (p) => `https://cdn.example.com/videos/${p}`, videoPoster: (v) => (v.id === 'v2' ? 'https://cdn.example.com/poster.jpg' : null) })
     const vids = (g['@graph'] as Record<string, unknown>[]).filter((n) => n['@type'] === 'VideoObject')
     expect(vids).toEqual([
       { '@type': 'VideoObject', name: 'Night Drive (live)', description: 'Night Drive (live) by Skeen', thumbnailUrl: 'https://i.ytimg.com/vi/abc123XYZ/hqdefault.jpg', uploadDate: '2026-05-01T00:00:00.000Z', embedUrl: 'https://www.youtube.com/embed/abc123XYZ', creator: { '@id': `${ORIGIN}/#artist` } },
-      { '@type': 'VideoObject', name: 'Studio', description: 'Studio by Skeen', thumbnailUrl: 'https://cdn.example.com/poster.jpg', uploadDate: '2026-05-02T00:00:00.000Z', contentUrl: 'https://cdn.example.com/videos/a1/videos/studio.mp4', creator: { '@id': `${ORIGIN}/#artist` } },
+      // A self-hosted file has no platform to have published it: the site IS the platform,
+      // so the day it was added is the day it was published. Nothing invented.
+      { '@type': 'VideoObject', name: 'Studio', description: 'Studio by Skeen', thumbnailUrl: 'https://cdn.example.com/poster.jpg', uploadDate: '2026-07-02T00:00:00.000Z', contentUrl: 'https://cdn.example.com/videos/a1/videos/studio.mp4', creator: { '@id': `${ORIGIN}/#artist` } },
     ])
     // No poster hook → the upload has no thumbnail → not stated.
     expect(byType('VideoObject').map((v) => v.name)).toEqual(['Night Drive (live)'])
+  })
+  it('CRITICAL: created_at is a fallback for UPLOADS ONLY — a YouTube embed with no platform date stays unstated', () => {
+    // v5 is a YouTube embed carrying created_at and no published_at. Extending the
+    // fallback to embeds would state the day the manager pasted the link as the day
+    // YouTube published the video, which is the 2026-08-26 mistake all over again.
+    const g = jsonLdGraph(payload(), { origin: ORIGIN, videoUrl: (p) => `https://cdn.example.com/videos/${p}`, videoPoster: () => 'https://cdn.example.com/poster.jpg' })
+    const vids = (g['@graph'] as Record<string, unknown>[]).filter((n) => n['@type'] === 'VideoObject')
+    expect(vids.map((v) => v.name)).toEqual(['Night Drive (live)', 'Studio'])
+    // An upload with neither date is still not stated: the fallback is a real column, not a clock.
+    const noDates = jsonLdGraph(payload({ videos: [{ id: 'v6', title: 'Undated', provider: 'uploaded', embed_url: null, storage_path: 'a1/videos/x.mp4', sort_order: 1 }] }), {
+      origin: ORIGIN,
+      videoUrl: (p) => `https://cdn.example.com/videos/${p}`,
+      videoPoster: () => 'https://cdn.example.com/poster.jpg',
+    })
+    expect((noDates['@graph'] as Record<string, unknown>[]).filter((n) => n['@type'] === 'VideoObject')).toEqual([])
   })
   it('CRITICAL: songs are NESTED in their album (track[] of MusicRecording), never loose in the graph', () => {
     expect(byType('MusicRecording')).toEqual([])
@@ -306,5 +326,27 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(mine[0]).toEqual({ question: 'Who is Skeen, the musician?', answer: 'My own words.' })
     expect(mine.at(-1)).toEqual({ question: 'Can I book Skeen?', answer: 'Yes, through the contact form.' })
     expect(mine).toHaveLength(6)
+  })
+
+  it('an ANSWER keeps its paragraphs; a QUESTION stays one line', () => {
+    // The other half of M8 (2026-09-03 review). `saveSeoField` stopped eating the
+    // manager's line breaks on the way IN, but this collapse ate them again on the way
+    // OUT — so /faqsheet and the FAQPage JSON-LD still rendered one run-on line and the
+    // fix would have looked broken from the only place anyone looks.
+    //
+    // A QUESTION is one line by nature, and it becomes the `name` of a JSON-LD Question,
+    // so it keeps collapsing. Only the answer is prose.
+    const wrapped = faqEntries(
+      payload({
+        site_content: {
+          faq_answer_1: 'First paragraph.\n\nSecond   paragraph.',
+          faq_extra_1_q: 'Can I\nbook Skeen?',
+          faq_extra_1_a: 'Yes.\n\nThrough the contact form.',
+        },
+      }),
+    )
+    expect(wrapped[0]!.answer).toBe('First paragraph.\n\nSecond paragraph.')
+    expect(wrapped.at(-1)!.question).toBe('Can I book Skeen?')
+    expect(wrapped.at(-1)!.answer).toBe('Yes.\n\nThrough the contact form.')
   })
 })

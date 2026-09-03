@@ -287,7 +287,12 @@ function videoNode(v: SiteVideo, payload: PublicSitePayload, opts: JsonLdOptions
   const thumb = embed ? youtubeThumb(embed) : safeHttpUrl(opts.videoPoster?.(v))
   // The platform's publish date, never the day the manager added the link (that was the
   // 2026-08-26 mistake): unknown = not stated.
-  const uploadDate = v.published_at ?? null
+  //
+  // An UPLOAD has no other platform — this site is where it was published — so for a
+  // self-hosted file `created_at` IS the publish date, not a stand-in for one. Only the
+  // YouTube sync ever writes `published_at`, so without this an uploaded video could
+  // never be stated at all, however complete the rest of it was (review 2026-09-03, M3).
+  const uploadDate = v.published_at ?? (v.provider === 'uploaded' ? (v.created_at ?? null) : null)
   if (!thumb || !uploadDate || !v.title) return null
   return {
     '@type': 'VideoObject',
@@ -427,10 +432,15 @@ export type SeoFinding = { rule: string; problem: string }
  * Run over the prerendered html strings of `/` and (optionally) `/edit`. Regex on
  * purpose: build tests run in node with no DOM, and every check here is a tag-level
  * fact, not a layout question. Returns [] when the page is findable.
+ *
+ * `edit: null` means "this site has no /edit page" — a pass, nothing to be indexed.
+ * `editError` is the other reason it might be missing: the caller TRIED and could not
+ * read it (a 429, a 500, a dropped connection). A check that cannot tell "fine" from
+ * "could not look" must not report fine, so the unknown is stated as a finding.
  */
-export function auditSeo(input: { home: string; edit?: string | null }): SeoFinding[] {
+export function auditSeo(input: { home: string; edit?: string | null; editError?: string | null }): SeoFinding[] {
   const out: SeoFinding[] = []
-  const { home, edit } = input
+  const { home, edit, editError } = input
   const desc = home.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1] ?? ''
   if (desc.length <= 60) out.push({ rule: 'description', problem: `meta description is ${desc.length} chars; needs more than 60` })
   if (!/<link[^>]*rel="canonical"/i.test(home)) out.push({ rule: 'canonical', problem: 'no canonical link' })
@@ -455,7 +465,8 @@ export function auditSeo(input: { home: string; edit?: string | null }): SeoFind
     }
   }
   if (/<meta\s+name="robots"[^>]*noindex/i.test(home)) out.push({ rule: 'robots', problem: 'the homepage is noindex' })
-  if (edit != null && !/<meta\s+name="robots"[^>]*noindex/i.test(edit)) out.push({ rule: 'robots', problem: '/edit is not noindex' })
+  if (editError) out.push({ rule: 'robots', problem: `could not check whether /edit is noindex (${editError})` })
+  else if (edit != null && !/<meta\s+name="robots"[^>]*noindex/i.test(edit)) out.push({ rule: 'robots', problem: '/edit is not noindex' })
   return out
 }
 
@@ -624,17 +635,31 @@ export function autoFaqAnswer(n: number, src: FaqSource): string {
  *  written, else the automatic answer, else the question is left out. Then any EXTRA
  *  questions the manager added (`faq_extra_N_q` / `_a`) — theirs, on the sheet, outside
  *  the measurement. Empty = no sheet. */
+/** An ANSWER is prose the manager wrote in a textarea, so its paragraph breaks are part
+ *  of what they wrote. Horizontal runs still collapse and a pileup of blank lines caps at
+ *  one, matching `normalizeSeoValue` on the way IN — the two have to agree, or a value
+ *  saved intact is mangled on the way out (2026-09-03 review, M8). A QUESTION is one line
+ *  by nature and becomes a JSON-LD Question's `name`, so it keeps collapsing entirely. */
+function faqProse(raw: string): string {
+  return raw
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export function faqEntries(src: FaqSource): FaqEntry[] {
   const prompts = probePrompts(src.artist.name, src.artist.schema_type)
   const c = src.site_content ?? {}
   const out: FaqEntry[] = []
   prompts.forEach((question, i) => {
-    const answer = (c[`faq_answer_${i + 1}`] ?? '').replace(/\s+/g, ' ').trim() || autoFaqAnswer(i + 1, src)
+    const answer = faqProse(c[`faq_answer_${i + 1}`] ?? '') || autoFaqAnswer(i + 1, src)
     if (answer) out.push({ question, answer })
   })
   for (let n = 1; n <= 5; n++) {
     const q = (c[`faq_extra_${n}_q`] ?? '').replace(/\s+/g, ' ').trim()
-    const a = (c[`faq_extra_${n}_a`] ?? '').replace(/\s+/g, ' ').trim()
+    const a = faqProse(c[`faq_extra_${n}_a`] ?? '')
     if (q && a) out.push({ question: q, answer: a })
   }
   return out

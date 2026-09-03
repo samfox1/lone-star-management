@@ -58,9 +58,28 @@ describe('sections save through the gates', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'About the artist' }), { target: { value: 'New bio' } })
     await vi.waitFor(() => expect(fieldMock).toHaveBeenCalledWith('a1', 'artist_bio', 'New bio', { store: 'artist', column: 'bio' }))
     const select = screen.getByRole('combobox', { name: 'Placement' }) as HTMLSelectElement
-    expect([...select.options].map((o) => o.value)).toEqual(['', ...ABOUT_PLACEMENTS])
     fireEvent.change(select, { target: { value: 'hidden' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', 'about_placement', 'hidden'))
+  })
+  /**
+   * Review 2026-09-03, M9: this page offered the whole ABOUT_PLACEMENTS registry while the
+   * editor's Site panel offers only what the connected site's manifest declares. On a site
+   * declaring `home`, picking "Its own page" saved fine and did nothing — no /about route,
+   * and no error anywhere. Same filter as site-tools.tsx now: `hidden` always (the bridge's
+   * aboutPlacement allows it unconditionally), the rest only when declared.
+   */
+  it('CRITICAL: Placement offers only what the site declares it can render', () => {
+    render(<AboutSection artistId="a1" initialBio="" initial={{ about_placement: '', about_heading: '' }} />)
+    // No declaration reaches this page today, so only the universally-renderable option.
+    expect([...(screen.getByRole('combobox', { name: 'Placement' }) as HTMLSelectElement).options].map((o) => o.value)).toEqual(['', 'hidden'])
+    cleanup()
+    render(<AboutSection artistId="a1" initialBio="" initial={{ about_placement: '', about_heading: '' }} about={{ placements: ['home'], default: 'home' }} />)
+    expect([...(screen.getByRole('combobox', { name: 'Placement' }) as HTMLSelectElement).options].map((o) => o.value)).toEqual(['', 'home', 'hidden'])
+    expect(ABOUT_PLACEMENTS).toContain('page')
+  })
+  it('the site default names where the bio goes when nothing is chosen', () => {
+    render(<AboutSection artistId="a1" initialBio="" initial={{ about_placement: '', about_heading: '' }} about={{ placements: ['home', 'page'], default: 'page' }} />)
+    expect(screen.getByRole('option', { name: 'Site default (Its own page)' })).toBeTruthy()
   })
   it('CRITICAL: the five fixed questions show their automatic answers; editing one saves to its FAQ key', async () => {
     render(<AiSection artistId="a1" name="Skeen" schemaType="MusicGroup" initial={{}} auto={['', 'Skeen makes House.', '', '', '']} />)

@@ -144,11 +144,48 @@ export function seoValueError(key: string, value: string): string | null {
   if (!value) return null
   if (key === 'og_image') return safeHttpUrl(value) && /^https:/i.test(value) ? null : 'The social image must be an https URL.'
   if (key === 'about_placement') {
+    // The REGISTRY check only. Whether the connected site can actually render `home` or
+    // `page` is in its manifest, which is announced at runtime over the bridge and stored
+    // nowhere — so no server call can consult it (SEO_GEO_PLAN B2 assumed otherwise). The
+    // manifest filter therefore lives in the two panels that offer the choice
+    // (editor/panels/site-tools.tsx and tools/seo/sections/about.tsx), and both offer only
+    // `hidden` when they hold no declaration. A value that slips past anyway is inert, not
+    // destructive: the bridge's aboutPlacement falls back to the site's declared default.
     return (ABOUT_PLACEMENTS as readonly string[]).includes(value) ? null : 'Unknown about placement.'
   }
   const max = SEO_LIMITS[key]
   if (max === undefined) return 'Unknown SEO field.'
   return value.length > max ? `Keep it under ${max} characters.` : null
+}
+
+/**
+ * The SEO keys whose value is PROSE the site renders as paragraphs (the fact sheet's
+ * answers), not a one-line `<head>` string. They keep their line breaks; everything else
+ * is collapsed to one line, because a newline inside a `<title>` or a meta description is
+ * whitespace the crawler folds anyway and a break the manager can't see.
+ *
+ * DERIVED from the registry, never hand-listed (AGENTS.md rule 4): a sixth probe answer or
+ * a sixth extra slot added to SEO_FIELDS is prose the day it exists. `seo_description` is
+ * edited in a textarea too, but its destination IS `<head>` — the textarea is there to
+ * wrap 160 characters, not to hold paragraphs — so it stays on the collapsing side.
+ *
+ * Before this split, a two-paragraph FAQ answer saved as one run-on line and the panel
+ * kept the manager's draft in local state, so the loss only appeared on reload
+ * (review 2026-09-03, M8).
+ */
+const PROSE_SEO_KEYS = new Set<string>([...FAQ_KEYS, ...FAQ_EXTRA.map((e) => e.a)])
+
+/** What actually gets stored for an SEO key: line breaks preserved for prose, collapsed
+ *  for `<head>`. Runs of spaces/tabs always collapse, and blank-line pileups cap at one
+ *  blank line, so the stored value is what the site will render. */
+function normalizeSeoValue(key: string, value: string): string {
+  if (!PROSE_SEO_KEYS.has(key)) return value.replace(/\s+/g, ' ').trim()
+  return value
+    .replace(/\r\n?/g, '\n') // one newline convention, whatever the OS pasted
+    .replace(/[^\S\n]+/g, ' ') // runs of spaces/tabs collapse; newlines survive
+    .replace(/ *\n */g, '\n') // no stranded spaces around a break
+    .replace(/\n{3,}/g, '\n\n') // at most one blank line between paragraphs
+    .trim()
 }
 
 /**
@@ -162,7 +199,7 @@ export async function saveSeoField(
   key: string,
   value: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const trimmed = value.replace(/\s+/g, ' ').trim()
+  const trimmed = normalizeSeoValue(key, value)
   const invalid = seoValueError(key, trimmed)
   if (invalid) return { ok: false, error: invalid }
   return writeSiteContentValue(supabase, artistId, key, trimmed)

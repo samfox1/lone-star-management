@@ -270,6 +270,13 @@ export async function getWorkingSitePayload(
   // for the same reason; the shape is guaranteed by the select, not by the cast.
   return {
     artist: artist as unknown as PublicSitePayload['artist'],
+    // The newest revision for this artist, the same value get_public_site emits
+    // (20260826150000/170000: max over ALL revisions, tombstones included — the query
+    // above is unfiltered for exactly that reason). It was queried and then left out of
+    // this object for a week: a custom site posted this payload over `init-data`, so
+    // `lastModifiedFrom` fell back to tour dates and the preview's dateModified and
+    // sitemap lastmod disagreed with the live site.
+    published_at: publishedAt,
     tracks,
     tour_dates,
     merch,

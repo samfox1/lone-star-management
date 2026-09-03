@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createShopifyClient } from '@/lib/merch/shopify'
+import { toLiveProducts } from '@/lib/merch/live'
 
 function res({ status = 200, headers = {}, body }: { status?: number; headers?: Record<string, string>; body: unknown }) {
   return {
@@ -33,7 +34,10 @@ type EdgeNode = {
   featuredImage: { url: string } | null
   images: { edges: { node: { url: string } }[] } | null
   priceRange: { minVariantPrice: { amount: string } } | null
-  variants: { edges: { node: VariantNode }[] } | null
+  variants: {
+    edges: { node: VariantNode }[]
+    pageInfo?: { hasNextPage: boolean; endCursor: string | null }
+  } | null
   metafields: MetafieldNode[] | null
 }
 
@@ -310,6 +314,12 @@ describe('query cost budget', () => {
     const cost = PAGE_SIZES.products * (1 + PAGE_SIZES.variants + PAGE_SIZES.images + PAGE_SIZES.metafields)
     expect(cost).toBeLessThan(1000)
   })
+
+  it('the variant follow-up query stays under the cap too', async () => {
+    const { PAGE_SIZES } = await import('@/lib/merch/shopify')
+    // node(id:) { variants(first: V) } — one object plus the connection.
+    expect(1 + PAGE_SIZES.variants).toBeLessThan(1000)
+  })
 })
 
 /**
@@ -444,6 +454,188 @@ describe('store domain validation', () => {
     const fetchImpl = vi.fn(async () => page([productEdge('p1', 'Tee', 'c1')], false, null) as unknown as Response)
     const c = createShopifyClient({ domain: 'lone-star.myshopify.com', token: 'tok', fetchImpl: fetchImpl as unknown as typeof fetch })
     await expect(c.getProducts()).resolves.toHaveLength(1)
+  })
+})
+
+/**
+ * VARIANT TRUNCATION (REVIEW_2026-09-03 L1).
+ *
+ * `variants(first: 50)` is a budget, not a ceiling: a 5-colour × 12-size garment has
+ * 60. Truncation had no detection and no second page, and `toLiveProducts` derives
+ * `available` from `variants.some(v => v.available)` — so a garment whose first 50
+ * options happen to be sold out rendered SOLD OUT on the site while Shopify would
+ * happily sell it, and the missing sizes were unbuyable regardless, because a cart line
+ * is built from a ProductVariant gid the page never received.
+ *
+ * Paging the rest was chosen over merely detecting truncation: refusing to derive
+ * `available` from a short list fixes the badge and leaves the picker still missing
+ * half the sizes, which is the same bug wearing a different label.
+ */
+describe('variant paging', () => {
+  function variantPage(edges: ReturnType<typeof variantEdge>[], hasNextPage: boolean, endCursor: string | null) {
+    return res({ body: { data: { node: { variants: { edges, pageInfo: { hasNextPage, endCursor } } } } } })
+  }
+
+  /** A full first page of variants, as Shopify sends it when there are more. */
+  function firstPage(count: number, available = true, offset = 0) {
+    return Array.from({ length: count }, (_, i) => variantEdge(`gid://v${offset + i}`, `size-${offset + i}`, { availableForSale: available }))
+  }
+
+  /** Routes the products query and the variants query apart the way the server does. */
+  function router(handlers: {
+    products: () => unknown
+    variants?: (cursor: string | null) => unknown
+  }) {
+    return vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}'))
+      if (String(body.query).includes('ProductVariants')) {
+        return handlers.variants?.(body.variables?.cursor ?? null) as unknown as Response
+      }
+      return handlers.products() as unknown as Response
+    })
+  }
+
+  it('asks for the variant connection’s pageInfo — without it, paging can never fire', async () => {
+    let sent = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body ?? '{}')).query
+      return page([], false, null) as unknown as Response
+    })
+    await client(fetchImpl as unknown as typeof fetch).getProducts()
+    // One pageInfo for the product connection, one for the variant connection inside it.
+    // A fixture cannot catch this: the mock answers whatever it is asked.
+    expect((sent.match(/pageInfo/g) ?? []).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('does not issue a second query when the first variant page is complete', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(3), pageInfo: { hasNextPage: false, endCursor: 'v2' } },
+    })
+    const fetchImpl = router({ products: () => page([tee], false, null) })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].variants).toHaveLength(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(1) // no N+1 on the common case
+  })
+
+  it('CRITICAL: follows the variant cursor, so a 5×12 garment keeps all 60 sizes', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50), pageInfo: { hasNextPage: true, endCursor: 'v49' } },
+    })
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      variants: () => variantPage(firstPage(10, true, 50), false, 'v59'),
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].variants).toHaveLength(60)
+    expect(out[0].variants.at(-1)).toEqual({
+      id: 'gid://v59',
+      title: 'size-59',
+      available: true,
+      price: '25.00',
+      currency: 'USD',
+    })
+  })
+
+  it('CRITICAL: an in-stock size past the first page is not rendered sold out', async () => {
+    // The live-lane consequence, end to end: this is the exact shape that put "sold
+    // out" on a garment Shopify would have sold.
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50, false), pageInfo: { hasNextPage: true, endCursor: 'v49' } },
+    })
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      variants: () => variantPage(firstPage(1, true, 50), false, 'v50'),
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(toLiveProducts(out)[0].available).toBe(true)
+  })
+
+  it('pages a variant connection across more than one extra page', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50), pageInfo: { hasNextPage: true, endCursor: 'a' } },
+    })
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      variants: (cursor) =>
+        cursor === 'a'
+          ? variantPage(firstPage(50, true, 50), true, 'b')
+          : variantPage(firstPage(5, true, 100), false, 'c'),
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].variants).toHaveLength(105)
+  })
+
+  it('breaks when the variant cursor repeats (hasNextPage lies) instead of looping', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50), pageInfo: { hasNextPage: true, endCursor: 'SAME' } },
+    })
+    let hits = 0
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      variants: () => {
+        if (++hits > 20) throw new Error('variant paging did not terminate')
+        return variantPage(firstPage(1, true, 50), true, 'SAME')
+      },
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(hits).toBe(1) // the repeat stops it, bounded rather than spinning
+    expect(out[0].variants).toHaveLength(51)
+  })
+
+  it('breaks when hasNextPage is true but the variant endCursor is null', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50), pageInfo: { hasNextPage: true, endCursor: 'a' } },
+    })
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      variants: () => variantPage(firstPage(1, true, 50), true, null),
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].variants).toHaveLength(51)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  /**
+   * WHAT THIS DOES AND DOES NOT CATCH: the fetch bound is derived from the constant, so
+   * this bites when the CHECK disappears from the loop condition (verified by deleting
+   * it) and deliberately not when the constant is merely retuned — 250 is a tuning
+   * value, the check is the guard.
+   */
+  it('stops at the per-product ceiling rather than paging forever', async () => {
+    const { MAX_VARIANTS_PER_PRODUCT, PAGE_SIZES } = await import('@/lib/merch/shopify')
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50), pageInfo: { hasNextPage: true, endCursor: 'c0' } },
+    })
+    let n = 0
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      // A store that always claims one more page with a cursor that always advances:
+      // nothing but the ceiling can stop this. Bounded here so a missing ceiling fails
+      // as a wrong count rather than hanging the suite — the same trick the product
+      // pagination test uses, and the reason that one is safe to run.
+      variants: () => {
+        if (++n > MAX_VARIANTS_PER_PRODUCT / PAGE_SIZES.variants + 2) {
+          throw new Error('variant paging ignored the per-product ceiling')
+        }
+        return variantPage(firstPage(50, true, 50 * n), true, `c${n}`)
+      },
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].variants.length).toBeLessThanOrEqual(MAX_VARIANTS_PER_PRODUCT)
+    expect(out[0].variants.length).toBeGreaterThan(50) // it did page, it just stopped
+  })
+
+  it('an unmapped node (a deleted product mid-sync) drops the extra pages, not the product', async () => {
+    const tee = productEdge('gid://p1', 'Tee', 'c1', {
+      variants: { edges: firstPage(50), pageInfo: { hasNextPage: true, endCursor: 'a' } },
+    })
+    const fetchImpl = router({
+      products: () => page([tee], false, null),
+      variants: () => res({ body: { data: { node: null } } }),
+    })
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out).toHaveLength(1)
+    expect(out[0].variants).toHaveLength(50)
   })
 })
 

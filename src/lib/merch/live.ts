@@ -14,6 +14,31 @@
  */
 import type { ShopifyMerch, ShopifyVariant } from './shopify'
 
+/**
+ * The shape `slugify` produces and the shape `media.slug`'s CHECK constraint enforces
+ * (20260826140000): lowercase alphanumerics in hyphen-joined runs, no leading, trailing
+ * or doubled hyphen, capped at `slugify`'s own 60-character slice.
+ */
+const PUBLIC_SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+const MAX_SLUG_LENGTH = 60
+
+/**
+ * Is this a slug the app could ever have minted?
+ *
+ * It lives beside the live lane's rules because the lane is where it MATTERS: the
+ * route hands the slug to `unstable_cache` as a cache key and to the service-role
+ * `shopify_store_for_slug` RPC, so an unchecked one is a guaranteed cache miss — one
+ * Supabase round trip per distinct string, and one Next data-cache entry per distinct
+ * string, from anyone who can type a URL. Rejecting the shapes the app cannot produce
+ * bounds both to slugs that could plausibly name an artist.
+ *
+ * Not a security boundary: the RPC is parameterised and the door is service-role-only.
+ * This is a budget boundary, which is the thing that was missing.
+ */
+export function isPublicSlug(slug: string): boolean {
+  return slug.length <= MAX_SLUG_LENGTH && PUBLIC_SLUG_RE.test(slug)
+}
+
 export type LiveVariant = ShopifyVariant
 
 export type LiveProduct = {

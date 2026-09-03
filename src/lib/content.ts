@@ -113,6 +113,29 @@ export const ARTIST_SNAPSHOT = [
   'schema_type',
 ] as const
 
+/**
+ * Columns that joined a snapshot ALREADY DEFAULTED — the column arrived with a non-null
+ * default and a backfill, and it joined the snapshot in the same change. Every revision
+ * published before that carries NO SUCH KEY, while every live row carries the default,
+ * so a key-by-key comparison read "missing vs 'photo'" as an edit and marked every
+ * artist's media dirty the day `kind` shipped (M5/M6, REVIEW_2026-09-03: 77 of 91 media
+ * revisions on the live project are in that shape). Absent here means "the default",
+ * which is what the row actually held when the snapshot was taken.
+ *
+ * Keyed like PUBLISHABLE, plus 'artist' for the profile singleton (ARTIST_SNAPSHOT), so
+ * the next defaulted column is one line rather than another silent flood of dirty badges.
+ * Only ever the column's OWN default: this is a statement about history, not a place to
+ * paper over a value the diff should be reporting.
+ *
+ * A key that is PRESENT and null is left alone — null is a value a manager can still be
+ * responsible for, and the two migrations below defaulted-and-backfilled in the same
+ * change, so no revision carries the key as null (verified against the live log).
+ */
+export const SNAPSHOT_DEFAULTS: Partial<Record<PublishableEntity | 'artist', Record<string, unknown>>> = {
+  media: { kind: 'photo' }, // 20260826130000
+  artist: { schema_type: 'MusicGroup' }, // 20260826160000
+}
+
 export type ContentRow = Record<string, unknown> & {
   id: string
   artist_id: string
@@ -797,15 +820,31 @@ export type UnpublishedDiff = { profile: SectionDiff } & Record<PublishableEntit
 
 const emptyDiff = (): SectionDiff => ({ added: 0, edited: 0, deleted: 0, dirty: false })
 
+/** One key's value for comparison. A key the snapshot does not HAVE (an older revision,
+ *  published before the column existed) reads as that column's default — see
+ *  SNAPSHOT_DEFAULTS — because that is what the row held when the snapshot was taken.
+ *  Absent with no registered default is null, as before, and a key that is present keeps
+ *  its own value (including null). */
+function snapshotValue(
+  snap: Record<string, unknown> | undefined,
+  key: string,
+  defaults: Record<string, unknown>,
+): unknown {
+  if (snap && key in snap) return snap[key] ?? null
+  return defaults[key] ?? null
+}
+
 /** Compare two snapshots key-by-key (jsonb key order isn't stable, so don't
- *  stringify whole objects). null and missing are equal. */
+ *  stringify whole objects). null and missing are equal, except where the column has a
+ *  registered default (SNAPSHOT_DEFAULTS), which missing then means. */
 function sameSnapshot(
   keys: readonly string[],
   a: Record<string, unknown> | undefined,
   b: Record<string, unknown> | undefined,
+  defaults: Record<string, unknown> = {},
 ): boolean {
   for (const k of keys) {
-    if (JSON.stringify(a?.[k] ?? null) !== JSON.stringify(b?.[k] ?? null)) return false
+    if (JSON.stringify(snapshotValue(a, k, defaults)) !== JSON.stringify(snapshotValue(b, k, defaults))) return false
   }
   return true
 }
@@ -846,7 +885,7 @@ export async function diffUnpublished(
     for (const [id, snap] of working) {
       const pub = latest.get(`${type}:${id}`)
       if (!pub || pub._deleted === true) d.added++
-      else if (!sameSnapshot(PUBLISHABLE[type].snapshot, snap, pub)) d.edited++
+      else if (!sameSnapshot(PUBLISHABLE[type].snapshot, snap, pub, SNAPSHOT_DEFAULTS[type] ?? {})) d.edited++
     }
     for (const [key, data] of latest) {
       if (!key.startsWith(`${type}:`) || data._deleted === true) continue
@@ -860,7 +899,15 @@ export async function diffUnpublished(
   const profilePub = latest.get(`artist:${artistId}`)
   const p = result.profile
   if (!profilePub) p.added = 1
-  else if (!sameSnapshot(ARTIST_SNAPSHOT, artistRes.data as unknown as Record<string, unknown>, profilePub)) p.edited = 1
+  else if (
+    !sameSnapshot(
+      ARTIST_SNAPSHOT,
+      artistRes.data as unknown as Record<string, unknown>,
+      profilePub,
+      SNAPSHOT_DEFAULTS.artist ?? {},
+    )
+  )
+    p.edited = 1
   p.dirty = p.added + p.edited + p.deleted > 0
 
   return result

@@ -44,8 +44,17 @@ export async function disconnectShopifyAction(artistId: string): Promise<{ error
 /**
  * Pull the store's products into draft merch. The storefront token is fetched
  * server-side from Vault via the owner-gated RPC; it never reaches the browser.
+ *
+ * The `SyncResult` is REPORTED, not discarded. `syncExternal` writes row by row and
+ * collects per-row failures into `errors[]` rather than aborting the pull, so a pull
+ * can succeed as a whole and import nothing — and until 2026-09-03 the manager was
+ * told "Merch pulled" either way (REVIEW_2026-09-03 M7). `merch_handle_uniq` made that
+ * reachable: reconnect to a different Shopify store while the old rows still hold the
+ * handles and every colliding insert lands in `errors[]`.
  */
-export async function syncShopifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function syncShopifyAction(
+  artistId: string,
+): Promise<{ ok: boolean; error?: string; message?: string }> {
   const supabase = await createClient()
   const { data: creds, error } = await supabase.rpc('shopify_credentials', {
     p_artist_id: artistId,
@@ -54,13 +63,34 @@ export async function syncShopifyAction(artistId: string): Promise<{ ok: boolean
   if (!creds || creds.length === 0) return { ok: false, error: 'Connect a Shopify store first.' }
 
   const { store_domain, token } = creds[0] as { store_domain: string; token: string }
+  let result
   try {
     const client = createShopifyClient({ domain: store_domain, token })
     const products = await client.getProducts()
-    await syncShopifyMerch(supabase, artistId, products)
+    result = await syncShopifyMerch(supabase, artistId, products)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
+
+  // Before the failure check, not after: a partial pull DID write rows, and returning
+  // an error over a stale list would tell the manager two contradictory things at once.
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+
+  if (result.failed > 0) {
+    // The first message is the diagnostic one — a unique-constraint name says "that
+    // handle is already taken", which is the difference between "retry" and
+    // "these rows belong to your old store".
+    const reason = result.errors[0]?.message ?? 'unknown error'
+    const landed = result.added + result.updated
+    return {
+      ok: false,
+      error: `${result.failed} product${result.failed === 1 ? '' : 's'} failed to save (${landed} saved): ${reason}`,
+    }
+  }
+
+  // Counts rather than a fixed "Merch pulled": a pull that touched nothing because
+  // every row is manual looked identical to one that imported the whole catalogue.
+  const parts = [`${result.added} added`, `${result.updated} updated`]
+  if (result.skipped > 0) parts.push(`${result.skipped} left alone`)
+  return { ok: true, message: `Merch pulled: ${parts.join(', ')}` }
 }
