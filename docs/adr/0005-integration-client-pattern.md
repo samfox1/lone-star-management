@@ -18,8 +18,13 @@ credentials or network, and must never overwrite a manager's hand edits.
   Spotify's client-credentials). Per-store private creds (Shopify) are
   per-artist in Vault (ADR 0001).
 - **Sync conflict policy**: a generic `syncExternal` core inserts new rows,
-  refreshes rows it owns (`source = provider`), and **never clobbers a manual
-  edit** (a human touching a row flips `source` to `manual`). It is
+  refreshes rows it owns (`source = provider`), and skips rows owned by anyone
+  else. ~~never clobbers a manual edit (a human touching a row flips `source` to
+  `manual`)~~ — **corrected 2026-09-02: that flip was never implemented.** A row
+  imported from a provider keeps that source forever, so every pull refreshes it,
+  hand edits included; only a row that was manually ADDED (or owned by another
+  provider) is protected. A sync must therefore not write any column a manager can
+  edit. It is
   partial-tolerant — a bad upstream row is reported in the result (`failed`,
   `errors`), never a half-written silent state — but an RLS/permission denial
   (Postgres `42501`) is fatal (preserves tenant isolation).

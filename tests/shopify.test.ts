@@ -4,7 +4,7 @@
  * error shaping, throttle (429) retry, and the missing-config guard.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { createShopifyClient } from '@/lib/shopify'
+import { createShopifyClient } from '@/lib/merch/shopify'
 
 function res({ status = 200, headers = {}, body }: { status?: number; headers?: Record<string, string>; body: unknown }) {
   return {
@@ -15,12 +15,35 @@ function res({ status = 200, headers = {}, body }: { status?: number; headers?: 
   }
 }
 
-type EdgeNode = {
+type VariantNode = {
   id: string
   title: string
+  availableForSale: boolean
+  price: { amount: string; currencyCode: string } | null
+}
+
+type EdgeNode = {
+  id: string
+  handle: string | null
+  title: string
+  description: string | null
   onlineStoreUrl: string | null
   featuredImage: { url: string } | null
+  images: { edges: { node: { url: string } }[] } | null
   priceRange: { minVariantPrice: { amount: string } } | null
+  variants: { edges: { node: VariantNode }[] } | null
+}
+
+function variantEdge(id: string, title: string, over: Partial<VariantNode> = {}) {
+  return {
+    node: {
+      id,
+      title,
+      availableForSale: true,
+      price: { amount: '25.00', currencyCode: 'USD' },
+      ...over,
+    } as VariantNode,
+  }
 }
 
 function productEdge(id: string, title: string, cursor: string, over: Partial<EdgeNode> = {}) {
@@ -28,10 +51,14 @@ function productEdge(id: string, title: string, cursor: string, over: Partial<Ed
     cursor,
     node: {
       id,
+      handle: title.toLowerCase().replace(/\s+/g, '-'),
       title,
+      description: null,
       onlineStoreUrl: `https://shop.example/${id}`,
       featuredImage: { url: `https://img.example/${id}.jpg` },
+      images: null,
       priceRange: { minVariantPrice: { amount: '25.00' } },
+      variants: null,
       ...over,
     } as EdgeNode,
   }
@@ -64,10 +91,14 @@ describe('getProducts', () => {
     expect(products).toHaveLength(2)
     expect(products[0]).toEqual({
       shopify_product_id: 'gid://p1',
+      handle: 'tee',
       title: 'Tee',
+      description: null,
       image_url: 'https://img.example/gid://p1.jpg',
+      images: [],
       price: '25.00',
       url: 'https://shop.example/gid://p1',
+      variants: [],
     })
     expect(products[1].title).toBe('Hoodie')
   })
@@ -105,6 +136,7 @@ describe('getProducts', () => {
 
   it('maps a null featuredImage / onlineStoreUrl to null (Shopify sends both routinely)', async () => {
     const bare = productEdge('gid://p9', 'Draft Tee', 'c1', {
+      handle: null,
       onlineStoreUrl: null, // unpublished from the online store
       featuredImage: null, // no image uploaded
       priceRange: null,
@@ -113,11 +145,90 @@ describe('getProducts', () => {
     const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
     expect(out[0]).toEqual({
       shopify_product_id: 'gid://p9',
+      handle: null,
       title: 'Draft Tee',
+      description: null,
       image_url: null,
+      images: [],
       price: null,
       url: null,
+      variants: [],
     })
+  })
+})
+
+/**
+ * The product-page fields (MERCH_PLAN step 1). Variants are the load-bearing one:
+ * a cart line is created from a ProductVariant gid, so the whole buy flow is blocked
+ * without them, and a merch page with no size picker is not a merch page.
+ */
+describe('product detail', () => {
+  it('maps handle, description, gallery images and variants', async () => {
+    const tee = productEdge('gid://p1', 'Ballerinas Tee', 'c1', {
+      handle: '50-ballerinas-t-shirt',
+      description: 'premium tee with a cropped fit',
+      images: { edges: [{ node: { url: 'https://img.example/front.jpg' } }, { node: { url: 'https://img.example/back.jpg' } }] },
+      variants: {
+        edges: [
+          variantEdge('gid://v-s', 's'),
+          variantEdge('gid://v-m', 'm', { price: { amount: '45.00', currencyCode: 'USD' } }),
+          variantEdge('gid://v-xl', 'xl', { availableForSale: false }),
+        ],
+      },
+    })
+    const fetchImpl = vi.fn(async () => page([tee], false, null) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+
+    expect(out[0].handle).toBe('50-ballerinas-t-shirt')
+    expect(out[0].description).toBe('premium tee with a cropped fit')
+    expect(out[0].images).toEqual(['https://img.example/front.jpg', 'https://img.example/back.jpg'])
+    expect(out[0].variants).toEqual([
+      { id: 'gid://v-s', title: 's', available: true, price: '25.00', currency: 'USD' },
+      { id: 'gid://v-m', title: 'm', available: true, price: '45.00', currency: 'USD' },
+      // Sold-out sizes are KEPT, not filtered: the picker greys "xl" out rather than
+      // pretending the size was never made.
+      { id: 'gid://v-xl', title: 'xl', available: false, price: '25.00', currency: 'USD' },
+    ])
+  })
+
+  it('maps a variant with no price node to a null price, keeping the variant', async () => {
+    const tee = productEdge('gid://p2', 'Odd Tee', 'c1', {
+      variants: { edges: [variantEdge('gid://v-1', 'one size', { price: null })] },
+    })
+    const fetchImpl = vi.fn(async () => page([tee], false, null) as unknown as Response)
+    const out = await client(fetchImpl as unknown as typeof fetch).getProducts()
+    expect(out[0].variants).toEqual([{ id: 'gid://v-1', title: 'one size', available: true, price: null, currency: null }])
+  })
+
+  it('requests the fields the product page needs', async () => {
+    let sent = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body ?? '{}')).query
+      return page([], false, null) as unknown as Response
+    })
+    await client(fetchImpl as unknown as typeof fetch).getProducts()
+    // Without these in the QUERY, Shopify simply omits them from the response and every
+    // mapping test above still passes against a fixture that hand-includes them.
+    for (const field of ['handle', 'description', 'images', 'variants', 'availableForSale', 'currencyCode']) {
+      expect(sent).toContain(field)
+    }
+  })
+})
+
+/**
+ * Storefront rejects a query whose COST exceeds 1000 points outright
+ * (MAX_COST_EXCEEDED), and a nested connection multiplies: products(first: N) with
+ * variants(first: V) and images(first: I) costs roughly N × (1 + V + I). Asking for
+ * 50 products × 100 variants would be ~5000 and every sync would fail on the first
+ * call — which no fixture-driven test above would ever catch, because the mock
+ * answers whatever it is asked. This is arithmetic on the real exported constants,
+ * so raising a page size past the budget fails here instead of in production.
+ */
+describe('query cost budget', () => {
+  it('stays under the Storefront 1000-point max query cost', async () => {
+    const { PAGE_SIZES } = await import('@/lib/merch/shopify')
+    const cost = PAGE_SIZES.products * (1 + PAGE_SIZES.variants + PAGE_SIZES.images)
+    expect(cost).toBeLessThan(1000)
   })
 })
 

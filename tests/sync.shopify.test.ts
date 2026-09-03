@@ -4,8 +4,8 @@
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { syncShopifyMerch } from '@/lib/sync'
-import type { ShopifyMerch } from '@/lib/shopify'
+import { syncShopifyMerch } from '@/lib/merch'
+import type { ShopifyMerch } from '@/lib/merch'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from './helpers/supabase'
 
 let artistA: string
@@ -24,8 +24,19 @@ afterEach(async () => {
   await svc.from('merch').delete().eq('artist_id', artistB)
 })
 
-function product(id: string, title: string): ShopifyMerch {
-  return { shopify_product_id: id, title, image_url: null, price: '20.00', url: null }
+function product(id: string, title: string, over: Partial<ShopifyMerch> = {}): ShopifyMerch {
+  return {
+    shopify_product_id: id,
+    handle: null,
+    title,
+    description: null,
+    image_url: null,
+    images: [],
+    price: '20.00',
+    url: null,
+    variants: [],
+    ...over,
+  }
 }
 
 describe('syncShopifyMerch', () => {
@@ -81,6 +92,72 @@ describe('syncShopifyMerch', () => {
     const ids = (data ?? []).map((r) => r.shopify_product_id)
     expect(ids).toEqual(expect.arrayContaining(['shp-ok-1', 'shp-ok-2']))
     expect(ids).not.toContain('shp-bad') // failed row never half-written
+  })
+
+  it('carries handle, description, gallery and variants onto the row', async () => {
+    const variants = [
+      { id: 'gid://v-s', title: 's', available: true, price: '45.00', currency: 'USD' },
+      { id: 'gid://v-xl', title: 'xl', available: false, price: '45.00', currency: 'USD' },
+    ]
+    await syncShopifyMerch(asA, artistA, [
+      product('shp-tee', 'Ballerinas Tee', {
+        handle: '50-ballerinas-t-shirt',
+        description: 'premium tee with a cropped fit',
+        images: ['https://img.example/front.jpg', 'https://img.example/back.jpg'],
+        variants,
+      }),
+    ])
+
+    const { data } = await svc
+      .from('merch')
+      .select('handle, description, images, variants')
+      .eq('artist_id', artistA)
+      .eq('shopify_product_id', 'shp-tee')
+      .single()
+    expect(data?.handle).toBe('50-ballerinas-t-shirt')
+    expect(data?.description).toBe('premium tee with a cropped fit')
+    expect(data?.images).toEqual(['https://img.example/front.jpg', 'https://img.example/back.jpg'])
+    // The variant gids round-trip intact through jsonb — a cart line is built from
+    // these, so a lossy write would break checkout rather than just the display.
+    expect(data?.variants).toEqual(variants)
+  })
+
+  it('a REFRESH updates variants, so a size selling out in Shopify reaches the row', async () => {
+    await syncShopifyMerch(asA, artistA, [
+      product('shp-tee', 'Tee', { variants: [{ id: 'gid://v-m', title: 'm', available: true, price: '45.00', currency: 'USD' }] }),
+    ])
+    await syncShopifyMerch(asA, artistA, [
+      product('shp-tee', 'Tee', { variants: [{ id: 'gid://v-m', title: 'm', available: false, price: '45.00', currency: 'USD' }] }),
+    ])
+
+    const { data } = await svc
+      .from('merch')
+      .select('variants')
+      .eq('artist_id', artistA)
+      .eq('shopify_product_id', 'shp-tee')
+      .single()
+    expect((data?.variants as { available: boolean }[])[0].available).toBe(false)
+  })
+
+  it("CRITICAL: a pull never overwrites a manager's in_stock override", async () => {
+    // The row is shopify-owned AND stays shopify-owned through an edit (source never
+    // flips — see the syncShopifyMerch docblock), so it is refreshed by every pull.
+    // Planting in_stock:false proves the sync leaves it alone rather than deriving it
+    // from `variants`, which would silently un-sell-out a deliberate toggle.
+    await syncShopifyMerch(asA, artistA, [product('shp-tee', 'Tee')])
+    await svc.from('merch').update({ in_stock: false }).eq('artist_id', artistA).eq('shopify_product_id', 'shp-tee')
+
+    await syncShopifyMerch(asA, artistA, [
+      product('shp-tee', 'Tee', { variants: [{ id: 'gid://v-m', title: 'm', available: true, price: '45.00', currency: 'USD' }] }),
+    ])
+
+    const { data } = await svc
+      .from('merch')
+      .select('in_stock')
+      .eq('artist_id', artistA)
+      .eq('shopify_product_id', 'shp-tee')
+      .single()
+    expect(data?.in_stock).toBe(false)
   })
 
   it('dedupes a repeated product id (last-wins)', async () => {

@@ -215,7 +215,13 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // the site, rendered sold out. Rides the snapshot wholesale, no SQL change (the
     // `role` precedent on links).
     // sort_order (20260818150000): the merch grid drags like every other list now.
-    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at'],
+    // handle/description/images/variants (20260902120000): the product page at
+    // /merch/[handle]. These ride the snapshot as the FALLBACK for first paint and for
+    // crawlers — the site resolves price and availability live off Shopify at render
+    // (MERCH_PLAN, "two lanes"), because a price frozen until someone republishes is a
+    // wrong price shown to a buyer. Nothing here is a markup sink: `description` is
+    // Shopify's plain-text field, never descriptionHtml.
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants'],
     orderBy: ['sort_order', 'created_at'],
   },
   link: {

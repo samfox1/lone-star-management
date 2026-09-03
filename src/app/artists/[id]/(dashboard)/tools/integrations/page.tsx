@@ -1,9 +1,9 @@
 import { KLabel } from '@/components/ui/ui'
 import { SyncPanel } from '../../sync-panel'
-import { ShopifyPanel } from '../../shopify-panel'
+import { ShopifyPanel } from '../../merch/shopify-panel'
 import { getShopifyDomain, requireArtist } from '../../_data'
 import { INTEGRATIONS_BY_SECTION, SECTION_LABEL } from '../../integrations'
-import { connectShopifyAction, disconnectShopifyAction, syncShopifyAction } from '../../actions'
+import { connectShopifyAction, disconnectShopifyAction, syncShopifyAction } from '../../merch/actions'
 
 /**
  * Integrations hub (under Manager tools). Renders entirely from the INTEGRATIONS

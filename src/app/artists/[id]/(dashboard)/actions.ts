@@ -61,7 +61,6 @@ import { createDeezerClient } from '@/lib/deezer'
 import { createAppleMusicClient } from '@/lib/apple'
 import { createBandsintownClient } from '@/lib/bandsintown'
 import { createTicketmasterClient } from '@/lib/ticketmaster'
-import { createShopifyClient } from '@/lib/shopify'
 import { createDriveClient, parseDriveFolderId, type DriveFile, type DriveKind } from '@/lib/drive'
 import { importDriveFile } from '@/lib/drive-import'
 import { resolveStreamingSong, type ResolvedSong, type StreamingUrls } from '@/lib/song-links'
@@ -69,7 +68,6 @@ import {
   syncAppleTracks,
   syncBandsintownTourDates,
   syncDeezerTracks,
-  syncShopifyMerch,
   syncSpotifyReleases,
   syncSpotifyTracks,
   syncTicketmasterTourDates,
@@ -1596,57 +1594,6 @@ export async function syncTicketmasterAction(artistId: string): Promise<{ ok: bo
     const client = createTicketmasterClient()
     const events = await client.getArtistEvents(artist.ticketmaster_attraction_id)
     await syncTicketmasterTourDates(supabase, artistId, events)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
-}
-
-/** Connect (or rotate) the artist's Shopify store. Token is stored in Vault. */
-export async function connectShopifyAction(
-  artistId: string,
-  formData: FormData,
-): Promise<{ error?: string }> {
-  const domain = String(formData.get('store_domain') ?? '').trim()
-  const token = String(formData.get('storefront_token') ?? '').trim()
-  if (!domain || !token) return { error: 'Enter a store domain and a storefront token.' }
-  const supabase = await createClient()
-  const { error } = await supabase.rpc('connect_shopify', {
-    p_artist_id: artistId,
-    p_domain: domain,
-    p_token: token,
-  })
-  if (error) return { error: error.message }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
-}
-
-export async function disconnectShopifyAction(artistId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const { error } = await supabase.rpc('disconnect_shopify', { p_artist_id: artistId })
-  if (error) return { error: error.message }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
-}
-
-/**
- * Pull the store's products into draft merch. The storefront token is fetched
- * server-side from Vault via the owner-gated RPC; it never reaches the browser.
- */
-export async function syncShopifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const { data: creds, error } = await supabase.rpc('shopify_credentials', {
-    p_artist_id: artistId,
-  })
-  if (error) return { ok: false, error: error.message }
-  if (!creds || creds.length === 0) return { ok: false, error: 'Connect a Shopify store first.' }
-
-  const { store_domain, token } = creds[0] as { store_domain: string; token: string }
-  try {
-    const client = createShopifyClient({ domain: store_domain, token })
-    const products = await client.getProducts()
-    await syncShopifyMerch(supabase, artistId, products)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }

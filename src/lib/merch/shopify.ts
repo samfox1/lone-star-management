@@ -24,21 +24,50 @@ function assertShopDomain(domain: string): void {
   }
 }
 
+/** One purchasable option of a product (a size, a colour). */
+export type ShopifyVariant = {
+  /** A ProductVariant gid. A cart line is created from THIS, never from the product
+   *  id, so the whole buy flow depends on it. */
+  id: string
+  title: string
+  available: boolean
+  price: string | null
+  currency: string | null
+}
+
 /** The shape the merch sync consumes (one Shopify product). */
 export type ShopifyMerch = {
   shopify_product_id: string
+  /** Shopify's URL slug. The per-product route is /merch/[handle] because
+   *  shopify_product_id is a gid://shopify/Product/… and is not URL-shaped. */
+  handle: string | null
   title: string
+  description: string | null
   image_url: string | null
+  /** Gallery for the product page; image_url stays the grid's single card image. */
+  images: string[]
   price: string | null
   url: string | null
+  variants: ShopifyVariant[]
+}
+
+type VariantNode = {
+  id: string
+  title: string
+  availableForSale?: boolean | null
+  price?: { amount?: string; currencyCode?: string } | null
 }
 
 type ProductNode = {
   id: string
+  handle?: string | null
   title: string
+  description?: string | null
   onlineStoreUrl?: string | null
   featuredImage?: { url?: string } | null
+  images?: { edges: { node: { url?: string } }[] } | null
   priceRange?: { minVariantPrice?: { amount?: string } } | null
+  variants?: { edges: { node: VariantNode }[] } | null
 }
 
 type ProductsResponse = {
@@ -70,10 +99,40 @@ function retryAfterMs(header: string | null): number {
   return (Number.isFinite(parsed) && parsed > 0 ? parsed : 1) * 1000
 }
 
+/**
+ * Connection sizes, exported because they are a BUDGET, not a preference.
+ *
+ * Storefront rejects any query costing over 1000 points outright
+ * (MAX_COST_EXCEEDED), and nested connections multiply: this query costs roughly
+ * products × (1 + variants + images). The original 50 products, once variants were
+ * added at Shopify's 100-per-product ceiling, would have been ~5000 — every sync
+ * failing on its first call, for every store. 10 × (1 + 50 + 10) = 610 leaves real
+ * headroom against Shopify's own costing, which is only approximated here.
+ *
+ * Paging 10 at a time is more round trips than 50, but a merch catalogue is tens of
+ * products and this is a background pull. Truncation is the worse failure: a product
+ * with more than `variants` options would silently lose sizes, so that number stays
+ * generous and `products` absorbs the cost. `tests/shopify.test.ts` fails if the
+ * arithmetic ever crosses the cap.
+ */
+export const PAGE_SIZES = { products: 10, variants: 50, images: 10 } as const
+
 const PRODUCTS_QUERY = `
   query Products($cursor: String) {
-    products(first: 50, after: $cursor) {
-      edges { node { id title onlineStoreUrl featuredImage { url } priceRange { minVariantPrice { amount } } } }
+    products(first: ${PAGE_SIZES.products}, after: $cursor) {
+      edges { node {
+        id
+        handle
+        title
+        description
+        onlineStoreUrl
+        featuredImage { url }
+        images(first: ${PAGE_SIZES.images}) { edges { node { url } } }
+        priceRange { minVariantPrice { amount } }
+        variants(first: ${PAGE_SIZES.variants}) {
+          edges { node { id title availableForSale price { amount currencyCode } } }
+        }
+      } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -127,13 +186,37 @@ export function createShopifyClient(opts: Options = {}) {
     throw new Error(`Shopify API rate-limited after ${maxRetries} retries: ${domain}`)
   }
 
+  /**
+   * A sold-out variant is KEPT, never filtered: the picker greys "xl" out, which tells
+   * a buyer the size exists and is gone. Dropping it would render as "we never made
+   * that size", and would also let a product with every variant sold out arrive as an
+   * empty picker with nothing to explain it.
+   *
+   * `availableForSale` is read with `=== true` rather than a truthy check so a missing
+   * field reads as unavailable. Wrongly showing sold-out is a lost sale; wrongly
+   * showing buyable is an order Shopify then refuses at checkout.
+   */
+  function mapVariant(node: VariantNode): ShopifyVariant {
+    return {
+      id: node.id,
+      title: node.title,
+      available: node.availableForSale === true,
+      price: node.price?.amount ?? null,
+      currency: node.price?.currencyCode ?? null,
+    }
+  }
+
   function mapNode(node: ProductNode): ShopifyMerch {
     return {
       shopify_product_id: node.id,
+      handle: node.handle ?? null,
       title: node.title,
+      description: node.description ?? null,
       image_url: node.featuredImage?.url ?? null,
+      images: (node.images?.edges ?? []).map((e) => e.node.url).filter((u): u is string => Boolean(u)),
       price: node.priceRange?.minVariantPrice?.amount ?? null,
       url: node.onlineStoreUrl ?? null,
+      variants: (node.variants?.edges ?? []).map((e) => mapVariant(e.node)),
     }
   }
 

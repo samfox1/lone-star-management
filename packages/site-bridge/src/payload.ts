@@ -85,6 +85,16 @@ export type SiteTourDate = {
   sort_order?: number | null
 }
 
+/** One purchasable option of a product (a size, a colour). */
+export type SiteMerchVariant = {
+  /** ProductVariant gid — what a Shopify cart line is built from. */
+  id: string
+  title: string
+  available: boolean
+  price: string | null
+  currency: string | null
+}
+
 export type SiteMerch = {
   id: string
   title: string
@@ -98,6 +108,22 @@ export type SiteMerch = {
   /** Stock state (20260818130000) — false renders as sold out; the item STAYS on the
    *  site. Absent on revisions published before the column — read with `!== false`. */
   in_stock?: boolean | null
+  /** Shopify's URL slug, backing /merch/[handle]. Null for a manually-added product,
+   *  which has no Shopify row behind it — such a product has no product page, so the
+   *  grid must not link one. Absent before 20260902120000; read with `?? null`. */
+  handle?: string | null
+  /** Plain text (Shopify's `description`, never `descriptionHtml`) — safe to render as
+   *  text, and not a markup sink. Absent before 20260902120000. */
+  description?: string | null
+  /** Gallery for the product page; `image_url` stays the grid's card image.
+   *  Null on a manual product and absent before 20260902120000 — read with `?? []`. */
+  images?: string[] | null
+  /** Purchasable options. `id` is a ProductVariant gid: a cart line is created from it,
+   *  so an empty list means the product cannot be bought on-site and must fall back to
+   *  its Shopify `url`. Prices here are the PUBLISHED fallback — the site resolves
+   *  live price and availability at render (MERCH_PLAN, "two lanes").
+   *  Null on a manual product and absent before 20260902120000 — read with `?? []`. */
+  variants?: SiteMerchVariant[] | null
 }
 
 export type SiteLink = {

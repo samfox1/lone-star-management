@@ -1,10 +1,20 @@
 /**
  * Sync external catalog data into a tenant's working rows, honoring the conflict
  * policy (PLAN #6): insert items we haven't seen, refresh rows we own
- * (source = this provider), and NEVER overwrite a manager's hand edit (source
- * flips to 'manual' the moment a human touches a row — and a row owned by a
- * different provider is left alone too). All writes go through the caller's
- * RLS-scoped client, so a sync can only ever write into its own artist.
+ * (source = this provider), and leave alone any row owned by someone else. All
+ * writes go through the caller's RLS-scoped client, so a sync can only ever write
+ * into its own artist.
+ *
+ * CAVEAT, corrected 2026-09-02: this header used to claim that `source` flips to
+ * 'manual' the moment a human touches a row, which would make "never overwrite a
+ * manager's hand edit" true for every column. Nothing implements that flip —
+ * `updateContent` writes only `pickFields`, `source` is in no CRUD field list, and
+ * no trigger does it. So a row imported from a provider stays that provider's
+ * forever and every pull refreshes it, hand edits included. The guarantee that DOES
+ * hold is narrower: a row whose source is already something else (a manually ADDED
+ * row, or another provider's) is skipped. Before adding a column to any sync's
+ * `values`, ask whether a manager can edit that column — if so, writing it here
+ * silently reverts them (see `merch/sync.ts` on `in_stock`).
  *
  * The network clients (spotify/bandsintown) are kept separate: routes fetch the
  * items and hand them here, so this pure DB step is testable against a real
@@ -18,7 +28,6 @@ import type { AppleTrackInput } from '@/lib/apple'
 import type { YouTubeVideoInput } from '@/lib/youtube'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { TicketmasterTourDate } from '@/lib/ticketmaster'
-import type { ShopifyMerch } from '@/lib/shopify'
 
 export type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
 
@@ -42,7 +51,7 @@ const RLS_DENIED = '42501'
 /** One incoming external item: its stable id + the columns to write. */
 type ExternalItem = { externalId: string; values: Record<string, unknown> }
 
-type SyncSpec = {
+export type SyncSpec = {
   table: string
   /** Column holding the provider's stable id (e.g. spotify_id). Trusted constant. */
   externalIdCol: string
@@ -55,7 +64,7 @@ type SyncSpec = {
   insertDefaults?: Record<string, unknown>
 }
 
-async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<SyncResult> {
+export async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Promise<SyncResult> {
   const { table, externalIdCol, source, artistId, items, insertDefaults } = spec
 
   const { data: existing, error: listErr } = await supabase
@@ -590,36 +599,6 @@ export function syncTicketmasterTourDates(
     items: events.map((e) => ({
       externalId: e.ticketmaster_id,
       values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url, latitude: e.latitude, longitude: e.longitude },
-    })),
-    insertDefaults: { on_site: false },
-  })
-}
-
-/**
- * Shopify sends price as a raw string ('25.00'); merch.price is numeric(10,2).
- * Coerce like the manual path (Number + isFinite); drop a non-numeric price to
- * null rather than letting it abort the row. A numerically valid but too-large
- * value still errors at the DB and is reported in SyncResult.errors.
- */
-function coercePrice(raw: string | null): number | null {
-  if (raw === null) return null
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : null
-}
-
-export function syncShopifyMerch(
-  supabase: SupabaseClient,
-  artistId: string,
-  products: ShopifyMerch[],
-): Promise<SyncResult> {
-  return syncExternal(supabase, {
-    table: 'merch',
-    externalIdCol: 'shopify_product_id',
-    source: 'shopify',
-    artistId,
-    items: products.map((p) => ({
-      externalId: p.shopify_product_id,
-      values: { title: p.title, image_url: p.image_url, price: coercePrice(p.price), url: p.url },
     })),
     insertDefaults: { on_site: false },
   })

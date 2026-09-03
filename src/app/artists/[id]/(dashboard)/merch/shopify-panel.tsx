@@ -5,8 +5,8 @@
  * store domain. Connect / pull / disconnect each confirm with a toast.
  */
 import { buttonClass, inputClass } from '@/components/ui/ui'
-import { SaveForm } from './save-form'
-import { ActionButton } from './action-button'
+import { SaveForm } from '../save-form'
+import { ActionButton } from '../action-button'
 
 type ConnectAction = (formData: FormData) => Promise<{ error?: string }>
 type PullAction = () => Promise<{ ok: boolean; error?: string }>
