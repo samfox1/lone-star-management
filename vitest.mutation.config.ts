@@ -52,6 +52,7 @@ export default defineConfig({
       'tests/sync.deezer.test.ts',
       'tests/sync.releases.test.ts',
       'tests/sync.shopify.test.ts',
+      'tests/merch-live-door.test.ts',
       'tests/sync.ticketmaster.test.ts',
       'tests/sync.youtube.test.ts',
       'tests/content.crud.test.ts',

@@ -221,7 +221,12 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // (MERCH_PLAN, "two lanes"), because a price frozen until someone republishes is a
     // wrong price shown to a buyer. Nothing here is a markup sink: `description` is
     // Shopify's plain-text field, never descriptionHtml.
-    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants'],
+    // shopify_product_id is the LIVE LANE's join key (MERCH_PLAN step 2): the site
+    // overlays current price/availability from /api/merch/[slug] onto these rows by it.
+    // Public-safe — a product gid appears in every Storefront response and is not a
+    // credential. Chosen over `handle`, which changes when an artist renames a product
+    // and would silently break the join until the next publish.
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants', 'shopify_product_id'],
     orderBy: ['sort_order', 'created_at'],
   },
   link: {

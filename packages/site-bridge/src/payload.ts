@@ -108,6 +108,11 @@ export type SiteMerch = {
   /** Stock state (20260818130000) — false renders as sold out; the item STAYS on the
    *  site. Absent on revisions published before the column — read with `!== false`. */
   in_stock?: boolean | null
+  /** The live lane's join key: a site overlays current price/availability (from
+   *  lone-star's /api/merch/[slug]) onto this row by matching it. Null for a manual
+   *  product, which has no live lane. Public-safe — a product gid is not a credential.
+   *  Absent before 20260902120000 — read with `?? null`. */
+  shopify_product_id?: string | null
   /** Shopify's URL slug, backing /merch/[handle]. Null for a manually-added product,
    *  which has no Shopify row behind it — such a product has no product page, so the
    *  grid must not link one. Absent before 20260902120000; read with `?? null`. */

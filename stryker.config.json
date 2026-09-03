@@ -22,6 +22,7 @@
     "src/lib/enquiry-inbox.ts",
     "src/lib/epk-pdf.ts",
     "src/lib/http.ts",
+    "src/lib/merch/live.ts",
     "src/lib/merch/shopify.ts",
     "src/lib/og.ts",
     "src/lib/seo.ts",
