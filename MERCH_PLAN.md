@@ -132,8 +132,44 @@ so it's the single control that does the most visual work.
 
 ## Progress
 
-**Steps 1 and 2 — DONE, committed 2026-09-02** (`1b8cc3b`, `1acffc6`). Next is the
-design round (step 3).
+**Steps 1, 2 and 4 — DONE. 2026-09-03: the merch site is built.**
+
+Step 3 (the design round) was ABANDONED, and the reason is worth keeping: the
+`/design-variations-html` skill briefed its generators with a prose *description* of the
+design system and let them write fresh CSS from it. Eight variations came back as
+competent imitations of skeen — near-enough colours, invented spacing, a fallback font
+instead of Space Grotesk — and Sam rejected all eight. The skill has been fixed to LOAD
+the project's real stylesheet and fonts and to forbid subagents from writing
+`font-family` or hex colours at all. The pages were then built directly against
+`app/about/page.tsx`'s actual spacing and type.
+
+**Step 4 (the site), in `~/Desktop/skeen-website`:**
+
+- `lib/merch.ts` — mapping, the live overlay, and `checkoutUrl`. A cart permalink needs
+  the NUMERIC variant id, not the gid, or checkout 404s silently.
+- `lib/merchLive.ts` — reads `/api/merch/[slug]`; every failure returns null and the page
+  renders published values, one publish behind.
+- `components/CartProvider.tsx` — localStorage via `useSyncExternalStore`, so the server
+  and hydrating renders agree by construction rather than by an effect.
+- `components/CartDrawer.tsx`, `MerchGrid.tsx`, `MerchProduct.tsx`, `MerchChrome.tsx`.
+- `app/merch/page.tsx`, `app/merch/[handle]/page.tsx` — both 404 when nothing is
+  published, and the Hero button is gated on the same condition so they cannot disagree.
+- `components/Hero.tsx` — the Merch button is back, between Contact and About. It is an
+  internal route now, so the old `config.merch` / `LINK.merch` binding is deleted rather
+  than uncommented; there is no external URL for the editor to point.
+
+**PNG images (Sam, 2026-09-03).** Merch renders cut-out on the near-black ground with no
+card or frame, so the images need an alpha channel. The Storefront query now asks for
+`preferredContentType: PNG` — Shopify serves WEBP/JPG by default and a JPG has no alpha
+at all, so a product shot would arrive with a white box baked around it. This cannot
+CREATE transparency: a flat JPG uploaded by the artist comes back as a flat JPG in a PNG
+wrapper. **Cut-out PNGs are an onboarding rule for the store**, and belong in the
+guided-connect walkthrough (step 7).
+
+**Not done:** the bridge still has to be published and skeen bumped off `^0.33.5` before
+`handle`/`variants` are typed on `SiteMerch` — the site reads them defensively today.
+`NEXT_PUBLIC_LONE_STAR_URL` is unset, so the live lane is dormant and published prices
+render.
 
 **Step 2 (live lane).**
 

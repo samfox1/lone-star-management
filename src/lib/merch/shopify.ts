@@ -117,6 +117,20 @@ function retryAfterMs(header: string | null): number {
  */
 export const PAGE_SIZES = { products: 10, variants: 50, images: 10 } as const
 
+/**
+ * PNG, not Shopify's default.
+ *
+ * Merch renders cut-out on the site's near-black ground (Sam, 2026-09-03), which only
+ * works if the image has an alpha channel. Shopify serves WEBP or JPG by default and a
+ * JPG has no alpha at all, so a product shot would arrive with a white box baked around
+ * it — on black, that is the whole design gone. `preferredContentType: PNG` preserves
+ * the transparency the artist uploaded.
+ *
+ * It cannot CREATE transparency: if the artist's team uploads a flat JPG, the PNG that
+ * comes back is that flat JPG in a PNG wrapper, white box and all. Cut-out PNGs are
+ * therefore an onboarding rule for the store, not something this query can enforce —
+ * see MERCH_PLAN.
+ */
 const PRODUCTS_QUERY = `
   query Products($cursor: String) {
     products(first: ${PAGE_SIZES.products}, after: $cursor) {
@@ -126,8 +140,8 @@ const PRODUCTS_QUERY = `
         title
         description
         onlineStoreUrl
-        featuredImage { url }
-        images(first: ${PAGE_SIZES.images}) { edges { node { url } } }
+        featuredImage { url(transform: {preferredContentType: PNG}) }
+        images(first: ${PAGE_SIZES.images}) { edges { node { url(transform: {preferredContentType: PNG}) } } }
         priceRange { minVariantPrice { amount } }
         variants(first: ${PAGE_SIZES.variants}) {
           edges { node { id title availableForSale price { amount currencyCode } } }

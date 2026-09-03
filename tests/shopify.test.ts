@@ -213,6 +213,23 @@ describe('product detail', () => {
       expect(sent).toContain(field)
     }
   })
+
+  it('CRITICAL: asks Shopify for PNG images, so transparency survives', async () => {
+    // Merch renders cut-out on the site's near-black ground (Sam, 2026-09-03). Shopify
+    // serves WEBP/JPG by default, and a JPG has no alpha channel at all — a product
+    // shot would arrive with a white box baked around it. preferredContentType: PNG is
+    // the only thing keeping the transparency the artist uploaded.
+    let sent = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body ?? '{}')).query
+      return page([], false, null) as unknown as Response
+    })
+    await client(fetchImpl as unknown as typeof fetch).getProducts()
+    // Both the card image and every gallery image, not just one of them.
+    const pngAsks = sent.match(/preferredContentType:\s*PNG/g) ?? []
+    expect(pngAsks.length).toBeGreaterThanOrEqual(2)
+    expect(sent).toContain('featuredImage { url(transform:')
+  })
 })
 
 /**
