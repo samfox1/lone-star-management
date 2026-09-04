@@ -381,6 +381,55 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(graph?.['@graph'][0]?.name).toBe('Skeen — questions and answers')
   })
 
+  it('NO NAME silences EVERY automatic answer, not just the website one', () => {
+    // Review, 2026-09-04, and the sharpest of the three: `autoFaqAnswer` is EXPORTED and
+    // the editor's SEO ledger calls it directly (tools/seo/[section]/page.tsx), so the
+    // guard inside faqEntries never protects it. Q1–Q4 still interpolated an empty name
+    // there — " is a House, Techno musician, based in Chicago." — and `sections/ai.tsx`
+    // seeds its textarea with `row.answer || row.auto`, so a manager who opens that row
+    // SAVES the hole as a written answer. Written answers win forever, including after
+    // the name is fixed. A bad automatic answer is a bad row; a saved one is a bad row
+    // that outlives its cause.
+    const nameless = {
+      ...payload(),
+      artist: { ...payload().artist, name: '  ' },
+      origin: ORIGIN,
+    }
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(autoFaqAnswer(n, nameless), `Q${n}`).toBe('')
+    }
+    // The witness: with a name, these same inputs DO answer — so the emptiness above is
+    // the name's doing and not a hollow fixture.
+    const named = { ...nameless, artist: { ...nameless.artist, name: 'Skeen' } }
+    expect([1, 2, 3, 4, 5].some((n) => autoFaqAnswer(n, named) !== '')).toBe(true)
+  })
+
+  it('probePrompts trims its own name, so every caller gets one spelling', () => {
+    // The editor's ledger passes `artist.name` straight in (sections/ai.tsx), untrimmed.
+    // Trimming in faqEntries only fixed the SITE — the manager writing the answers still
+    // saw "Who is Skeen , the musician?" while the published sheet said "Skeen". The trim
+    // belongs where the name is USED, or the next caller reopens the hole.
+    for (const q of probePrompts('  Skeen  ', 'MusicGroup')) {
+      expect(q).not.toMatch(/\s{2,}|\s,|^\s|\s$/)
+      expect(q).toContain('Skeen')
+    }
+  })
+
+  it('a nameless artist with a WRITTEN extra question still gets no FAQPage node', () => {
+    // The extras are exempt from the no-name rule by design (they are whole sentences the
+    // manager wrote). That exemption made `entries` non-empty, which skipped
+    // faqPageJsonLd's null return, and the node shipped `name: " — questions and
+    // answers"`. The exemption is right; the TITLE still needs a name.
+    const written = {
+      ...payload(),
+      artist: { ...payload().artist, name: '  ' },
+      origin: ORIGIN,
+      site_content: { faq_extra_1_q: 'Where do I write?', faq_extra_1_a: 'The contact form.' },
+    }
+    expect(faqEntries(written)).toHaveLength(1)
+    expect(faqPageJsonLd(written, { origin: ORIGIN })).toBeNull()
+  })
+
   it('an ANSWER keeps its paragraphs; a QUESTION stays one line', () => {
     // The other half of M8 (2026-09-03 review). `saveSeoField` stopped eating the
     // manager's line breaks on the way IN, but this collapse ate them again on the way

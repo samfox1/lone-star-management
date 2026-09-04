@@ -585,7 +585,12 @@ export function auditGeoFacts(graph: unknown): SeoFinding[] {
  *  teach (leaking "Chicago" into the question hands the engine the answer). Change the
  *  wording only with a new version, or months stop comparing. */
 export const PROBE_VERSION = 'v1'
-export function probePrompts(name: string, schemaType?: string | null): string[] {
+export function probePrompts(rawName: string, schemaType?: string | null): string[] {
+  // TRIMMED HERE, not by the caller. The caller-side trim left the editor's SEO ledger
+  // (tools/seo/sections/ai.tsx, which calls this directly) showing "Who is Skeen , the
+  // musician?" while the published sheet said "Skeen" — the manager writing the answers
+  // and the page quoting them spelling the artist differently (2026-09-04 review).
+  const name = (rawName ?? '').trim()
   const role = schemaType === 'Person' ? 'the artist' : 'the musician'
   return [
     `Who is ${name}, ${role}?`,
@@ -626,6 +631,17 @@ export function autoFaqAnswer(n: number, src: FaqSource): string {
   const where = (a.location ?? '').trim()
   const bio = (a.bio ?? '').replace(/\s+/g, ' ').trim()
   const role = a.schema_type === 'Person' ? 'artist' : 'musician'
+  // NO NAME, NO ANSWER — at the TOP, because every branch below interpolates it. The
+  // previous guard sat on n===5 alone, under a comment claiming that was the only branch
+  // reachable without an artist. It was not: Q1–Q4 produced " is a House, Techno
+  // musician, based in Chicago." and friends.
+  //
+  // This matters even though `faqEntries` would not reach them, because this function is
+  // EXPORTED and the editor's SEO ledger calls it directly for the answers it displays —
+  // and `sections/ai.tsx` seeds its textarea with `row.answer || row.auto`, so a manager
+  // who opens such a row SAVES the hole as a written answer. Written answers win forever,
+  // outliving the missing name that caused them (2026-09-04 review).
+  if (!name) return ''
   if (n === 1) {
     if (bio) return bio
     const bits = [genre ? `${genre} ${role}` : role, where ? `based in ${where}` : ''].filter(Boolean).join(', ')
@@ -648,10 +664,7 @@ export function autoFaqAnswer(n: number, src: FaqSource): string {
     if (!recent.length) return ''
     return `${name}'s latest releases: ${recent.map((r) => `${r.title} (${fmtDate(r.release_date!)})`).join(', ')}.`
   }
-  // Guarded on the NAME as well as the origin — see faqEntries. This was the one
-  // automatic answer that could be produced without an artist, which is what made a
-  // nameless payload look answerable.
-  if (n === 5) return src.origin && name ? `${name}'s official website is ${src.origin.replace(/^https?:\/\//, '')}.` : ''
+  if (n === 5) return src.origin ? `${name}'s official website is ${src.origin.replace(/^https?:\/\//, '')}.` : ''
   return ''
 }
 
@@ -705,6 +718,11 @@ export function faqEntries(src: FaqSource): FaqEntry[] {
 /** FAQPage markup for the /faqsheet route: the artist as the page's subject, one
  *  Question/Answer pair per answered prompt. Null when nothing is answered. */
 export function faqPageJsonLd(payload: FaqSource, opts: { origin: string; path?: string }) {
+  // The manager's EXTRA questions are exempt from the no-name rule — whole sentences they
+  // wrote, none depending on the name. That exemption is right, and it is also what let a
+  // nameless artist reach this node with a non-empty `entries`, shipping the title as
+  // " — questions and answers". The exemption stays; the TITLE still needs a name.
+  if (!artistName(payload.artist)) return null
   const entries = faqEntries({ ...payload, origin: payload.origin ?? opts.origin })
   if (!entries.length) return null
   const path = opts.path ?? '/faqsheet'
