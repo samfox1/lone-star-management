@@ -600,7 +600,10 @@ export type FaqSource = {
  */
 export function autoFaqAnswer(n: number, src: FaqSource): string {
   const a = src.artist
-  const name = a.name
+  // TRIMMED, and that is the guard rather than cosmetics: `'  '` is truthy, so an
+  // untrimmed read let a whitespace-only artist satisfy the name check on Q5 below and
+  // produce "  's official website is …".
+  const name = (a.name ?? '').trim()
   const genre = (a.genre ?? '').trim()
   const where = (a.location ?? '').trim()
   const bio = (a.bio ?? '').replace(/\s+/g, ' ').trim()
@@ -627,7 +630,10 @@ export function autoFaqAnswer(n: number, src: FaqSource): string {
     if (!recent.length) return ''
     return `${name}'s latest releases: ${recent.map((r) => `${r.title} (${fmtDate(r.release_date!)})`).join(', ')}.`
   }
-  if (n === 5) return src.origin ? `${name}'s official website is ${src.origin.replace(/^https?:\/\//, '')}.` : ''
+  // Guarded on the NAME as well as the origin — see faqEntries. This was the one
+  // automatic answer that could be produced without an artist, which is what made a
+  // nameless payload look answerable.
+  if (n === 5) return src.origin && name ? `${name}'s official website is ${src.origin.replace(/^https?:\/\//, '')}.` : ''
   return ''
 }
 
@@ -650,7 +656,19 @@ function faqProse(raw: string): string {
 }
 
 export function faqEntries(src: FaqSource): FaqEntry[] {
-  const prompts = probePrompts(src.artist.name, src.artist.schema_type)
+  // NO NAME, NO SHEET. Every prompt and every automatic answer interpolates the artist's
+  // name, so without one the sheet reads "Who is , the musician?" answered by "'s
+  // official website is skeenmusic.com." — and this page exists to be QUOTED by an
+  // assistant, which makes a sentence with a hole in it worse than no page.
+  //
+  // Only Q5's guard used to be reachable (it tested `origin`, not the name), so a payload
+  // with no artist still produced one truthy answer and listed /faqsheet in the sitemap.
+  // Caught by skeen's own sitemap test the day 0.34.0 was installed (2026-09-03).
+  //
+  // The manager's EXTRA questions are exempt below: those are whole sentences they wrote
+  // themselves, and none of them depends on the name.
+  const named = (src.artist.name ?? '').trim() !== ''
+  const prompts = named ? probePrompts(src.artist.name, src.artist.schema_type) : []
   const c = src.site_content ?? {}
   const out: FaqEntry[] = []
   prompts.forEach((question, i) => {

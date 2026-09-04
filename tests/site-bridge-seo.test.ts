@@ -328,6 +328,40 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(mine).toHaveLength(6)
   })
 
+  it('NO ARTIST NAME → no sheet at all, rather than answers with a hole in them', () => {
+    // Found by skeen's own sitemap test the day 0.34.0 was installed. Every automatic
+    // answer interpolates the name, and only Q5's guard was on `origin` — so a payload
+    // with no name still produced "'s official website is skeenmusic.com.", a truthy
+    // string, which listed /faqsheet in the sitemap and would have shipped that sentence
+    // as FAQPage JSON-LD. The questions are as bad: "Who is , the musician?".
+    //
+    // A name is the subject of all five. Without one there is nothing to say, and saying
+    // it anyway is worse than silence — this sheet exists to be quoted by an assistant.
+    // WITH AN ORIGIN, deliberately. Q5's only guard used to be `src.origin`, so a fixture
+    // without one silences it for the wrong reason and the assertion proves nothing —
+    // this was written that way first and the mutation check caught it (the mutant
+    // survived). The origin is the planted witness: the name is now the only thing left
+    // that can make this empty.
+    const base = payload()
+    // Spread the real fixture's artist rather than writing a fresh literal: the artist
+    // shape has a dozen required fields, and a hand-built stand-in is a fixture that
+    // drifts from the type it is meant to stand in for.
+    const nameless = { ...base, artist: { ...base.artist, name: '  ' }, origin: ORIGIN }
+    expect(autoFaqAnswer(5, nameless)).toBe('')
+    expect(autoFaqAnswer(5, { ...nameless, artist: { ...base.artist, name: 'Skeen' } })).toContain(
+      'official website',
+    )
+    expect(faqEntries(nameless)).toEqual([])
+
+    // A manager's OWN words still stand: they wrote a whole sentence, and it does not
+    // depend on the name being interpolated into it.
+    const written = {
+      ...nameless,
+      site_content: { faq_extra_1_q: 'Where do I write?', faq_extra_1_a: 'The contact form.' },
+    }
+    expect(faqEntries(written)).toEqual([{ question: 'Where do I write?', answer: 'The contact form.' }])
+  })
+
   it('an ANSWER keeps its paragraphs; a QUESTION stays one line', () => {
     // The other half of M8 (2026-09-03 review). `saveSeoField` stopped eating the
     // manager's line breaks on the way IN, but this collapse ate them again on the way
