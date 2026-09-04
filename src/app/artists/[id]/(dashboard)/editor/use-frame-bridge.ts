@@ -6,7 +6,7 @@ import { editorMessage, isFrameMessage, type FrameMode, type RegionMeasurements,
 import type { CursorSettings } from '@samfox1/site-bridge/cursor'
 import { bumpNonce } from './use-signal'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
-import { mergeManifests, type DroppedRegion, type ManifestPage } from '@samfox1/site-bridge/manifest'
+import { mergeManifests, type DroppedRegion } from '@samfox1/site-bridge/manifest'
 
 /**
  * The editor's whole conversation with the site frame, in one place
@@ -256,22 +256,38 @@ export function useFrameBridge({
           // held manifest would empty the Text panel for every other page; accumulating
           // into it would never let a region leave. So: replace THIS PAGE's entry, then
           // re-derive the whole thing from the map.
-          announcesRef.current.set(msg.manifest.page ?? '', msg.manifest)
+          const latest = msg.manifest
+          const latestKey = latest.page ?? ''
+          announcesRef.current.set(latestKey, latest)
+
+          // THE LATEST ANNOUNCE OWNS THE PAGE LIST (2026-09-04 review). A held announce is
+          // a snapshot, and its copy of `pages` can be stale — skeen's `/about` exists only
+          // while the bio is placed there, so a list that named it an hour ago is wrong
+          // now. Taking the list from "whichever held announce has one" (Map order) let a
+          // stale list win, and nothing ever let a page GO: its regions stayed selectable
+          // and kept writing rows for a page nothing rendered, and the switcher (P2) would
+          // offer a page the frame cannot show. No `pages` at all is a one-page site,
+          // exactly as before — not a list that shrank to nothing — so it evicts nothing.
+          const pages = latest.pages
+          if (pages) {
+            for (const key of announcesRef.current.keys()) {
+              // The latest announce is never evicted, whatever its list says: a page the
+              // site tags but does not declare is the site's bug, and the fold's rule for
+              // it is misplaced, never invisible.
+              if (key !== latestKey && !pages.some((p) => p.key === key)) announcesRef.current.delete(key)
+            }
+          }
 
           // Fold in DECLARED page order, never arrival order. `mergeManifests` resolves a
           // duplicate key first-wins, so folding in visit order would make the winner
           // depend on which page the manager happened to open first — and the same site
           // would show two different panels to two managers.
-          const pages = [...announcesRef.current.values()].reduce<ManifestPage[]>(
-            (found, m) => (m.pages?.length ? m.pages : found),
-            [],
-          )
           const rank = (key: string) => {
             if (key === '') return -1
-            const i = pages.findIndex((p) => p.key === key)
+            const i = pages?.findIndex((p) => p.key === key) ?? -1
             // A page the site tags but never declares sorts LAST rather than vanishing:
             // degrade to misplaced, never to invisible.
-            return i === -1 ? pages.length : i
+            return i === -1 ? (pages?.length ?? 0) : i
           }
           const ordered = [...announcesRef.current.entries()].sort(([a], [b]) => rank(a) - rank(b))
 
@@ -282,12 +298,31 @@ export function useFrameBridge({
             folded = step.manifest
             dropped.push(...step.dropped)
           }
+          if (folded) {
+            // Stamped HERE, not trusted from the fold. `mergeManifests` carries `pages`
+            // forward like every other site-wide declaration (`next.pages ?? prev.pages`),
+            // which is right for a pure fold that cannot know which announce is newest —
+            // but it makes the LAST page in declared order the last word, and that page's
+            // held copy may still name the page just evicted. Only this layer knows which
+            // announce is the latest, so only this layer can say what the list is.
+            if (pages) folded.pages = pages
+            else delete folded.pages
+          }
           setManifest(folded)
           manifestRef.current = folded
           // REPLACED, not appended: the frame re-announces the same page constantly
           // (after paint, and on every `hello`), and an appended list would grow without
           // bound while describing the same one conflict.
           setDroppedRegions(dropped)
+          // `framePage` was admitted by checking a `page-change` against the declaration;
+          // a page that has left the declaration fails that same check now. Null rather
+          // than a guess: only the frame knows what it is showing (Trap 7), and a shell
+          // that follows the contract (`pageChanged` after paint) sends the real answer
+          // right behind this announce. A switcher pointing at an evicted page is the bug
+          // one layer up, and null is what it already handles before the first page-change.
+          setFramePage((current) =>
+            current !== null && (folded?.pages ?? []).some((p) => p.key === current) ? current : null,
+          )
         }
         if (draft) {
           deliveredDraft.current = draft

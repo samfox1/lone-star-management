@@ -21,6 +21,7 @@ import { renderHook, act } from '@testing-library/react'
 import { frameOrigin, frameSrc, useFrameBridge, HELLO_RETRY_MS, HELLO_TIMEOUT_MS } from '@/app/artists/[id]/(dashboard)/editor/use-frame-bridge'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
+import type { DroppedRegion, ManifestPage, TemplateManifest } from '@samfox1/site-bridge/manifest'
 
 const CUSTOM = 'https://skeen-website.vercel.app'
 
@@ -499,5 +500,132 @@ describe('multi-page: the fold holds ONE manifest per page (SITE_PAGES_PLAN.md D
     frameSays({ type: 'ready', manifest: two }, CUSTOM)
 
     expect(result.current.manifest?.styles.map((s) => s.key)).toEqual(['a'])
+  })
+})
+
+/* ── a page the site STOPS declaring must LEAVE (2026-09-04 review) ────────────────────
+ * skeen's `/about` exists only while the manager places the bio there (CONNECTING.md
+ * §11). The fold held one announce per page and never let one go, so a page the site
+ * stopped declaring kept its regions in the panels for the whole session — and the
+ * switcher (P2) would have offered a page the frame could not show, with `set-page`
+ * silently dead. The site's LATEST announce owns the page list; everything below pins
+ * what that means. */
+describe('multi-page: a page the latest announce no longer declares is evicted', () => {
+  const pageOf = (key: string): ManifestPage => ({ key, label: key, path: key === 'home' ? '/' : `/${key}` })
+
+  /** One region of EVERY kind the fold knows, all tagged `page`. Typed against
+   *  `DroppedRegion['kind']` — the fold's own registry of lists — so a kind added there is
+   *  a compile error here, not a witness quietly missing from the eviction check. */
+  const everyKind = (page: string): Record<DroppedRegion['kind'], object[]> => ({
+    fields: [{ key: `${page}_field`, label: 'f', type: 'text', target: { store: 'site_content', key: `${page}_field` }, page }],
+    slots: [{ key: `${page}_slot`, label: 's', accepts: 'image', page }],
+    styles: [{ key: `${page}_style`, label: 'st', page }],
+    links: [{ key: `${page}_link`, label: 'l', page }],
+    components: [{ key: `${page}_component`, label: 'c', count: 1, slots: [{ key: 'photo', label: 'Photo' }], page }],
+    videoSlots: [{ kind: 'hero', role: `${page}_hero`, label: 'v', group: 'g', page }],
+  })
+  const KINDS = Object.keys(everyKind('x')) as DroppedRegion['kind'][]
+
+  /** An announce as the frame sends it. `pages` undefined = the announce declares none. */
+  const announce = (page: string, pages: string[] | undefined) => ({
+    template: 'skeen',
+    page,
+    ...(pages ? { pages: pages.map(pageOf) } : {}),
+    ...everyKind(page),
+  })
+
+  /** How many regions of each kind the held manifest carries for `page`. */
+  const tagged = (m: TemplateManifest | null, page: string) =>
+    Object.fromEntries(
+      KINDS.map((k) => [k, ((m?.[k] ?? []) as { page?: string }[]).filter((r) => r.page === page).length]),
+    )
+  const ONE_EACH = Object.fromEntries(KINDS.map((k) => [k, 1]))
+  const NONE = Object.fromEntries(KINDS.map((k) => [k, 0]))
+
+  it('CRITICAL: evicts EVERY region of the undeclared page — after proving they were there', () => {
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    // About is announced FIRST on purpose: the old fold took `pages` from whichever held
+    // announce came first in Map order, so a stale list from here would have shielded
+    // About from eviction. Latest must win regardless of arrival order.
+    frameSays({ type: 'ready', manifest: announce('about', ['home', 'about', 'merch']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'about', 'merch']) }, CUSTOM)
+    // The witness: every kind of About region is in the panels.
+    expect(tagged(result.current.manifest, 'about')).toEqual(ONE_EACH)
+
+    // The manager hides the bio; the site re-announces the page it is showing, without About.
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'merch']) }, CUSTOM)
+
+    expect(tagged(result.current.manifest, 'about')).toEqual(NONE)
+    expect(tagged(result.current.manifest, 'home')).toEqual(ONE_EACH)
+    expect(result.current.manifest?.pages?.map((p) => p.key)).toEqual(['home', 'merch'])
+  })
+
+  it('the LATEST list is the manifest’s list, even when a held page still carries a stale one', () => {
+    // Held announces are snapshots. Merch was visited while About existed, so its copy of
+    // `pages` still names About; folding in declared order would make Merch's stale list
+    // the last word and the switcher would offer a page the frame just said is gone.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'about', 'merch']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['home', 'about', 'merch']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'merch']) }, CUSTOM)
+
+    expect(result.current.manifest?.pages?.map((p) => p.key)).toEqual(['home', 'merch'])
+    // Merch itself is still declared, so its regions stay.
+    expect(tagged(result.current.manifest, 'merch')).toEqual(ONE_EACH)
+  })
+
+  it('CRITICAL: framePage is dropped when the page it names is evicted', () => {
+    // The bug one layer up: a switcher latched to a page the frame cannot show. framePage
+    // is only ever admitted by checking `page-change` against the declaration, so losing
+    // the declaration must un-admit it the same way.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'about']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('about', ['home', 'about']) }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    expect(result.current.framePage).toBe('about') // the witness
+
+    frameSays({ type: 'ready', manifest: announce('home', ['home']) }, CUSTOM)
+    expect(result.current.framePage).toBeNull()
+
+    // And the frame cannot re-assert it: an undeclared page-change is a stranger.
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    expect(result.current.framePage).toBeNull()
+  })
+
+  it('framePage SURVIVES a re-announce that still declares its page', () => {
+    // The frame re-announces constantly (after paint, on every `hello`). A reset on every
+    // announce would blank the switcher between every two messages.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'merch']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['home', 'merch']) }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'merch' }, CUSTOM)
+    expect(result.current.framePage).toBe('merch')
+
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'merch']) }, CUSTOM)
+    expect(result.current.framePage).toBe('merch')
+  })
+
+  it('an announce that declares NO pages evicts nothing', () => {
+    // No list means a one-page site, not a list that shrank to one. Held pages stay, and
+    // — the latest announce owning the list — there is no list until the next one.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['home', 'merch']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('merch', ['home', 'merch']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('home', undefined) }, CUSTOM)
+
+    expect(tagged(result.current.manifest, 'merch')).toEqual(ONE_EACH)
+    expect(tagged(result.current.manifest, 'home')).toEqual(ONE_EACH)
+    expect(result.current.manifest?.pages).toBeUndefined()
+  })
+
+  it('the latest announce is never evicted, even when its own list omits its page', () => {
+    // A site whose tags and list disagree is a site bug; the fold's rule is misplaced,
+    // never invisible (see the pure `mergeManifests` tests). Eviction must honour it.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: announce('home', ['home']) }, CUSTOM)
+    frameSays({ type: 'ready', manifest: announce('nowhere', ['home']) }, CUSTOM)
+
+    expect(tagged(result.current.manifest, 'nowhere')).toEqual(ONE_EACH)
+    expect(tagged(result.current.manifest, 'home')).toEqual(ONE_EACH)
   })
 })

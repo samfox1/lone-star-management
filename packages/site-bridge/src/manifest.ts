@@ -475,6 +475,13 @@ export function mergeManifests(
   prev: TemplateManifest | null,
   next: TemplateManifest,
 ): MergedManifest {
+  // Carried forward like every other site-wide declaration below, and DELIBERATELY left
+  // that way after the 2026-09-04 review found a stale list winning: a pure fold sees
+  // `prev` and `next`, not which announce arrived last, so it cannot tell a fresh list
+  // from a held page's old snapshot. The caller that does know — `useFrameBridge`, which
+  // holds one announce per page — evicts against the latest list and stamps it over the
+  // result. Within one fold this only sets `rank`, and a stale list that merely lacks a
+  // since-evicted page ranks the remaining pages in the same relative order.
   const pages = next.pages ?? prev?.pages
   const dropped: DroppedRegion[] = []
 
