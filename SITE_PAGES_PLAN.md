@@ -2,6 +2,11 @@
 
 > **Status: PLANNED, not started.** Written after Sam asked why skeen's About page and
 > Merch page are missing from the editor (2026-09-03).
+>
+> **Superseded in part — read the amendments before this body.** P1 and P3 have SHIPPED;
+> P2, P4 and P5 have not. D2 was replaced (A1), and five more claims below turned out to
+> be wrong (C1–C5, 2026-09-04). Everything above the first `---` is the original plan,
+> kept as written.
 
 ## The finding
 
@@ -373,3 +378,204 @@ three live sites for nothing. It moves when the bridge is actually published, at
 
 Status: typecheck clean, lint clean, 3986 DB-free tests green, full suite (225 files,
 4597 tests) green.
+
+---
+
+# P3 shipped (2026-09-04) — and five of this plan's claims were wrong
+
+Twelve commits across the two repos. lone-star: P1 (`5482f5b`), the frame's half of the
+two page messages (`d04e66b`, bridge 0.35.0), `FrameHandle` exported after 0.35.0 broke
+skeen's typecheck on install (`c5a0383`, 0.35.1), the pages contract as CONNECTING §11
+plus a `prepublishOnly` version guard (`ca3585a`), cross-page eviction (`8729eb0`).
+skeen: the edit shell holding its page in state (`dfcb552`), the manifest's page dimension
+and /about's three regions (`06824ee`), never leave /edit and the announce latch moved
+inside its own animation frame (`5fb6115`), re-announce when the set of available pages
+changes (`b3b38b8`).
+
+**P2, P4 and P5 are UNSTARTED.** No switcher exists, no panel filters by `page`
+(D5 is untouched), skeen's merch components still declare nothing, and `checkContract`
+still knows nothing about pages. Two P5 fragments landed early and are listed under C5.
+
+## C1 — Trap 1 is too broad. Only DOM-derived TEXT fields are per-visit.
+
+The trap says the merged manifest "cannot honestly list every page's text until every
+page has been visited once", and offers "have the site declare its fields statically" as
+the alternative. skeen already does, for everything except text: `STYLE_REGIONS`
+(`skeen lib/styles.ts:93`) is one static array carrying `about_bio`, `about_close` and
+`about_usb` with `page: "about"`, and slots, links, components and video slots are static
+in `EDIT_LIST` the same way. Only `withDomTextFields` (`skeen lib/editList.ts:288`) reads
+the live DOM, and it only ever ADDS fields.
+
+So every announce, from any page, carries every page's style/link/slot/video regions with
+their tags — and the fold treats the repeats as idempotent rather than as duplicate keys:
+`manifest.ts:518` refuses to report a drop when the held side and the incoming side name
+the same page, which is the normal case for a static declaration re-announced on every
+`ready`. The Style panel is therefore complete before the manager has visited anything.
+
+The honest version of the trap: **a page's TEXT fields appear only after that page has
+been announced once**, and nothing else is per-visit. That is a much smaller claim, and
+it is the one the switcher has to make obvious.
+
+## C2 — P1's "a region can leave" was only true WITHIN one page.
+
+The P1 section says the per-page map is "what lets a region leave". It let a region leave
+its own page's announce. It did not let a PAGE leave: held announces were only ever
+`set`, never pruned, and `pages` was picked by a reduce over the held map, so a stale list
+naming /about beat the fresh one that no longer did. skeen's /about exists exactly while
+the bio is placed there, so that is a live case, not a hypothetical.
+
+Cross-page eviction arrived in `8729eb0` (2026-09-04), a day after P1:
+`use-frame-bridge.ts:271-278` takes the list from the LATEST announce and deletes every
+held announce whose key is not in it. R14's note promised more than P1 delivered; this is
+the commit that made it true.
+
+## C3 — `pages: []` is a declaration. ABSENT `pages` is the one-page case.
+
+Not in the plan at all, and not guessable. `use-frame-bridge.ts:271`: eviction runs only
+when the latest announce HAS a `pages` field. No `pages` is a one-page site — every site
+before 0.35.0, and it evicts nothing. An explicitly empty list is a site saying "I have
+no pages", and it evicts every held announce but the latest.
+
+The latest announce is never evicted whatever its own list says: a page the site TAGS but
+does not DECLARE is the site's bug, and the fold's rule for it is misplaced (ranked last),
+never invisible.
+
+## C4 — Trap 6's mechanism is wrong. Availability is resolved SITE-side, from `aboutPlacement`.
+
+Trap 6 says "the manifest's existing `about` block already carries the placement; read it
+rather than adding a second source of truth." That is not what shipped, and the trap's own
+advice would have been the second source of truth.
+
+skeen's `SITE_PAGES.about.available` reads `site.aboutPlacement === "page"`
+(`skeen lib/sitePages.tsx:42`), because `mapSite` has already folded the three inputs into
+one answer (`skeen lib/mapSite.ts:784`): the manifest's declared default (`SITE_ABOUT`),
+the manager's stored choice, and whether there is a bio at all — no bio means `hidden`,
+so the footer cannot link and the sitemap cannot list a URL that 404s. `pages` is then
+`availablePages(site)` filtered through that (`withPages`, `sitePages.tsx:85`).
+
+The consequence for P2: **the editor does not decide availability and must not try.** It
+takes the announced list verbatim, and a page that stops being real stops being announced.
+Related, from the 2026-09-03 review (M9, `7208c7e`): no server-side gate can check this
+either, because the manifest is announced at runtime and stored nowhere.
+
+## C5 — "PACKAGE_VERSION moves at P5" is already false. The bridge is published at 0.35.2.
+
+P1 deliberately left `PACKAGE_VERSION` alone so the three live sites would not be flagged
+"republish to apply" for nothing, and said it would move "when the bridge is actually
+published, at P5". P3 needed a published bridge: skeen installs `^0.35.2` from the
+registry (`skeen package-lock.json`, resolved URL), and `PACKAGE_VERSION` is 0.35.2
+(`packages/site-bridge/src/manifest.ts:27`).
+
+`bridgeOutdated` (`src/lib/site-editor/manifest.ts:56`) compares a site's announced
+`bridgeVersion` against that constant, so **any deployed site below 0.35.2 now shows the
+flag** — that is the cost P1 was deferring, paid at P3 instead. `BRIDGE_VERSION` is still
+2 (`protocol.ts:27`), so nothing is refused on the wire; the two page messages are
+additive and an older frame ignores `set-page` via optional chaining.
+
+The two P5 fragments that came with those publishes: CONNECTING §11 documents pages
+(`ca3585a`), and `check-version.mjs` refuses a publish whose `PACKAGE_VERSION` disagrees
+with `package.json` (`ca3585a`, after `bb23abe` made it a test). §11 currently describes a
+page switcher that does not exist yet.
+
+## Claims checked and still TRUE
+
+- **A1, as shipped.** `/edit` holds one `useState<PageKey>` and one map from key to body
+  (`skeen lib/sitePages.tsx:36`, `app/edit/page.tsx:60`); a nav click in browse mode sets
+  state instead of navigating; the editor's `set-page` lands in the same state. No reload,
+  no re-handshake. `5fb6115` had to go further than A1 did: a same-origin link to a page
+  the shell CANNOT render (/merch, /faqsheet) is now swallowed too, because navigating
+  away unmounts the bridge and leaves the editor holding the public shop.
+- **D2's `frameSrc` page argument never shipped**, correctly. `frameSrc(artistId,
+  customSiteUrl)` still takes two arguments (`use-frame-bridge.ts:33`). The P1 phase text
+  and the P3 heading (`/edit?page=`) are stale prose, superseded by A1.
+- **A5.** `checkContract` is the tool that must learn pages, and `scripts/audit-regions.ts`
+  is untouched and fine. Confirmed by what skeen had to do instead: its contract test
+  renders every page into ONE container (`everyPage`, `skeen components/SiteBody.test.tsx:494-511`)
+  so rule 2 sees the union of DOMs. That workaround is the interim; P5 replaces it with
+  one DOM per page.
+- **Trap 7 is load-bearing, and `page-change` exists.** The editor cannot read a
+  cross-origin frame's location, so the frame saying so is the only route. It is checked
+  against the declaration on arrival (`use-frame-bridge.ts:345-352`) for the same reason
+  `field-change` is, and `pageChanged` posts the announce FIRST so the declaration is
+  never behind the claim.
+- **A7.** The fold ranks by declared `pages[]` order in both layers (`manifest.ts:491`,
+  `use-frame-bridge.ts:284-292`), so the first image collection is `pages[0]`'s regardless
+  of visit order.
+- **A4 / D3.** Nothing in the storage or publish path learned that pages exist. Keys are
+  still one flat namespace and `page` is still a tag.
+- **A6's runtime half only.** The fold drops a duplicate and reports it, and
+  `droppedRegions` is returned by the hook — but see N3.
+- **Trap 4 is weaker than written.** `fitViewport` (`src/lib/site-editor/viewport.ts:71-88`)
+  scales by WIDTH alone and derives the frame's height so the canvas fills the panel; a
+  short page gets a taller viewport, never a cropped or mis-scaled one. /about is a
+  one-screen `min-h-screen` page and needed no viewport change. Still worth a look at
+  P4's centred product page, but there is no height-driven scale math to get wrong.
+
+## New hazards the plan never mentioned
+
+### N1 — a CLAIMED `size-[15px]` fluidises to ~11px on a tablet.
+
+`sizeLength` (`packages/site-bridge/src/styles.ts:129-135`) returns the ladder's clamp for
+a size on the ladder, and for anything else synthesises `clamp(px*0.7, px/1024*100vw, px)`
+— so 15px becomes `clamp(11px, 1.46vw, 15px)`, which renders at about 11px at a 768px
+viewport. Fine for a heading, wrong for a paragraph of prose.
+
+So skeen's About bio deliberately does NOT use the usual `size-[15px] lse-owns-[size]`
+pattern. Its base carries an UNCLAIMED `text-[clamp(13px,2.35vw,15px)]`
+(`skeen lib/styles.ts:336-347`), matching the widths the old `text-[13px] sm:text-[15px]`
+pair switched at. Unclaimed is what makes the editor's Size control still work: the bridge
+inlines `font-size: var(--lse-size)`, which beats the class the moment a manager sets one.
+
+**The rule for any page of body copy: claim `size` only where the ladder's clamp is
+acceptable, otherwise ship your own clamp unclaimed.**
+
+### N2 — skeen's `usb` link is still `rendered: false` on a premise that is now false. OPEN DECISION.
+
+`skeen lib/editList.ts:482-489` declares the USB link region `rendered: false` under the
+comment "Rendered on /about, not in the SiteBody the editor frames". /about IS now a page
+the editor frames, and `AboutBody` renders that anchor. The link is still declared without
+a `data-lse-link` marker, so it configures rather than renders, and `checkContract` rule 2
+exempts it.
+
+Left as it is on purpose: whether to mark it is a decision, not a fix. Marking it makes
+the URL clickable in the frame; leaving it keeps the Site-links panel as the only way in.
+The comment's reasoning is what is stale, and the same question applies to `booking`
+(never an element) and the commented-out `merch` entry (P4's).
+
+### N3 — `droppedRegions` is computed and surfaced nowhere.
+
+A6 asked for "a drop-plus-surface in the editor's D4 merge". The drop landed; the surface
+did not. `droppedRegions` is returned by `useFrameBridge` and has no consumer in `src/`
+outside its own tests. So a duplicate key across pages is currently detected, resolved
+first-wins, and silent — which is where it started, one layer up. P5's `checkContract`
+finding is the other half and is also unbuilt.
+
+### N4 — nothing yet pins that a region's `page` tag reaches the editor from a real site.
+
+The fold is well tested on both sides in isolation, and skeen pins `withPages` and its own
+regions. What no test crosses is the wire: a `page: "about"` region declared in skeen's
+registry arriving in lone-star's panels under About. That is P2's first test, and it is the
+one that would have caught a tag dropped in `EDIT_LIST`'s style mapper
+(`skeen lib/editList.ts:360-365`, where the tag rides along conditionally).
+
+## P2, with what is now known
+
+The two-sided availability fix landed BEFORE P2 (`8729eb0` + skeen `b3b38b8`, both
+2026-09-04) precisely because P2 is what makes it bite. Without a switcher, a stale page
+list is invisible; with one, it is a menu entry that does nothing — `set-page` moves the
+editor's idea of the page, the shell has nothing to switch to, no `page-change` comes back,
+and the editor sits latched to a page it is not displaying. The skeen half re-announces
+when the SET of available pages changes rather than only when the page on screen does,
+which is the case a manager hits by hiding the bio while standing on home.
+
+So P2 inherits:
+
+- `framePage` is already re-validated on every announce and CLEARED when its page is
+  evicted (`use-frame-bridge.ts:322-325`). Null is the state the switcher must render
+  before the first `page-change` anyway, so it needs no separate "evicted" case.
+- The switcher renders from `manifest.pages` verbatim. It never filters, never guesses
+  availability (C4), and must not set `framePage` itself — `setPage` posts and waits, so an
+  older frame that ignores `set-page` leaves the switcher truthfully on the page still
+  showing (`use-frame-bridge.ts:217-223`).
+- Panel filtering per D5 is entirely unbuilt: no panel reads `page` today.
+- N4's cross-repo test is P2's first test.

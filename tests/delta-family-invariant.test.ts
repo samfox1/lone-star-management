@@ -67,14 +67,12 @@ function emittedTokens(c: StyleControl): string[] {
 }
 
 describe('every emittable token has a family, and its removal round-trips', () => {
-  const seen = new Map<string, string>() // family → sample token
   for (const c of allControls()) {
     for (const token of emittedTokens(c).filter(Boolean).flatMap((v) => v.split(/\s+/))) {
       const key = `${c.id}:${token}`
       it(key, () => {
         const fam = familyOf(token)
         expect(fam, `${token} (control ${c.id}) has no family — a delta cannot carry it`).not.toBeNull()
-        seen.set(fam!, token)
         const not = `lse-not-[${fam}]`
         expect(familyOf(not), `${not} does not parse — a removal of ${fam} would ship as a junk class`).toBe(fam)
         expect(cleanClassText(`lse-delta ${not} ${token}`)).not.toBeNull()
@@ -86,9 +84,24 @@ describe('every emittable token has a family, and its removal round-trips', () =
   }
 
   it('the sweep was not vacuous: it covered a real spread of families', () => {
-    // Guards the walker itself — an emittedTokens bug returning [] everywhere would
-    // pass every generated case by generating none.
-    expect(seen.size).toBeGreaterThanOrEqual(20)
-    expect([...seen.keys()]).toEqual(expect.arrayContaining(['size', 'divider', 'textColor', 'pad', 'sizesm']))
+    // Guards the walker itself — an emittedTokens bug returning [] everywhere would pass
+    // every generated case above by generating none of them.
+    //
+    // DERIVED HERE, from the same walker. It used to read a `seen` Map that the generated
+    // `it`s above filled as they ran, which made this assertion depend on every one of
+    // them having already executed. True in declaration order, false under
+    // `--sequence.shuffle`: it failed about one run in three, and standalone
+    // (`-t "the sweep was not vacuous"`) it read `expected 0 to be >= 20` because no
+    // sibling had run at all. A guard against vacuity that is itself order-dependent is
+    // worse than no guard, and it hid for weeks because nothing ran the suite twice in
+    // two different orders (2026-09-04, found by shuffled repeat passes).
+    const families = new Set<string>()
+    for (const c of allControls())
+      for (const token of emittedTokens(c).filter(Boolean).flatMap((v) => v.split(/\s+/))) {
+        const fam = familyOf(token)
+        if (fam) families.add(fam)
+      }
+    expect(families.size).toBeGreaterThanOrEqual(20)
+    expect([...families]).toEqual(expect.arrayContaining(['size', 'divider', 'textColor', 'pad', 'sizesm']))
   })
 })
