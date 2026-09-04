@@ -12,6 +12,24 @@ import type { PublicSitePayload, SiteRelease, SiteTourDate, SiteTrack, SiteVideo
 import { platformFromUrl } from './social'
 import { recommendAlt } from './alt'
 
+/**
+ * The artist's name, TRIMMED — the one spelling every SEO surface uses.
+ *
+ * A normaliser rather than a `.trim()` at each call site, because the per-consumer
+ * version is what went wrong: the 0.34.1 no-name fix trimmed it inside `autoFaqAnswer`
+ * and left `probePrompts` reading the raw value, so a name with a trailing space
+ * rendered "Who is Skeen , the musician?" directly above "Skeen's official website is
+ * …" — one artist, two spellings, on the page whose whole job is to be quoted verbatim
+ * (2026-09-03 review). Nothing trims `artists.name` on the way in, so this is the
+ * boundary.
+ *
+ * Empty means NO NAME, and callers treat that as "say nothing" rather than interpolating
+ * a hole into a sentence.
+ */
+function artistName(a: { name?: string | null } | null | undefined): string {
+  return (a?.name ?? '').trim()
+}
+
 export type SiteSeo = {
   /** <title> and og:title. */
   title: string
@@ -156,7 +174,7 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
   return {
     '@type': person ? 'Person' : 'MusicGroup',
     '@id': `${opts.origin}/#artist`,
-    name: a.name,
+    name: artistName(a),
     url: `${opts.origin}/`,
     ...(description ? { description } : {}),
     ...(opts.imageUrl ? (person ? { image: opts.imageUrl } : { image: opts.imageUrl, logo: opts.imageUrl }) : {}),
@@ -177,7 +195,7 @@ function eventNode(show: SiteTourDate, payload: PublicSitePayload, opts: JsonLdO
   const ticket = safeHttpUrl(show.ticket_url)
   return {
     '@type': 'MusicEvent',
-    name: where ? `${payload.artist.name} at ${where}` : payload.artist.name,
+    name: where ? `${artistName(payload.artist)} at ${where}` : artistName(payload.artist),
     startDate: show.date,
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -249,7 +267,7 @@ function imageNode(m: WireMedia, payload: PublicSitePayload, opts: JsonLdOptions
   if (!shown) return null
   const url = safeHttpUrl(shown.url)
   if (!url) return null
-  const text = (shown.alt ?? '').trim() || (m.alt ?? '').trim() || recommendAlt({ artist: payload.artist.name, caption: m.label, kind: m.kind })
+  const text = (shown.alt ?? '').trim() || (m.alt ?? '').trim() || recommendAlt({ artist: artistName(payload.artist), caption: m.label, kind: m.kind })
   if (m.kind === 'artwork') {
     return {
       '@type': 'VisualArtwork',
@@ -262,7 +280,7 @@ function imageNode(m: WireMedia, payload: PublicSitePayload, opts: JsonLdOptions
     '@type': 'ImageObject',
     contentUrl: url,
     ...(text ? { caption: text } : {}),
-    creditText: payload.artist.name,
+    creditText: artistName(payload.artist),
   }
 }
 
@@ -297,7 +315,7 @@ function videoNode(v: SiteVideo, payload: PublicSitePayload, opts: JsonLdOptions
   return {
     '@type': 'VideoObject',
     name: v.title,
-    description: `${v.title} by ${payload.artist.name}`,
+    description: `${v.title} by ${artistName(payload.artist)}`,
     thumbnailUrl: thumb,
     uploadDate,
     ...(embed ? { embedUrl: embed } : {}),
@@ -316,7 +334,7 @@ export function jsonLdGraph(payload: PublicSitePayload, opts: JsonLdOptions): { 
       '@type': 'WebSite',
       '@id': `${opts.origin}/#website`,
       url: `${opts.origin}/`,
-      name: payload.artist.name,
+      name: artistName(payload.artist),
       publisher: { '@id': `${opts.origin}/#artist` },
       inLanguage: 'en',
     },
@@ -603,7 +621,7 @@ export function autoFaqAnswer(n: number, src: FaqSource): string {
   // TRIMMED, and that is the guard rather than cosmetics: `'  '` is truthy, so an
   // untrimmed read let a whitespace-only artist satisfy the name check on Q5 below and
   // produce "  's official website is …".
-  const name = (a.name ?? '').trim()
+  const name = artistName(a)
   const genre = (a.genre ?? '').trim()
   const where = (a.location ?? '').trim()
   const bio = (a.bio ?? '').replace(/\s+/g, ' ').trim()
@@ -667,8 +685,9 @@ export function faqEntries(src: FaqSource): FaqEntry[] {
   //
   // The manager's EXTRA questions are exempt below: those are whole sentences they wrote
   // themselves, and none of them depends on the name.
-  const named = (src.artist.name ?? '').trim() !== ''
-  const prompts = named ? probePrompts(src.artist.name, src.artist.schema_type) : []
+  // ONE name for the questions and the answers alike — see artistName.
+  const name = artistName(src.artist)
+  const prompts = name ? probePrompts(name, src.artist.schema_type) : []
   const c = src.site_content ?? {}
   const out: FaqEntry[] = []
   prompts.forEach((question, i) => {
@@ -696,7 +715,7 @@ export function faqPageJsonLd(payload: FaqSource, opts: { origin: string; path?:
         '@type': 'FAQPage',
         '@id': `${opts.origin}${path}#faq`,
         url: `${opts.origin}${path}`,
-        name: `${payload.artist.name} — questions and answers`,
+        name: `${artistName(payload.artist)} — questions and answers`,
         about: { '@id': `${opts.origin}/#artist` },
         mainEntity: entries.map((e) => ({
           '@type': 'Question',

@@ -462,6 +462,48 @@ export function clearHighlightFromDom(root: ParentNode): void {
 }
 
 /**
+ * The controls the bridge hands a shell once it is mounted.
+ *
+ * EXPORTED, and that is not tidiness. This type grows — `pageChanged` was added in
+ * 0.35.0 — and a shell never constructs one, so growth is harmless in real code and
+ * breaks exactly one thing: a TEST DOUBLE built as an object literal. Skeen's typecheck
+ * went red on the 0.35.0 install with no change on its side (2026-09-03 review), which
+ * is a breaking change in a minor version however additive the runtime was. A site can
+ * now write `const handle: FrameHandle = { ... }` and get an error naming the member it
+ * is missing, and `Partial<FrameHandle>` where it only cares about one.
+ */
+export type FrameHandle = {
+  /**
+   * Re-post `ready` with a FRESHLY BUILT manifest. The shell needs it because this frame
+   * renders nothing until the editor sends init-data: the first announce necessarily
+   * scans an empty document and ships a manifest with no DOM-derived fields in it.
+   *
+   * Deliberately NOT automatic on init-data: only the shell knows when its content has
+   * actually painted, and announcing a beat too early re-ships the same empty list with
+   * more confidence.
+   */
+  announce: () => void;
+  /**
+   * Save a DECLARED field the manager changed by acting on the page — dropping an icon
+   * where they want it (0.27.0). The editor treats it exactly like a typed value and
+   * ignores any key the manifest does not declare, so a site cannot write outside what it
+   * asked for. Call it on the gesture's END, not during: every call is a save.
+   */
+  writeField: (key: string, value: string) => void;
+  /**
+   * The shell is now SHOWING `page` — call it after the new page has painted, from either
+   * cause (the editor's `set-page`, or the manager clicking the site's own nav in browse
+   * mode). Announces the fresh manifest FIRST, then posts `page-change`, in that order and
+   * as one call so a shell cannot get it backwards: the editor checks `page-change`
+   * against the pages DECLARED in the announce, and one that arrives ahead of its
+   * declaration is dropped as a stranger naming a page.
+   *
+   * Call it INSTEAD of `announce`, never as well as — it announces for you.
+   */
+  pageChanged: (page: string) => void;
+};
+
+/**
  * Wire the live frame bridge. Reports selects to the parent, applies editor
  * messages, and surfaces injected draft data via `onInitData`. Only acts on
  * messages from the trusted `editorOrigin`. Returns a teardown.
@@ -508,19 +550,7 @@ export function mountFrameBridge(options: {
    * write outside what it asked for. Call it on the gesture's END, not during: every call
    * is a save.
    */
-  onMounted?: (handle: {
-    announce: () => void;
-    writeField: (key: string, value: string) => void;
-    /**
-     * The shell is now SHOWING `page` — call it after the new page has painted, from
-     * either cause (the editor's `set-page`, or the manager clicking the site's own nav
-     * in browse mode). Announces the fresh manifest FIRST, then posts `page-change`, in
-     * that order and as one call so a shell cannot get it backwards: the editor checks
-     * `page-change` against the pages DECLARED in the announce, and one that arrives
-     * ahead of its declaration is dropped as a stranger naming a page.
-     */
-    pageChanged: (page: string) => void;
-  }) => void;
+  onMounted?: (handle: FrameHandle) => void;
   /** The site's region registry lookup (its `regionBase`). Bound synchronously before
    *  any listener attaches — see the ordering note on `regionBaseLookup`. */
   regionBase?: (key: string) => string;

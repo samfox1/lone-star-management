@@ -362,6 +362,25 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(faqEntries(written)).toEqual([{ question: 'Where do I write?', answer: 'The contact form.' }])
   })
 
+  it('the QUESTIONS use the trimmed name too — one name, not two spellings', () => {
+    // Review finding, 2026-09-03: the no-name fix trimmed the name in `autoFaqAnswer` and
+    // in `faqEntries`' guard, but `probePrompts` still received the RAW value. So a name
+    // with a trailing space (nothing trims `artists.name` on insert) rendered
+    // "Who is Skeen , the musician?" above "Skeen's official website is …" — the question
+    // and its own answer spelling the artist differently, on a page whose entire job is
+    // being quoted verbatim by an assistant.
+    const padded = { ...payload(), artist: { ...payload().artist, name: '  Skeen  ' }, origin: ORIGIN }
+    const entries = faqEntries(padded)
+    expect(entries.length).toBeGreaterThan(0)
+    for (const e of entries) {
+      expect(e.question, 'question').not.toMatch(/\s{2,}|\s,|^\s|\s$/)
+      expect(e.question).toContain('Skeen')
+    }
+    // The JSON-LD title is the same name, not a third spelling of it.
+    const graph = faqPageJsonLd(padded, { origin: ORIGIN })
+    expect(graph?.['@graph'][0]?.name).toBe('Skeen — questions and answers')
+  })
+
   it('an ANSWER keeps its paragraphs; a QUESTION stays one line', () => {
     // The other half of M8 (2026-09-03 review). `saveSeoField` stopped eating the
     // manager's line breaks on the way IN, but this collapse ate them again on the way
