@@ -508,7 +508,19 @@ export function mountFrameBridge(options: {
    * write outside what it asked for. Call it on the gesture's END, not during: every call
    * is a save.
    */
-  onMounted?: (handle: { announce: () => void; writeField: (key: string, value: string) => void }) => void;
+  onMounted?: (handle: {
+    announce: () => void;
+    writeField: (key: string, value: string) => void;
+    /**
+     * The shell is now SHOWING `page` — call it after the new page has painted, from
+     * either cause (the editor's `set-page`, or the manager clicking the site's own nav
+     * in browse mode). Announces the fresh manifest FIRST, then posts `page-change`, in
+     * that order and as one call so a shell cannot get it backwards: the editor checks
+     * `page-change` against the pages DECLARED in the announce, and one that arrives
+     * ahead of its declaration is dropped as a stranger naming a page.
+     */
+    pageChanged: (page: string) => void;
+  }) => void;
   /** The site's region registry lookup (its `regionBase`). Bound synchronously before
    *  any listener attaches — see the ordering note on `regionBaseLookup`. */
   regionBase?: (key: string) => string;
@@ -516,6 +528,14 @@ export function mountFrameBridge(options: {
    *  site can show its own affordance (dim the chrome, drop a hover outline). Optional:
    *  the mode works without it. */
   onModeChange?: (mode: FrameMode) => void;
+  /**
+   * The editor asked for a different PAGE (SITE_PAGES_PLAN.md A1). The shell swaps what it
+   * renders in CLIENT STATE and, once the new page has painted, calls the handle's
+   * `pageChanged`. It must not navigate: `/edit` is a route and this bridge is mounted in
+   * that route's effect, so a real navigation unmounts it and leaves the editor holding a
+   * dead frame. Optional — a one-page site never hears this and never needs to.
+   */
+  onSetPage?: (page: string) => void;
   /**
    * Bring a region into view — open its tab, expand its section, scroll its carousel.
    *
@@ -720,6 +740,12 @@ export function mountFrameBridge(options: {
       if (mode === "browse") clearHighlightFromDom(document);
       options.onModeChange?.(mode);
     }
+    else if (msg.type === "set-page" && "page" in msg && typeof msg.page === "string") {
+      // Optional chaining is the compatibility story: a site built before pages existed
+      // declares no handler, and the request has to be a no-op there rather than a throw
+      // inside the one listener that handles everything else.
+      options.onSetPage?.(msg.page);
+    }
     else options.onEditorMessage?.(msg);
   };
 
@@ -753,9 +779,15 @@ export function mountFrameBridge(options: {
   // another attempt at a handshake that has already succeeded, it is a corrected manifest
   // for one that did. Counting it would push `attempts` toward the give-up threshold and
   // flash the shell back to "not connected" after it had settled.
+  const reannounce = () => post(stamp({ type: "ready", manifest: manifest() }));
   options.onMounted?.({
-    announce: () => post(stamp({ type: "ready", manifest: manifest() })),
+    announce: reannounce,
     writeField: (key, value) => post(stamp({ type: "field-change", key, value })),
+    pageChanged: (page) => {
+      // Manifest first — see the handle's docblock for why this order is not a style choice.
+      reannounce();
+      post(stamp({ type: "page-change", page }));
+    },
   });
   announce = setInterval(() => {
     // Bounded (~10s): opened directly, with no editor parent, this must not spin forever.

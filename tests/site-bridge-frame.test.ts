@@ -1227,3 +1227,85 @@ describe('a pending reveal belongs to the LATEST selection only', () => {
     el.remove()
   })
 })
+
+describe('pages — the frame swaps its rendered page on request and says so (SITE_PAGES_PLAN.md A1)', () => {
+  // Written RED first (2026-09-03): 0.34.0 DECLARED `set-page` / `page-change` in the
+  // protocol but the frame did not yet handle either, so a site on 0.34.x could not be
+  // switched by the editor and its own nav switches were invisible to it.
+
+  it('`set-page` from the editor reaches the shell', () => {
+    const pages: string[] = []
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target, onSetPage: (p) => pages.push(p) })
+    editorSays({ type: 'set-page', page: 'about' })
+    expect(pages).toEqual(['about'])
+    stop()
+  })
+
+  it('CRITICAL: `set-page` from the WRONG origin is dropped — and the right one is the witness', () => {
+    // The same origin guard every other inbound message has. Asserted here because a
+    // page switch is a NEW thing a stranger could ask the frame to do, and "the guard is
+    // generic" is a claim, not a test.
+    const pages: string[] = []
+    const target = { postMessage: () => {} } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target, onSetPage: (p) => pages.push(p) })
+    window.dispatchEvent(new MessageEvent('message', { data: { v: BRIDGE_VERSION, source: EDITOR_SOURCE, type: 'set-page', page: 'evil' }, origin: 'https://evil.test' }))
+    expect(pages).toEqual([])
+    editorSays({ type: 'set-page', page: 'about' })
+    expect(pages).toEqual(['about'])
+    stop()
+  })
+
+  it('a site that declares no `onSetPage` ignores `set-page` and keeps working', () => {
+    // Every site deployed before 0.35 is this site. An unknown-to-it request must be a
+    // no-op, not a throw in a message handler that then stops handling anything.
+    const posted: unknown[] = []
+    const target = { postMessage: (m: unknown) => posted.push(m) } as unknown as Window
+    const stop = mountFrameBridge({ editorOrigin: 'https://editor.test', onInitData: () => {}, target })
+    // `not.toThrow()` around dispatchEvent is VACUOUS here and was the first draft: jsdom
+    // catches an exception thrown inside a listener and reports it as a window `error`
+    // event instead of propagating it, so the mutant that dropped the `?.` survived. The
+    // error event is the observable; listen for it.
+    const errors: unknown[] = []
+    const onError = (e: ErrorEvent) => { errors.push(e.error ?? e.message) }
+    window.addEventListener('error', onError)
+    editorSays({ type: 'set-page', page: 'about' })
+    window.removeEventListener('error', onError)
+    expect(errors, 'a no-handler set-page must not throw inside the listener').toEqual([])
+    // And the listener is still alive afterwards.
+    posted.length = 0
+    editorSays({ type: 'hello' })
+    expect(posted.filter((m) => (m as { type?: string }).type === 'ready')).toHaveLength(1)
+    stop()
+  })
+
+  it('CRITICAL: `pageChanged` announces the NEW manifest first, then posts `page-change`', () => {
+    // Order is load-bearing on the editor side. `page-change` is checked against the
+    // DECLARED pages (a frame is a separate origin and could name anything), and the
+    // declaration arrives inside the announce — so a `page-change` that lands before its
+    // announce is dropped as undeclared, and the switcher never moves. One call, fixed
+    // order, so the shell cannot get it backwards.
+    const posted: { type?: string; page?: string; manifest?: { page?: string } }[] = []
+    const target = { postMessage: (m: unknown) => posted.push(m as (typeof posted)[number]) } as unknown as Window
+    let current = 'home'
+    let handle: { pageChanged: (page: string) => void } | null = null
+    const stop = mountFrameBridge({
+      editorOrigin: 'https://editor.test',
+      onInitData: () => {},
+      target,
+      // A THUNK, like the real shell's: the manifest must be built at announce time so it
+      // describes the page that has just rendered, not the one that was showing at mount.
+      editList: () => ({ template: 't', page: current, pages: [{ key: 'home', label: 'Home', path: '/' }, { key: 'about', label: 'About', path: '/about' }], fields: [], slots: [], styles: [], links: [] }),
+      onMounted: (h) => { handle = h },
+    })
+    posted.length = 0
+    current = 'about'
+    handle!.pageChanged('about')
+
+    const types = posted.map((m) => m.type)
+    expect(types).toEqual(['ready', 'page-change'])
+    expect(posted[0]!.manifest?.page, 'the announce describes the NEW page').toBe('about')
+    expect(posted[1]!.page).toBe('about')
+    stop()
+  })
+})
