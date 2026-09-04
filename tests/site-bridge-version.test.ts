@@ -8,10 +8,16 @@
  * always said KEEP IN SYNC — which is a rule that depends on someone remembering.
  *
  * They were IN SYNC when this was written (2026-09-03, both 0.33.6) — so unlike most of
- * this suite it was green on its first run, and its right to exist rests on the mutation
- * check instead: drifting PACKAGE_VERSION by one patch turns it red. It is here because
- * the rule was previously enforced by a comment asking someone to remember, and the
- * package is published by hand.
+ * this suite it was green on its first run, and its right to exist rests on a MANUAL
+ * mutation check: drifting PACKAGE_VERSION by one patch was confirmed to turn it red.
+ * Manual and not Stryker, deliberately stated: `packages/site-bridge` is excluded from
+ * the mutate list (stryker.config.json's `_workspace_caveat`), so nothing automated will
+ * ever re-prove this one.
+ *
+ * It is also NOT the last line of defence any more, because a test catches a drift on the
+ * next test run — which can be after a wrong number is already on the registry.
+ * `packages/site-bridge/check-version.mjs` runs as `prepublishOnly` and refuses the
+ * publish itself. This test is the fast feedback; that hook is the guarantee.
  *
  * When they do drift, a site built against the newer bridge announces the older number,
  * and the editor either flags a site that is current or stays silent about one that is

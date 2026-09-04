@@ -436,6 +436,50 @@ import { fetchPublicReleases } from '@samfox1/site-bridge'
 
 Then rule 6 of §7 proves all of it on the built html, every build.
 
+## 11. More than one page (0.35.0)
+
+A site with a second editable page — an about page, a shop — declares them, and the
+editor's page switcher is built from exactly that list. Declare nothing and you are a
+one-page site, which is what every site was before 0.35.0 and what they all still are
+until they opt in.
+
+**The one rule that is not obvious: your `/edit` must NOT navigate.** The bridge is
+mounted in that route's effect, so a real route change unmounts it and leaves the editor
+holding a dead frame. Hold the current page in state and swap what you render.
+
+```ts
+// The manifest you announce
+{ page: current,                      // WHICH page this announce describes
+  pages: [ { key: 'home',  label: 'Home',  path: '/' },
+           { key: 'about', label: 'About', path: '/about' } ],
+  styles: [ { key: 'about_bio', label: 'Bio', page: 'about', … } ], … }
+
+mountFrameBridge({
+  onSetPage: (key) => setCurrent(key),   // the editor's switcher
+  onMounted: (h) => { handle.current = h },
+})
+// after the new page has PAINTED — announces and posts page-change, in that order:
+handle.current.pageChanged(current)
+```
+
+- **`page` on the announce is stated, never inferred from the regions.** The editor keeps
+  one announce per page and replaces it, which is what lets a region you stop declaring
+  leave the panels. Inferring the page from the first region breaks on the one announce
+  where it matters: a page that has just lost its last region.
+- **`page` on a region is a TAG, not a key prefix.** Keys stay one flat namespace and must
+  be unique across every page — two regions sharing a key share one stored override, and
+  edits leak between pages. The editor drops the duplicate and names it; do not rely on
+  that.
+- **Call `pageChanged`, not `announce`.** It does both, in the order the editor needs: a
+  `page-change` that arrives before the announce declaring that page is dropped as a
+  stranger, and the switcher never moves.
+- **Only declare a page you can render.** A page that 404s is a switcher entry that leads
+  nowhere — filter the list by whatever makes it real (skeen's `/about` exists only while
+  the bio is placed there).
+- **A nav click in `browse` mode is a page change too.** Intercept your own nav while in
+  browse, set state, and call `pageChanged` — otherwise the click navigates the iframe and
+  the bridge goes with it.
+
 ## Known rough edges
 
 Written down so nobody rediscovers them.
@@ -447,6 +491,11 @@ Written down so nobody rediscovers them.
 - **Class-writing controls beat your breakpoints.** Size and font became variables in
   0.16.0, the six remaining text controls in 0.18.0 (§5). Palette colours still lift
   inline; keep base values fluid where a control has no variable yet.
+- **The `onMounted` handle grows.** `pageChanged` joined it in 0.35.0 and turned a test
+  double built as an object literal into a typecheck failure on install — a shell never
+  constructs a handle, but its mock does. Type yours `FrameHandle` (exported from
+  `@samfox1/site-bridge/frame` since 0.35.1) as an ANNOTATION, not an `as` cast: the
+  annotation names the missing member, the cast hides it.
 - **Value tokens need 0.16.0 or newer** (the text families 0.18.0). An older applier renders `size-[48px]` as a dead
   class and the region falls back to its base size. The editor checks your `bridgeVersion`
   and keeps writing classes when you are behind, so upgrading is safe in either order —
