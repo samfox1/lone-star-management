@@ -69,7 +69,12 @@ export function resolveSeo(payload: SeoSource): SiteSeo {
   const title = (c.seo_title ?? '').trim() || name
   const override = (c.seo_description ?? '').trim()
   const bio = (payload.artist?.bio ?? '').trim()
-  const description = override ? toDescription(override) : bio ? toDescription(bio) : `${name} — official site`
+  // The last fallback needs a NAME, not just a trimmed one. Without it the description
+  // read " — official site" and went into every page's <meta> and Open Graph card
+  // (2026-09-04 audit, F1). An empty description is omitted downstream; a dash with
+  // nothing in front of it is not.
+  const fallback = name ? `${name} — official site` : ''
+  const description = override ? toDescription(override) : bio ? toDescription(bio) : fallback
   const ogImage = safeHttpUrl(c.og_image) ?? safeHttpUrl(payload.artist?.hero_image_url) ?? null
   return { title, description, ogImage }
 }
@@ -327,6 +332,21 @@ function videoNode(v: SiteVideo, payload: PublicSitePayload, opts: JsonLdOptions
 /** The whole fact sheet as one `@graph`: artist, website, upcoming events, albums with
  *  their songs, and the photos/artworks the manager listed. */
 export function jsonLdGraph(payload: PublicSitePayload, opts: JsonLdOptions): { '@context': string; '@graph': Node[] } {
+  // NO NAME, NO FACT SHEET — the whole graph is ABOUT the artist, so without one every
+  // node in it is a sentence with a hole. Executed against a blank artist this published
+  // `MusicGroup {"name":""}`, `WebSite {"name":""}` and `MusicEvent {" at Smartbar,
+  // Chicago"}` on every connected site: indexed, and quoted verbatim by assistants
+  // (2026-09-04 audit, F1). It is the same rule `faqPageJsonLd` already applies.
+  //
+  // The guard is HERE rather than on each of the six `artistName()` sinks below, because
+  // per-sink guarding is exactly what produced this: the FAQ surfaces were fixed on
+  // 2026-09-03 and the JSON-LD ones were not, twice.
+  //
+  // An EMPTY GRAPH, not null. `factSheet.tsx` in every connected site calls
+  // `jsonLdScript(jsonLdGraph(...))` unconditionally, so a null return would break each
+  // of them — the mistake 0.35.0 made with a required handle member. An empty `@graph`
+  // is valid JSON-LD, ignored by crawlers, and needs no change in any site.
+  if (!artistName(payload.artist)) return { '@context': 'https://schema.org', '@graph': [] }
   const seo = resolveSeo(payload)
   const graph: Node[] = [
     artistNode(payload, opts, seo),

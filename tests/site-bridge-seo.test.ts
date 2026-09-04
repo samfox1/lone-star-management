@@ -362,6 +362,57 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(faqEntries(written)).toEqual([{ question: 'Where do I write?', answer: 'The contact form.' }])
   })
 
+  it('CRITICAL: a nameless artist publishes NO fact sheet, rather than one with a hole in it', () => {
+    // 2026-09-04 audit, F1, and the third time this exact shape has bitten. The no-name
+    // guard was put on the FAQ surfaces because that is where the hole was NOTICED; six
+    // other `artistName()` sinks kept only the trim. Executed, a blank artist published:
+    //   MusicGroup { "name": "" }
+    //   WebSite    { "name": "" }
+    //   MusicEvent { "name": " at Smartbar, Chicago" }
+    //   description: " — official site"
+    // into JSON-LD on every connected site — indexed, and quoted verbatim by assistants.
+    //
+    // EMPTY GRAPH, not null: `factSheet.tsx` calls jsonLdScript(jsonLdGraph(...))
+    // unconditionally, so returning null would break every consumer — the mistake 0.35.0
+    // made. An empty @graph is valid, ignored by crawlers, and needs no consumer change.
+    const nameless = { ...payload(), artist: { ...payload().artist, name: '  ' } }
+    const graph = jsonLdGraph(nameless, { origin: ORIGIN })
+    expect(graph['@graph']).toEqual([])
+    // The witness: the SAME payload with a name publishes a real graph, so the emptiness
+    // above is the name's doing and not a hollow fixture.
+    const named = jsonLdGraph(payload(), { origin: ORIGIN })
+    expect(named['@graph'].length).toBeGreaterThan(1)
+    expect(JSON.stringify(named['@graph'])).toContain('MusicGroup')
+  })
+
+  it('resolveSeo does not fall back to " — official site" with no name', () => {
+    const nameless = { artist: { ...payload().artist, name: '  ', bio: null }, site_content: {} }
+    expect(resolveSeo(nameless).description).not.toContain('—')
+    // Witness: a named artist with no bio and no override DOES get that fallback.
+    const named = { artist: { ...payload().artist, name: 'Skeen', bio: null }, site_content: {} }
+    expect(resolveSeo(named).description).toBe('Skeen — official site')
+  })
+
+  it('faqEntries asks for NO prompts when there is no name (F2 — this had no killing test)', () => {
+    // The guard `const prompts = name ? probePrompts(...) : []` survived its mutant: the
+    // audit removed the condition and all 36 tests still passed. It is load-bearing, not
+    // redundant with autoFaqAnswer's guard — with a manager-written answer present, the
+    // mutant published `{"question":"Who is , the musician?","answer":"A written answer."}`
+    // straight onto /faqsheet.
+    const nameless = {
+      ...payload(),
+      artist: { ...payload().artist, name: '  ' },
+      origin: ORIGIN,
+      site_content: { faq_answer_1: 'A written answer.' },
+    }
+    // The manager's answer to a PROMPT cannot survive without its prompt…
+    expect(faqEntries(nameless)).toEqual([])
+    // …while their own EXTRA question, which does not interpolate the name, still does.
+    expect(
+      faqEntries({ ...nameless, site_content: { faq_extra_1_q: 'Book?', faq_extra_1_a: 'Yes.' } }),
+    ).toEqual([{ question: 'Book?', answer: 'Yes.' }])
+  })
+
   it('the QUESTIONS use the trimmed name too — one name, not two spellings', () => {
     // Review finding, 2026-09-03: the no-name fix trimmed the name in `autoFaqAnswer` and
     // in `faqEntries`' guard, but `probePrompts` still received the RAW value. So a name
@@ -398,10 +449,22 @@ describe('the FAQ sheet (AI visibility)', () => {
     for (const n of [1, 2, 3, 4, 5]) {
       expect(autoFaqAnswer(n, nameless), `Q${n}`).toBe('')
     }
-    // The witness: with a name, these same inputs DO answer — so the emptiness above is
-    // the name's doing and not a hollow fixture.
-    const named = { ...nameless, artist: { ...nameless.artist, name: 'Skeen' } }
-    expect([1, 2, 3, 4, 5].some((n) => autoFaqAnswer(n, named) !== '')).toBe(true)
+    // THE WITNESS, and `every` rather than `some` — deliberately. `some` was the
+    // 2026-09-04 audit's F3: `payload()` carries no releases, so Q4 answered '' with or
+    // WITHOUT a name, and that row of the loop above proved nothing. `some` passed anyway
+    // on the strength of the other four. That is miss #2's shape appearing INSIDE the test
+    // written to close miss #2, which is why the witness must now hold for every prompt.
+    // `today` is set so Q3's show is genuinely upcoming rather than silently filtered as
+    // past — the fixture's default left that row weaker than it read, too.
+    const named = {
+      ...nameless,
+      artist: { ...nameless.artist, name: 'Skeen' },
+      releases: [{ id: 'r1', title: 'Loose', cover_url: null, release_date: '2026-03-15' }],
+      today: '2026-01-01',
+    }
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(autoFaqAnswer(n, named), `witness Q${n}`).not.toBe('')
+    }
   })
 
   it('probePrompts trims its own name, so every caller gets one spelling', () => {
