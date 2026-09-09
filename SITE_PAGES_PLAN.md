@@ -1,6 +1,6 @@
 # Multi-page editor — plan of record (2026-09-03)
 
-> **Status: P1, P3, P2 and P4 SHIPPED; P5 remains.** Written after Sam asked why
+> **Status: COMPLETE. P1, P3, P2, P4 and P5 all shipped (2026-09-09).** Written after Sam asked why
 > skeen's About page and Merch page are missing from the editor (2026-09-03).
 >
 > **Superseded in part — read the amendments before this body.** D2 was replaced (A1),
@@ -809,3 +809,47 @@ repos green, and every fix that changes behaviour was seen RED first or killed a
   region does not travel yet; same two lines when it needs to.
 - `pageLabel` groups in the Text panel follow field order, not declared page order —
   fine at two pages, worth deriving from `pages` at three.
+
+---
+
+# P5 shipped (2026-09-09) — the plan is complete
+
+The duplicate-key guard A6 asked for, in the two layers it asked for. The DROP had
+landed with P1; neither half of the TELLING had.
+
+**Build time** — `checkContract` gains a `duplicate-key` finding (bridge 0.36.0), per
+LIST. A field `usb` and a link `usb` are rows in different tables and skeen names style
+regions after the fields they dress, so one namespace across all four would have made the
+check unusable on the site it was written for. The detail names both pages: the fix is to
+rename one, and the reader has to know which two are fighting.
+
+**Runtime** — `droppedRegions` is a banner in the inspector. Not a block: the editor
+works, the region is still editable, first-wins is a defensible resolution. What was
+missing was anyone being told.
+
+## C14 — `audit-regions` needed nothing, and `checkContract`'s per-page DOM was the wrong fix
+
+A5 named two tools. `scripts/audit-regions.ts` was already fine. And the per-page DOM
+`checkContract` was supposed to grow turned out to be unnecessary: a site renders the
+UNION of its pages into one container (skeen's `everyPage`) and rule 2 sees everything.
+That workaround was called "the interim" — it is the answer. CONNECTING §7 documents it,
+including the two things that bit during P4: the union must include each page's BACKDROP,
+and the fixture must be FURNISHED or a conditionally-rendered region reports as unmarked.
+
+## The miss that showed up three times in one day
+
+Every new surface this week was first tested against the component that renders it, never
+against the thing that FEEDS it — so deleting the wiring left a green suite three separate
+times: `fromShopify` (the mapping flattened to `false`), the `itemPages` rules (Stryker),
+and this banner (the shell's prop). Each was caught by mutation, not by review, and each
+is now pinned at the source the same way. Worth remembering as a shape: **a test that
+renders the consumer proves nothing about the producer.**
+
+## What is left, and it is not this plan
+
+- **N2** — skeen's `usb` link `rendered: false` on a stale premise. A decision, not a bug.
+- **Only fields and items carry a page into the panels.** Styles, links and slots still
+  land ungrouped; the same two lines when a panel needs it.
+- **The bridge is at 0.36.0 and UNPUBLISHED.** No site needs it — `duplicate-key` is a
+  build-time check a site opts into by upgrading — so this is not urgent, but the merch
+  work will want a publish eventually.
