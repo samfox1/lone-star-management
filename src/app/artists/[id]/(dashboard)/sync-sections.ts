@@ -1,5 +1,4 @@
 import { INTEGRATIONS, isConnected, type IntegrationArtist } from './integrations'
-import type { SyncSource } from './sync-dialog'
 
 /**
  * WHICH SOURCES A PAGE'S SYNC BUTTON OFFERS.
@@ -17,11 +16,35 @@ import type { SyncSource } from './sync-dialog'
  * have. Reading it from an id field would report every artist as disconnected forever,
  * with no error anywhere.
  */
+/** One data source a page's content can be pulled from, resolved by the PAGE — an id
+ *  column for the platform integrations, Vault for Shopify. The dialog never decides who
+ *  is connected; it chooses among what it is given and reports what happened. */
+export type SyncSource = { key: string; label: string; connected: boolean }
+
+/** What one source did on this run. `syncOutcome` (lib/sync) writes both strings. */
+export type SyncRunResult = { key: string; label: string; ok: boolean; message?: string; error?: string }
+
 export const SYNC_SECTIONS = ['music', 'videos', 'tour', 'files', 'merch'] as const
 export type SyncSection = (typeof SYNC_SECTIONS)[number]
 
 /** Shopify's key. Not from the registry, so it is a constant both halves read. */
 export const SHOPIFY_KEY = 'shopify'
+
+/**
+ * What KIND of service each section pulls from, for the dialog's empty state (Sam,
+ * 2026-09-09: "it should say no merchandise service integrations").
+ *
+ * Its own map rather than `SECTION_LABEL`: that one names the CONTENT ("Music", "Tour
+ * dates") for the integrations hub's group headings, and "No Tour dates integrations"
+ * reads as a typo. This names the SOURCE, which is what is missing.
+ */
+export const SECTION_SERVICE_NOUN: Record<SyncSection, string> = {
+  music: 'music service',
+  videos: 'video service',
+  tour: 'tour date service',
+  files: 'file service',
+  merch: 'merchandise service',
+}
 
 export function sourcesForSection(
   section: SyncSection,

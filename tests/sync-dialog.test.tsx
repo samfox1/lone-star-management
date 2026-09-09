@@ -59,13 +59,18 @@ describe('the dialog lists the sources for THIS section', () => {
     }
   })
 
-  it('CRITICAL: a DISCONNECTED source is not offered as something to sync', () => {
-    // Syncing a source with no id configured can only fail. It is named — so the manager
-    // can see it exists and go connect it — but it carries no checkbox to tick.
+  it('CRITICAL: a DISCONNECTED source is not listed at all', () => {
+    // It used to be named with a "NOT CONNECTED" tag beside it. Sam, 2026-09-09, on a
+    // screenshot of exactly that: "if shopify, or any service, is not connected, it
+    // shouldn't say one isnt connected". A row a manager cannot act on is noise in a
+    // dialog whose whole job is choosing what to run — the way to a service you have not
+    // connected is "Sync other platforms", which is on screen.
     open([src({ key: 'spotify' }), src({ key: 'deezer', label: 'Deezer', connected: false })])
     const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText('Deezer')).toBeTruthy()
-    expect(dialog.queryByRole('checkbox', { name: 'Deezer' })).toBeNull()
+    expect(dialog.queryByText('Deezer'), 'a disconnected service is still listed').toBeNull()
+    expect(dialog.queryByText(/not connected/i)).toBeNull()
+    // The witness: the connected one IS there, so this is a filter and not an empty box.
+    expect(dialog.getByRole('checkbox', { name: 'Spotify' })).toBeTruthy()
   })
 
   it('CRITICAL: only the TICKED sources are synced', () => {
@@ -113,8 +118,49 @@ describe('the dialog reports what each source did', () => {
     })
   })
 
-  it('an empty section says so rather than opening an empty box', () => {
+})
+
+describe('a section with NOTHING connected offers a way in, not a dead button', () => {
+  it('CRITICAL: it names what KIND of service is missing, and offers to connect one', () => {
+    // Sam, 2026-09-09: "it should say no merchandise service integrations. and then have
+    // the button to connect more." The screenshot that prompted it showed "Shopify NOT
+    // CONNECTED" beside a greyed-out SYNC NOW — a dialog that told a manager about a
+    // thing they do not have and then refused to do anything.
+    render(
+      <SyncDialog artistId="a1" section="merch" sources={[src({ key: 'shopify', label: 'Shopify', connected: false })]} run={noResults} integrationsHref="/artists/a1/tools/integrations" />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^sync$/i }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText(/no merchandise service integrations/i)).toBeTruthy()
+    expect(dialog.getByRole('link', { name: /connect/i }).getAttribute('href')).toBe('/artists/a1/tools/integrations')
+  })
+
+  it('CRITICAL: there is no Sync now to press', () => {
+    // A control that provably cannot work is worse than no control — it reads as the
+    // dialog being broken rather than the store being unconnected.
+    render(
+      <SyncDialog artistId="a1" section="merch" sources={[src({ connected: false })]} run={noResults} integrationsHref="/x" />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^sync$/i }))
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: /sync now/i })).toBeNull()
+  })
+
+  it('CRITICAL: each section names its OWN kind of service', () => {
+    // "No music service integrations" on the Merch page would be worse than the bug.
+    for (const [section, noun] of [['music', /music service/i], ['videos', /video service/i], ['tour', /tour date service/i]] as const) {
+      render(
+        <SyncDialog artistId="a1" section={section} sources={[src({ connected: false })]} run={noResults} integrationsHref="/x" />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: /^sync$/i }))
+      expect(within(screen.getByRole('dialog')).getByText(noun), section).toBeTruthy()
+      cleanup()
+    }
+  })
+
+  it('a section with no sources at all says the same thing', () => {
+    // Belt: `sourcesForSection` always returns something today, but an empty list must
+    // not fall through to a blank card.
     open([])
-    expect(within(screen.getByRole('dialog')).getByText(/nothing connected/i)).toBeTruthy()
+    expect(within(screen.getByRole('dialog')).getByText(/integrations/i)).toBeTruthy()
   })
 })

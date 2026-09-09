@@ -7,14 +7,13 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from './use-lock-body-scroll'
+import { SECTION_SERVICE_NOUN, type SyncRunResult, type SyncSection, type SyncSource } from './sync-sections'
 
-/** One data source this page's content can be pulled from, resolved by the PAGE — an id
- *  column for the platform integrations, Vault for Shopify. This component never decides
- *  who is connected; it chooses among what it is given and reports what happened. */
-export type SyncSource = { key: string; label: string; connected: boolean }
-
-/** What one source did on this run. `syncOutcome` (lib/sync) writes both strings. */
-export type SyncRunResult = { key: string; label: string; ok: boolean; message?: string; error?: string }
+// The types and the section vocabulary live in sync-sections, and the arrow points ONE
+// way: that module has no React and no 'use client', so this can read it while the pages
+// read both. The reverse — sync-sections importing a type from here — was a cycle waiting
+// for a value to be added to it.
+export type { SyncRunResult, SyncSource } from './sync-sections'
 
 /**
  * SYNC, IN PLACE (Sam, 2026-09-09: "I dont want the sync button to redirect the user to
@@ -41,8 +40,10 @@ export function SyncDialog({
   disabled = false,
 }: {
   artistId: string
-  /** Which content this page holds — passed straight back to `run`, never interpreted. */
-  section: string
+  /** Which content this page holds. Passed straight back to `run`, and used to name the
+   *  KIND of service missing when nothing is connected — derived here rather than passed,
+   *  so no page can forget it and get "No service integrations". */
+  section: SyncSection
   sources: SyncSource[]
   run: (artistId: string, section: string, keys: string[]) => Promise<{ results: SyncRunResult[] }>
   integrationsHref: string
@@ -105,35 +106,34 @@ export function SyncDialog({
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
           <div className={modalCardClass}>
-            {sources.length === 0 ? (
-              <p className="text-[13px] text-ink-muted">Nothing connected for this yet.</p>
+            {connected.length === 0 ? (
+              /* NOTHING CONNECTED. It used to list the section's services with a "not
+                 connected" tag beside each and a dead Sync now underneath — a dialog
+                 telling a manager about things they do not have and then refusing to act
+                 (Sam, 2026-09-09, on a screenshot of exactly that). Name the KIND that is
+                 missing and offer the one thing that helps. */
+              <p className="text-[13px] leading-relaxed text-ink-muted">
+                No {SECTION_SERVICE_NOUN[section]} integrations.
+              </p>
             ) : (
               <ul className="space-y-1">
-                {sources.map((s) => {
+                {connected.map((s) => {
                   const result = results?.find((r) => r.key === s.key)
                   return (
                     <li key={s.key} className="flex items-start gap-3 py-1.5">
-                      {s.connected ? (
-                        <input
-                          type="checkbox"
-                          id={`sync-${s.key}`}
-                          aria-label={s.label}
-                          checked={picked.includes(s.key)}
-                          onChange={() => toggle(s.key)}
-                          className="mt-0.5 h-4 w-4 flex-none accent-accent"
-                        />
-                      ) : (
-                        // Space where the box would be, so the labels line up and a
-                        // disconnected source reads as one of the same list.
-                        <span className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
-                      )}
+                      {/* Every row here IS connected — the list is `connected`, not
+                          `sources`. A disconnected service is not a row at all. */}
+                      <input
+                        type="checkbox"
+                        id={`sync-${s.key}`}
+                        aria-label={s.label}
+                        checked={picked.includes(s.key)}
+                        onChange={() => toggle(s.key)}
+                        className="mt-0.5 h-4 w-4 flex-none accent-accent"
+                      />
                       <span className="min-w-0 flex-1">
-                        <label
-                          htmlFor={s.connected ? `sync-${s.key}` : undefined}
-                          className={cx('block text-[13px]', s.connected ? 'text-ink' : 'text-ink-faint')}
-                        >
+                        <label htmlFor={`sync-${s.key}`} className="block text-[13px] text-ink">
                           {s.label}
-                          {!s.connected && <span className="ml-2 font-space text-[10px] uppercase tracking-[0.08em]">Not connected</span>}
                         </label>
                         {result && (
                           <span
@@ -155,11 +155,18 @@ export function SyncDialog({
             <div className="mt-6 flex items-center justify-between gap-3">
               {/* The route to the hub stays — as a LINK, which is what it always should
                   have been, rather than the thing the Sync button did. */}
+              {/* The route to the hub. With nothing connected it IS the action, so it
+                  says so; otherwise it stays the quiet way out to the other platforms. */}
               <Link
                 href={integrationsHref}
-                className="font-space text-[11px] font-semibold text-ink-muted underline underline-offset-2 hover:text-ink"
+                className={cx(
+                  'font-space text-[11px] font-bold uppercase tracking-[0.06em]',
+                  connected.length === 0
+                    ? 'rounded-lg bg-ink px-3 py-2 text-paper'
+                    : 'font-semibold normal-case tracking-normal text-ink-muted underline underline-offset-2 hover:text-ink',
+                )}
               >
-                Sync other platforms
+                {connected.length === 0 ? 'Connect a service' : 'Sync other platforms'}
               </Link>
               <div className="flex items-center gap-2">
                 <button
@@ -169,14 +176,18 @@ export function SyncDialog({
                 >
                   Close
                 </button>
-                <button
-                  type="button"
-                  onClick={sync}
-                  disabled={!picked.length || busy}
-                  className="rounded-lg bg-ink px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper transition-opacity disabled:opacity-40"
-                >
-                  {busy ? 'Syncing…' : 'Sync now'}
-                </button>
+                {/* No Sync now with nothing connected: a control that provably cannot work
+                    reads as the dialog being broken rather than the store being unlinked. */}
+                {connected.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={sync}
+                    disabled={!picked.length || busy}
+                    className="rounded-lg bg-ink px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper transition-opacity disabled:opacity-40"
+                  >
+                    {busy ? 'Syncing…' : 'Sync now'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
