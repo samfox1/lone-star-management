@@ -307,6 +307,9 @@ function SeoEditRow({
       value={value || 'Not set'}
       empty={!value}
       editLabel={label}
+      // Inside PANEL_BODY, which already pads. Without this the row steps 16px in from
+      // the Social card / About / Type rows beside it (Sam, 2026-09-09).
+      flush
       onEdit={() => onEdit?.({ store, key: fieldKey, label, value, multiline })}
     />
   )

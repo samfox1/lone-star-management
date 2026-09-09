@@ -1426,10 +1426,14 @@ describe('EditorInspector — Music panel (projects)', () => {
     // tour dates." Projects drag as cards; the persisted list is every TRACK in the new
     // project order — the numbering is what flips a connected site into manual mode.
     openMusic()
+    // Only the ON-SITE projects are cards now (2026-09-09) — 'One Off' is off-site.
     const cards = document.querySelectorAll('aside div[draggable="true"]')
-    expect(cards.length).toBe(RELEASES.length)
+    expect(cards.length).toBe(RELEASES.filter((r) => r.onSite).length)
     fireEvent.dragStart(cards[0]) // Midnight LP…
     fireEvent.drop(cards[1]) // …dropped on Sundown EP
+    // t9 is STILL LAST: the renumber runs over the whole catalogue, so a project the
+    // panel does not show keeps its place instead of being shuffled to the end or lost.
+    // That is the assertion worth keeping — it is the reason filtering the VIEW is safe.
     expect(reorderContentMock).toHaveBeenCalledWith('track', 'artist-1', ['t4', 't5', 't1', 't2', 't3', 't9'])
   })
 
@@ -1439,9 +1443,11 @@ describe('EditorInspector — Music panel (projects)', () => {
     expect(screen.getByText('3 songs')).toBeTruthy()
     expect(screen.getByText('Album')).toBeTruthy()
     expect(screen.getByText('EP')).toBeTruthy()
-    // Off-site projects still show (dimmed) — the whole catalog is arrangeable here.
-    expect(screen.getByText('One Off')).toBeTruthy()
-    expect(screen.getByText('1 song')).toBeTruthy()
+    // Off-site projects are NOT here (Sam, 2026-09-09: "items… that have been untallied
+    // (dont have the blue check) should be off the panel"). They used to show dimmed, so
+    // a manager editing a two-album site scrolled past the whole back catalogue.
+    expect(screen.queryByText('One Off')).toBeNull()
+    expect(screen.queryByText('1 song')).toBeNull()
   })
 
   it('toggling a project off flips on_site on ITS SONGS (not a release flag)', () => {
@@ -1450,10 +1456,13 @@ describe('EditorInspector — Music panel (projects)', () => {
     expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t1', 't2', 't3'], false)
   })
 
-  it('toggling an off-site project on puts its songs up', () => {
+  it('CRITICAL: an off-site project has no toggle here — the way back is the Music page', () => {
+    // The trade Sam chose: "i can always re-add them with the add music button". The
+    // panel's toggle now only takes things OFF, so this asserts the control is GONE
+    // rather than that it does something else.
     openMusic()
-    fireEvent.click(screen.getByRole('button', { name: 'Put One Off on the site' }))
-    expect(setSongsOnSiteMock).toHaveBeenCalledWith('artist-1', ['t9'], true)
+    expect(screen.queryByRole('button', { name: 'Put One Off on the site' })).toBeNull()
+    expect(screen.getByRole('link', { name: /Add music/i })).toBeTruthy()
   })
 
   // 'projects are NOT draggable' retired 2026-08-18: Sam asked for the tour-dates drag
@@ -1464,7 +1473,8 @@ describe('EditorInspector — Music panel (projects)', () => {
     const titles = [...document.querySelectorAll('aside .grid span')]
       .map((s) => s.textContent)
       .filter((t) => t === 'Midnight LP' || t === 'Sundown EP' || t === 'One Off')
-    expect(titles).toEqual(['Midnight LP', 'Sundown EP', 'One Off'])
+    // Order preserved, off-site dropped — 'One Off' is not in the panel at all.
+    expect(titles).toEqual(['Midnight LP', 'Sundown EP'])
   })
 
   it('expands a project to reveal its songs, and the toggle does NOT expand it', () => {
@@ -1476,9 +1486,13 @@ describe('EditorInspector — Music panel (projects)', () => {
     expect(screen.getByText('Intro')).toBeTruthy()
     expect(screen.getByText('Nightdrive')).toBeTruthy()
     // The on/off toggle is a separate control — clicking it toggles, never collapses.
+    // It now also REMOVES the card, because an off-site project is not in this panel
+    // (2026-09-09). Its open tracklist goes with it, which is the honest result of
+    // "take this off the site" and the reason the assertion flipped.
     fireEvent.click(screen.getByRole('button', { name: 'Take Midnight LP off the site' }))
     expect(setSongsOnSiteMock).toHaveBeenCalled()
-    expect(screen.getByText('Nightdrive')).toBeTruthy() // still open
+    expect(screen.queryByText('Nightdrive')).toBeNull()
+    expect(screen.queryByText('Midnight LP')).toBeNull()
   })
 
   it('points at the Music page when there are no projects', () => {

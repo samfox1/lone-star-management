@@ -185,6 +185,23 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
     expect(onEditText).toHaveBeenLastCalledWith(expect.objectContaining({ key: 'seo_description', multiline: true }))
   })
 
+  it('CRITICAL: the text rows sit FLUSH with the select rows, not indented', () => {
+    // Sam, 2026-09-09, with a screenshot: "this indentation isnt good. it should be all
+    // flush." EditRow carries its own px-4 because its usual home is a full-bleed list;
+    // inside PANEL_BODY's px-5 that stacked into a 16px step, so Title and Genre sat in
+    // from Social card and About. Asserted as a CLASS because jsdom does no layout — the
+    // real check is the screenshot, and this stops the padding creeping back.
+    const { container } = render(
+      <SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{ seo_title: 'SKEEN' }} />,
+    )
+    const row = screen.getByRole('button', { name: 'Edit Title' }).closest('div.group')
+    expect(row, 'the Title row is not an EditRow any more').not.toBeNull()
+    expect(row?.className, 'the SEO rows are indented again').not.toContain('px-4')
+    // The witness: the shared component still pads everywhere ELSE, so this is a flush
+    // VARIANT rather than the padding being deleted for everyone.
+    expect(container.querySelector('.px-4')).toBeNull()
+  })
+
   it('an empty text row reads as empty rather than blank', () => {
     render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{}} />)
     expect(screen.getAllByText('Not set').length).toBeGreaterThan(0)

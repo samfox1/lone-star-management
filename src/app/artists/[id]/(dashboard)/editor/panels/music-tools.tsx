@@ -43,6 +43,21 @@ export function MusicTools({
   const [open, setOpen] = useState<string | null>(null)
   const { dragProps, isOver } = useDragReorder((fromKey, toKey) => onReorder?.(fromKey, toKey))
 
+  /**
+   * ONLY what is on the site (Sam, 2026-09-09: "items like songs here that have been
+   * untallied (dont have the blue check) should be off the panel. i can always re-add them
+   * with the add music button").
+   *
+   * The panel used to list the whole catalogue and dim the rest, so editing a three-album
+   * site meant scrolling past every demo to reach the covers actually on the page. The
+   * editor is a view of the SITE; the library is the Music page, which is where the Add
+   * link at the bottom already goes.
+   *
+   * Turning a project off therefore removes its card from here. That is the gesture, not
+   * a side effect, and the route back is on screen whether the panel is full or empty.
+   */
+  const shown = releases.filter((r) => r.onSite)
+
   // A song selected in the FRAME (cover-art click) lands here as `item:track:<id>` —
   // expand the project that owns it, or the "selected song" is invisible behind a closed
   // card. Render-time reset on prop change (the repo's selectedStyle pattern), so a
@@ -52,11 +67,11 @@ export function MusicTools({
   if (focusedSongId !== lastFocusedSong) {
     setLastFocusedSong(focusedSongId)
     if (focusedSongId) {
-      const owner = releases.find((r) => r.songs.some((s) => s.id === focusedSongId))
+      const owner = shown.find((r) => r.songs.some((s) => s.id === focusedSongId))
       if (owner) setOpen(owner.key)
     }
   }
-  if (releases.length === 0) {
+  if (shown.length === 0) {
     return (
       <div className="px-5 py-4">
         <AddLink href={`/artists/${artistId}/music`} label="Add music" />
@@ -68,7 +83,7 @@ export function MusicTools({
   // under the card), so it reads as "these songs belong to this album" — which needs the
   // grid chunked into rows of 3, with the open list injected after the owning row.
   const rows: EditorProject[][] = []
-  for (let i = 0; i < releases.length; i += 3) rows.push(releases.slice(i, i + 3))
+  for (let i = 0; i < shown.length; i += 3) rows.push(shown.slice(i, i + 3))
 
   return (
     <div className="space-y-2.5 px-5 py-4">
@@ -79,11 +94,9 @@ export function MusicTools({
             <div className="grid grid-cols-3 gap-2.5">
               {row.map((r) => {
                 const isOpen = r.key === open
-                // An off-site card dims — but the toggle must NOT, or the one control that
-                // turns it back on reads as disabled. CSS opacity composites the whole
-                // subtree, so the dim lives on the thumbnail/tag/text, never on the card,
-                // and the toggle button sits outside it at full strength.
-                const dim = !r.onSite && 'opacity-55'
+                // No off-site dimming any more: nothing off-site reaches this grid. The
+                // dim existed to mark cards that were listed but not on the page, and the
+                // answer to those turned out to be not listing them.
                 return (
                   <div
                     key={r.key}
@@ -117,7 +130,7 @@ export function MusicTools({
                       }}
                       className="block w-full text-left"
                     >
-                      <div className={cx('relative', dim)}>
+                      <div className="relative">
                         <SongThumb coverUrl={r.cover_url} />
                         <span className="absolute left-1 top-1 rounded bg-ink/70 px-1 py-0.5 font-space text-[8px] font-bold uppercase tracking-[0.06em] text-paper">
                           {RELEASE_TYPE_LABEL[r.kind as ReleaseType] ?? r.kind}
@@ -133,7 +146,7 @@ export function MusicTools({
                           </span>
                         )}
                       </div>
-                      <div className={cx('px-1.5 py-1', dim)}>
+                      <div className="px-1.5 py-1">
                         <span className="block truncate text-[11px] text-ink">{r.title || 'Untitled'}</span>
                         <span className="block font-space text-[9px] text-ink-faint">{plural(r.songs.length, 'song')}</span>
                       </div>

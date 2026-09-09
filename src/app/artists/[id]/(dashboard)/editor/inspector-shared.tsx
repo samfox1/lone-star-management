@@ -177,6 +177,7 @@ export function EditRow({
   trailing,
   expanded,
   editLabel,
+  flush = false,
   onEdit,
 }: {
   /** The KEY — always shown, so a field like "Name" is unambiguous. */
@@ -197,11 +198,15 @@ export function EditRow({
    *  is user content — socials number their rows ("social link 1") so two lists don't
    *  collide, even though the row shows the platform name. */
   editLabel?: string
+  /** Drop the row's own horizontal padding, for a row rendered INSIDE a padded body
+   *  (PANEL_BODY's px-5). Without it the two paddings stack and the row sits 16px in from
+   *  its neighbours — the step Sam caught in the SEO group, 2026-09-09. */
+  flush?: boolean
   onEdit: () => void
 }) {
   const singleLine = value === undefined
   return (
-    <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-surface">
+    <div className={cx('group flex items-center gap-3 py-2.5 hover:bg-surface', !flush && 'px-4')}>
       {grip && (
         <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
           <Icon name="grip" size={16} />
