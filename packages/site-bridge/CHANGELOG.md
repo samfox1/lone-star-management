@@ -72,13 +72,36 @@ announces `bridgeVersion: '0.32.0'` and the editor is on 0.35.2.
 
 ## Unreleased
 
-Committed to `dev` after the 0.35.2 bump, so the tree is 0.35.2 plus this:
+Nothing since 0.36.0.
 
-- **`8729eb0` (2026-09-04)** — a seven-line comment on `mergeManifests` recording why the
-  `pages` list is carried forward rather than replaced: a pure fold sees `prev` and `next`,
-  not which announce arrived last, so the caller that does know (`useFrameBridge`) evicts
-  against the latest list and stamps it over the result. Comment-only.
-  *Site action: none.*
+---
+
+## 0.36.0 — `checkContract` catches a key used twice
+
+**What it adds.** One new finding, `duplicate-key`: a key declared twice in the same list
+(`styles`, `fields`, `slots`, `links`). Keys are ONE FLAT NAMESPACE across every page
+(SITE_PAGES_PLAN.md D3) — `page` is a tag, never a prefix, because `site_styles` rows are
+keyed by the bare key and a prefix syntax would have cost a migration of every stored
+override. The price of that decision is a collision nothing caught: the DB's unique
+constraint makes two pages SHARE a row rather than conflict, `applyStyleToDom` dresses
+every element matching the key, and the editor's fold resolves it first-wins. What a
+manager sees is one heading changing when they restyle a different one.
+
+`ContractManifest` gains an optional `pages`, and its entries an optional `page` — read
+ONLY to name the two pages in the finding, so it can say "on home and on merch" rather
+than "on nothing and on merch". `AuditRegion` gains `page` for the same reason; the audit
+itself ignores it.
+
+PER LIST, deliberately. A field `usb` and a link `usb` are rows in different tables, and a
+site may name a style region after the field it dresses — skeen does. One namespace for
+all four would have made the check unusable on the site it was written for.
+
+**What a site must do.** Nothing, unless it has a duplicate — in which case the check now
+says so and the fix is to rename one. A multi-page site should make sure the DOM it hands
+`checkContract` is the union of every page AND its backdrop, or regions tagged with a page
+it did not render report as unmarked (CONNECTING §7 rule 2 now shows how).
+
+*Site action: none required. Adopt when convenient.*
 
 ---
 

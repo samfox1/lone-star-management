@@ -25,6 +25,10 @@ export type AuditRegion = {
   base?: string;
   /** 'icons' groups are held to the extra rules their controls need. */
   scope?: string;
+  /** Which page the region renders on. This audit ignores it — every rule here is about
+   *  the region's own class string — but `checkContract` reads it to name the two pages
+   *  in a duplicate-key finding, and it shares this type. */
+  page?: string;
 };
 
 export type AuditFinding = { key: string; problem: string };

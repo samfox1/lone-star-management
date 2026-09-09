@@ -241,6 +241,7 @@ export function EditorShell({
     setMode,
     frameMode,
     manifest,
+    droppedRegions,
     selectedStyle,
     selectedLink,
     selectedRegion,
@@ -329,6 +330,7 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
+        droppedRegions={droppedRegions}
         hasUnpublished={hasUnpublished}
         photos={photos}
         imageFields={panels.imageFields}

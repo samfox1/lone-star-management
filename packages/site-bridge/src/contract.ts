@@ -49,9 +49,14 @@ import type { AuditRegion } from "./audit";
  */
 export type ContractManifest = {
   styles: readonly AuditRegion[];
-  fields: readonly { key: string }[];
-  slots: readonly { key: string }[];
-  links: readonly { key: string; rendered?: boolean }[];
+  fields: readonly { key: string; page?: string }[];
+  slots: readonly { key: string; page?: string }[];
+  links: readonly { key: string; rendered?: boolean; page?: string }[];
+  /** The site's declared pages, in declaration order. Read only to NAME the pages in a
+   *  duplicate-key finding — an untagged region belongs to the first, so the message can
+   *  say "on home and on merch" rather than "on nothing and on merch". Absent = a
+   *  single-page site, where a repeat is still a repeat. */
+  pages?: readonly { key: string }[];
   styleOptions?: {
     textColors?: readonly { value: string }[];
     bgColors?: readonly { value: string }[];
@@ -81,7 +86,11 @@ export type ContractFinding = {
     | "claim-ignored"
     /** The site's CSS never imports tokens.css, so nothing the editor applies as a class
      *  is compiled — every non-colour control silently does nothing. */
-    | "tokens-not-compiled";
+    | "tokens-not-compiled"
+    /** One key declared twice in one list. Region keys are ONE FLAT NAMESPACE across every
+     *  page (SITE_PAGES_PLAN.md D3), so two pages naming the same region share one stored
+     *  row — restyle one and the other changes, silently. */
+    | "duplicate-key";
   detail: string;
 };
 
@@ -208,6 +217,45 @@ export function checkContract(input: ContractInput): ContractFinding[] {
           detail: `the manifest declares the ${kind} "${key}" but no element carries ${attr}="${key}" — its control will change nothing`,
         });
       }
+    }
+  }
+
+  /* 2b. NO KEY IS DECLARED TWICE IN ONE LIST (SITE_PAGES_PLAN.md A6).
+   *
+   *     `page` is a TAG, never part of the key (D3) — `site_styles` rows are keyed by the
+   *     bare key, and a prefix syntax would have cost a migration of every stored
+   *     override. The price is this collision, and nothing else catches it: the DB's
+   *     unique constraint makes the two SHARE a row rather than conflict, `applyStyleToDom`
+   *     dresses every element matching the key, and the editor's merge resolves it
+   *     first-wins. What a manager sees is the merch heading changing when they restyle
+   *     the About one, with nothing anywhere saying why.
+   *
+   *     PER LIST, deliberately: a field `usb` and a link `usb` are rows in different
+   *     tables, and a site may well name a style region after the field it dresses —
+   *     skeen does. Flagging that would make the check unusable on the site it was
+   *     written for. */
+  const lists: [string, readonly { key: string; page?: string }[]][] = [
+    ["style region", manifest.styles],
+    ["field", manifest.fields],
+    ["slot", manifest.slots],
+    ["link", manifest.links],
+  ];
+  for (const [kind, entries] of lists) {
+    const seen = new Map<string, string | undefined>();
+    for (const entry of entries ?? []) {
+      if (!seen.has(entry.key)) {
+        seen.set(entry.key, entry.page);
+        continue;
+      }
+      const first = seen.get(entry.key);
+      // Both pages named, because the fix is to rename one of them and the reader has to
+      // know which two are fighting. An untagged entry belongs to the first declared page
+      // (the bridge's own rule), so it is described that way rather than as "no page".
+      const where = (p: string | undefined) => p ?? manifest.pages?.[0]?.key ?? "the only page";
+      findings.push({
+        check: "duplicate-key",
+        detail: `the ${kind} "${entry.key}" is declared twice — on ${where(first)} and on ${where(entry.page)}. Region keys are one flat namespace across pages, so both share a single stored row: restyling one changes the other.`,
+      });
     }
   }
 

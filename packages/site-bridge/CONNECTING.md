@@ -325,12 +325,35 @@ What it checks, and what each one is about:
    with no error anywhere. For a site that mounts sections conditionally, walk them: the
    union is the real page. A link that configures rather than renders declares
    `rendered: false` (§2).
+
+   **On a multi-page site the union means EVERY PAGE, and its backdrop.** The manifest
+   declares the union of pages, so the DOM you hand this must be the union too, or every
+   region tagged with a page you did not render reports as unmarked. Derive it from your
+   page map rather than listing pages by hand:
+
+   ```tsx
+   const everyPage = (site, editable) => (
+     <>{Object.values(SITE_PAGES).map(({ body: Body, backdrop: Backdrop }, i) => (
+       <div key={i}>{Backdrop && <Backdrop site={site} editable={editable} />}
+                    <Body site={site} editable={editable} /></div>
+     ))}</>
+   )
+   ```
+
+   And FURNISH the fixture: a region that only renders with content — a size picker that
+   needs two variants, a description that needs a description — reports as unmarked on a
+   thin one, which is a red test about nothing.
 3. **The self-audit passes** — delegated to `auditRegions`, so the two can never disagree
    about what "declare what you set" means.
 4. **An empty payload invents nothing.** Pass `publishedValues`: strings that exist only
    because someone published them. None may appear when nothing is published.
 5. **A claimed property arrives as a variable** and is never inlined over (§5).
-6. **The public page is findable** — NOT part of `checkContract` (it needs the built
+6. **No key is declared twice in one list** (0.36.0). Keys are one flat namespace across
+   every page (§11), so two regions sharing a key share one stored override and edits leak
+   between pages — restyle the merch heading and the about one moves. The check is per
+   LIST, so a field and a link may share a name; a style region named after the field it
+   dresses is fine and intended.
+7. **The public page is findable** — NOT part of `checkContract` (it needs the built
    html, not a DOM): `auditSeo({ home, edit })` from `@samfox1/site-bridge/seo` over your
    BUILT html returns `[]`: a real meta
    description, a canonical, one `h1`, a heading in every `section[id]`, an `alt` on
