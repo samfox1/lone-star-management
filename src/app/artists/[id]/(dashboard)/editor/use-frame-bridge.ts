@@ -348,7 +348,24 @@ export function useFrameBridge({
         // ignored rather than trusted — the switcher would otherwise show a page no panel
         // can filter to.
         const declared = (manifestRef.current?.pages ?? []).some((p) => p.key === msg.page)
-        if (declared) setFramePage(msg.page)
+        if (declared)
+          setFramePage((prev) => {
+            // A MOVE drops the selection; a re-report of the page already showing does
+            // not. The frame re-announces constantly — after paint, on every `hello` —
+            // and clearing on those would deselect a region a beat after it was clicked.
+            //
+            // The move itself must clear, and more sharply than a mode switch does: the
+            // selected region is not merely un-clickable now, it is GONE. The panel would
+            // sit open on a Home heading while the frame shows About, its Size slider
+            // writing overrides for something off screen, with no dead space on the new
+            // page to deselect from. Same rule as `setFrameMode`, harder case.
+            if (prev !== null && prev !== msg.page) {
+              setSelectedStyle(null)
+              setSelectedLink(null)
+              setSelectedRegion(null)
+            }
+            return msg.page
+          })
       } else if (msg.type === 'measured') {
         setMeasuredRegion({ key: msg.key, measured: msg.measured })
       } else if (msg.type === 'deselect') {

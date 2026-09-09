@@ -629,3 +629,96 @@ describe('multi-page: a page the latest announce no longer declares is evicted',
     expect(tagged(result.current.manifest, 'home')).toEqual(ONE_EACH)
   })
 })
+
+/* ── a page change drops the selection it left behind (P2) ──────────────────────────
+ * The same rule mode-switching already follows, and for the same reason stated there:
+ * "a panel still showing a selected region while clicks work the site reads as a control
+ * that has stopped responding."
+ *
+ * A page switch is the sharper case. The selected region is not merely un-clickable, it
+ * is GONE — the frame rendered a different page and the element does not exist. The
+ * panel would sit open on a Home heading while the frame shows About, its Size slider
+ * writing overrides for something off screen, and the only way out would be to click
+ * dead space on a page that has no such region to deselect from.
+ */
+describe('a page change clears what was selected on the page left behind', () => {
+  const PAGES = [
+    { key: 'home', label: 'Home', path: '/' },
+    { key: 'about', label: 'About', path: '/about' },
+  ]
+  const manifest = {
+    template: 'skeen',
+    page: 'home',
+    pages: PAGES,
+    fields: [], slots: [], links: [{ key: 'usb', label: 'USB' }],
+    styles: [{ key: 'hero', label: 'Hero' }],
+  }
+
+  it('CRITICAL: a style selection made on Home does not survive the move to About', () => {
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest }, CUSTOM)
+    // The frame reports where it is BEFORE the manager touches anything — that is what a
+    // real load does, and it is what makes the next report a MOVE rather than the editor
+    // learning the page for the first time (see the null case below).
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'style', key: 'hero' } }, CUSTOM)
+    expect(result.current.selectedStyle?.key, 'the selection never arrived').toBe('hero')
+
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    expect(result.current.selectedStyle).toBeNull()
+  })
+
+  it('CRITICAL: the link and region selections go too', () => {
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'link', key: 'usb' } }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'field', key: 'hero_tagline' } }, CUSTOM)
+    expect(result.current.selectedLink?.key).toBe('usb')
+    expect(result.current.selectedRegion).not.toBeNull()
+
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    expect(result.current.selectedLink).toBeNull()
+    expect(result.current.selectedRegion).toBeNull()
+  })
+
+  it('an UNDECLARED page is ignored, and clears nothing', () => {
+    // The page-change guard runs first. A frame naming a page the site never declared is
+    // not a navigation, so nothing about the editor's state should move — including the
+    // selection, which still points at a region that is still on screen.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'style', key: 'hero' } }, CUSTOM)
+
+    frameSays({ type: 'page-change', page: 'merch' }, CUSTOM)
+    expect(result.current.framePage, 'an undeclared page must not become the current one').toBe('home')
+    expect(result.current.selectedStyle?.key).toBe('hero')
+  })
+
+  it('CRITICAL: learning the page for the FIRST time is not a move, and clears nothing', () => {
+    // `framePage` is null until the frame speaks. A selection made in that window was
+    // made on the page the frame is ABOUT to name — it is not stale, and clearing it
+    // would drop a region the manager just clicked.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'style', key: 'hero' } }, CUSTOM)
+    expect(result.current.framePage).toBeNull()
+
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    expect(result.current.selectedStyle?.key).toBe('hero')
+  })
+
+  it('re-reporting the SAME page does not clear a selection', () => {
+    // The frame re-announces constantly (after paint, on every `hello`), and a
+    // `page-change` for the page already showing is one of those. Dropping the selection
+    // there would make a region deselect itself a beat after a manager clicked it.
+    const { result } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    frameSays({ type: 'select', target: { kind: 'style', key: 'hero' } }, CUSTOM)
+
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    expect(result.current.selectedStyle?.key).toBe('hero')
+  })
+})

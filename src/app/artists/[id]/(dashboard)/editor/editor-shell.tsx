@@ -226,6 +226,8 @@ export function EditorShell({
     setMode,
     frameMode,
     manifest,
+    framePage,
+    setPage,
     selectedStyle,
     selectedLink,
     selectedRegion,
@@ -300,12 +302,16 @@ export function EditorShell({
       resolvePanelInputs({
         customSiteUrl,
         manifest,
+        // The page the FRAME is showing (P2/D5). Page-scoped categories narrow to it, so
+        // the Style panel on About lists About's regions rather than all forty of Home's,
+        // every one of which would highlight nothing — the element is not in the frame.
+        page: framePage,
         draft: draft ?? null,
         siteContent,
         local: { textFields, imageFields },
         derive: { textFields: runtimeTextFields, imageFields: runtimeImageFields },
       }),
-    [customSiteUrl, manifest, draft, siteContent, textFields, imageFields],
+    [customSiteUrl, manifest, framePage, draft, siteContent, textFields, imageFields],
   )
 
   return (
@@ -314,6 +320,9 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
+        pages={manifest?.pages}
+        framePage={framePage}
+        onSelectPage={setPage}
         hasUnpublished={hasUnpublished}
         photos={photos}
         imageFields={panels.imageFields}

@@ -13,6 +13,7 @@ import {
   type ManifestComponent,
   type ManifestVideoSlot,
   type ManifestLinkRegion,
+  type ManifestPage,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
 import { type EditorStyleOptions } from '@/lib/site-editor/style-controls'
@@ -28,6 +29,7 @@ import { isContactLink, looksLikeEmail } from '@/lib/url'
 const isContactish = (url: string) => isContactLink(url) || looksLikeEmail(url)
 import { Icon, type IconName } from '@/components/ui/icons'
 import { ItemEditor } from './item-editor'
+import { PageSwitcher } from './page-switcher'
 import { buildItemEditorConfig } from './item-editor-config'
 import { budgetFor, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
@@ -161,6 +163,9 @@ function BridgeOutdatedBanner() {
 export function EditorInspector({
   artistId,
   bridgeOutdated = false,
+  pages,
+  framePage = null,
+  onSelectPage,
   photos: initial,
   imageFields = [],
   textFields = [],
@@ -222,6 +227,14 @@ export function EditorInspector({
   tours?: EditorTour[]
   /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
    *  edit-list at runtime; a site that declares none simply has no component section. */
+  /** The pages the SITE declares (SITE_PAGES_PLAN.md P2), straight off the merged
+   *  manifest. Fewer than two and no switcher renders — every site that predates pages
+   *  declares none at all. */
+  pages?: readonly ManifestPage[]
+  /** The page the FRAME says it is showing, or null before its first `page-change`. */
+  framePage?: string | null
+  /** Ask the frame to switch pages. Posts and waits — this never moves the marker. */
+  onSelectPage?: (page: string) => void
   components?: ManifestComponent[]
   /** The open photo pools the site DECLARES (its image slots), in order — one grid each
    *  in the Images panel. Defaults EMPTY: a group is shown because the site asked for
@@ -1068,6 +1081,10 @@ export function EditorInspector({
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {bridgeOutdated && <BridgeOutdatedBanner />}
+      {/* Above everything, and outside the panel chrome: the page a manager is on scopes
+          every panel below (D5), and is not a property of whichever one happens to be
+          open. Renders nothing at all under two pages. */}
+      <PageSwitcher pages={pages} current={framePage} onSelect={onSelectPage ?? (() => {})} />
       {itemEditor ? (
         itemEditor
       ) : textEditor ? (

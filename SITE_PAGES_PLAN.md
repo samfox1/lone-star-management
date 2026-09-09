@@ -1,12 +1,11 @@
 # Multi-page editor — plan of record (2026-09-03)
 
-> **Status: PLANNED, not started.** Written after Sam asked why skeen's About page and
-> Merch page are missing from the editor (2026-09-03).
+> **Status: P1, P3 and P2 SHIPPED; P4 and P5 remain.** Written after Sam asked why
+> skeen's About page and Merch page are missing from the editor (2026-09-03).
 >
-> **Superseded in part — read the amendments before this body.** P1 and P3 have SHIPPED;
-> P2, P4 and P5 have not. D2 was replaced (A1), and five more claims below turned out to
-> be wrong (C1–C5, 2026-09-04). Everything above the first `---` is the original plan,
-> kept as written.
+> **Superseded in part — read the amendments before this body.** D2 was replaced (A1),
+> and seven more claims below turned out to be wrong (C1–C5 on 2026-09-04, C6–C7 on
+> 2026-09-09). Everything above the first `---` is the original plan, kept as written.
 
 ## The finding
 
@@ -579,3 +578,94 @@ So P2 inherits:
   showing (`use-frame-bridge.ts:217-223`).
 - Panel filtering per D5 is entirely unbuilt: no panel reads `page` today.
 - N4's cross-repo test is P2's first test.
+
+---
+
+# P2 shipped (2026-09-09) — the switcher, and what the plan had wrong
+
+Test-first throughout. `tests/editor-page-filter.test.ts` was seen RED (9 of 12 on
+`onPage is not a function`) before the resolver learned about pages;
+`tests/editor-page-switcher.test.tsx` RED on a component that did not exist; the
+selection-clearing block in `tests/use-frame-bridge.test.tsx` RED on 2 of 4, with the
+other 2 passing as the over-clearing guards they are.
+
+## What landed
+
+**The switcher** — `editor/page-switcher.tsx`, its own file rather than 80 more lines in
+a 1200-line inspector, for the same reason the plan gives /edit. It renders `pages`
+verbatim, renders nothing under two pages, and — the rule with teeth — does NOT move its
+own marker on click. `onSelect` posts `set-page` and waits for `page-change`, so a frame
+that ignores the message leaves the strip truthfully on the page still showing. It sits at
+the top of the inspector, outside `PanelChrome`, because the page scopes every panel below
+and is not a property of whichever one happens to be open.
+
+**Panel filtering** — one narrowing, in `resolvePanelInputs`, at the top, so no resolver
+can forget. `CATEGORY_IS_PAGE_SCOPED` is a `Record<ManifestCategory, boolean>`: a new
+category is a compile error until someone decides, and `manifestForPage` ITERATES that
+registry rather than listing six keys, so the decision is what runs.
+
+**A page move drops the selection** — not in the plan, found while wiring. Switching to
+About with a Home region selected left the panel open on an element that no longer exists,
+its Size slider writing overrides for something off screen, with no dead space on the new
+page to deselect from. Same rule `setFrameMode` already follows; sharper case. A
+re-report of the page already showing does NOT clear (the frame re-announces constantly),
+and neither does learning the page for the first time from `null`.
+
+## C6 — D5 was wrong about the Style panel
+
+D5 exempted `style` from filtering, on the reading that style regions are site-wide bands.
+skeen's registry disagreed, and shipped first: its About regions carry `page: "about"`
+under the comment "a region declared on /about must say so, or the editor files it under
+Home" (`skeen lib/styles.ts:326-358`, 2026-09-04). The site's declaration wins
+(`editor-shows-what-site-sets`), so `styles` filters like every other page-scoped
+category. Sam confirmed, 2026-09-09. `site` (cursor, SEO, facts) and the three genuinely
+site-wide categories — `styleOptions`, `assetBudgets`, `itemStyling` — do not filter; a
+font list that emptied when a manager stepped off Home reads as the editor breaking.
+
+## C7 — "untagged means site-wide" was never the rule, and skeen needed no change
+
+The obvious reading of a `page` TAG is that an absent one means "everywhere", which would
+have put all forty of Home's regions in About's panels and made the switcher change almost
+nothing on screen. The bridge had already decided otherwise and said so at `PageScoped`:
+**absent means the first declared page**, which is exactly what makes every existing
+single-page manifest correct untouched. `mergeManifests`' own `rank` implements it
+(untagged sorts with the first page). So the narrowing follows the fold rather than
+inventing a second rule, and the skeen half of P2 is empty: its home regions are untagged,
+its About regions are tagged, and both were already right.
+
+A tag naming a page the site does NOT declare falls back to the first page — the fold's
+principle again, degrade to misplaced never to invisible. A renamed page must not delete
+the manager's only route to a region.
+
+## N4 is closed
+
+`tests/editor-page-wire.test.tsx` drives the real chain with no stubs in the middle:
+announce off the wire → the per-page fold → `page-change` → `resolvePanelInputs` → the
+props the inspector renders. Its fixture is shaped like skeen's announce — a style
+registry announced WHOLE on every page (C1), so only the tag tells the pages apart, which
+is the shape the bug would have hidden in. Two mutants killed it: removing the narrowing
+(2 of 4 red), and making the narrowing mutate the held manifest instead of copying it
+(1 of 4 red — the "switch back to Home" test exists for exactly that).
+
+## Mutation
+
+`panel-inputs.ts` was already in the Stryker slice, so the new code was watched from the
+first run: 94.81% with four survivors in it. One was real — narrowing a null manifest
+reaches for `manifest.pages` on nothing — and is now pinned even though `framePage` cannot
+currently be non-null without a manifest. 95.56% after. The three that remain are recorded
+as equivalent in the source, with the reason and the condition under which one of them
+starts to bite.
+
+`page-switcher.tsx` is NOT in the slice: it lists `src/lib` modules only, and adding the
+first `.tsx` is a change to what that report means rather than a line in a list.
+
+## Still open, and deliberately
+
+- **N3 — `droppedRegions` is surfaced nowhere.** Computed, returned by `useFrameBridge`,
+  consumed by nothing outside its own tests. A duplicate key across pages is detected,
+  resolved first-wins, and silent. Its other half is P5's `checkContract` finding, and
+  the two want building together.
+- **N2 — skeen's `usb` link is `rendered: false` on a stale premise.** An open decision,
+  not a fix; unchanged by P2.
+- **N1's clamp rule** applies to every page P4 adds.
+- **P4 (merch) and P5 (tooling)** are next, in that order.
