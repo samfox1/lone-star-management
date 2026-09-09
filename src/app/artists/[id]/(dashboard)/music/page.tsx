@@ -4,13 +4,16 @@ import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { dashboardDiff, requireArtist } from '../_data'
-import { importDriveFileAction, listDriveFilesAction, refreshMusicAction } from '../actions'
+import { importDriveFileAction, listDriveFilesAction } from '../actions'
 import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
 import { type ReleaseOption } from '../tracks/track-card'
 import { type ReleaseLink, type ReleaseSong } from '../releases/release-card'
 import { MusicBrowser, LOOSE, type MusicSong, type UnreleasedSong } from './music-browser'
+import { SyncDialog } from '../sync-dialog'
+import { sourcesForSection } from '../sync-sections'
+import { syncSectionAction } from '../sync-section-action'
 
 /**
  * The Music tab — ONE surface for the artist's whole catalog, classified by
@@ -187,7 +190,19 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       mergeTargets={mergeTargets}
       artistId={id}
       artistSlug={artist.slug}
-      refreshAction={refreshMusicAction.bind(null, id)}
+      syncDialog={
+        // The Sync button opens a dialog listing this section's sources, each connected
+        // one ticked, with a per-source result line (Sam, 2026-09-09). It replaced a
+        // single press that pulled every connected service at once and reported the lot
+        // as one joined string.
+        <SyncDialog
+          artistId={id}
+          section="music"
+          sources={sourcesForSection('music', artist, false)}
+          run={syncSectionAction}
+          integrationsHref={`/artists/${id}/tools/integrations`}
+        />
+      }
       dirty={musicDirty}
       importButton={
         artist.drive_folder_id ? (

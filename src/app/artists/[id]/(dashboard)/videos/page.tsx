@@ -2,11 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { dashboardDiff, requireArtist } from '../_data'
-import { importDriveFileAction, listDriveFilesAction, refreshYouTubeAction } from '../actions'
+import { importDriveFileAction, listDriveFilesAction } from '../actions'
 import { AssetsShell } from '../assets-rail'
 import { VideosBrowser } from './videos-browser'
 import { VideoAddButton } from './video-add'
-import { RefreshButton } from './refresh-button'
+import { SyncDialog } from '../sync-dialog'
+import { sourcesForSection } from '../sync-sections'
+import { syncSectionAction } from '../sync-section-action'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
 
@@ -74,7 +76,15 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
               />
             </DriveImportButton>
           )}
-          <RefreshButton action={refreshYouTubeAction.bind(null, id)} />
+          {/* The same dialog Music and Merch use (Sam, 2026-09-09) — one Sync gesture
+              across the dashboard rather than three shapes of it. */}
+          <SyncDialog
+            artistId={id}
+            section="videos"
+            sources={sourcesForSection('videos', artist, false)}
+            run={syncSectionAction}
+            integrationsHref={`/artists/${id}/tools/integrations`}
+          />
           <VideoAddButton artistId={id} />
         </>
       }

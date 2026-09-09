@@ -16,7 +16,6 @@ import { useOnSiteSelection } from '../use-on-site-selection'
 import { publishReleasesAction } from '../actions'
 import { ReleaseCard, type Release } from '../releases/release-card'
 import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
-import { RefreshButton } from './refresh-button'
 import { SongAddButton } from './song-add'
 import { type MergeTarget } from './merge-song-modal'
 
@@ -113,7 +112,7 @@ export function MusicBrowser({
   mergeTargets,
   artistId,
   artistSlug,
-  refreshAction,
+  syncDialog,
   dirty = false,
   importButton,
 }: {
@@ -135,7 +134,11 @@ export function MusicBrowser({
   mergeTargets: MergeTarget[]
   artistId: string
   artistSlug: string
-  refreshAction: () => Promise<{ ok: boolean; error?: string }>
+  /** The Sync control — a DIALOG listing this section's sources (Sam, 2026-09-09),
+   *  built by the page because only the server knows which are connected. It replaced a
+   *  single `refreshAction` press that pulled every connected service at once and
+   *  reported the lot as one joined string. */
+  syncDialog?: ReactNode
   /** Unpublished music edits — enables the publish pill without a selection delta. */
   dirty?: boolean
   /** The Drive copy-import affordance (only when a folder is connected). */
@@ -300,7 +303,10 @@ export function MusicBrowser({
         trailing={
           <>
             {importButton}
-            <RefreshButton action={refreshAction} disabled={bucket === 'unreleased'} />
+            {/* Hidden on Unreleased: a platform pull only ever produces RELEASED music,
+                so the control does not apply to that view — the same reason the old
+                button was disabled there. */}
+            {bucket !== 'unreleased' && syncDialog}
             {/* ONE + for the whole page; released/unreleased is chosen in the modal. */}
             <SongAddButton artistId={artistId} />
           </>

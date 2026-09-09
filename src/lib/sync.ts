@@ -45,6 +45,51 @@ export type SyncResult = {
   errors: SyncError[]
 }
 
+/**
+ * ONE SENTENCE FOR EVERY PULL — what it did, and what it could not do.
+ *
+ * `syncExternal` has always returned `failed` and per-item `errors`, and almost every
+ * action threw them away and returned a bare `{ ok: true }`. A pull where three rows
+ * collided on a unique index therefore looked exactly like a clean one — which is why
+ * two known bugs in MERCH_PLAN are invisible ("a handle swap fails one row";
+ * "reconnecting to a different store leaves stale rows"). Only the Shopify action
+ * reported it, in prose it had invented for itself.
+ *
+ * Here so every source says the same thing the same way, and so the sync dialog can show
+ * a per-source line without each action having its own wording.
+ *
+ * A PARTIAL FAILURE IS NOT `ok`. Some rows landed and some did not, and a manager who
+ * reads "pulled" will publish a catalogue that is missing products. The count that landed
+ * rides along because it is the difference between "retry" and "look at your store", and
+ * so does the first error message: a constraint name says which of those it is.
+ */
+export function syncOutcome(
+  result: SyncResult,
+  /** Singular noun for the thing pulled — "product", "song", "tour date". */
+  noun: string,
+): { ok: boolean; message?: string; error?: string } {
+  const plural = (n: number) => `${n} ${noun}${n === 1 ? '' : 's'}`
+  if (result.failed > 0) {
+    const landed = result.added + result.updated + result.merged
+    // Empty `errors` with a non-zero `failed` would be a bug in the sync, but swallowing
+    // the count because the detail is missing is worse than reporting it bare.
+    const reason = result.errors[0]?.message ?? 'unknown error'
+    return { ok: false, error: `${plural(result.failed)} failed to save (${landed} saved): ${reason}` }
+  }
+  // NOTHING CHANGED is the normal outcome of a second pull, and it has to read that way.
+  // `skipped` alone is that case: rows were looked at and deliberately left, which is
+  // "up to date", not "7 left alone" — a count with no verb reads as a problem.
+  if (!result.added && !result.updated && !result.merged) {
+    return { ok: true, message: 'Already up to date' }
+  }
+  const parts: string[] = []
+  if (result.added) parts.push(`${result.added} added`)
+  if (result.updated) parts.push(`${result.updated} updated`)
+  if (result.merged) parts.push(`${result.merged} merged`)
+  if (result.skipped) parts.push(`${result.skipped} left alone`)
+  return { ok: true, message: parts.join(', ') }
+}
+
 /** Postgres RLS / authorization denial — a hard contract breach, never partial. */
 const RLS_DENIED = '42501'
 

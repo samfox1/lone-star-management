@@ -8,7 +8,8 @@ import { saveSoundcloudUrlAction } from '../actions'
 
 /**
  * "Connect your platforms" — the music-connect step. Links an artist's streaming profiles so
- * one Sync (refreshMusicAction) can pull their whole catalog, merged into union rows. Reuses
+ * one Sync can pull their whole catalog, merged into union rows (the Music page's Sync is a
+ * dialog over these same sources since 2026-09-09 — `sync-sections.ts`). Reuses
  * the same SyncPanel the Integrations hub uses for Spotify/Apple/Deezer; SoundCloud is a
  * save-only profile field (no catalog API to pull from). Reachable on its own and never gates
  * access — the future signup wizard will reuse this page.

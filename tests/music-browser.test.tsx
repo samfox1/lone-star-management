@@ -2,8 +2,10 @@
 /**
  * MusicBrowser — the ONE Music surface. Locks Sam's 2026-07-09 spec: two
  * segmented lenses (All/Released/Unreleased, then All/On site/Off site) under a
- * single shared toolbar (Import · Refresh · + Song · + Release · sort) that
- * stays put across views, with Refresh greyed out on Unreleased. Unreleased
+ * single shared toolbar (Import · Sync · + Song · + Release · sort) that
+ * stays put across views, with Sync absent on Unreleased — a platform pull only ever
+ * produces RELEASED music, so the control does not apply there (it was a greyed-out
+ * button until 2026-09-09, when Sync became a dialog the page builds). Unreleased
  * items count as off-site for the site lens; heavy cards are stubbed.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
@@ -50,7 +52,7 @@ function setup(over: Partial<Parameters<typeof MusicBrowser>[0]> = {}) {
       mergeTargets={[]}
       artistId="a1"
       artistSlug="a"
-      refreshAction={vi.fn(async () => ({ ok: true }))}
+      syncDialog={<button type="button">Sync</button>}
       {...over}
     />,
   )
@@ -79,14 +81,18 @@ describe('MusicBrowser lenses', () => {
     expect(screen.queryByTestId('song')).not.toBeInTheDocument()
   })
 
-  it('Unreleased hides released content and greys out Sync', () => {
+  it('Unreleased hides released content, and Sync with it', () => {
+    // Sync was a greyed-out button on this view until 2026-09-09; it is now a dialog the
+    // page hands in, and the view does not render it at all. Same rule — a platform pull
+    // only ever produces released music — expressed as absence rather than as a control
+    // that can never become enabled here.
     setup()
-    expect(screen.getByRole('button', { name: 'Sync' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeTruthy()
     fireEvent.click(bucketBtn('Unreleased'))
     expect(releaseTitles()).toEqual(['Demo EP'])
-    expect(screen.getByRole('button', { name: 'Sync' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Sync' })).toBeNull()
     fireEvent.click(bucketBtn('All'))
-    expect(screen.getByRole('button', { name: 'Sync' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeTruthy()
   })
 
   it('On site shows only live released items (unreleased is never on site)', () => {
@@ -138,6 +144,19 @@ describe('MusicBrowser — orphan singles (no loose bucket)', () => {
     expect(screen.getByText('Bootleg Mix')).toBeInTheDocument()
     fireEvent.click(siteBtn('Off site'))
     expect(screen.queryByText('Bootleg Mix')).toBeNull()
+  })
+})
+
+describe('MusicBrowser — the Sync control', () => {
+  it('CRITICAL: it is offered on the released views and NOT on Unreleased', () => {
+    // A platform pull only ever produces released music, so the control does not apply
+    // there. It was a greyed-out button until 2026-09-09; now the page hands in a dialog,
+    // and the view simply does not render it — a disabled control that can never become
+    // enabled in this view is furniture.
+    setup()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeTruthy()
+    fireEvent.click(bucketBtn('Unreleased'))
+    expect(screen.queryByRole('button', { name: 'Sync' }), 'Sync is offered on Unreleased').toBeNull()
   })
 })
 

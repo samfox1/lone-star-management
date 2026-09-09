@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { dashboardDiff, requireArtist } from '../_data'
-import { ToolbarIconLink } from '../toolbar'
+import { SyncDialog } from '../sync-dialog'
+import { sourcesForSection } from '../sync-sections'
+import { syncSectionAction } from '../sync-section-action'
 import { TourBrowser } from './tour-browser'
 import { TourAddButton } from './tour-add'
 
@@ -21,7 +23,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
   // diffUnpublished is the only way to know whether there are unpublished date EDITS,
   // now that presence is live and no longer a selection delta. It's the same query
   // behind the nav's pending dot, so the PublishBar and the dot always agree.
-  const [, rows, counts, diff] = await Promise.all([
+  const [artist, rows, counts, diff] = await Promise.all([
     requireArtist(id),
     listContent(supabase, 'tour_date', id),
     entityCounts(supabase, id, daysAgo(30)),
@@ -48,11 +50,15 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
       }))}
       trailing={
         <>
-          <ToolbarIconLink
-            href={`/artists/${id}/tools/integrations`}
-            title="Sync from Bandsintown / Ticketmaster"
-            icon="refresh"
-            label="Sync"
+          {/* A DIALOG, like Music, Videos and Merch (Sam, 2026-09-09). This was the same
+              redirect-to-integrations link Merch had: a manager who wanted their dates
+              refreshed was sent to a settings page to find a button. */}
+          <SyncDialog
+            artistId={id}
+            section="tour"
+            sources={sourcesForSection('tour', artist, false)}
+            run={syncSectionAction}
+            integrationsHref={`/artists/${id}/tools/integrations`}
           />
           <TourAddButton artistId={id} />
         </>

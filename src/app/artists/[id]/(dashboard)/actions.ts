@@ -72,6 +72,7 @@ import {
   syncSpotifyTracks,
   syncTicketmasterTourDates,
   syncYouTubeVideos,
+  syncOutcome,
 } from '@/lib/sync'
 
 export async function addContentAction(
@@ -1439,36 +1440,6 @@ export async function refreshSpotifyAction(artistId: string): Promise<{ ok: bool
   return pullSpotify(artistId)
 }
 
-/**
- * The Music page's "Sync": pull from EVERY connected music service in one click, so a
- * catalog scattered across platforms lands in one place. Runs Spotify FIRST (it's the only
- * source that creates releases + links tracks), then Apple and Deezer, which MERGE their
- * links onto the union rows by title (see lib/sync.ts syncTracks). Only runs the services
- * the artist has actually linked; reports each service's error but doesn't abort the rest.
- */
-export async function refreshMusicAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('spotify_artist_id, apple_artist_id, deezer_artist_id')
-    .eq('id', artistId)
-    .single()
-
-  const jobs: { name: string; connected: boolean; run: () => Promise<{ ok: boolean; error?: string }> }[] = [
-    { name: 'Spotify', connected: !!artist?.spotify_artist_id, run: () => pullSpotify(artistId) },
-    { name: 'Apple Music', connected: !!artist?.apple_artist_id, run: () => syncAppleAction(artistId) },
-    { name: 'Deezer', connected: !!artist?.deezer_artist_id, run: () => syncDeezerAction(artistId) },
-  ]
-  const connected = jobs.filter((j) => j.connected)
-  if (connected.length === 0) return { ok: false, error: 'No music services connected yet. Add them in Integrations.' }
-
-  const errors: string[] = []
-  for (const j of connected) {
-    const res = await j.run()
-    if (!res.ok && res.error) errors.push(`${j.name}: ${res.error}`)
-  }
-  return errors.length ? { ok: false, error: errors.join(' · ') } : { ok: true }
-}
 
 /** Save (or clear) the artist's Deezer artist id used to pull their catalog. */
 export async function saveDeezerIdAction(artistId: string, formData: FormData) {
@@ -1497,7 +1468,7 @@ export async function saveSoundcloudUrlAction(artistId: string, formData: FormDa
 
 /** Pull the artist's Deezer catalog into draft tracks (metadata + link-out). Merges
  *  into the union track set alongside any other connected service. */
-export async function syncDeezerAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function syncDeezerAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
@@ -1506,15 +1477,16 @@ export async function syncDeezerAction(artistId: string): Promise<{ ok: boolean;
     .single()
   if (!artist?.deezer_artist_id) return { ok: false, error: 'No Deezer artist linked yet.' }
 
+  let result
   try {
     const client = createDeezerClient()
     const tracks = await client.getArtistTracks(artist.deezer_artist_id)
-    await syncDeezerTracks(supabase, artistId, tracks)
+    result = await syncDeezerTracks(supabase, artistId, tracks)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return syncOutcome(result, 'song')
 }
 
 /** Save (or clear) the artist's Apple Music artist id used to pull their catalog. */
@@ -1525,7 +1497,7 @@ export async function saveAppleIdAction(artistId: string, formData: FormData) {
 /** Pull the artist's Apple Music catalog into draft tracks (metadata + link-out) via
  *  the free iTunes Search API. Merges into the union track set alongside any other
  *  connected service. */
-export async function syncAppleAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function syncAppleAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
@@ -1534,15 +1506,16 @@ export async function syncAppleAction(artistId: string): Promise<{ ok: boolean; 
     .single()
   if (!artist?.apple_artist_id) return { ok: false, error: 'No Apple Music artist linked yet.' }
 
+  let result
   try {
     const client = createAppleMusicClient()
     const tracks = await client.getArtistTracks(artist.apple_artist_id)
-    await syncAppleTracks(supabase, artistId, tracks)
+    result = await syncAppleTracks(supabase, artistId, tracks)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return syncOutcome(result, 'song')
 }
 
 /** Save (or clear) the artist's Bandsintown name used to pull tour dates. */
@@ -1554,7 +1527,7 @@ export async function saveBandsintownNameAction(artistId: string, formData: Form
  * Pull the artist's Bandsintown events and sync them into draft tour dates.
  * Same conflict policy as Spotify. Requires BANDSINTOWN_APP_ID configured.
  */
-export async function syncBandsintownAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function syncBandsintownAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
@@ -1563,15 +1536,16 @@ export async function syncBandsintownAction(artistId: string): Promise<{ ok: boo
     .single()
   if (!artist?.bandsintown_name) return { ok: false, error: 'No Bandsintown artist linked yet.' }
 
+  let result
   try {
     const client = createBandsintownClient()
     const events = await client.getArtistEvents(artist.bandsintown_name)
-    await syncBandsintownTourDates(supabase, artistId, events)
+    result = await syncBandsintownTourDates(supabase, artistId, events)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return syncOutcome(result, 'tour date')
 }
 
 /** Save (or clear) the artist's Ticketmaster attraction id used to pull events. */

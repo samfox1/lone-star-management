@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { getShopifyDomain, requireArtist } from '../_data'
-import { ToolbarIconLink } from '../toolbar'
+import { SyncDialog } from '../sync-dialog'
+import { sourcesForSection } from '../sync-sections'
+import { syncSectionAction } from '../sync-section-action'
 import { MerchBrowser } from './merch-browser'
 import { MerchAddButton } from './merch-add'
 
@@ -39,11 +41,16 @@ export default async function MerchPage({ params }: { params: Promise<{ id: stri
       }))}
       trailing={
         <>
-          <ToolbarIconLink
-            href={`/artists/${id}/tools/integrations`}
-            title={shopifyDomain ? 'Synced from Shopify' : 'Connect Shopify'}
-            icon={shopifyDomain ? 'refresh' : 'download'}
-            label={shopifyDomain ? 'Sync' : 'Connect'}
+          {/* A DIALOG, not a trip to the integrations page (Sam, 2026-09-09). Sync used
+              to be a link: a manager who wanted their products refreshed was sent to a
+              settings screen to find a button. The dialog still offers that route, as a
+              link, out of the way of the press everyone came for. */}
+          <SyncDialog
+            artistId={id}
+            section="merch"
+            sources={sourcesForSection('merch', {}, Boolean(shopifyDomain))}
+            run={syncSectionAction}
+            integrationsHref={`/artists/${id}/tools/integrations`}
           />
           <MerchAddButton artistId={id} />
         </>
