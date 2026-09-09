@@ -29,10 +29,7 @@ import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 // The inspector reaches for the app router (useSessionRevert) and the dashboard's server
 // actions. Neither is what this suite is about; both must exist for it to render.
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
-vi.mock('@/app/artists/[id]/(dashboard)/actions', () => new Proxy({}, {
-  get: () => vi.fn(async () => ({ ok: true })),
-  has: () => true,
-}))
+vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('./helpers/editor-actions'))
 
 afterEach(cleanup)
 
@@ -81,6 +78,21 @@ describe('a field declared on another page keeps its page, and its page’s name
       fields: [{ key: 'hero_tagline', label: 'Tagline', type: 'text', target: { store: 'site_content', key: 'hero_tagline' }, page: 'home' }],
     } as unknown as TemplateManifest
     expect(runtimeTextFields(tagged, {}, draft)[0]?.pageLabel).toBeUndefined()
+  })
+
+  it('CRITICAL: a field tagged with an UNDECLARED page belongs to the FIRST page, not to nowhere', () => {
+    // Review, 2026-09-09. `page` used to be the RAW tag: a field tagged `shop_2019` on a
+    // site that no longer declares that page was headed under nothing (correct) but its
+    // highlight still named `shop_2019` — and the hook holds a highlight until the frame
+    // reports reaching that page, which it never will. The row did nothing. Items already
+    // followed the fold's rule (degrade to misplaced, never to invisible); fields now do too.
+    const stale = {
+      ...manifest,
+      fields: [{ key: 'ghost', label: 'Ghost', type: 'text', target: { store: 'site_content', key: 'ghost' }, page: 'shop_2019' }],
+    } as unknown as TemplateManifest
+    const [ghost] = runtimeTextFields(stale, {}, draft)
+    expect(ghost?.page, 'the raw tag leaked through — this highlight would stall').toBe('home')
+    expect(ghost?.pageLabel).toBeUndefined()
   })
 
   it('a site that declares no pages heads nothing, whatever its fields say', () => {
@@ -173,9 +185,11 @@ describe('opening a row for another page tells the frame which page it is on', (
     open(onHighlight)
     fireEvent.click(screen.getByRole('button', { name: /Edit Tagline/ }))
 
-    const [target, page] = onHighlight.mock.calls.at(-1)!
-    expect(target).toMatchObject({ kind: 'field', key: 'hero_tagline' })
-    expect(page).toBeUndefined()
+    const call = onHighlight.mock.calls.at(-1)!
+    expect(call[0]).toMatchObject({ kind: 'field', key: 'hero_tagline' })
+    // Arity, not a destructured `undefined` — a trailing explicit undefined would pass
+    // the destructured form and still break every one-argument caller's tests.
+    expect(call.length, 'a page argument was passed for a first-page field').toBe(1)
   })
 })
 

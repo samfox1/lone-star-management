@@ -350,15 +350,16 @@ export function useFrameBridge({
           // that follows the contract (`pageChanged` after paint) sends the real answer
           // right behind this announce. A switcher pointing at an evicted page is the bug
           // one layer up, and null is what it already handles before the first page-change.
-          setFramePage((current) => {
-            const kept = current !== null && (folded?.pages ?? []).some((p) => p.key === current) ? current : null
-            // The REF moves with the state. `applyHighlight` decides from it, and a ref
-            // still naming an evicted page would make it hold a request for a
-            // `page-change` that is never coming — the panel row would do nothing at all.
-            // Null means "we do not know where the frame is", which fires immediately.
-            framePageRef.current = kept
-            return kept
-          })
+          // Decided from the REF, which mirrors the state, and written to both — never
+          // inside a state updater: an updater is not a place for side effects (React may
+          // run it twice), and the ref is what `applyHighlight` decides from, so a ref
+          // still naming an evicted page would hold a request for a `page-change` that is
+          // never coming. Null means "we do not know where the frame is", which fires
+          // immediately (review, 2026-09-09).
+          const current = framePageRef.current
+          const kept = current !== null && (folded?.pages ?? []).some((p) => p.key === current) ? current : null
+          framePageRef.current = kept
+          setFramePage(kept)
         }
         if (draft) {
           deliveredDraft.current = draft
@@ -394,24 +395,27 @@ export function useFrameBridge({
             pendingHighlight.current = null
             if (held.page === msg.page) post({ type: 'highlight', target: held.target })
           }
+          // A MOVE drops the selection; a re-report of the page already showing does
+          // not. The frame re-announces constantly — after paint, on every `hello` — and
+          // clearing on those would deselect a region a beat after it was clicked.
+          //
+          // The move itself must clear, and more sharply than a mode switch does: the
+          // selected region is not merely un-clickable now, it is GONE. The panel would
+          // sit open on a Home heading while the frame shows About, its Size slider
+          // writing overrides for something off screen, with no dead space on the new
+          // page to deselect from. Same rule as `setFrameMode`, harder case.
+          //
+          // `prev` is the ref, not a state updater's argument: the other setState calls
+          // do not belong inside an updater (review, 2026-09-09), and the ref IS the
+          // previous page — it is written on every path that writes the state.
+          const prev = framePageRef.current
+          if (prev !== null && prev !== msg.page) {
+            setSelectedStyle(null)
+            setSelectedLink(null)
+            setSelectedRegion(null)
+          }
           framePageRef.current = msg.page
-          setFramePage((prev) => {
-            // A MOVE drops the selection; a re-report of the page already showing does
-            // not. The frame re-announces constantly — after paint, on every `hello` —
-            // and clearing on those would deselect a region a beat after it was clicked.
-            //
-            // The move itself must clear, and more sharply than a mode switch does: the
-            // selected region is not merely un-clickable now, it is GONE. The panel would
-            // sit open on a Home heading while the frame shows About, its Size slider
-            // writing overrides for something off screen, with no dead space on the new
-            // page to deselect from. Same rule as `setFrameMode`, harder case.
-            if (prev !== null && prev !== msg.page) {
-              setSelectedStyle(null)
-              setSelectedLink(null)
-              setSelectedRegion(null)
-            }
-            return msg.page
-          })
+          setFramePage(msg.page)
         }
       } else if (msg.type === 'measured') {
         setMeasuredRegion({ key: msg.key, measured: msg.measured })

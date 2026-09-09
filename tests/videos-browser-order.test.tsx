@@ -45,16 +45,20 @@ const titles = () => screen.getAllByTestId('video').map((el) => el.textContent)
 
 /** The order the PAGE hands them over: `listContent`'s oldest-first. The browser must not
  *  depend on being fed them in the order it wants to show. */
+// Titles chosen so ALPHABETICAL order differs from CHRONOLOGICAL order. The first version
+// used 'Just Added' / 'Middle' / 'Oldest', which sort a–z into exactly the newest-first
+// order — so the A–Z test below could not tell the two comparators apart (review,
+// 2026-09-09). 'Zulu' is newest, 'Alpha' is oldest: newest-first is Z-M-A, a–z is A-M-Z.
 const asLoaded = [
-  video({ id: 'v1', title: 'Oldest', created_at: '2020-01-01T00:00:00Z' }),
-  video({ id: 'v2', title: 'Middle', created_at: '2023-01-01T00:00:00Z' }),
-  video({ id: 'v3', title: 'Just Added', created_at: '2026-09-09T00:00:00Z' }),
+  video({ id: 'v1', title: 'Alpha', created_at: '2020-01-01T00:00:00Z' }),
+  video({ id: 'v2', title: 'Mike', created_at: '2023-01-01T00:00:00Z' }),
+  video({ id: 'v3', title: 'Zulu', created_at: '2026-09-09T00:00:00Z' }),
 ]
 
 describe('VideosBrowser — a new video stacks on top of its section', () => {
   it('CRITICAL: the default view shows newest first, reversing how they arrived', () => {
     render(<VideosBrowser videos={asLoaded} artistId="a1" />)
-    expect(titles()).toEqual(['Just Added', 'Middle', 'Oldest'])
+    expect(titles()).toEqual(['Zulu', 'Mike', 'Alpha'])
   })
 
   it('CRITICAL: it sorts WITHIN each provider section, never across them', () => {
@@ -81,7 +85,7 @@ describe('VideosBrowser — a new video stacks on top of its section', () => {
     // this would fail and the test above would still pass.
     render(<VideosBrowser videos={asLoaded} artistId="a1" />)
     fireEvent.click(screen.getByRole('button', { name: 'A–Z' }))
-    expect(titles()).toEqual(['Just Added', 'Middle', 'Oldest'].sort())
+    expect(titles()).toEqual(['Alpha', 'Mike', 'Zulu'])
   })
 
   it('videos with no created_at keep a stable order rather than jumping', () => {

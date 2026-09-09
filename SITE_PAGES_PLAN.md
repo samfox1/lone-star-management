@@ -752,3 +752,60 @@ passed to the highlight; first-wins guard dropped; undeclared-tag fallback repla
 - **N2** (skeen's `usb` link `rendered: false`) unchanged.
 - **The merch pages are invisible in the editor until a product is ON the site.** skeen
   has none published today. That is the availability rule working, not a bug.
+
+---
+
+# Review of the day (2026-09-09, before anything shipped) — what it found
+
+Sam asked for a review of the whole day's changes: test problems, and shared code to
+consolidate. Three real bugs, four test problems, six consolidations. All fixed, both
+repos green, and every fix that changes behaviour was seen RED first or killed a mutant.
+
+## Bugs
+
+- **A field tagged with an undeclared page stalled.** `runtimeTextFields` passed the RAW
+  tag through as `page`; items already resolved an undeclared tag to the first page.
+  A highlight naming a page the site does not declare is held forever — the frame can
+  never report reaching it. One `effectivePage(tag, pages)` in panel-inputs now, read by
+  fields and items alike.
+- **The SEO editor re-guessed `store` from the key's spelling.** The descriptor carries
+  `store` precisely so nothing guesses; the persist ignored it and matched `seo_` — the
+  commit message even said guessing was the bug. The debounce key is `<store>:<key>` now
+  and the session's edits are keyed by store, so nothing reads a prefix.
+- **`setFramePage` updaters had side effects** (three other `setState`s, a ref write).
+  React may run an updater twice. The ref mirrors the state on every write, so the
+  previous page is read from the ref and the clears happen outside.
+
+## Tests
+
+- The Videos A–Z test could not tell A–Z from newest-first: 'Just Added' / 'Middle' /
+  'Oldest' sort alphabetically into exactly the newest order. Retitled.
+- The site-tools FLUSH test's "witness" comment described an assertion that was not
+  there. A plain `EditRow` is now rendered and shown to still pad.
+- The MerchBodies "surfaces are regions" test hand-listed five of eight product regions;
+  it derives every `merch_product` region from the registry now, on a furnished fixture.
+- Three suites carried their own copy of the actions mock — one as a Proxy minting a
+  fresh `vi.fn` per property read, so `vi.mocked(x)` could never be the fn the component
+  called. One `tests/helpers/editor-actions.ts`.
+- Two skeen contract fixtures carried the same product literal; three skeen suites
+  hand-rolled a product row. One `lib/merch.fixture.ts`.
+
+## Consolidations
+
+- **`src/lib/library-order.ts`** — the Music and Videos browsers each had a newest-first;
+  one pure module now (date, undated-first, then created_at), and it joins the Stryker
+  slice: 100% of its mutants die. The music copy had drifted (the sentinel bug) and
+  neither copy was mutation-tested, because a .tsx component is not in the slice.
+- **`onSiteOnly`** in inspector-shared — the on-site rule, stated once, read by the Music
+  and Merch panels.
+- **`EMPTY_FACTS`** exported from site-tools and used as its own default; the inspector's
+  copy is gone.
+- **`MerchShell`** (skeen) — the five pieces of furniture both merch bodies assembled.
+- **`CORNER`** (skeen) — the fixed-corner wrapper classes, copied three times.
+
+## Still worth knowing
+
+- Only fields and items carry a page into the panels. A Style-panel click on an About
+  region does not travel yet; same two lines when it needs to.
+- `pageLabel` groups in the Text panel follow field order, not declared page order —
+  fine at two pages, worth deriving from `pages` at three.

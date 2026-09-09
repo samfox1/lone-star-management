@@ -153,6 +153,25 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
 }
 
 /**
+ * The page a tagged region ACTUALLY belongs to, against the site's declared list.
+ *
+ * The bridge's rule (`PageScoped`): an absent tag means the FIRST declared page. Added
+ * here: a tag naming a page the site does NOT declare falls back to the first page too —
+ * the fold's principle, degrade to misplaced, never to invisible. The invisible case is
+ * concrete: a highlight names this page, the hook holds it until the frame reports
+ * reaching that page, and a frame can never reach a page it does not declare. The row
+ * would do nothing, silently.
+ *
+ * ONE function for fields and items, exported so `runtimeTextFields` reads the same rule
+ * `itemPagesOf` does — the review (2026-09-09) found fields passing the RAW tag through.
+ * Returns undefined when the site declares no pages: there is nowhere to travel.
+ */
+export function effectivePage(tag: string | undefined, pages: readonly { key: string }[] | undefined): string | undefined {
+  if (!pages?.length) return undefined
+  return tag && pages.some((p) => p.key === tag) ? tag : pages[0].key
+}
+
+/**
  * The page each library type lives on, read off the slots (see PanelInputs.itemPages).
  * The first slot for an asset type wins — a site with two image pools on two pages is
  * not a case any panel handles yet, and the first declared is the one untagged photos
@@ -163,13 +182,10 @@ function itemPagesOf(manifest: TemplateManifest | null): Partial<Record<LibraryA
   // One null check, up front. `manifest?.slots` further down read as a second guard and
   // was an equivalent mutant: nothing below runs without a manifest.
   if (!manifest?.pages?.length) return {}
-  const pages = manifest.pages
-  const declared = new Set(pages.map((p) => p.key))
-  const first = pages[0].key
   const out: Partial<Record<LibraryAsset, string>> = {}
   for (const slot of manifest.slots ?? []) {
     if (out[slot.accepts]) continue
-    out[slot.accepts] = slot.page && declared.has(slot.page) ? slot.page : first
+    out[slot.accepts] = effectivePage(slot.page, manifest.pages)
   }
   return out
 }

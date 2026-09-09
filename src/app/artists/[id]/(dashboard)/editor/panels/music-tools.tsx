@@ -4,7 +4,7 @@ import { useDragReorder } from '../use-drag-reorder'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { type EditorProject } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
-import { OnSiteDot, plural, EYEBROW } from '../inspector-shared'
+import { OnSiteDot, onSiteOnly, plural, EYEBROW } from '../inspector-shared'
 import { SongThumb, AddLink } from '../inspector-grid'
 
 /* ── Music tools: the setlist as on-site cover cards + an Add tile (mirrors Videos).
@@ -43,20 +43,9 @@ export function MusicTools({
   const [open, setOpen] = useState<string | null>(null)
   const { dragProps, isOver } = useDragReorder((fromKey, toKey) => onReorder?.(fromKey, toKey))
 
-  /**
-   * ONLY what is on the site (Sam, 2026-09-09: "items like songs here that have been
-   * untallied (dont have the blue check) should be off the panel. i can always re-add them
-   * with the add music button").
-   *
-   * The panel used to list the whole catalogue and dim the rest, so editing a three-album
-   * site meant scrolling past every demo to reach the covers actually on the page. The
-   * editor is a view of the SITE; the library is the Music page, which is where the Add
-   * link at the bottom already goes.
-   *
-   * Turning a project off therefore removes its card from here. That is the gesture, not
-   * a side effect, and the route back is on screen whether the panel is full or empty.
-   */
-  const shown = releases.filter((r) => r.onSite)
+  // On-site only — the rule and its reasons are on `onSiteOnly`. Toggling a project off
+  // removes its card (and its open tracklist) from here; the Add link is the way back.
+  const shown = onSiteOnly(releases)
 
   // A song selected in the FRAME (cover-art click) lands here as `item:track:<id>` —
   // expand the project that owns it, or the "selected song" is invisible behind a closed

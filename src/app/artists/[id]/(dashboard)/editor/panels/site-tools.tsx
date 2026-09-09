@@ -37,6 +37,9 @@ const TRAIL_OPTIONS: { value: string; label: string }[] = [
 
 /** Artist facts the fact sheet reads (artists.genre / location / schema_type). */
 export type ArtistFacts = { genre: string; location: string; schema_type: string }
+/** The facts before the artist has any. One object, exported, so the inspector's spread of
+ *  this session's edits over them and this panel's default agree by construction. */
+export const EMPTY_FACTS: ArtistFacts = { genre: '', location: '', schema_type: 'MusicGroup' }
 
 /**
  * One SEO/GEO text field, handed UP to be opened full-panel.
@@ -59,7 +62,7 @@ export function SiteTools({
   photos,
   values: initial,
   seo: initialSeo = {},
-  facts: initialFacts = { genre: '', location: '', schema_type: 'MusicGroup' },
+  facts: initialFacts = EMPTY_FACTS,
   about = null,
   onEditBio,
   onEditText,

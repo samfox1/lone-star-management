@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
+import { compareLibrary, sortLibrary } from '@/lib/library-order'
 import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
 import { CardGrid } from '../card-grid'
@@ -84,52 +85,13 @@ const TYPE_LABEL: Record<ReleaseType, string> = {
 }
 const TYPE_ORDER = RELEASE_TYPES
 
-/**
- * Where an UNDATED release sorts. It is the thing you just added — a record typed in
- * before its release date is known — so it counts as the newest: first under Newest, last
- * under Oldest (Sam, 2026-09-09: "the newest ones should be in the top left of their
- * respective section… it should enter the list as a stack, not append to the end").
- *
- * ONE sentinel, read by both directions. They used to disagree: `oldest` treated an
- * undated release as `'9999'` (far future, therefore newest, therefore last in an
- * ascending sort — right), while `newest` treated the SAME release as `''` (therefore
- * oldest, therefore last again). Undated items sank to the bottom whichever way you
- * sorted, which is not a preference, it is the two halves contradicting each other.
- *
- * `||`, not `??`: a blank date input stores '', and only `||` reads that as undated. The
- * old `??` let an empty string fall through to a string compare it lost against every
- * real date.
- */
-const FAR_FUTURE = '9999'
-
-/** Anything the Music page shows in a section: a release, or a song with no release row
- *  behind it (a SoundCloud single/remix). They sort against each OTHER, so they answer
- *  the same three questions. */
-type Sortable = { title: string; release_date?: string | null; created_at?: string }
-
-const sortDate = (x: Sortable) => x.release_date || FAR_FUTURE
-/** When it landed in the library. The tie-break, and the ONLY key for a batch of imports
- *  that share no release date — "the ones added most recently should show up first". */
-const addedAt = (x: Sortable) => x.created_at || ''
-
-/**
- * ONE comparator for a whole section, whatever kind of thing is in it.
- *
- * A SoundCloud single creates no release row, so it renders as an orphan SONG. The section
- * used to draw every release and then every orphan — two consecutive lists — so a single
- * imported five minutes ago sat after a release from 2019 however the sort was set.
- * Sorting the two lists separately would not have fixed that; they have to be one list.
- */
-function compareBy(sort: Sort): (a: Sortable, b: Sortable) => number {
-  if (sort === 'az') return (a, b) => a.title.localeCompare(b.title)
-  const newest = (a: Sortable, b: Sortable) =>
-    sortDate(b).localeCompare(sortDate(a)) || addedAt(b).localeCompare(addedAt(a))
-  return sort === 'newest' ? newest : (a, b) => newest(b, a)
-}
-
-function sorted<T extends Sortable>(items: T[], sort: Sort): T[] {
-  return [...items].sort(compareBy(sort))
-}
+// The order itself lives in lib/library-order (review, 2026-09-09): one rule for this
+// page and the Videos page, in a pure module Stryker can see. What stays here is the
+// SHAPE this page needs — releases and orphan songs sorted AGAINST EACH OTHER, because a
+// SoundCloud single creates no release row and used to sit behind every release in its
+// section however the sort was set.
+const sorted = sortLibrary
+const compareBy = compareLibrary
 
 /**
  * The ONE Music surface: every release and song, filtered by two segmented

@@ -13,6 +13,7 @@ import { OriginSection, groupByOrigin } from '../origin'
 import { useLiveOnSite } from '../use-live-on-site'
 import { publishEntityAction } from '../actions'
 import { VideoCard, type VideoItem } from './video-card'
+import { sortLibrary } from '@/lib/library-order'
 
 type Kind = 'videos' | 'shorts'
 type Sort = 'added' | 'az'
@@ -65,17 +66,18 @@ export function VideosBrowser({
 
   const inKind = videos.filter((v) => (v.is_short ? kind === 'shorts' : kind === 'videos'))
   let shown = filterBySite(inKind, site)
-  if (sort === 'az') shown = [...shown].sort((a, b) => a.title.localeCompare(b.title))
   // "Added" means MOST RECENTLY added (Sam, 2026-09-09). The rows arrive oldest first —
   // listContent orders `sort_order, created_at` ascending and every undragged row ties on
   // sort_order 0 — so an imported video used to land at the bottom of its section. The
   // flip is done here rather than in listContent because lib/site.ts reads that same
   // ordering for the PUBLIC site, and this is a library view, not the site's order.
   //
-  // Sorted before grouping, so each provider section gets its own newest-first run rather
-  // than the newest video being hoisted out of its section (`groupByOrigin` keeps the
-  // order it is handed within each group).
-  else shown = [...shown].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  // The ORDER is lib/library-order's, shared with the Music page: a video has no release
+  // date, so it reads as "undated" and falls straight through to created_at. Sorted
+  // before grouping, so each provider section gets its own newest-first run rather than
+  // the newest video being hoisted out of its section (`groupByOrigin` keeps the order it
+  // is handed within each group).
+  shown = sortLibrary(shown, sort === 'az' ? 'az' : 'newest')
 
   const groups = groupByOrigin(shown, (v) => v.provider ?? 'youtube', ORIGIN_ORDER, providerLabel)
 

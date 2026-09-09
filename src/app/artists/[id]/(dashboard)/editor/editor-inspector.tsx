@@ -2,7 +2,7 @@
 
 import type { MediaKind } from '@samfox1/site-bridge/payload'
 import type { ManifestAbout } from '@samfox1/site-bridge/seo'
-import type { ArtistFacts, SiteTextField } from './panels/site-tools'
+import { EMPTY_FACTS, type ArtistFacts, type SiteTextField } from './panels/site-tools'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY } from './inspector-shared'
@@ -144,9 +144,14 @@ const COMPONENTS: Component[] = [
  *  then fired forever — any caller that simply omitted the optional prop crashed the
  *  inspector with "Too many re-renders". Found while fixing the 2026-08-09 review. */
 const NO_STYLES: Record<string, string> = {}
-/** The Site panel's facts, before the artist has any. Its own constant so the spread that
- *  folds this session's edits over them has a stable object to start from. */
-const EMPTY_FACTS: ArtistFacts = { genre: '', location: '', schema_type: 'MusicGroup' }
+
+/** The SEO/GEO editor's debounce key: the store rides in the key because the hook keys
+ *  its timers by one string and the write may run after the editor has closed. */
+const siteFieldKey = (f: Pick<SiteTextField, 'store' | 'key'>) => `${f.store}:${f.key}`
+const parseSiteFieldKey = (storeKey: string): Pick<SiteTextField, 'store' | 'key'> => {
+  const i = storeKey.indexOf(':')
+  return { store: storeKey.slice(0, i) as SiteTextField['store'], key: storeKey.slice(i + 1) }
+}
 
 /** Shown when the connected site was built against an OLDER bridge than the editor: a
  *  control here can write a token the site's applier can't lift yet, so a slider may do
@@ -339,17 +344,10 @@ export function EditorInspector({
    *  open — without them, backing out would redraw the snippet from the draft the page was
    *  rendered with, and the edit would look like it did nothing until a refresh. */
   const [editingSite, setEditingSite] = useState<SiteTextField | null>(null)
-  const [siteEdits, setSiteEdits] = useState<Record<string, string>>({})
-  /** Split back into the two shapes SiteTools takes. One map is written (the editor knows
-   *  only a key); two are read, because the panel keeps SEO strings and artist facts apart. */
-  const seoOverrides = useMemo(
-    () => Object.fromEntries(Object.entries(siteEdits).filter(([k]) => k.startsWith('seo_'))),
-    [siteEdits],
-  )
-  const factOverrides = useMemo(
-    () => Object.fromEntries(Object.entries(siteEdits).filter(([k]) => !k.startsWith('seo_'))),
-    [siteEdits],
-  )
+  /** Keyed by STORE, then key — the descriptor says where a field lives, and nothing here
+   *  re-derives that from the key's spelling (the review, 2026-09-09, found the first
+   *  version guessing `seo_` prefixes, which is exactly what `store` exists to end). */
+  const [siteEdits, setSiteEdits] = useState<Record<SiteTextField['store'], Record<string, string>>>({ seo: {}, fact: {} })
   // The one TOUR DATE handed the whole panel (its supporting acts and their links). A
   // third state rather than a branch of ItemEdit: that union is media-shaped —
   // preview, Replace, Remove — and a show has none of those.
@@ -533,8 +531,11 @@ export function EditorInspector({
    * row nothing reads (the ftbk bug, 2026-08-20), which is why the row hands it up.
    */
   const siteTextSave = useDebouncedFieldSave<string>({
-    persist: (key, value) => {
-      const store = key.startsWith('seo_') || key === 'about_placement' ? 'seo' : 'fact'
+    // The debounce key is `<store>:<key>` (see `siteFieldKey`): the hook keys its timers
+    // by one string, and the store has to survive the debounce — the editor may be closed
+    // by the time the write runs, so it cannot be read off `editingSite` then.
+    persist: (storeKey, value) => {
+      const { store, key } = parseSiteFieldKey(storeKey)
       const run =
         store === 'seo'
           ? saveSeoFieldAction(artistId, key, value)
@@ -951,21 +952,22 @@ export function EditorInspector({
   /** The SEO/GEO field open full-panel — the SAME editor the Text panel opens, so "Edit"
    *  is one gesture everywhere. No style controls: an SEO string renders in a search
    *  result, not on the page, so there is nothing to restyle. */
+  const siteTextValue = editingSite ? (siteEdits[editingSite.store][editingSite.key] ?? editingSite.value) : ''
   const siteTextEditor = editingSite ? (
     <TextFieldEditor
       field={{
         key: editingSite.key,
         label: editingSite.label,
         type: 'text',
-        value: siteEdits[editingSite.key] ?? editingSite.value,
+        value: siteTextValue,
         multiline: editingSite.multiline ?? false,
       }}
-      value={siteEdits[editingSite.key] ?? editingSite.value}
+      value={siteTextValue}
       status={siteTextSave.status}
       styleValues={NO_STYLES}
       onEdit={(v) => {
-        setSiteEdits((m) => ({ ...m, [editingSite.key]: v }))
-        siteTextSave.save(editingSite.key, v)
+        setSiteEdits((m) => ({ ...m, [editingSite.store]: { ...m[editingSite.store], [editingSite.key]: v } }))
+        siteTextSave.save(siteFieldKey(editingSite), v)
       }}
       onStyle={() => {}}
       onBack={() => setEditingSite(null)}
@@ -1147,8 +1149,8 @@ export function EditorInspector({
         artistId={artistId}
         photos={photos}
         values={cursorValues}
-        seo={{ ...seoValues, ...seoOverrides }}
-        facts={{ ...(artistFacts ?? EMPTY_FACTS), ...factOverrides }}
+        seo={{ ...seoValues, ...siteEdits.seo }}
+        facts={{ ...(artistFacts ?? EMPTY_FACTS), ...siteEdits.fact }}
         about={manifestAbout}
         onEditText={(f) => {
           closeEditors() // one editor in the panel at a time

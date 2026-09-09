@@ -48,37 +48,7 @@ import type {
   EditorVideo,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
-vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
-  deleteMediaAction: vi.fn(async () => ({})),
-  reorderGalleryAction: vi.fn(async () => ({})),
-  saveEditorFieldAction: vi.fn(async () => ({})),
-  saveEditorStyleAction: vi.fn(async () => ({ ok: true })),
-  saveEditorLinkAction: vi.fn(async () => ({ ok: true })),
-  updateContentAction: vi.fn(async () => ({})),
-  deleteContentAction: vi.fn(async () => ({})),
-  reorderContentAction: vi.fn(async () => ({})),
-  renameVideoAction: vi.fn(async () => ({})),
-  setOnSiteAction: vi.fn(async () => ({})),
-  placeGalleryPhotoAction: vi.fn(async () => ({})),
-  setMediaLabelAction: vi.fn(async () => ({})),
-  setMediaAltAction: vi.fn(async () => ({})),
-  setMediaKindAction: vi.fn(async () => ({})),
-  renameMediaAction: vi.fn(async () => ({ storage_path: 'artist-1/gallery/renamed.jpg' })),
-  setSupportUrlAction: vi.fn(async () => ({})),
-  assignHeroSlotAction: vi.fn(async () => ({})),
-  assignComponentSlotAction: vi.fn(async () => ({})),
-  setSongsOnSiteAction: vi.fn(async () => ({})),
-  setImageFieldAction: vi.fn(async () => ({ ok: true })),
-  addContentAction: vi.fn(async () => ({})),
-  restorePublishedAction: vi.fn(async () => ({ ok: true, changed: 3, hasPublished: true })),
-  listPublishMomentsAction: vi.fn(async () => ({
-    ok: true,
-    moments: [
-      { publishedAt: '2026-08-14T18:00:00.000Z', entities: 4 },
-      { publishedAt: '2026-08-10T09:30:00.000Z', entities: 12 },
-    ],
-  })),
-}))
+vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('./helpers/editor-actions'))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   MediaUploader: ({ onUploaded }: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => (

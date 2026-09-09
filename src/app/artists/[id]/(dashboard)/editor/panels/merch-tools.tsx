@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/icons'
 import { type EditorMerch } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { AddLink } from '../inspector-grid'
+import { onSiteOnly } from '../inspector-shared'
 
 /* ── Merch tools: a cover grid like Music, one card per product (Sam, 2026-08-18).
  * The card face SELECTS (outlines the product on the site); the pencil opens the
@@ -30,16 +31,9 @@ export function MerchTools({
 }) {
   const { dragProps, isOver } = useDragReorder((fromId, toId) => onReorder?.(fromId, toId))
 
-  /**
-   * ONLY what is on the site (Sam, 2026-09-09, extending the Music panel's rule). The
-   * editor is a view of the SITE; the library is the Merch page, which is where the Add
-   * link at the bottom already goes.
-   *
-   * `onSite`, NOT `inStock`. They are different flags and this card already dims by the
-   * second one: a sold-out product is still ON the page — fans see it marked sold out —
-   * so filtering by stock would hide the one thing the manager most needs to edit.
-   */
-  const shown = merch.filter((m) => m.onSite)
+  // On-site only (`onSiteOnly` — the rule, once). By `onSite`, NOT `inStock`: this card
+  // already dims by stock, and a sold-out product is still on the page.
+  const shown = onSiteOnly(merch)
 
   return (
     <div className="space-y-2.5 px-5 py-4">

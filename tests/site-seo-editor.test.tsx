@@ -21,36 +21,7 @@ import { saveArtistFactAction, saveSeoFieldAction } from '@/app/artists/[id]/(da
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({ GallerySlotUploader: () => null, MediaUploader: () => null }))
-// Listed rather than proxied: vitest validates a module mock's shape at collection time,
-// and a Proxy answers `has` for everything including the ESM interop probes.
-vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
-  saveSeoFieldAction: vi.fn(async () => ({ ok: true })),
-  saveArtistFactAction: vi.fn(async () => ({ ok: true })),
-  saveCursorFieldAction: vi.fn(async () => ({ ok: true })),
-  saveEditorFieldAction: vi.fn(async () => ({})),
-  saveEditorStyleAction: vi.fn(async () => ({ ok: true })),
-  saveEditorLinkAction: vi.fn(async () => ({ ok: true })),
-  deleteMediaAction: vi.fn(async () => ({})),
-  reorderGalleryAction: vi.fn(async () => ({})),
-  updateContentAction: vi.fn(async () => ({})),
-  deleteContentAction: vi.fn(async () => ({})),
-  reorderContentAction: vi.fn(async () => ({})),
-  renameVideoAction: vi.fn(async () => ({})),
-  setOnSiteAction: vi.fn(async () => ({})),
-  placeGalleryPhotoAction: vi.fn(async () => ({})),
-  setMediaLabelAction: vi.fn(async () => ({})),
-  setMediaAltAction: vi.fn(async () => ({})),
-  setMediaKindAction: vi.fn(async () => ({})),
-  renameMediaAction: vi.fn(async () => ({})),
-  setSupportUrlAction: vi.fn(async () => ({})),
-  assignHeroSlotAction: vi.fn(async () => ({})),
-  assignComponentSlotAction: vi.fn(async () => ({})),
-  setSongsOnSiteAction: vi.fn(async () => ({})),
-  setImageFieldAction: vi.fn(async () => ({ ok: true })),
-  addContentAction: vi.fn(async () => ({})),
-  restorePublishedAction: vi.fn(async () => ({ ok: true, changed: 0, hasPublished: true })),
-  listPublishMomentsAction: vi.fn(async () => ({ ok: true, moments: [] })),
-}))
+vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('./helpers/editor-actions'))
 
 const seoMock = vi.mocked(saveSeoFieldAction)
 const factMock = vi.mocked(saveArtistFactAction)

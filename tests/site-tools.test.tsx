@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SiteTools } from '@/app/artists/[id]/(dashboard)/editor/panels/site-tools'
+import { EditRow } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
 import { saveArtistFactAction, saveCursorFieldAction, saveSeoFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { ABOUT_PLACEMENTS } from '@samfox1/site-bridge/seo'
 import { CURSOR_CONTENT_KEYS, type CursorSettings } from '@samfox1/site-bridge/cursor'
@@ -197,9 +198,14 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
     const row = screen.getByRole('button', { name: 'Edit Title' }).closest('div.group')
     expect(row, 'the Title row is not an EditRow any more').not.toBeNull()
     expect(row?.className, 'the SEO rows are indented again').not.toContain('px-4')
-    // The witness: the shared component still pads everywhere ELSE, so this is a flush
-    // VARIANT rather than the padding being deleted for everyone.
     expect(container.querySelector('.px-4')).toBeNull()
+    // The WITNESS, rendered rather than claimed: a plain EditRow still pads, so what the
+    // SEO rows have is a flush VARIANT and not padding deleted for every panel. (The
+    // first version of this test asserted only the absence above and called it a
+    // witness — review, 2026-09-09.)
+    cleanup()
+    const plain = render(<EditRow label="Elsewhere" value="v" onEdit={() => {}} />)
+    expect(plain.container.querySelector('div.group')?.className).toContain('px-4')
   })
 
   it('an empty text row reads as empty rather than blank', () => {

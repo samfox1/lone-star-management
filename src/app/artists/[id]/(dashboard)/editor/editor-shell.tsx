@@ -8,7 +8,7 @@ import { bridgeOutdated } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { mediaUrl } from '@/lib/storage-url'
 import { withStyleVars, withUploadedFonts } from '@/lib/site-editor/style-controls'
-import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
+import { effectivePage, resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
 import { CURSOR_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
@@ -58,19 +58,24 @@ export function runtimeTextFields(
       ? { store: 'artist' as const, column: t.column as 'name' | 'bio' }
       : undefined
   }
-  // A page is worth NAMING only when it is not the one an untagged region would belong
-  // to. `pages[0]` is that page by the bridge's rule, so a site with no `pages`, or a
-  // field tagged with the first one, heads nothing — and every panel that predates pages
-  // renders exactly as it did.
+  // The page a field belongs to is the EFFECTIVE one (panel-inputs `effectivePage`): an
+  // absent or undeclared tag means the first page, the same rule items follow. The review
+  // (2026-09-09) found the raw tag passed through here, so a field tagged with a page the
+  // site no longer declared had a highlight the frame could never satisfy.
+  //
+  // A page is worth NAMING only when it is not the first: a site with no `pages`, or a
+  // field on the first one, heads nothing — and every panel that predates pages renders
+  // exactly as it did.
   const pages = manifest?.pages
-  const firstPage = pages?.[0]?.key
-  const pageLabelFor = (page: string | undefined) =>
-    page && page !== firstPage ? pages?.find((p) => p.key === page)?.label : undefined
+  const first = pages?.[0]?.key
+  const pageOf = (tag: string | undefined) => effectivePage(tag, pages)
+  const labelOf = (page: string | undefined) =>
+    page && page !== first ? pages?.find((p) => p.key === page)?.label : undefined
   return textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
     key: e.key,
     label: e.label,
-    page: e.field?.page,
-    pageLabel: pageLabelFor(e.field?.page),
+    page: pageOf(e.field?.page),
+    pageLabel: labelOf(pageOf(e.field?.page)),
     type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
     target: artistTarget(e.field),
     value: (() => {

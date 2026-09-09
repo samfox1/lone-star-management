@@ -63,6 +63,25 @@ export const SCROLL_BODY = 'flex-1 overflow-y-auto [scrollbar-width:none] [&::-w
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 /**
+ * ONLY what is on the site — the rule every item panel lists by (Sam, 2026-09-09: "items
+ * like songs here that have been untallied (dont have the blue check) should be off the
+ * panel. i can always re-add them with the add music button").
+ *
+ * The editor is a view of the SITE. The LIBRARY — everything the artist owns, on the site
+ * or not — is the dashboard page for that type, which is where each panel's Add link
+ * already goes. A panel listing the library meant editing a two-album site started with
+ * scrolling past the back catalogue. Turning something off therefore removes it from the
+ * panel; that is the gesture, not a side effect, and the Add link is the way back.
+ *
+ * Here rather than in each panel so the rule is stated once and read by `onSite`, never
+ * by a neighbouring flag — merch also carries `inStock`, and a sold-out product is still
+ * on the page.
+ */
+export function onSiteOnly<T extends { onSite: boolean }>(items: readonly T[]): T[] {
+  return items.filter((i) => i.onSite)
+}
+
+/**
  * Run a field's save SERIALIZED per id (chained onto that field's previous save, so an
  * older keystroke's write can't land after a newer one — review #6), and reflect the
  * result honestly across concurrent fields via an `errored` set, so one field's failure
