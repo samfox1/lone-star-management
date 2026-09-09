@@ -30,10 +30,21 @@ export function MerchTools({
 }) {
   const { dragProps, isOver } = useDragReorder((fromId, toId) => onReorder?.(fromId, toId))
 
+  /**
+   * ONLY what is on the site (Sam, 2026-09-09, extending the Music panel's rule). The
+   * editor is a view of the SITE; the library is the Merch page, which is where the Add
+   * link at the bottom already goes.
+   *
+   * `onSite`, NOT `inStock`. They are different flags and this card already dims by the
+   * second one: a sold-out product is still ON the page — fans see it marked sold out —
+   * so filtering by stock would hide the one thing the manager most needs to edit.
+   */
+  const shown = merch.filter((m) => m.onSite)
+
   return (
     <div className="space-y-2.5 px-5 py-4">
       <div className="grid grid-cols-3 gap-2.5">
-        {merch.map((m) => {
+        {shown.map((m) => {
           const focused = focusedKey === `item:merch:${m.id}`
           return (
             <div

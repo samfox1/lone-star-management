@@ -161,9 +161,15 @@ const VIDEOS: EditorVideo[] = [
   yt({ id: 'v3', title: 'Tour recap', poster: null, onSite: false }),
 ]
 
+// ON SITE, both. The panel shows only on-site products (2026-09-09), and every test
+// below is about the merch EDITOR — the pencil, the debounced save, the stock toggle,
+// drag, delete. They were written when the panel listed everything, so the fixture's
+// `onSite: false` was incidental; left as it was, it now renders an empty panel and the
+// whole group fails for a reason none of them is about. p2 stays OUT of stock, which is
+// a different flag and still what its test needs.
 const MERCH: EditorMerch[] = [
-  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: false, inStock: true },
-  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: false, inStock: false },
+  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: true, inStock: true },
+  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: true, inStock: false },
 ]
 
 const RELEASES: EditorProject[] = [
