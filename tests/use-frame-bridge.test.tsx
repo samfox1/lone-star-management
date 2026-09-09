@@ -722,3 +722,133 @@ describe('a page change clears what was selected on the page left behind', () =>
     expect(result.current.selectedStyle?.key).toBe('hero')
   })
 })
+
+/* ── highlighting something that lives on another page ──────────────────────────────
+ * Sam, 2026-09-09: there are no page tabs. The Text panel lists every page's copy, and
+ * clicking an entry is what moves the frame — "clicking it should highlight the about
+ * text on the about page".
+ *
+ * So a highlight can name a page. When that page is not the one showing, the frame has to
+ * get there FIRST: highlighting immediately would aim at an element that does not exist
+ * yet, and the frame would answer with nothing while the panel row looked selected. The
+ * request is therefore held until the frame reports it arrived.
+ */
+describe('a highlight can name a page, and waits for the frame to get there', () => {
+  const PAGES = [
+    { key: 'home', label: 'Home', path: '/' },
+    { key: 'about', label: 'About', path: '/about' },
+  ]
+  const manifest = {
+    template: 'skeen', page: 'home', pages: PAGES,
+    fields: [{ key: 'artist_bio', label: 'About', type: 'text', target: { store: 'artist', column: 'bio' }, page: 'about' }],
+    slots: [], links: [], styles: [],
+  }
+  const target = { kind: 'field' as const, key: 'artist_bio' }
+
+  const onAbout = () => {
+    const h = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+    return h
+  }
+
+  it('CRITICAL: a highlight for ANOTHER page asks the frame to move, and does not fire yet', () => {
+    const { result, frame } = onAbout()
+    act(() => result.current.applyHighlight(target, 'about'))
+
+    expect(posted(frame, 'set-page'), 'the frame was never asked to move').toHaveLength(1)
+    expect(posted(frame, 'set-page')[0][0]).toMatchObject({ page: 'about' })
+    expect(posted(frame, 'highlight'), 'highlighted an element that is not rendered yet').toHaveLength(0)
+  })
+
+  it('CRITICAL: it fires once the frame reports it arrived', () => {
+    const { result, frame } = onAbout()
+    act(() => result.current.applyHighlight(target, 'about'))
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+
+    expect(posted(frame, 'highlight')).toHaveLength(1)
+    expect(posted(frame, 'highlight')[0][0]).toMatchObject({ target })
+  })
+
+  it('CRITICAL: it fires only ONCE — the frame re-reports its page constantly', () => {
+    // `page-change` arrives again after paint and on every `hello`. A held request that
+    // re-fired on each would re-highlight a region the manager had since deselected.
+    const { result, frame } = onAbout()
+    act(() => result.current.applyHighlight(target, 'about'))
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+
+    expect(posted(frame, 'highlight')).toHaveLength(1)
+  })
+
+  it('CRITICAL: a highlight for the page ALREADY showing fires straight away', () => {
+    const { result, frame } = onAbout()
+    act(() => result.current.applyHighlight(target, 'home'))
+
+    expect(posted(frame, 'set-page'), 'asked the frame to move to where it already is').toHaveLength(0)
+    expect(posted(frame, 'highlight')).toHaveLength(1)
+  })
+
+  it('CRITICAL: no page named means fire now — every caller that predates pages', () => {
+    const { result, frame } = onAbout()
+    act(() => result.current.applyHighlight(target))
+
+    expect(posted(frame, 'set-page')).toHaveLength(0)
+    expect(posted(frame, 'highlight')).toHaveLength(1)
+  })
+
+  it('a held request is dropped if the frame lands somewhere else', () => {
+    // The manager clicked About and then navigated the site themselves. Firing on the
+    // wrong page would highlight whatever happens to share that key, or nothing at all.
+    const { result, frame } = onAbout()
+    act(() => result.current.applyHighlight(target, 'about'))
+    frameSays({ type: 'page-change', page: 'home' }, CUSTOM)
+
+    expect(posted(frame, 'highlight')).toHaveLength(0)
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    expect(posted(frame, 'highlight'), 'a dropped request must stay dropped').toHaveLength(0)
+  })
+
+  it('on a site with no pages, a named page is ignored rather than stalling', () => {
+    // `framePage` is null forever on every site that declares none. Holding the request
+    // for a `page-change` that will never come would make the panel row do nothing.
+    const h = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: { template: 'skeen', fields: [], slots: [], links: [], styles: [] } }, CUSTOM)
+    act(() => h.result.current.applyHighlight(target, 'about'))
+
+    expect(posted(h.frame, 'highlight')).toHaveLength(1)
+    expect(posted(h.frame, 'set-page')).toHaveLength(0)
+  })
+})
+
+/* ── the ref that `applyHighlight` reads must not outlive an eviction ──────────────── */
+describe('an evicted page clears the ref applyHighlight decides from', () => {
+  const pageOf = (key: string) => ({ key, label: key, path: key === 'home' ? '/' : `/${key}` })
+  const target = { kind: 'field' as const, key: 'artist_bio' }
+  const manifest = (pages: string[]) => ({
+    template: 'skeen', page: 'home', pages: pages.map(pageOf),
+    fields: [], slots: [], links: [], styles: [],
+  })
+
+  it('CRITICAL: after the frame’s page leaves the declaration, a highlight fires now', () => {
+    // `framePage` goes null on eviction. If the REF kept the dead page, applyHighlight
+    // would compare against it, decide the target is elsewhere, and hold a request for a
+    // `page-change` that is never coming — the row would silently do nothing.
+    const { result, frame } = mount({ customSiteUrl: CUSTOM })
+    frameSays({ type: 'ready', manifest: manifest(['home', 'about']) }, CUSTOM)
+    frameSays({ type: 'page-change', page: 'about' }, CUSTOM)
+    expect(result.current.framePage).toBe('about')
+
+    // The bio moves off its own page; the site re-announces without /about.
+    frameSays({ type: 'ready', manifest: manifest(['home']) }, CUSTOM)
+    expect(result.current.framePage).toBeNull()
+
+    // Named a DIFFERENT page from the evicted one, deliberately: naming 'about' would
+    // match the stale ref and fire by accident, proving nothing. `framePage` is null now,
+    // which means the editor does not know where the frame is — and "don't know" fires
+    // immediately rather than holding for a `page-change` nobody promised.
+    act(() => result.current.applyHighlight(target, 'home'))
+    expect(posted(frame, 'highlight'), 'the request stalled on a stale page ref').toHaveLength(1)
+    expect(posted(frame, 'set-page')).toHaveLength(0)
+  })
+})

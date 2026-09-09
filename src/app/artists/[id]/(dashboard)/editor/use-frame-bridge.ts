@@ -70,7 +70,7 @@ export type FrameBridge = {
   /** Pause (false) / resume (true) every playing video in the frame. */
   setPlayback: (playing: boolean) => void
   /** Outline + scroll a region into view in the frame (a tile click in the inspector). */
-  applyHighlight: (target: SelectTarget) => void
+  applyHighlight: (target: SelectTarget, page?: string) => void
   /** Drop the frame's current highlight (the tile was deselected). */
   clearHighlight: () => void
   /** Switch the frame between selecting regions and working the site (`set-mode`). */
@@ -137,6 +137,13 @@ export function useFrameBridge({
    *  (a re-subscribe mid-drag would drop the drop). */
   const manifestRef = useRef<TemplateManifest | null>(null)
   const [framePage, setFramePage] = useState<string | null>(null)
+  /** `framePage` as a ref: `applyHighlight` is handed to panels and must not go stale, and
+   *  the message listener must not re-subscribe every time the frame changes page. */
+  const framePageRef = useRef<string | null>(null)
+  /** A highlight waiting for the frame to reach the page it lives on. There are no page
+   *  tabs (Sam, 2026-09-09) — clicking a Text row for another page IS the navigation — so
+   *  the request outlives the click and is posted once the frame reports it arrived. */
+  const pendingHighlight = useRef<{ target: SelectTarget; page: string } | null>(null)
   const [droppedRegions, setDroppedRegions] = useState<DroppedRegion[]>([])
   /** ONE ANNOUNCE PER PAGE, keyed by `manifest.page` (D4). The held manifest is derived
    *  from this map, never accumulated into — that is what lets a region the site STOPS
@@ -200,7 +207,30 @@ export function useFrameBridge({
    *  my page load look like" needs a button, not a hunt for the reload gesture. */
   /** Pause / resume every playing video in the frame (the toolbar toggle). */
   const setPlayback = useCallback((playing: boolean) => post({ type: 'set-playback', playing }), [post])
-  const applyHighlight = useCallback((target: SelectTarget) => post({ type: 'highlight', target }), [post])
+  /**
+   * Outline a region in the frame — optionally one that lives on ANOTHER page.
+   *
+   * Highlighting across pages cannot be posted straight away: the element is not rendered,
+   * the frame answers with nothing, and the panel row sits there looking selected. So the
+   * frame is asked to move and the request is HELD until its `page-change` says it got
+   * there. If it lands somewhere else instead — the manager navigated the site themselves
+   * — the request is dropped rather than fired at the wrong page.
+   *
+   * A page that is null (every site declaring none) or equal to the one showing fires
+   * immediately, which is also what every caller written before pages gets.
+   */
+  const applyHighlight = useCallback(
+    (target: SelectTarget, page?: string) => {
+      const current = framePageRef.current
+      if (page && current !== null && page !== current) {
+        pendingHighlight.current = { target, page }
+        post({ type: 'set-page', page })
+        return
+      }
+      post({ type: 'highlight', target })
+    },
+    [post],
+  )
   const clearHighlight = useCallback(() => post({ type: 'clear-highlight' }), [post])
   /** Whether a click in the frame SELECTS a region or works the site. See the protocol's
    *  `set-mode`: a site with navigation is unbrowsable while every click is swallowed. */
@@ -320,9 +350,15 @@ export function useFrameBridge({
           // that follows the contract (`pageChanged` after paint) sends the real answer
           // right behind this announce. A switcher pointing at an evicted page is the bug
           // one layer up, and null is what it already handles before the first page-change.
-          setFramePage((current) =>
-            current !== null && (folded?.pages ?? []).some((p) => p.key === current) ? current : null,
-          )
+          setFramePage((current) => {
+            const kept = current !== null && (folded?.pages ?? []).some((p) => p.key === current) ? current : null
+            // The REF moves with the state. `applyHighlight` decides from it, and a ref
+            // still naming an evicted page would make it hold a request for a
+            // `page-change` that is never coming — the panel row would do nothing at all.
+            // Null means "we do not know where the frame is", which fires immediately.
+            framePageRef.current = kept
+            return kept
+          })
         }
         if (draft) {
           deliveredDraft.current = draft
@@ -348,7 +384,17 @@ export function useFrameBridge({
         // ignored rather than trusted — the switcher would otherwise show a page no panel
         // can filter to.
         const declared = (manifestRef.current?.pages ?? []).some((p) => p.key === msg.page)
-        if (declared)
+        if (declared) {
+          // The held cross-page highlight resolves HERE, once, whichever way it goes: the
+          // frame reached the page (fire) or landed elsewhere (drop). Cleared either way,
+          // because `page-change` repeats — after paint and on every `hello` — and a
+          // request that re-fired would re-highlight a region already deselected.
+          const held = pendingHighlight.current
+          if (held) {
+            pendingHighlight.current = null
+            if (held.page === msg.page) post({ type: 'highlight', target: held.target })
+          }
+          framePageRef.current = msg.page
           setFramePage((prev) => {
             // A MOVE drops the selection; a re-report of the page already showing does
             // not. The frame re-announces constantly — after paint, on every `hello` —
@@ -366,6 +412,7 @@ export function useFrameBridge({
             }
             return msg.page
           })
+        }
       } else if (msg.type === 'measured') {
         setMeasuredRegion({ key: msg.key, measured: msg.measured })
       } else if (msg.type === 'deselect') {
@@ -385,7 +432,11 @@ export function useFrameBridge({
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [draft, targetOrigin])
+    // `post` is listed and costs nothing: it depends only on `targetOrigin`, which this
+    // effect already re-subscribes on. The listener releases a held cross-page highlight,
+    // so it needs to post — everything else it touches is still reached through a ref, to
+    // keep the subscription from churning on every manifest and every draft.
+  }, [draft, targetOrigin, post])
 
   /**
    * Hand the frame its draft whenever we have both a draft and a live bridge.

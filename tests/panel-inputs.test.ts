@@ -49,10 +49,6 @@ const resolve = (over: Partial<Parameters<typeof resolvePanelInputs>[0]> = {}) =
   resolvePanelInputs({
     customSiteUrl: 'https://site.example',
     manifest: FULL,
-    // No page: this suite is about a category REACHING a panel, and FULL declares a
-    // single-page site. The per-page narrowing has its own suite
-    // (tests/editor-page-filter.test.ts) — null is the state every site here is in.
-    page: null,
     draft: DRAFT,
     siteContent: CONTENT,
     local: { textFields: [], imageFields: [] },

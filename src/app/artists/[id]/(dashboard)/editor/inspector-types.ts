@@ -57,6 +57,14 @@ export type EditorTextField = {
    *  and the page (which renders artist.bio) never showed the edit (found wiring
    *  ftbk, 2026-08-20). Absent → site_content by key, the historic behaviour. */
   target?: { store: 'artist'; column: 'name' | 'bio' }
+  /** Which PAGE this copy lives on, from the site's declaration. Absent on a single-page
+   *  site and on the first declared page (the bridge's rule: an untagged region belongs to
+   *  the first page). Carried so a click can send the frame there before highlighting. */
+  page?: string
+  /** The site's own name for that page ("About"), and the heading the Text panel files
+   *  the row under. Set ONLY for a page that is not the first — heading the first page
+   *  would put a "Home" bar above every existing site's panel for no information. */
+  pageLabel?: string
   /** The style region dressing this field's element, when the site declares one — the
    *  Text panel offers Font/Size/Boldness against it, so the words and how they look are
    *  edited in one place. Null when the site declares no region for this field, which is

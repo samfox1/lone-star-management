@@ -58,9 +58,19 @@ export function runtimeTextFields(
       ? { store: 'artist' as const, column: t.column as 'name' | 'bio' }
       : undefined
   }
+  // A page is worth NAMING only when it is not the one an untagged region would belong
+  // to. `pages[0]` is that page by the bridge's rule, so a site with no `pages`, or a
+  // field tagged with the first one, heads nothing — and every panel that predates pages
+  // renders exactly as it did.
+  const pages = manifest?.pages
+  const firstPage = pages?.[0]?.key
+  const pageLabelFor = (page: string | undefined) =>
+    page && page !== firstPage ? pages?.find((p) => p.key === page)?.label : undefined
   return textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
     key: e.key,
     label: e.label,
+    page: e.field?.page,
+    pageLabel: pageLabelFor(e.field?.page),
     type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
     target: artistTarget(e.field),
     value: (() => {
@@ -226,8 +236,6 @@ export function EditorShell({
     setMode,
     frameMode,
     manifest,
-    framePage,
-    setPage,
     selectedStyle,
     selectedLink,
     selectedRegion,
@@ -302,16 +310,12 @@ export function EditorShell({
       resolvePanelInputs({
         customSiteUrl,
         manifest,
-        // The page the FRAME is showing (P2/D5). Page-scoped categories narrow to it, so
-        // the Style panel on About lists About's regions rather than all forty of Home's,
-        // every one of which would highlight nothing — the element is not in the frame.
-        page: framePage,
         draft: draft ?? null,
         siteContent,
         local: { textFields, imageFields },
         derive: { textFields: runtimeTextFields, imageFields: runtimeImageFields },
       }),
-    [customSiteUrl, manifest, framePage, draft, siteContent, textFields, imageFields],
+    [customSiteUrl, manifest, draft, siteContent, textFields, imageFields],
   )
 
   return (
@@ -320,9 +324,6 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
-        pages={manifest?.pages}
-        framePage={framePage}
-        onSelectPage={setPage}
         hasUnpublished={hasUnpublished}
         photos={photos}
         imageFields={panels.imageFields}

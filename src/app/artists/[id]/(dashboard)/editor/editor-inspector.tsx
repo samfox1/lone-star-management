@@ -13,7 +13,6 @@ import {
   type ManifestComponent,
   type ManifestVideoSlot,
   type ManifestLinkRegion,
-  type ManifestPage,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
 import { type EditorStyleOptions } from '@/lib/site-editor/style-controls'
@@ -29,7 +28,6 @@ import { isContactLink, looksLikeEmail } from '@/lib/url'
 const isContactish = (url: string) => isContactLink(url) || looksLikeEmail(url)
 import { Icon, type IconName } from '@/components/ui/icons'
 import { ItemEditor } from './item-editor'
-import { PageSwitcher } from './page-switcher'
 import { buildItemEditorConfig } from './item-editor-config'
 import { budgetFor, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
@@ -163,9 +161,6 @@ function BridgeOutdatedBanner() {
 export function EditorInspector({
   artistId,
   bridgeOutdated = false,
-  pages,
-  framePage = null,
-  onSelectPage,
   photos: initial,
   imageFields = [],
   textFields = [],
@@ -227,14 +222,6 @@ export function EditorInspector({
   tours?: EditorTour[]
   /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
    *  edit-list at runtime; a site that declares none simply has no component section. */
-  /** The pages the SITE declares (SITE_PAGES_PLAN.md P2), straight off the merged
-   *  manifest. Fewer than two and no switcher renders — every site that predates pages
-   *  declares none at all. */
-  pages?: readonly ManifestPage[]
-  /** The page the FRAME says it is showing, or null before its first `page-change`. */
-  framePage?: string | null
-  /** Ask the frame to switch pages. Posts and waits — this never moves the marker. */
-  onSelectPage?: (page: string) => void
   components?: ManifestComponent[]
   /** The open photo pools the site DECLARES (its image slots), in order — one grid each
    *  in the Images panel. Defaults EMPTY: a group is shown because the site asked for
@@ -297,7 +284,10 @@ export function EditorInspector({
   /** Repaint the frame's site-wide cursor live (Site panel). */
   onApplyCursor?: (settings: CursorSettings) => void
   /** Outline + scroll a region into view in the frame (a tile click). */
-  onHighlight?: (target: SelectTarget) => void
+  /** Outline a region in the preview. The second argument is the PAGE it lives on, for a
+   *  region the frame is not currently showing: the hook asks the frame to travel there
+   *  and fires the highlight when it arrives. Absent = wherever the frame already is. */
+  onHighlight?: (target: SelectTarget, page?: string) => void
   /** Drop the frame's highlight (left the Images panel). */
   onClearHighlight?: () => void
 }) {
@@ -392,12 +382,35 @@ export function EditorInspector({
   const isImageRegion = (t: SelectTarget): boolean =>
     t.kind === 'field' ? imageRegionKeys.has(t.key) : t.kind === 'item' && t.assetType === 'image'
 
+  /** Which page a declared region lives on, for the regions that say. Built from the
+   *  panel inputs rather than held as state: the page is a property of the FIELD, and a
+   *  second copy in the inspector is a second thing that can be stale. Only fields carry
+   *  one today — the other categories join as their panels learn about pages. */
+  const pageOfKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const f of textFields) if (f.page) m.set(f.key, f.page)
+    return m
+  }, [textFields])
+
   // Editor → frame: whenever the focused region changes, outline it in the preview (or
   // clear it). A real side effect (postMessage), so it lives in an effect, not in render.
+  //
+  // The PAGE rides along (Sam, 2026-09-09). There are no page tabs: opening a row for
+  // copy that lives on /about IS how a manager gets to /about, so the highlight names the
+  // page and the hook does the travelling. A region on the page already showing passes
+  // none, which is every region on every single-page site.
   useEffect(() => {
-    if (focused) onHighlight?.(focused)
-    else onClearHighlight?.()
-  }, [focused, onHighlight, onClearHighlight])
+    if (!focused) {
+      onClearHighlight?.()
+      return
+    }
+    const page = focused.kind === 'field' ? pageOfKey.get(focused.key) : undefined
+    // Called with ONE argument when there is no page, not with an explicit `undefined`:
+    // every existing caller and its tests were written against the one-argument contract,
+    // and a trailing undefined is a silent change to all of them.
+    if (page) onHighlight?.(focused, page)
+    else onHighlight?.(focused)
+  }, [focused, onHighlight, onClearHighlight, pageOfKey])
 
   // Manually switching components (or backing out) drops the highlight — the outline
   // follows the SELECTION, and a panel change is a deselection of whatever held it.
@@ -1081,10 +1094,6 @@ export function EditorInspector({
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {bridgeOutdated && <BridgeOutdatedBanner />}
-      {/* Above everything, and outside the panel chrome: the page a manager is on scopes
-          every panel below (D5), and is not a property of whichever one happens to be
-          open. Renders nothing at all under two pages. */}
-      <PageSwitcher pages={pages} current={framePage} onSelect={onSelectPage ?? (() => {})} />
       {itemEditor ? (
         itemEditor
       ) : textEditor ? (
