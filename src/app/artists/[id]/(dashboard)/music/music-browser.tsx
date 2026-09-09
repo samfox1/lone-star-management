@@ -25,6 +25,10 @@ export const LOOSE = 'loose'
 export type MusicSong = Track & { created_at: string; release_type: ReleaseType }
 
 export type UnreleasedSong = Track & {
+  /** When it was added to the library — the sort key for a demo with no release date,
+   *  which is most of them. Already carried by the page; declared here so the browser can
+   *  sort on it. */
+  created_at?: string
   /** Release id when the song sits inside an UNRELEASED release, else LOOSE. */
   group: string
   /** The unreleased release's title (unused for LOOSE). */
@@ -97,15 +101,34 @@ const TYPE_ORDER = RELEASE_TYPES
  * real date.
  */
 const FAR_FUTURE = '9999'
-const sortDate = (r: Release) => r.release_date || FAR_FUTURE
 
-function sorted(releases: Release[], sort: Sort): Release[] {
-  const copy = [...releases]
-  if (sort === 'az') return copy.sort((a, b) => a.title.localeCompare(b.title))
-  // A dated release still sorts by its DATE: a back-catalogue record added today is not
-  // new. Arrival order only decides where the undated ones go.
-  if (sort === 'newest') return copy.sort((a, b) => sortDate(b).localeCompare(sortDate(a)))
-  return copy.sort((a, b) => sortDate(a).localeCompare(sortDate(b)))
+/** Anything the Music page shows in a section: a release, or a song with no release row
+ *  behind it (a SoundCloud single/remix). They sort against each OTHER, so they answer
+ *  the same three questions. */
+type Sortable = { title: string; release_date?: string | null; created_at?: string }
+
+const sortDate = (x: Sortable) => x.release_date || FAR_FUTURE
+/** When it landed in the library. The tie-break, and the ONLY key for a batch of imports
+ *  that share no release date — "the ones added most recently should show up first". */
+const addedAt = (x: Sortable) => x.created_at || ''
+
+/**
+ * ONE comparator for a whole section, whatever kind of thing is in it.
+ *
+ * A SoundCloud single creates no release row, so it renders as an orphan SONG. The section
+ * used to draw every release and then every orphan — two consecutive lists — so a single
+ * imported five minutes ago sat after a release from 2019 however the sort was set.
+ * Sorting the two lists separately would not have fixed that; they have to be one list.
+ */
+function compareBy(sort: Sort): (a: Sortable, b: Sortable) => number {
+  if (sort === 'az') return (a, b) => a.title.localeCompare(b.title)
+  const newest = (a: Sortable, b: Sortable) =>
+    sortDate(b).localeCompare(sortDate(a)) || addedAt(b).localeCompare(addedAt(a))
+  return sort === 'newest' ? newest : (a, b) => newest(b, a)
+}
+
+function sorted<T extends Sortable>(items: T[], sort: Sort): T[] {
+  return [...items].sort(compareBy(sort))
 }
 
 /**
@@ -185,7 +208,8 @@ export function MusicBrowser({
   const releaseOrder = [...new Set(unreleasedSongs.filter((s) => s.group !== LOOSE).map((s) => s.group))]
   const labels = new Map(unreleasedSongs.map((s) => [s.group, s.groupLabel]))
   const songGroups = groupByOrigin(
-    unreleasedSongs,
+    // Newest-added first inside every group, same rule as the released shelf.
+    sorted(unreleasedSongs, sort),
     (s) => s.group,
     [...releaseOrder, LOOSE],
     (k) => (k === LOOSE ? 'Not on a release' : (labels.get(k) ?? k)),
@@ -219,36 +243,44 @@ export function MusicBrowser({
         const rels = shownReleases.filter((r) => r.release_type === type)
         const orphs = shownOrphans.filter((o) => o.release_type === type)
         if (rels.length + orphs.length === 0) return null
+        // ONE list, sorted together (Sam, 2026-09-09). Rendering releases then orphans
+        // pinned every SoundCloud single behind every release in its section, whatever
+        // the sort said — the kind of thing an item is must not decide where it sits.
+        const entries: ({ kind: 'release'; item: Release } | { kind: 'song'; item: MusicSong })[] = [
+          ...rels.map((item) => ({ kind: 'release' as const, item })),
+          ...orphs.map((item) => ({ kind: 'song' as const, item })),
+        ].sort((a, b) => compareBy(sort)(a.item, b.item))
         return (
           <OriginSection key={type} label={TYPE_LABEL[type as ReleaseType]} count={rels.length + orphs.length}>
             {/* Releases and orphan tracks of this type share ONE wrapping row (both 192px),
                 so a remix release and an orphan remix sit side by side, not stacked. An
                 expanded EP/album grows only by its tracklist; the neighbours reflow. */}
             <div className="flex flex-wrap gap-x-5 gap-y-8">
-              {rels.map((r) => (
-                <ReleaseCard
-                  key={r.id}
-                  release={r}
-                  artistId={artistId}
-                  artistSlug={artistSlug}
-                  selected={selected.has(r.id)}
-                  onToggleSelect={() => toggleSelect(r.id)}
-                  // The FULL catalog, not targetsFor: the card filters per tracklist row
-                  // (each row excludes only itself, and a row's twin can be anywhere).
-                  mergeTargets={mergeTargets}
-                />
-              ))}
-              {orphs.map((t) => (
-                <div key={t.id} className="w-48 flex-none">
-                  <TrackCard
+              {entries.map((e) =>
+                e.kind === 'release' ? (
+                  <ReleaseCard
+                    key={e.item.id}
+                    release={e.item}
                     artistId={artistId}
-                    track={t}
-                    releases={releaseOptions}
-                    hideBadges
-                    mergeTargets={targetsFor(t.id)}
+                    artistSlug={artistSlug}
+                    selected={selected.has(e.item.id)}
+                    onToggleSelect={() => toggleSelect(e.item.id)}
+                    // The FULL catalog, not targetsFor: the card filters per tracklist row
+                    // (each row excludes only itself, and a row's twin can be anywhere).
+                    mergeTargets={mergeTargets}
                   />
-                </div>
-              ))}
+                ) : (
+                  <div key={e.item.id} className="w-48 flex-none">
+                    <TrackCard
+                      artistId={artistId}
+                      track={e.item}
+                      releases={releaseOptions}
+                      hideBadges
+                      mergeTargets={targetsFor(e.item.id)}
+                    />
+                  </div>
+                ),
+              )}
             </div>
           </OriginSection>
         )

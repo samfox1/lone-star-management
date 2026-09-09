@@ -134,6 +134,8 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       slug: row.slug as string,
       cover_url: (row.cover_url as string | null) ?? null,
       release_date: (row.release_date as string | null) ?? null,
+      // The library's tie-break: two releases with no date order by which was added last.
+      created_at: (row.created_at as string | null) ?? '',
       release_type: toReleaseType(row.release_type as string | null),
       links: (row.links as ReleaseLink[]) ?? [],
       on_site: (row.on_site as boolean | null) ?? true,

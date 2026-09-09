@@ -227,3 +227,103 @@ describe('MusicBrowser — an undated release is the newest thing there is', () 
     expect(titlesIn('release')).toEqual(['Newer', 'Older'])
   })
 })
+
+/* ── a section is ONE list, newest first, whatever kind of thing is in it ──────────────
+ * Sam, 2026-09-09: "for putting the assets first, it doesnt seem to work with the
+ * soundcloud songs. When I add a song, it should be stamped with a date field to indicate
+ * when it was added to assets, and the ones added most recently should show up first."
+ *
+ * A SoundCloud single creates no release row, so it renders as an ORPHAN song. The section
+ * used to draw every release, then every orphan — two consecutive lists sharing one
+ * wrapping row — so a single imported five minutes ago sat after a release from 2019 no
+ * matter how the sort was set. Sorting each list alone would not have fixed it: they have
+ * to be ONE list to interleave.
+ *
+ * The order key is the same for both kinds:
+ *   1. release date, descending, with an undated item counting as JUST ADDED (first);
+ *   2. then created_at descending — when it was added to assets — which is what separates
+ *      two things that share a date, and what orders the undated ones among themselves.
+ */
+describe('MusicBrowser — releases and orphan songs share one newest-first order', () => {
+  const rel = (id: string, title: string, date: string | null, added = '2020-01-01T00:00:00Z') =>
+    release({ id, title, release_date: date, release_type: 'single', created_at: added })
+  const orphan = (id: string, title: string, date: string | null, added: string): MusicSong =>
+    ({
+      ...song({ id, title, release_date: date }),
+      created_at: added,
+      release_type: 'single',
+    }) as MusicSong
+
+  /** Everything drawn in the released shelf, in DOM order, releases and songs together. */
+  const shelf = () =>
+    screen.getAllByTestId(/^(release|song)$/).map((el) => el.textContent)
+
+  const only = (releases: Release[], orphans: MusicSong[]) =>
+    setup({ releases, orphanSingles: orphans, unreleasedReleases: [], unreleasedSongs: [] })
+
+  it('CRITICAL: a just-added orphan single outranks an older release in the same section', () => {
+    // The exact report. Before the fix this read ['Old Album', 'Fresh Import'] — the
+    // orphan could not reach the front of its own section however it was dated.
+    only(
+      [rel('r1', 'Old Release', '2019-01-01')],
+      [orphan('o1', 'Fresh Import', null, '2026-09-09T12:00:00Z')],
+    )
+    expect(shelf()).toEqual(['Fresh Import', 'Old Release'])
+  })
+
+  it('CRITICAL: a DATED orphan still sorts by its date, in among the releases', () => {
+    // Interleaved, not "songs first". The kind of thing an item is must not decide where
+    // it sits — only its date does.
+    only(
+      [rel('r1', 'From 2019', '2019-01-01'), rel('r2', 'From 2026', '2026-01-01')],
+      [orphan('o1', 'From 2022', '2022-01-01', '2026-09-09T12:00:00Z')],
+    )
+    expect(shelf()).toEqual(['From 2026', 'From 2022', 'From 2019'])
+  })
+
+  it('CRITICAL: two undated items order by WHEN THEY WERE ADDED, newest first', () => {
+    // "the ones added most recently should show up first". This is the tie-break, and the
+    // only thing that separates a batch of imports that share no release date.
+    only(
+      [],
+      [
+        orphan('o1', 'Added first', null, '2026-09-01T00:00:00Z'),
+        orphan('o2', 'Added last', null, '2026-09-09T00:00:00Z'),
+        orphan('o3', 'Added second', null, '2026-09-05T00:00:00Z'),
+      ],
+    )
+    expect(shelf()).toEqual(['Added last', 'Added second', 'Added first'])
+  })
+
+  it('CRITICAL: Oldest reverses the whole thing, both kinds together', () => {
+    only(
+      [rel('r1', 'Old Release', '2019-01-01')],
+      [orphan('o1', 'Fresh Import', null, '2026-09-09T12:00:00Z')],
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }))
+    expect(shelf()).toEqual(['Old Release', 'Fresh Import'])
+  })
+})
+
+describe('MusicBrowser — unreleased songs stack too', () => {
+  const demo = (id: string, title: string, added: string): UnreleasedSong =>
+    ({ ...song({ id, title }), created_at: added }) as UnreleasedSong
+
+  it('CRITICAL: the most recently added demo is first in its group', () => {
+    setup({
+      releases: [],
+      unreleasedReleases: [],
+      orphanSingles: [],
+      unreleasedSongs: [
+        demo('s1', 'Oldest demo', '2026-01-01T00:00:00Z'),
+        demo('s2', 'Newest demo', '2026-09-09T00:00:00Z'),
+        demo('s3', 'Middle demo', '2026-05-01T00:00:00Z'),
+      ],
+    })
+    expect(screen.getAllByTestId('song').map((el) => el.textContent)).toEqual([
+      'Newest demo',
+      'Middle demo',
+      'Oldest demo',
+    ])
+  })
+})

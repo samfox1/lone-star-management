@@ -2,7 +2,7 @@
 
 import type { MediaKind } from '@samfox1/site-bridge/payload'
 import type { ManifestAbout } from '@samfox1/site-bridge/seo'
-import type { ArtistFacts } from './panels/site-tools'
+import type { ArtistFacts, SiteTextField } from './panels/site-tools'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { GroupLabel, SCROLL_BODY } from './inspector-shared'
@@ -54,6 +54,8 @@ import {
   setMediaAltAction,
   setMediaKindAction,
   renameMediaAction,
+  saveArtistFactAction,
+  saveSeoFieldAction,
   setOnSiteAction,
 } from '../actions'
 import { useOptimisticRunner } from './use-optimistic'
@@ -142,6 +144,9 @@ const COMPONENTS: Component[] = [
  *  then fired forever — any caller that simply omitted the optional prop crashed the
  *  inspector with "Too many re-renders". Found while fixing the 2026-08-09 review. */
 const NO_STYLES: Record<string, string> = {}
+/** The Site panel's facts, before the artist has any. Its own constant so the spread that
+ *  folds this session's edits over them has a stable object to start from. */
+const EMPTY_FACTS: ArtistFacts = { genre: '', location: '', schema_type: 'MusicGroup' }
 
 /** Shown when the connected site was built against an OLDER bridge than the editor: a
  *  control here can write a token the site's applier can't lift yet, so a slider may do
@@ -325,6 +330,22 @@ export function EditorInspector({
   // separately from editingItem because it carries no media and shares none of that
   // editor's Replace/Remove machinery.
   const [editingText, setEditingText] = useState<EditorTextField | null>(null)
+  /** The SEO/GEO text field open full-panel, and what has been typed into these rows this
+   *  session. The overrides exist because the Site panel is UNMOUNTED while the editor is
+   *  open — without them, backing out would redraw the snippet from the draft the page was
+   *  rendered with, and the edit would look like it did nothing until a refresh. */
+  const [editingSite, setEditingSite] = useState<SiteTextField | null>(null)
+  const [siteEdits, setSiteEdits] = useState<Record<string, string>>({})
+  /** Split back into the two shapes SiteTools takes. One map is written (the editor knows
+   *  only a key); two are read, because the panel keeps SEO strings and artist facts apart. */
+  const seoOverrides = useMemo(
+    () => Object.fromEntries(Object.entries(siteEdits).filter(([k]) => k.startsWith('seo_'))),
+    [siteEdits],
+  )
+  const factOverrides = useMemo(
+    () => Object.fromEntries(Object.entries(siteEdits).filter(([k]) => !k.startsWith('seo_'))),
+    [siteEdits],
+  )
   // The one TOUR DATE handed the whole panel (its supporting acts and their links). A
   // third state rather than a branch of ItemEdit: that union is media-shaped —
   // preview, Replace, Remove — and a show has none of those.
@@ -493,6 +514,22 @@ export function EditorInspector({
   // Text values live HERE, above both the list and the editor, so the two windows onto
   // one field can never show different text or race each other's debounced save.
   const textSave = useTextFieldSave(artistId, textFields, onApplyField)
+  /**
+   * The SEO/GEO editor's save. Debounced like the text editor's, and routed by the
+   * descriptor's `store` — `seo_*` through the SEO gate into site_content, `genre` and
+   * `location` onto the artist row. Guessing that from the key would write a site_content
+   * row nothing reads (the ftbk bug, 2026-08-20), which is why the row hands it up.
+   */
+  const siteTextSave = useDebouncedFieldSave<string>({
+    persist: (key, value) => {
+      const store = key.startsWith('seo_') || key === 'about_placement' ? 'seo' : 'fact'
+      const run =
+        store === 'seo'
+          ? saveSeoFieldAction(artistId, key, value)
+          : saveArtistFactAction(artistId, key as keyof ArtistFacts, value)
+      return run.then((r) => ({ ok: r.ok, error: r.error }))
+    },
+  })
   // The SAME save path the Style panel uses, so a font set from a text field and one set
   // from the Style panel cannot disagree about what is stored or drift in debounce.
   const { save: saveTextStyle } = useStyleRegionSave(artistId, onApplyStyle)
@@ -899,6 +936,30 @@ export function EditorInspector({
   ) : null
   // Same panel slot as the item editor, and mutually exclusive with it: opening one
   // closes the other, so the panel is never showing two things at once.
+  /** The SEO/GEO field open full-panel — the SAME editor the Text panel opens, so "Edit"
+   *  is one gesture everywhere. No style controls: an SEO string renders in a search
+   *  result, not on the page, so there is nothing to restyle. */
+  const siteTextEditor = editingSite ? (
+    <TextFieldEditor
+      field={{
+        key: editingSite.key,
+        label: editingSite.label,
+        type: 'text',
+        value: siteEdits[editingSite.key] ?? editingSite.value,
+        multiline: editingSite.multiline ?? false,
+      }}
+      value={siteEdits[editingSite.key] ?? editingSite.value}
+      status={siteTextSave.status}
+      styleValues={NO_STYLES}
+      onEdit={(v) => {
+        setSiteEdits((m) => ({ ...m, [editingSite.key]: v }))
+        siteTextSave.save(editingSite.key, v)
+      }}
+      onStyle={() => {}}
+      onBack={() => setEditingSite(null)}
+    />
+  ) : null
+
   const textEditor = editingText ? (
     <TextFieldEditor
       field={editingText}
@@ -1074,9 +1135,13 @@ export function EditorInspector({
         artistId={artistId}
         photos={photos}
         values={cursorValues}
-        seo={seoValues}
-        facts={artistFacts}
+        seo={{ ...seoValues, ...seoOverrides }}
+        facts={{ ...(artistFacts ?? EMPTY_FACTS), ...factOverrides }}
         about={manifestAbout}
+        onEditText={(f) => {
+          closeEditors() // one editor in the panel at a time
+          setEditingSite(f)
+        }}
         onEditBio={() => {
           const bio = textFields.find((f) => f.key === 'artist_bio')
           if (!bio) return
@@ -1096,6 +1161,8 @@ export function EditorInspector({
       {bridgeOutdated && <BridgeOutdatedBanner />}
       {itemEditor ? (
         itemEditor
+      ) : siteTextEditor ? (
+        siteTextEditor
       ) : textEditor ? (
         textEditor
       ) : tourEditor ? (
@@ -1113,7 +1180,7 @@ export function EditorInspector({
           never-published artist). Shows while anything is unpublished OR touched this
           session; hidden while the ITEM editor is open (its own revert owns that
           surface). */}
-      {!itemEditor && !textEditor && !tourEditor && (journalCount > 0 || hasUnpublished) && (
+      {!itemEditor && !textEditor && !siteTextEditor && !tourEditor && (journalCount > 0 || hasUnpublished) && (
         <SessionActions busy={reverting} onRemove={revertSession} />
       )}
     </aside>

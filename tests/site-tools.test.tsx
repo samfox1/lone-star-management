@@ -108,18 +108,86 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
   const seoMock = vi.mocked(saveSeoFieldAction)
   const factMock = vi.mocked(saveArtistFactAction)
 
-  it("CRITICAL: typing a title saves through the SEO gate, not the generic field path", async () => {
-    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{ seo_title: '' }} />)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'SKEEN' } })
-    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('artist-1', 'seo_title', 'SKEEN'))
-  })
-
-  it('genre and location save to the ARTIST, and the type select too', async () => {
+  it('the type select still saves inline — a select has nothing to open', async () => {
+    // The text rows moved to a full-panel editor (below); the two SELECTS did not. There
+    // is no hidden text in a dropdown, so an extra screen to reach it would be friction.
     render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} />)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Genre' }), { target: { value: 'House' } })
-    await vi.waitFor(() => expect(factMock).toHaveBeenCalledWith('artist-1', 'genre', 'House'))
     fireEvent.change(screen.getByRole('combobox', { name: 'Artist type' }), { target: { value: 'Person' } })
     await vi.waitFor(() => expect(factMock).toHaveBeenCalledWith('artist-1', 'schema_type', 'Person'))
+  })
+
+  /* ── the text rows OPEN, they do not hold a cramped box ─────────────────────────────
+   * Sam, 2026-09-09, with a screenshot of the description clipped mid-word: "the seo and
+   * geo section isnt designed well to be edited. There should be a snippet of the text in
+   * the side panel, and then there should be an edit button that opens its own editing
+   * side panel (like the rest of the editable components/text) where the user can see all
+   * the text instead of just editing in that little section."
+   *
+   * So these four become the same row every other panel uses: label, a truncated snippet
+   * of the value, and a pencil that hands the field up to the inspector to open
+   * full-panel. The inspector half is pinned in tests/site-seo-editor.test.tsx.
+   */
+  it('CRITICAL: the text rows are SNIPPETS with a pencil, not inline boxes', () => {
+    render(
+      <SiteTools
+        artistId="artist-1"
+        photos={[]}
+        values={NO_VALUES}
+        seo={{ seo_title: 'SKEEN', seo_description: 'Meet Skeen, a Chicago house producer with a long description that runs off the end of the row.' }}
+        facts={{ genre: 'House, Tech House', location: 'Chicago', schema_type: 'MusicGroup' }}
+      />,
+    )
+    // No text inputs left in the group — that is the change, stated as an absence so a
+    // half-done migration (rows added, boxes kept) fails here.
+    for (const name of ['Title', 'Description', 'Genre', 'Location']) {
+      expect(screen.queryByRole('textbox', { name }), `${name} still has an inline box`).toBeNull()
+      expect(screen.getByRole('button', { name: `Edit ${name}` })).toBeTruthy()
+    }
+    // And the value is VISIBLE as a snippet, so the row says what it holds.
+    expect(screen.getByText('SKEEN')).toBeTruthy()
+    expect(screen.getByText(/Meet Skeen, a Chicago house producer/)).toBeTruthy()
+    expect(screen.getByText('House, Tech House')).toBeTruthy()
+  })
+
+  it('CRITICAL: the pencil hands up WHERE the field saves, not just its key', () => {
+    // seo_title goes through the SEO gate; genre is an artist column. The editor upstairs
+    // cannot guess which from a key alone, and guessing wrong writes a site_content row
+    // that nothing reads (the ftbk bug, 2026-08-20).
+    const onEditText = vi.fn()
+    render(
+      <SiteTools
+        artistId="artist-1"
+        photos={[]}
+        values={NO_VALUES}
+        seo={{ seo_title: 'SKEEN' }}
+        facts={{ genre: 'House', location: '', schema_type: 'MusicGroup' }}
+        onEditText={onEditText}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Title' }))
+    expect(onEditText).toHaveBeenLastCalledWith(
+      expect.objectContaining({ store: 'seo', key: 'seo_title', label: 'Title', value: 'SKEEN' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Genre' }))
+    expect(onEditText).toHaveBeenLastCalledWith(
+      expect.objectContaining({ store: 'fact', key: 'genre', label: 'Genre', value: 'House' }),
+    )
+  })
+
+  it('CRITICAL: the description opens MULTILINE — it is the one that never fit', () => {
+    // The whole point of the report. A single-line box in a full-width panel would move
+    // the clipping rather than end it.
+    const onEditText = vi.fn()
+    render(
+      <SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{ seo_description: 'x' }} onEditText={onEditText} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Description' }))
+    expect(onEditText).toHaveBeenLastCalledWith(expect.objectContaining({ key: 'seo_description', multiline: true }))
+  })
+
+  it('an empty text row reads as empty rather than blank', () => {
+    render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{}} />)
+    expect(screen.getAllByText('Not set').length).toBeGreaterThan(0)
   })
 
   it("CRITICAL: About offers only what the site declares, plus hidden — and 'Site default' names the site's default", async () => {

@@ -42,6 +42,9 @@ export type Release = {
   slug: string
   cover_url: string | null
   release_date: string | null
+  /** When the row was created — the library's tie-break, so two undated releases order by
+   *  which was added last. Not rendered anywhere. */
+  created_at?: string
   release_type: ReleaseType
   links: ReleaseLink[]
   /** Whether the release is currently live on the public site. */

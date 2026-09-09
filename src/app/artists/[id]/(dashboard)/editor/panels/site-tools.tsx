@@ -20,7 +20,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
-import { ControlRow, EYEBROW, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
+import { ControlRow, EditRow, EYEBROW, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
@@ -38,6 +38,22 @@ const TRAIL_OPTIONS: { value: string; label: string }[] = [
 /** Artist facts the fact sheet reads (artists.genre / location / schema_type). */
 export type ArtistFacts = { genre: string; location: string; schema_type: string }
 
+/**
+ * One SEO/GEO text field, handed UP to be opened full-panel.
+ *
+ * `store` rides along because the two halves of this group save to different places —
+ * `seo_*` through the SEO gate into site_content, `genre`/`location` onto the artist row.
+ * The editor upstairs cannot infer that from a key, and inferring it wrong writes a
+ * site_content row nothing reads (the ftbk bug, 2026-08-20).
+ */
+export type SiteTextField = {
+  store: 'seo' | 'fact'
+  key: string
+  label: string
+  value: string
+  multiline?: boolean
+}
+
 export function SiteTools({
   artistId,
   photos,
@@ -46,6 +62,7 @@ export function SiteTools({
   facts: initialFacts = { genre: '', location: '', schema_type: 'MusicGroup' },
   about = null,
   onEditBio,
+  onEditText,
   swatches = [],
   budget = null,
   onApplyCursor,
@@ -62,6 +79,10 @@ export function SiteTools({
   about?: ManifestAbout | null
   /** Opens the bio in the text editor (the ONE bio feeds About, meta and JSON-LD). */
   onEditBio?: () => void
+  /** Opens one SEO/GEO text field full-panel, the way every other text row opens
+   *  (Sam, 2026-09-09). Absent = the rows render but do nothing, which is the state a
+   *  caller that has not wired it is in. */
+  onEditText?: (field: SiteTextField) => void
   /** Site palette + already-used colours for the trail colour picker. */
   swatches?: string[]
   /** The site's image budget — the cursor uploader compresses like every other slot. */
@@ -139,8 +160,11 @@ export function SiteTools({
     <>
       <GroupLabel>SEO / GEO</GroupLabel>
       <div className={PANEL_BODY}>
-        <SeoTextRow label="Title" value={seo.seo_title ?? ''} onChange={(v) => setSeoKey('seo_title', v)} />
-        <SeoTextRow label="Description" value={seo.seo_description ?? ''} onChange={(v) => setSeoKey('seo_description', v)} />
+        <SeoEditRow store="seo" fieldKey="seo_title" label="Title" value={seo.seo_title ?? ''} onEdit={onEditText} />
+        {/* The one the report was about: a description never fit the inline box, so the
+            row shows a snippet and the words open full-panel. Multiline — a single-line
+            input in a wider panel would move the clipping, not end it. */}
+        <SeoEditRow store="seo" fieldKey="seo_description" label="Description" value={seo.seo_description ?? ''} multiline onEdit={onEditText} />
         <ControlRow label="Social card">
           <a href={`/artists/${artistId}/tools/seo`} className={`${EYEBROW} text-ink underline underline-offset-2`}>
             Open
@@ -166,8 +190,8 @@ export function SiteTools({
             ))}
           </select>
         </ControlRow>
-        <SeoTextRow label="Genre" value={facts.genre} onChange={(v) => setFact('genre', v)} />
-        <SeoTextRow label="Location" value={facts.location} onChange={(v) => setFact('location', v)} />
+        <SeoEditRow store="fact" fieldKey="genre" label="Genre" value={facts.genre} onEdit={onEditText} />
+        <SeoEditRow store="fact" fieldKey="location" label="Location" value={facts.location} onEdit={onEditText} />
         <ControlRow label="Type">
           <select aria-label="Artist type" value={facts.schema_type || 'MusicGroup'} onChange={(e) => setFact('schema_type', e.target.value)} className={SELECT}>
             <option value="MusicGroup">Musician</option>
@@ -256,14 +280,38 @@ export function SiteTools({
  *  which is where Sam said cursor files should live. */
 const SELECT = 'w-[168px] rounded-md border border-hairline bg-paper px-2 py-1 font-space text-[11px] outline-none focus:border-accent'
 
-/** [label] [text input] — the same row shape as the cursor controls. */
-function SeoTextRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+/**
+ * [label] [snippet] [pencil] — the row every other panel uses (EditRow), so "Edit" is one
+ * gesture everywhere in the inspector. It replaced a label + inline `<input>`: a
+ * description clipped mid-word in a 200px box, and the only way to read it was to click
+ * in and arrow across (Sam, 2026-09-09, with a screenshot).
+ */
+function SeoEditRow({
+  store,
+  fieldKey,
+  label,
+  value,
+  multiline,
+  onEdit,
+}: {
+  store: 'seo' | 'fact'
+  fieldKey: string
+  label: string
+  value: string
+  multiline?: boolean
+  onEdit?: (field: SiteTextField) => void
+}) {
   return (
-    <ControlRow label={label}>
-      <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={SELECT} />
-    </ControlRow>
+    <EditRow
+      label={label}
+      value={value || 'Not set'}
+      empty={!value}
+      editLabel={label}
+      onEdit={() => onEdit?.({ store, key: fieldKey, label, value, multiline })}
+    />
   )
 }
+
 
 function CursorImageRow({
   label,
