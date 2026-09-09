@@ -28,11 +28,21 @@ import { runtimeImageFields, runtimeTextFields } from '@/app/artists/[id]/(dashb
  *  registry's own shape, so a new category shows up here as a compile error too. */
 const FULL: TemplateManifest = {
   template: 'a-connected-site',
+  // Two pages, so `itemPages` has something to say (a slot's page is only meaningful
+  // against a declared list). Every category below still declares ONE of everything.
+  pages: [
+    { key: 'home', label: 'Home', path: '/' },
+    { key: 'merch', label: 'Merch', path: '/merch' },
+  ],
   fields: [
     { key: 'hero_tagline', label: 'Hero tagline', type: 'text', target: { store: 'site_content', key: 'hero_tagline' }, defaultValue: 'Songs from the flood' },
     { key: 'portrait', label: 'Portrait', type: 'image', target: { store: 'media', purpose: 'profile_photo' } },
   ],
-  slots: [{ key: 'gallery', label: 'Gallery', accepts: 'image' }],
+  slots: [
+    { key: 'gallery', label: 'Gallery', accepts: 'image' },
+    // A page-tagged slot: the way an item panel learns where its items live (P4).
+    { key: 'merch_grid', label: 'Merch', accepts: 'merch', page: 'merch' },
+  ],
   styles: [{ key: 'hero', label: 'Hero', base: 'text-4xl' }],
   links: [{ key: 'booking', label: 'Booking' }],
   components: [{ key: 'polaroid', label: 'Polaroid', count: 2, slots: [{ key: 'photo', label: 'Photo' }] }],
@@ -228,5 +238,64 @@ describe('the registry is the list', () => {
       itemStyling: true,
     }
     expect(Object.keys(exhaustive).length).toBe(MANIFEST_CATEGORIES.length)
+  })
+})
+
+/* ── which page an ITEM lives on (SITE_PAGES_PLAN.md P4) ─────────────────────────────
+ * The Merch panel highlights `item:merch:<id>`. With no page tabs, the frame has to be
+ * SENT to the merch page before that highlight can land — and the only thing that says
+ * merch items live on /merch is the merch SLOT's `page` tag. Resolved here, once, so the
+ * inspector reads a map rather than re-deriving it from slots.
+ */
+describe('itemPages — a slot’s page tag says where its items live', () => {
+  it('CRITICAL: a page-tagged slot maps its asset type to that page', () => {
+    // `toBe` on the one key, not `toEqual` on the map: the untagged gallery slot rightly
+    // maps too (next test), and an exact map here would fail for that.
+    expect(resolve().itemPages.merch).toBe('merch')
+  })
+
+  it('CRITICAL: an UNTAGGED slot belongs to the FIRST declared page — never "everywhere"', () => {
+    // The bridge's rule (PageScoped): absent means the first declared page. The gallery
+    // slot is untagged, so images live on home. Reading untagged as "no page" would make
+    // a home-page item skip the travel check and highlight nothing on /merch.
+    const inputs = resolve()
+    expect(inputs.itemPages.image).toBe('home')
+  })
+
+  it('CRITICAL: a site with NO pages declares nothing here', () => {
+    // Every site before pages. An item highlight then carries no page and fires where
+    // the frame already is, which is the only page there is.
+    const onePage = { ...FULL, pages: undefined } as unknown as TemplateManifest
+    expect(resolve({ manifest: onePage }).itemPages).toEqual({})
+  })
+
+  it('a built-in template gets none — same gate as every sibling', () => {
+    expect(resolve({ customSiteUrl: null }).itemPages).toEqual({})
+  })
+
+  it('CRITICAL: the FIRST slot for a type wins — declaration order, never visit order (A7)', () => {
+    // Two image pools on two pages. The first declared is where untagged photos live, so
+    // it is the one an image highlight must travel to. Stryker found this rule unwatched
+    // (2026-09-09): with the guard gone the LAST slot won, silently.
+    const two = {
+      ...FULL,
+      slots: [
+        { key: 'works', label: 'Works', accepts: 'image' },
+        { key: 'shop_photos', label: 'Shop photos', accepts: 'image', page: 'merch' },
+      ],
+    } as unknown as TemplateManifest
+    expect(resolve({ manifest: two }).itemPages.image).toBe('home')
+  })
+
+  it('CRITICAL: a tag naming an UNDECLARED page falls back to the first page, never stalls', () => {
+    // The fold's own principle: degrade to misplaced, never to invisible. A highlight
+    // sent to a page the site does not declare would wait for a `page-change` that never
+    // comes, and the card would do nothing. Stryker's `||` mutant returned the undeclared
+    // key here and nothing noticed.
+    const stale = {
+      ...FULL,
+      slots: [{ key: 'merch_grid', label: 'Merch', accepts: 'merch', page: 'shop_2019' }],
+    } as unknown as TemplateManifest
+    expect(resolve({ manifest: stale }).itemPages.merch).toBe('home')
   })
 })

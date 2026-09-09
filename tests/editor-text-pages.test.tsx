@@ -178,3 +178,38 @@ describe('opening a row for another page tells the frame which page it is on', (
     expect(page).toBeUndefined()
   })
 })
+
+/* ── an ITEM on another page travels too (P4) ───────────────────────────────────────── */
+import type { EditorMerch } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
+
+describe('selecting a merch card tells the frame which page merch lives on', () => {
+  const merch: EditorMerch[] = [
+    { id: 'p1', title: 'Tour Tee', price: '30', url: '', image_url: null, onSite: true, inStock: true },
+  ]
+  const openMerch = (onHighlight: (t: SelectTarget, page?: string) => void, itemPages?: Record<string, string>) => {
+    render(<EditorInspector artistId="a1" photos={[]} merch={merch} itemPages={itemPages} onHighlight={onHighlight} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Merch' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select Tour Tee' }))
+  }
+
+  it('CRITICAL: with the merch slot tagged, the highlight names its page', () => {
+    // Without this the card click posts a highlight for `merch:p1` while the frame shows
+    // home — the region is in no frame the editor has loaded, and nothing outlines. This
+    // is the round trip the plan said P4 would close.
+    const onHighlight = vi.fn()
+    openMerch(onHighlight, { merch: 'merch' })
+    const [target, page] = onHighlight.mock.calls.at(-1)!
+    expect(target).toMatchObject({ kind: 'item', assetType: 'merch', id: 'p1' })
+    expect(page).toBe('merch')
+  })
+
+  it('CRITICAL: with no page for the asset, the highlight carries none', () => {
+    // Every single-page site. A trailing page here would make the hook hold the request
+    // for a page-change that never comes.
+    const onHighlight = vi.fn()
+    openMerch(onHighlight, undefined)
+    const call = onHighlight.mock.calls.at(-1)!
+    expect(call[0]).toMatchObject({ kind: 'item', assetType: 'merch', id: 'p1' })
+    expect(call.length, 'a page argument was passed for an item with no page').toBe(1)
+  })
+})

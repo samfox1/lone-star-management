@@ -31,6 +31,7 @@ const CUSTOM = 'https://skeen-website.vercel.app'
 const PAGES = [
   { key: 'home', label: 'Home', path: '/' },
   { key: 'about', label: 'About', path: '/about' },
+  { key: 'merch', label: 'Merch', path: '/merch' },
 ]
 
 /** An announce shaped like skeen's: every page carries the whole static declaration. */
@@ -43,7 +44,8 @@ const announce = (page: string) => ({
     { key: 'hero_tagline', label: 'Tagline', type: 'text', target: { store: 'site_content', key: 'hero_tagline' } },
     { key: 'artist_bio', label: 'About', type: 'text', target: { store: 'artist', column: 'bio' }, page: 'about' },
   ],
-  slots: [],
+  // The merch SLOT, tagged (P4): the only thing that says merch items live on /merch.
+  slots: [{ key: 'merch', label: 'Merch', accepts: 'merch', page: 'merch' }],
   links: [],
   styles: [
     { key: 'hero', label: 'Hero', base: 'text-4xl' },
@@ -145,5 +147,15 @@ describe('a page tag declared by a site reaches the Text panel with its page', (
     const text = panels(result.current.manifest).textFields
     expect(text).toHaveLength(2)
     for (const f of text) expect(f.pageLabel).toBeUndefined()
+  })
+})
+
+describe('a slot’s page tag reaches the item panels', () => {
+  it('CRITICAL: one announce from HOME says merch items live on /merch', () => {
+    // The P4 round trip's first hop, off the wire: the Merch panel has never shown the
+    // frame /merch, and it must still know to send it there before highlighting a card.
+    const { result } = mount()
+    frameSays({ type: 'ready', manifest: announce('home') })
+    expect(panels(result.current.manifest).itemPages.merch).toBe('merch')
   })
 })

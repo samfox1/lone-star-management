@@ -166,6 +166,7 @@ function BridgeOutdatedBanner() {
 export function EditorInspector({
   artistId,
   bridgeOutdated = false,
+  itemPages,
   photos: initial,
   imageFields = [],
   textFields = [],
@@ -227,6 +228,9 @@ export function EditorInspector({
   tours?: EditorTour[]
   /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
    *  edit-list at runtime; a site that declares none simply has no component section. */
+  /** Which page each library type's items live on (panel-inputs `itemPages`, P4). An
+   *  item highlight names its page from this so the frame can travel first. */
+  itemPages?: Partial<Record<string, string>>
   components?: ManifestComponent[]
   /** The open photo pools the site DECLARES (its image slots), in order — one grid each
    *  in the Images panel. Defaults EMPTY: a group is shown because the site asked for
@@ -425,13 +429,21 @@ export function EditorInspector({
       onClearHighlight?.()
       return
     }
-    const page = focused.kind === 'field' ? pageOfKey.get(focused.key) : undefined
+    // A field's page comes from the field; an ITEM's from the slot that holds its type
+    // (P4) — the Merch panel's card is `item:merch:<id>`, and merch lives wherever the
+    // merch slot said.
+    const page =
+      focused.kind === 'field'
+        ? pageOfKey.get(focused.key)
+        : focused.kind === 'item'
+          ? itemPages?.[focused.assetType]
+          : undefined
     // Called with ONE argument when there is no page, not with an explicit `undefined`:
     // every existing caller and its tests were written against the one-argument contract,
     // and a trailing undefined is a silent change to all of them.
     if (page) onHighlight?.(focused, page)
     else onHighlight?.(focused)
-  }, [focused, onHighlight, onClearHighlight, pageOfKey])
+  }, [focused, onHighlight, onClearHighlight, pageOfKey, itemPages])
 
   // Manually switching components (or backing out) drops the highlight — the outline
   // follows the SELECTION, and a panel change is a deselection of whatever held it.

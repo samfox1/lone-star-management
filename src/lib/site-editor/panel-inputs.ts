@@ -24,7 +24,7 @@
  * prove none of them resolved empty.
  */
 import type { PublicSitePayload, SiteContent } from '@/lib/site'
-import type { TemplateManifest } from '@/lib/site-editor/manifest'
+import type { LibraryAsset, TemplateManifest } from '@/lib/site-editor/manifest'
 import type { EditorImageField, EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
 
 /**
@@ -56,7 +56,7 @@ export type ManifestCategory = (typeof MANIFEST_CATEGORIES)[number]
  */
 export const CATEGORY_CONSUMERS: Record<ManifestCategory, readonly (keyof PanelInputs)[]> = {
   fields: ['textFields', 'imageFields'],
-  slots: ['imageCollections'],
+  slots: ['imageCollections', 'itemPages'],
   itemStyling: ['itemStyling'],
   styles: ['styleRegions'],
   links: ['linkRegions'],
@@ -76,6 +76,16 @@ export type PanelInputs = {
    *  called" is the same question as "is there one", and one list answers both. The
    *  FIRST is where untagged photos live (every photo placed before collections). */
   imageCollections: readonly { key: string; label: string }[]
+  /**
+   * Which PAGE each library type's items live on, from the slot that accepts them
+   * (SITE_PAGES_PLAN.md P4). The item panels highlight `item:<asset>:<id>`; with no page
+   * tabs, the frame has to be SENT to that page first, and a slot's `page` tag is the only
+   * thing that says merch lives on /merch. An untagged slot belongs to the FIRST declared
+   * page (the bridge's rule), so a home-page item still names its page. EMPTY on a site
+   * that declares no pages: there is nowhere to travel, and a highlight fires where the
+   * frame already is.
+   */
+  itemPages: Partial<Record<LibraryAsset, string>>
   /** False when the site locks its look (manifest itemStyling: false): gallery tiles
    *  offer Replace, never the per-item style editor. */
   itemStyling: boolean
@@ -128,6 +138,7 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
     imageCollections: (announced?.slots ?? [])
       .filter((sl) => sl.accepts === 'image')
       .map((sl) => ({ key: sl.key, label: sl.label })),
+    itemPages: itemPagesOf(announced),
     // Absent = true: every site and built-in template before ftbk styled items.
     itemStyling: announced?.itemStyling !== false,
     components: announced?.components ?? [],
@@ -139,6 +150,28 @@ export function resolvePanelInputs(args: ResolveArgs): PanelInputs {
     assetBudgets: announced?.assetBudgets,
     linkRegions: announced?.links ?? [],
   }
+}
+
+/**
+ * The page each library type lives on, read off the slots (see PanelInputs.itemPages).
+ * The first slot for an asset type wins — a site with two image pools on two pages is
+ * not a case any panel handles yet, and the first declared is the one untagged photos
+ * live in (A7), so it is the honest default. A tag naming an undeclared page falls back
+ * to the first page: degrade to misplaced, never to a highlight that stalls.
+ */
+function itemPagesOf(manifest: TemplateManifest | null): Partial<Record<LibraryAsset, string>> {
+  // One null check, up front. `manifest?.slots` further down read as a second guard and
+  // was an equivalent mutant: nothing below runs without a manifest.
+  if (!manifest?.pages?.length) return {}
+  const pages = manifest.pages
+  const declared = new Set(pages.map((p) => p.key))
+  const first = pages[0].key
+  const out: Partial<Record<LibraryAsset, string>> = {}
+  for (const slot of manifest.slots ?? []) {
+    if (out[slot.accepts]) continue
+    out[slot.accepts] = slot.page && declared.has(slot.page) ? slot.page : first
+  }
+  return out
 }
 
 /**

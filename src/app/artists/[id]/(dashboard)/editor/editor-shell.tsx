@@ -337,6 +337,7 @@ export function EditorShell({
         components={panels.components}
         videoSlots={panels.videoSlots}
         imageCollections={panels.imageCollections}
+        itemPages={panels.itemPages}
         itemStyling={panels.itemStyling}
         assetBudgets={panels.assetBudgets}
         styleRegions={panels.styleRegions}
