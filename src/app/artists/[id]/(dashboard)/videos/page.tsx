@@ -56,6 +56,10 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
           is_short: (row.is_short as boolean | null) ?? false,
           on_site: (row.on_site as boolean | null) ?? true,
           youtube_views: (row.youtube_views as number | null) ?? null,
+          // The library's sort key. listContent hands these over OLDEST first
+          // (sort_order, created_at ascending) and the browser flips them; the ordering
+          // itself is left alone because lib/site.ts reads the same one for the public site.
+          created_at: (row.created_at as string | null) ?? '',
           stat: metricValue(counts, 'video', [row.id as string]),
         }
       })}

@@ -80,12 +80,32 @@ const TYPE_LABEL: Record<ReleaseType, string> = {
 }
 const TYPE_ORDER = RELEASE_TYPES
 
+/**
+ * Where an UNDATED release sorts. It is the thing you just added — a record typed in
+ * before its release date is known — so it counts as the newest: first under Newest, last
+ * under Oldest (Sam, 2026-09-09: "the newest ones should be in the top left of their
+ * respective section… it should enter the list as a stack, not append to the end").
+ *
+ * ONE sentinel, read by both directions. They used to disagree: `oldest` treated an
+ * undated release as `'9999'` (far future, therefore newest, therefore last in an
+ * ascending sort — right), while `newest` treated the SAME release as `''` (therefore
+ * oldest, therefore last again). Undated items sank to the bottom whichever way you
+ * sorted, which is not a preference, it is the two halves contradicting each other.
+ *
+ * `||`, not `??`: a blank date input stores '', and only `||` reads that as undated. The
+ * old `??` let an empty string fall through to a string compare it lost against every
+ * real date.
+ */
+const FAR_FUTURE = '9999'
+const sortDate = (r: Release) => r.release_date || FAR_FUTURE
+
 function sorted(releases: Release[], sort: Sort): Release[] {
   const copy = [...releases]
   if (sort === 'az') return copy.sort((a, b) => a.title.localeCompare(b.title))
-  if (sort === 'newest') return copy.sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))
-  // oldest: ascending, undated last
-  return copy.sort((a, b) => (a.release_date || '9999').localeCompare(b.release_date || '9999'))
+  // A dated release still sorts by its DATE: a back-catalogue record added today is not
+  // new. Arrival order only decides where the undated ones go.
+  if (sort === 'newest') return copy.sort((a, b) => sortDate(b).localeCompare(sortDate(a)))
+  return copy.sort((a, b) => sortDate(a).localeCompare(sortDate(b)))
 }
 
 /**

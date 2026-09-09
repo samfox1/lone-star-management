@@ -166,3 +166,64 @@ describe('MusicBrowser toolbar', () => {
     expect(screen.getByRole('button', { name: /^Publish/ })).not.toBeDisabled()
   })
 })
+
+/* ── a just-added item stacks on top of its section ────────────────────────────────────
+ * Sam, 2026-09-09: "the newest ones should be in the top left of their respective
+ * section. It should enter the list as a stack, not a append to the end list."
+ *
+ * The defect was a sentinel that disagreed with itself. `oldest` read an undated release
+ * as `'9999'` — far future, therefore NEWEST, therefore last in an ascending sort, which
+ * is right. `newest` read the same release as `''` — therefore OLDEST, therefore last
+ * again. Undated items sank to the bottom in BOTH directions, and a release you had just
+ * typed in (no date yet) appeared at the end of its section.
+ *
+ * Undated means JUST ADDED. It sorts first under Newest and last under Oldest, and the
+ * two are now the same sentinel rather than two guesses.
+ */
+describe('MusicBrowser — an undated release is the newest thing there is', () => {
+  const dated = (id: string, title: string, date: string | null) =>
+    release({ id, title, release_date: date, release_type: 'single' })
+
+  const titlesIn = (testid: string) => screen.getAllByTestId(testid).map((el) => el.textContent)
+  /** Only the RELEASED shelf, so the fixture's unreleased defaults don't join the list
+   *  being asserted on — they render in their own section and would read as a sort bug. */
+  const only = (releases: Release[]) =>
+    setup({ releases, unreleasedReleases: [], unreleasedSongs: [], orphanSingles: [] })
+
+  it('CRITICAL: under Newest, a release with no date sorts ABOVE every dated one', () => {
+    only([
+      dated('r1', 'Old Song', '2020-01-01'),
+      dated('r2', 'Just Added', null),
+      dated('r3', 'Recent Song', '2026-01-01'),
+    ])
+    // 'newest' is the default sort, which is the state a manager lands in.
+    expect(titlesIn('release')).toEqual(['Just Added', 'Recent Song', 'Old Song'])
+  })
+
+  it('CRITICAL: an EMPTY-STRING date counts as undated too', () => {
+    // The old `?? ''` only caught null. A row whose date column holds '' — which the
+    // add form produces from a blank input — fell through to a string compare against
+    // every real date and lost every one of them.
+    only([dated('r1', 'Old Song', '2020-01-01'), dated('r2', 'Just Added', '')])
+    expect(titlesIn('release')).toEqual(['Just Added', 'Old Song'])
+  })
+
+  it('CRITICAL: under Oldest it goes LAST — the sentinel means one thing in both directions', () => {
+    // The half that stops "undated first" from being implemented as "undated always
+    // first". Newest and Oldest must be each other's reverse.
+    only([
+      dated('r1', 'Old Song', '2020-01-01'),
+      dated('r2', 'Just Added', null),
+      dated('r3', 'Recent Song', '2026-01-01'),
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }))
+    expect(titlesIn('release')).toEqual(['Old Song', 'Recent Song', 'Just Added'])
+  })
+
+  it('dated releases still sort by their DATE, not by when they were typed in', () => {
+    // The rule is "newest release first", and a back-catalogue record added today is not
+    // new. Only the undated case is about arrival order.
+    only([dated('r1', 'Newer', '2026-05-01'), dated('r2', 'Older', '2019-01-01')])
+    expect(titlesIn('release')).toEqual(['Newer', 'Older'])
+  })
+})

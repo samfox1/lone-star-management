@@ -32,6 +32,10 @@ export type VideoItem = {
   youtube_views?: number | null
   /** 30-day clicks from the artist's own site (video_click), from analytics_by_entity. */
   stat?: number
+  /** When the row was created — the LIBRARY's sort key (Sam, 2026-09-09: newest first,
+   *  top-left of its section). Not a display field; nothing renders it. '' on a row
+   *  loaded before this was surfaced. */
+  created_at?: string
 }
 
 const BADGE_LABEL: Record<string, string> = {
