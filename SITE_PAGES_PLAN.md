@@ -1,6 +1,6 @@
 # Multi-page editor — plan of record (2026-09-03)
 
-> **Status: P1, P3 and P2 SHIPPED; P4 and P5 remain.** Written after Sam asked why
+> **Status: P1, P3, P2 and P4 SHIPPED; P5 remains.** Written after Sam asked why
 > skeen's About page and Merch page are missing from the editor (2026-09-03).
 >
 > **Superseded in part — read the amendments before this body.** D2 was replaced (A1),
@@ -670,3 +670,85 @@ UNION of every page (`everyPage`, derived from `SITE_PAGES`), so a field marked 
   two lines (`page` through the resolver, `pageLabel` for the heading) when their panels
   need it.
 - **N2, N1** unchanged. **P4 (merch) and P5 (tooling)** are next.
+
+---
+
+# P4 shipped (2026-09-09) — the merch pages, and what closing the round trip took
+
+Grid first, product second, as the order of work said. Test-first on both sides; the
+mutants that mattered are listed at the end.
+
+## What landed
+
+**skeen.** `SITE_PAGES` gains `merch` and `merch_product`, both available exactly while
+the shop is — ONE predicate, because `/merch` 404s an empty shop and a product page with
+no product is the same 404 (trap 6). The grid is the merch SLOT and every card an ITEM
+(`merch:<id>`); the corners, the sky and the product's five surfaces are regions tagged
+with their page. Public routes render the same bodies (`MerchGridBody`,
+`MerchProductBody`) — the About split, for the same reason.
+
+**lone-star.** `resolvePanelInputs` gains `itemPages`: each library type → the page of
+the slot that accepts it. The inspector's highlight effect reads an item's page from it,
+and `applyHighlight(target, page)` (P2) does the travelling. A Merch panel card click now
+sends the frame to `/merch` and outlines the card once it arrives. That is the round
+trip the original plan named as P4's finish line.
+
+## C10 — the product page is chosen by CLICK, not only by "first"
+
+Trap 5 said pick the first product. That is the fallback, not the rule: the declared path
+`/merch/[handle]` is a route PATTERN (so the route-exists test can find its file) and
+never equals a real href, so `SitePage` gains `match`, `pageForPath` uses it, and the
+shell records which product a browse-mode click chose. With none chosen: the first. With
+none published: it says so, rather than rendering a product-shaped nothing.
+
+## C11 — a slot's `page` tag is what makes an ITEM travel
+
+The plan's D3 made `page` a tag "for grouping in the editor, nothing else". For items it
+is more than grouping: it is the only thing that says merch lives on `/merch`. Three
+rules, each with a test that goes red without it: an untagged slot belongs to the first
+declared page; the first slot per type wins (A7); an undeclared tag falls back to the
+first page — degrade to misplaced, never to a highlight that stalls.
+
+## C12 — one control in three states wears its region on the WRAPPER
+
+"Add to cart" renders as a buyable button, an external link, or a blocked "pick a size" /
+"sold out" span. Marking only the buyable one left the region unmarked whenever the
+preview showed another state — found by the contract test, whose seeded product has two
+sizes and therefore renders "pick a size". The region is now the wrapper, carrying the
+type the states share; fill stays on the state element, because a single declared colour
+would be a lie the picker then shows. Its colour control reads blank on purpose.
+
+## C13 — the contract fixtures must SEED what a page renders conditionally
+
+Every product-page region exists only with a product on it. The union render
+(`everyPage`) fed an empty shop and reported all five unmarked. Both fixtures now seed one
+product with two sizes and a description. The first attempt seeded the WRONG fixture — a
+replace anchored on a fragment that appeared earlier in the file — and the failing test
+list did not change, which is how it was caught. Anchor on something unique.
+
+## Also learned
+
+- `text-charcoal`, `text-cream`, `bg-sky` joined skeen's declared palette. The audit is
+  right: a colour the picker cannot name is a control that reads blank.
+- No `/55`-style opacity variants in a base — the audit reads them as undeclared colours.
+  Dimming lives on wrappers and children, as it now does on the sizes, facts, and
+  description.
+- Trap 4 (the viewport) needed nothing: `fitViewport` scales by width alone.
+- No bridge change, so no publish and no cache gotcha.
+
+## Mutants killed
+
+skeen: slot tag dropped; product-link match dropped; pages always available; handle
+ignored. lone-star: itemPages never derived; untagged slot read as no page; item page not
+passed to the highlight; first-wins guard dropped; undeclared-tag fallback replaced.
+
+## Still open, deliberately
+
+- **P5 (tooling)**: the duplicate-key guard in `checkContract`, and N3 —
+  `droppedRegions` surfaced nowhere. `checkContract`'s per-page DOM is less urgent than
+  planned: skeen's union render does the job.
+- **Only fields and items carry a page into the panels.** Styles, links and slots still
+  land ungrouped in their panels; same two lines when a panel needs it.
+- **N2** (skeen's `usb` link `rendered: false`) unchanged.
+- **The merch pages are invisible in the editor until a product is ON the site.** skeen
+  has none published today. That is the availability rule working, not a bug.
