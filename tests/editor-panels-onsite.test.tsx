@@ -31,7 +31,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
 afterEach(cleanup)
 
 const product = (over: Partial<EditorMerch>): EditorMerch => ({
-  id: 'm', title: 'Tee', price: '30', url: '', image_url: null, onSite: true, inStock: true, ...over,
+  id: 'm', title: 'Tee', price: '30', url: '', image_url: null, onSite: true, inStock: true, fromShopify: false, ...over,
 })
 
 describe('MerchTools — an off-site product is not in the panel', () => {

@@ -128,7 +128,27 @@ export type EditorVideo = {
   previewUrl: string | null
   onSite: boolean
 }
-export type EditorMerch = { id: string; title: string; price: string; url: string; image_url: string | null; onSite: boolean; inStock: boolean }
+export type EditorMerch = {
+  id: string
+  title: string
+  price: string
+  url: string
+  image_url: string | null
+  onSite: boolean
+  inStock: boolean
+  /**
+   * Synced from a Shopify store (the row carries a `shopify_product_id`), which makes
+   * most of it READ-ONLY here (Sam, 2026-09-09). The storefront token is read-only, so
+   * nothing typed in this editor can reach Shopify — and two things then undo it:
+   * `syncShopifyMerch` overwrites title/price/url on every pull, and the site resolves
+   * price LIVE at render (`applyLive`), so a typed price never reaches a visitor.
+   *
+   * The dangerous case is that second one failing open: with the live lane down, an
+   * edited price DOES render while Shopify charges its own. What the manager still owns
+   * is what Shopify does not send — on-site, their manual sold-out override, grid order.
+   */
+  fromShopify: boolean
+}
 export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 /** One PROJECT in the Music panel — an album / EP / single, the unit the site renders.
  *  Songs are grouped into it by their parent `release_id` (see lib/music.ts). A project

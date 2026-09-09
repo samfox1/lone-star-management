@@ -138,8 +138,10 @@ const VIDEOS: EditorVideo[] = [
 // whole group fails for a reason none of them is about. p2 stays OUT of stock, which is
 // a different flag and still what its test needs.
 const MERCH: EditorMerch[] = [
-  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: true, inStock: true },
-  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: true, inStock: false },
+  // MANUAL products (no Shopify row behind them), so the editor lets every field be
+  // edited — which is what the merch-editor tests below are about.
+  { id: 'p1', title: 'Tour Tee', price: '30', url: 'https://shop/x', image_url: 'https://img/tee.jpg', onSite: true, inStock: true, fromShopify: false },
+  { id: 'p2', title: 'Vinyl LP', price: '25', url: 'https://shop/y', image_url: null, onSite: true, inStock: false, fromShopify: false },
 ]
 
 const RELEASES: EditorProject[] = [

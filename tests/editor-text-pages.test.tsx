@@ -198,7 +198,7 @@ import type { EditorMerch } from '@/app/artists/[id]/(dashboard)/editor/inspecto
 
 describe('selecting a merch card tells the frame which page merch lives on', () => {
   const merch: EditorMerch[] = [
-    { id: 'p1', title: 'Tour Tee', price: '30', url: '', image_url: null, onSite: true, inStock: true },
+    { id: 'p1', title: 'Tour Tee', price: '30', url: '', image_url: null, onSite: true, inStock: true, fromShopify: false },
   ]
   const openMerch = (onHighlight: (t: SelectTarget, page?: string) => void, itemPages?: Record<string, string>) => {
     render(<EditorInspector artistId="a1" photos={[]} merch={merch} itemPages={itemPages} onHighlight={onHighlight} />)

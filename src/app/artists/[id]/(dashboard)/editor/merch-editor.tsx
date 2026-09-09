@@ -57,7 +57,13 @@ export function MerchEditor({
     normalize: (v) => v,
   })
 
+  /**
+   * SHOPIFY OWNS THE SYNCED FIELDS (Sam, 2026-09-09). The gate is here, in the writer,
+   * not only on the markup: a control added later cannot write one of these by being a
+   * different kind of element.
+   */
   function edit(field: 'title' | 'price' | 'url', value: string) {
+    if (item.fromShopify) return
     setDetails((d) => ({ ...d, [field]: value }))
     if (!invalid(field, value)) save(field, value)
   }
@@ -85,36 +91,67 @@ export function MerchEditor({
             <img src={item.image_url} alt="" className="h-full w-full object-cover" />
           </div>
         )}
-        <FieldRow label="Name">
-          <input
-            aria-label="Product name"
-            aria-invalid={invalid('title', details.title) || undefined}
-            value={details.title}
-            onChange={(e) => edit('title', e.target.value)}
-            className={FIELD}
-          />
-        </FieldRow>
-        <FieldRow label="Price">
-          <input
-            aria-label="Price"
-            aria-invalid={invalid('price', details.price) || undefined}
-            value={details.price}
-            onChange={(e) => edit('price', e.target.value)}
-            inputMode="decimal"
-            placeholder="28"
-            className={FIELD}
-          />
-        </FieldRow>
-        <FieldRow label="Link">
-          <input
-            aria-label="Product link"
-            type="url"
-            value={details.url}
-            onChange={(e) => edit('url', e.target.value)}
-            placeholder="https://…"
-            className={FIELD}
-          />
-        </FieldRow>
+        {/* A SHOPIFY product's name, price and link are read-only here — shown, because a
+            manager still has to see what the product is, but not editable, because
+            nothing typed here can reach Shopify (the storefront token is read-only) and
+            two things would undo it anyway: the next sync overwrites these columns, and
+            the site prices the product LIVE at render. An editable price is the sharp
+            one — with the live lane down it would render, and Shopify would still charge
+            its own. (Sam, 2026-09-09.) */}
+        {item.fromShopify ? (
+          <>
+            <FieldRow label="Name">
+              <span className="block truncate py-1.5 text-[13px] text-ink">{item.title || 'Untitled'}</span>
+            </FieldRow>
+            <FieldRow label="Price">
+              <span className="block py-1.5 text-[13px] text-ink">
+                {item.price.trim() === '' ? 'Not set' : `$${item.price}`}
+              </span>
+            </FieldRow>
+            <FieldRow label="Link">
+              <span className="block truncate py-1.5 text-[13px] text-ink-muted">{item.url || 'Not set'}</span>
+            </FieldRow>
+            {/* WHY, and where to go instead — a control that refuses without saying so
+                reads as broken. */}
+            <p className="pt-1 font-space text-[10px] leading-relaxed text-ink-faint">
+              Synced from Shopify. Change the name, price or link in Shopify — the site
+              reads the price live, so it updates without republishing.
+            </p>
+          </>
+        ) : (
+          <>
+            <FieldRow label="Name">
+              <input
+                aria-label="Product name"
+                aria-invalid={invalid('title', details.title) || undefined}
+                value={details.title}
+                onChange={(e) => edit('title', e.target.value)}
+                className={FIELD}
+              />
+            </FieldRow>
+            <FieldRow label="Price">
+              <input
+                aria-label="Price"
+                aria-invalid={invalid('price', details.price) || undefined}
+                value={details.price}
+                onChange={(e) => edit('price', e.target.value)}
+                inputMode="decimal"
+                placeholder="28"
+                className={FIELD}
+              />
+            </FieldRow>
+            <FieldRow label="Link">
+              <input
+                aria-label="Product link"
+                type="url"
+                value={details.url}
+                onChange={(e) => edit('url', e.target.value)}
+                placeholder="https://…"
+                className={FIELD}
+              />
+            </FieldRow>
+          </>
+        )}
 
         {/* Stock is presence-independent: a sold-out item STAYS on the site, shown as
             sold out — taking it off entirely is the Merch page's on-site selection. */}

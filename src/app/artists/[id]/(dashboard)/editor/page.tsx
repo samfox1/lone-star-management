@@ -237,6 +237,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     // chosen + published on the Merch page.
     onSite: (r.on_site as boolean | null) ?? false,
     inStock: (r.in_stock as boolean | null) ?? true,
+    // A Shopify row's fields are Shopify's: the sync overwrites them and the site prices
+    // it live. The editor goes read-only on those (see EditorMerch.fromShopify).
+    fromShopify: Boolean(r.shopify_product_id),
   }))
 
   // The Music panel lists PROJECTS, not songs, newest-first: songs grouped by their PARENT
