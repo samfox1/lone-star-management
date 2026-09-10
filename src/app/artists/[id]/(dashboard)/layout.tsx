@@ -63,10 +63,18 @@ export default async function DashboardLayout({
           `bg-paper` because a sticky element with no background lets the page show
           through it as it scrolls underneath.
 
-          Not pinned by a test — jsdom does no layout, and this is an async server
-          component that reads the database. The rails' comments name 71px as this
-          header's height; if the header changes height, that number is the one to move. */}
-      <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline bg-paper px-5 py-3.5">
+          THE BOUNCE COVER (`before:` classes, Sam, 2026-09-10, fourth screenshot: "now
+          when I scroll far enough down I see the line above the nav bar"). A Mac trackpad
+          scrolled past the top rubber-bands the page; this sticky header rides that bounce
+          and the FIXED side rail does not, so for the length of the bounce the rail's
+          full-height line showed in the gap above the bar. The ::before is a screen-tall
+          block of paper hung above the header — off-screen at rest, and exactly filling the
+          exposed gap during a bounce because it moves with the header. It sits inside the
+          header's stacking context, so it covers the rail (z-10) the way the header does.
+
+          Not pinned by a test — jsdom does no layout, headless Chromium does not bounce,
+          and this is an async server component that reads the database. */}
+      <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline bg-paper px-5 py-3.5 before:absolute before:inset-x-0 before:bottom-full before:h-screen before:bg-paper before:content-['']">
         {/* brand: back to roster + small avatar + name */}
         <Link href="/roster" title="Back to roster" className="group flex min-w-0 items-center gap-2">
           <span className="inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors group-hover:bg-surface group-hover:text-ink">

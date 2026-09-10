@@ -23,7 +23,9 @@ export { TOOLS, toolFor }
 // never bounces, which is why it could not be reproduced there.
 //
 // So the rail now runs the whole viewport, z-10, and the header (z-30, bg-paper) simply
-// covers its top 71px. The line is continuous behind the bar at every scroll offset and
+// covers its top 71px — and, during a bounce, the gap ABOVE itself too, via a screen-tall
+// `::before` hung off the header (layout.tsx). Without that cover the full-height line
+// showed above the bar for the length of the bounce, which was the next screenshot. The line is continuous behind the bar at every scroll offset and
 // through the bounce, and there is no longer a number here that has to match the
 // header's height. The icon group centres on 50vh of the VIEWPORT, which is where it
 // already sat (assets-rail.tsx does the same).
