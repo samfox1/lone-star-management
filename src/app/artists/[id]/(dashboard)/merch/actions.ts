@@ -13,6 +13,50 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createShopifyClient, syncShopifyMerch } from '@/lib/merch'
+import { probeShopify, type ShopifyProbe } from '@/lib/merch/probe'
+
+/**
+ * TEST CONNECTION — read one page from the store and show it back (MERCH_PLAN step 7).
+ *
+ * Connecting is the one step an artist's team does without us, and the four ways it fails
+ * all look the same from here: no products. So this does not answer "connected?" with a
+ * tick — it answers with THEIR OWN MERCH, or with the name of the door that is shut.
+ *
+ * IT READS THE STORED CREDENTIAL, NOT A TYPED ONE (Sam, 2026-09-10). The tempting design
+ * is to probe before saving, so a broken token is never stored. But the question a manager
+ * is really asking is "will the pull work", and the pull goes through Vault via
+ * `shopify_credentials`. Probing the pasted values would exercise a different path than
+ * the one that matters and could pass while every sync failed. A bad token stored is
+ * cheap — the next attempt overwrites it, and Disconnect exists. A green test beside a
+ * broken sync is not.
+ *
+ * IT WRITES NOTHING. No merch rows, no revalidate: "Pull merch" stays the deliberate act,
+ * so this is safe to press as often as you like. And what it returns is rendered in a
+ * browser, so the token stays here — `getFirstPage` hands back products, never credentials.
+ */
+export async function probeShopifyAction(
+  artistId: string,
+): Promise<ShopifyProbe & { storeDomain?: string }> {
+  const supabase = await createClient()
+  const { data: creds, error } = await supabase.rpc('shopify_credentials', {
+    p_artist_id: artistId,
+  })
+  // Our own database failing is NOT the artist's Shopify setup being wrong. Calling it
+  // 'bad-token' would send them to Shopify to fix a token that was never the problem.
+  if (error) return { ok: false, reason: 'unknown', detail: error.message }
+  if (!creds || creds.length === 0) {
+    // Returned WITHOUT touching the network: a request carrying an empty token is a
+    // pointless round trip that comes back as a 401 and reads as "your token is wrong".
+    return { ok: false, reason: 'not-connected', detail: 'No Shopify store is connected.' }
+  }
+
+  const { store_domain, token } = creds[0] as { store_domain: string; token: string }
+  const client = createShopifyClient({ domain: store_domain, token })
+  const probe = await probeShopify(() => client.getFirstPage())
+  // The domain rides along so the preview can NAME the store. Products alone prove some
+  // store answered; products plus the domain prove it was the one they typed.
+  return { ...probe, storeDomain: store_domain }
+}
 
 /** Connect (or rotate) the artist's Shopify store. Token is stored in Vault. */
 export async function connectShopifyAction(

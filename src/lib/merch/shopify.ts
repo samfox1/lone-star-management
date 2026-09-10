@@ -11,6 +11,27 @@
 
 const API_VERSION = '2024-01'
 
+/**
+ * A Shopify failure that carries WHY, not just a sentence.
+ *
+ * The message stays exactly what it always was — every existing assertion matches on it —
+ * but "Test connection" has to tell a 404 (wrong address) from a 401 (bad token) from an
+ * ACCESS_DENIED (missing scope), and three different screens fix those three. Parsing a
+ * number back out of the message would be a second place for the format to matter.
+ */
+export class ShopifyApiError extends Error {
+  constructor(
+    message: string,
+    /** HTTP status, when the failure came with one. Absent for an in-body GraphQL error. */
+    readonly status?: number,
+    /** Storefront's `errors[].extensions.code`, e.g. THROTTLED or ACCESS_DENIED. */
+    readonly code?: string,
+  ) {
+    super(message)
+    this.name = 'ShopifyApiError'
+  }
+}
+
 // A storefront's Storefront API host is always {shop}.myshopify.com — custom
 // primary domains front only the online store, never the GraphQL endpoint.
 // Validating here keeps a bad manager-supplied domain from redirecting the
@@ -278,18 +299,22 @@ export function createShopifyClient(opts: Options = {}) {
         await sleep(retryAfterMs(res.headers.get('retry-after')))
         continue
       }
-      if (!res.ok) throw new Error(`Shopify API error ${res.status} for ${domain}`)
+      if (!res.ok) throw new ShopifyApiError(`Shopify API error ${res.status} for ${domain}`, res.status)
       const body = (await res.json()) as T
       if (isThrottled(body)) {
         await sleep(THROTTLE_BACKOFF_MS)
         continue
       }
       if (body.errors?.length) {
-        throw new Error(`Shopify GraphQL error: ${body.errors[0].message}`)
+        throw new ShopifyApiError(
+          `Shopify GraphQL error: ${body.errors[0].message}`,
+          undefined,
+          body.errors[0].extensions?.code,
+        )
       }
       return body
     }
-    throw new Error(`Shopify API rate-limited after ${maxRetries} retries: ${domain}`)
+    throw new ShopifyApiError(`Shopify API rate-limited after ${maxRetries} retries: ${domain}`)
   }
 
   /**
@@ -409,7 +434,20 @@ export function createShopifyClient(opts: Options = {}) {
     return out
   }
 
-  return { getProducts }
+  /**
+   * ONE page of products — what "Test connection" reads (MERCH_PLAN step 7).
+   *
+   * Deliberately not `getProducts()`. Proving a token works must not pull a 500-product
+   * catalogue over the wire, and a manager only needs to recognise their own merch to know
+   * it is the right store. Variant follow-ups are skipped for the same reason: a short
+   * picker in a preview costs nothing, and the real sync fills them in.
+   */
+  async function getFirstPage(): Promise<ShopifyMerch[]> {
+    const body: ProductsResponse = await graphql(PRODUCTS_QUERY, { cursor: null })
+    return (body.data?.products?.edges ?? []).map((edge) => mapNode(edge.node))
+  }
+
+  return { getProducts, getFirstPage }
 }
 
 export type ShopifyClient = ReturnType<typeof createShopifyClient>
