@@ -27,6 +27,7 @@
     "src/lib/merch/live.ts",
     "src/lib/merch/shopify.ts",
     "src/lib/merch/probe.ts",
+    "src/lib/cover-url.ts",
     "src/lib/og.ts",
     "src/lib/seo-audit.ts",
     "src/lib/seo.ts",

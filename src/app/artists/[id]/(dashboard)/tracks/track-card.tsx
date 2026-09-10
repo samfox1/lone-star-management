@@ -22,6 +22,7 @@ import {
   updateContentAction,
 } from '../actions'
 import { SelectToggle } from '../select-toggle'
+import { coverThumbUrl } from '@/lib/cover-url'
 
 /** A release the track can be assigned to (id + title, for the selector). */
 export type ReleaseOption = { id: string; title: string }
@@ -243,8 +244,11 @@ export function TrackCard({
             {RELEASE_TYPE_LABEL[track.release_type]}
           </span>
           {track.cover_url ? (
+            // Sized for the tile (lib/cover-url): Spotify's 640 is 4x the bytes of the 300
+            // this 192px box needs, and the Music tab was carrying 5.8 MB of covers
+            // (Sam, 2026-09-10). The modal's 360px image below keeps the full asset.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={track.cover_url} alt="" className="h-full w-full object-cover" />
+            <img src={coverThumbUrl(track.cover_url, 192) ?? undefined} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="h-9 w-9 rounded-full bg-ink" />
           )}

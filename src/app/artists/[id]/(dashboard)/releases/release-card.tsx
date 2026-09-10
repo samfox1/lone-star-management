@@ -15,6 +15,7 @@ import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { EntitySparkline } from '../entity-sparkline'
 import { TrackAudio } from '../track-audio'
+import { coverThumbUrl } from '@/lib/cover-url'
 import {
   deleteContentAction,
   setReleaseLinkAction,
@@ -384,8 +385,10 @@ export function ReleaseCard({
               {RELEASE_TYPE_LABEL[release.release_type]}
             </span>
             {release.cover_url ? (
+              // Sized for the tile — see tracks/track-card.tsx. The modal's 360px image keeps
+              // the full asset.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+              <img src={coverThumbUrl(release.cover_url, 192) ?? undefined} alt="" className="h-full w-full object-cover" />
             ) : (
               <span className="h-9 w-9 rounded-full bg-ink" />
             )}
@@ -426,7 +429,7 @@ export function ReleaseCard({
                   <div className="flex h-24 w-24 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
                     {release.cover_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
+                      <img src={coverThumbUrl(release.cover_url, 96) ?? undefined} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <span className="h-9 w-9 rounded-full bg-ink" />
                     )}

@@ -5,7 +5,6 @@ import { toReleaseType } from '@/lib/releases'
 import { releaseBucket, trackBucket, type MusicBucket } from '@/lib/music'
 import { dashboardDiff, requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction } from '../actions'
-import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
 import { type ReleaseOption } from '../tracks/track-card'
@@ -180,7 +179,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   const mergeTargets = tracks.map((t) => ({ id: t.id, title: t.title }))
 
   return (
-    <AssetsShell artistId={id} active="music">
+    <>
     <MusicBrowser
       releases={releases}
       unreleasedReleases={unreleasedReleases}
@@ -216,6 +215,6 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
         ) : undefined
       }
     />
-    </AssetsShell>
+    </>
   )
 }

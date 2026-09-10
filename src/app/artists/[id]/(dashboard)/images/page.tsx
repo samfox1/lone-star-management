@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction } from '../actions'
-import { AssetsShell } from '../assets-rail'
 import { DriveBrowser } from '../drive-browser'
 import { DriveImportButton } from '../drive-import-button'
 import { PhotosBrowser, type PhotoItem } from './photos-browser'
@@ -32,7 +31,7 @@ export default async function ImagesPage({ params }: { params: Promise<{ id: str
   }))
 
   return (
-    <AssetsShell artistId={id} active="photos">
+    <>
       <PhotosBrowser
         photos={photos}
         artistId={id}
@@ -51,6 +50,6 @@ export default async function ImagesPage({ params }: { params: Promise<{ id: str
           </>
         }
       />
-    </AssetsShell>
+    </>
   )
 }

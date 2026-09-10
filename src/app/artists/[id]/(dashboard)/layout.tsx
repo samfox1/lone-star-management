@@ -1,4 +1,5 @@
 import { ToolsShell } from './tools-rail'
+import { AssetsShell } from './assets-rail'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Icon } from '@/components/ui/icons'
@@ -114,8 +115,13 @@ export default async function DashboardLayout({
       <ArtistNav artistId={id} dirty={dirty} layout="strip" />
 
       <main className="w-full px-7 py-8">
-        {/* On a tool route this adds the tools side panel; elsewhere it is the page alone. */}
-        <ToolsShell artistId={id}>{children}</ToolsShell>
+        {/* On a tool route this adds the tools side panel; on an assets route (music /
+            images / videos) the assets rail; elsewhere it is the page alone. Both live HERE
+            so they persist across a tab switch while the page beneath streams in behind
+            its loading.tsx (2026-09-10). */}
+        <ToolsShell artistId={id}>
+          <AssetsShell artistId={id}>{children}</AssetsShell>
+        </ToolsShell>
       </main>
       <Toaster />
     </div>

@@ -3,7 +3,6 @@ import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
 import { dashboardDiff, requireArtist } from '../_data'
 import { importDriveFileAction, listDriveFilesAction } from '../actions'
-import { AssetsShell } from '../assets-rail'
 import { VideosBrowser } from './videos-browser'
 import { VideoAddButton } from './video-add'
 import { SyncDialog } from '../sync-dialog'
@@ -41,7 +40,7 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
   ])
 
   return (
-    <AssetsShell artistId={id} active="videos">
+    <>
     <VideosBrowser
       artistId={id}
       dirty={diff.video.dirty}
@@ -89,6 +88,6 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
         </>
       }
     />
-    </AssetsShell>
+    </>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 
@@ -59,8 +60,34 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
   )
 }
 
-/** Wrap an asset page's content with the rail (mobile: rail hidden, content full-width). */
-export function AssetsShell({ artistId, active, children }: { artistId: string; active: AssetKind; children: React.ReactNode }) {
+/**
+ * Which assets tab a pathname is on, or null. PURE, so it is unit-testable and so the
+ * shell and anything else that needs to know ("is this an assets route?") read one rule.
+ * The URL segment is the truth; `photos` is the key the rail has always used for /images.
+ */
+export function assetKindFor(pathname: string, artistId: string): AssetKind | null {
+  const seg = pathname.split('?')[0].split('#')[0].replace(/\/+$/, '').split('/').pop() ?? ''
+  if (!pathname.startsWith(`/artists/${artistId}/`)) return null
+  return ITEMS.find((it) => it.seg === seg)?.key ?? null
+}
+
+/**
+ * The rail, rendered from the DASHBOARD LAYOUT rather than by each assets page
+ * (2026-09-10). Same shape as ToolsShell: on an assets route it wraps the page with the
+ * rail; elsewhere it is the page alone.
+ *
+ * WHY IT MOVED. Sam: "it takes way too long to bounce between the pages on the assets
+ * page." Measured, a warm tab switch commits in ~300ms — but for those 300ms NOTHING
+ * changes on screen, because each page rendered its own rail and its own body in one
+ * server pass with no loading state. A `loading.tsx` per page fixes that, but only if the
+ * rail is OUTSIDE the page: a loading state replaces the page, and a rail inside the page
+ * would blink out on every switch. In the layout it stays put, and the skeleton fills the
+ * space beside it the instant the tab is clicked.
+ */
+export function AssetsShell({ artistId, children }: { artistId: string; children: React.ReactNode }) {
+  const pathname = usePathname() ?? ''
+  const active = assetKindFor(pathname, artistId)
+  if (!active) return <>{children}</>
   return (
     <div className="flex gap-6">
       <AssetsRail artistId={artistId} active={active} />
