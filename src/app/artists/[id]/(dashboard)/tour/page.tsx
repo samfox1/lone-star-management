@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
-import { dashboardDiff, requireArtist } from '../_data'
+import { requireArtist } from '../_data'
 import { SyncDialog } from '../sync-dialog'
 import { sourcesForSection } from '../sync-sections'
 import { syncSectionAction } from '../sync-section-action'
@@ -23,17 +23,15 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
   // diffUnpublished is the only way to know whether there are unpublished date EDITS,
   // now that presence is live and no longer a selection delta. It's the same query
   // behind the nav's pending dot, so the PublishBar and the dot always agree.
-  const [artist, rows, counts, diff] = await Promise.all([
+  const [artist, rows, counts] = await Promise.all([
     requireArtist(id),
     listContent(supabase, 'tour_date', id),
     entityCounts(supabase, id, daysAgo(30)),
-    dashboardDiff(id),
   ])
 
   return (
     <TourBrowser
       artistId={id}
-      dirty={diff.tour_date.dirty}
       tours={rows.map((row) => ({
         id: row.id as string,
         date: (row.date as string | null) ?? null,

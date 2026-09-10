@@ -9,6 +9,7 @@
  * entity. entity_type is the SINGULAR form the schema CHECK constraint expects.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { frontSortOrder, slotByDate } from './insert-position'
 import { safeHref } from '@/lib/url'
 
 /** The columns reconcileOnSite reads (superset: provenance only for releases). */
@@ -371,7 +372,30 @@ export async function listContent(
  *  publish gate for merch.
  *  (Releases keep their own path: manual adds stay live, Spotify imports set false in
  *  the sync — so `release` is intentionally not here.) */
-const INSERT_OFF_SITE: readonly CrudEntity[] = ['video', 'merch', 'tour_date']
+/**
+ * AUTO-PUBLISHED types (PRESENCE_PLAN.md S2/S3, Sam 2026-09-10: "tour dates and merch can
+ * just go right to the site … they are always going to be added to a list"). Every write
+ * to one of these — add, edit, delete, toggle, reorder, sync — also snapshots the type,
+ * so the list on the page IS the list on the site and there is no Publish step. A
+ * subset of LIVE_TOGGLE by construction (the type says so), because a draft-presence
+ * type auto-published would be a contradiction.
+ */
+export const AUTO_PUBLISH: readonly LiveTogglePublishable[] = ['tour_date', 'merch']
+
+/** Snapshot `type` now if it is auto-published; a no-op for every other type. */
+export async function autoPublish(supabase: SupabaseClient, type: PublishableEntity, artistId: string): Promise<void> {
+  if ((AUTO_PUBLISH as readonly string[]).includes(type)) await publishContent(supabase, type, artistId)
+}
+
+/** Only videos still land off-site on a manual add (83 YouTube imports must never
+ *  auto-appear, and the same door serves hand-added ones). A hand-added tour date or
+ *  product is ON the site — that is what adding one means now (S2/S3). Syncs keep
+ *  inserting off-site through their own `insertDefaults`; the library is where things
+ *  arrive, the toggle is where they are chosen. */
+const INSERT_OFF_SITE: readonly CrudEntity[] = ['video']
+
+/** Where a NEW row lands (lib/insert-position): merch on top, a tour date by its date. */
+const INSERT_POSITION: Partial<Record<CrudEntity, 'front' | 'by-date'>> = { merch: 'front', tour_date: 'by-date' }
 
 export async function createContent(
   supabase: SupabaseClient,
@@ -380,13 +404,45 @@ export async function createContent(
   input: Record<string, unknown>,
 ): Promise<ContentRow> {
   const offSite = INSERT_OFF_SITE.includes(type) ? { on_site: false } : {}
+  const table = PUBLISHABLE[type].table
+  const position = INSERT_POSITION[type]
+
+  // Merch: on top. Only when the list has been dragged (some sort_order is set) — an
+  // undragged list is newest-first at the door already, and numbering one row would flip
+  // the whole list into manual mode.
+  let front: { sort_order?: number } = {}
+  if (position === 'front') {
+    const { data: existing, error: e } = await supabase.from(table).select('sort_order').eq('artist_id', artistId)
+    if (e) throw new Error(e.message)
+    const n = frontSortOrder((existing ?? []).map((r) => (r.sort_order as number | null) ?? null))
+    if (n !== null) front = { sort_order: n }
+  }
+
   const { data, error } = await supabase
-    .from(PUBLISHABLE[type].table)
-    .insert({ ...pickFields(type, input), ...offSite, artist_id: artistId })
+    .from(table)
+    .insert({ ...pickFields(type, input), ...offSite, ...front, artist_id: artistId })
     .select('*')
     .single()
   if (error) throw new Error(error.message)
-  return data as ContentRow
+  const row = data as ContentRow
+
+  // Tour: slotted by date among the dragged order, via the same atomic renumber the
+  // editor's drag uses. Null from slotByDate means the list was never dragged and the
+  // door orders by date on its own.
+  if (position === 'by-date') {
+    const { data: others, error: e } = await supabase.from(table).select('id, date, sort_order').eq('artist_id', artistId).neq('id', row.id)
+    if (e) throw new Error(e.message)
+    const order = slotByDate(
+      (others ?? []).map((r) => ({ id: r.id as string, date: (r.date as string | null) ?? null, sort_order: (r.sort_order as number | null) ?? null })),
+      row.id as string,
+      (row.date as string | null) ?? null,
+    )
+    if (order) {
+      const { error: re } = await supabase.rpc('reorder_rows', { p_table: table, p_artist: artistId, p_ids: order })
+      if (re) throw new Error(re.message)
+    }
+  }
+  return row
 }
 
 export async function updateContent(

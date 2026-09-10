@@ -12,10 +12,9 @@
  *     it. That's the contract the public site depends on, and it holds per-type — which is
  *     why it is asserted per-type rather than for whichever type came to mind: the door
  *     joins each section separately, so the rule can be broken for exactly one of them.
- *  2. reconcileOnSite — making the live set exactly a selection — now applies ONLY to
- *     the publish-reconciled types (merch here; release has its own suite). Running it
- *     against a live-toggle type is the bug ADR 0009 exists to prevent, so it is not
- *     exercised against one here.
+ *  2. (2026-09-10) There is no reconcile path any more — merch joined the live-toggle
+ *     types, and tour dates and merch also AUTO-PUBLISH on every write (S2/S3). This
+ *     file pins the door contract that both models share: the live flag gates.
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -83,24 +82,26 @@ const writeFlag = (client: SupabaseClient, c: Case, id: string, on: boolean, art
   client.from(c.table).update({ on_site: on }).eq('id', id).eq('artist_id', artistId)
 
 describe.each(CASES)('on-site gating: $type', (c) => {
-  it('createContent lands the new row off-site (on_site=false)', async () => {
+  it('createContent lands the row where its KIND says: a video off-site, a date or product ON', async () => {
+    // PRESENCE_PLAN S2/S3 (Sam, 2026-09-10): "tour dates and merch can just go right to
+    // the site" — adding one IS putting it on the list. A video still arrives off-site,
+    // because 83 YouTube imports must never auto-appear and the same door serves both.
     const row = await create(c)
     const { data } = await svc.from(c.table).select('on_site').eq('id', row.id as string).single()
-    expect(data!.on_site).toBe(false)
+    expect(data!.on_site).toBe(c.type !== 'video')
   })
 
-  it('CRITICAL: a published row stays hidden until the flag is on, and hides again when off', async () => {
-    const row = await create(c) // on_site=false
+  it('CRITICAL: the flag alone moves a published row on and off the site — no republish', async () => {
+    const row = await create(c)
     const id = row.id as string
-    await publishContent(asA, c.type, artistA) // snapshot exists, but still hidden
-    expect(await onSite(c)).toBe(false)
-
+    const start = c.type !== 'video' // where createContent left it (see above)
+    await publishContent(asA, c.type, artistA) // snapshot exists; presence is the LIVE flag
+    expect(await onSite(c)).toBe(start)
     // The door gates on the WORKING row, so the flag alone moves it — no republish.
-    await writeFlag(asA, c, id, true, artistA)
-    expect(await onSite(c)).toBe(true)
-
-    await writeFlag(asA, c, id, false, artistA)
-    expect(await onSite(c)).toBe(false)
+    await writeFlag(asA, c, id, !start, artistA)
+    expect(await onSite(c)).toBe(!start)
+    await writeFlag(asA, c, id, start, artistA)
+    expect(await onSite(c)).toBe(start)
   })
 
   it('CRITICAL: a published row whose WORKING row was deleted stays live until a tombstone', async () => {

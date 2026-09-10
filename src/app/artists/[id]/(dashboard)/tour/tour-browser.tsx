@@ -1,16 +1,13 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
 import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
-import { PublishBar } from '../publish-bar'
 import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
 import { Segmented } from '../segmented'
 import { OriginSection } from '../origin'
 import { useLiveOnSite } from '../use-live-on-site'
-import { publishEntityAction } from '../actions'
 import { TourRow, type TourDate } from './tour-row'
 
 type Sort = 'soonest' | 'latest'
@@ -52,16 +49,12 @@ function filterByWhen(items: TourDate[], when: When, today: string): TourDate[] 
 export function TourBrowser({
   tours,
   artistId,
-  dirty = false,
   trailing,
 }: {
   tours: TourDate[]
   artistId: string
-  /** Unpublished content edits — what lights up the PublishBar now that presence is live. */
-  dirty?: boolean
   trailing?: ReactNode
 }) {
-  const router = useRouter()
   const today = todayStr()
   const [site, setSite] = useState<SiteFilter>('all')
   // Default to All so every date is visible at a glance; the sort below floats the
@@ -87,13 +80,6 @@ export function TourBrowser({
     { key: 'upcoming', label: 'Upcoming', items: shown.filter((t) => !isPast(t, today)) },
     { key: 'past', label: 'Past', items: shown.filter((t) => isPast(t, today)) },
   ].filter((s) => s.items.length > 0)
-
-  async function publish(password: string) {
-    // Snapshot only — no reconcile. The on-site set is already whatever the toggles say.
-    const res = await publishEntityAction('tour_date', artistId, password)
-    if (res.ok) router.refresh()
-    return res
-  }
 
   const row = (t: TourDate) => (
     <TourRow
@@ -160,8 +146,6 @@ export function TourBrowser({
           </div>
         )}
       </div>
-
-      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="tour dates" />
     </div>
   )
 }
