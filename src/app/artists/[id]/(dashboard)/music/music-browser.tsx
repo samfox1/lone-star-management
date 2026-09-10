@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
@@ -302,11 +302,22 @@ export function MusicBrowser({
         onSort={setSort}
         trailing={
           <>
-            {importButton}
+            {/* KEYED WRAPPERS around the two elements the PAGE created (2026-09-10, the
+                "unique key" warning). `syncDialog` and `importButton` are built in the
+                server page and cross the server→client boundary as sealed elements. Put
+                straight into this multi-child fragment, React's reconciler reads them as
+                unkeyed list items and warns — "It was passed a child from MusicPage" —
+                even though a locally-created element in the same slot would not. The
+                other browsers never hit this because their pages hand over ONE fragment
+                that is rendered whole. A keyed Fragment owned here is the smallest fix:
+                no DOM, and the page element becomes a sole child rather than a list item.
+                jsdom cannot reproduce it (a test-created element is not sealed), so this
+                is pinned by the browser console, not a test. */}
+            {importButton && <Fragment key="import">{importButton}</Fragment>}
             {/* Hidden on Unreleased: a platform pull only ever produces RELEASED music,
                 so the control does not apply to that view — the same reason the old
                 button was disabled there. */}
-            {bucket !== 'unreleased' && syncDialog}
+            {bucket !== 'unreleased' && syncDialog && <Fragment key="sync">{syncDialog}</Fragment>}
             {/* ONE + for the whole page; released/unreleased is chosen in the modal. */}
             <SongAddButton artistId={artistId} />
           </>
