@@ -111,9 +111,11 @@ Sequenced plan agreed with Sam after a full codebase/DB/plans review. Order:
    verified). `album_name` fallback killed; per-platform badges on track cards;
    copilot counts split released/unreleased; skeen-website uses authoritative
    `release_type`. 439 tests green, prod build + authenticated dogfood done.
-5. **EPK-only fields** — build stage plot, tech rider, press quotes, and
-   downloadable press assets (see "Phase 5 review follow-ups" below; scope now
-   confirmed as build-it, not derived-only).
+5. ~~**EPK-only fields**~~ — DONE 2026-08-04 (0766041, 9595ddb, cc2080c): press pitch +
+   quotes, private rider/stage-plot uploads, the readiness gate, and the generated PDF
+   that staples the rider on. The one piece of the July scope NOT built is "downloadable
+   press assets" (a hi-res photo/logo pack for promoters) — see the follow-ups below.
+   (This line said "build it" until 2026-09-10, a month after it shipped.)
 6. **Wire skeen-website content-in** — the site fetches `videos`, `site_content`,
    and `release_type` but never renders them, so publishing videos has no effect on
    the live site. Consume them in the mappers (Work tab from `videos`, use
@@ -504,9 +506,11 @@ Deferred SCOPE the plan (§5.9) named but v1 cut (build when needed):
       release_id with an album_name fallback), and the release card shows its
       track count.
 - [ ] **Pre-save** — §5.9 listed it; not built.
-- [ ] **EPK-only fields + file uploads** — §5.9 listed stage-plot / tech-rider +
-      "a few EPK-only fields"; v1 EPK is 100% derived from published content. Add
-      EPK config fields + a (private?) asset upload for the rider/stage plot.
+- [x] **EPK-only fields + file uploads** — DONE 2026-08-04: press pitch/quotes,
+      private `documents` bucket for rider + stage plot, merged into the PDF.
+- [ ] **Downloadable press assets** — the last unbuilt piece of the §5.9 EPK scope: a
+      promoter-facing pack (hi-res photos, logos) downloadable from `/[slug]/epk`.
+      Published media only, built on click like the PDF. Not started.
 - [ ] **Analytics consent banner** — privacy is handled (no PII, target truncated),
       but no consent UI. Add if/when targeting jurisdictions that require it.
 
