@@ -20,6 +20,7 @@ import {
   setTrackTypeAction,
   updateContentAction,
 } from '../actions'
+import { SelectToggle } from '../select-toggle'
 
 /** A release the track can be assigned to (id + title, for the selector). */
 export type ReleaseOption = { id: string; title: string }
@@ -197,6 +198,22 @@ export function TrackCard({
 
   return (
     <>
+      {/* THE SAME CHECK THE RELEASE CARDS WEAR (Sam, 2026-09-10: "why dont the soundcloud
+          music assets have the check on them like the spotify one on the right does").
+          An orphan song's on-site switch lived only inside the modal (48db004), so on the
+          shelf a release showed a check and the song beside it showed nothing — one fact,
+          two faces. Same SelectToggle, same corner, same layering as GridCard: a SIBLING
+          of the tile button, never inside it, so the check is not also a click on the card.
+          It flips the song instantly through the existing action (the doors read the live
+          row), so `selected` and `onSite` are always the same value and the mark is
+          simply on or off — never the release cards' "publish to apply" states. A song
+          inside a release shows none: the release's check governs it. */}
+      <div className="relative">
+        {isOrphan && (
+          <div className="absolute left-2 top-2 z-10">
+            <SelectToggle selected={onSite} onSite={onSite} onToggle={toggleOnSite} label={track.title} />
+          </div>
+        )}
       <button type="button" onClick={() => setOpen(true)} className="group block w-full text-left">
         <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
           {/* Same type badge the release cards carry, from the song's own release_type —
@@ -222,6 +239,7 @@ export function TrackCard({
           </div>
         )}
       </button>
+      </div>
 
       {/* Same single-style modal as a release single — a song is a song wherever it lives. */}
       <CardModal open={open} onClose={() => !editOpen && !mergeOpen && setOpen(false)} wide footer={null}>

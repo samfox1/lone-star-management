@@ -10,7 +10,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
-import { setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { setTrackOnSiteAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
@@ -28,6 +28,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setTrackReleaseAction: vi.fn(async () => ({})),
   setTrackTypeAction: vi.fn(async () => ({})),
   setTrackParentReleaseAction: vi.fn(async () => ({})),
+  setTrackOnSiteAction: vi.fn(async () => ({})),
   // Pulled in transitively via release-card (shared SONG_PLATFORMS).
   setReleaseLinkAction: vi.fn(async () => ({})),
   setReleaseTypeAction: vi.fn(async () => ({})),
@@ -120,5 +121,45 @@ describe('TrackCard song type', () => {
     saveEdit()
     await waitFor(() => expect(screen.queryByText('Edit song')).toBeNull())
     expect(setTrackTypeAction).not.toHaveBeenCalled()
+  })
+})
+
+/* ── the on-site check on the tile (Sam, 2026-09-10) ─────────────────────────────────
+ * "why dont the soundcloud music assets have the check on them like the spotify one on
+ * the right does". The Spotify one was a RELEASE card, which mounts SelectToggle on its
+ * tile. The SoundCloud ones were release-less SONGS, whose on-site switch lived inside the
+ * modal (48db004) with nothing on the tile face at all — so one fact wore two different
+ * faces on the same shelf, and the songs read as off-site or broken. Same check now, wired
+ * to the song's existing instant action; a song inside a release still shows none, because
+ * the release owns that decision. */
+describe('the on-site check on a song tile', () => {
+  it('CRITICAL: an orphan song ON the site shows a checked mark on its tile', () => {
+    render(<TrackCard track={track({ on_site: true })} artistId="a1" releases={[]} />)
+    const box = screen.getByRole('checkbox', { name: /Demo — on site/ })
+    expect(box).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('CRITICAL: clicking the mark flips the song on or off the site, through the same action the modal uses', async () => {
+    render(<TrackCard track={track({ on_site: false })} artistId="a1" releases={[]} />)
+    const box = screen.getByRole('checkbox', { name: /Demo — off site/ })
+    expect(box).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(box)
+    await waitFor(() => expect(setTrackOnSiteAction).toHaveBeenCalledWith('t1', 'a1', true))
+    expect(screen.getByRole('checkbox', { name: /Demo — on site/ })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('CRITICAL: a song inside a release shows NO mark — the release owns on-site', () => {
+    // The release card's check governs every song in it; a second check on the song would
+    // be a control that either lies or fights the release's.
+    render(<TrackCard track={track({ release_id: 'r1', on_site: true })} artistId="a1" releases={[]} />)
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+
+  it('the mark does not open the modal', () => {
+    // Sibling of the tile button, not inside it — a click on the check must not also
+    // count as a click on the card.
+    render(<TrackCard track={track({ on_site: false })} artistId="a1" releases={[]} />)
+    fireEvent.click(screen.getByRole('checkbox'))
+    expect(screen.queryByPlaceholderText('Spotify link')).toBeNull()
   })
 })
