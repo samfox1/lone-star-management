@@ -51,7 +51,22 @@ export default async function DashboardLayout({
 
   return (
     <div className="font-ui text-ink flex flex-1 flex-col bg-paper">
-      <header className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline px-5 py-3.5">
+      {/* STICKY (Sam, 2026-09-10, with a screenshot of the Integrations page mid-scroll:
+          "the vertical line on the side bar disconnects… I think the top nav bar should
+          stay in place when scrolling"). The tools and assets rails are `fixed` to the
+          viewport at top:71px — this header's rendered height — so they stay put while
+          the page scrolls. The header did not, so it scrolled away and left the rail
+          pinned 71px down with blank paper above it and its border-right meeting nothing.
+          Pinning the header is what makes 71px mean "just under the header" always.
+
+          z-30: under the modal overlay (z-50) and the toasts (z-60), above page content.
+          `bg-paper` because a sticky element with no background lets the page show
+          through it as it scrolls underneath.
+
+          Not pinned by a test — jsdom does no layout, and this is an async server
+          component that reads the database. The rails' comments name 71px as this
+          header's height; if the header changes height, that number is the one to move. */}
+      <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline bg-paper px-5 py-3.5">
         {/* brand: back to roster + small avatar + name */}
         <Link href="/roster" title="Back to roster" className="group flex min-w-0 items-center gap-2">
           <span className="inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors group-hover:bg-surface group-hover:text-ink">
