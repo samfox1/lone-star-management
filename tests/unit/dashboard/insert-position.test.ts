@@ -67,3 +67,55 @@ describe('slotByDate — a tour date fits around the others', () => {
     expect(slotByDate(dragged, 'new', '2026-10-20')).toEqual(['c', 'a', 'b', 'new'])
   })
 })
+
+/* ── what Stryker found unwatched (2026-09-10): every fixture above arrived ALREADY in
+ * sort_order order, so a sort that was removed, reversed or summed instead of subtracted
+ * produced the same answer. These arrive scrambled. ─────────────────────────────────── */
+describe('slotByDate — the manager’s order is reconstructed, not assumed', () => {
+  it('CRITICAL: rows arriving out of order are placed by their sort_order, not their arrival', () => {
+    const scrambled = [
+      { id: 'c', date: '2026-11-01', sort_order: 2 },
+      { id: 'a', date: '2026-10-01', sort_order: 0 },
+      { id: 'b', date: '2026-10-15', sort_order: 1 },
+    ]
+    expect(slotByDate(scrambled, 'new', '2026-10-20')).toEqual(['a', 'b', 'new', 'c'])
+  })
+  it('CRITICAL: an unnumbered row goes LAST even when it arrives first', () => {
+    // A partially-numbered list is still manual mode (some rows numbered, not all), and
+    // the unnumbered one sorts after every numbered one.
+    const rows = [
+      { id: 'tba', date: null, sort_order: null },
+      { id: 'b', date: '2026-10-15', sort_order: 1 },
+      { id: 'a', date: '2026-10-01', sort_order: 0 },
+    ]
+    expect(slotByDate(rows, 'new', '2026-12-01')).toEqual(['a', 'b', 'new', 'tba'])
+  })
+  it('a tie in sort_order is broken by date', () => {
+    const tied = [
+      { id: 'later', date: '2026-10-15', sort_order: 0 },
+      { id: 'earlier', date: '2026-10-01', sort_order: 0 },
+    ]
+    expect(slotByDate(tied, 'new', '2026-12-01')).toEqual(['earlier', 'later', 'new'])
+  })
+  it('a large gap between sort_orders does not change the order (subtraction, not addition)', () => {
+    const rows = [
+      { id: 'b', date: '2026-10-15', sort_order: 100 },
+      { id: 'a', date: '2026-10-01', sort_order: 1 },
+    ]
+    expect(slotByDate(rows, 'new', '2026-09-01')).toEqual(['new', 'a', 'b'])
+  })
+  it('a tie between a dated and an undated row puts the undated one first', () => {
+    // The tie-break compares dates as strings with '' for none, so an undated row sorts
+    // ahead of any date on an equal sort_order. Pinned because the null-coalesce here
+    // was unwatched: swapped for `&&`, this case throws instead of ordering.
+    const tied = [
+      { id: 'dated', date: '2026-10-01', sort_order: 0 },
+      { id: 'tba', date: null, sort_order: 0 },
+    ]
+    expect(slotByDate(tied, 'new', '2026-12-01')).toEqual(['tba', 'dated', 'new'])
+  })
+  // One mutant is EQUIVALENT and recorded so nobody chases it: dropping the
+  // `date !== null` guard before `date <= newDate` changes nothing, because in JavaScript
+  // `null <= '2026-…'` is false (null coerces to 0, the string to NaN). The guard stays
+  // for the reader; behaviour cannot differ.
+})
