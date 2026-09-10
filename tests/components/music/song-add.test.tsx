@@ -213,7 +213,6 @@ describe('SongAddButton', () => {
     fireEvent.click(within(dialog).getByText('Live set'))
     fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Navy Pier Set' } })
     dropAudio(dialog)
-    fireEvent.click(within(dialog).getByRole('button', { name: 'released' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(1))
@@ -221,24 +220,26 @@ describe('SongAddButton', () => {
     expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Navy Pier Set', release_type: 'live', release_id: null })
   })
 
-  it('single: one song, required released choice blocks until picked', async () => {
+  it('single: RELEASED BY DEFAULT — nothing asks, Add just works', async () => {
+    // Sam, 2026-09-10: "We should assume, when adding a song, that it is released." This
+    // replaces the forced released/unreleased question that used to block here.
     const dialog = openModal()
     fireEvent.click(within(dialog).getByText('Add Manually'))
     fireEvent.click(within(dialog).getByText('Single'))
-    expect(within(dialog).getByText(/Has this been released\?/)).toBeInTheDocument()
-    expect(within(dialog).getByText('*')).toBeInTheDocument()
-
+    expect(within(dialog).queryByText(/Has this been released\?/)).toBeNull()
     fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Hand Made' } })
     dropAudio(dialog)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
-    expect(await within(dialog).findByText('Choose released or unreleased.')).toBeInTheDocument()
-    expect(inserted).toHaveLength(0)
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'released' }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(inserted).toHaveLength(1))
-    expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Hand Made', released: true, release_id: null })
+    expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Hand Made', released: true, on_site: true, release_id: null })
     expect(uploads.map((u) => u.bucket)).toEqual(['audio'])
+  })
+
+  it('single: the Unreleased switch is offered on a manual upload, off by default', () => {
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Add Manually'))
+    fireEvent.click(within(dialog).getByText('Single'))
+    expect(within(dialog).getByRole('switch', { name: 'Unreleased' })).toHaveAttribute('aria-checked', 'false')
   })
 
   it('EP: creates the release and its song rows (+ Add song appends one)', async () => {
@@ -257,7 +258,7 @@ describe('SongAddButton', () => {
     // Each drop renames its zone's label to the filename, so always hit the
     // FIRST still-empty zone.
     for (let i = 0; i < 3; i++) dropAudio(dialog, 0)
-    fireEvent.click(within(dialog).getByRole('button', { name: 'unreleased' }))
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Unreleased' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(4)) // 1 release + 3 songs
@@ -292,7 +293,7 @@ describe('SongAddButton', () => {
       fireEvent.click(within(dialog).getByText('Single'))
       fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Demo Take' } })
       dropAudio(dialog)
-      fireEvent.click(within(dialog).getByRole('button', { name: 'unreleased' }))
+      fireEvent.click(within(dialog).getByRole('switch', { name: 'Unreleased' }))
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
       await waitFor(() => expect(inserted).toHaveLength(1))
@@ -309,7 +310,6 @@ describe('SongAddButton', () => {
       fireEvent.click(within(dialog).getByText('Single'))
       fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Out Now' } })
       dropAudio(dialog)
-      fireEvent.click(within(dialog).getByRole('button', { name: 'released' }))
       fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
       await waitFor(() => expect(inserted).toHaveLength(1))
@@ -323,3 +323,46 @@ describe('SongAddButton', () => {
  * correct by hand on every SoundCloud add — and the two negatives are the reason it is a
  * word-boundary match rather than a substring one.
  */
+
+/* ── the Unreleased switch on the streaming path (Sam, 2026-09-10) ─────────────────────
+ * "this should only be available on soundcloud and when a song is manually added." A
+ * SoundCloud link says nothing about release — demos and live sets live there — so the
+ * switch is offered when EVERY link given is SoundCloud. One Spotify, Apple or Deezer
+ * link and the song is released by being there: no switch, no way to say otherwise. */
+describe('streaming: Unreleased is offered for SoundCloud only', () => {
+  async function review(url: string, placeholder: string) {
+    vi.mocked(resolveStreamingSongAction).mockResolvedValueOnce({ ok: false as const, error: 'no metadata' })
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
+    fireEvent.change(within(dialog).getByPlaceholderText(placeholder), { target: { value: url } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    await within(dialog).findByPlaceholderText('Song title')
+    return dialog
+  }
+
+  it('CRITICAL: a SoundCloud-only link offers the switch, and flipping it stores an unreleased, off-site song', async () => {
+    const dialog = await review('https://soundcloud.com/skeen/demo', 'https://soundcloud.com/…')
+    const sw = within(dialog).getByRole('switch', { name: 'Unreleased' })
+    expect(sw).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(sw)
+    fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Basement Demo' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Original' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(inserted).toHaveLength(1))
+    expect(inserted[0]).toMatchObject({ __table: 'tracks', title: 'Basement Demo', released: false, on_site: false })
+  })
+
+  it('CRITICAL: a SoundCloud-only link left alone is released and on the site', async () => {
+    const dialog = await review('https://soundcloud.com/skeen/live-set', 'https://soundcloud.com/…')
+    fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Navy Pier' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Live set' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(inserted).toHaveLength(1))
+    expect(inserted[0]).toMatchObject({ released: true, on_site: true, release_type: 'live' })
+  })
+
+  it('CRITICAL: a Spotify link offers NO switch — being on Spotify is being released', async () => {
+    const dialog = await review('https://open.spotify.com/track/ZZ9', 'https://open.spotify.com/track/…')
+    expect(within(dialog).queryByRole('switch', { name: 'Unreleased' })).toBeNull()
+  })
+})

@@ -139,16 +139,33 @@ describe('track provenance columns reach trackBucket', () => {
     ['provider_url', { provider_url: 'https://youtu.be/x' }],
     ['stream_url', { stream_url: 'https://open.spotify.com/track/x' }],
     ['apple_url', { apple_url: 'https://music.apple.com/x' }],
-    ['soundcloud_url', { soundcloud_url: 'https://soundcloud.com/x' }],
     ['deezer_url', { deezer_url: 'https://deezer.com/track/x' }],
     ['the manual released flag', { released: true }],
   ]
 
+  // soundcloud_url is NOT in this table any more (Sam, 2026-09-10): a SoundCloud link no
+  // longer decides the bucket. It still has to REACH the rule — see the inverse case below,
+  // which proves the column is mapped by showing the flag, not the link, is what counts.
   it.each(EVIDENCE)('%s alone classifies the song Released', async (_label, evidence) => {
     trackRows = [track(evidence)]
     const props = await musicProps()
     expect(props.orphanSingles.map((s) => s.id)).toEqual(['t1'])
     expect(props.unreleasedSongs).toEqual([])
+  })
+
+  it('CRITICAL: soundcloud_url alone classifies the song UNRELEASED — the flag decides, not the link', async () => {
+    // The column still reaches the rule (it feeds badges and links); it just stopped
+    // implying release. released:false is the fixture default, so this is Unreleased.
+    trackRows = [track({ soundcloud_url: 'https://soundcloud.com/x' })]
+    const props = await musicProps()
+    expect(props.orphanSingles.map((s) => s.id)).toEqual([])
+    expect(props.unreleasedSongs.map((s) => s.id)).toEqual(['t1'])
+  })
+
+  it('soundcloud_url + released:true classifies the song Released', async () => {
+    trackRows = [track({ soundcloud_url: 'https://soundcloud.com/x', released: true })]
+    const props = await musicProps()
+    expect(props.orphanSingles.map((s) => s.id)).toEqual(['t1'])
   })
 
   it('a song with no platform evidence at all stays Unreleased', async () => {

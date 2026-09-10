@@ -10,7 +10,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
-import { setTrackOnSiteAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { setTrackOnSiteAction, setTrackReleasedAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
@@ -29,6 +29,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setTrackTypeAction: vi.fn(async () => ({})),
   setTrackParentReleaseAction: vi.fn(async () => ({})),
   setTrackOnSiteAction: vi.fn(async () => ({})),
+  setTrackReleasedAction: vi.fn(async () => ({})),
   // Pulled in transitively via release-card (shared SONG_PLATFORMS).
   setReleaseLinkAction: vi.fn(async () => ({})),
   setReleaseTypeAction: vi.fn(async () => ({})),
@@ -161,5 +162,35 @@ describe('the on-site check on a song tile', () => {
     render(<TrackCard track={track({ on_site: false })} artistId="a1" releases={[]} />)
     fireEvent.click(screen.getByRole('checkbox'))
     expect(screen.queryByPlaceholderText('Spotify link')).toBeNull()
+  })
+})
+
+/* ── the Unreleased switch in the editor (Sam, 2026-09-10) ──────────────────────────── */
+describe('the Unreleased switch in the song editor', () => {
+  it('CRITICAL: a manual SoundCloud-only song offers it; flipping it calls the action', async () => {
+    openModal(track({ soundcloud_url: 'https://soundcloud.com/x/demo', released: true }))
+    const sw = screen.getByRole('switch', { name: 'Unreleased' })
+    expect(sw).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(sw)
+    await waitFor(() => expect(setTrackReleasedAction).toHaveBeenCalledWith('t1', 'a1', false))
+    expect(screen.getByRole('switch', { name: 'Unreleased' })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('a manual upload with no links offers it too', () => {
+    openModal(track())
+    expect(screen.getByRole('switch', { name: 'Unreleased' })).toBeInTheDocument()
+  })
+
+  it('CRITICAL: a song on Spotify does NOT offer it — being there is being released', () => {
+    openModal(track({ spotify_id: 'sp1', soundcloud_url: 'https://soundcloud.com/x/y' }))
+    expect(screen.queryByRole('switch', { name: 'Unreleased' })).toBeNull()
+  })
+
+  it('flipping to unreleased also turns the On site switch off', async () => {
+    // The public doors read on_site, so the two must move together or "unreleased" lies.
+    openModal(track({ soundcloud_url: 'https://soundcloud.com/x/demo', released: true, on_site: true }))
+    expect(screen.getByRole('switch', { name: /On site/i })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('switch', { name: 'Unreleased' }))
+    await waitFor(() => expect(screen.getByRole('switch', { name: /On site/i })).toHaveAttribute('aria-checked', 'false'))
   })
 })

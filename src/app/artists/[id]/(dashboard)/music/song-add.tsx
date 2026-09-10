@@ -32,7 +32,6 @@ const COVER_RULES = {
 
 type Step = 'choose' | 'manual' | 'streaming' | 'streaming-review'
 type Format = 'single' | 'ep' | 'album' | 'remix' | 'live'
-type Released = 'released' | 'unreleased'
 type SongRow = { id: string; title: string; contributors: string; file: File | null }
 
 // Monotonic id for stable React keys on removable rows (index keys mis-associate
@@ -72,7 +71,12 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   const [format, setFormat] = useState<Format | null>(null)
   const [releaseTitle, setReleaseTitle] = useState('')
   const [rows, setRows] = useState<SongRow[]>(() => [newRow()])
-  const [released, setReleased] = useState<Released | null>(null) // deliberate: no default
+  // RELEASED IS THE ASSUMPTION (Sam, 2026-09-10: "We should assume, when adding a song,
+  // that it is released. There can be a toggle that says 'unreleased'"). It used to be a
+  // forced two-way question with no default. Now a song is released unless the manager
+  // flips this, and the switch is only OFFERED where it can be true: a manual upload, or
+  // a SoundCloud-only link. A song on Spotify, Apple or Deezer is released by being there.
+  const [unreleased, setUnreleased] = useState(false)
   const [urls, setUrls] = useState<StreamingUrls>({})
   // A streaming link (SoundCloud etc.) carries no album/type, so the manager tags it.
   // One link is one song, so the choice is what KIND of song: an original, a remix, or a
@@ -100,6 +104,9 @@ export function SongAddButton({ artistId }: { artistId: string }) {
 
   useLockBodyScroll(open)
   const hasUrls = Object.values(urls).some((u) => u?.trim())
+  // The Unreleased switch appears on the streaming path only when EVERY link given is
+  // SoundCloud. One Spotify/Apple/Deezer link and the song is released by definition.
+  const soundcloudOnly = hasUrls && Object.entries(urls).every(([k, u]) => !u?.trim() || k === 'soundcloud')
   const grouped = format === 'ep' || format === 'album'
 
   function reset() {
@@ -108,7 +115,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     setStreamingType(null)
     setReleaseTitle('')
     setRows([newRow()])
-    setReleased(null)
+    setUnreleased(false)
     setUrls({})
     setCoverFile(null)
     setReviewTitle('')
@@ -205,7 +212,11 @@ export function SongAddButton({ artistId }: { artistId: string }) {
           title: reviewTitle.trim().slice(0, 120),
           cover_url: coverUrl,
           featured_artists: parseContributors(reviewContributors),
-          released: true, // it's on a platform
+          // Released unless the manager flipped the switch — which is only offered for a
+          // SoundCloud-only link; anything else here is on a service and therefore released.
+          released: !unreleased,
+          // Unreleased ⇒ off the site (the column defaults to TRUE, so it must be written).
+          on_site: !unreleased,
           // The service can't tell single from remix, so the manager tagged it.
           release_type: streamingType,
           ...parseStreamingLinks(urls),
@@ -218,7 +229,6 @@ export function SongAddButton({ artistId }: { artistId: string }) {
         // ----- manual: single OR a grouped record (EP/album) -----------------
         if (!format) return setError('Pick a format.')
         if (grouped && !releaseTitle.trim()) return setError(`Give the ${format.toUpperCase()} a title.`)
-        if (!released) return setError('Choose released or unreleased.')
         for (const [i, r] of rows.entries()) {
           if (!r.title.trim()) return setError(`Song ${i + 1} needs a title.`)
           if (!r.file) return setError(`Song ${i + 1} needs its audio file (MP3 or M4A).`)
@@ -258,12 +268,12 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               release_type: format,
               links: [],
               source: 'manual',
-              released: released === 'released',
+              released: !unreleased,
               // EXPLICIT, because the column defaults to TRUE: omitting it would put an
               // unreleased record on the public site at the next publish, contradicting
               // the promise this modal makes ("unreleased music stays private to the
               // dashboard"). Sync inserts off-site for the same reason.
-              on_site: released === 'released',
+              on_site: !unreleased,
             })
             .select('id')
             .single()
@@ -304,10 +314,10 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               // Only a grouped record (EP/album) has an album name; a single/remix stands
               // alone, so it groups by its own id, not a shared album.
               album_name: grouped ? releaseTitle.trim().slice(0, 120) : null,
-              released: released === 'released',
+              released: !unreleased,
               // See the release insert above: the column defaults to TRUE, so an
               // unreleased song must say so or it goes public on the next publish.
-              on_site: released === 'released',
+              on_site: !unreleased,
             })
             .select('id')
             .single()
@@ -353,32 +363,25 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     </button>
   )
 
-  // REQUIRED choice, deliberately not a toggle: neither option is preselected.
-  const releasedChoice = (
-    <div className="space-y-2">
-      <p className="text-xs text-ink-muted">
-        Has this been released? Released music can appear on your public site; unreleased music stays
-        private to the dashboard. <span className="text-accent-red">*</span>
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        {(['released', 'unreleased'] as Released[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setReleased(r)}
-            aria-pressed={released === r}
-            className={cx(
-              'rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition-colors',
-              released === r
-                ? 'border-ink bg-ink text-white'
-                : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
-            )}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
-    </div>
+  // A SWITCH, off by default — not a question. Released is assumed; this is the exception
+  // (Sam, 2026-09-10). Offered on every manual upload and on a SoundCloud-only link.
+  const unreleasedToggle = (
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2">
+      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Unreleased</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={unreleased}
+        aria-label="Unreleased"
+        onClick={() => setUnreleased((v) => !v)}
+        className={cx(
+          'relative h-5 w-9 flex-none rounded-full transition-colors',
+          unreleased ? 'bg-ink' : 'bg-ink/15',
+        )}
+      >
+        <span className={cx('absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform', unreleased && 'translate-x-4')} />
+      </button>
+    </label>
   )
 
   const coverDrop = (
@@ -518,7 +521,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     + Add song
                   </button>
                 )}
-                {releasedChoice}
+                {unreleasedToggle}
               </div>
             )}
 
@@ -574,6 +577,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     ))}
                   </div>
                 </div>
+                {soundcloudOnly && unreleasedToggle}
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">Title</span>
                   <input

@@ -68,6 +68,15 @@ export function releaseIsReleased(r: ReleaseProvenance): boolean {
  * (source or an external id/url) OR the manual released flag. Every column listed here
  * must also appear in the SQL mirror and in tests/music.test.ts's per-column table —
  * `deezer_url` was once missing from both and its check was provably dead code.
+ *
+ * SOUNDCLOUD IS NOT ON THIS LIST (Sam, 2026-09-10: "the point of the release tag is some
+ * tracks are considered 'unreleased'. These are ones that often aren't on any services").
+ * SoundCloud is where demos and live sets live, so a link there proves nothing about
+ * release. A SoundCloud-only song is Released iff its `released` flag says so — the flag
+ * a manager can set, and the only source besides a manual upload where the "Unreleased"
+ * toggle is offered at all. `soundcloud_url` still counts as a PLATFORM for badges and
+ * links (trackPlatforms); it just stops deciding the bucket. Mirrored in SQL by
+ * 20260910120000.
  */
 export function trackOnPlatform(t: TrackProvenance): boolean {
   return (
@@ -78,7 +87,6 @@ export function trackOnPlatform(t: TrackProvenance): boolean {
     t.provider_url != null ||
     t.stream_url != null ||
     t.apple_url != null ||
-    t.soundcloud_url != null ||
     t.deezer_url != null ||
     t.released === true
   )

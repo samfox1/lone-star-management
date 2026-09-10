@@ -51,7 +51,7 @@ describe('trackBucket (loose, no release)', () => {
   // a song to Released.
   it.each([
     'spotify_id', 'apple_id', 'deezer_id', 'provider_url', 'stream_url',
-    'apple_url', 'soundcloud_url', 'deezer_url',
+    'apple_url', 'deezer_url',
   ] as const)(
     'any platform linkage (%s) makes it released',
     (field) => {
@@ -246,5 +246,27 @@ describe('groupTracksIntoProjects', () => {
     const p = groupTracksIntoProjects([ptrk('sc', null, 'remix')], lookup)
     expect(p[0].releaseType).toBe('remix')
     expect(p[0].key).toBe('track:sc')
+  })
+})
+
+/* ── SoundCloud is not a release (Sam, 2026-09-10) ────────────────────────────────────
+ * "the point of the release tag is some tracks are considered 'unreleased'. These are
+ * ones that often aren't on any services." SoundCloud is where demos and live sets live,
+ * so a SoundCloud link proves nothing about release: it left the platform list, and a
+ * SoundCloud-only song is Released iff its `released` flag says so. Spotify, Apple and
+ * Deezer still force Released — a song on those is released whatever the flag says. */
+describe('a SoundCloud link does not make a song released', () => {
+  const base = { source: 'manual' as const, release_id: null, spotify_id: null, apple_id: null, deezer_id: null,
+    provider_url: null, stream_url: null, apple_url: null, deezer_url: null, released: false }
+  it('CRITICAL: SoundCloud-only + released:false is UNRELEASED', () => {
+    expect(trackBucket({ ...base, soundcloud_url: 'https://soundcloud.com/x/y' })).toBe('unreleased')
+  })
+  it('SoundCloud-only + released:true is released — the flag decides', () => {
+    expect(trackBucket({ ...base, soundcloud_url: 'https://soundcloud.com/x/y', released: true })).toBe('released')
+  })
+  it('CRITICAL: a Spotify id still forces released, even with released:false', () => {
+    // The toggle is not offered for these, and if a stale flag slipped through it must
+    // not un-release a song that is on Spotify.
+    expect(trackBucket({ ...base, spotify_id: 'sp', released: false })).toBe('released')
   })
 })

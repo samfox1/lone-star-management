@@ -15,6 +15,7 @@ import { SONG_PLATFORMS } from '../releases/release-card'
 import {
   deleteContentAction,
   setTrackOnSiteAction,
+  setTrackReleasedAction,
   setTrackParentReleaseAction,
   setTrackReleaseAction,
   setTrackTypeAction,
@@ -41,6 +42,8 @@ export type Track = TrackPlatformIds & {
   release_type: ReleaseType
   /** Live on-site state — only surfaced/toggled for orphans (a track with a release follows it). */
   on_site: boolean
+  /** The manual released flag. Read only where it can matter (see canBeUnreleased). */
+  released?: boolean | null
 }
 
 /**
@@ -81,6 +84,24 @@ export function TrackCard({
   const isOrphan = !track.release_id
   const [onSite, setOnSite] = useState(track.on_site)
   const platforms = trackPlatforms(track)
+  // The Unreleased switch is offered ONLY where the flag can decide anything: a manual
+  // song with no Spotify/Apple/Deezer presence (a SoundCloud link is not a release —
+  // packages/music-rules). Elsewhere the song is released by being on a service.
+  const canBeUnreleased = track.source === 'manual' && platforms.every((p) => p.key === 'soundcloud')
+  const [released, setReleased] = useState(track.released !== false)
+
+  async function toggleReleased() {
+    const next = !released
+    setReleased(next) // optimistic
+    if (!next) setOnSite(false) // the action takes an unreleased song off the site too
+    const res = await setTrackReleasedAction(track.id, artistId, next)
+    if (res?.error) {
+      setReleased(!next)
+      toast(res.error, 'error')
+    } else {
+      toast(next ? 'Marked released' : 'Marked unreleased')
+    }
+  }
 
   async function toggleOnSite() {
     const next = !onSite
@@ -307,6 +328,26 @@ export function TrackCard({
                 </div>
               </div>
 
+              {/* Unreleased switch (Sam, 2026-09-10) — only where the flag can decide:
+                  manual + SoundCloud-only. Flipping it on also takes the song off the site. */}
+              {canBeUnreleased && (
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Unreleased</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={!released}
+                    aria-label="Unreleased"
+                    onClick={toggleReleased}
+                    className={cx(
+                      'relative h-5 w-9 flex-none rounded-full transition-colors',
+                      !released ? 'bg-ink' : 'bg-ink/15',
+                    )}
+                  >
+                    <span className={cx('absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform', !released && 'translate-x-4')} />
+                  </button>
+                </label>
+              )}
               {/* On-site switch — only for an orphan song (no release to follow). Live, green
                   when on. A song with a release is governed by that release instead. */}
               {isOrphan && (

@@ -1238,6 +1238,31 @@ export async function setTrackReleaseAction(
  * the write to the owner.
  */
 /**
+ * The song editor's Unreleased switch (Sam, 2026-09-10). Offered only for a song with no
+ * Spotify/Apple/Deezer presence — a manual upload or a SoundCloud-only link — because for
+ * anything else the flag cannot matter (the law reads platform presence first).
+ *
+ * Marking a song unreleased ALSO takes it off the site, in the same update: the public
+ * doors gate on `on_site`, not on `released`, so an unreleased song left on-site would
+ * still render — the exact promise "unreleased music stays private" would be broken by
+ * the one control that says the word.
+ */
+export async function setTrackReleasedAction(
+  trackId: string,
+  artistId: string,
+  released: boolean,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('tracks')
+    .update(released ? { released: true } : { released: false, on_site: false })
+    .eq('id', trackId)
+  if (error) return { error: error.message }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return {}
+}
+
+/**
  * Flip a single track on/off the public site directly. This is for ORPHAN songs (no home
  * release) — a song imported from Apple/Deezer with no release has nothing to follow, so it
  * needs its own switch. A track that DOES have a release follows that release's on-site state
