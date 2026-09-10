@@ -347,3 +347,57 @@ describe('MusicBrowser — unreleased songs stack too', () => {
     ])
   })
 })
+
+/* ── the type filter, right of Released / Unreleased (Sam, 2026-09-10) ──────────────────
+ * "Have a button to the right of released unreleased that allows you to select single,
+ * ep, album, live, etc." One button, a menu: All types plus every entry in RELEASE_TYPES,
+ * derived — a seventh type would appear here without anyone editing a list. */
+import { RELEASE_TYPES } from '@/lib/releases'
+
+describe('the type filter', () => {
+  it('CRITICAL: the menu lists All types and every registry type, in registry order', () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: /All types/ }))
+    const items = screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
+    expect(items[0]).toBe('All types')
+    expect(items).toHaveLength(RELEASE_TYPES.length + 1)
+    // Every type is offered, and none is offered twice.
+    expect(new Set(items).size).toBe(items.length)
+  })
+
+  it('CRITICAL: picking EPs shows only the EP shelf, and All types brings the rest back', () => {
+    setup()
+    expect(screen.getByText('Public Single')).toBeInTheDocument()
+    expect(screen.getByText('Demo EP')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /All types/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'EPs' }))
+    expect(screen.queryByText('Public Single'), 'a single survived the EP filter').toBeNull()
+    expect(screen.getByText('Demo EP')).toBeInTheDocument()
+    // The button now says what is picked.
+    expect(screen.getByRole('button', { name: /EPs/ })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /EPs/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'All types' }))
+    expect(screen.getByText('Public Single')).toBeInTheDocument()
+  })
+
+  it('CRITICAL: it filters the unreleased half too, not just the shelves', () => {
+    // 'Bedroom Demo' is an unreleased single (the fixture default). Picking Albums must
+    // hide it — a type filter that only reached the released shelves would be a lie on
+    // the half of the page where hand-added music lives.
+    setup()
+    expect(screen.getByText('Bedroom Demo')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /All types/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Albums' }))
+    expect(screen.queryByText('Bedroom Demo')).toBeNull()
+    expect(screen.queryByText('Demo EP')).toBeNull()
+  })
+
+  it('sits to the RIGHT of the Released / Unreleased control', () => {
+    setup()
+    const bucket = screen.getByRole('group', { name: /release state/i })
+    const type = screen.getByRole('button', { name: /All types/ })
+    expect(bucket.compareDocumentPosition(type) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})

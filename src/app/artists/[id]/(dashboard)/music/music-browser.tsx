@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
@@ -66,6 +66,72 @@ function BucketFilter({ value, onChange }: { value: Bucket; onChange: (b: Bucket
           {o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+type TypeFilterValue = 'all' | ReleaseType
+
+/**
+ * ONE BUTTON, A MENU (Sam, 2026-09-10: "Have a button to the right of released
+ * unreleased that allows you to select single, ep, album, live, etc"). Seven options is
+ * too many for a segmented row beside two that already have three each, so this is a
+ * button that says what is picked and opens a menu. The options are DERIVED from
+ * RELEASE_TYPES and TYPE_LABEL, so a new type is offered here without anyone editing a
+ * list. Same outside-click-closes pattern as the song card's ⋯ menu.
+ */
+function TypeFilter({ value, onChange }: { value: TypeFilterValue; onChange: (v: TypeFilterValue) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+  const options: { key: TypeFilterValue; label: string }[] = [
+    { key: 'all', label: 'All types' },
+    ...RELEASE_TYPES.map((t) => ({ key: t, label: TYPE_LABEL[t] })),
+  ]
+  const current = options.find((o) => o.key === value)?.label ?? 'All types'
+  return (
+    <div ref={ref} className="relative flex-none">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={cx(
+          'inline-flex items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 font-space text-xs transition-colors',
+          value === 'all' ? 'text-ink-muted hover:text-ink' : 'bg-ink font-semibold text-white',
+        )}
+      >
+        {current}
+        <span aria-hidden className="text-[9px]">▾</span>
+      </button>
+      {open && (
+        <div role="menu" className="absolute left-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-hairline bg-paper py-1 shadow-lg">
+          {options.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onChange(o.key)
+                setOpen(false)
+              }}
+              className={cx(
+                'block w-full px-3 py-1.5 text-left font-space text-xs hover:bg-surface',
+                o.key === value ? 'font-semibold text-ink' : 'text-ink-muted',
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -146,6 +212,9 @@ export function MusicBrowser({
 }) {
   const router = useRouter()
   const [bucket, setBucket] = useState<Bucket>('all')
+  const [typeFilter, setTypeFilter] = useState<TypeFilterValue>('all')
+  const ofType = <T extends { release_type: ReleaseType }>(xs: T[]) =>
+    typeFilter === 'all' ? xs : xs.filter((x) => x.release_type === typeFilter)
   const [site, setSite] = useState<SiteFilter>('all')
   const [sort, setSort] = useState<Sort>('newest')
   const { selected, toggle: toggleSelect, pendingCount } = useOnSiteSelection(releases)
@@ -169,12 +238,13 @@ export function MusicBrowser({
 
   // ----- Unreleased half (hidden when bucket === 'released'; never on site) --
   const showUnreleased = bucket !== 'released' && site !== 'on'
-  const shownUnreleasedReleases = sorted(unreleasedReleases, sort)
-  const releaseOrder = [...new Set(unreleasedSongs.filter((s) => s.group !== LOOSE).map((s) => s.group))]
-  const labels = new Map(unreleasedSongs.map((s) => [s.group, s.groupLabel]))
+  const shownUnreleasedReleases = ofType(sorted(unreleasedReleases, sort))
+  const shownUnreleasedSongs = ofType(unreleasedSongs)
+  const releaseOrder = [...new Set(shownUnreleasedSongs.filter((s) => s.group !== LOOSE).map((s) => s.group))]
+  const labels = new Map(shownUnreleasedSongs.map((s) => [s.group, s.groupLabel]))
   const songGroups = groupByOrigin(
     // Newest-added first inside every group, same rule as the released shelf.
-    sorted(unreleasedSongs, sort),
+    sorted(shownUnreleasedSongs, sort),
     (s) => s.group,
     [...releaseOrder, LOOSE],
     (k) => (k === LOOSE ? 'Not on a release' : (labels.get(k) ?? k)),
@@ -204,7 +274,7 @@ export function MusicBrowser({
   // orphan remix (a SoundCloud remix with no release row) lands under Remixes, not Singles.
   const releasedContent = (
     <>
-      {TYPE_ORDER.map((type) => {
+      {TYPE_ORDER.filter((t) => typeFilter === 'all' || t === typeFilter).map((type) => {
         const rels = shownReleases.filter((r) => r.release_type === type)
         const orphs = shownOrphans.filter((o) => o.release_type === type)
         if (rels.length + orphs.length === 0) return null
@@ -273,8 +343,8 @@ export function MusicBrowser({
     </>
   )
 
-  const releasedShownCount = shownReleases.length + shownOrphans.length
-  const unreleasedShownCount = showUnreleased ? shownUnreleasedReleases.length + unreleasedSongs.length : 0
+  const releasedShownCount = ofType(shownReleases).length + ofType(shownOrphans).length
+  const unreleasedShownCount = showUnreleased ? shownUnreleasedReleases.length + shownUnreleasedSongs.length : 0
   const nothingShown = (!showReleased || releasedShownCount === 0) && (!showUnreleased || unreleasedShownCount === 0)
 
   return (
@@ -288,6 +358,7 @@ export function MusicBrowser({
             </KLabel>
             <OnSiteFilter value={site} onChange={setSite} />
             <BucketFilter value={bucket} onChange={setBucket} />
+            <TypeFilter value={typeFilter} onChange={setTypeFilter} />
           </div>
         }
         chips={[]}
