@@ -20,14 +20,41 @@ beforeAll(async () => {
   asA = await signInAs(SEED.managerA)
 })
 
+/**
+ * EXACTLY THE ROWS THIS FILE MADE (AGENTS.md rule 6).
+ *
+ * This used to be `delete().eq('artist_id', artistA)` — every merch row the seed artists
+ * had, whoever wrote it. The rule exists because that destroys other suites' premises and
+ * any real data a person put there, and it does it silently: a later denial test asserting
+ * "B cannot read A's merch" passes VACUOUSLY once the table is empty.
+ *
+ * The blast radius happened to be zero while `merch` was empty, which is exactly how a
+ * teardown like this survives review. It stops being zero the moment an artist connects a
+ * real store and pulls, so it is fixed before that rather than after.
+ *
+ * Every row this file creates is prefixed `shp-`, and each id is REGISTERED as it is used
+ * rather than matched by a `like` pattern — a pattern is a second description of what the
+ * tests do, and it drifts the first time someone adds a row with a different shape.
+ */
+const created = new Set<string>()
+
+/** Register an id as this file's, so the teardown will collect it. */
+function mine<T extends string>(id: T): T {
+  created.add(id)
+  return id
+}
+
 afterEach(async () => {
-  await svc.from('merch').delete().eq('artist_id', artistA)
-  await svc.from('merch').delete().eq('artist_id', artistB)
+  if (created.size === 0) return
+  const ids = [...created]
+  await svc.from('merch').delete().in('shopify_product_id', ids).eq('artist_id', artistA)
+  await svc.from('merch').delete().in('shopify_product_id', ids).eq('artist_id', artistB)
+  created.clear()
 })
 
 function product(id: string, title: string, over: Partial<ShopifyMerch> = {}): ShopifyMerch {
   return {
-    shopify_product_id: id,
+    shopify_product_id: mine(id),
     handle: null,
     title,
     description: null,
@@ -47,8 +74,8 @@ function product(id: string, title: string, over: Partial<ShopifyMerch> = {}): S
 describe('syncShopifyMerch', () => {
   it('inserts new, refreshes shopify-owned, never clobbers manual rows', async () => {
     await svc.from('merch').insert([
-      { artist_id: artistA, title: 'My Manual Tee', shopify_product_id: 'shp-manual', source: 'manual' },
-      { artist_id: artistA, title: 'Stale Auto Tee', shopify_product_id: 'shp-auto', source: 'shopify' },
+      { artist_id: artistA, title: 'My Manual Tee', shopify_product_id: mine('shp-manual'), source: 'manual' },
+      { artist_id: artistA, title: 'Stale Auto Tee', shopify_product_id: mine('shp-auto'), source: 'shopify' },
     ])
 
     const result = await syncShopifyMerch(asA, artistA, [
@@ -163,6 +190,41 @@ describe('syncShopifyMerch', () => {
       .eq('shopify_product_id', 'shp-tee')
       .single()
     expect(data?.in_stock).toBe(false)
+  })
+
+  // ── the teardown's own witness ─────────────────────────────────────────────────────
+  //
+  // Two halves of one claim, split across tests ON PURPOSE: the thing being proved is what
+  // survives an `afterEach`, and a single test cannot observe its own teardown. Files run
+  // in order and `fileParallelism` is false, so this pair is stable.
+  //
+  // Without it, "the teardown is scoped" is an unverified comment — and the old unscoped
+  // version would pass every other test in this file exactly as it does now.
+  it('plants a row this file does NOT own', async () => {
+    // NOT registered with mine(): it stands in for another suite's fixture, or a person's
+    // real merch row.
+    const { error } = await svc.from('merch').insert({
+      artist_id: artistA,
+      title: 'Bystander — another suite owns this',
+      shopify_product_id: 'bystander-not-ours',
+      source: 'manual',
+    })
+    expect(error).toBeNull()
+    // Do some ordinary work, so the teardown has something of its own to collect.
+    await syncShopifyMerch(asA, artistA, [product('shp-witness', 'Witness')])
+  })
+
+  it('CRITICAL: the teardown collected its own rows and left the bystander alone', async () => {
+    const { data } = await svc
+      .from('merch')
+      .select('shopify_product_id')
+      .eq('artist_id', artistA)
+    const ids = (data ?? []).map((r) => r.shopify_product_id)
+    expect(ids, 'the teardown deleted a row it did not create').toContain('bystander-not-ours')
+    expect(ids, 'the teardown left its own row behind').not.toContain('shp-witness')
+
+    // This file cleans up after itself, including the stand-in it planted.
+    await svc.from('merch').delete().eq('artist_id', artistA).eq('shopify_product_id', 'bystander-not-ours')
   })
 
   it('dedupes a repeated product id (last-wins)', async () => {

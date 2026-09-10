@@ -236,7 +236,8 @@ Each step ships and leaves the system working.
 2. **Live lane on the read path.** Site resolves price/availability from Shopify at render
    (ISR ~60s, same as `get_public_site`), snapshot as fallback. Proof: change a price in
    Shopify, reload, see it — without publishing.
-3. **Design round.** ← NEXT. `/design-variations-html` for the grid, product page and cart drawer
+3. ~~**Design round.**~~ ABANDONED — see Progress above.
+   `/design-variations-html` for the grid, product page and cart drawer
    in skeen's real tokens (black, cream, `flash-1` red, `font-alt`, lowercase), against the
    jigitz reference. Sam picks, then build.
 4. **`/merch` + `/merch/[handle]` + cart drawer** on skeen. Declared layout regions,
@@ -249,10 +250,17 @@ Each step ships and leaves the system working.
    it between Contact and About; the old commented line sat before Contact, so it moves.
 6. **Editor controls** for the tokens step 4 declares. No new architecture — the existing
    panel, filtered by the new declarations.
-7. **Guided self-serve connect.** Rewrite the Integrations Shopify panel into a real
-   walkthrough: the exact Shopify admin path, the scope to tick
-   (`unauthenticated_read_product_listings`), and a "test connection" that pulls one
-   product back so they know it worked. Plus the scope guard from the token section above.
+7. ~~**Guided self-serve connect.**~~ **DONE 2026-09-10.** Test connection reads ONE page
+   through the same Vault path the sync uses (Sam chose that over probing the pasted value:
+   a probe on a different path can pass while every sync fails) and shows the artist their
+   own products back, on the near-black ground the real page uses. Five failure reasons,
+   each with its own fix; an EMPTY list is reported as SUCCESS and names both causes,
+   because Shopify cannot distinguish "no products" from "not published to this sales
+   channel". Writes nothing. `probe.ts` is in the Stryker slice at 100%.
+
+   The admin path and the scope live behind "Where do I find these?" rather than on screen
+   — Sam's no-instruction-copy rule (2026-08-12) against steps that happen on Shopify's
+   screens, which no design of ours can make self-evident.
 8. **Checkout branding** in Shopify admin — logo, colours, fonts. Fifteen minutes of
    settings, and it does more for "consistent" than any code here. It has to be an artist
    onboarding task, since you can't do it for them.
@@ -262,6 +270,23 @@ replace token pasting — agreed as the right long-term answer, deliberately not
 A `products/update` webhook to keep dashboard titles/images fresh. Mirroring product images
 into your own bucket, which should be decided before the first site ships merch, because
 migrating live image URLs later quietly breaks published revisions.
+
+## Where this stands (2026-09-10)
+
+Steps 1, 2, 4, 5 and 7 are done; 3 was abandoned; 6 is deferred (Sam, 2026-09-10:
+"focus in the short term on the functionality instead of styling edits"), and 8 is an
+artist onboarding task rather than code.
+
+**BLOCKED ON CREDENTIALS.** `integrations` is empty and `merch` has zero rows — nothing
+has ever touched a real store, so every test here mocks the network. Sam is waiting on
+Skeen's team for the `.myshopify.com` domain and a Storefront API access token, and
+declined a throwaway dev store in the meantime (2026-09-10). What is still unproven is
+whether real Shopify behaves the way the client assumes.
+
+Two things to say out loud when those credentials arrive, because neither produces an
+error message: every product must be **published to the app the token belongs to** or the
+API returns an empty list, and product images should be **cut-out PNGs** or the near-black
+merch page shows the white box baked into a flat JPG.
 
 ## Known gaps
 
@@ -276,13 +301,17 @@ Found in review before the migration was applied, accepted rather than fixed now
 - **A handle swap between two products inside one pull fails one row.** Product A renames
   to `tee-2` and B takes `tee`; if B is processed before A's update, B collides. It is
   reported in `SyncResult.errors` and the next pull succeeds.
-- **`SyncResult.errors` is not surfaced anywhere.** `syncShopifyAction` throws away the
-  result, so a partial failure looks like a clean pull to the manager. Both gaps above
-  are invisible because of this. Worth fixing when the guided-connect walkthrough lands
-  (step 7), since that is where a "pulled 12, 1 failed" line belongs.
-- **The teardown in `tests/sync.shopify.test.ts` deletes all merch for the seed artists**
-  rather than only the rows it created, which AGENTS.md rule 6 forbids. Pre-existing, and
-  the blast radius is the `lone-pine` / `gulf-static` fixtures, not real artist data.
+- ~~**`SyncResult.errors` is not surfaced anywhere.**~~ **FIXED** (2026-09-03, M7).
+  `syncShopifyAction` reports counts and the first diagnostic message: "3 products failed
+  to save (9 saved): duplicate key…". The two gaps above are therefore visible now, which
+  is the difference between "permanently broken and silent" and "permanently broken and
+  says so".
+- ~~**The teardown deletes all merch for the seed artists.**~~ **FIXED** (2026-09-10).
+  `tests/integration/shopify/sync.shopify.test.ts` registers each id it creates and deletes
+  exactly those. It has a WITNESS now — a bystander row planted in one test and asserted
+  present in the next, which is the only way to observe what an `afterEach` did. Restoring
+  the old teardown turns it red. The blast radius was zero only because `merch` was empty;
+  that stops being true the day an artist connects a real store.
 
 ## Open questions
 
