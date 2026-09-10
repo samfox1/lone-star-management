@@ -192,7 +192,7 @@ describe('one TypeScript copy', () => {
   // way that survives it being bundled — its source is checked instead. `!== 'manual'`
   // is the rule's fingerprint: every copy of it, in every language, contains that test.
   it('lone-star-agent holds no copy of the rule, only DB wiring', () => {
-    const src = readFileSync(new URL('../lone-star-agent/agent/lib/lonestar.ts', import.meta.url), 'utf8')
+    const src = readFileSync(new URL('../../../lone-star-agent/agent/lib/lonestar.ts', import.meta.url), 'utf8')
     expect(src).toContain('@lone-star/music-rules')
     expect(src).not.toMatch(/!==\s*["']manual["']/)
   })
