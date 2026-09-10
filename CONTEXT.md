@@ -99,7 +99,7 @@ decisions behind them (esp. ADR-0002).
     because the doors gate on the *working* row. **Publish-reconcile** — release / merch
     are reconciled from a password-gated selection at publish (`ON_SITE_ENTITIES` +
     `reconcileOnSite`). A type on both paths has its toggle silently reverted at the next
-    publish; `tests/on-site-paths.test.ts` guards that.
+    publish; `tests/integration/site/on-site-paths.test.ts` guards that.
   - A row must be **published once** before its toggle does anything: the doors serve the
     published snapshot and gate it on the working row, so an unpublished row isn't in
     `live` to gate. New/imported video, merch and tour_date rows land **off-site**

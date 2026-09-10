@@ -68,6 +68,27 @@ how the per-artist flood cap vanished for a day. If a behavior matters, its test
 bite; if the test cannot be made to bite, say so in the test's comment rather than
 leaving a reassuring green.
 
+## Where a test goes
+
+`tests/` is organised by KIND first, then by subject (2026-09-10):
+
+    tests/unit/<subject>/         pure. no DB, no DOM.
+    tests/components/<subject>/   jsdom, `// @vitest-environment jsdom`, actions mocked
+    tests/integration/<subject>/  TALKS TO THE HOSTED PROJECT
+
+The top level is not decoration: `vitest.mutation.config.ts` excludes exactly
+`tests/integration/**`, so the folder a file sits in decides whether Stryker runs it
+thousands of times. That replaced sixty hand-listed paths, which is the sort of list
+that is only ever wrong in the direction nobody notices.
+
+Import helpers as `@tests/helpers/…`, never `./helpers/…` — the alias survives a file
+moving between subjects, a relative path does not.
+
+Plan docs written before this date (`DASHBOARD_PLAN.md`, `SEO_GEO_PLAN.md`,
+`SITE_PAGES_PLAN.md`, `REVIEW_2026-09-03.md`) name tests by their old flat path. They
+are records of what was true then and were left alone; `git log --follow` finds any of
+them.
+
 ## The two tools that enforce this
 
 Rules depend on someone remembering. These do not.
@@ -78,8 +99,10 @@ notices. A SURVIVED mutant is a line nothing is watching. It runs against
 tests once per mutant and the main suite crosses the internet to hosted Postgres.
 `mutate` in `stryker.config.json` lists only modules pinned by DB-free tests: adding a
 module tested solely through the live-DB suites would report false survivors and teach
-everyone to ignore the report. `tests/mutation-config.test.ts` fails if a DB-backed
-suite leaks into that slice (it caught eight on day one).
+everyone to ignore the report. `tests/unit/harness/mutation-config.test.ts` fails if a
+DB-backed suite leaks into that slice (it caught eight on day one), and now also fails
+the other way — a pure test filed under `integration/` is excluded from mutation testing
+forever, and nothing else would ever say so.
 
 The `break` threshold is a RATCHET. Raise it as the score rises; never lower it to turn
 a red build green. A drop means a new line went unwatched or an existing test stopped
