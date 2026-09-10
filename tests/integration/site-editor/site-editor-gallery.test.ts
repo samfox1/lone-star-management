@@ -1,3 +1,4 @@
+// Reordering gallery photos: the pure ordering rule, then the write against the real database.
 /**
  * Gallery reorder — the visual editor's photo-ordering path. `reorderList` is pure;
  * `reorderGallery` writes each media row's sort_order to its index, RLS-scoped to the

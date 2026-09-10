@@ -1,3 +1,4 @@
+// The YouTube client, over the quota-cheap uploads-playlist path rather than search.
 /**
  * PHASE 4 (Videos) — youtubeClient, test-first. Uses the quota-cheap path
  * (channels.list → contentDetails.relatedPlaylists.uploads → playlistItems.list,

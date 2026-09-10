@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The site-connection contract, run as code a site can point at itself.
 /**
  * `checkContract` — the five §7 tests of CONNECTING.md, as CODE a site runs on itself.
  *

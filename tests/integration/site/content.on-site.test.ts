@@ -1,3 +1,4 @@
+// On-site presence for videos, merch and tour dates, and the two write paths that own it.
 /**
  * On-site presence for videos / merch / tour dates — the Music-page publish model
  * generalized (20260707120000_content_visibility; the flag was renamed

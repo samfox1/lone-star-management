@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Text controls for a site whose manifest arrives over the bridge at runtime, not from a
+//   registry.
 /**
  * CUSTOM-SITE TEXT FIELDS — the Text panel for a site whose manifest arrives over the
  * BRIDGE at runtime (skeen), rather than from the local MANIFESTS registry.

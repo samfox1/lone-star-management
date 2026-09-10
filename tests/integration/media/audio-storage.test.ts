@@ -1,3 +1,4 @@
+// A manager writes only their own audio folder, and the raw file is unreachable unsigned.
 /**
  * PHASE 3 — gated audio storage isolation (the non-negotiable gate). A manager
  * can only write their own audio folder, and the raw object in the PRIVATE

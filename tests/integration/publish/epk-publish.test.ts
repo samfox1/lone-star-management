@@ -1,3 +1,4 @@
+// Press-kit fields ride the profile's publish, so the PDF and the public page never disagree.
 /**
  * Press-kit fields ride the profile's publish window.
  *

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// The site-wide custom cursor and trail: settings, the DOM applier, and the messages that
+//   drive it.
 /**
  * Site-wide cursor + trail (2026-08-11). DB-free: the settings mappers, the DOM
  * applier's contract (cursor value, click swap, trail layer lifecycle, idempotency),

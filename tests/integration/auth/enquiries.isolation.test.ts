@@ -1,3 +1,5 @@
+// Contact enquiries protect two things: the artist's booking address and the visitor's
+//   message.
 /**
  * ENQUIRIES — security boundary.
  *

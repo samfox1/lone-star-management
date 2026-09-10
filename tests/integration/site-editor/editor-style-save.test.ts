@@ -1,3 +1,4 @@
+// Cleaning typed class text, then writing or clearing the style row for a region.
 /**
  * cleanClassText (pure) + saveEditorStyle (live). The style write path resolves a
  * region key + cleans the typed class text, then upserts/clears a `site_styles`

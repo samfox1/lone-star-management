@@ -1,3 +1,4 @@
+// What has changed since the last publish, per section, with no false positives.
 /**
  * PHASE 1 — diffUnpublished(artistId): what's changed since the last publish,
  * per section. Powers the Overview "unpublished" summary and the per-section

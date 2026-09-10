@@ -1,3 +1,4 @@
+// A song carries its own release date onto the wire, so the NEW badge has something to read.
 /**
  * The NEW badge's data path (Sam, 2026-08-21: "songs should have a new tag that appears
  * if they were released in the last week").

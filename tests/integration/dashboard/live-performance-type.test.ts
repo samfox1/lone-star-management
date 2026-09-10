@@ -1,3 +1,4 @@
+// Live performance as a sixth song type, with its own section but the same plumbing.
 /**
  * LIVE PERFORMANCE — a sixth song type (Sam, 2026-08-21: "recordings of artists live
  * performance", "its own section in the music assets but embeded in the sites just like

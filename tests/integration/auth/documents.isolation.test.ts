@@ -1,3 +1,4 @@
+// The private documents bucket: stage plots and riders stay unreadable across tenants.
 /**
  * Tenant isolation for the PRIVATE `documents` bucket (stage plots + tech riders).
  *

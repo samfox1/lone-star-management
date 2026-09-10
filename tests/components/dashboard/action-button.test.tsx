@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// The click-to-run button: toasts the result, confirms destructive acts, and latches double
+//   clicks.
 /**
  * ActionButton — the field-less click-to-run control (per-section Publish, integration
  * Pull, Shopify Disconnect). Toasts savedMessage on success, the returned error on

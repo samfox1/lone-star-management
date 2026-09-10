@@ -1,3 +1,4 @@
+// The public door filters links on their on-site flag.
 /**
  * links.on_site — the door gate (20260714160000).
  *

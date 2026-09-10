@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// The public press-kit page a promoter opens, including the quote URL that must not become a
+//   link.
 /**
  * The PUBLIC press kit page — the thing a promoter actually opens.
  *

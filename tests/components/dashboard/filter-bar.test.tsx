@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The chip and sort control above a dashboard grid. Holds no state of its own.
 /**
  * FilterBar — the chip + sort control for dashboard grids. Presentational: it holds no
  * state, just fires onChip / onSort and marks the active chip / sort with aria-pressed.

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Phone-only size and padding values, and how they reach real CSS.
 /**
  * MOBILE OVERRIDES (bridge 0.19.0) — the plan agreed 2026-08-17: editing in the
  * editor's phone view sets a SECOND, phone-only value. Two tokens:

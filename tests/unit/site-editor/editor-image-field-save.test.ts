@@ -1,3 +1,4 @@
+// Saving an image into a single-slot image field.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * setImageField — the editor's single-occupancy image write (hero image / profile photo).

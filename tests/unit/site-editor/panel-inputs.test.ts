@@ -1,3 +1,4 @@
+// Every category a site declares about itself reaches a panel in the editor.
 /**
  * EVERY DECLARED CATEGORY REACHES A PANEL.
  *

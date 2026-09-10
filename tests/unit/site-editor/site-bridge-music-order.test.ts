@@ -1,3 +1,4 @@
+// The one law for what order music projects appear in, shared by the editor and every site.
 /**
  * The ONE law for what order music projects appear in — proved here, consumed by BOTH
  * the editor's Music panel (src/lib/music.ts) and a connected site's grid.

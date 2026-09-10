@@ -1,3 +1,4 @@
+// The SEO checks, each rule proven by a page that breaks only that one rule.
 /**
  * auditSeo — CONNECTING §7 rule 6 as code (SEO_GEO_PLAN B5). Each rule is proven by a
  * page that breaks ONLY it; a page with all of them passes with [].

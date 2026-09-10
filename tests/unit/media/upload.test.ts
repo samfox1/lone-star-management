@@ -1,3 +1,4 @@
+// What may be uploaded, per kind, and the size messages that say how to fix it.
 /**
  * Pure upload + video-render logic, extracted so the rules that used to be buried in
  * the uploader components' onChange handlers (and the site templates' render branch)

@@ -1,3 +1,4 @@
+// The Shopify storefront token lives encrypted in Vault; the row holds only a pointer to it.
 /**
  * MILESTONE 8 — per-store Shopify credentials via Supabase Vault (PLAN #3).
  *

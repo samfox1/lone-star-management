@@ -1,3 +1,4 @@
+// Fetching published content — the read every connected site uses.
 /**
  * fetchPublicSite — the published-content read the bridge now owns, so every connected
  * site gets "publishing reaches my deployed page" instead of hand-rolling it (which is

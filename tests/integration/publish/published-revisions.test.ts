@@ -1,3 +1,4 @@
+// The one place that says what is live: latest revision per entity, tombstones excluded.
 /**
  * The published-state seam: published_revisions(artist, entity_type?) returns the
  * LIVE published view — the latest revision per entity with TOMBSTONES EXCLUDED.

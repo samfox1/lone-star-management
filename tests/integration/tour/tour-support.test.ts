@@ -1,3 +1,4 @@
+// A tour date's supporting acts, and their links, reach the public site.
 /**
  * A tour date's supporting acts reach the PUBLIC SITE.
  *

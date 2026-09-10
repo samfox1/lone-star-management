@@ -1,3 +1,4 @@
+// In phone view, Size and Padding write a second value that only applies on small screens.
 /**
  * PHONE-SCOPED CONTROLS: in the editor's mobile view, the Size and Padding controls
  * write `sizesm-[…]` / `padsm-[…]` — a second value that only applies below 640px —

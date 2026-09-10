@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The shared UI pieces that carry real behaviour: the modal, avatar initials, and chart maths.
 /**
  * The shared primitives in src/components/ui — only the parts that carry BEHAVIOUR.
  * The class-string wrappers (Button, Card, Field, KLabel, Stat, AppShell) are

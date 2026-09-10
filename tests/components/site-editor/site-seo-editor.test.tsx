@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// An SEO or GEO text field opens full-panel, like every other text field.
 /**
  * A SEO/GEO TEXT FIELD OPENS FULL-PANEL, LIKE EVERY OTHER TEXT FIELD.
  *

@@ -1,3 +1,4 @@
+// Media rows and their storage objects are both scoped to the artist's manager.
 /**
  * MILESTONE — per-artist media (table + Storage), isolation.
  *

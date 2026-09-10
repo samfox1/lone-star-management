@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Delete footer every card grid shares, so one missing guard would be missing everywhere.
 /**
  * CardModal's Delete footer — the OTHER one-click destroy path.
  *

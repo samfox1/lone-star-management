@@ -1,3 +1,5 @@
+// The public payload carries the newest publish time, so a sitemap tracks publishes not the
+//   clock.
 /**
  * `published_at` on the public payload (SEO_GEO_PLAN B1, 20260826150000): the newest
  * revision for the artist, so a site's sitemap lastmod tracks publishes, not the clock.

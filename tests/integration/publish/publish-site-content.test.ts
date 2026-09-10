@@ -1,3 +1,4 @@
+// Site text is draft until published — the whole round trip against the real door.
 /**
  * SITE TEXT IS DRAFT UNTIL PUBLISHED — the whole round trip, against the real door.
  *

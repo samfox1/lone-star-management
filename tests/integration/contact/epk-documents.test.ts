@@ -1,3 +1,4 @@
+// The stage plot and tech rider: stored privately, and published with the profile.
 /**
  * The press-kit DOCUMENTS: the stage plot and the tech rider.
  *

@@ -1,3 +1,5 @@
+// The per-artist burst cap on the anonymous event door, so a bot cannot flood one artist's
+//   rows.
 /**
  * record_event burst cap (20260714140000).
  *

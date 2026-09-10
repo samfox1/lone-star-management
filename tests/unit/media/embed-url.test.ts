@@ -1,3 +1,4 @@
+// The XSS gate for video embeds: known providers only, everything else refused.
 /**
  * PHASE 4 (Videos) — embedInfo(): the XSS gate for video embeds. A video's
  * embed_url becomes an <iframe src>, so only known providers (YouTube,

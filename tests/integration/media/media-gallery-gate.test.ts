@@ -1,3 +1,5 @@
+// The gallery gate reads the on-site flag from inside the published revision, old snapshots
+//   included.
 /**
  * get_public_site's GALLERY gate, and its snapshot back-compat across the
  * visible → on_site rename (20260714150000).

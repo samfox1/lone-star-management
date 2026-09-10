@@ -1,3 +1,5 @@
+// Sweeping up the old font file when a font is replaced, so nothing is orphaned in a public
+//   bucket.
 /**
  * Font object GC.
  *

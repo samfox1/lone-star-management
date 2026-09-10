@@ -1,3 +1,4 @@
+// Spotify song sync: insert new, refresh what sync owns, never overwrite a hand edit.
 /**
  * MILESTONE 6 — Spotify track sync, test-first (real DB).
  *

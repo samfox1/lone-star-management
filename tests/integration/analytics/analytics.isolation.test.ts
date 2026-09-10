@@ -1,3 +1,5 @@
+// Fans record events only through one guarded door; nobody can insert rows or read another
+//   artist's.
 /**
  * PHASE 5 (Analytics) — the secure ingest gate. Anon fans record events ONLY
  * through record_event (a SECURITY DEFINER door that resolves the artist from

@@ -1,3 +1,4 @@
+// Songs end to end against the real database: edit, publish, read publicly, with RLS in play.
 /**
  * MILESTONE 3 — Tracks end to end (CRUD + publish), test-first.
  *

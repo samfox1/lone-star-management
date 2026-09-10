@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The press-kit download gate as the manager sees it: what is missing, and how to fix it.
 /**
  * The download gate as the manager experiences it.
  *

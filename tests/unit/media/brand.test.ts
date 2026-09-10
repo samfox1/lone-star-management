@@ -1,3 +1,4 @@
+// An artist's logos, and how the main one is framed and baked into a favicon.
 /**
  * Brand: the artist's logos, and how the primary one is framed into a favicon.
  *

@@ -1,3 +1,5 @@
+// The editor's atomic renumber, which takes a table name as a string and so needs its own
+//   guard.
 /**
  * `reorder_rows(p_table, p_artist, p_ids)` — the editor's atomic renumber (20260713120000).
  *

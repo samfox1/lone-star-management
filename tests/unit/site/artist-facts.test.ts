@@ -1,3 +1,4 @@
+// The allowlist behind saving an artist fact.
 /** artistFactUpdate — the runtime allowlist behind saveArtistFactAction (SEO_GEO_PLAN B6). */
 import { describe, expect, it } from 'vitest'
 import { ARTIST_FACT_COLUMNS, SCHEMA_TYPES, artistFactUpdate } from '@/lib/artist-facts'

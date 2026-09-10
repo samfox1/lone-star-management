@@ -1,3 +1,4 @@
+// Where the pure Released/Unreleased rules meet real database columns.
 /**
  * The MUSIC PAGE's classification WIRING — the seam where the pure rules in
  * lib/music.ts meet real DB rows.

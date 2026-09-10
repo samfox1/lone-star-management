@@ -1,3 +1,4 @@
+// Deleting a song takes its audio file with it, and a cleanup failure never fails the delete.
 /**
  * deleteContentAction('track') — the audio object must not outlive the row.
  *

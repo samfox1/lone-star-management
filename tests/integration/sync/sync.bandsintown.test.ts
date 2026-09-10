@@ -1,3 +1,4 @@
+// Bandsintown tour-date sync against the real database.
 /**
  * MILESTONE 7 — Bandsintown tour-date sync (real DB). Same conflict policy as
  * the Spotify sync, applied to tour_dates via the bandsintown_id dedup key.

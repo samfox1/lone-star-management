@@ -1,3 +1,4 @@
+// The Spotify client: getting and reusing a token, backing off, paging, and shaping errors.
 /**
  * MILESTONE 6 — spotifyClient, test-first. Mocked at the fetch boundary so it's
  * fast, deterministic, and needs no real credentials (README test rules).

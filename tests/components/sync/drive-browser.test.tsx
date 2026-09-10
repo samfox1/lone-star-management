@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Browsing the connected Drive folder and importing files one at a time.
 /**
  * DriveBrowser — browse the connected Drive folder, multi-select, copy-import.
  * Actions are mocked; locks: listing renders names/sizes, Imported files are

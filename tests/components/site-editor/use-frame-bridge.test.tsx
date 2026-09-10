@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The editor's conversation with the site frame, where every failure mode is silent.
 /**
  * useFrameBridge — the editor's conversation with the site frame.
  *

@@ -1,3 +1,4 @@
+// Merging songs refuses a caller who does not manage the artist.
 /**
  * `mergeSongsAction`'s ownership guard.
  *

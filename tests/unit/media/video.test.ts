@@ -1,3 +1,4 @@
+// Pasting a video URL: resolving it to a safe embed plus a title and thumbnail.
 /**
  * Video auto-detect for the "Add" modal: resolveVideo maps a pasted YouTube/SoundCloud
  * URL to a safe embed URL (via embedInfo) + title/thumbnail from the provider oEmbed,

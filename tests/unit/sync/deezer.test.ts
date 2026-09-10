@@ -1,3 +1,4 @@
+// The Deezer client: mapping songs, paging, de-duping titles, and backing off a quota error.
 /**
  * PHASE 2 — deezerClient, test-first. Mocked at the fetch boundary (fast,
  * deterministic, no creds — Deezer's public API needs none). Covers mapping,

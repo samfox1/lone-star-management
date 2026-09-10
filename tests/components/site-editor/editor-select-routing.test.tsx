@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Clicking a thing in the preview selects that thing in the panel, and the panel highlights
+//   back.
 /**
  * CLICKING A THING IN THE PREVIEW SELECTS THAT THING IN THE PANEL — for every kind,
  * not just images. And the panel answers back with a highlight.

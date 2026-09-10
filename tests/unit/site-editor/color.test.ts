@@ -1,3 +1,4 @@
+// Colour maths for the picker: reading a hex, converting to and from HSV, and hue positions.
 import { describe, it, expect } from 'vitest'
 import { clamp, contrastInk, fractionAt, hexToHsv, hsvToHex, hueHex, normalizeHex } from '@/lib/color'
 

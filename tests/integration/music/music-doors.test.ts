@@ -1,3 +1,5 @@
+// The public music doors gate on the on-site flag, not on Released, after the two were
+//   decoupled.
 /**
  * MUSIC doors after the Released/site DECOUPLING (20260710170000):
  *

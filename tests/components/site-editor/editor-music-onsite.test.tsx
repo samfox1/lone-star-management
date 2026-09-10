@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Music panel lists only what is on the site, not the whole library.
 /**
  * THE EDITOR'S MUSIC PANEL SHOWS WHAT IS ON THE SITE.
  *

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The editor's review-and-approve publish window, behind a password.
 /**
  * The visual editor's review-and-approve publish window (phase 4). Opening it fetches
  * the unpublished-change summary; a password confirm publishes everything. Covers the

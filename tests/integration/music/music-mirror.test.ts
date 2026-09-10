@@ -1,3 +1,4 @@
+// Released is one rule with more than one implementation; this is what stops them drifting.
 /**
  * MIRROR TEST — "Released" is ONE rule with TWO implementations left. This file is the
  * only thing that stops them drifting silently:

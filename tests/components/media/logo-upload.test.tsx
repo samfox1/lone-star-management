@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The two logo slots, and the favicon that is derived from the primary one.
 /**
  * LogoUpload — the two logo slots.
  *

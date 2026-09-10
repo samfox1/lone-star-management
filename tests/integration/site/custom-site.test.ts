@@ -1,3 +1,4 @@
+// When an artist counts as having a custom site, and what an anonymous visitor is sent to.
 import { afterAll, describe, expect, it } from 'vitest'
 import { customSiteUrl, isCustom } from '@/lib/custom-site'
 import { SEED, anonClient, artistIdBySlug, serviceClient } from '@tests/helpers/supabase'

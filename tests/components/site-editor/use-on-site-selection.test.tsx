@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Which items are on the site: seeding from what is live, and tracking the pending difference.
 /**
  * useOnSiteSelection — the "which items are on the site" selection behind every
  * publish-gated browser. Seeds from what's live (`on_site`), tracks the selection⇄live

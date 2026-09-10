@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Restore version menu — going back to a published version, which is not an undo.
 /**
  * The Restore version menu — the three-dot button beside Publish (Sam, 2026-08-15).
  *

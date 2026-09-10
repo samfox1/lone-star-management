@@ -1,3 +1,4 @@
+// A font stays draft until published, proven against the real public door.
 /**
  * Fonts are PUBLISH-GATED, proven against the real door.
  *

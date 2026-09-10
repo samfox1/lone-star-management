@@ -1,3 +1,4 @@
+// Released vs Unreleased, worked out from where a song appears, not from a stored status.
 /**
  * music.ts — the Released vs Unreleased derivation (provenance-based, no stored status).
  * A release/track is Unreleased iff it has NO platform presence; release membership is

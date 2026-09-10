@@ -1,3 +1,4 @@
+// Ticketmaster tour-date sync against the real database.
 /**
  * PHASE 4 — Ticketmaster tour-date sync (real DB). Same conflict policy as
  * Bandsintown: insert new, refresh ticketmaster-owned, never clobber manual;

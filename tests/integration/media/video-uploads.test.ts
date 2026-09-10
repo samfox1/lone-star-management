@@ -1,3 +1,5 @@
+// Uploaded videos against the real project: the check constraints, bucket security, and
+//   cleanup.
 /**
  * Uploaded-video integration against the live hosted project (20260708120000). Proves
  * the long-term-bug guards that unit tests can't reach:

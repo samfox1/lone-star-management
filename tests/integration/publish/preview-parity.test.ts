@@ -1,3 +1,4 @@
+// After a full publish, the manager's preview matches the public site exactly.
 /**
  * PHASE 0 — preview parity: after a full publish, the manager preview
  * (getWorkingSite) matches the public site (getPublishedSite) for the profile +

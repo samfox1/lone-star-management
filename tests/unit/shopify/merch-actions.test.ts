@@ -1,3 +1,4 @@
+// What the Pull merch button reports back — including a pull that only half worked.
 /**
  * `syncShopifyAction` — the Pull merch button's server half.
  *

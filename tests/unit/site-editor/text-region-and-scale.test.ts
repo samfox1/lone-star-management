@@ -1,3 +1,5 @@
+// A section wrapper is not its heading, and the size scale reaches past what the site already
+//   uses.
 /**
  * TWO faults Sam hit on 2026-08-05, both about the Text panel offering the wrong thing.
  *

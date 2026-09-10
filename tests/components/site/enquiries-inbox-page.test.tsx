@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The roster-wide inbox: every message labelled with who it came in for, and nothing dropped.
 /**
  * The roster-wide inbox at /artists.
  *

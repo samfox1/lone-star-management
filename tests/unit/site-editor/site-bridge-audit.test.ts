@@ -1,3 +1,4 @@
+// Does a site declare everything it styles? The audit each site runs on its own registry.
 /**
  * `auditRegions` — the "does this site tell the editor everything it sets?" rule, now in
  * the package so every site can run it against its OWN registry in its own suite.

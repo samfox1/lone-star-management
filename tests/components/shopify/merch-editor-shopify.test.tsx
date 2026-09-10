@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// The editor's Merch panel: what Shopify owns is read-only, what the manager owns stays
+//   editable.
 /**
  * A SHOPIFY PRODUCT IS READ-ONLY WHERE SHOPIFY OWNS IT.
  *

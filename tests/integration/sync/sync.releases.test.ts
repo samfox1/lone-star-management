@@ -1,3 +1,4 @@
+// Spotify release sync: new releases arrive off-site for the manager to turn on.
 /**
  * MILESTONE 6 — Spotify RELEASE sync, test-first (real DB).
  *

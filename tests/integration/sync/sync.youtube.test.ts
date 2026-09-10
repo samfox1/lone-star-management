@@ -1,3 +1,4 @@
+// YouTube video sync against the real database.
 /**
  * PHASE 4 (Videos) — YouTube video sync (real DB). Same conflict policy: insert
  * new, refresh youtube-owned, never clobber a manual video; RLS-scoped.

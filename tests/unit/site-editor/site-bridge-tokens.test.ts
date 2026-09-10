@@ -1,3 +1,4 @@
+// The committed token stylesheet still matches the editor's controls, and only ever grows.
 /**
  * tokens.css IS IN SYNC WITH THE EDITOR'S VOCABULARY (SITE_BRIDGE_PLAN.md phase 1).
  *

@@ -1,3 +1,4 @@
+// One action runs the sources a manager ticked for a section, and reports each separately.
 /**
  * ONE ACTION DISPATCHES A SECTION'S PULLS, AND REPORTS THEM ONE BY ONE.
  *

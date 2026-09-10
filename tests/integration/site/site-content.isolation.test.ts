@@ -1,3 +1,4 @@
+// A manager can never touch another artist's site text.
 /**
  * SITE EDITOR — tenant isolation for the new site_content table (the
  * non-negotiable gate). A manager can never read/update/delete/insert another

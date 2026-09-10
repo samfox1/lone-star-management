@@ -1,3 +1,4 @@
+// One item's styling is stored as a delta against the site's own base, never a frozen copy.
 /**
  * ITEMS JOINED THE DELTA MODEL — deliberately (Sam, 2026-08-18): an item's base lives
  * in SITE code, so a raw stored string freezes whatever the card looked like on the

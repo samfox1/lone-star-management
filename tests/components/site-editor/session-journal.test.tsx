@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The editor's undo ledger.
 /**
  * The editor's UNDO ledger (`useSessionJournal`).
  *

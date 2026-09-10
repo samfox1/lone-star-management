@@ -1,3 +1,4 @@
+// Apple Music sync against the real database, including the cross-platform merge.
 /**
  * Apple Music track sync (real DB) — now a UNION merge, not a mutually-exclusive
  * source. Same conflict policy for exact-id matches (insert new, refresh

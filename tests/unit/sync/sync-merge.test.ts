@@ -1,3 +1,4 @@
+// The decisions a catalog pull makes before it writes: refresh, stamp, insert, or refuse.
 /**
  * Catalog merge rules — the decisions syncTracks makes BEFORE it writes: which
  * incoming song refreshes a row, which stamps onto a row imported from another

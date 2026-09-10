@@ -1,3 +1,4 @@
+// The EPK download route, the only place the readiness gate is actually enforced.
 /**
  * The EPK download route — the only place the readiness gate is actually ENFORCED.
  *

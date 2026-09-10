@@ -1,3 +1,4 @@
+// The font actions refuse a caller who does not manage the artist.
 /**
  * The font actions' ownership gate.
  *

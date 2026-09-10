@@ -1,3 +1,4 @@
+// The two release doors join differently on purpose, and this pins where they diverge.
 /**
  * The two RELEASE doors join `releases` DIFFERENTLY, on purpose, and nothing pinned it:
  *

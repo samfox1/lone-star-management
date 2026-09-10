@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The cinematic hero marks its image and text regions in edit mode.
 /**
  * The cinematic hero emits its markers in edit mode: the hero MEDIA (image here —
  * no clips, so the poster branch renders) is an image field, and the tagline / cta

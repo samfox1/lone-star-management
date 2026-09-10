@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The manager-tools side panel: every tool in the registry, grouped, current one marked.
 /**
  * The manager-tools side panel (Sam, 2026-08-28): every tool in the registry, grouped,
  * the current one marked; shown on tool routes only. Expectations derive from TOOLS.

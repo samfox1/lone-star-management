@@ -1,3 +1,4 @@
+// A pull tells the manager what it did, including the parts that failed.
 /**
  * A PULL REPORTS WHAT IT DID, INCLUDING WHAT IT COULD NOT DO.
  *

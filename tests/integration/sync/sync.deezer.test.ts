@@ -1,3 +1,4 @@
+// Deezer song sync against the real database.
 /**
  * PHASE 2 — Deezer track sync (real DB). Same conflict policy as Spotify: insert
  * new, refresh deezer-owned, never clobber manual; RLS-scoped to the caller's

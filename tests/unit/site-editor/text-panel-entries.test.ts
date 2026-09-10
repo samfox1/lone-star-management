@@ -1,3 +1,4 @@
+// What the Text panel lists: copy the manager types, plus text written into the design.
 /**
  * What the Text panel LISTS.
  *

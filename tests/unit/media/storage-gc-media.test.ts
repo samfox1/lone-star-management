@@ -1,3 +1,4 @@
+// A photo removed in the editor keeps its file while a published version still points at it.
 /**
  * Media object GC (review finding #1). A gallery photo removed in the editor is a DRAFT
  * change; its Storage object must NOT be destroyed while a published revision still

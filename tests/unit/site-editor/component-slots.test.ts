@@ -1,3 +1,4 @@
+// Naming one image slot inside a repeated component, like a wall of polaroids.
 /**
  * Component slots (lib/site-editor/manifest) — the address of one image inside a
  * repeated component, e.g. skeen's polaroid wall.

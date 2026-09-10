@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// A new video stacks on top of its section, not onto the end of the list.
 /**
  * NEWEST FIRST, IN EVERY SECTION (Sam, 2026-09-09).
  *

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Sync opens a dialog instead of navigating away, and each source reports its own result.
 /**
  * SYNC OPENS A DIALOG, IT DOES NOT NAVIGATE (Sam, 2026-09-09).
  *

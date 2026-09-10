@@ -1,3 +1,5 @@
+// The Shopify Storefront client: mapping products, paging, retrying a throttle, and shaping
+//   errors. Fetch is mocked.
 /**
  * MILESTONE 8 — shopifyClient (Storefront GraphQL), test-first. Mocked at the
  * fetch boundary. Covers: product mapping, cursor pagination, GraphQL + HTTP

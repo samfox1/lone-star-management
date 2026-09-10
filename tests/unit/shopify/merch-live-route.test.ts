@@ -1,3 +1,5 @@
+// The public /api/merch/[slug] route: it caches failures too, so a Shopify outage cannot be
+//   amplified, and it checks the slug before anything else.
 /**
  * `/api/merch/[slug]` — the live price lane's public door.
  *

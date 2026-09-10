@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The publish control for content lists: disabled until something differs from what is live.
 /**
  * PublishBar — the password-gated publish control for on-site content lists. Disabled
  * until the selection differs from what's live; opens a password prompt; hands the

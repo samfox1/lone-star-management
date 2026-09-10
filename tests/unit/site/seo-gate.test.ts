@@ -1,3 +1,4 @@
+// The only write path for SEO fields, which rewrite the page head. Derived from the schema.
 /**
  * saveSeoField's gate (SEO_GEO_PLAN B6): the only write path for the SEO_FIELDS keys,
  * which rewrite <head>. Derived from SEO_FIELDS, so a key added to the schema without a

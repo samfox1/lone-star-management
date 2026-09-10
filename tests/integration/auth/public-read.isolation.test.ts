@@ -1,3 +1,4 @@
+// The public site's one door: published snapshots only, no cross-tenant leak, no secrets.
 /**
  * PUBLIC READ PATH — security boundary (README CRITICAL items).
  *

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Two pages claiming one region key is caught at build time.
 /**
  * A REGION KEY USED ON TWO PAGES IS A BUG THE BUILD MUST CATCH (SITE_PAGES_PLAN.md A6/P5).
  *

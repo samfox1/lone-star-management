@@ -1,3 +1,5 @@
+// Turning Shopify's live answer into prices, stock and variants for the site. Pure rules, no
+//   network.
 /**
  * The LIVE LANE (MERCH_PLAN step 2). Price, availability and variants are Shopify's,
  * resolved at render, never frozen into a published revision — a price that stays

@@ -1,3 +1,4 @@
+// Publishing one section never publishes another section's pending edit.
 /**
  * PHASE 0 — per-section publish isolation: publishing one section does not
  * publish another section's pending edit.

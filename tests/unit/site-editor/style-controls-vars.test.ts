@@ -1,3 +1,4 @@
+// Size and font emit CSS variables instead of classes, so a styled region stays responsive.
 /**
  * The EDITOR half of the CSS-variable migration (CONNECTING.md §5).
  *

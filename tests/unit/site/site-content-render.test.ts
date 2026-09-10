@@ -1,3 +1,4 @@
+// An override renders, stored HTML renders escaped, and a template reads only its own keys.
 /**
  * SITE EDITOR — render contract (no DB). A site_content override renders; a
  * stored HTML payload renders ESCAPED (text fields are React-escaped, §9); and a

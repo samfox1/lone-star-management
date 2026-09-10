@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The chip field for who else is on a tour date, checked against what a real form would post.
 /**
  * TagInput — the chip field behind a tour date's "who else is performing".
  *

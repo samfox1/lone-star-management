@@ -1,3 +1,5 @@
+// Importing a Drive file for real: the bytes land, the row registers, and a re-import
+//   de-dupes.
 /**
  * Drive copy-on-import — the real thing against the LIVE project: bytes land in
  * the right bucket under {artistId}/…, the row is registered with drive_file_id,

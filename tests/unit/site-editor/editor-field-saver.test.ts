@@ -1,3 +1,4 @@
+// Saves for one field run in order, so an older write cannot land after a newer one.
 /**
  * runSerialized — the inspector tools' per-field save runner (review #6 + #8). Saves for
  * the SAME field are chained so an older write can't land after a newer one; an `errored`

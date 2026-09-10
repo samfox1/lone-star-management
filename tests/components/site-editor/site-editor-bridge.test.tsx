@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// A click in the edit frame resolves to the nearest marked region, inner item beating outer
+//   slot.
 /**
  * Frame-side bridge resolution (phase 1): a click anywhere in the edit-mode frame
  * resolves to the nearest marked region (an inner item beats its enclosing slot),

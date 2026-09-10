@@ -1,3 +1,4 @@
+// Each style control owns one slice of a class string and leaves everything else alone.
 /**
  * The no-code style controls (lib/site-editor/style-controls): each control owns a slice
  * of a Tailwind class string, reads the current utility, and swaps it on apply while

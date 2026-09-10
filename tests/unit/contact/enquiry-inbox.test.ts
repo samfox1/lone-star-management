@@ -1,3 +1,4 @@
+// What an enquiry row says before you open it: its snippet, and the filters over the list.
 /**
  * The inbox's pure rules — what a row says before you open it.
  *

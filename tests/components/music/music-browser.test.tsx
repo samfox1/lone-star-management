@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The one Music surface: its two lenses, its shared toolbar, and how releases are ordered.
 /**
  * MusicBrowser — the ONE Music surface. Locks Sam's 2026-07-09 spec: two
  * segmented lenses (All/Released/Unreleased, then All/On site/Off site) under a

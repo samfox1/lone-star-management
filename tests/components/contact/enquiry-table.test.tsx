@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The enquiries table. It is a record store, not a mail client, so it must never hide a row.
 /**
  * The enquiries table.
  *

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The typed half of the press kit, and the form shape the server zips back together by index.
 /**
  * PressKitForm — the hand-typed half of the press kit.
  *

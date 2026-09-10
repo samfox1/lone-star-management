@@ -1,3 +1,4 @@
+// The Bandsintown client: mapping events, retrying a rate limit, and shaping errors.
 /**
  * MILESTONE 7 — bandsintownClient, test-first. Mocked at the fetch boundary.
  * Covers: event mapping, 429 retry, error shaping, unknown-artist → [], and the

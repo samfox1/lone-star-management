@@ -1,3 +1,4 @@
+// Reading view counts for videos in batches, to cache each video's reach on sync.
 /**
  * youtubeClient.viewCounts — global YouTube view counts via videos.list?part=statistics
  * (batched 50/call), used to cache each video's reach on sync. Mocked at the fetch

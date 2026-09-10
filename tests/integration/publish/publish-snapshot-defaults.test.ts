@@ -1,3 +1,4 @@
+// A new column with a default must not make every existing artist look dirty.
 /**
  * M5 + M6 (REVIEW_2026-09-03) — a column that joins a snapshot WITH a default must not
  * make every existing artist dirty.

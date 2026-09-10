@@ -1,3 +1,4 @@
+// Binding a link region to a URL by key, guards first and then the live round trip.
 /**
  * saveEditorLink — binding a manifest link region (USB / Merch button) to a URL by KEY
  * (Phase 2). The guard cases are pure (they return before any DB call, proven with a

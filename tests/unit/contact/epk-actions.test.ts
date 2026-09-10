@@ -1,3 +1,4 @@
+// The press-document actions only write allowed columns, and only for your own artist.
 /**
  * `savePressDocumentAction`'s guards.
  *

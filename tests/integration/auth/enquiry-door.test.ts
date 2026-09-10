@@ -1,3 +1,4 @@
+// The privileged door behind the contact form: recipients, validation, and rate limiting.
 /**
  * submit_enquiry — the privileged door behind the /contact Edge Function.
  *

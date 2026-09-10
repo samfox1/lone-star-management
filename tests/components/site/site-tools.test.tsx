@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Site panel: an optimistic change paints at once, and a refused save reverts both sides.
 /**
  * The Site panel (cursor + trail). Pins the save loop's honesty: an optimistic
  * change paints the frame immediately, a confirmed save stays, and a REFUSED save

@@ -1,3 +1,4 @@
+// The decision at the upload door: send it as-is, shrink it first, or refuse it.
 /**
  * The decision at the upload door (BRIEF-asset-compression.md, skeen repo).
  *

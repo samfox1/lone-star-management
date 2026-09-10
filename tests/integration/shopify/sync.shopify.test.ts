@@ -1,3 +1,4 @@
+// Pulling Shopify products into merch rows, against the real database.
 /**
  * MILESTONE 8 — Shopify merch sync (real DB). Same conflict policy, applied to
  * merch via the shopify_product_id dedup key.

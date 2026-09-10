@@ -1,3 +1,4 @@
+// The draft payload carries a publish time too, which the bridge reads for its page metadata.
 /**
  * H2 (REVIEW_2026-09-03) — the DRAFT payload must carry `published_at`.
  *

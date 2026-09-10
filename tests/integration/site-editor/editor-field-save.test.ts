@@ -1,3 +1,4 @@
+// The editor's draft write path: resolve a field to its target and write it, scoped by RLS.
 /**
  * saveEditorField — the visual editor's draft write path. Resolves a field to its
  * manifest target and writes it: an artist column or a site_content key (blank

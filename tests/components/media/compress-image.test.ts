@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The compressor itself — the code that touches the manager's actual bytes.
 /**
  * The compressor itself — the code that touches the manager's actual bytes.
  *

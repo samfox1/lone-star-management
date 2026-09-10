@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The shared Add flow for videos, merch and tour dates.
 /**
  * CreateModal — the shared "Add" flow (videos / merch / tour). Opens a modal, submits
  * the typed fields to the bound action, and on success closes + toasts "{kind} added";

@@ -1,3 +1,4 @@
+// How an on-site event is declared, and how each metric card labels its number.
 /**
  * The analytics contract seams, now pure + unit-testable (they used to be verifiable
  * only by clicking on a live public page):

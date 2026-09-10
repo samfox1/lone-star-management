@@ -1,3 +1,4 @@
+// Renaming a file: copy first, then the row, and undo the copy if the row fails.
 /**
  * renameMedia — descriptive file names (SEO_GEO_PLAN B6b). A fake client pins the ORDER
  * (copy, then row; remove the copy if the row fails). DB-free, so it stays in the

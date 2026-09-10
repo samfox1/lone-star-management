@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Entrance animations, and the root-attribute guard that keeps a site from hiding its own
+//   content.
 /**
  * Slice-3 motion: the entrances runtime + the derived effects CSS. The load-bearing
  * safety rule is the ROOT-ATTRIBUTE GUARD: entrance hidden-states apply only under

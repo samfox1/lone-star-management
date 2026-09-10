@@ -1,3 +1,4 @@
+// The Ticketmaster client: mapping events, paging, backing off, and shaping errors.
 /**
  * PHASE 4 — ticketmasterClient, test-first. Mocked at the fetch boundary (fast,
  * deterministic, no key). Covers mapping, page-number pagination, empty results,

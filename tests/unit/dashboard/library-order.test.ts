@@ -1,3 +1,4 @@
+// One sort order for the library pages: newest, oldest, and A to Z.
 /**
  * ONE ORDER FOR THE LIBRARY PAGES (Music, Videos), in a pure module.
  *

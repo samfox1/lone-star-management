@@ -1,3 +1,4 @@
+// How the Style panel groups regions into a short outline instead of one flat list.
 /**
  * `groupStyleRegions` (lib/site-editor/manifest) — the Style panel's outline.
  *

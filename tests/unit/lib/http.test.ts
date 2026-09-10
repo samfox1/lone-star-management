@@ -1,3 +1,4 @@
+// The shared GET-with-retry helper, including the Retry-After header that caused a hot loop.
 /**
  * Shared GET-with-retry helper. The client tests exercise it indirectly; this
  * locks the cross-cutting behavior — notably the NaN-guarded Retry-After (the

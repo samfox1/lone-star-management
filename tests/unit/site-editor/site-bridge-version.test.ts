@@ -1,3 +1,4 @@
+// The bridge's two version numbers have to agree with each other.
 /**
  * The bridge's TWO version numbers must agree.
  *

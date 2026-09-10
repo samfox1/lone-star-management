@@ -1,3 +1,4 @@
+// The video type end to end, and the short list of fields that actually reach fans.
 /**
  * PHASE 4 (Videos) — the new `video` content type: CRUD, draft → publish, public
  * read under the right key, tombstone on delete, dirty-tracking, and the PUBLIC

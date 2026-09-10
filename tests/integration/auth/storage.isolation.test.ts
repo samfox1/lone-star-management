@@ -1,3 +1,4 @@
+// The media and videos buckets are keyed by artist folder, and that is actually enforced.
 /**
  * `media` and `videos` bucket object policies — cross-tenant.
  *

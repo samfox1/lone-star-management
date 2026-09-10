@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The two irreversible delete buttons: both confirm first and both latch a double click.
 /**
  * DeleteButton / MediaDeleteButton — client deletes for server-rendered list rows and
  * media assets. Both are IRREVERSIBLE and there is no undo, so both gate on a

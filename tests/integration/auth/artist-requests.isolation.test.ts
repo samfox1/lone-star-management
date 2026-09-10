@@ -1,3 +1,4 @@
+// A manager sees and files only their own artist requests.
 /**
  * Tenant isolation for the artist-request queue.
  *

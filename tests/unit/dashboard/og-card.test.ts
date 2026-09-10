@@ -1,3 +1,4 @@
+// The social preview card: fixed size, solid background, logo centred and never transparent.
 /**
  * The social preview card: 1200x630, logo centred on a SOLID background.
  *

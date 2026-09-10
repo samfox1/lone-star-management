@@ -1,3 +1,4 @@
+// Which style controls an image gets when it is used as a background, and which are hidden.
 /**
  * The BACKGROUND image control set (Sam, 2026-08-18): "if an image is being used as a
  * background, there doesnt need to be certain editable tools like edges or borders …

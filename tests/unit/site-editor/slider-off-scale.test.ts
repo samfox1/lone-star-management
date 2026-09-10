@@ -1,3 +1,4 @@
+// Where a slider handle sits when the current value is not one of its steps.
 /**
  * WHERE THE HANDLE SITS when the current value is not one of the slider's steps.
  *

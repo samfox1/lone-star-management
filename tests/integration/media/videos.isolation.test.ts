@@ -1,3 +1,4 @@
+// A manager can never touch another artist's videos.
 /**
  * PHASE 4 (Videos) — tenant isolation for the new videos table (the
  * non-negotiable gate). A manager can never read/write/delete/insert another

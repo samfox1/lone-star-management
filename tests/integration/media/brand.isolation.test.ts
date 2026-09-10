@@ -1,3 +1,5 @@
+// Brand writes are tenant-scoped, and the database bounds the framing even if the client is
+//   bypassed.
 /**
  * Tenant isolation for the brand writes, and the action's purpose allowlist.
  *

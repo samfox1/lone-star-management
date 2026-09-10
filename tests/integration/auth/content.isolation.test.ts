@@ -1,3 +1,4 @@
+// A manager can never write another tenant's content, for any content type.
 /**
  * MILESTONE 5 — write-isolation gate for ALL content types + publish-all.
  *

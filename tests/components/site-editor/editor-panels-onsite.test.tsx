@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Merch and Videos panels list only what is on the site.
 /**
  * THE ITEM PANELS SHOW WHAT IS ON THE SITE.
  *

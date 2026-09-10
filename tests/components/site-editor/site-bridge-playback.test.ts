@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The pause/play toggle resumes only the clips it paused, never one the fan paused.
 /**
  * The pause/play toggle (2026-08-11): setVideosPlaying pauses every PLAYING <video>
  * and resumes only what IT paused — a clip the fan paused themselves must not spring

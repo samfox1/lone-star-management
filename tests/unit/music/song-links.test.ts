@@ -1,3 +1,4 @@
+// Reading a pasted streaming URL and filling in what the platform already knows.
 /**
  * song-links — URL→union-column mapping and service metadata resolution for the
  * add-song flow (the manager never types what the platform already knows).

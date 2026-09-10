@@ -1,3 +1,5 @@
+// The bridge package is the single source of truth; the shims re-export it and never redefine
+//   it.
 /**
  * THE CONTRACT PACKAGE IS THE CONTRACT (SITE_BRIDGE_PLAN.md phase 1).
  *

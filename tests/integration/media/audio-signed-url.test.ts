@@ -1,3 +1,4 @@
+// Signing audio for a published song, and refusing to sign an unpublished or foreign one.
 /**
  * PHASE 3 — the signing door. signAudioUrl returns a working signed URL for a
  * PUBLISHED track's audio, and refuses to sign an unpublished track or another

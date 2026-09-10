@@ -1,3 +1,4 @@
+// Reading Open Graph tags off a page for the merch Add modal, behind an SSRF gate.
 /**
  * Open-Graph scraping for the merch "Add" modal's Automatic mode. parseOpenGraph is
  * a pure function over HTML; isPublicHttpUrl is the SSRF gate (public http(s) only);

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// The editor's left inspector: browsing components, and the wired Images, Text and Links
+//   tools.
 /**
  * The visual editor's left inspector (phase 2 panel). Covers the two-state
  * navigation and the wired Images tools: Browse lists the component types with the

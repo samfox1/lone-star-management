@@ -1,3 +1,4 @@
+// The Apple Music reader, over the free iTunes search API. Fetch is mocked.
 /**
  * appleMusicClient — reads catalog data from the FREE iTunes Search API (no key,
  * no developer token; the paid MusicKit API isn't required for catalog lookups).

@@ -1,3 +1,4 @@
+// Media is draft until published, and a deleted row is tombstoned on republish.
 /**
  * PHASE 0 — media is draft → publish (and tombstones on delete + republish).
  * Media is read by the public site from published revisions, not the live table.

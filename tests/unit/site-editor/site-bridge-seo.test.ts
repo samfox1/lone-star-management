@@ -1,3 +1,4 @@
+// Building titles, JSON-LD, sitemap and robots. One copy of rules two apps used to each carry.
 /**
  * The bridge's SEO builders (SEO_GEO_PLAN B4): ONE copy of the rules skeen's lib/seo.ts
  * and lone-star's src/lib/seo.ts each carried. Pure, DB-free, in the mutation slice.

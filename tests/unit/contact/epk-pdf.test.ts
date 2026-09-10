@@ -1,3 +1,4 @@
+// Building the press kit PDF, and wrapping a bio to a fixed page width with no layout engine.
 /**
  * The generated press kit.
  *

@@ -1,3 +1,4 @@
+// Every platform the picker offers has a mark, and the committed file is the generated one.
 /**
  * EVERY OFFERED PLATFORM HAS A MARK, AND THE COMMITTED FILE IS THE GENERATED ONE.
  *

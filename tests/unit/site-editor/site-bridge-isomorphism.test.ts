@@ -1,3 +1,4 @@
+// The bridge imports cleanly on the server, where there is no DOM at all.
 /**
  * THE PACKAGE IMPORTS CLEANLY WITHOUT A DOM (SITE_BRIDGE_PLAN.md P1/P3).
  *

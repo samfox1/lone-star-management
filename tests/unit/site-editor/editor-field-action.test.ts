@@ -1,3 +1,4 @@
+// Which save path a text edit takes: a built-in template, or the artist's own site.
 /**
  * saveEditorFieldAction — which WRITE PATH an artist's row selects.
  *

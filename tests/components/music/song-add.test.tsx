@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Add Music button: single, EP or album, and unreleased music never reaching the site.
 /**
  * SongAddButton — the Music page's "+ Add Music". Manual path asks the format
  * first (Single / EP / Album): a single is one song; an EP/album is a manual

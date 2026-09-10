@@ -1,3 +1,4 @@
+// Renaming a file against the live project: the copy lands, and the old object survives.
 /**
  * renameMedia against the live project: a real copy lands at {slug}.{ext} and the old
  * object survives for the snapshot that may still point at it (SEO_GEO_PLAN B6b).

@@ -1,3 +1,4 @@
+// The two on-site write paths stay separate; a type on both would silently revert the editor.
 /**
  * The two ON-SITE write paths stay DISJOINT (ADR 0009).
  *

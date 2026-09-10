@@ -1,3 +1,4 @@
+// Site text overrides, draft to publish, and the guard against a typed field taking junk.
 /**
  * SITE EDITOR — site_content override behavior + draft→publish + XSS guard.
  * (Isolation is covered separately in site-content.isolation.test.ts.)

@@ -1,3 +1,4 @@
+// The core rulebook: manifest, DOM markers and the frame protocol all line up.
 /**
  * Site-editor RULEBOOK (phase 0) — pure unit tests, no DB. Locks the manifest ↔
  * marker ↔ bridge contract: every declared site-text field is an editable manifest

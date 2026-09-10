@@ -1,3 +1,5 @@
+// Reading enquiry attachments, where the interesting part is a file that is gone or never
+//   arrived.
 /**
  * Reading attachments in the dashboard.
  *

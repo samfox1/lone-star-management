@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The version gate is actually wired up, not merely implemented.
 /**
  * THE VERSION GATE IS WIRED, not just implemented.
  *

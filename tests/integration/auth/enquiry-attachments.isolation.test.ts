@@ -1,3 +1,4 @@
+// Enquiry attachments are read-only for the artist's managers, and the bucket is private.
 /**
  * `enquiry_attachments` and the private `enquiry-attachments` bucket.
  *

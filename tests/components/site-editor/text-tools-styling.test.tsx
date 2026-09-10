@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Text panel is a list that types; one field opens full-panel with its style controls.
 /**
  * The Text panel is a LIST that types; one field opens full-panel behind Edit, exactly
  * like an image or a video slot. Font/Size/Boldness live in that editor.

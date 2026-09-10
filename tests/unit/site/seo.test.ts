@@ -1,3 +1,4 @@
+// Building a public page's title, description and share image from published data.
 /**
  * SEO/OG — siteMetadata(site) builds the public page's title/description/OG
  * image from the PUBLISHED artist data, with sensible fallbacks when unset.

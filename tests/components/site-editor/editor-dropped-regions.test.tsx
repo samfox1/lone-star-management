@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// When two pages claim the same region key, the editor says so instead of silently dropping
+//   one.
 /**
  * N3 — A DROPPED REGION IS SAID OUT LOUD (SITE_PAGES_PLAN.md A6, second layer).
  *

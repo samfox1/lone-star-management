@@ -1,3 +1,5 @@
+// The host guard for a manager-typed site URL that the server fetches and the public redirects
+//   to.
 /**
  * `isPublicSiteUrl` — the host guard the SEO live check and the public redirect share.
  *

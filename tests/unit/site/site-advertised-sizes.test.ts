@@ -1,3 +1,4 @@
+// A site decides which text sizes it can actually render; the editor offers only those.
 /**
  * A SITE DECIDES WHICH SIZES IT CAN RENDER.
  *

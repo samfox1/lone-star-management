@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Resolving a region's styles: the base, the override, and per-item overlays.
 // PORTED from skeen's lib/styles.test.ts (SITE_BRIDGE_PLAN.md phase 1 slice 2) — the tests move
 // with the code they pin. skeen keeps its copies until its phase-2 migration deletes
 // them WITH its mirrored modules; the double coverage in the window is deliberate.

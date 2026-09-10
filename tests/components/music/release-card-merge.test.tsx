@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Merging a duplicate song from inside a release tracklist.
 /**
  * ReleaseCard tracklist — "Merge into…" on a release's songs.
  *

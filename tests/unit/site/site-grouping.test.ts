@@ -1,3 +1,4 @@
+// The two helpers behind the On-site / Off-site toggle and the group-by-origin layout.
 /**
  * The two pure helpers behind the content pages' On-site/Off-site toggle + group-by-
  * origin layout. Pure functions, so the filtering/bucketing rules are unit-testable

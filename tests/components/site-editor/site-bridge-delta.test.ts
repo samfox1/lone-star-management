@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// An override stores only what changed, so a styled region no longer freezes at that day's
+//   design.
 /**
  * DELTA OVERRIDES (0.24.0) — the end of the frozen region.
  *

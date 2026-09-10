@@ -1,3 +1,4 @@
+// Undo changes: putting the draft back to the last published version, for this artist only.
 /**
  * "Undo changes" — restoreToPublished puts the DRAFT back to the last published version
  * for everything the site editor owns (Sam, 2026-08-14).

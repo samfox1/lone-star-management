@@ -1,3 +1,4 @@
+// The release type and its public smart-link page, read from the published snapshot.
 /**
  * PHASE 5 (Releases) — the `release` content type + its public smart-link door.
  * A release publishes like content (entity_type='release'); the public landing

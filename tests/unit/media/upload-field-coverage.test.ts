@@ -1,3 +1,4 @@
+// Every upload path goes through the one field, so none can skip the compression gate.
 /**
  * NO UPLOADER MAY ASSEMBLE ITS OWN DROP FIELD.
  *

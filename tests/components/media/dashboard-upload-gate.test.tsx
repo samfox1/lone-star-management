@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The dashboard's own uploaders go through the compression gate too.
 /**
  * THE DASHBOARD'S OWN UPLOADERS GO THROUGH THE COMPRESSION GATE.
  *

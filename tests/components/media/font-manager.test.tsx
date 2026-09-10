@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Brand page's font list: each font previewed in itself, plus upload, remove and slots.
 /**
  * FontManager — the Brand page's font list.
  *

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// A colour that was never set must not be painted as if it were a real colour.
 /**
  * An UNSET colour must not look like a colour.
  *

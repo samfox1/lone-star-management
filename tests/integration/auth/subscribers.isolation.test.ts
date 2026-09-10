@@ -1,3 +1,4 @@
+// The public email signup: one guarded write door, and fan emails nobody else can read.
 /**
  * Security for the public email-list signup. `subscribers` holds anonymous fan
  * emails keyed to one artist, so — like analytics_events — the ONLY write path

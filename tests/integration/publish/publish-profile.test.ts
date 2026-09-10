@@ -1,3 +1,4 @@
+// The artist profile is draft until published; name, bio, hero and template version together.
 /**
  * PHASE 0 — the artist profile is draft → publish (not live).
  *

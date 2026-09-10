@@ -1,3 +1,4 @@
+// A video placed in a hero slot reaches the public site.
 /**
  * A video placed in a hero slot (site_role) reaches the PUBLIC SITE.
  *

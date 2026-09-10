@@ -1,3 +1,4 @@
+// Every style token the editor can emit belongs to a family, and removing one round-trips.
 /**
  * THE DERIVED INVARIANT both review agents independently demanded (AGENTS.md rule 4):
  * hand-listed family tables are how the two HIGH bugs hid — `border-t` (no family, so

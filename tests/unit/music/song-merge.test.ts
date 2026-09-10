@@ -1,3 +1,4 @@
+// Merging two songs, field by field: what unions, what wins a tie, and what refuses.
 /**
  * MERGING TWO SONGS — the field-by-field resolution, exhaustively.
  *

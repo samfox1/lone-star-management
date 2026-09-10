@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The single-song editor, and the pasted listen link that promotes an upload to Released.
 /**
  * TrackCard — the orphan-single editor, now the SAME single-style modal a release
  * single uses. Tests the Spotify (stream_url) slot: pasting a link saves it on blur

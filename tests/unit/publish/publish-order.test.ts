@@ -1,3 +1,4 @@
+// Publishing writes the profile LAST, so a publish that dies halfway never goes half-live.
 /**
  * publishAll publishes the PROFILE LAST (lib/content.ts).
  *

@@ -1,3 +1,4 @@
+// The one query behind the inbox's attachment badge, shared by both inbox pages.
 /**
  * `attachmentCounts` — the inbox badge query.
  *

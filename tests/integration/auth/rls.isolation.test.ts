@@ -1,3 +1,4 @@
+// The product's most important property: a manager can never read or write another tenant.
 /**
  * MILESTONE 2 GATE — tenant isolation.
  *

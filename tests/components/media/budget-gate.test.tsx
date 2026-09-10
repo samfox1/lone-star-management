@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The compression prompt a picked file passes through before it is uploaded.
 /**
  * The compression gate a picked file passes through before upload
  * (BRIEF-asset-compression.md, skeen repo).

@@ -1,3 +1,4 @@
+// The pure helpers behind the /contact edge function, which npm test cannot run directly.
 /**
  * Pure helpers behind the /contact Edge Function.
  *

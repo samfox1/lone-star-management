@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// A custom font reaches the rendered site, and only sanitized CSS gets injected.
 /**
  * Custom fonts reach the RENDERED site — and only sanitized CSS does.
  *

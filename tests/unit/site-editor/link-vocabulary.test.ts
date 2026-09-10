@@ -1,3 +1,4 @@
+// What may be added to an artist's links: known platforms only, and never the same one twice.
 /**
  * WHAT MAY BE ADDED TO AN ARTIST'S LINK ROW.
  *

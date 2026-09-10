@@ -1,3 +1,4 @@
+// Which style region dresses a given piece of text.
 /**
  * Which style region dresses a given text field.
  *

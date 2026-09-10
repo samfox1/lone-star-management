@@ -1,3 +1,4 @@
+// The public apply-for-access flow: one guarded write door, and no anonymous reads.
 /**
  * Security for the public "apply for access" flow. `applications` holds anonymous
  * lead submissions (name/email/notes), so — like analytics_events — the ONLY

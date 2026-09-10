@@ -1,3 +1,4 @@
+// All four of bio, photo, contact email and a release must exist before a press kit is made.
 /**
  * The EPK download gate.
  *

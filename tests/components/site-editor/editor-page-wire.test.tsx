@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// A page tag declared by a site survives the wire and reaches the panels with its page.
 /**
  * N4 — THE PAGE TAG SURVIVES THE WIRE (SITE_PAGES_PLAN.md "New hazards").
  *

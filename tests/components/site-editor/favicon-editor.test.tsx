@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The tab-icon controls, checked by what they ask the canvas to draw.
 /**
  * FaviconEditor — the controls behind the tab icon.
  *

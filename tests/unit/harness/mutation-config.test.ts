@@ -1,3 +1,5 @@
+// The tests/ folder rule: what touches the database lives in integration/, and only that is
+//   excluded from mutation testing.
 /**
  * THE FOLDER RULE MUST STAY TRUE.
  *

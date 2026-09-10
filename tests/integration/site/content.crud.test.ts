@@ -1,3 +1,4 @@
+// Tour dates, merch and links end to end: owner edits, then the publish loop.
 /**
  * MILESTONE 5 — remaining content (tour dates, merch, links), test-first.
  *

@@ -1,3 +1,4 @@
+// The SEO page's Run check: every rule reported pass or fail against a served site.
 /**
  * auditLiveSite — the SEO / GEO page's "Run check". A fake fetch serves a site; every
  * rule is listed pass or fail, the graph is counted, the sitemap and robots are read.

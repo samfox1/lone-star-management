@@ -1,3 +1,4 @@
+// Recording an event: resolve the artist from the slug, store a typed event, and ignore junk.
 /**
  * PHASE 5 (Analytics) — record_event behavior: resolves the artist from the slug,
  * stores a typed event (+ optional target, no PII), and ignores junk (unknown

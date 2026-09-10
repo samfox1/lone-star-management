@@ -1,3 +1,4 @@
+// A style edit is draft until published; it does not go straight to the live site.
 /**
  * Style rows must ride the publish window (skeen brief, 2026-08-03).
  *

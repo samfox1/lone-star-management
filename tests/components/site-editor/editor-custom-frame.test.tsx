@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Embedding a custom site in the editor: the wire shape it gets, and the ready handshake.
 /**
  * S4 Slice 2 — embedding a CUSTOM site in the editor (SITE_STYLING_PLAN.md §5).
  *

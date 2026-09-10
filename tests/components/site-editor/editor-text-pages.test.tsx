@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The Text panel lists every page's copy, and opening a row sends the preview to that page.
 /**
  * THE TEXT PANEL LISTS EVERY PAGE'S COPY, AND CLICKING A ROW GOES THERE.
  *

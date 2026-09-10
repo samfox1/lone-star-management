@@ -1,3 +1,4 @@
+// Merging songs against the real database: whether a merge is allowed to run at all.
 /**
  * MERGING SONGS — against the real database.
  *

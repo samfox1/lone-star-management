@@ -1,3 +1,4 @@
+// The two tables that decide what a live site looks like, guarded against cross-tenant writes.
 /**
  * `revisions` and `site_styles` — the two per-artist tables that decide what a live
  * public site looks like. Neither had an isolation test of any kind.

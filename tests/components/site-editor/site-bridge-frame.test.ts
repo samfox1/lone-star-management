@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The frame side of the bridge: the protocol, resolving a click, and optimistic updates.
 // PORTED from skeen's lib/frameBridge.test.ts (SITE_BRIDGE_PLAN.md phase 1 slice 2) — the tests move
 // with the code they pin. skeen keeps its copies until its phase-2 migration deletes
 // them WITH its mirrored modules; the double coverage in the window is deliberate.

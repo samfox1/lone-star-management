@@ -1,3 +1,4 @@
+// The editor saves only what the manager changed against the base, not the whole string.
 /**
  * THE EDITOR WRITES DELTAS (0.24) — only what the manager changed, against the base.
  *

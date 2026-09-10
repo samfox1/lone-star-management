@@ -1,3 +1,4 @@
+// Every control the editor offers emits a token the site actually turns into real CSS.
 /**
  * The style PIPELINE, end to end: every control the editor offers must emit a token the
  * bridge actually LIFTS to real CSS — and a control must never be offered where it can't

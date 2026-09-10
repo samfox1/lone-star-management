@@ -1,3 +1,4 @@
+// The two logos and the derived favicon, stored as media rows.
 /**
  * Brand assets in the database: the two logos and the derived favicon.
  *

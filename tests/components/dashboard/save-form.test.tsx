@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The edit form: run the action on submit, then toast Saved or the error.
 /**
  * SaveForm — client edit form behavior (no DB). Runs the bound action on submit and
  * confirms with a toast: "Saved" on success, the returned error on failure. Proves the

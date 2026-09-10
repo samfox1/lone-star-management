@@ -1,3 +1,4 @@
+// Only the service role can read a store's Shopify token. Runs against the real database.
 /**
  * `shopify_store_for_slug` — the live lane's door (20260902130000).
  *

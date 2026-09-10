@@ -1,3 +1,4 @@
+// Which URLs are safe to render or store, and telling a social link from a contact link.
 import { describe, expect, it } from 'vitest'
 import { isContactLink, isUrlField, safeHref } from '@/lib/url'
 

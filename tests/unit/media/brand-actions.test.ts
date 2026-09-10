@@ -1,3 +1,4 @@
+// The Brand actions only write the purposes they are allowed to, and only for your own artist.
 /**
  * The Brand actions' purpose allowlist.
  *

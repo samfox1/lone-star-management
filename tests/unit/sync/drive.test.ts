@@ -1,3 +1,4 @@
+// The Google Drive reader for a public folder: browsing it and copying a file in.
 /**
  * driveClient — the public-folder Google Drive reader (browse + copy-on-import).
  * Deterministic: injected fetch/sleep, no network. Locks the quirks the client

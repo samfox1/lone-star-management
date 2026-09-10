@@ -1,3 +1,4 @@
+// Publishing makes the live site match the working table, deletions included.
 /**
  * MILESTONE 5 fix — publish reconcile (tombstones) + ordering parity.
  *

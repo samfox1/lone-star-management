@@ -1,3 +1,4 @@
+// Multi-page sites: folding one announce per page into a single picture of the whole site.
 /**
  * MULTI-PAGE manifests (SITE_PAGES_PLAN.md P1) — pure, no DB, no DOM.
  *

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The six remaining text controls become CSS variables, same recipe as size and font.
 /**
  * The SECOND wave of the CSS-variable migration (CONNECTING.md §5): the six remaining
  * text controls, same recipe as size/font. Each token lifts to a variable AND inlines

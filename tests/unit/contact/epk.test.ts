@@ -1,3 +1,4 @@
+// The two press-kit fields a manager types: the one-line pitch and the press quotes.
 /**
  * Press-kit fields: the two EPK-only values a manager fills in by hand
  * (a one-line pitch and a list of press quotes).

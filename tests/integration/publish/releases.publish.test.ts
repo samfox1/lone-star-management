@@ -1,3 +1,4 @@
+// Choosing which releases are on the site, committed behind a password-gated publish.
 /**
  * Release publish — the on-site visibility reconcile + the password gate.
  *

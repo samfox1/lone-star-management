@@ -1,3 +1,4 @@
+// Applying a style to a region or an item, and which parts of the class string survive it.
 import { describe, it, expect } from 'vitest'
 import {
   isItemKey,

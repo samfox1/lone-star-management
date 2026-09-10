@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The (Mobile) tag reaches the panels a manager actually opens, not just the control objects.
 /**
  * THE (Mobile) TAG REACHES THE PANELS A MANAGER ACTUALLY OPENS.
  *

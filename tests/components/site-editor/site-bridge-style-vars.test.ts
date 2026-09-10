@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Size and font become CSS variables, so a site's own breakpoints still win.
 /**
  * SIZE and FONT as CSS CUSTOM PROPERTIES — the migration CONNECTING.md §5 describes.
  *

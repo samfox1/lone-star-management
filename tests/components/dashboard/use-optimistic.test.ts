@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The inspector's optimistic-update rule, tested once instead of through fourteen panels.
 /**
  * The inspector's optimistic rule, tested through ONE interface instead of via
  * fourteen panel flows (2026-08-18 inspector split).

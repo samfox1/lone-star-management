@@ -1,3 +1,4 @@
+// Folding a site's current base classes back into an override written against an older one.
 /**
  * `rebase` — folding a site's CURRENT base classes back into an override the manager
  * wrote against an older one.

@@ -1,3 +1,5 @@
+// The public site reads published data; the manager preview reads working rows in the same
+//   shape.
 /**
  * MILESTONE 4 — public site + preview data, test-first.
  *

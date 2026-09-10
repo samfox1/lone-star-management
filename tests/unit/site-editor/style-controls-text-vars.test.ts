@@ -1,3 +1,4 @@
+// Boldness, alignment, spacing and casing emit values the site lifts into CSS variables.
 /**
  * The EDITOR half of the second-wave migration: boldness, alignment, line spacing,
  * letter spacing, uppercase and italic emit VALUE tokens the bridge lifts onto

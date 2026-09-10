@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Every SEO section saves through the same gates the editor uses.
 /**
  * The SEO / GEO editor's sections (Sam, 2026-08-28): every section in the registry saves
  * through the SAME gates the editor uses; the bio edits the artist column, never a

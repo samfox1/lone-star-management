@@ -1,3 +1,4 @@
+// Fonts are tenant-scoped, and the bucket is the guard no client can talk its way past.
 /**
  * Tenant isolation for `artist_fonts`, and the guards only the real database can hold.
  *

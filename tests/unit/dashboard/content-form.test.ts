@@ -1,3 +1,4 @@
+// Turning a submitted form into the columns written to a row.
 /**
  * The FORM → row rule (lib/content-form.ts): how submitted FormData becomes the
  * column set handed to createContent / updateContent.

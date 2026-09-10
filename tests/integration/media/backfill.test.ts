@@ -1,3 +1,4 @@
+// The versioning migration backfilled existing artists, so no live site went dark at cutover.
 /**
  * PHASE 0 — the versioning migration backfilled existing artists, so every
  * currently-live site still renders (no regression at cutover).

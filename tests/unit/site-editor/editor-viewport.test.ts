@@ -1,3 +1,4 @@
+// The editor frame's fit-and-zoom maths, and the device menu.
 /**
  * The editor frame's viewport maths (S4). The frame renders the site at a real
  * desktop width and scales it down, so the manager edits the layout a desktop

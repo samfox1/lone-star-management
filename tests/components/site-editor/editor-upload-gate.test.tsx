@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Uploads started from the editor panel go through the compression gate too.
 /**
  * THE EDITOR'S OWN UPLOADERS GO THROUGH THE COMPRESSION GATE.
  *

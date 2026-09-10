@@ -1,3 +1,4 @@
+// The one alt-text suggestion rule the editor and every connected site share.
 /**
  * recommendAlt — the ONE alt-text rule the editor's preset and every site share
  * (SEO_GEO_PLAN B6b). Sam, 2026-08-26: "I want the system to recommend the best name

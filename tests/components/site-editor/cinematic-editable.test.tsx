@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// The cinematic template marks its editable regions in edit mode only.
 /**
  * Phase 1 — the cinematic template emits the `data-lse-*` markers ONLY in edit
  * mode. Renders the template with mocked heavy children (hero/work/embed/subscribe)
