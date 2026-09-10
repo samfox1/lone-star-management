@@ -14,7 +14,9 @@ export const RELEASE_TYPE_LABEL: Record<ReleaseType, string> = {
   ep: 'EP',
   album: 'Album',
   remix: 'Remix',
-  live: 'Live',
+  // 'Live set', not 'Live' (Sam, 2026-09-10): these are recordings of whole live sets
+  // and performances, usually off SoundCloud, and "Live" alone read as a status.
+  live: 'Live set',
   featured: 'Featured',
 }
 

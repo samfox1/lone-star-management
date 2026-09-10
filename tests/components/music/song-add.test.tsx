@@ -166,7 +166,7 @@ describe('SongAddButton', () => {
 
     const title = await within(dialog).findByPlaceholderText('Song title')
     fireEvent.change(title, { target: { value: 'Skeen LIVE @ Navy Pier' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Live' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Live set' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(1))
@@ -176,7 +176,7 @@ describe('SongAddButton', () => {
   it('manual: a Live tile writes release_type live on the song', async () => {
     const dialog = openModal()
     fireEvent.click(within(dialog).getByText('Add Manually'))
-    fireEvent.click(within(dialog).getByText('Live'))
+    fireEvent.click(within(dialog).getByText('Live set'))
     fireEvent.change(within(dialog).getByPlaceholderText('Song title'), { target: { value: 'Navy Pier Set' } })
     dropAudio(dialog)
     fireEvent.click(within(dialog).getByRole('button', { name: 'released' }))

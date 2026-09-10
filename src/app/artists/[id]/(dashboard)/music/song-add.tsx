@@ -50,7 +50,7 @@ type StreamingType = (typeof STREAMING_TYPES)[number]
 const STREAMING_TYPE_LABEL: Record<StreamingType, string> = {
   single: 'Original',
   remix: 'Remix',
-  live: 'Live',
+  live: 'Live set',
 }
 
 /**
@@ -498,7 +498,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               <div className="mt-4 grid grid-cols-2 gap-2.5">
                 {tile(() => { setFormat('single'); setRows([newRow()]) }, 'tracks', 'Single')}
                 {tile(() => { setFormat('remix'); setRows([newRow()]) }, 'tracks', 'Remix')}
-                {tile(() => { setFormat('live'); setRows([newRow()]) }, 'tracks', 'Live')}
+                {tile(() => { setFormat('live'); setRows([newRow()]) }, 'tracks', 'Live set')}
                 {tile(() => { setFormat('ep'); setRows([newRow(), newRow()]) }, 'releases', 'EP')}
                 {tile(() => { setFormat('album'); setRows([newRow(), newRow()]) }, 'releases', 'Album')}
               </div>

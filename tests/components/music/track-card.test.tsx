@@ -97,14 +97,14 @@ describe('TrackCard song type', () => {
     // (AGENTS.md rule 4) — this is the check that would have caught 'live' being
     // unpickable.
     openEdit()
-    for (const label of ['Single', 'EP', 'Album', 'Remix', 'Live', 'Featured']) {
+    for (const label of ['Single', 'EP', 'Album', 'Remix', 'Live set', 'Featured']) {
       expect(screen.getByRole('button', { name: label })).toBeTruthy()
     }
   })
 
   it('CRITICAL: picking Live saves it against the song', async () => {
     openEdit(track({ release_type: 'remix' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Live' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Live set' }))
     saveEdit()
 
     await waitFor(() => expect(setTrackTypeAction).toHaveBeenCalledTimes(1))

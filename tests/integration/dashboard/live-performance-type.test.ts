@@ -27,7 +27,7 @@ afterAll(async () => {
 describe('the live-performance type', () => {
   it('is in the registry and carries a label', () => {
     expect(RELEASE_TYPES).toContain('live')
-    expect(RELEASE_TYPE_LABEL.live).toBe('Live')
+    expect(RELEASE_TYPE_LABEL.live).toBe('Live set')
   })
 
   it('survives coercion instead of collapsing to the single default', () => {
