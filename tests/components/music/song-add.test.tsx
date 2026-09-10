@@ -9,7 +9,7 @@
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
-import { SongAddButton, guessStreamingType, parseContributors } from '@/app/artists/[id]/(dashboard)/music/song-add'
+import { SongAddButton, parseContributors } from '@/app/artists/[id]/(dashboard)/music/song-add'
 import { resolveStreamingSongAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 const inserted: Record<string, unknown>[] = []
@@ -94,9 +94,11 @@ describe('SongAddButton', () => {
     })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
 
-    // Review step: pre-filled with what the service resolved; remix guessed from the title.
+    // Review step: pre-filled with what the service resolved. The TYPE is not — the
+    // manager picks it (2026-09-10), so this test picks like a manager would.
     const title = await within(dialog).findByPlaceholderText('Song title')
     expect(title).toHaveValue('Resolved Title')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Original' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(inserted).toHaveLength(1))
@@ -106,12 +108,18 @@ describe('SongAddButton', () => {
       title: 'Resolved Title',
       released: true,
       spotify_id: 'ZZ9',
-      release_type: 'single', // no "remix" in the title → guessed single
+      release_type: 'single', // the manager picked Original
     })
     expect(uploads).toHaveLength(0)
   })
 
-  it('streaming: guesses "remix" from the resolved title, no toggle needed', async () => {
+  it('streaming: the song type is a REQUIRED choice — Add refuses until one is picked', async () => {
+    // Sam, 2026-09-10: "i want the user to select when adding the song if its a live set
+    // or not, same with a remix." This reverses the 2026-08-21 behaviour this test used to
+    // pin ("guesses remix from the title, no toggle needed"): the type was pre-filled from
+    // the title and sat at the bottom of the review step, so a manager could add a song
+    // without ever seeing that a choice existed. Now the title is not consulted at all —
+    // a title with "Remix" in it still blocks until the manager says so.
     vi.mocked(resolveStreamingSongAction).mockResolvedValueOnce({
       ok: true as const,
       song: { title: 'Cool Song [Skeen Remix]', cover_url: null, contributors: [] },
@@ -123,10 +131,36 @@ describe('SongAddButton', () => {
     })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
     await within(dialog).findByPlaceholderText('Song title')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
 
+    // No pick → refused, nothing written. The error names the choice.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    expect(await within(dialog).findByText(/Pick a song type/)).toBeInTheDocument()
+    expect(inserted).toHaveLength(0)
+
+    // The pick is the manager's, and it is what lands on the row.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remix' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(inserted).toHaveLength(1))
     expect(inserted[0]).toMatchObject({ title: 'Cool Song [Skeen Remix]', release_type: 'remix' })
+  })
+
+  it('streaming: the type question comes FIRST on the review step, not below the fold', async () => {
+    // Where it sat is why nobody picked it. The choice is the first thing on the step,
+    // above the title and cover the service already filled in.
+    vi.mocked(resolveStreamingSongAction).mockResolvedValueOnce({
+      ok: true as const,
+      song: { title: 'Cool Song', cover_url: null, contributors: [] },
+    })
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
+    fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
+      target: { value: 'https://open.spotify.com/track/RM1' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    const title = await within(dialog).findByPlaceholderText('Song title')
+    const typeButton = within(dialog).getByRole('button', { name: 'Original' })
+    // DOM order: the type picker precedes the title input.
+    expect(typeButton.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('streaming: when the service resolves nothing, the review lets the manager fill it in', async () => {
@@ -289,23 +323,3 @@ describe('SongAddButton', () => {
  * correct by hand on every SoundCloud add — and the two negatives are the reason it is a
  * word-boundary match rather than a substring one.
  */
-describe('guessStreamingType', () => {
-  it('reads a live recording out of the title', () => {
-    expect(guessStreamingType('Skeen LIVE @ Navy Pier Open Air')).toBe('live')
-    expect(guessStreamingType('Small Talk (Live)')).toBe('live')
-  })
-
-  it('lets REMIX win a title that claims both', () => {
-    // A remix of a live cut is still a remix; the reverse is not a thing.
-    expect(guessStreamingType('Live Wire [Skeen Remix]')).toBe('remix')
-  })
-
-  it('does not find a concert inside an ordinary word', () => {
-    expect(guessStreamingType('Living Room')).toBe('single')
-    expect(guessStreamingType('Olive')).toBe('single')
-  })
-
-  it('falls back to an original when the title claims nothing', () => {
-    expect(guessStreamingType('Rushing Back')).toBe('single')
-  })
-})

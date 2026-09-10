@@ -53,19 +53,6 @@ const STREAMING_TYPE_LABEL: Record<StreamingType, string> = {
   live: 'Live set',
 }
 
-/**
- * Best-guess a pasted link's type from its resolved title, for the manager to confirm.
- *
- * REMIX WINS a title holding both ("Live Wire [Skeen Remix]"): a remix of a live cut is
- * still a remix, whereas the reverse reading — a live performance that is also a remix —
- * is not a thing the catalog has. Live needs the word on a boundary, so "Living Room"
- * and "Olive" do not become concert recordings.
- */
-export function guessStreamingType(title: string): StreamingType {
-  if (/\bremix\b/i.test(title)) return 'remix'
-  if (/\blive\b/i.test(title)) return 'live'
-  return 'single'
-}
 
 /**
  * THE add-music flow (the Music page's single + button). Two ways in:
@@ -168,9 +155,12 @@ export function SongAddButton({ artistId }: { artistId: string }) {
       setReviewTitle(title)
       setReviewContributors(resolved.ok ? resolved.song.contributors.join(', ') : '')
       setReviewCoverUrl(resolved.ok ? resolved.song.cover_url : null)
-      // Best-guess the type from the title ("… [remix]", "LIVE @ …") — the manager
-      // confirms it on the review step, so a wrong guess is one click to fix.
-      setStreamingType(guessStreamingType(title))
+      // NOT guessed from the title any more (Sam, 2026-09-10: "i want the user to select
+      // when adding the song if its a live set or not, same with a remix"). The guess was
+      // pre-filled and the picker sat at the bottom of the review step, so a manager could
+      // add a song without ever seeing that a choice existed — and a title-guessed kind
+      // ends up on the public site under the wrong shelf with nobody having chosen it.
+      setStreamingType(null)
       setStep('streaming-review')
     } finally {
       setBusyBoth(false)
@@ -195,6 +185,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     try {
       if (step === 'streaming-review') {
         if (!reviewTitle.trim()) return setError('Give the song a title.')
+        if (!streamingType) return setError('Pick a song type: original, remix or live set.')
         // An uploaded cover overrides the detected one; either (or neither) may be present.
         let coverUrl = reviewCoverUrl
         if (coverFile) {
@@ -561,6 +552,28 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                 <p className="text-xs text-ink-muted">
                   Here&apos;s what we pulled from the link. Fill in anything it couldn&apos;t detect before adding.
                 </p>
+                {/* FIRST, and required. What kind of song this is decides which shelf it
+                    sits on, here and on the public site, and it is the one thing the
+                    service cannot tell us. It used to sit last, pre-filled from a title
+                    guess, which is how remixes and live sets were added without anyone
+                    choosing (Sam, 2026-09-10). */}
+                <div>
+                  <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                    Song type <span className="text-accent-red">*</span>
+                  </span>
+                  <div className="flex gap-2">
+                    {STREAMING_TYPES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setStreamingType(t)}
+                        className={buttonClass(streamingType === t ? 'solid' : 'ghost')}
+                      >
+                        {STREAMING_TYPE_LABEL[t]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">Title</span>
                   <input
@@ -603,24 +616,6 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                       className="text-xs text-ink-muted file:mr-2 file:rounded-md file:border file:border-hairline file:bg-paper file:px-2 file:py-1 file:text-ink-muted"
                     />
                   )}
-                </div>
-                {/* Required: the manager confirms the machine's guess (from the title). */}
-                <div>
-                  <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                    Song type
-                  </span>
-                  <div className="flex gap-2">
-                    {STREAMING_TYPES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setStreamingType(t)}
-                        className={buttonClass(streamingType === t ? 'solid' : 'ghost')}
-                      >
-                        {STREAMING_TYPE_LABEL[t]}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}
