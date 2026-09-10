@@ -53,32 +53,40 @@ export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
  *  The editor's vocabulary differs from the entities' on purpose (`photo` is a `media`
  *  row, `tour` a `tour_date`), so this map is the translation — and the reason the two
  *  paths can't be compared by eye. Tables come from PUBLISHABLE, never hand-copied. */
-export type LiveToggleKind = 'photo' | 'track' | 'link' | 'video' | 'tour'
+export type LiveToggleKind = 'photo' | 'link' | 'video' | 'tour' | 'merch'
 export const LIVE_TOGGLE: Record<LiveToggleKind, PublishableEntity> = {
   photo: 'media',
-  track: 'track',
   link: 'link',
   video: 'video',
   tour: 'tour_date',
+  // Merch joined 2026-09-10 (PRESENCE_PLAN S2): "tour dates and merch can just go right
+  // to the site" — a product is always a list entry, so its check IS the site change.
+  merch: 'merch',
 }
 
 /**
- * PUBLISH-RECONCILED types: their on-site set is chosen behind the password gate as a
- * SELECTION, and `reconcileOnSite` makes the live set exactly that selection at publish
- * — anything absent is taken off the site.
+ * DRAFT-PRESENCE types (PRESENCE_PLAN.md S1, ADR 0010): a tick or toggle writes the
+ * working row's `on_site` like a live toggle does — but the public doors read `on_site`
+ * FROM THE SNAPSHOT, so nothing reaches fans until Publish. The editor preview renders
+ * working rows, so the manager sees where the song lands before anyone else does.
  *
- * Only release and merch: the editor cannot pick either yet, so nothing competes with
- * the reconcile. Giving one an editor picker means MOVING it to LIVE_TOGGLE first.
+ * Sam, 2026-09-10: "blindly adding songs to the site seems problematic." An asset can be
+ * used many ways on a site; tour dates and merch are always a list, so those stay live.
+ *
+ * `on_site` therefore rides these types' SNAPSHOT (see PUBLISHABLE), and the
+ * "selection reconciled at publish" machinery that used to serve releases and merch is
+ * gone: nothing reconciles from a selection any more. A type is in exactly one of
+ * DRAFT_PRESENCE / LIVE_TOGGLE (tests/on-site-paths.test.ts).
  */
-export type OnSiteEntity = 'release' | 'merch'
-export const ON_SITE_ENTITIES: readonly OnSiteEntity[] = ['release', 'merch']
+export type DraftPresenceEntity = 'track' | 'release'
+export const DRAFT_PRESENCE: readonly DraftPresenceEntity[] = ['track', 'release']
 
 /** LIVE-TOGGLE types that publish their OWN content from their own page — snapshot
  *  only, NEVER reconciled (presence is already live). `publishEntityAction` takes this,
  *  so a reconcile type (release / merch) is a COMPILE error there and can't silently
  *  skip `reconcileOnSite` (ADR 0009). The other live-toggle types publish elsewhere:
  *  photo(media) via the Site publish, track with releases, link via a section publish. */
-export type LiveTogglePublishable = 'video' | 'tour_date'
+export type LiveTogglePublishable = 'video' | 'tour_date' | 'merch'
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
@@ -201,7 +209,10 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // snapshotted, so a standalone single's date reached the site as null — no NEW badge
     // could light for one, and the date sort put every dated SoundCloud song in the
     // undated tail (2026-08-21).
-    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'release_date', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released'],
+    // `on_site` rides the snapshot (20260910130000): the public doors read presence from
+    // the published copy, so a tick on the Music page is a draft until Publish. Backfilled
+    // into every latest revision by that migration, so nothing reads as dirty on arrival.
+    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'release_date', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released', 'on_site'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {
@@ -276,7 +287,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   release: {
     table: 'releases',
     // source + spotify_id: provenance for the doors' Released/Unreleased check.
-    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order', 'source', 'spotify_id', 'released'],
+    snapshot: ['id', 'title', 'slug', 'cover_url', 'release_date', 'release_type', 'links', 'sort_order', 'source', 'spotify_id', 'released', 'on_site'], // on_site: see track
     orderBy: ['sort_order', 'created_at'],
   },
   media: {
@@ -362,58 +373,6 @@ export async function listContent(
   return (data ?? []) as ContentRow[]
 }
 
-/**
- * Reconcile which of an artist's items (of an on-site-gated type) are live on the
- * public site. `onSiteIds` is the desired on-site set: rows in it are shown
- * (`on_site=true`), all others are hidden. Only rows that actually change are
- * written. RLS scopes every write to the caller's tenant, so this can't touch
- * another artist's rows. Returns how many flipped each way. (The public-facing gate
- * is this `on_site` flag; see get_public_site / get_public_releases / get_release.)
- */
-export async function reconcileOnSite(
-  supabase: SupabaseClient,
-  type: OnSiteEntity,
-  artistId: string,
-  onSiteIds: string[],
-): Promise<{ shown: number; hidden: number }> {
-  const table = PUBLISHABLE[type].table
-  const wanted = new Set(onSiteIds)
-  // Releases have a Released/Unreleased split; only Released ones are exposed by
-  // the on-site UI, so scope reconcile to them. Otherwise an Unreleased release
-  // (never in `onSiteIds`) gets written on_site=false on every publish — a
-  // latent trap once it's later promoted to Released.
-  const scopeToReleased = type === 'release'
-  const cols = scopeToReleased ? 'id, on_site, source, spotify_id, links, released' : 'id, on_site'
-  const { data, error } = await supabase.from(table).select(cols).eq('artist_id', artistId)
-  if (error) throw new Error(error.message)
-  // `cols` is a runtime string, so the typed builder can't infer the row shape.
-  const rows = (data ?? []) as unknown as OnSiteRow[]
-
-  const scoped = scopeToReleased
-    ? rows.filter((r) => releaseBucket(r as unknown as ReleaseProvenance) === 'released')
-    : rows
-
-  const toShow = scoped.filter((r) => !r.on_site && wanted.has(r.id as string)).map((r) => r.id)
-  const toHide = scoped.filter((r) => r.on_site && !wanted.has(r.id as string)).map((r) => r.id)
-
-  if (toShow.length) {
-    const { error: e } = await supabase
-      .from(table)
-      .update({ on_site: true })
-      .in('id', toShow)
-      .eq('artist_id', artistId)
-    if (e) throw new Error(e.message)
-  }
-  if (toHide.length) {
-    const { error: e } = await supabase
-      .from(table)
-      .update({ on_site: false })
-      .in('id', toHide)
-      .eq('artist_id', artistId)
-    if (e) throw new Error(e.message)
-  }
-  return { shown: toShow.length, hidden: toHide.length }
-}
 
 /** New video/merch/tour_date rows land OFF-site (`on_site=false`): the library is
  *  where content ARRIVES, never where it goes live. A synced Bandsintown date or one of

@@ -43,6 +43,8 @@ export type Track = TrackPlatformIds & {
   release_type: ReleaseType
   /** Live on-site state — only surfaced/toggled for orphans (a track with a release follows it). */
   on_site: boolean
+  /** What the PUBLISHED copy says (PRESENCE_PLAN S1); absent = assume it matches. */
+  published_on_site?: boolean
   /** The manual released flag. Read only where it can matter (see canBeUnreleased). */
   released?: boolean | null
 }
@@ -226,14 +228,15 @@ export function TrackCard({
           shelf a release showed a check and the song beside it showed nothing — one fact,
           two faces. Same SelectToggle, same corner, same layering as GridCard: a SIBLING
           of the tile button, never inside it, so the check is not also a click on the card.
-          It flips the song instantly through the existing action (the doors read the live
-          row), so `selected` and `onSite` are always the same value and the mark is
-          simply on or off — never the release cards' "publish to apply" states. A song
-          inside a release shows none: the release's check governs it. */}
+          It writes the song's working row through the existing action — a DRAFT since
+          2026-09-10 (PRESENCE_PLAN S1): the public doors read presence from the snapshot,
+          so `onSite` here is what the PUBLISHED copy says and the mark shows "checked,
+          publish to put on site" until Publish, exactly like a release's. A song inside a
+          release shows none: the release's check governs it. */}
       <div className="relative">
         {isOrphan && (
           <div className="absolute left-2 top-2 z-10">
-            <SelectToggle selected={onSite} onSite={onSite} onToggle={toggleOnSite} label={track.title} />
+            <SelectToggle selected={onSite} onSite={track.published_on_site ?? onSite} onToggle={toggleOnSite} label={track.title} />
           </div>
         )}
       <button type="button" onClick={() => setOpen(true)} className="group block w-full text-left">

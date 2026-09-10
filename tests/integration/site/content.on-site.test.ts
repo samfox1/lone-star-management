@@ -19,7 +19,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent, reconcileOnSite } from '@/lib/content'
+import { createContent, publishContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 let artistA: string
@@ -130,51 +130,5 @@ describe.each(CASES)('on-site gating: $type', (c) => {
  * appear — they are live-toggled, and reconciling one would revert the editor's
  * toggles at the next publish, which is the whole reason for the split.
  */
-describe('reconcileOnSite (publish-reconciled types)', () => {
-  it('touches only rows that change, both directions', async () => {
-    const on = await create(MERCH)
-    const off = await create(MERCH)
-    await reconcileOnSite(asA, 'merch', artistA, [on.id as string]) // seed: `on` is on-site
-
-    // Desired set = keep `on`, add `off` → one flips on, nothing flips off.
-    const res = await reconcileOnSite(asA, 'merch', artistA, [on.id as string, off.id as string])
-    expect(res).toEqual({ shown: 1, hidden: 0 })
-
-    const { data } = await svc.from(MERCH.table).select('id, on_site').eq('artist_id', artistA)
-    const byId = Object.fromEntries((data ?? []).map((r) => [r.id, r.on_site]))
-    expect(byId[on.id as string]).toBe(true)
-    expect(byId[off.id as string]).toBe(true)
-  })
-
-  it('takes off the site anything absent from the selection', async () => {
-    // The behaviour that makes reconcile incompatible with a live toggle: an empty
-    // selection hides everything, including a row someone just switched on elsewhere.
-    const row = await create(MERCH)
-    await reconcileOnSite(asA, 'merch', artistA, [row.id as string])
-
-    const res = await reconcileOnSite(asA, 'merch', artistA, [])
-    expect(res).toEqual({ shown: 0, hidden: 1 })
-
-    const { data } = await svc.from(MERCH.table).select('on_site').eq('id', row.id as string).single()
-    expect(data!.on_site).toBe(false)
-  })
-
-  it("CRITICAL: cannot flip another tenant's rows on-site", async () => {
-    // The one cross-tenant case kept here: it pins the RETURN-VALUE contract as well as
-    // the row (a caller reads {shown, hidden} to report what it published, so an RLS
-    // no-op reported as "1 shown" is a lie the row check alone wouldn't catch). Plain
-    // "A's write to B is a no-op" belongs to rls.isolation.test.ts.
-    const { data: bRow } = await svc
-      .from(MERCH.table)
-      .insert({ artist_id: artistB, ...MERCH.create, on_site: false })
-      .select('id')
-      .single()
-    created.push({ table: MERCH.table, id: bRow!.id as string })
-
-    const res = await reconcileOnSite(asA, 'merch', artistB, [bRow!.id as string])
-    expect(res).toEqual({ shown: 0, hidden: 0 }) // RLS makes A's write a no-op
-
-    const { data } = await svc.from(MERCH.table).select('on_site').eq('id', bRow!.id as string).single()
-    expect(data!.on_site).toBe(false) // untouched
-  })
-})
+// The `reconcileOnSite` block that lived here is gone with the function (PRESENCE_PLAN,
+// 2026-09-10): merch is live-toggled now, and the first describe above IS that contract.

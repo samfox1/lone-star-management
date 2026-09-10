@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
-import { getShopifyDomain, requireArtist } from '../_data'
+import { dashboardDiff, getShopifyDomain, requireArtist } from '../_data'
 import { SyncDialog } from '../sync-dialog'
 import { sourcesForSection } from '../sync-sections'
 import { syncSectionAction } from '../sync-section-action'
@@ -19,16 +19,18 @@ export default async function MerchPage({ params }: { params: Promise<{ id: stri
   // Gate, Shopify domain, product rows, and 30-day counts are all independent — one
   // parallel wave instead of gate → domain → content serially. requireArtist stays
   // cache()d, so the layout's parallel call to it is deduped.
-  const [, shopifyDomain, rows, counts] = await Promise.all([
+  const [, shopifyDomain, rows, counts, diff] = await Promise.all([
     requireArtist(id),
     getShopifyDomain(id),
     listContent(supabase, 'merch', id),
     entityCounts(supabase, id, daysAgo(30)),
+    dashboardDiff(id),
   ])
 
   return (
     <MerchBrowser
       artistId={id}
+      dirty={diff.merch.dirty}
       items={rows.map((row) => ({
         id: row.id as string,
         title: row.title as string,

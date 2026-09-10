@@ -11,7 +11,6 @@
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reconcileOnSite } from '@/lib/content'
 import { SEED, SEED_PASSWORD, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 let artistA: string
@@ -76,50 +75,60 @@ async function seedReleaseB(over: Record<string, unknown> = {}): Promise<string>
   return data!.id as string
 }
 
-describe('reconcileOnSite', () => {
-  it('shows the selected releases and hides the rest, touching only what changes', async () => {
-    const live = await seedRelease({ slug: 'live', on_site: true }) // already on
-    const off = await seedRelease({ slug: 'off', on_site: false }) // to turn on
-    const drop = await seedRelease({ slug: 'drop', on_site: true }) // to turn off
+/**
+ * THE TICK IS A DRAFT WRITE THAT CASCADES (PRESENCE_PLAN S1). `setReleaseOnSiteAction`
+ * replaces publish-time reconcile: it writes the release's on_site and every song in it,
+ * at once, on the WORKING rows. Nothing here reaches a door — that is the snapshot's job,
+ * pinned in music-doors.test.ts.
+ */
+describe('setReleaseOnSiteAction — the tick is a draft write that cascades', () => {
+  const setOn = async (releaseId: string, on: boolean, artist = artistA) => {
+    const { setReleaseOnSiteAction } = await import('@/app/artists/[id]/(dashboard)/actions')
+    return setReleaseOnSiteAction(releaseId, artist, on)
+  }
+  const createdTracks: string[] = []
+  afterEach(async () => {
+    if (createdTracks.length) {
+      await svc.from('tracks').delete().in('id', createdTracks)
+      createdTracks.length = 0
+    }
+  })
+  async function seedTrack(releaseId: string, on: boolean): Promise<string> {
+    const { data, error } = await svc
+      .from('tracks')
+      .insert({ artist_id: artistA, title: 'T', release_id: releaseId, on_site: on })
+      .select('id')
+      .single()
+    if (error) throw new Error(error.message)
+    createdTracks.push(data!.id as string)
+    return data!.id as string
+  }
 
-    // Desired on-site set: keep `live`, add `off`, drop `drop`.
-    const res = await reconcileOnSite(asA, 'release', artistA, [live, off])
-    expect(res).toEqual({ shown: 1, hidden: 1 })
-
-    const { data } = await svc.from('releases').select('id, on_site').eq('artist_id', artistA)
-    const byId = Object.fromEntries((data ?? []).map((r) => [r.id, r.on_site]))
-    expect(byId[live]).toBe(true)
-    expect(byId[off]).toBe(true)
-    expect(byId[drop]).toBe(false)
+  it('CRITICAL: turning a release on turns its songs on too — a song follows its home release', async () => {
+    const rel = await seedRelease({ slug: 'cascade-on', on_site: false })
+    const song = await seedTrack(rel, false)
+    expect(await setOn(rel, true)).toEqual({})
+    const { data: r } = await svc.from('releases').select('on_site').eq('id', rel).single()
+    const { data: t } = await svc.from('tracks').select('on_site').eq('id', song).single()
+    expect(r!.on_site).toBe(true)
+    expect(t!.on_site, 'the song did not follow its release').toBe(true)
   })
 
-  it('is a no-op when the selection already matches what is live', async () => {
-    const a = await seedRelease({ slug: 'a', on_site: true })
-    await seedRelease({ slug: 'b', on_site: false })
-    const res = await reconcileOnSite(asA, 'release', artistA, [a])
-    expect(res).toEqual({ shown: 0, hidden: 0 })
+  it('CRITICAL: turning it off cascades off', async () => {
+    const rel = await seedRelease({ slug: 'cascade-off', on_site: true })
+    const song = await seedTrack(rel, true)
+    await setOn(rel, false)
+    const { data: t } = await svc.from('tracks').select('on_site').eq('id', song).single()
+    expect(t!.on_site).toBe(false)
   })
 
-  it('never touches an Unreleased release (dashboard-only; not in the on-site selection)', async () => {
-    // A Released release that IS on-site but not in the selection would be hidden;
-    // an Unreleased one (manual, no platform presence) must be left alone so it
-    // isn't written on_site=false — a latent trap once promoted. (#11)
-    const unreleased = await seedRelease({ slug: 'unrel', on_site: true, released: false })
-    const res = await reconcileOnSite(asA, 'release', artistA, []) // select nothing
-    expect(res).toEqual({ shown: 0, hidden: 0 })
-    const { data } = await svc.from('releases').select('on_site').eq('id', unreleased).single()
-    expect(data!.on_site).toBe(true) // untouched
-  })
-
-  it("CRITICAL: cannot flip another tenant's releases on-site", async () => {
+  it("CRITICAL: cannot flip another tenant's release — RLS makes it a no-op, and the row proves it", async () => {
     const bRel = await seedReleaseB({ slug: 'b-secret', on_site: false })
-
-    // Manager A tries to publish B's release by id — RLS makes it a no-op.
-    const res = await reconcileOnSite(asA, 'release', artistB, [bRel])
-    expect(res).toEqual({ shown: 0, hidden: 0 })
-
+    await setOn(bRel, true, artistB)
+    // Row STATE, never the return value: a row-filtered UPDATE returns no error and
+    // touches nothing (AGENTS.md rule 3).
     const { data } = await svc.from('releases').select('on_site').eq('id', bRel).single()
-    expect(data!.on_site).toBe(false) // untouched
+    expect(data!.on_site).toBe(false)
   })
 })
 
@@ -133,18 +142,11 @@ describe('reconcileOnSite', () => {
  * from the password and not from a broken publish.
  */
 describe('publish password gate', () => {
-  const publish = async (onSiteIds: string[], password: string) => {
-    const { publishReleasesAction } = await import('@/app/artists/[id]/(dashboard)/actions')
-    return publishReleasesAction(artistA, onSiteIds, password)
+  const publish = async (password: string) => {
+    const { publishMusicAction } = await import('@/app/artists/[id]/(dashboard)/actions')
+    return publishMusicAction(artistA, password)
   }
 
-  /** The releases already live for A. The publish under test only ADDS to that set:
-   *  reconcile takes everything absent from the selection off the site, and this runs
-   *  against the shared live project. */
-  async function liveSelection(): Promise<string[]> {
-    const { data } = await svc.from('releases').select('id').eq('artist_id', artistA).eq('on_site', true)
-    return (data ?? []).map((r) => r.id as string)
-  }
 
   const revisionCount = async (entityId: string) => {
     const { count } = await svc
@@ -157,7 +159,7 @@ describe('publish password gate', () => {
   it('CRITICAL: a wrong password publishes nothing', async () => {
     const rel = await seedRelease({ slug: 'gate-bad', on_site: false })
 
-    const res = await publish([...(await liveSelection()), rel], 'not-the-password')
+    const res = await publish('not-the-password')
     expect(res).toEqual({ ok: false, error: 'Incorrect password.' })
 
     // The flag and the snapshot are the load-bearing assertions: a gate that ran AFTER
@@ -171,11 +173,15 @@ describe('publish password gate', () => {
     const rel = await seedRelease({ slug: 'gate-ok', on_site: false })
 
     trackRevisionFloor = new Date().toISOString()
-    const res = await publish([...(await liveSelection()), rel], SEED_PASSWORD)
+    const res = await publish(SEED_PASSWORD)
     expect(res).toEqual({ ok: true })
 
+    // Publish no longer changes presence — it SNAPSHOTS it. The row stays what the
+    // manager set (off), and the revision carries that same value for the door to read.
     const { data } = await svc.from('releases').select('on_site').eq('id', rel).single()
-    expect(data!.on_site).toBe(true)
+    expect(data!.on_site).toBe(false)
     expect(await revisionCount(rel)).toBe(1)
+    const { data: rev } = await svc.from('revisions').select('data').eq('entity_id', rel).single()
+    expect((rev!.data as { on_site?: boolean }).on_site, 'the snapshot does not carry on_site').toBe(false)
   })
 })

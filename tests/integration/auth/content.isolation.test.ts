@@ -15,7 +15,6 @@ import {
   createContent,
   deleteContent,
   publishAll,
-  reconcileOnSite,
   updateContent,
 } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
@@ -148,10 +147,10 @@ describe('publishAll', () => {
 
     // tour_date + merch land off-site on create (on_site=false); put them on the site
     // so they reach the public door. (track + link have no visibility gate.) The two
-    // use different write paths — tour_date is live-toggled, merch is publish-
-    // reconciled (ADR 0009) — and both are RLS-scoped to A either way.
+    // are both live-toggled now (merch joined tour on 2026-09-10, PRESENCE_PLAN S2), and
+    // both writes are RLS-scoped to A.
     await asA.from('tour_dates').update({ on_site: true }).eq('id', created[1].id).eq('artist_id', artistA)
-    await reconcileOnSite(asA, 'merch', artistA, [created[2].id])
+    await asA.from('merch').update({ on_site: true }).eq('id', created[2].id).eq('artist_id', artistA)
 
     const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
     const blob = JSON.stringify(data)

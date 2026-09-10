@@ -12,8 +12,9 @@ import { PublishBar } from '../publish-bar'
 import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, type SiteFilter } from '../on-site-filter'
 import { OriginSection, groupByOrigin } from '../origin'
-import { useOnSiteSelection } from '../use-on-site-selection'
-import { publishReleasesAction } from '../actions'
+import { useOnSiteFlag } from '../use-on-site-flag'
+import { toast } from '../toast'
+import { publishMusicAction, setReleaseOnSiteAction } from '../actions'
 import { ReleaseCard, type Release } from '../releases/release-card'
 import { TrackCard, type Track, type ReleaseOption } from '../tracks/track-card'
 import { SongAddButton } from './song-add'
@@ -166,8 +167,8 @@ const compareBy = compareLibrary
  * Unreleased (platform pulls only ever produce Released music). Unreleased
  * items are never public, so the site filter treats them as off-site; every
  * other card — releases AND orphan singles — is filtered by its own `on_site`.
- * The password-gated publish pill covers on-site selection changes AND content
- * edits (`dirty`).
+ * A tick writes the working row at once (a DRAFT — PRESENCE_PLAN S1); the
+ * password-gated publish pill commits it along with content edits (`dirty`).
  */
 export function MusicBrowser({
   releases,
@@ -217,10 +218,13 @@ export function MusicBrowser({
     typeFilter === 'all' ? xs : xs.filter((x) => x.release_type === typeFilter)
   const [site, setSite] = useState<SiteFilter>('all')
   const [sort, setSort] = useState<Sort>('newest')
-  const { selected, toggle: toggleSelect, pendingCount } = useOnSiteSelection(releases)
+  // A tick is a DRAFT WRITE, at once (PRESENCE_PLAN S1): the release's on_site and its
+  // songs' change now, the editor preview shows it, fans see it on Publish. No selection
+  // to reconcile, so no pending count — the PublishBar lights on `dirty` like Tour's.
+  const flag = useOnSiteFlag(releases, (id, on) => setReleaseOnSiteAction(id, artistId, on), (m) => toast(m, 'error'))
 
   async function publish(password: string): Promise<{ ok: boolean; error?: string }> {
-    const res = await publishReleasesAction(artistId, [...selected], password)
+    const res = await publishMusicAction(artistId, password)
     if (res.ok) router.refresh()
     return res
   }
@@ -298,8 +302,8 @@ export function MusicBrowser({
                     release={e.item}
                     artistId={artistId}
                     artistSlug={artistSlug}
-                    selected={selected.has(e.item.id)}
-                    onToggleSelect={() => toggleSelect(e.item.id)}
+                    selected={flag.onSite(e.item.id)}
+                    onToggleSelect={() => flag.toggle(e.item.id)}
                     // The FULL catalog, not targetsFor: the card filters per tracklist row
                     // (each row excludes only itself, and a row's twin can be anywhere).
                     mergeTargets={mergeTargets}
@@ -420,7 +424,7 @@ export function MusicBrowser({
         </div>
       )}
 
-      <PublishBar pendingCount={pendingCount} dirty={dirty} onPublish={publish} />
+      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} />
     </div>
   )
 }

@@ -34,7 +34,9 @@ let trackRows: Row[] = []
 let counts: EntityCounts = new Map()
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
-vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({})) }))
+// `rpc` answers the page's latest_revisions read (PRESENCE_PLAN S1: what the PUBLISHED
+// copy says about presence) with nothing published — every fixture reads as not-yet-live.
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc: async () => ({ data: [], error: null }) })) }))
 
 // _data calls unstable_cache at module scope, so it is replaced outright.
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({

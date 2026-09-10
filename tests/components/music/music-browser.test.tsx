@@ -10,13 +10,14 @@
  * items count as off-site for the site lens; heavy cards are stubbed.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
 import { MusicBrowser, LOOSE, type MusicSong, type UnreleasedSong } from '@/app/artists/[id]/(dashboard)/music/music-browser'
 import type { Release } from '@/app/artists/[id]/(dashboard)/releases/release-card'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
-  publishReleasesAction: vi.fn(async () => ({ ok: true })),
+  publishMusicAction: vi.fn(async () => ({ ok: true })),
+  setReleaseOnSiteAction: vi.fn(async () => ({})),
   addContentAction: vi.fn(async () => ({})),
   addReleaseAction: vi.fn(async () => undefined),
 }))
@@ -25,7 +26,13 @@ vi.mock('@/app/artists/[id]/(dashboard)/tracks/track-card', () => ({
   TrackCard: ({ track }: { track: { title: string } }) => <li data-testid="song">{track.title}</li>,
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/releases/release-card', () => ({
-  ReleaseCard: ({ release }: { release: { title: string } }) => <div data-testid="release">{release.title}</div>,
+  // The stub exposes the tick, so the tick's wiring — not the card's — is what a test hits.
+  ReleaseCard: ({ release, onToggleSelect }: { release: { title: string }; onToggleSelect?: () => void }) => (
+    <div data-testid="release">
+      {release.title}
+      <button type="button" aria-label={`Tick ${release.title}`} onClick={onToggleSelect} />
+    </div>
+  ),
 }))
 
 afterEach(cleanup)
@@ -399,5 +406,19 @@ describe('the type filter', () => {
     const bucket = screen.getByRole('group', { name: /release state/i })
     const type = screen.getByRole('button', { name: /All types/ })
     expect(bucket.compareDocumentPosition(type) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
+/* ── the tick is a draft write, at once (PRESENCE_PLAN S1, 2026-09-10) ──────────────── */
+import { setReleaseOnSiteAction } from '@/app/artists/[id]/(dashboard)/actions'
+
+describe('the on-site tick on a release', () => {
+  it('CRITICAL: ticking writes the working row immediately, no Publish involved', async () => {
+    // It used to accumulate into a selection that a password-gated publish reconciled —
+    // and silently reverted the editor's toggle. Now the tick IS the write; Publish only
+    // snapshots. 'Public Single' is on-site in the fixture, so a tick turns it OFF.
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Tick Public Single' }))
+    await waitFor(() => expect(setReleaseOnSiteAction).toHaveBeenCalledWith('r1', 'a1', false))
   })
 })

@@ -9,8 +9,8 @@ import { PublishBar } from '../publish-bar'
 import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
 import { OriginSection, groupByOrigin } from '../origin'
-import { useOnSiteSelection } from '../use-on-site-selection'
-import { publishSelectionAction } from '../actions'
+import { useLiveOnSite } from '../use-live-on-site'
+import { publishEntityAction } from '../actions'
 import { MerchCard, type MerchItem } from './merch-card'
 
 type Sort = 'added' | 'az' | 'price'
@@ -39,15 +39,20 @@ export function MerchBrowser({
   items,
   artistId,
   trailing,
+  dirty = false,
 }: {
   items: MerchItem[]
   artistId: string
   trailing?: ReactNode
+  /** Unpublished content edits — presence is live, so this is what the pill is for. */
+  dirty?: boolean
 }) {
   const router = useRouter()
   const [site, setSite] = useState<SiteFilter>('all')
   const [sort, setSort] = useState<Sort>('added')
-  const { selected, toggle, pendingCount } = useOnSiteSelection(items)
+  // LIVE (PRESENCE_PLAN S2, Sam 2026-09-10: "tour dates and merch can just go right to
+  // the site"): the check writes on_site now and the public door reads the live row.
+  const { onSite, toggle } = useLiveOnSite(items, 'merch', artistId)
 
   let shown = filterBySite(items, site)
   if (sort === 'az') shown = [...shown].sort((a, b) => a.title.localeCompare(b.title))
@@ -56,7 +61,7 @@ export function MerchBrowser({
   const groups = groupByOrigin(shown, (i) => i.source ?? 'manual', ORIGIN_ORDER, sourceLabel)
 
   async function publish(password: string) {
-    const res = await publishSelectionAction('merch', artistId, [...selected], password)
+    const res = await publishEntityAction('merch', artistId, password)
     if (res.ok) router.refresh()
     return res
   }
@@ -101,7 +106,7 @@ export function MerchBrowser({
                     key={i.id}
                     item={i}
                     artistId={artistId}
-                    selected={selected.has(i.id)}
+                    selected={onSite(i.id)}
                     onToggleSelect={() => toggle(i.id)}
                   />
                 ))}
@@ -111,7 +116,7 @@ export function MerchBrowser({
         </div>
       )}
 
-      <PublishBar pendingCount={pendingCount} onPublish={publish} noun="merch" />
+      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="merch" />
     </div>
   )
 }

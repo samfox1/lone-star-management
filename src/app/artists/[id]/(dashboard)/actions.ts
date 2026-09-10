@@ -36,11 +36,9 @@ import {
   publishAll,
   publishContent,
   publishProfile,
-  reconcileOnSite,
-  restoreToPublished,
+    restoreToPublished,
   listPublishMoments,
   type PublishMoment,
-  type OnSiteEntity,
   setSupportUrl,
   updateContent,
 } from '@/lib/content'
@@ -1100,91 +1098,57 @@ async function verifyPasswordGate(
 }
 
 /**
- * Publish the artist's releases to their public site — PASSWORD-GATED. `onSiteIds`
- * is the full set of releases that should be live; every other release is taken
- * off the site. Flow: verify the password, reconcile each release's `on_site` flag
- * to the selection (RLS-scoped), then snapshot release + track content so
- * newly-live releases and their tracklists render on the site. (Tracks piggyback on
- * the release publish — they belong to a release — so this stays release-specific.)
- * Returns an error string instead of throwing, so the client shows it inline.
+ * PUBLISH MUSIC (PRESENCE_PLAN.md S1). Password-gated. Snapshots releases and songs —
+ * including their `on_site`, which is what makes a tick on the Music page reach fans.
+ *
+ * What it no longer does: reconcile presence from a selection. That used to be here as
+ * "Option A: a song follows its home release", applied at publish time from the page's
+ * checkbox state — and it silently reverted whatever the editor's Music toggle had set
+ * since. Now the tick itself writes the working row (`setReleaseOnSiteAction` cascades
+ * to the release's songs at tick time), both surfaces edit the same draft, and Publish
+ * only commits it.
  */
-export async function publishReleasesAction(
+export async function publishMusicAction(
   artistId: string,
-  onSiteIds: string[],
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const gate = await verifyPasswordGate(supabase, password)
   if ('error' in gate) return { ok: false, error: gate.error }
-
   try {
-    await reconcileOnSite(supabase, 'release', artistId, onSiteIds)
-    // Option A: a song's on-site state follows its HOME release. Putting a release on the
-    // site turns its tracks on; taking it off turns them off. This is how a freshly-synced
-    // song (inserted off-site) becomes public. Orphan tracks (no release_id) are left alone —
-    // they carry their own on_site (e.g. a SoundCloud single).
-    const { data: allRels, error: relErr } = await supabase
-      .from('releases')
-      .select('id')
-      .eq('artist_id', artistId)
-    if (relErr) throw new Error(relErr.message)
-    const onSet = new Set(onSiteIds)
-    const offIds = (allRels ?? []).map((r) => r.id as string).filter((id) => !onSet.has(id))
-    if (onSiteIds.length) {
-      const { error } = await supabase
-        .from('tracks')
-        .update({ on_site: true })
-        .eq('artist_id', artistId)
-        .in('release_id', onSiteIds)
-      if (error) throw new Error(error.message)
-    }
-    if (offIds.length) {
-      const { error } = await supabase
-        .from('tracks')
-        .update({ on_site: false })
-        .eq('artist_id', artistId)
-        .in('release_id', offIds)
-      if (error) throw new Error(error.message)
-    }
     await publishContent(supabase, 'release', artistId, gate.userId)
     await publishContent(supabase, 'track', artistId, gate.userId)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
   }
-
   revalidatePath(`/artists/${artistId}`, 'layout')
   return { ok: true }
 }
 
 /**
- * Publish a PUBLISH-RECONCILED type (merch; releases have their own action) to the
- * public site — PASSWORD-GATED: verify the password, reconcile `on_site` to the
- * selection, snapshot the type's content. `onSiteIds` is the desired on-site set;
- * everything else is taken off the site.
- *
- * Only for types in ON_SITE_ENTITIES. A LIVE-TOGGLE type must use
- * publishEntityAction instead — reconciling one would revert its toggles (ADR 0009).
+ * The Music page's tick on a RELEASE: a draft write. Sets the release's `on_site` and
+ * cascades to every song in it ("a song follows its home release" — the rule that used to
+ * run at publish time). Fans see nothing until `publishMusicAction`; the editor preview
+ * sees it at once. Scoped to the artist, so RLS row-filters a foreign id to a no-op.
  */
-export async function publishSelectionAction(
-  type: OnSiteEntity,
+export async function setReleaseOnSiteAction(
+  releaseId: string,
   artistId: string,
-  onSiteIds: string[],
-  password: string,
-): Promise<{ ok: boolean; error?: string }> {
+  onSite: boolean,
+): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const gate = await verifyPasswordGate(supabase, password)
-  if ('error' in gate) return { ok: false, error: gate.error }
-
-  try {
-    await reconcileOnSite(supabase, type, artistId, onSiteIds)
-    await publishContent(supabase, type, artistId, gate.userId)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-
+  const { error } = await supabase.from('releases').update({ on_site: onSite }).eq('id', releaseId).eq('artist_id', artistId)
+  if (error) return { error: error.message }
+  const { error: trackErr } = await supabase
+    .from('tracks')
+    .update({ on_site: onSite })
+    .eq('artist_id', artistId)
+    .eq('release_id', releaseId)
+  if (trackErr) return { error: trackErr.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return {}
 }
+
 
 /**
  * Publish one content type to the public site — PASSWORD-GATED, snapshot only.

@@ -28,16 +28,28 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   // requireArtist folded INTO the wave (not a serial gate before it): it's cache()d and
   // RLS-scoped, so it still gates ownership — a non-owner's notFound() rejects the whole
   // Promise.all and 404s before anything renders.
-  const [artist, releaseRows, trackRows, counts, diff] = await Promise.all([
+  const [artist, releaseRows, trackRows, counts, diff, latest] = await Promise.all([
     requireArtist(id),
     listContent(supabase, 'release', id),
     listContent(supabase, 'track', id),
     entityCounts(supabase, id, daysAgo(30)),
     dashboardDiff(id),
+    // What the PUBLISHED copy says about presence (PRESENCE_PLAN S1), so a tile can show
+    // "checked, publish to put on site" while the working row and the snapshot disagree.
+    supabase.rpc('latest_revisions', { p_artist_id: id }),
   ])
   // Unpublished music edits (renames, links…) enable the publish pill even when
   // the on-site selection hasn't changed, so an edit can't strand as a draft.
   const musicDirty = diff.release.dirty || diff.track.dirty
+  const publishedOnSite = new Map<string, boolean>()
+  for (const r of (latest.data ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[]) {
+    if ((r.entity_type === 'release' || r.entity_type === 'track') && r.entity_id && r.data._deleted !== true) {
+      publishedOnSite.set(`${r.entity_type}:${r.entity_id}`, (r.data.on_site as boolean | null) ?? true)
+    }
+  }
+  // Never published = not on the site, whatever the working row says.
+  const pubRelease = (id: string) => publishedOnSite.get(`release:${id}`) ?? false
+  const pubTrack = (id: string) => publishedOnSite.get(`track:${id}`) ?? false
 
   // Classify every release once; tracks inherit through their release_id.
   const relBucket = new Map<string, MusicBucket>(
@@ -63,6 +75,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       release_id: (row.release_id as string | null) ?? null,
       parent_release_id: (row.parent_release_id as string | null) ?? null,
       on_site: (row.on_site as boolean | null) ?? false,
+      published_on_site: pubTrack(row.id as string),
       spotify_id: (row.spotify_id as string | null) ?? null,
       apple_id: (row.apple_id as string | null) ?? null,
       deezer_id: (row.deezer_id as string | null) ?? null,
@@ -141,6 +154,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       release_type: toReleaseType(row.release_type as string | null),
       links: (row.links as ReleaseLink[]) ?? [],
       on_site: (row.on_site as boolean | null) ?? true,
+      published_on_site: pubRelease(rid),
       songs,
       stat,
     }

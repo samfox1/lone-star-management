@@ -221,31 +221,44 @@ describe('get_public_releases — still Released-gated', () => {
  * from the revision would leave a "hidden" release publicly reachable until the manager
  * happened to publish again.
  */
-describe('on_site toggled AFTER publish — the doors read the LIVE row', () => {
-  it('CRITICAL: flipping on_site off darkens all four doors with no republish, and back on restores them', async () => {
-    const setOnSite = async (on: boolean) => {
-      await svc.from('releases').update({ on_site: on }).eq('id', id.togRelease)
-      await svc.from('tracks').update({ on_site: on }).eq('id', id.togTrack)
-    }
+describe('on_site toggled AFTER publish — the doors read the SNAPSHOT (PRESENCE_PLAN S1)', () => {
+  // The old version of this suite proved the opposite: a live-row flip darkened all four
+  // doors with no republish. Sam, 2026-09-10: "blindly adding songs to the site seems
+  // problematic" — so presence is a DRAFT until Publish, and the doors read `on_site`
+  // from the published copy. The live row is only a fallback for a revision older than
+  // the 20260910130000 backfill; every fixture here is published fresh, so it never
+  // applies.
+  const setLive = async (on: boolean) => {
+    await svc.from('releases').update({ on_site: on }).eq('id', id.togRelease)
+    await svc.from('tracks').update({ on_site: on }).eq('id', id.togTrack)
+  }
+  const republish = async () => {
+    await publishContent(svc, 'release', artistA)
+    await publishContent(svc, 'track', artistA)
+  }
+  const visible = async () => ({
+    page: (await releasePage('toggle-album'))?.title ?? null,
+    list: (await publicReleases()).map((r) => r.title).includes('Toggle Album'),
+    tracks: (await publicSiteTracks()).map((t) => t.title).includes('Toggle Cut'),
+    audio: await audioPath(id.togTrack),
+  })
 
-    // Published on-site: all four doors serve it.
-    expect((await releasePage('toggle-album'))?.title).toBe('Toggle Album')
-    expect((await publicReleases()).map((r) => r.title)).toContain('Toggle Album')
-    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Toggle Cut')
-    expect(await audioPath(id.togTrack)).toBe(`${artistA}/toggle.mp3`)
+  it('CRITICAL: flipping the LIVE row off changes NOTHING at any door until Publish', async () => {
+    expect(await visible()).toEqual({ page: 'Toggle Album', list: true, tracks: true, audio: `${artistA}/toggle.mp3` })
+    await setLive(false)
+    // Still there. This is the assertion that distinguishes the new model from the old:
+    // under the old one every field below went dark here.
+    expect(await visible()).toEqual({ page: 'Toggle Album', list: true, tracks: true, audio: `${artistA}/toggle.mp3` })
+  })
 
-    // Off-site, NO republish.
-    await setOnSite(false)
-    expect(await releasePage('toggle-album')).toBeNull()
-    expect((await publicReleases()).map((r) => r.title)).not.toContain('Toggle Album')
-    expect((await publicSiteTracks()).map((t) => t.title)).not.toContain('Toggle Cut')
-    expect(await audioPath(id.togTrack)).toBeNull()
-
-    // Back on-site, still no republish — the old snapshot is served again.
-    await setOnSite(true)
-    expect((await releasePage('toggle-album'))?.title).toBe('Toggle Album')
-    expect((await publicReleases()).map((r) => r.title)).toContain('Toggle Album')
-    expect((await publicSiteTracks()).map((t) => t.title)).toContain('Toggle Cut')
-    expect(await audioPath(id.togTrack)).toBe(`${artistA}/toggle.mp3`)
+  it('CRITICAL: Publish carries the flip to every door, and Publish carries it back', async () => {
+    await setLive(false)
+    await republish()
+    expect(await visible()).toEqual({ page: null, list: false, tracks: false, audio: null })
+    await setLive(true)
+    // Not yet — the draft says on, the snapshot still says off.
+    expect(await visible()).toEqual({ page: null, list: false, tracks: false, audio: null })
+    await republish()
+    expect(await visible()).toEqual({ page: 'Toggle Album', list: true, tracks: true, audio: `${artistA}/toggle.mp3` })
   })
 })
