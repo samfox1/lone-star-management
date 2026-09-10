@@ -12,10 +12,10 @@ import { toast } from './toast'
  * gives these types — both write the same flag with the same meaning, so the two
  * surfaces agree instead of racing.
  *
- * Contrast `useOnSiteSelection`, which is for the PUBLISH-RECONCILED types (release /
- * merch): there the checkbox is a wish, and nothing happens until a password-gated
- * publish reconciles the whole set. Here the checkbox IS the state. Never point this
- * at a type in `ON_SITE_ENTITIES` — the next publish would revert every toggle.
+ * Contrast `useOnSiteFlag` with `setReleaseOnSiteAction`, which the Music page uses for
+ * the DRAFT-PRESENCE types (release / track): same optimistic bookkeeping, but the door
+ * reads the snapshot there, so the write is a draft until Publish (ADR 0010). Here the
+ * checkbox IS the site. Never point this at a DRAFT_PRESENCE type.
  *
  * Optimistic, reverting just the one row on failure (same shape as the editor's
  * togglePhotoOnSite). Re-seeds when the server's live set changes, by adjusting state

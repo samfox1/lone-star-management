@@ -67,6 +67,11 @@ publish" machinery — go away: nothing reconciles from a selection any more.
 
 **S4 — prove it.** Full suite, `mutation:changed`, and a browser pass of each page.
 
+## Status (2026-09-10)
+S1 shipped c212ee3 + 71b2ef3 (migrations 20260910130000/140000/150000 applied). S2 + S3
+shipped 511a4ac (20260910160000 applied). ADR 0010 records the decision. S4: full suite,
+`mutation:changed`, browser pass — see the commits that follow.
+
 ## Not in scope
 Videos, photos and links keep today's behaviour (live toggle, content published
 separately). If Sam wants them on AUTO_PUBLISH too it is the S2/S3 shape again.

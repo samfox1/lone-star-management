@@ -209,7 +209,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     country: (r.country as string | null) ?? null,
     ticketUrl: (r.ticket_url as string | null) ?? null,
     support: (r.support as string[] | null) ?? [],
-    // New/synced dates land off-site (INSERT_OFF_SITE) and are chosen here.
+    // SYNCED dates land off-site (the syncs' insertDefaults) and are chosen here; a
+    // hand-added one is on the site from the moment it is added (PRESENCE_PLAN S3).
     onSite: (r.on_site as boolean | null) ?? false,
   }))
 
@@ -233,8 +234,9 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     price: r.price == null ? '' : String(r.price),
     url: (r.url as string | null) ?? '',
     image_url: (r.image_url as string | null) ?? null,
-    // Like videos: a new/imported product lands off-site (INSERT_OFF_SITE) and is
-    // chosen + published on the Merch page.
+    // An IMPORTED product lands off-site (the Shopify sync's insertDefaults) and is
+    // switched on from the Merch page; a hand-added one is on the site the moment it is
+    // added (PRESENCE_PLAN S2). Either way presence is live — no Publish step for merch.
     onSite: (r.on_site as boolean | null) ?? false,
     inStock: (r.in_stock as boolean | null) ?? true,
     // A Shopify row's fields are Shopify's: the sync overwrites them and the site prices
