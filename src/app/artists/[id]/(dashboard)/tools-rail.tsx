@@ -15,7 +15,18 @@ import { TOOLS, toolFor } from './tools-registry'
 
 export { TOOLS, toolFor }
 
-// 71px = the dashboard header's rendered height (assets-rail.tsx says the same).
+// FULL HEIGHT FROM THE TOP, UNDER THE HEADER (Sam, 2026-09-10). The rail used to start at
+// top:71px — the header's height — so its border-right met the header's border-bottom.
+// That held while scrolling, and broke the moment a Mac trackpad rubber-banded past the
+// top: the STICKY header rides the bounce with the page, the FIXED rail does not, and
+// the line came away from the bar by however far the page was pulled. Headless Chromium
+// never bounces, which is why it could not be reproduced there.
+//
+// So the rail now runs the whole viewport, z-10, and the header (z-30, bg-paper) simply
+// covers its top 71px. The line is continuous behind the bar at every scroll offset and
+// through the bounce, and there is no longer a number here that has to match the
+// header's height. The icon group centres on 50vh of the VIEWPORT, which is where it
+// already sat (assets-rail.tsx does the same).
 /**
  * The manager tools as a 76px icon rail — the ASSETS rail, one to one (Sam,
  * 2026-08-28: "mimic the side panel used on the assets page"). Icons stacked and
@@ -27,9 +38,9 @@ export function ToolsRail({ artistId, active }: { artistId: string; active: stri
     <div className="hidden w-[76px] flex-none md:block">
       <nav
         aria-label="Manager tools"
-        className="fixed left-0 top-[71px] flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper"
+        className="fixed left-0 top-0 z-10 flex h-screen w-[76px] flex-col border-r border-hairline bg-paper"
       >
-        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-1 px-1.5">
+        <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-1.5">
           {TOOLS.map((t) => {
             const on = t.seg === active
             return (

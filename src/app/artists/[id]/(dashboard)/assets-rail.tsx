@@ -15,7 +15,9 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
   { key: 'videos', label: 'Videos', seg: 'videos', icon: 'videos' },
 ]
 
-// The 71px in the classes below = the dashboard header's rendered height
+// Full viewport height from the top, under the sticky header — tools-rail.tsx explains
+// the rubber-band bug this fixes (Sam, 2026-09-10). No header-height number to keep in
+// sync any more.
 // (py-3.5 + the 42px nav row + border). Keep in sync with layout.tsx.
 
 /**
@@ -34,9 +36,9 @@ export function AssetsRail({ artistId, active }: { artistId: string; active: Ass
     <div className="hidden w-[76px] flex-none md:block">
       <nav
         aria-label="Asset types"
-        className="fixed left-0 top-[71px] flex h-[calc(100vh-71px)] w-[76px] flex-col border-r border-hairline bg-paper"
+        className="fixed left-0 top-0 z-10 flex h-screen w-[76px] flex-col border-r border-hairline bg-paper"
       >
-        <div className="mt-[calc(50vh-71px)] flex -translate-y-1/2 flex-col gap-1 px-2">
+        <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-2">
           {ITEMS.map((it) => (
             <Link
               key={it.key}
