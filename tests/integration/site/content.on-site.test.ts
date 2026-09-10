@@ -23,7 +23,6 @@ import { createContent, publishContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 let artistA: string
-let artistB: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
@@ -43,11 +42,9 @@ const CASES: Case[] = [
   { type: 'tour_date', table: 'tour_dates', siteKey: 'tour_dates', create: { date: '2026-10-10', venue: 'VIS venue', city: 'Austin' }, marker: 'VIS venue' },
 ]
 
-const MERCH = CASES.find((c) => c.type === 'merch')!
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
 })
 

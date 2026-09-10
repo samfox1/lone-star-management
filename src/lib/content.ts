@@ -9,19 +9,9 @@
  * entity. entity_type is the SINGULAR form the schema CHECK constraint expects.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { releaseBucket, type ReleaseProvenance } from '@/lib/music'
 import { safeHref } from '@/lib/url'
 
 /** The columns reconcileOnSite reads (superset: provenance only for releases). */
-type OnSiteRow = {
-  id: string
-  on_site: boolean | null
-  source?: string | null
-  spotify_id?: string | null
-  links?: unknown
-  released?: boolean | null
-}
-
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
 
