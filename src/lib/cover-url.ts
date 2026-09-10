@@ -23,7 +23,7 @@
  *
  * Tiles only. The modal's large image and the public site keep the full asset.
  */
-import { mediaThumbUrl } from './storage-url'
+import { MEDIA_OBJECT_PATH, mediaRenderPath } from './storage-url'
 
 const SPOTIFY_ID = /\/image\/ab67616d0000(b273|1e02|4851)([0-9a-f]{24})$/i
 const SOUNDCLOUD_SIZE = /-t(500x500|300x300|200x200)(\.[a-z]+)$/i
@@ -46,21 +46,29 @@ export function coverThumbUrl(url: string | null | undefined, size: number): str
     return url.replace(SOUNDCLOUD_SIZE, `-t${want}$2`)
   }
 
-  // Our own bucket: the render endpoint, at a bounding box a little above the draw size so
-  // a retina tile stays crisp. mediaThumbUrl owns the endpoint and the quality.
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const prefix = base ? `${base}/storage/v1/object/public/media/` : null
-  if (prefix && url.startsWith(prefix)) {
-    return mediaThumbUrl(url.slice(prefix.length), { size: Math.min(640, Math.ceil(size * 2)) })
+  // Our own bucket, recognised by PATH SHAPE on whatever origin it sits on — not by
+  // comparing against NEXT_PUBLIC_SUPABASE_URL. The first version did that and passed
+  // everywhere except CI's mutation job, which runs the DB-free slice with no env: the
+  // prefix was `undefined/…`, nothing matched, and the helper quietly returned the
+  // full-size original. Rewritten on the URL's own origin, 2× the draw size for a crisp
+  // retina tile, capped at the endpoint's 640 so nothing is upscaled.
+  const u = parse(url)
+  if (u && u.pathname.startsWith(MEDIA_OBJECT_PATH)) {
+    const path = u.pathname.slice(MEDIA_OBJECT_PATH.length)
+    return `${u.origin}${mediaRenderPath(path, { size: Math.min(640, Math.ceil(size * 2)) })}`
   }
 
   return url
 }
 
-function hostOf(url: string): string {
+function parse(url: string): URL | null {
   try {
-    return new URL(url).host
+    return new URL(url)
   } catch {
-    return ''
+    return null
   }
+}
+
+function hostOf(url: string): string {
+  return parse(url)?.host ?? ''
 }

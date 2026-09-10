@@ -33,11 +33,15 @@ describe('coverThumbUrl', () => {
     expect(coverThumbUrl('https://i1.sndcdn.com/artworks-abc-t500x500.jpg', 192)).toBe('https://i1.sndcdn.com/artworks-abc-t300x300.jpg')
     expect(coverThumbUrl('https://i1.sndcdn.com/artworks-abc-t500x500.jpg', 100)).toBe('https://i1.sndcdn.com/artworks-abc-t200x200.jpg')
   })
-  it('CRITICAL: an object in our own media bucket goes through the render endpoint', () => {
-    const ours = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/a1/covers/x.jpg`
-    const out = coverThumbUrl(ours, 192)
-    expect(out).toContain('/storage/v1/render/image/public/media/a1/covers/x.jpg')
-    expect(out).toMatch(/width=/)
+  it('CRITICAL: an object in our own media bucket goes through the render endpoint, on its own origin', () => {
+    // A FIXED origin, deliberately not NEXT_PUBLIC_SUPABASE_URL. The first version built
+    // this fixture from the env, which CI's mutation job does not set — the fixture became
+    // `undefined/storage/…`, the helper (which also read the env) fell through, and the
+    // job failed on 2026-09-10. Neither side reads the environment now.
+    const ours = 'https://proj.supabase.co/storage/v1/object/public/media/a1/covers/x.jpg'
+    expect(coverThumbUrl(ours, 192)).toBe(
+      'https://proj.supabase.co/storage/v1/render/image/public/media/a1/covers/x.jpg?width=384&height=384&resize=contain&quality=62',
+    )
   })
   it('CRITICAL: an unknown host is returned untouched, never dropped', () => {
     expect(coverThumbUrl('https://example.com/art.png', 192)).toBe('https://example.com/art.png')
@@ -88,7 +92,7 @@ describe('coverThumbUrl — host and boundary guards', () => {
 })
 
 describe('coverThumbUrl — our bucket asks the render endpoint for 2× the draw size, capped', () => {
-  const ours = (f: string) => `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${f}`
+  const ours = (f: string) => `https://proj.supabase.co/storage/v1/object/public/media/${f}`
   it('a 192px tile asks for a 384 box', () => {
     expect(coverThumbUrl(ours('a1/c.jpg'), 192)).toMatch(/width=384/)
   })

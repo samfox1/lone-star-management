@@ -25,6 +25,20 @@ export function mediaUrl(path: string): string {
  * public SITE still uses `mediaUrl` at full quality; this only shrinks editor previews.
  */
 export function mediaThumbUrl(path: string, opts?: { size?: number; quality?: number }): string {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}${mediaRenderPath(path, opts)}`
+}
+
+/** The bucket's public-object path prefix, as it appears in a stored URL. */
+export const MEDIA_OBJECT_PATH = '/storage/v1/object/public/media/'
+
+/**
+ * The render endpoint's PATH + query for a media object — the part of `mediaThumbUrl`
+ * that is not the project base. Split out (2026-09-10) so a caller that already holds a
+ * full object URL can rewrite it on ITS OWN origin, with no environment read: the
+ * mutation job runs the DB-free slice with no env at all, and a helper that recognised
+ * our bucket by comparing against `NEXT_PUBLIC_SUPABASE_URL` fell through silently there.
+ */
+export function mediaRenderPath(path: string, opts?: { size?: number; quality?: number }): string {
   const { size = 640, quality = 62 } = opts ?? {}
   const q = new URLSearchParams({
     width: String(size),
@@ -32,5 +46,5 @@ export function mediaThumbUrl(path: string, opts?: { size?: number; quality?: nu
     resize: 'contain',
     quality: String(quality),
   })
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/render/image/public/media/${path}?${q}`
+  return `/storage/v1/render/image/public/media/${path}?${q}`
 }
