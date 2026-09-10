@@ -48,6 +48,9 @@ export function MerchCard({
 }) {
   const price = priceLabel(item.price)
   const badge = item.source && item.source !== 'manual' ? item.source : null
+  // `source`, not a shopify_product_id: it is what this card is handed, and the sync
+  // sets both together (lib/merch/sync.ts `source: 'shopify'`).
+  const fromShopify = item.source === 'shopify'
 
   return (
     <GridCard
@@ -100,6 +103,34 @@ export function MerchCard({
         <EntitySparkline artistId={artistId} entityIds={[item.id]} label="Buy clicks · 30d" />
       </div>
 
+      {/* READ-ONLY WHERE SHOPIFY OWNS IT — the rule the editor's merch panel got on
+          2026-09-09 (1f95083), applied here by the review a day later. Nothing typed on
+          this card can reach Shopify, the next pull overwrites these four columns, and the
+          site prices the product LIVE at render: an edited price here would show in the
+          dashboard, be reverted on the next sync, and never be what a buyer is charged.
+          The values are still SHOWN — a card that hides them reads as broken, not as
+          owned elsewhere. */}
+      {fromShopify ? (
+        <div className="mt-5 space-y-1.5">
+          <div className="flex items-baseline gap-3">
+            <span className="w-14 flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">Price</span>
+            <span className="text-[13px] text-ink">{price ?? 'Not set'}</span>
+          </div>
+          <div className="flex items-baseline gap-3">
+            <span className="w-14 flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">Link</span>
+            <span className="min-w-0 truncate text-[13px] text-ink-muted">{item.url ?? 'Not set'}</span>
+          </div>
+          <p className="pt-1 font-space text-[10px] leading-relaxed text-ink-faint">
+            Synced from Shopify. Change the name, price, link or image in Shopify — the site
+            reads the price live, so it updates without republishing.
+          </p>
+          {item.url && (
+            <a href={item.url} target="_blank" rel="noopener noreferrer" className="inline-block pt-1 font-space text-xs text-ink-muted hover:underline">
+              Open buy page ↗
+            </a>
+          )}
+        </div>
+      ) : (
       <SaveForm action={updateContentAction.bind(null, 'merch', item.id, artistId)} className="mt-5 space-y-2">
         <input name="title" defaultValue={item.title} required placeholder="Item name" className={`${inputClass} w-full`} />
         <div className="flex gap-2">
@@ -118,6 +149,7 @@ export function MerchCard({
           )}
         </div>
       </SaveForm>
+      )}
     </GridCard>
   )
 }

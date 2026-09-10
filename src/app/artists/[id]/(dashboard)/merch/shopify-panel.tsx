@@ -166,9 +166,9 @@ export function ShopifyPanel({
   const [showSteps, setShowSteps] = useState(false)
 
   async function runTest() {
-    // A ref would be the latch if two clicks could both read pre-render state; here the
-    // button is removed from the DOM while testing, and a repeat press is harmless anyway
-    // — the probe writes nothing.
+    // No busyRef latch on purpose. AGENTS.md rule 5 wants one where a double fire does
+    // damage; here the button is DISABLED while testing, and a repeat press that slipped
+    // through would only run the probe again — it writes nothing.
     setTesting(true)
     try {
       setResult(await probeAction())
