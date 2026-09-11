@@ -20,12 +20,15 @@ export type { ReleaseOption, Track }
 export function TrackCard({
   track,
   artistId,
+  artistSlug,
   releases,
   hideBadges = false,
   mergeTargets = [],
 }: {
   track: Track
   artistId: string
+  /** The artist's public slug, for the modal's Share. */
+  artistSlug?: string
   releases: ReleaseOption[]
   /** Hide the platform-badge subtitle (orphan singles in the Singles grid read as a
    *  plain single card — title only — to match the release cards beside them). */
@@ -100,6 +103,7 @@ export function TrackCard({
       <SongModal
         track={track}
         artistId={artistId}
+        artistSlug={artistSlug}
         releases={releases}
         open={open}
         onClose={() => setOpen(false)}

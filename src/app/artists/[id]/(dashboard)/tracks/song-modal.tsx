@@ -24,7 +24,7 @@ import {
 
 /** A release the track can be assigned to (id + title, for the selector). `release_type`
  *  lets a song's modal say "Track from EP OutWest" when its home is a multi-song record. */
-export type ReleaseOption = { id: string; title: string; release_type?: ReleaseType }
+export type ReleaseOption = { id: string; title: string; release_type?: ReleaseType; slug?: string }
 
 export type Track = TrackPlatformIds & {
   id: string
@@ -68,9 +68,12 @@ export function SongModal({
   mergeTargets = [],
   onTakenOffSite,
   home,
+  artistSlug,
 }: {
   track: Track
   artistId: string
+  /** The artist's public slug — the release page a song shares lives under it. */
+  artistSlug?: string
   releases: ReleaseOption[]
   /** The song's home release, when the caller knows it better than `releases` does (the
    *  release card opening one of its own songs). */
@@ -160,6 +163,38 @@ export function SongModal({
   const onRecord = homeType === 'ep' || homeType === 'album'
   const kind = onRecord && homeRelease ? `Track from ${RELEASE_TYPE_LABEL[homeType]} ${homeRelease.title}` : RELEASE_TYPE_LABEL[type]
 
+  // What Share hands out (Sam, 2026-09-11: every song has a Share): the home release's
+  // public page when there is one, else the song's own listen link. Nothing to share →
+  // no button, rather than a button that copies nothing.
+  const shareUrl = (() => {
+    if (homeRelease?.slug && artistSlug) {
+      const origin = typeof window === 'undefined' ? '' : window.location.origin
+      return `${origin}/${artistSlug}/r/${homeRelease.slug}`
+    }
+    for (const p of SONG_PLATFORMS) {
+      const href = safeHref(track[p.field] ?? '')
+      if (href) return href
+    }
+    return null
+  })()
+  async function share() {
+    if (!shareUrl) return
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: track.title, url: shareUrl })
+        return
+      } catch {
+        // cancelled or unsupported — fall through to copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      toast('Link copied')
+    } catch {
+      toast("Couldn't copy the link.", 'error')
+    }
+  }
+
   return (
     <>
       <CardModal
@@ -168,6 +203,19 @@ export function SongModal({
         wide
         label={track.title}
         analyticsHref={`/artists/${artistId}`}
+        corner={
+          shareUrl ? (
+            <button
+              type="button"
+              onClick={share}
+              aria-label="Share"
+              title="Share"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <Icon name="share" size={16} />
+            </button>
+          ) : null
+        }
         deleteAction={deleteContentAction.bind(null, 'track', track.id, artistId)}
         deleteLabel="Delete"
         deleteNoun="Song"

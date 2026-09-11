@@ -242,3 +242,35 @@ describe('a song on a record', () => {
     expect(dialog.querySelector('h3 + div')?.textContent).toMatch(/^Single/)
   })
 })
+
+/* ── Share (Sam, 2026-09-11: "every album, ep, single, etc should have a share button") ── */
+describe('Share on a song', () => {
+  it('a song with a home release shares that release’s public page', async () => {
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    render(
+      <TrackCard
+        track={track({ release_id: 'r1', release_type: 'single' })}
+        artistId="a1"
+        artistSlug="skeen"
+        releases={[{ id: 'r1', title: 'Demo', release_type: 'single', slug: 'demo' }]}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Demo/ }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Share' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/skeen\/r\/demo$/)))
+    vi.unstubAllGlobals()
+  })
+
+  it('a standalone song shares its listen link; with nothing to share there is no button', async () => {
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const dialog = openModal(track({ soundcloud_url: 'https://soundcloud.com/x/demo' }), { artistSlug: 'skeen' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://soundcloud.com/x/demo'))
+    cleanup()
+    const bare = openModal(track(), { artistSlug: 'skeen' })
+    expect(within(bare).queryByRole('button', { name: 'Share' })).toBeNull()
+    vi.unstubAllGlobals()
+  })
+})

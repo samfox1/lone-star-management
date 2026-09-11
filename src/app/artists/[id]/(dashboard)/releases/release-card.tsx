@@ -389,7 +389,8 @@ export function ReleaseCard({
           track={song}
           artistId={artistId}
           releases={releases}
-          home={{ id: release.id, title, release_type: type }}
+          home={{ id: release.id, title, release_type: type, slug: release.slug }}
+          artistSlug={artistSlug}
           open
           onClose={() => setSong(null)}
           mergeTargets={targetsFor(song.id)}

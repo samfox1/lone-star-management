@@ -179,6 +179,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     id: r.id as string,
     title: r.title as string,
     release_type: toReleaseType(r.release_type as string | null),
+    slug: r.slug as string,
   }))
 
   // Merge targets span the WHOLE catalog, not just the visible bucket: the sync's refusal

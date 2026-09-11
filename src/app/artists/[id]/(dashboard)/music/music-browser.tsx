@@ -264,6 +264,7 @@ export function MusicBrowser({
         <TrackCard
           key={t.id}
           artistId={artistId}
+          artistSlug={artistSlug}
           track={t}
           releases={releaseOptions}
           mergeTargets={targetsFor(t.id)}
@@ -313,6 +314,7 @@ export function MusicBrowser({
                   <div key={e.item.id} className="w-48 flex-none">
                     <TrackCard
                       artistId={artistId}
+                      artistSlug={artistSlug}
                       track={e.item}
                       releases={releaseOptions}
                       hideBadges
