@@ -16,6 +16,8 @@ Supersede rather than edit: add a new ADR that marks the old one superseded.
 | [0008](0008-per-region-style-overrides.md) | Per-region style overrides + the custom-site contract | Accepted |
 | [0009](0009-editor-picked-types-are-live-toggled.md) | A type the editor can pick is live-toggled, never publish-reconciled | Accepted |
 | [0010](0010-edge-functions-as-public-doors.md) | An Edge Function may be a public door, when Postgres provably cannot be | Accepted (extends 0001) |
+| [0011](0011-presence-per-kind.md) | Presence waits for Publish: tracks, releases, tour dates and merch | Accepted (amends 0009) |
+| [0012](0012-analytics-tallies-in-one-schema.md) | Analytics: one schema per subject, tallied daily, bots flagged not counted | Accepted (extends 0001, 0010) |
 
 See also: `PLAN.md` (original brief), `DASHBOARD_PLAN.md` (multi-page dashboard
 plan + pressure-test), `PHASE0.md` (versioning foundation; deleted 2026-08-05, in git history),

@@ -149,7 +149,8 @@ decisions behind them (esp. ADR-0002).
   dashboard): a `view` on load, or a `play` / `link_click` / `ticket_click` /
   `buy_click` / `video_click`. Declared through `trackAttrs` (`src/lib/events.ts`) —
   the one typed seam, so an emitter can't forget an attribute or use an off-allowlist
-  type — and ingested by the `record_event` public door (anon, type-allowlisted).
+  type — and ingested by the `record_event` public door (anon, type-allowlisted) until the
+  step-3 cut-over, after which the `event` Edge Function calls `record_site_event`.
   `SiteAnalytics` (`src/components/site-analytics.tsx`) is the delegated listener,
   mounted only on public pages.
 - **Attribution** — the content row an event is about: `entity_id` + `entity_type`
@@ -162,6 +163,24 @@ decisions behind them (esp. ADR-0002).
   AND its tracks), merch = buy clicks, tour = ticket clicks, video = clicks from your
   site. Read via `analytics_by_entity` (totals) / `analytics_entity_daily` (the modal
   sparkline), both owner-read (RLS).
+- **Context** (2026-09-11, ADR 0012) — what a `view` carries besides the artist: `path`,
+  `referrer_host` + a **source** bucket (instagram / tiktok / … / `ai` / direct / other;
+  `utm_source` wins), the UTM triple, `country` / `region` / `city` (from the IP, best
+  effort), `device` / `browser`, a **visitor hash** and **is_bot**. Written only by
+  `record_site_event` (service_role, called by the `event` Edge Function once step 3 ships).
+- **Visitor hash** — `sha256(salt + UTC date + ip + user-agent)`: one visitor per person
+  per day, nothing stored on the device, no banner. "Visitors" over a window = the sum of
+  daily distinct hashes. Returning visitors across days are NOT a thing here, by design.
+- **Bot** — a flagged row (`is_bot`), kept for audit and counted on `daily_total.bots`,
+  never counted as a view or a visitor by any reader.
+- **Tally / rolled day** — one row per (artist, day, dimension value) in schema
+  `analytics` (`daily_total`, `daily_source`, `daily_place`, …), written by
+  `roll_up_analytics(day)`. A day in `analytics.rolled_days` is authoritative: readers use
+  its tallies and ignore its raw rows. The last two complete days are re-rolled nightly;
+  a pruned day (`pruned_at`) is never re-rolled.
+- **Raw window** — 90 days of raw `analytics_events` rows; `prune_analytics` deletes
+  older rows only for rolled days, in whole UTC days. The schema is not exposed through
+  PostgREST; the six `analytics_*` readers in `public` are the only way in.
 - **Reach** — a video's GLOBAL YouTube view count (`youtube_views`, cached on sync).
   Shown ALONGSIDE the on-site metric to contrast total reach vs the lift this site
   drives — never conflated, since we can't prove a YouTube view came from us.
