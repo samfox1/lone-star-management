@@ -14,7 +14,7 @@
  * over a date is testable without faking time.
  */
 import { describe, expect, it } from 'vitest'
-import { isPastShow, todayIso } from '@/lib/tour'
+import { COUNTRY_CODES, countryCode, isPastShow, todayIso } from '@/lib/tour'
 
 const TODAY = '2026-09-11'
 
@@ -40,5 +40,53 @@ describe('isPastShow', () => {
   it('todayIso is the UTC calendar date', () => {
     expect(todayIso(new Date('2026-09-11T23:59:00Z'))).toBe('2026-09-11')
     expect(todayIso(new Date('2026-09-12T00:00:01Z'))).toBe('2026-09-12')
+  })
+})
+
+/**
+ * The tour list abbreviates a country ("Amsterdam, NL") so the place column stays as
+ * narrow as a US one ("Austin, TX"). Names the list has actually carried, plus the
+ * common touring countries; anything unknown is left as written, never guessed.
+ */
+describe('countryCode', () => {
+  it('abbreviates the countries a bill is likely to name', () => {
+    expect(countryCode('Netherlands')).toBe('NL')
+    expect(countryCode('The Netherlands')).toBe('NL')
+    expect(countryCode('United Kingdom')).toBe('UK')
+    expect(countryCode('Germany')).toBe('DE')
+    expect(countryCode('Canada')).toBe('CA')
+  })
+  it('is case- and space-insensitive', () => {
+    expect(countryCode('  netherlands ')).toBe('NL')
+  })
+  it('keeps a code that is already a code', () => {
+    expect(countryCode('NL')).toBe('NL')
+    expect(countryCode('uk')).toBe('UK')
+  })
+  it('CRITICAL: leaves an unknown country as written, and null as null', () => {
+    expect(countryCode('Ruritania')).toBe('Ruritania')
+    expect(countryCode(null)).toBeNull()
+    expect(countryCode('')).toBeNull()
+    expect(countryCode('   ')).toBeNull()
+  })
+  it('only a 2–3 LETTER value counts as a code already', () => {
+    expect(countryCode('nld')).toBe('NLD')
+    expect(countryCode('abcd')).toBe('abcd') // four letters: a word, left alone
+    expect(countryCode('n1')).toBe('n1') // a digit: not a code
+    expect(countryCode('a')).toBe('a')
+  })
+  // The map itself, derived from the registry (AGENTS.md rule 4) so every entry is
+  // watched, not the handful named above: a key is a trimmed lower-case name, a value
+  // is a 2–3 letter upper-case code, and looking a key up yields exactly its value.
+  it('CRITICAL: every entry in the map is well-formed and reachable', () => {
+    const entries = Object.entries(COUNTRY_CODES)
+    expect(entries.length).toBeGreaterThan(30)
+    for (const [name, code] of entries) {
+      expect(name, `key "${name}"`).toMatch(/^[a-z]+( [a-z]+)*$/)
+      expect(code, `value for "${name}"`).toMatch(/^[A-Z]{2,3}$/)
+      expect(countryCode(name)).toBe(code)
+      expect(countryCode(name.toUpperCase())).toBe(code)
+      expect(countryCode(` ${name.replace(/ /g, '   ')} `)).toBe(code)
+    }
   })
 })

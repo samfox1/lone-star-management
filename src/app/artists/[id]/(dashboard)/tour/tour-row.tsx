@@ -12,6 +12,7 @@ import { SupportActs } from './support-acts'
 import { supportActsOf } from '@/lib/content'
 import { DateSquare, KvCells, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { US_STATES } from '@/lib/us-states'
+import { countryCode } from '@/lib/tour'
 
 const STATE_OPTIONS = US_STATES.map((s) => ({ value: s.code, label: `${s.code} · ${s.name}` }))
 
@@ -75,9 +76,9 @@ export function TourRow({
   const menuRef = useRef<HTMLDivElement>(null)
   const { day, month } = dateBlock(tour.date)
   const badge = tour.source && tour.source !== 'manual' ? tour.source : null
-  // "Austin, TX" — state preferred (US shows), country as the fallback for a date
-  // booked outside the US. Same join the public site uses, so the row previews it.
-  const place = [tour.city, tour.state ?? tour.country].filter(Boolean).join(', ')
+  // "Austin, TX" — state preferred (US shows), the country ABBREVIATED as the fallback
+  // for a date booked outside the US ("Amsterdam, NL"), so the column stays narrow.
+  const place = [tour.city, tour.state ?? countryCode(tour.country)].filter(Boolean).join(', ')
 
   // Same close rules as the song card's menu: a click anywhere else, or Escape.
   useEffect(() => {
@@ -115,7 +116,9 @@ export function TourRow({
 
   return (
     <>
-      <div className="flex items-center gap-5 border-b border-hairline py-5 last:border-0">
+      {/* No hairline between dates (Sam, 2026-09-11): the rhythm is the rows' own spacing.
+          Venue and place truncate before they can touch the column beside them. */}
+      <div className="flex items-center gap-5 py-3.5">
         {/* `selected` is the draft (optimistic), `onSite` what is PUBLISHED — a toggle is a
             draft until Publish (PRESENCE_PLAN, revised 2026-09-11), so the pending states
             "checked, publish to put on site" / "on site, publish to remove" are real here. */}

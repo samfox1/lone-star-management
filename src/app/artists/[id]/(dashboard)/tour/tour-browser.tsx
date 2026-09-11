@@ -106,9 +106,9 @@ export function TourBrowser({
   )
 
   return (
-    // Filter row and date list share the full max-w-4xl width — a date row carries a
-    // venue, place, lineup and ticket link, so the old max-w-2xl bunched them up.
-    <div className="mx-auto max-w-4xl space-y-6 pb-24">
+    // Filter row and date list share one width. max-w-2xl bunched the columns up;
+    // max-w-3xl was more than a date needs (Sam, 2026-09-11: "a little less width").
+    <div className="mx-auto max-w-3xl space-y-6 pb-24">
       <FilterBar
         leading={
           <div className="flex flex-wrap items-center gap-3">
@@ -131,7 +131,7 @@ export function TourBrowser({
         trailing={trailing}
       />
 
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-3xl">
         {sections.length === 0 ? (
           <EmptyState
             icon="tour"
