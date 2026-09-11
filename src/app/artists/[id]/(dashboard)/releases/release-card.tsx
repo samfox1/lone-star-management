@@ -1,19 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { type IconType } from 'react-icons'
 import { SiApplemusic, SiDeezer, SiSoundcloud, SiSpotify } from 'react-icons/si'
-import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
+import { safeHref } from '@/lib/url'
 import { type TrackPlatformIds } from '@/lib/music'
 import { CardModal } from '../card-modal'
+import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { toast } from '../toast'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
-import { EntitySparkline } from '../entity-sparkline'
 import { TrackAudio } from '../track-audio'
 import { coverThumbUrl } from '@/lib/cover-url'
 import {
@@ -92,10 +92,13 @@ export const SONG_PLATFORMS: {
 ]
 
 /**
- * A release as a grid tile: cover with a select checkbox + live badge + type
- * badge, then title and meta. Selection drives the password-gated publish; the
- * checkbox is owned by the parent browser. Clicking the tile opens the edit modal
- * (tracklist · type · DSP links · delete).
+ * A release as a grid tile: cover with a select checkbox + live badge + type badge, then
+ * title and meta. Selection drives the password-gated publish; the checkbox is owned by
+ * the parent browser. Clicking the tile opens the release modal — built on modal-kit
+ * (prototype G, Sam, 2026-09-11): cover · title · type / year / songs, then rows that save
+ * their own field (Title, Type, Date, one per streaming platform, Songs or Audio), with
+ * Share · Delete · Done in the footer. A tracklist song opens its own modal in the same
+ * grammar. No Save, no "Edit release" sheet, no listens (the Analytics button has those).
  */
 export function ReleaseCard({
   release,
@@ -118,55 +121,48 @@ export function ReleaseCard({
   mergeTargets?: MergeTarget[]
 }) {
   const [editing, setEditing] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  // The overview modal is read-only (links aside). "Edit" opens a SEPARATE modal that holds
-  // the editable details — title, date, type — committed together on its own Save.
-  const [detailsEditOpen, setDetailsEditOpen] = useState(false)
-  const [titleDraft, setTitleDraft] = useState(release.title)
-  const [dateDraft, setDateDraft] = useState(release.release_date?.slice(0, 10) ?? '')
-  const [typeDraft, setTypeDraft] = useState<ReleaseType>(release.release_type)
-  // The tracklist song whose links modal is open (click a song to add/edit its link).
+  // Rows save themselves; these mirror what other rows and the header depend on, so they
+  // follow a save without a refresh. Title and date travel TOGETHER on every write:
+  // updateReleaseDetailsAction nulls a missing date, so a title-only write would erase it.
+  const [title, setTitle] = useState(release.title)
+  const [date, setDate] = useState(release.release_date?.slice(0, 10) ?? '')
+  const [type, setType] = useState<ReleaseType>(release.release_type)
+  // The tracklist song whose modal is open (click a song to see and edit its links).
   const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
-  // The tracklist song being merged away (the row's ⇄ icon). Same modal + server action
-  // as the standalone song cards — one merge implementation, wherever the song lives.
+  // The tracklist song being merged away. Same modal + server action as the standalone
+  // song cards — one merge implementation, wherever the song lives.
   const [mergeSong, setMergeSong] = useState<ReleaseSong | null>(null)
   // A song can never be its own merge target — the server refuses it, but offering it at
   // all invites the manager to delete the row they are standing on.
   const targetsFor = (id: string) => mergeTargets.filter((t) => t.id !== id)
-  const year = release.release_date?.slice(0, 4)
+
+  const year = date.slice(0, 4)
   const songCount = release.songs.length
   // Only EPs and albums have a tracklist (Sam, 2026-07-24) — a single IS its song, so its
-  // modal drops the tracklist and lets the cover/details fill the space instead.
-  const expandable = release.release_type === 'ep' || release.release_type === 'album'
+  // modal shows the song's audio where the tracklist would be.
+  const expandable = type === 'ep' || type === 'album'
   // Singles read as just the year (no song count — a single is one track); EPs/albums keep
   // the count. No year → no meta line at all (never a "—" placeholder).
   const meta = expandable
     ? [year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
-    : (year ?? '')
+    : year
+  // Type is constrained to sensible conversions: EP ⇄ Album for a multi-track release,
+  // Single ⇄ Remix for a single. `null` (e.g. Featured) has no Type row at all.
+  const typeOptions: readonly ReleaseType[] | null = expandable
+    ? ['ep', 'album']
+    : type === 'single' || type === 'remix'
+      ? ['single', 'remix']
+      : null
 
-  useEffect(() => {
-    if (!menuOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false)
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [menuOpen])
+  const fail = (message: string) => toast(message, 'error')
 
   // Share the public release page — native sheet where available, clipboard otherwise.
   async function share() {
-    setMenuOpen(false)
     if (typeof window === 'undefined') return
     const url = `${window.location.origin}/${artistSlug}/r/${release.slug}`
     if (navigator.share) {
       try {
-        await navigator.share({ title: release.title, url })
+        await navigator.share({ title, url })
         return
       } catch {
         // cancelled or unsupported — fall through to copy
@@ -180,216 +176,94 @@ export function ReleaseCard({
     }
   }
 
-  async function del() {
-    setMenuOpen(false)
-    const res = await deleteContentAction('release', release.id, artistId)
-    if (res?.error) toast(res.error, 'error')
-    else {
-      toast('Release deleted')
-      setEditing(false)
-    }
-  }
-
-  // "Edit" opens the separate details modal with fresh drafts (the server state may have
-  // changed since this card last rendered).
-  function enterEdit() {
-    setMenuOpen(false)
-    setTitleDraft(release.title)
-    setDateDraft(release.release_date?.slice(0, 10) ?? '')
-    setTypeDraft(release.release_type)
-    setDetailsEditOpen(true)
-  }
-
-  // The details modal's Save: commit title, date, and type as one batch — nothing is written
-  // until this is pressed — then close that modal (the overview stays open behind it).
-  async function saveDetails() {
-    const t = titleDraft.trim()
-    if (!t) {
-      toast('Give the release a title.', 'error')
-      return
-    }
-    let saved = false
-    if (t !== release.title || dateDraft !== (release.release_date?.slice(0, 10) ?? '')) {
-      const fd = new FormData()
-      fd.set('title', t)
-      fd.set('release_date', dateDraft)
-      const res = await updateReleaseDetailsAction(release.id, artistId, fd)
-      if (res?.error) {
-        toast(res.error, 'error')
-        return
-      }
-      saved = true
-    }
-    if (typeDraft !== release.release_type) {
-      const fd = new FormData()
-      fd.set('release_type', typeDraft)
-      const res = await setReleaseTypeAction(release.id, artistId, fd)
-      if (res?.error) {
-        toast(res.error, 'error')
-        return
-      }
-      saved = true
-    }
-    if (saved) toast('Saved')
-    setDetailsEditOpen(false)
-  }
-
-  // A release link slot saves on blur: type a url and it's stored, clear it and it's
-  // dropped — no add/remove buttons. Skips the write when nothing changed.
-  async function saveReleaseLink(label: string, input: HTMLInputElement) {
-    const val = input.value.trim()
-    const current = release.links.find((l) => l.label === label)?.url ?? ''
-    if (val === current) return
+  async function saveDetails(nextTitle: string, nextDate: string) {
+    if (!nextTitle) return { error: 'Give the release a title.' }
     const fd = new FormData()
-    fd.set('url', val)
-    const res = await setReleaseLinkAction(release.id, artistId, label, fd)
-    if (res?.error) toast(res.error, 'error')
-    else toast(val ? `${label} saved` : `${label} removed`)
+    fd.set('title', nextTitle)
+    fd.set('release_date', nextDate)
+    const res = await updateReleaseDetailsAction(release.id, artistId, fd)
+    if (!res?.error) {
+      setTitle(nextTitle)
+      setDate(nextDate)
+    }
+    return res
   }
 
-  // Same save-on-blur for a song's own platform link (track column).
-  async function saveSongLink(songId: string, field: string, current: string, input: HTMLInputElement) {
-    const val = input.value.trim()
-    if (val === current) return
+  // Only when it actually CHANGED (KvField guarantees that): the action locks the type
+  // against a later Spotify sync, so a no-op write would lock it for no reason.
+  async function saveType(value: string) {
     const fd = new FormData()
-    fd.set(field, val)
-    const res = await updateContentAction('track', songId, artistId, fd)
-    if (res?.error) toast(res.error, 'error')
-    else toast(val ? 'Link saved' : 'Link removed')
+    fd.set('release_type', value)
+    const res = await setReleaseTypeAction(release.id, artistId, fd)
+    if (!res?.error) setType(value as ReleaseType)
+    return res
   }
 
-  // Type is only editable in the details modal, constrained to sensible conversions: EP ⇄
-  // Album for a multi-track release, Single ⇄ Remix for a single. `null` (e.g. Featured) has
-  // no toggle.
-  const typeOptions: readonly [ReleaseType, ReleaseType] | null = expandable
-    ? ['ep', 'album']
-    : release.release_type === 'single' || release.release_type === 'remix'
-      ? ['single', 'remix']
-      : null
+  // A release link slot: the value is stored under the platform's label; blank clears it.
+  const saveReleaseLink = (label: string) => async (value: string) => {
+    const fd = new FormData()
+    fd.set('url', value)
+    return setReleaseLinkAction(release.id, artistId, label, fd)
+  }
 
-  // Body of the separate "Edit release" modal — the only place details are editable.
-  const detailsEditForm = (
-    <div className="space-y-5 font-space">
-      <h3 className="text-lg font-bold tracking-[-0.01em]">Edit release</h3>
-      <label className="block space-y-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Title</span>
-        <input
-          value={titleDraft}
-          onChange={(e) => setTitleDraft(e.target.value)}
-          placeholder="Release title"
-          className="w-full rounded-lg bg-surface px-3 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
-        />
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Release date</span>
-        <input
-          type="date"
-          value={dateDraft}
-          onChange={(e) => setDateDraft(e.target.value)}
-          className="block rounded-lg bg-surface px-2.5 py-2 font-space text-sm text-ink outline-none focus:bg-paper focus:ring-1 focus:ring-hairline"
-        />
-      </label>
-      {typeOptions && (
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Type</span>
-          <div className="grid max-w-[260px] grid-cols-2 gap-2">
-            {typeOptions.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTypeDraft(t)}
-                aria-pressed={typeDraft === t}
-                className={cx(
-                  'rounded-lg border px-3 py-2 font-space text-xs font-semibold transition-colors',
-                  typeDraft === t
-                    ? 'border-ink bg-ink text-white'
-                    : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
-                )}
-              >
-                {RELEASE_TYPE_LABEL[t]}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  // A song's own platform link (track column) — one row, one field.
+  const saveSongLink = (songId: string, field: string) => async (value: string) => {
+    const fd = new FormData()
+    fd.set(field, value)
+    return updateContentAction('track', songId, artistId, fd)
+  }
 
-  // The 3-dots menu (Edit / Share / Delete). Lives beside the title in the modal's left column.
-  const kebabMenu = (
-    <div ref={menuRef} className="relative flex-none">
-      <button
-        type="button"
-        onClick={() => setMenuOpen((v) => !v)}
-        aria-label={`${release.title} options`}
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+  /** The ↗ beside a link row: opens the saved link to check it works. */
+  const openMark = (label: string, url: string) => {
+    const href = safeHref(url)
+    return href ? (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Open ${label} link in a new tab`}
+        title="Open link to check it works"
+        className="flex-none text-ink-faint transition-colors hover:text-ink"
       >
-        <Icon name="more" size={18} />
-      </button>
-      {menuOpen && (
-        <div
-          role="menu"
-          className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={enterEdit}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-          >
-            <Icon name="edit" size={15} /> Edit
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={share}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
-          >
-            <Icon name="share" size={15} /> Share
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={del}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
-          >
-            <Icon name="trash" size={15} /> Delete
-          </button>
-        </div>
-      )}
-    </div>
-  )
+        <Icon name="external" size={14} />
+      </a>
+    ) : null
+  }
+
+  const cover = (size: number) =>
+    release.cover_url ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={coverThumbUrl(release.cover_url, size) ?? undefined} alt="" className="h-full w-full object-cover" />
+    ) : (
+      <div className="flex h-full w-full items-center justify-center rounded-xl bg-surface">
+        <span className="h-5 w-5 rounded-full bg-ink" />
+      </div>
+    )
 
   return (
-    // A plain fixed-width tile — the tracklist lives in a modal now, so the card never grows
+    // A plain fixed-width tile — the tracklist lives in a modal, so the card never grows
     // and the grid never reflows or pushes a far-left album's songs off-screen.
     <div className="w-48 flex-none">
       <div className="group relative">
         {/* On-site select — top-left, doesn't open a modal */}
         {onToggleSelect && (
           <div className="absolute left-2 top-2 z-10">
-            <SelectToggle selected={!!selected} onSite={release.published_on_site ?? release.on_site} onToggle={onToggleSelect} label={release.title} />
+            <SelectToggle selected={!!selected} onSite={release.published_on_site ?? release.on_site} onToggle={onToggleSelect} label={title} />
           </div>
         )}
-
-        {/* Every release opens the one wide editor modal (details + tracklist on the left,
-            analytics + links on the right). The 3-dots menu lives inside that modal. */}
         <button
           type="button"
           onClick={() => setEditing(true)}
           aria-haspopup="dialog"
-          aria-label={`${release.title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
+          aria-label={`${title} — ${songCount} song${songCount === 1 ? '' : 's'}`}
           className="block w-full text-left"
         >
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface">
             <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-space text-[9px] font-bold uppercase tracking-[0.08em] text-white">
-              {RELEASE_TYPE_LABEL[release.release_type]}
+              {RELEASE_TYPE_LABEL[type]}
             </span>
             {release.cover_url ? (
-              // Sized for the tile — see tracks/track-card.tsx. The modal's 360px image keeps
-              // the full asset.
+              // Sized for the tile — see tracks/track-card.tsx.
               // eslint-disable-next-line @next/next/no-img-element
               <img src={coverThumbUrl(release.cover_url, 192) ?? undefined} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -397,9 +271,7 @@ export function ReleaseCard({
             )}
           </div>
           <div className="mt-3 flex items-center gap-1">
-            <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">
-              {release.title}
-            </span>
+            <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-[-0.01em] group-hover:text-accent">{title}</span>
             {expandable && (
               <span className="flex-none text-ink-faint" aria-hidden>
                 <Icon name="chevronRight" size={16} />
@@ -413,203 +285,105 @@ export function ReleaseCard({
 
       <CardModal
         open={editing}
-        // Escape/click-outside closes ONE layer: while the link, merge, OR details modal is
-        // open it guards this one, so Escape dismisses the top layer first. The Save button
-        // lives in the right column (footer={null}) so a long tracklist can run full-height.
-        onClose={() => !linkSong && !detailsEditOpen && !mergeSong && setEditing(false)}
-        wide
-        footer={null}
-      >
-        <div className="font-space">
-          <div className="grid grid-cols-2 gap-8">
-            {/* LEFT — the release itself. The 3-dots sits to the right of the title. Singles
-                show a big cover + big title (no tracklist); EPs/albums pair a compact cover
-                with a scrollable tracklist. */}
-            {expandable ? (
-              // EP/album: compact cover beside the title, then a scrollable tracklist.
-              <div className="flex min-w-0 flex-col gap-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-24 w-24 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
-                    {release.cover_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coverThumbUrl(release.cover_url, 96) ?? undefined} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="h-9 w-9 rounded-full bg-ink" />
-                    )}
-                  </div>
-                  <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="text-lg font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
-                      {meta && <div className="mt-1 text-[13px] text-ink-muted">{meta}</div>}
-                    </div>
-                    {kebabMenu}
-                  </div>
-                </div>
-                {songCount > 0 && (
-                  <ol className="max-h-[52vh] space-y-0.5 overflow-auto">
-                    {release.songs.map((s, i) => (
-                      <li key={s.id} className="group/row flex items-baseline gap-2 py-1 text-[13px]">
-                        <span className="w-5 flex-none text-right text-ink-faint">{i + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => setLinkSong(s)}
-                          title="Add or edit links"
-                          className="min-w-0 flex-1 truncate text-left text-ink hover:text-accent"
-                        >
-                          {s.title}
-                        </button>
-                        {feat(s) && <span className="max-w-[40%] flex-none truncate text-ink-faint">{feat(s)}</span>}
-                        {/* Merge into… — a sync-refusal duplicate frequently lives HERE, inside a
-                            release; without this the affordance existed only on standalone cards
-                            and the manager had no way to resolve it. Icon-only, like every row
-                            control; hidden when the catalog offers no other song. */}
-                        {targetsFor(s.id).length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setMergeSong(s)}
-                            aria-label={`Merge ${s.title} into…`}
-                            title="Merge into…"
-                            className="flex-none self-center text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100"
-                          >
-                            <Icon name="links" size={14} />
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            ) : (
-              // Single: a big cover fills the column, with the year pinned to the bottom so it
-              // lines up with the Close/Save buttons across in the right column.
-              <div className="flex min-w-0 flex-col gap-4">
-                <div className="flex aspect-square w-full max-w-[360px] items-center justify-center overflow-hidden rounded-2xl bg-surface">
-                  {release.cover_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="h-16 w-16 rounded-full bg-ink" />
-                  )}
-                </div>
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="min-w-0 flex-1 text-2xl font-bold leading-tight tracking-[-0.01em]">{release.title}</h3>
-                  {kebabMenu}
-                </div>
-                {/* Audio for the single's underlying track (a single IS one song), at the bottom. */}
-                {release.songs[0] && (
-                  <div className="mt-auto">
-                    <TrackAudio
-                      artistId={artistId}
-                      trackId={release.songs[0].id}
-                      audioPath={release.songs[0].audio_path}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* RIGHT — performance sparkline + streaming link inputs. No section labels: the
-                sparkline carries its own "Listens · 30d" and each input has its platform icon. */}
-            <div className="flex min-w-0 flex-col gap-6">
-              <EntitySparkline
-                artistId={artistId}
-                entityIds={[release.id, ...release.songs.map((s) => s.id)]}
-                label="Listens · 30d"
-              />
-
-              {/* One input per platform — paste a link and it saves on blur, clear it and it's
-                  removed. The icon lights up when a link is set; the ↗ opens it to check it works. */}
-              <div className="space-y-2.5">
-                {STREAMING_PLATFORMS.map((p) => {
-                  const link = release.links.find((l) => l.label === p.label) ?? null
-                  return (
-                    <div key={p.label} className="flex items-center gap-3">
-                      <p.Icon size={22} className={cx('flex-none', link ? p.color : 'text-ink-faint')} />
-                      <input
-                        // Remount when the saved url changes so the uncontrolled default resyncs.
-                        key={link?.url ?? ''}
-                        defaultValue={link?.url ?? ''}
-                        type="url"
-                        placeholder={p.placeholder}
-                        aria-label={`${p.label} link`}
-                        onBlur={(e) => saveReleaseLink(p.label, e.currentTarget)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.currentTarget.blur()
-                        }}
-                        className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
-                      />
-                      {/* Just the ↗ icon — opens the saved link in a new tab to confirm it works.
-                          Faint + inert until a link is set, so the rows stay aligned either way. */}
-                      {link ? (
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`Open ${p.label} link in a new tab`}
-                          title="Open link to check it works"
-                          className="flex-none text-ink-muted transition-colors hover:text-ink"
-                        >
-                          <Icon name="external" size={16} />
-                        </a>
-                      ) : (
-                        <span aria-hidden className="flex-none text-ink-faint/40">
-                          <Icon name="external" size={16} />
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Close + Save live here (not a bottom row) so the left tracklist can run
-                  full-height. mt-auto pins them to the bottom of the taller column. Streaming
-                  links save on blur, so both buttons simply close the overview. */}
-              <div className="mt-auto flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardModal>
-
-      {/* Edit details — a separate modal opened from the overview's 3-dots "Edit". This is the
-          only place the title / date / type can be changed; the overview stays read-only. */}
-      <CardModal
-        open={detailsEditOpen}
-        onClose={() => setDetailsEditOpen(false)}
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setDetailsEditOpen(false)}
-              className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={saveDetails}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
-            >
-              Save
-            </button>
-          </div>
+        // Escape / click-outside closes ONE layer: while a song or merge modal is open it
+        // guards this one, so the top layer dismisses first.
+        onClose={() => !linkSong && !mergeSong && setEditing(false)}
+        label={title}
+        analyticsHref={`/artists/${artistId}`}
+        deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
+        deleteLabel="Delete"
+        deleteNoun="Release"
+        footerLeft={
+          <button
+            type="button"
+            onClick={share}
+            className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+          >
+            Share
+          </button>
         }
       >
-        {detailsEditForm}
+        <ModalHeader
+          square={cover(112)}
+          title={title}
+          meta={
+            <>
+              <span>{RELEASE_TYPE_LABEL[type]}</span>
+              {year ? (
+                <>
+                  <MetaDot />
+                  <span>{year}</span>
+                </>
+              ) : null}
+              {expandable && songCount ? (
+                <>
+                  <MetaDot />
+                  <span>
+                    {songCount} song{songCount === 1 ? '' : 's'}
+                  </span>
+                </>
+              ) : null}
+            </>
+          }
+        />
+        <div className="mt-5">
+          <KvField label="Title" value={title} onSave={(v) => saveDetails(v, date)} onError={fail} />
+          {typeOptions && (
+            <KvField
+              label="Type"
+              value={type}
+              options={typeOptions.map((t) => ({ value: t, label: RELEASE_TYPE_LABEL[t] }))}
+              required
+              onSave={saveType}
+              onError={fail}
+            />
+          )}
+          <KvField label="Date" value={date} type="date" mono onSave={(v) => saveDetails(title, v)} onError={fail} />
+          {STREAMING_PLATFORMS.map((p) => {
+            const url = release.links.find((l) => l.label === p.label)?.url ?? ''
+            return (
+              <KvField key={p.label} label={p.label} value={url} type="url" mono onSave={saveReleaseLink(p.label)} onError={fail} trailing={openMark(p.label, url)} />
+            )
+          })}
+          {expandable ? (
+            songCount > 0 && (
+              <KvRow label="Songs" align="start">
+                {/* Click a song → its own modal, the same grammar as a standalone song. Merge
+                    into… on hover: a sync-refusal duplicate frequently lives HERE, inside a
+                    release, and its twin can be anywhere in the catalog. */}
+                <ol className="min-w-0 flex-1">
+                  {release.songs.map((s, i) => (
+                    <li key={s.id} className="group/row flex items-baseline gap-2 py-1 text-[15px]">
+                      <span className="w-5 flex-none text-right font-space text-[11px] text-ink-faint">{i + 1}</span>
+                      <button type="button" onClick={() => setLinkSong(s)} className="min-w-0 flex-1 truncate text-left hover:text-accent">
+                        {s.title}
+                      </button>
+                      {feat(s) && <span className="max-w-[40%] flex-none truncate font-space text-[11px] text-ink-faint">{feat(s)}</span>}
+                      {targetsFor(s.id).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setMergeSong(s)}
+                          aria-label={`Merge ${s.title} into…`}
+                          title="Merge into…"
+                          className="flex-none self-center text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100"
+                        >
+                          <Icon name="links" size={14} />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </KvRow>
+            )
+          ) : (
+            // A single IS one song: its audio sits where a tracklist would.
+            release.songs[0] && (
+              <KvRow label="Audio">
+                <TrackAudio artistId={artistId} trackId={release.songs[0].id} audioPath={release.songs[0].audio_path} />
+              </KvRow>
+            )
+          )}
+        </div>
       </CardModal>
 
       {/* Merge — the SAME modal + server action the standalone song cards use, verbatim:
@@ -625,95 +399,54 @@ export function ReleaseCard({
         />
       )}
 
-      {/* Click a tracklist song → it opens exactly like a single (a song on an album IS one),
-          borrowing the album cover + year, with its own listens and per-platform links. */}
-      <CardModal open={linkSong !== null} onClose={() => setLinkSong(null)} wide footer={null}>
-        {linkSong && (
-          <div className="font-space">
-            <div className="grid grid-cols-2 gap-8">
-              {/* LEFT — album art + song title (shown as a single), year pinned to the bottom. */}
-              <div className="flex min-w-0 flex-col gap-4">
-                <div className="flex aspect-square w-full max-w-[360px] items-center justify-center overflow-hidden rounded-2xl bg-surface">
-                  {release.cover_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={release.cover_url} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="h-16 w-16 rounded-full bg-ink" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-2xl font-bold leading-tight tracking-[-0.01em]">{linkSong.title}</h3>
-                  {feat(linkSong) && <div className="mt-1 text-[13px] text-ink-muted">{feat(linkSong)}</div>}
-                </div>
-                <div className="mt-auto">
-                  <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
-                </div>
-              </div>
-
-              {/* RIGHT — the song's own performance + per-platform links (save on blur). */}
-              <div className="flex min-w-0 flex-col gap-6">
-                <EntitySparkline artistId={artistId} entityIds={[linkSong.id]} label="Listens · 30d" />
-
-                <div className="space-y-2.5">
-                  {SONG_PLATFORMS.map((p) => {
-                    const value = linkSong[p.field] ?? ''
-                    return (
-                      <div key={p.field} className="flex items-center gap-3">
-                        <p.Icon size={22} className={cx('flex-none', value ? p.color : 'text-ink-faint')} />
-                        <input
-                          key={value}
-                          type="url"
-                          defaultValue={value}
-                          placeholder={p.placeholder}
-                          aria-label={`${p.label} link`}
-                          onBlur={(e) => saveSongLink(linkSong.id, p.field, value, e.currentTarget)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') e.currentTarget.blur()
-                          }}
-                          className="min-w-0 flex-1 rounded-lg bg-surface px-3 py-2 text-center font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline"
-                        />
-                        {value ? (
-                          <a
-                            href={value}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`Open ${p.label} link in a new tab`}
-                            title="Open link to check it works"
-                            className="flex-none text-ink-muted transition-colors hover:text-ink"
-                          >
-                            <Icon name="external" size={16} />
-                          </a>
-                        ) : (
-                          <span aria-hidden className="flex-none text-ink-faint/40">
-                            <Icon name="external" size={16} />
-                          </span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="mt-auto flex items-center justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setLinkSong(null)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLinkSong(null)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 font-space text-sm font-semibold text-white shadow-lg transition-colors hover:bg-accent-hover"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
+      {/* A tracklist song's own modal — the album's cover, the song's title, feat. and the
+          release as meta; then its per-platform links and audio. Same grammar as TrackCard. */}
+      {linkSong && (
+        <CardModal
+          open
+          onClose={() => !mergeSong && setLinkSong(null)}
+          label={linkSong.title}
+          analyticsHref={`/artists/${artistId}`}
+          footerLeft={
+            targetsFor(linkSong.id).length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setMergeSong(linkSong)}
+                className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+              >
+                Merge into…
+              </button>
+            ) : null
+          }
+        >
+          <ModalHeader
+            square={cover(112)}
+            title={linkSong.title}
+            meta={
+              <>
+                {feat(linkSong) ? (
+                  <>
+                    <span>{feat(linkSong)}</span>
+                    <MetaDot />
+                  </>
+                ) : null}
+                <span>{title}</span>
+              </>
+            }
+          />
+          <div className="mt-5">
+            {SONG_PLATFORMS.map((p) => {
+              const value = linkSong[p.field] ?? ''
+              return (
+                <KvField key={p.field} label={p.label} value={value} type="url" mono onSave={saveSongLink(linkSong.id, p.field)} onError={fail} trailing={openMark(p.label, value)} />
+              )
+            })}
+            <KvRow label="Audio">
+              <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
+            </KvRow>
           </div>
-        )}
-      </CardModal>
+        </CardModal>
+      )}
     </div>
   )
 }
