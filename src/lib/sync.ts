@@ -197,6 +197,10 @@ type IncomingTrack = {
   /** Fill-if-empty columns (the platform's link) when stamping onto another
    *  platform's row — never overwrites an existing value. */
   mergeFill: Record<string, unknown>
+  /** Columns the platform SEEDS but the manager owns afterwards (a song's featured
+   *  artists): written on insert, and on a refresh only where the row has nothing —
+   *  a name the manager added or removed in the dashboard survives every pull. */
+  fillIfEmpty?: Record<string, unknown>
 }
 
 /** The columns of an existing row the merge reads. */
@@ -212,6 +216,7 @@ type TrackRow = {
   album_name: string | null
   stream_url: string | null
   apple_url: string | null
+  featured_artists: string[] | null
 }
 
 /** Songs within ±3s of each other (same normalized title) are treated as the same. */
@@ -319,7 +324,7 @@ async function syncTracks(
   // stamped — a different answer run to run against identical data.
   const { data, error } = await supabase
     .from('tracks')
-    .select('id, source, title, duration_ms, spotify_id, apple_id, deezer_id, cover_url, album_name, stream_url, apple_url')
+    .select('id, source, title, duration_ms, spotify_id, apple_id, deezer_id, cover_url, album_name, stream_url, apple_url, featured_artists')
     .eq('artist_id', artistId)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
@@ -356,9 +361,15 @@ async function syncTracks(
         skipped++
         continue
       }
+      const seed: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(item.fillIfEmpty ?? {})) {
+        const cur = (exact as Record<string, unknown>)[k]
+        const empty = cur == null || (Array.isArray(cur) && cur.length === 0)
+        if (empty && v != null) seed[k] = v
+      }
       const { error: uErr } = await supabase
         .from('tracks')
-        .update({ title: item.title, ...enrichmentPatch(item), ...item.owned })
+        .update({ title: item.title, ...enrichmentPatch(item), ...item.owned, ...seed })
         .eq('id', exact.id)
       if (uErr) {
         if (uErr.code === RLS_DENIED) throw new Error(uErr.message)
@@ -404,6 +415,7 @@ async function syncTracks(
       duration_ms: item.duration_ms,
       on_site: false,
       ...item.owned,
+      ...item.fillIfEmpty,
     })
     if (iErr) {
       if (iErr.code === RLS_DENIED) throw new Error(iErr.message)
@@ -430,8 +442,11 @@ export function syncSpotifyTracks(
       cover_url: t.cover_url,
       album_name: t.album_name,
       duration_ms: t.duration_ms,
-      owned: { stream_url: t.stream_url, featured_artists: t.featured_artists },
+      owned: { stream_url: t.stream_url },
       mergeFill: { stream_url: t.stream_url },
+      // Seeded from Spotify, then the manager's (Sam, 2026-09-11: collaborators are
+      // edited on the song) — a pull never overwrites a list the row already has.
+      fillIfEmpty: { featured_artists: t.featured_artists },
     })),
   )
 }

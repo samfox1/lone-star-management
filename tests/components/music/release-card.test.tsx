@@ -222,12 +222,12 @@ describe('a song inside the release', () => {
     expect(screen.getByRole('dialog', { name: 'Night EP' })).toBeInTheDocument()
   })
 
-  it('offers the Release row when the card knows the releases — and no "Also on"', () => {
+  it('offers the Released on row when the card knows the releases — and no "Also on"', () => {
     render(<ReleaseCard release={release()} artistId="a1" artistSlug="lone-pine" releases={[{ id: 'r1', title: 'Night EP' }, { id: 'r2', title: 'Day LP' }]} />)
     fireEvent.click(screen.getByRole('button', { name: /^Night EP — / }))
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
-    expect(rowOf(songDialog, 'Release')).toBeInTheDocument()
+    expect(rowOf(songDialog, 'Released on')).toBeInTheDocument()
     // A single that is also on an album is two songs now (Sam, 2026-09-11) — nothing to
     // "also appear on".
     expect(within(songDialog).queryByText('Also on', { selector: 'span' })).toBeNull()

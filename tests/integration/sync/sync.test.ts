@@ -62,6 +62,25 @@ describe('syncSpotifyTracks', () => {
     expect(bySpotify['sp-new']).toMatchObject({ title: 'Brand New', source: 'spotify', on_site: false })
   })
 
+  it('CRITICAL: collaborators are seeded by a pull and then belong to the manager', async () => {
+    // Sam (2026-09-11): collaborators are edited on the song. A pull fills an empty list
+    // and never overwrites one the row already has — added or trimmed by hand.
+    await svc.from('tracks').insert([
+      { artist_id: artistA, title: 'Kept', spotify_id: 'sp-kept', source: 'spotify', featured_artists: ['Hand Added'] },
+      { artist_id: artistA, title: 'Empty', spotify_id: 'sp-empty', source: 'spotify', featured_artists: [] },
+    ])
+    await syncSpotifyTracks(asA, artistA, [
+      { spotify_id: 'sp-kept', title: 'Kept', cover_url: null, stream_url: 's', featured_artists: ['From Spotify'], album_name: null, duration_ms: null },
+      { spotify_id: 'sp-empty', title: 'Empty', cover_url: null, stream_url: 's', featured_artists: ['From Spotify'], album_name: null, duration_ms: null },
+      { spotify_id: 'sp-fresh', title: 'Fresh', cover_url: null, stream_url: 's', featured_artists: ['Seeded'], album_name: null, duration_ms: null },
+    ])
+    const { data } = await svc.from('tracks').select('spotify_id, featured_artists').eq('artist_id', artistA)
+    const by = Object.fromEntries((data ?? []).map((r) => [r.spotify_id, r.featured_artists]))
+    expect(by['sp-kept']).toEqual(['Hand Added'])
+    expect(by['sp-empty']).toEqual(['From Spotify'])
+    expect(by['sp-fresh']).toEqual(['Seeded'])
+  })
+
   it('is idempotent — a second sync of the same data changes nothing new', async () => {
     const incoming: SpotifyTrackInput[] = [
       { spotify_id: 'sp-x', title: 'X', cover_url: null, stream_url: null, featured_artists: [], album_name: null, duration_ms: null },

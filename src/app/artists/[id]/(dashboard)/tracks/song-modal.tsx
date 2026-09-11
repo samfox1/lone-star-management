@@ -11,6 +11,8 @@ import { CardModal } from '../card-modal'
 import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { SONG_PLATFORMS } from '../music/platforms'
+import { normalizeTitle } from '@/lib/sync'
+import { FeaturedChips } from './featured-chips'
 import { TrackAudio } from '../track-audio'
 import { toast } from '../toast'
 import { deleteContentAction, setTrackReleasedAction, setTrackReleaseAction, setTrackTypeAction, updateContentAction } from '../actions'
@@ -41,6 +43,9 @@ export type Track = TrackPlatformIds & {
   published_on_site?: boolean
   /** The manual released flag. Read only where it can matter (see canBeUnreleased). */
   released?: boolean | null
+  /** Collaborators — printed as "feat. …" on the site. Absent on a caller that predates
+   *  the Featuring row; the modal treats that as none. */
+  featured_artists?: string[]
 }
 
 const TYPE_OPTIONS = RELEASE_TYPES.map((t) => ({ value: t, label: RELEASE_TYPE_LABEL[t] }))
@@ -140,6 +145,11 @@ export function SongModal({
   }
 
   const releaseOptions = releases.map((r) => ({ value: r.id, label: r.title }))
+  // "Merge duplicate…" only when there IS a likely duplicate: another song whose title
+  // normalises to this one's (the sync's own match rule). Sam (2026-09-11) could not
+  // tell what the button was for on a song with no twin — now it appears only when
+  // there is one to fold this into.
+  const twins = mergeTargets.filter((t) => normalizeTitle(t.title) === normalizeTitle(track.title))
   const date = track.release_date?.slice(0, 10) ?? ''
 
   // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP
@@ -237,13 +247,14 @@ export function SongModal({
                 unreleased
               </button>
             )}
-            {mergeTargets.length > 0 && (
+            {twins.length > 0 && (
               <button
                 type="button"
                 onClick={() => setMergeOpen(true)}
+                title="Another song has this title — fold this one into it"
                 className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
               >
-                Merge into…
+                Merge duplicate…
               </button>
             )}
           </>
@@ -297,8 +308,13 @@ export function SongModal({
                 here the day it lands (a hand-kept list is how 'live' shipped unpickable). Not
                 offered on a song that lives on a record: the record's type is the song's. */}
             {!releaseId && <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />}
-            {releases.length > 0 && <KvField label="Release" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />}
+            {releases.length > 0 && <KvField label="Released on" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />}
             <KvField label="Date" value={date} type="date" mono onSave={saveField('release_date')} onError={fail} />
+            {/* Collaborators (Sam, 2026-09-11): chips, edited one at a time, printed as
+                "feat. …" on the site. */}
+            <KvRow label="Featuring">
+              <FeaturedChips artistId={artistId} trackId={track.id} names={track.featured_artists ?? []} />
+            </KvRow>
             {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
             <KvRow label="Audio">
               <TrackAudio artistId={artistId} trackId={track.id} audioPath={track.audio_path} />
@@ -349,7 +365,7 @@ export function SongModal({
         }}
         artistId={artistId}
         song={{ id: track.id, title: track.title }}
-        targets={mergeTargets}
+        targets={twins}
       />
     </>
   )

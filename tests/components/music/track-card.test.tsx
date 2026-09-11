@@ -23,7 +23,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
 import { RELEASE_TYPE_LABEL, RELEASE_TYPES } from '@/lib/releases'
-import { setTrackOnSiteAction, setTrackReleasedAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { setTrackFeaturedAction, setTrackOnSiteAction, setTrackReleasedAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
@@ -38,6 +38,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
+  setTrackFeaturedAction: vi.fn(async (_t: string, _a: string, names: string[]) => ({ names })),
   setTrackReleaseAction: vi.fn(async () => ({})),
   setTrackTypeAction: vi.fn(async () => ({})),
   setTrackParentReleaseAction: vi.fn(async () => ({})),
@@ -143,12 +144,14 @@ describe('the modal grammar', () => {
     expect(within(dialog).queryByText(/listens/i)).toBeNull()
   })
 
-  it('offers Merge into… only when there is something to merge into', () => {
-    openModal()
+  it('offers "Merge duplicate…" only when another song has THIS title', () => {
+    // Sam (2026-09-11) could not tell what "Merge into…" was for on a song with no twin.
+    // A target with a different title is not a duplicate, so no button.
+    openModal(track(), { mergeTargets: [{ id: 't2', title: 'Other' }] })
     expect(screen.queryByRole('button', { name: /Merge/ })).toBeNull()
     cleanup()
-    openModal(track(), { mergeTargets: [{ id: 't2', title: 'Other' }] })
-    expect(screen.getByRole('button', { name: /Merge/ })).toBeInTheDocument()
+    openModal(track(), { mergeTargets: [{ id: 't2', title: 'demo (feat. X)' }] })
+    expect(screen.getByRole('button', { name: 'Merge duplicate…' })).toBeInTheDocument()
   })
 })
 
@@ -272,5 +275,27 @@ describe('Share on a song', () => {
     const bare = openModal(track(), { artistSlug: 'skeen' })
     expect(within(bare).queryByRole('button', { name: 'Share' })).toBeNull()
     vi.unstubAllGlobals()
+  })
+})
+
+/* ── collaborators (Sam, 2026-09-11: "where do we put collaborators?") ─────────────── */
+describe('the Featuring row', () => {
+  it('shows each collaborator as a chip and adds one through the "+" dialog, as one list', async () => {
+    const dialog = openModal(track({ featured_artists: ['Arlo'] }))
+    expect(within(dialog).getByRole('button', { name: 'Arlo' })).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add collaborator' }))
+    const pop = screen.getByRole('dialog', { name: 'Collaborator' })
+    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bo Reed' } })
+    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('t1', 'a1', ['Arlo', 'Bo Reed']))
+    expect(within(dialog).getByRole('button', { name: 'Bo Reed' })).toBeInTheDocument()
+  })
+
+  it('removes one from its chip, leaving the rest', async () => {
+    const dialog = openModal(track({ featured_artists: ['Arlo', 'Bo Reed'] }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Arlo' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Collaborator' })).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('t1', 'a1', ['Bo Reed']))
+    expect(within(dialog).queryByRole('button', { name: 'Arlo' })).toBeNull()
   })
 })

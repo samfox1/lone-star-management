@@ -39,6 +39,7 @@ import {
   publishProfile,
   restoreToPublished,
   setSupportActs,
+  setTrackFeatured,
   listPublishMoments,
   type PublishMoment,
   setSupportUrl,
@@ -766,6 +767,27 @@ export async function setSupportUrlAction(
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
+}
+
+/** A song's collaborators, as one list — the song modal's Featuring row. Draft until
+ *  the Music section is republished. RLS scopes the write. */
+export async function setTrackFeaturedAction(
+  trackId: string,
+  artistId: string,
+  names: string[],
+): Promise<{ error?: string; names?: string[] }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+  try {
+    const saved = await setTrackFeatured(supabase, artistId, trackId, names)
+    revalidatePath(`/artists/${artistId}`, 'layout')
+    return { names: saved }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Save failed.' }
+  }
 }
 
 /**

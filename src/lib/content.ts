@@ -521,6 +521,39 @@ export function supportActsOf(row: { support?: string[] | null; support_urls?: R
 }
 
 /**
+ * Write a song's collaborators — the names shown as "feat. …" on the site (Sam,
+ * 2026-09-11: "where do we put collaborators?"). Trimmed, blanks dropped, duplicates
+ * collapsed, capped at 20 like parseContributors. `.select().single()` makes a
+ * row-filtered write bite under RLS. A Spotify pull seeds this list and then leaves it
+ * alone (lib/sync `fillIfEmpty`), so what is written here stays.
+ */
+export async function setTrackFeatured(
+  supabase: SupabaseClient,
+  artistId: string,
+  trackId: string,
+  names: readonly string[],
+): Promise<string[]> {
+  const seen = new Set<string>()
+  const clean: string[] = []
+  for (const raw of names) {
+    const name = raw.trim()
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    clean.push(name)
+    if (clean.length === 20) break
+  }
+  const { error } = await supabase
+    .from('tracks')
+    .update({ featured_artists: clean })
+    .eq('id', trackId)
+    .eq('artist_id', artistId)
+    .select('id')
+    .single()
+  if (error) throw new Error(error.message)
+  return clean
+}
+
+/**
  * Write a tour date's WHOLE lineup — names and links — in one update (Sam, 2026-09-11:
  * acts are added one at a time with their website, and edited or removed in place).
  * `support` (names, bill order) and `support_urls` (name→url) are two columns keyed by
