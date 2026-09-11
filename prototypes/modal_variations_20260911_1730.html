@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — Modal G, refined (2026-09-11)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --surface:#fafafa; --hair:#ececec; --hair-soft:#f1f1f3;
+    --blue:#2563eb; --blue-soft:#eef4ff; --red:#e5484d; --danger-soft:#fef5f5; --mono:'Space Mono',monospace; --sans:'Instrument Sans',sans-serif; }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);color:var(--ink);background:#e9e9ec;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1200px;margin:26px auto 80px;padding:0 24px;}
+  h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 4px;}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 6px;} .hint b{color:var(--ink);}
+  .sec{margin-top:40px;} .sec > .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;}
+  .stage{background:#8b8b90;border-radius:14px;padding:34px 24px;display:flex;justify-content:center;align-items:flex-start;gap:24px;flex-wrap:wrap;}
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6;margin:10px 0 0;} .note b{color:var(--ink);}
+
+  .card{background:var(--paper);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:28px;position:relative;width:640px;}
+  .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+  .ic.sm{width:14px;height:14px;} .ic.xs{width:12px;height:12px;}
+  .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .ibtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;border:none;background:transparent;color:var(--muted);cursor:pointer;} .ibtn:hover{background:var(--surface);color:var(--ink);}
+  .close{position:absolute;top:18px;right:18px;}
+  .btn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--hair);background:#fff;color:var(--ink);border-radius:9px;padding:8px 14px;cursor:pointer;} .btn:hover{border-color:#cbd5e1;}
+  .btn.danger{color:var(--red);border-color:transparent;padding:8px 6px;} .btn.danger:hover{background:var(--danger-soft);}
+  .btn.solid{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .hd{display:flex;align-items:center;gap:16px;padding-right:36px;}
+  .hd .sq{width:56px;height:56px;border-radius:12px;flex:none;}
+  .hd .title{font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.1;}
+  .hd .meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;} .hd .meta b{color:var(--ink);font-size:14px;} .hd .meta .dot{width:3px;height:3px;border-radius:99px;background:var(--faint);}
+  .db{border:1px solid var(--hair);display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .db .d{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1;letter-spacing:-.03em;} .db .m{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--faint);margin-top:4px;}
+  .db.past .d{font-size:10px;letter-spacing:.12em;color:var(--faint);}
+  .rows{margin-top:20px;}
+  .kv{display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair-soft);min-height:44px;position:relative;}
+  .kv .k{width:100px;flex:none;} .kv .v{flex:1;font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;}
+  .kv .v.empty{color:#c9ccd1;} .kv .v.mono{font-family:var(--mono);font-size:13px;}
+  .kv .pen{opacity:0;color:var(--faint);} .kv:hover .pen{opacity:1;}
+  /* the WHERE row: three cells on one line */
+  .kv .cells{flex:1;display:grid;grid-template-columns:1.4fr .7fr 1fr;gap:18px;min-width:0;}
+  .cell{display:flex;flex-direction:column;gap:3px;min-width:0;cursor:text;}
+  .cell .k{font-size:9px;} .cell .v{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .cell .v.empty{color:#c9ccd1;}
+  .cell:hover .k{color:var(--muted);}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1;}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hair);border-radius:8px;padding:5px 9px;font-size:13px;font-weight:500;background:#fff;cursor:pointer;} .chip:hover{border-color:#cbd5e1;}
+  .chip .ic{width:11px;height:11px;color:var(--faint);} .chip.add{color:var(--faint);font-weight:400;border-style:dashed;padding:5px 8px;}
+  .pop{position:absolute;z-index:3;background:#fff;border:1px solid var(--hair);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.14);padding:14px 16px;width:300px;left:116px;top:46px;}
+  .pop .f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;} .pop .f input{font-family:var(--sans);font-size:14px;border:none;border-bottom:1px solid var(--hair);padding:5px 0;outline:none;} .pop .f input.mono{font-family:var(--mono);font-size:12px;} .pop .f input:focus{border-bottom-color:var(--ink);}
+  .pop .r{display:flex;justify-content:space-between;align-items:center;}
+  .ft{display:flex;align-items:center;justify-content:space-between;margin-top:26px;padding-top:18px;border-top:1px solid var(--hair);}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);border-radius:9px;padding:6px 10px 6px 7px;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;background:#fff;}
+  .pill .bx{width:13px;height:13px;border-radius:4px;border:1px solid #cfd2d6;display:inline-flex;align-items:center;justify-content:center;background:#fff;}
+  .pill.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);} .pill.on .bx{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .sw{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;}
+  .sw i{width:30px;height:18px;border-radius:99px;background:#dfe2e6;position:relative;display:inline-block;transition:background .15s;} .sw i:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:99px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s;}
+  .sw.on{color:var(--ink);} .sw.on i{background:var(--ink);} .sw.on i:after{left:14px;}
+  .hidden{display:none;}
+  .kv input{flex:1;font-family:var(--sans);font-size:15px;border:none;outline:none;background:transparent;color:var(--ink);padding:0;min-width:0;} .kv input.mono{font-family:var(--mono);font-size:13px;} .kv input::placeholder{color:#c9ccd1;}
+  .cell input{font-family:var(--sans);font-size:15px;border:none;outline:none;background:transparent;color:var(--ink);padding:0;min-width:0;width:100%;} .cell input::placeholder{color:#c9ccd1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Modal G · refined</h1>
+  <p class="hint">Changes: <b>old show</b> leaves the footer (two placements below — pick one), and city · state · country share one WHERE row as three cells. Click a chip to open its popover.</p>
+
+  <div class="sec">
+    <div class="lbl">G1 · old show as a switch in the header, right of the meta</div>
+    <div class="stage"><div class="card">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="hd">
+        <div class="sq db past" style="border-radius:12px"><div class="d">PAST</div></div>
+        <div style="min-width:0;flex:1"><div class="title">Scoot Inn</div>
+          <div class="meta">Austin, TX <i class="dot"></i> 2026-11-11 <i class="dot"></i> <span><b>0</b> clicks · 30d</span></div></div>
+        <label class="sw on" style="margin-right:6px"><i></i>old show</label>
+      </div>
+      <div class="rows">
+        <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Where</span>
+          <div class="cells">
+            <div class="cell"><span class="k">City</span><span class="v">Austin</span></div>
+            <div class="cell"><span class="k">State</span><span class="v">TX</span></div>
+            <div class="cell"><span class="k">Country</span><span class="v empty">—</span></div>
+          </div><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Lineup</span>
+          <div class="chips">
+            <span class="chip" onclick="pop(this,'pop1')">Jigitz <svg class="ic" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+            <span class="chip" onclick="pop(this,'pop1')">ZHU <svg class="ic" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+            <span class="chip" onclick="pop(this,'pop1')">Gudfella</span>
+            <span class="chip add">+</span>
+          </div>
+          <div class="pop hidden" id="pop1">
+            <div class="f"><span class="k">Name</span><input value="Jigitz"></div>
+            <div class="f"><span class="k">Website</span><input class="mono" value="https://www.jigitz.online/"></div>
+            <div class="r"><button class="btn danger">Remove</button><button class="btn">Done</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="ft"><button class="btn danger">Delete</button><button class="btn">Done</button></div>
+    </div></div>
+    <p class="note"><b>Where:</b> three labelled cells on one line — City wide, State narrow, Country last. Empty reads "—". Click a cell to edit that cell. <b>Old show:</b> a quiet switch in the header; when on, the date block reads PAST.</p>
+  </div>
+
+  <div class="sec">
+    <div class="lbl">G2 · old show as its own row at the bottom of the list</div>
+    <div class="stage"><div class="card">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="hd">
+        <div class="sq db" style="border-radius:12px"><div class="d">11</div><div class="m">NOV</div></div>
+        <div style="min-width:0;flex:1"><div class="title">Scoot Inn</div>
+          <div class="meta">Austin, TX <i class="dot"></i> 2026-11-11 <i class="dot"></i> <span><b>0</b> clicks · 30d</span></div></div>
+      </div>
+      <div class="rows">
+        <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Where</span>
+          <div class="cells">
+            <div class="cell"><span class="k">City</span><span class="v">Austin</span></div>
+            <div class="cell"><span class="k">State</span><span class="v">TX</span></div>
+            <div class="cell"><span class="k">Country</span><span class="v empty">—</span></div>
+          </div><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Lineup</span>
+          <div class="chips">
+            <span class="chip" onclick="pop(this,'pop2')">Jigitz <svg class="ic" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+            <span class="chip" onclick="pop(this,'pop2')">ZHU <svg class="ic" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+            <span class="chip" onclick="pop(this,'pop2')">Gudfella</span>
+            <span class="chip add">+</span>
+          </div>
+          <div class="pop hidden" id="pop2">
+            <div class="f"><span class="k">Name</span><input value="Jigitz"></div>
+            <div class="f"><span class="k">Website</span><input class="mono" value="https://www.jigitz.online/"></div>
+            <div class="r"><button class="btn danger">Remove</button><button class="btn">Done</button></div>
+          </div>
+        </div>
+        <div class="kv"><span class="k">Past</span><label class="sw"><i></i>old show</label></div>
+      </div>
+      <div class="ft"><button class="btn danger">Delete</button><button class="btn">Done</button></div>
+    </div></div>
+    <p class="note"><b>Old show</b> as one more row: label PAST, value a switch. Same place every time, reads with the other facts, off the footer. The footer is only Delete / Done.</p>
+  </div>
+
+  <div class="sec">
+    <div class="lbl">Add a date · same card, rows are inputs</div>
+    <div class="stage"><div class="card">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="hd">
+        <div class="sq db" style="border-radius:12px"><div class="d" style="color:#c9ccd1">—</div></div>
+        <div style="min-width:0;flex:1"><div class="title" style="color:#c9ccd1">New date</div><div class="meta">draft</div></div>
+      </div>
+      <div class="rows">
+        <div class="kv"><span class="k">Date</span><input class="mono" placeholder="2026-__-__"></div>
+        <div class="kv"><span class="k">Venue</span><input placeholder="Venue"></div>
+        <div class="kv"><span class="k">Where</span>
+          <div class="cells">
+            <div class="cell"><span class="k">City</span><input placeholder="City"></div>
+            <div class="cell"><span class="k">State</span><input placeholder="—"></div>
+            <div class="cell"><span class="k">Country</span><input placeholder="—"></div>
+          </div></div>
+        <div class="kv"><span class="k">Tickets</span><input class="mono" placeholder="https://"></div>
+        <div class="kv"><span class="k">Lineup</span><div class="chips"><span class="chip add">+</span></div></div>
+        <div class="kv"><span class="k">Past</span><label class="sw"><i></i>old show</label></div>
+      </div>
+      <div class="ft"><span></span><button class="btn solid">Add</button></div>
+    </div></div>
+  </div>
+</div>
+<script>
+  function pop(chip,id){ const p=document.getElementById(id); p.classList.toggle('hidden'); p.querySelector('input').value=chip.textContent.trim(); }
+</script>
+</body>
+</html>

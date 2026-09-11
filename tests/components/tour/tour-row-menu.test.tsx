@@ -13,7 +13,7 @@
  * Actions mocked as in the sibling card tests; the confirm is stubbed per test.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { TourRow, type TourDate } from '@/app/artists/[id]/(dashboard)/tour/tour-row'
 import { deleteContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 
@@ -70,7 +70,8 @@ describe('TourRow ⋯ menu', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Mohawk options/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Edit/ }))
-    expect(screen.getByRole('dialog')).toHaveTextContent('Edit date')
+    // The modal is headed by the venue (modal-kit), not by "Edit date".
+    expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Mohawk' })).toBeInTheDocument()
   })
 
   it('CRITICAL: Remove confirms, then deletes THIS date', async () => {

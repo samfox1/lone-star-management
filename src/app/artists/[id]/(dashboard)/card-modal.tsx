@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
+import { Icon } from '@/components/ui/icons'
 import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from './use-lock-body-scroll'
 import { toast } from './toast'
@@ -24,6 +26,8 @@ export function CardModal({
   confirmText,
   wide = false,
   footer,
+  label,
+  analyticsHref,
   children,
 }: {
   open: boolean
@@ -38,6 +42,14 @@ export function CardModal({
   /** Replaces the default Delete / Done footer row (e.g. a single Save button). Pass `null`
    *  to render NO footer at all — for modals that carry their own action inside the body. */
   footer?: ReactNode | null
+  /** Accessible name for the dialog (the thing's name, or "Add date"). */
+  label?: string
+  /** Where the analytics button goes. The modal shows no numbers of its own (Sam,
+   *  2026-09-11: "I don't need the click info on these modals") — one button takes the
+   *  manager to the analytics page instead.
+   *  TODO(analytics): deep-link to THIS item once the analytics page can take one
+   *  (being built separately); today every button lands on the artist's page. */
+  analyticsHref?: string
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -82,21 +94,42 @@ export function CardModal({
     <div
       role="dialog"
       aria-modal="true"
+      aria-label={label}
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className={wide ? modalCardWideClass : modalCardClass}>
+        <div className="absolute right-4 top-4 flex items-center gap-0.5">
+          {analyticsHref ? (
+            <Link
+              href={analyticsHref}
+              aria-label="Analytics"
+              title="Analytics"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <Icon name="analytics" size={16} />
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
         {children}
         {footer === null ? null : footer !== undefined ? (
           <div className="mt-6">{footer}</div>
         ) : (
-          <div className="mt-6 flex items-center justify-between">
+          <div className="mt-6 flex items-center justify-between border-t border-hairline pt-4">
             {deleteAction ? (
               <button
                 type="button"
                 onClick={del}
                 disabled={deleting}
-                className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
+                className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
               >
                 {deleting ? 'Deleting…' : deleteLabel}
               </button>

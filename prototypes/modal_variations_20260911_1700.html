@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — Modal variations, round 2 (2026-09-11)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --surface:#fafafa; --hair:#ececec; --hair-soft:#f1f1f3;
+    --blue:#2563eb; --blue-soft:#eef4ff; --red:#e5484d; --danger-soft:#fef5f5; --mono:'Space Mono',monospace; --sans:'Instrument Sans',sans-serif; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);color:var(--ink);background:#e9e9ec;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1200px;margin:26px auto 80px;padding:0 24px;}
+  h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 4px;}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 6px;} .hint b{color:var(--ink);}
+  .sec{margin-top:44px;}
+  .sec > .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;}
+  .stage{background:#8b8b90;border-radius:14px;padding:34px 24px;display:flex;justify-content:center;align-items:flex-start;}
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6;margin:10px 0 0;} .note b{color:var(--ink);}
+  .picker{position:fixed;top:0;left:0;right:0;z-index:5;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid #d9d9de;padding:10px 24px;display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:11px;}
+  .picker a{color:var(--muted);text-decoration:none;border:1px solid var(--hair);border-radius:7px;padding:5px 9px;background:#fff;} .picker a:hover{color:var(--ink);border-color:#cbd5e1;} .picker span{color:var(--faint);margin-right:6px;}
+
+  /* ---- the grammar (from the song modal) ---- */
+  .card{background:var(--paper);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:28px;position:relative;}
+  .card.m{width:640px;} .card.l{width:900px;}
+  .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+  .ic.sm{width:14px;height:14px;} .ic.xs{width:12px;height:12px;}
+  .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .ibtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;border:none;background:transparent;color:var(--muted);cursor:pointer;} .ibtn:hover{background:var(--surface);color:var(--ink);}
+  .close{position:absolute;top:18px;right:18px;}
+  .btn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--hair);background:#fff;color:var(--ink);border-radius:9px;padding:8px 14px;cursor:pointer;} .btn:hover{border-color:#cbd5e1;}
+  .btn.danger{color:var(--red);border-color:transparent;padding:8px 6px;} .btn.danger:hover{background:var(--danger-soft);}
+  .hd{display:flex;align-items:center;gap:16px;padding-right:36px;}
+  .hd .sq{width:56px;height:56px;border-radius:12px;flex:none;}
+  .hd .title{font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.1;}
+  .hd .meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;} .hd .meta b{color:var(--ink);font-size:14px;} .hd .meta .dot{width:3px;height:3px;border-radius:99px;background:var(--faint);}
+  .db{border:1px solid var(--hair);display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .db .d{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1;letter-spacing:-.03em;} .db .m{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--faint);margin-top:4px;}
+  .rows{margin-top:20px;}
+  .kv{display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair-soft);cursor:text;min-height:44px;}
+  .kv .k{width:100px;flex:none;} .kv .v{flex:1;font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kv .v.empty{color:#c9ccd1;} .kv .v.mono{font-family:var(--mono);font-size:13px;}
+  .kv .aside{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap;}
+  .kv .pen{opacity:0;color:var(--faint);} .kv:hover .pen{opacity:1;}
+  .kv .tools{display:flex;gap:0;opacity:0;} .kv:hover .tools{opacity:1;}
+  .kv input,.kv select{flex:1;font-family:var(--sans);font-size:15px;border:none;outline:none;background:transparent;color:var(--ink);padding:0;min-width:0;} .kv input.mono{font-family:var(--mono);font-size:13px;}
+  .kv.ghost .v{color:#c9ccd1;} .kv.ghost:hover .v{color:var(--muted);}
+  .gap{height:18px;}
+  .lab{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:22px 0 4px;}
+  .ft{display:flex;align-items:center;justify-content:space-between;margin-top:26px;padding-top:18px;border-top:1px solid var(--hair);}
+  .ft .l{display:flex;align-items:center;gap:14px;}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);border-radius:9px;padding:7px 11px 7px 8px;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;background:#fff;}
+  .pill .bx{width:14px;height:14px;border-radius:4px;border:1px solid #cfd2d6;display:inline-flex;align-items:center;justify-content:center;background:#fff;}
+  .pill.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);} .pill.on .bx{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hair);border-radius:8px;padding:5px 9px;font-size:13px;font-weight:500;background:#fff;cursor:pointer;} .chip:hover{border-color:#cbd5e1;}
+  .chip .ic{width:11px;height:11px;color:var(--faint);} .chip.add{color:var(--faint);font-weight:400;border-style:dashed;}
+  .pop{position:absolute;z-index:3;background:#fff;border:1px solid var(--hair);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.14);padding:14px 16px;width:300px;}
+  .pop .f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;} .pop .f input{font-family:var(--sans);font-size:14px;border:none;border-bottom:1px solid var(--hair);padding:5px 0;outline:none;} .pop .f input.mono{font-family:var(--mono);font-size:12px;}
+  .pop .f input:focus{border-bottom-color:var(--ink);}
+  .pop .r{display:flex;justify-content:space-between;align-items:center;}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px;margin-top:8px;}
+  .split{display:grid;grid-template-columns:176px 1fr;gap:36px;}
+  .rail{display:flex;flex-direction:column;gap:16px;}
+  .rail .db{border-radius:14px;padding:22px 0 18px;} .rail .db .d{font-size:40px;} .rail .db .y{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.1em;margin-top:8px;}
+  .rail .stat{font-family:var(--mono);font-size:11px;color:var(--muted);} .rail .stat b{color:var(--ink);font-size:14px;}
+  .rail .title{font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.1;}
+  .hidden{display:none;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+</style>
+</head>
+<body>
+<div class="picker"><span>JUMP</span><a href="#d">D · Rows</a><a href="#e">E · Wide rows</a><a href="#f">F · Rail</a><a href="#g">G · Chips</a><a href="#apply">Applied: merch · release · add</a></div>
+<div class="wrap" style="padding-top:38px">
+  <h1>Modal variations · round 2</h1>
+  <p class="hint">Everything here is the song modal's grammar: square + title + mono meta, <b>label / value rows</b>, one hairline before the footer. No section headers with lines. Hover a row for its pencil; click a chip in G. Set in Instrument Sans.</p>
+
+  <!-- ================= D ================= -->
+  <div class="sec" id="d">
+    <div class="lbl">D · Rows — the song modal, verbatim, for a tour date</div>
+    <div class="stage"><div class="card m">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="hd">
+        <div class="sq db" style="border-radius:12px"><div class="d">11</div><div class="m">NOV</div></div>
+        <div style="min-width:0;flex:1"><div class="title">Scoot Inn</div>
+          <div class="meta">Austin, TX <i class="dot"></i> 2026-11-11 <i class="dot"></i> <span><b>0</b> clicks · 30d</span></div></div>
+      </div>
+      <div class="rows">
+        <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">City</span><span class="v">Austin</span><span class="aside">TX</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Country</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="gap"></div>
+        <div class="kv"><span class="k">Lineup</span><span class="v">Jigitz</span><span class="aside">jigitz.online</span>
+          <span class="tools"><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></button><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span></div>
+        <div class="kv"><span class="k"></span><span class="v">ZHU</span><span class="aside">zhumusic.com</span>
+          <span class="tools"><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></button><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span></div>
+        <div class="kv ghost"><span class="k"></span><span class="v">+ act</span></div>
+      </div>
+      <div class="ft"><div class="l"><label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label><button class="btn danger">Delete</button></div><button class="btn">Done</button></div>
+    </div></div>
+    <p class="note"><b>Idea:</b> the date block stands where the cover art stands. Acts are rows under one LINEUP label (the label only prints once), each with its host on the right and edit / remove on hover. A ghost "+ act" row adds. Nothing else changes from the song modal.</p>
+  </div>
+
+  <!-- ================= E ================= -->
+  <div class="sec" id="e">
+    <div class="lbl">E · Wide rows — same grammar, two columns of rows, no headers</div>
+    <div class="stage"><div class="card l">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="hd">
+        <div class="sq db" style="border-radius:12px"><div class="d">11</div><div class="m">NOV</div></div>
+        <div style="min-width:0;flex:1"><div class="title">Scoot Inn</div>
+          <div class="meta">Austin, TX <i class="dot"></i> 2026-11-11 <i class="dot"></i> <span><b>0</b> clicks · 30d</span></div></div>
+      </div>
+      <div class="cols">
+        <div class="rows">
+          <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">City</span><span class="v">Austin</span><span class="aside">TX</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Country</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        </div>
+        <div class="rows">
+          <div class="kv"><span class="k">Lineup</span><span class="v">Jigitz</span><span class="aside">jigitz.online</span><span class="tools"><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></button><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span></div>
+          <div class="kv"><span class="k"></span><span class="v">ZHU</span><span class="aside">zhumusic.com</span><span class="tools"><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></button><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span></div>
+          <div class="kv ghost"><span class="k"></span><span class="v">+ act</span></div>
+          <div class="gap"></div>
+          <div class="kv"><span class="k">Clicks</span><span class="v mono">0 <span style="color:var(--faint)">· 30d</span></span></div>
+          <div class="kv"><span class="k">Source</span><span class="v mono" style="color:var(--muted)">manual</span></div>
+        </div>
+      </div>
+      <div class="ft"><div class="l"><label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label><button class="btn danger">Delete</button></div><button class="btn">Done</button></div>
+    </div></div>
+    <p class="note"><b>Idea:</b> when a thing has two kinds of facts (the show · who's on it), give each a column. Reads in one glance, never scrolls. The right column can also hold the read-only facts (clicks, source) as plain rows.</p>
+  </div>
+
+  <!-- ================= F ================= -->
+  <div class="sec" id="f">
+    <div class="lbl">F · Rail — the date owns the left, rows on the right, headers gone</div>
+    <div class="stage"><div class="card l">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="split">
+        <div class="rail">
+          <div class="db"><div class="d">11</div><div class="m">NOV</div><div class="y">2026</div></div>
+          <label class="pill on" style="align-self:flex-start"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label>
+          <div class="stat"><b>0</b> clicks · 30d</div>
+        </div>
+        <div>
+          <div class="title" style="font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.1;padding-right:30px">Scoot Inn</div>
+          <div class="rows" style="margin-top:10px">
+            <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+            <div class="kv"><span class="k">City</span><span class="v">Austin</span><span class="aside">TX</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+            <div class="kv"><span class="k">Country</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+            <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+            <div class="gap"></div>
+            <div class="kv"><span class="k">Lineup</span><span class="v">Jigitz</span><span class="aside">jigitz.online</span><span class="tools"><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></button><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span></div>
+            <div class="kv"><span class="k"></span><span class="v">ZHU</span><span class="aside">zhumusic.com</span><span class="tools"><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></button><button class="ibtn"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span></div>
+            <div class="kv ghost"><span class="k"></span><span class="v">+ act</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="ft"><button class="btn danger">Delete</button><button class="btn">Done</button></div>
+    </div></div>
+    <p class="note"><b>Idea:</b> C without the section lines. The day is the biggest thing on the card; the flag and the stat sit under it, off the row list. Date is edited by clicking the block.</p>
+  </div>
+
+  <!-- ================= G ================= -->
+  <div class="sec" id="g">
+    <div class="lbl">G · Chips — lineup as one row of chips; click a chip to edit it</div>
+    <div class="stage"><div class="card m" style="overflow:visible">
+      <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="hd">
+        <div class="sq db" style="border-radius:12px"><div class="d">11</div><div class="m">NOV</div></div>
+        <div style="min-width:0;flex:1"><div class="title">Scoot Inn</div>
+          <div class="meta">Austin, TX <i class="dot"></i> 2026-11-11 <i class="dot"></i> <span><b>0</b> clicks · 30d</span></div></div>
+      </div>
+      <div class="rows">
+        <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Where</span><span class="v">Austin, TX</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        <div class="kv" style="position:relative;cursor:default"><span class="k">Lineup</span>
+          <span class="v chips" style="overflow:visible">
+            <span class="chip" onclick="pop(this)">Jigitz <svg class="ic" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+            <span class="chip" onclick="pop(this)">ZHU <svg class="ic" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+            <span class="chip" onclick="pop(this)">Gudfella</span>
+            <span class="chip add">+</span>
+          </span>
+          <div class="pop hidden" id="pop" style="left:116px;top:44px">
+            <div class="f"><span class="k">Name</span><input value="Jigitz"></div>
+            <div class="f"><span class="k">Website</span><input class="mono" value="https://www.jigitz.online/"></div>
+            <div class="r"><button class="btn danger">Remove</button><button class="btn">Done</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="ft"><div class="l"><label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label><button class="btn danger">Delete</button></div><button class="btn">Done</button></div>
+    </div></div>
+    <p class="note"><b>Idea:</b> the shortest one. Acts are chips on a single row (a link icon marks the ones with a site); a chip opens a small popover with name, website, remove. City and state fold into one WHERE row.</p>
+  </div>
+
+  <!-- ================= APPLIED ================= -->
+  <div class="sec" id="apply">
+    <div class="lbl">Applied — merch · release · add a date, same grammar</div>
+    <div class="grid3">
+      <div class="stage" style="padding:22px 14px"><div class="card" style="width:100%;padding:22px">
+        <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hd" style="gap:12px"><div class="sq" style="background:linear-gradient(135deg,#dcdce0,#f4f4f6);width:52px;height:52px"></div>
+          <div style="min-width:0;flex:1"><div class="title" style="font-size:18px">Ballerinas Tee</div><div class="meta" style="font-size:11px">Shopify <i class="dot"></i> <b style="font-size:13px">$45</b></div></div></div>
+        <div class="rows" style="margin-top:12px">
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Price</span><span class="v mono">45.00</span></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Stock</span><span class="v">In stock</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Sizes</span><span class="v mono" style="font-size:12px">s · m · l · xl</span></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Ships</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Label</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        </div>
+        <div class="ft" style="margin-top:18px"><label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>on site</label><button class="btn">Done</button></div>
+      </div></div>
+      <div class="stage" style="padding:22px 14px"><div class="card" style="width:100%;padding:22px">
+        <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hd" style="gap:12px"><div class="sq" style="background:linear-gradient(135deg,#1c1c1e,#5a5a60);width:52px;height:52px"></div>
+          <div style="min-width:0;flex:1"><div class="title" style="font-size:18px">Sunshine State of Mind</div><div class="meta" style="font-size:11px">Album <i class="dot"></i> 2024-03-22 <i class="dot"></i> 9 songs</div></div></div>
+        <div class="rows" style="margin-top:12px">
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Type</span><span class="v">Album</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Date</span><span class="v mono">2024-03-22</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Spotify</span><span class="v mono" style="font-size:12px">open.spotify.com/album/…</span></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Apple</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Songs</span><span class="v">Intro, Couldn't Sleep, +7</span><span class="aside">▾</span></div>
+        </div>
+        <div class="ft" style="margin-top:18px"><button class="btn danger">Delete</button><button class="btn">Done</button></div>
+      </div></div>
+      <div class="stage" style="padding:22px 14px"><div class="card" style="width:100%;padding:22px">
+        <button class="ibtn close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hd" style="gap:12px"><div class="sq db" style="border-radius:10px;width:52px;height:52px"><div class="d" style="font-size:18px;color:#c9ccd1">—</div></div>
+          <div style="min-width:0;flex:1"><div class="title" style="font-size:18px;color:#c9ccd1">New date</div><div class="meta" style="font-size:11px">draft</div></div></div>
+        <div class="rows" style="margin-top:12px">
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Date</span><input class="mono" placeholder="2026-__-__"></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Venue</span><input placeholder="Venue"></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Where</span><input placeholder="City"><span class="aside">TX ▾</span></div>
+          <div class="kv" style="min-height:40px"><span class="k" style="width:80px">Tickets</span><input class="mono" placeholder="https://"></div>
+          <div class="kv ghost" style="min-height:40px"><span class="k" style="width:80px">Lineup</span><span class="v">+ act</span></div>
+        </div>
+        <div class="ft" style="margin-top:18px"><span></span><button class="btn" style="background:var(--ink);color:#fff;border-color:var(--ink)">Add</button></div>
+      </div></div>
+    </div>
+    <p class="note"><b>Add</b> is the same card with the rows as inputs and one solid button. The header fills in as you type (the date block and title mirror the rows).</p>
+  </div>
+</div>
+<script>
+  function pop(chip){ const p=document.getElementById('pop'); p.classList.toggle('hidden'); p.querySelector('input').value=chip.textContent.trim(); }
+</script>
+</body>
+</html>

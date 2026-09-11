@@ -79,7 +79,7 @@ export async function addContentAction(
   type: GenericEntity,
   artistId: string,
   formData: FormData,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; id?: string }> {
   const input = extractFields(type, formData)
   if (Object.keys(input).length === 0) return { error: 'Fill in at least one field.' }
   const supabase = await createClient()
@@ -100,13 +100,16 @@ export async function addContentAction(
     if (problem) return { error: problem }
   }
 
+  let id: string
   try {
-    await createContent(supabase, type, artistId, input)
+    const row = await createContent(supabase, type, artistId, input)
+    id = row.id as string
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Add failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
+  // The id lets a card finish what one create can't carry (a tour date's act LINKS).
+  return { id }
 }
 
 export async function updateContentAction(

@@ -213,7 +213,7 @@ describe('useBudgetGate', () => {
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toMatch(/1080p|export/i)
     expect(screen.queryByRole('button', { name: /compress/i })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /cancel|close/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
     await waitFor(() => expect(result()).toBe('null'))
     expect(compressImageFile).not.toHaveBeenCalled()
   })

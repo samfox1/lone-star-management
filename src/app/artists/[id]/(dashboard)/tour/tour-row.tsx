@@ -1,20 +1,19 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { buttonClass, inputClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { CardModal } from '../card-modal'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
-import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
 import { toast } from '../toast'
-import { SaveForm } from '../save-form'
 import { SupportActs } from './support-acts'
 import { supportActsOf } from '@/lib/content'
-import { BoolToggle } from '../bool-toggle'
+import { DateSquare, KvCells, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { US_STATES } from '@/lib/us-states'
+
+const STATE_OPTIONS = US_STATES.map((s) => ({ value: s.code, label: `${s.code} · ${s.name}` }))
 
 export type TourDate = {
   id: string
@@ -24,8 +23,8 @@ export type TourDate = {
   /** Two-letter US state code (TX). null for out-of-country dates. */
   state: string | null
   country: string | null
-  /** Manager marked this as an old show — it renders in Past regardless of date. */
-  /** The stored flag — the edit modal's "This was an old show". Raw; see `past`. */
+  /** The stored flag, kept for rows written before 2026-09-11 (undated old shows). It
+   *  is no longer editable anywhere: a date in the past IS an old show. See `past`. */
   is_past: boolean
   /** DERIVED by the page (lib/tour isPastShow): by date, or the flag. What the row shows. */
   past: boolean
@@ -104,6 +103,15 @@ export function TourRow({
     if (res?.error) toast(res.error, 'error')
     else toast('Date removed')
   }
+
+  /** One row → one field. Absent keys are skipped server-side (extractUpdate), so a
+   *  FormData with a single entry writes exactly that column and nothing else. */
+  const saveField = (field: string) => async (value: string) => {
+    const fd = new FormData()
+    fd.set(field, value)
+    return updateContentAction('tour_date', tour.id, artistId, fd)
+  }
+  const fail = (message: string) => toast(message, 'error')
 
   return (
     <>
@@ -211,50 +219,42 @@ export function TourRow({
       <CardModal
         open={open}
         onClose={() => setOpen(false)}
+        label={tour.venue || 'Untitled venue'}
+        analyticsHref={`/artists/${artistId}`}
         deleteAction={deleteContentAction.bind(null, 'tour_date', tour.id, artistId)}
-        deleteLabel="Delete date"
+        deleteLabel="Delete"
         deleteNoun="Date"
       >
-        <h3 className="text-lg font-bold tracking-[-0.01em]">Edit date</h3>
-        {badge && (
-          <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">from {badge}</div>
-        )}
-        <div className="mt-4">
-          <EntitySparkline artistId={artistId} entityIds={[tour.id]} label="Ticket clicks · 30d" />
-        </div>
-        <SaveForm action={updateContentAction.bind(null, 'tour_date', tour.id, artistId)} className="mt-4 space-y-2">
-          <div className="flex gap-2">
-            <input name="date" type="date" defaultValue={tour.date ?? ''} className={`${inputClass} w-40`} />
-            <input name="city" defaultValue={tour.city ?? ''} placeholder="City" className={`${inputClass} flex-1`} />
-          </div>
-          <div className="flex gap-2">
-            <input name="venue" defaultValue={tour.venue ?? ''} placeholder="Venue" className={`${inputClass} min-w-0 flex-1`} />
-            <select
-              name="state"
-              defaultValue={tour.state ?? ''}
-              aria-label="State"
-              className={`${inputClass} w-28 ${tour.state ? 'text-ink' : 'text-ink-faint'}`}
-            >
-              <option value="">State</option>
-              {US_STATES.map((s) => (
-                <option key={s.code} value={s.code} className="text-ink">
-                  {s.code} · {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <input name="country" defaultValue={tour.country ?? ''} placeholder="Country (outside the US)" className={`${inputClass} w-full`} />
-          <input name="ticket_url" type="url" defaultValue={tour.ticket_url ?? ''} placeholder="Tickets URL" className={`${inputClass} w-full`} />
-          <BoolToggle name="is_past" label="This was an old show" defaultChecked={tour.is_past} />
-          <button type="submit" className={buttonClass('ghost')}>
-            Save
-          </button>
-        </SaveForm>
-        {/* The lineup saves itself, act by act (see SupportActs) — it is outside the
-            SaveForm so the form's Save never posts `support` and overwrites it. Remounted
-            with the modal, like everything else in it. */}
-        <div className="mt-4">
-          <SupportActs artistId={artistId} tourDateId={tour.id} acts={supportActsOf(tour)} />
+        {/* The modal grammar (modal-kit): the venue IS the title, the date block stands
+            where cover art would, the place is the meta. Every row saves its own field;
+            there is no Save, no "old show" toggle (a past date is an old show), and no
+            click numbers (the Analytics button in the corner goes to that page). */}
+        <ModalHeader
+          square={<DateSquare date={tour.date} past={tour.past} />}
+          title={tour.venue || 'Untitled venue'}
+          meta={
+            <>
+              {place ? <span>{place}</span> : null}
+              {place && badge ? <MetaDot /> : null}
+              {badge ? <span>from {badge}</span> : null}
+            </>
+          }
+        />
+        <div className="mt-5">
+          <KvField label="Date" value={tour.date ?? ''} type="date" mono onSave={saveField('date')} onError={fail} />
+          <KvField label="Venue" value={tour.venue ?? ''} onSave={saveField('venue')} onError={fail} />
+          <KvCells
+            label="Where"
+            cells={[
+              { label: 'City', value: tour.city ?? '', onSave: saveField('city'), onError: fail },
+              { label: 'State', value: tour.state ?? '', options: STATE_OPTIONS, onSave: saveField('state'), onError: fail },
+              { label: 'Country', value: tour.country ?? '', onSave: saveField('country'), onError: fail },
+            ]}
+          />
+          <KvField label="Tickets" value={tour.ticket_url ?? ''} type="url" mono onSave={saveField('ticket_url')} onError={fail} />
+          <KvRow label="Lineup">
+            <SupportActs artistId={artistId} tourDateId={tour.id} acts={supportActsOf(tour)} />
+          </KvRow>
         </div>
       </CardModal>
     </>
