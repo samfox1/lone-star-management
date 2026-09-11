@@ -330,7 +330,7 @@ export function ReleaseCard({
         {/* Two columns (Sam, 2026-09-11): the release on the left, its listen links on the
             right — each link row labelled by the platform's logo, black when a link is set,
             grey when empty. */}
-        <div className="mt-5 grid grid-cols-[1fr_320px] gap-x-10">
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)_320px] gap-x-10">
           <div>
           <KvField label="Title" value={title} onSave={(v) => saveDetails(v, date)} onError={fail} />
           <KvField
