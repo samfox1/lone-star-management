@@ -84,7 +84,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
         onClose={close}
         label="Add date"
         footer={
-          <div className="flex items-center justify-end border-t border-hairline pt-4">
+          <div className="mt-1 flex items-center justify-end">
             <button type="button" onClick={add} disabled={busy} className={buttonClass('solid')}>
               {busy ? 'Adding…' : 'Add date'}
             </button>

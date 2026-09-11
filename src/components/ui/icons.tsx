@@ -190,12 +190,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
     </>
   ),
+  // The box-with-an-arrow share mark (Sam, 2026-09-11: "the other share icon"), not the
+  // three-node network: this is the one people know from their phone's share sheet.
   share: (
     <>
-      <circle cx="6" cy="12" r="2.4" />
-      <circle cx="17" cy="6" r="2.4" />
-      <circle cx="17" cy="18" r="2.4" />
-      <path d="M8.1 10.9l6.8-3.8M8.1 13.1l6.8 3.8" />
+      <path d="M12 15V4" />
+      <path d="M8.5 7.5L12 4l3.5 3.5" />
+      <path d="M7 11H6a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-1" />
     </>
   ),
   trash: <path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13" />,

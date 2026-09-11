@@ -131,7 +131,7 @@ export function CardModal({
         {footer === null ? null : footer !== undefined ? (
           <div className="mt-6">{footer}</div>
         ) : (
-          <div className="mt-6 flex items-center justify-between border-t border-hairline pt-4">
+          <div className="mt-7 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {footerLeft}
               {deleteAction ? (
