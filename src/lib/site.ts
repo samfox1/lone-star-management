@@ -166,6 +166,9 @@ export async function getWorkingSitePayload(
             // A song's OWN date (20260821, snapshotted from this release onward). Only
             // meaningful for a standalone — one on a record is dated by the record.
             release_date: (s.release_date as string | null) ?? null,
+            // The song's OWN type (snapshotted from 2026-09-11) — the shelf a standalone
+            // lands on. Preview must carry it or a Live set previews as a Single.
+            release_type: (s.release_type as string | null) ?? null,
             source: (s.source as string | null) ?? null,
             spotify_id: (s.spotify_id as string | null) ?? null,
             apple_id: (s.apple_id as string | null) ?? null,
