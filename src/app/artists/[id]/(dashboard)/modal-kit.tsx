@@ -103,6 +103,8 @@ type EditableProps = {
   type?: 'text' | 'url' | 'date'
   /** A select instead of a text input; saves on change. The empty option reads "—". */
   options?: SelectOption[]
+  /** Drop the empty option — for a value that always has to be something (a song's type). */
+  required?: boolean
 }
 
 /**
@@ -110,7 +112,7 @@ type EditableProps = {
  * value is saved — an untouched row never writes — and a refused save puts the old
  * value back and reports why. Optimistic: the new value shows while the save is out.
  */
-function Editable({ label, value, onSave, onError, mono, type = 'text', options, size }: EditableProps & { size: 'row' | 'cell' }) {
+function Editable({ label, value, onSave, onError, mono, type = 'text', options, required, size }: EditableProps & { size: 'row' | 'cell' }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   // What the row SHOWS. Seeded from the prop and re-seeded when the prop changes (a
@@ -155,7 +157,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
           onChange={(e) => void commit(e.target.value)}
           className="absolute inset-0 w-full cursor-pointer opacity-0"
         >
-          <option value="">—</option>
+          {required ? null : <option value="">—</option>}
           {options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -204,11 +206,13 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
   )
 }
 
-/** One `LABEL  value` row that saves its own field. */
-export function KvField(props: EditableProps) {
+/** One `LABEL  value` row that saves its own field. `trailing` sits after the value —
+ *  an "open in a new tab" mark beside a link, say — and shows whatever the hover state. */
+export function KvField({ trailing, ...props }: EditableProps & { trailing?: ReactNode }) {
   return (
     <KvRow label={props.label}>
       <Editable {...props} size="row" />
+      {trailing}
       <Icon name="edit" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover:opacity-100" />
     </KvRow>
   )

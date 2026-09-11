@@ -26,6 +26,7 @@ export function CardModal({
   confirmText,
   wide = false,
   footer,
+  footerLeft,
   label,
   analyticsHref,
   children,
@@ -42,6 +43,9 @@ export function CardModal({
   /** Replaces the default Delete / Done footer row (e.g. a single Save button). Pass `null`
    *  to render NO footer at all — for modals that carry their own action inside the body. */
   footer?: ReactNode | null
+  /** Extra controls in the footer's LEFT group, before Delete (a flag pill, "Merge into…").
+   *  Ignored when `footer` replaces the whole row. */
+  footerLeft?: ReactNode
   /** Accessible name for the dialog (the thing's name, or "Add date"). */
   label?: string
   /** Where the analytics button goes. The modal shows no numbers of its own (Sam,
@@ -124,18 +128,19 @@ export function CardModal({
           <div className="mt-6">{footer}</div>
         ) : (
           <div className="mt-6 flex items-center justify-between border-t border-hairline pt-4">
-            {deleteAction ? (
-              <button
-                type="button"
-                onClick={del}
-                disabled={deleting}
-                className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
-              >
-                {deleting ? 'Deleting…' : deleteLabel}
-              </button>
-            ) : (
-              <span />
-            )}
+            <div className="flex items-center gap-3">
+              {footerLeft}
+              {deleteAction ? (
+                <button
+                  type="button"
+                  onClick={del}
+                  disabled={deleting}
+                  className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
+                >
+                  {deleting ? 'Deleting…' : deleteLabel}
+                </button>
+              ) : null}
+            </div>
             <button type="button" onClick={onClose} className={buttonClass('ghost')}>
               Done
             </button>

@@ -1,15 +1,28 @@
 // @vitest-environment jsdom
-// The single-song editor, and the pasted listen link that promotes an upload to Released.
+// The song modal on the modal kit: rows that save one field each, the listen links, the type
+//   select, the tile's on-site mark, and the Unreleased pill.
 /**
- * TrackCard — the orphan-single editor, now the SAME single-style modal a release
- * single uses. Tests the Spotify (stream_url) slot: pasting a link saves it on blur
- * via updateContentAction, which promotes an upload to Released by derivation. The
- * audio uploader, supabase client (sparkline + signed audio URL), and server actions
- * are mocked.
+ * TrackCard — a song's modal, rebuilt on modal-kit (prototype G, Sam, 2026-09-11: the song
+ * modal was the picture he liked). Header = cover · title · type / date meta. Rows: Title,
+ * Type, Release, Also on, Date, one per listen platform, Audio. Footer: Unreleased pill
+ * (where it can decide anything), Merge into… (when there is a target), Delete, Done.
+ * No Save, no Edit sheet, no click numbers.
+ *
+ * What is pinned:
+ *   - a pasted Spotify link saves on blur through updateContentAction (stream_url), which
+ *     promotes an upload to Released by derivation; the current link is shown as text;
+ *   - the Type row offers EVERY type in the registry (a hand-picked list is how 'live'
+ *     shipped unpickable) and saves the pick at once; editing another row never writes
+ *     the type;
+ *   - the tile's on-site mark (orphans only) flips through the same action as before;
+ *   - Unreleased is offered only where the flag can decide (manual + SoundCloud-only),
+ *     and flipping it also takes the song off the site;
+ *   - no Save / Close buttons, one Analytics button, Merge only when there is a target.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
+import { RELEASE_TYPE_LABEL, RELEASE_TYPES } from '@/lib/releases'
 import { setTrackOnSiteAction, setTrackReleasedAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
@@ -48,67 +61,59 @@ const track = (over: Partial<Track> = {}): Track => ({
   apple_url: null, soundcloud_url: null, deezer_url: null, ...over,
 })
 
-function openModal(t: Track = track()) {
-  render(<TrackCard track={t} artistId="a1" releases={[]} />)
+function openModal(t: Track = track(), extra: Partial<Parameters<typeof TrackCard>[0]> = {}) {
+  render(<TrackCard track={t} artistId="a1" releases={[]} {...extra} />)
+  // The tile's name is badge + title (+ platform badges): match on the title. Before the
+  // modal opens it is the only BUTTON carrying it (the on-site mark is a checkbox).
   fireEvent.click(screen.getByRole('button', { name: new RegExp(t.title) }))
+  return screen.getByRole('dialog')
+}
+
+/** The row carrying this label (the label span's row box). */
+function rowOf(dialog: HTMLElement, label: string): HTMLElement {
+  const lab = within(dialog).getAllByText(label, { selector: 'span' }).find((el) => el.closest('.group'))!
+  return lab.closest('.group') as HTMLElement
+}
+
+/** Click a row's value to edit it, type, blur. */
+function editRow(dialog: HTMLElement, label: string, next: string) {
+  fireEvent.click(within(rowOf(dialog, label)).getByRole('button'))
+  const input = within(dialog).getByRole('textbox', { name: label })
+  fireEvent.change(input, { target: { value: next } })
+  fireEvent.blur(input)
 }
 
 describe('TrackCard listen link', () => {
   it('saves a pasted Spotify link on blur through updateContentAction (promotes the song)', async () => {
-    openModal()
-    const input = screen.getByPlaceholderText('Spotify link')
-    fireEvent.change(input, { target: { value: 'https://soundcloud.com/x/song' } })
-    fireEvent.blur(input)
-
+    const dialog = openModal()
+    editRow(dialog, 'Spotify', 'https://soundcloud.com/x/song')
     await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
     const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
     expect([type, id, artistId]).toEqual(['track', 't1', 'a1'])
+    expect([...(fd as FormData).keys()]).toEqual(['stream_url'])
     expect((fd as FormData).get('stream_url')).toBe('https://soundcloud.com/x/song')
   })
 
-  it('prefills the current Spotify link', () => {
-    openModal(track({ stream_url: 'https://x/s' }))
-    expect(screen.getByPlaceholderText('Spotify link')).toHaveValue('https://x/s')
+  it('shows the current Spotify link as text, with a way to open it', () => {
+    const dialog = openModal(track({ stream_url: 'https://x/s' }))
+    expect(within(dialog).getByText('https://x/s')).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: /Open Spotify/ })).toHaveAttribute('href', 'https://x/s')
   })
 })
 
-/**
- * SONG TYPE (Sam, 2026-08-21: "Theres no way to edit the details of the music").
- *
- * A song's `release_type` decides which section of the Music page it files under and what
- * the site's grid calls it — and it was settable at ADD time and never again. A release
- * card had type chips; a SONG had a read-only badge, so a standalone SoundCloud track,
- * the one kind that has no release row to edit instead, could never be re-tagged at all.
- * That is how a live set ended up filed as a remix.
- */
 describe('TrackCard song type', () => {
-  const openEdit = (t: Track = track()) => {
-    openModal(t)
-    fireEvent.click(screen.getByRole('button', { name: `${t.title} options` }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Edit/i }))
-  }
-  /** The song card's own modal also has a Save; the edit sheet opens on top, so its
-   *  Save is the last one mounted. */
-  const saveEdit = () => {
-    const buttons = screen.getAllByRole('button', { name: 'Save' })
-    fireEvent.click(buttons[buttons.length - 1])
-  }
-
   it('CRITICAL: offers every type in the registry, not a hand-picked few', () => {
-    // Derived from RELEASE_TYPES, so a type added later appears here the day it lands
-    // (AGENTS.md rule 4) — this is the check that would have caught 'live' being
-    // unpickable.
-    openEdit()
-    for (const label of ['Single', 'EP', 'Album', 'Remix', 'Live set', 'Featured']) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
-    }
+    // Derived from RELEASE_TYPES (AGENTS.md rule 4) — the check that would have caught
+    // 'live' being unpickable.
+    const dialog = openModal()
+    const select = within(dialog).getByRole('combobox', { name: 'Type' })
+    const labels = [...select.querySelectorAll('option')].map((o) => o.textContent)
+    expect(labels).toEqual(RELEASE_TYPES.map((t) => RELEASE_TYPE_LABEL[t]))
   })
 
-  it('CRITICAL: picking Live saves it against the song', async () => {
-    openEdit(track({ release_type: 'remix' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Live set' }))
-    saveEdit()
-
+  it('CRITICAL: picking Live saves it against the song at once', async () => {
+    const dialog = openModal(track({ release_type: 'remix' }))
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Type' }), { target: { value: 'live' } })
     await waitFor(() => expect(setTrackTypeAction).toHaveBeenCalledTimes(1))
     const [id, artistId, fd] = vi.mocked(setTrackTypeAction).mock.calls[0]
     expect([id, artistId]).toEqual(['t1', 'a1'])
@@ -116,31 +121,46 @@ describe('TrackCard song type', () => {
   })
 
   it('does not write a type the manager never touched', async () => {
-    // Saving an unrelated edit must not stamp release_type — a no-op write would lock
-    // the value against a later Spotify sync for no reason.
-    openEdit(track({ release_type: 'single' }))
-    saveEdit()
-    await waitFor(() => expect(screen.queryByText('Edit song')).toBeNull())
+    // Editing the title must not stamp release_type — a no-op write would lock the value
+    // against a later Spotify sync for no reason.
+    const dialog = openModal(track({ release_type: 'single' }))
+    editRow(dialog, 'Title', 'Demo (edit)')
+    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
+    expect([...(vi.mocked(updateContentAction).mock.calls[0][3] as FormData).keys()]).toEqual(['title'])
     expect(setTrackTypeAction).not.toHaveBeenCalled()
   })
 })
 
+describe('the modal grammar', () => {
+  it('has no Save or Close buttons, one Done, and an Analytics button', () => {
+    const dialog = openModal()
+    expect(within(dialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
+    expect(within(dialog).queryByRole('button', { name: /^Cancel$/ })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument() // the × only
+    expect(within(dialog).getByRole('link', { name: 'Analytics' })).toHaveAttribute('href', '/artists/a1')
+    expect(within(dialog).queryByText(/listens/i)).toBeNull()
+  })
+
+  it('offers Merge into… only when there is something to merge into', () => {
+    openModal()
+    expect(screen.queryByRole('button', { name: /Merge/ })).toBeNull()
+    cleanup()
+    openModal(track(), { mergeTargets: [{ id: 't2', title: 'Other' }] })
+    expect(screen.getByRole('button', { name: /Merge/ })).toBeInTheDocument()
+  })
+})
+
 /* ── the on-site check on the tile (Sam, 2026-09-10) ─────────────────────────────────
- * "why dont the soundcloud music assets have the check on them like the spotify one on
- * the right does". The Spotify one was a RELEASE card, which mounts SelectToggle on its
- * tile. The SoundCloud ones were release-less SONGS, whose on-site switch lived inside the
- * modal (48db004) with nothing on the tile face at all — so one fact wore two different
- * faces on the same shelf, and the songs read as off-site or broken. Same check now, wired
- * to the song's existing instant action; a song inside a release still shows none, because
- * the release owns that decision. */
+ * Same check the release cards wear, wired to the song's action; a song inside a release
+ * shows none, because the release owns that decision. */
 describe('the on-site check on a song tile', () => {
   it('CRITICAL: an orphan song ON the site shows a checked mark on its tile', () => {
     render(<TrackCard track={track({ on_site: true })} artistId="a1" releases={[]} />)
-    const box = screen.getByRole('checkbox', { name: /Demo — on site/ })
-    expect(box).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('checkbox', { name: /Demo — on site/ })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('CRITICAL: clicking the mark flips the song on or off the site, through the same action the modal uses', async () => {
+  it('CRITICAL: clicking the mark flips the song on or off the site, through the same action', async () => {
     render(<TrackCard track={track({ on_site: false })} artistId="a1" releases={[]} />)
     const box = screen.getByRole('checkbox', { name: /Demo — off site/ })
     expect(box).toHaveAttribute('aria-checked', 'false')
@@ -150,23 +170,19 @@ describe('the on-site check on a song tile', () => {
   })
 
   it('CRITICAL: a song inside a release shows NO mark — the release owns on-site', () => {
-    // The release card's check governs every song in it; a second check on the song would
-    // be a control that either lies or fights the release's.
     render(<TrackCard track={track({ release_id: 'r1', on_site: true })} artistId="a1" releases={[]} />)
     expect(screen.queryByRole('checkbox')).toBeNull()
   })
 
   it('the mark does not open the modal', () => {
-    // Sibling of the tile button, not inside it — a click on the check must not also
-    // count as a click on the card.
     render(<TrackCard track={track({ on_site: false })} artistId="a1" releases={[]} />)
     fireEvent.click(screen.getByRole('checkbox'))
-    expect(screen.queryByPlaceholderText('Spotify link')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
 
-/* ── the Unreleased switch in the editor (Sam, 2026-09-10) ──────────────────────────── */
-describe('the Unreleased switch in the song editor', () => {
+/* ── the Unreleased pill in the footer (Sam, 2026-09-10) ────────────────────────────── */
+describe('the Unreleased pill', () => {
   it('CRITICAL: a manual SoundCloud-only song offers it; flipping it calls the action', async () => {
     openModal(track({ soundcloud_url: 'https://soundcloud.com/x/demo', released: true }))
     const sw = screen.getByRole('switch', { name: 'Unreleased' })
@@ -186,11 +202,11 @@ describe('the Unreleased switch in the song editor', () => {
     expect(screen.queryByRole('switch', { name: 'Unreleased' })).toBeNull()
   })
 
-  it('flipping to unreleased also turns the On site switch off', async () => {
+  it("flipping to unreleased also takes the song off the site (the tile's mark follows)", async () => {
     // The public doors read on_site, so the two must move together or "unreleased" lies.
     openModal(track({ soundcloud_url: 'https://soundcloud.com/x/demo', released: true, on_site: true }))
-    expect(screen.getByRole('switch', { name: /On site/i })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('checkbox', { name: /Demo — on site/ })).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByRole('switch', { name: 'Unreleased' }))
-    await waitFor(() => expect(screen.getByRole('switch', { name: /On site/i })).toHaveAttribute('aria-checked', 'false'))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Demo — off site/ })).toHaveAttribute('aria-checked', 'false'))
   })
 })
