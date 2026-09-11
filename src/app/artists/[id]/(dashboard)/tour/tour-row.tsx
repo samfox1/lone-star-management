@@ -252,7 +252,7 @@ export function TourRow({
             ]}
           />
           <KvField label="Tickets" value={tour.ticket_url ?? ''} type="url" mono onSave={saveField('ticket_url')} onError={fail} />
-          <KvRow label="Lineup" align="start">
+          <KvRow label="Lineup">
             <SupportActs artistId={artistId} tourDateId={tour.id} acts={supportActsOf(tour)} />
           </KvRow>
         </div>

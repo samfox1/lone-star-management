@@ -56,8 +56,12 @@ afterEach(async () => {
 describe('merch — toggle, then Publish', () => {
   it('CRITICAL: adding a product lands it on-site IN THE DRAFT and nowhere public until Publish', async () => {
     const { addContentAction, publishEntityAction } = await actions()
-    expect(await addContentAction('merch', artistA, fd({ title: 'LP Tee', price: '20' }))).toEqual({})
+    // Register the row BEFORE asserting on the answer: a failed assertion here used to
+    // leave 'LP Tee' behind, and the leftovers skewed the slotting tests below.
+    const added = await addContentAction('merch', artistA, fd({ title: 'LP Tee', price: '20' }))
     const row = await newest('merch', 'title', 'LP Tee')
+    // The action answers with the new row's id (2026-09-11, for the tour card's act links).
+    expect(added).toEqual({ id: row.id })
     expect(row.on_site).toBe(true)
     expect(await revisionsFor(row.id), 'the add published on its own').toBe(0)
     expect(await publicList('merch', 'title')).not.toContain('LP Tee')
@@ -106,8 +110,9 @@ describe('merch — toggle, then Publish', () => {
 describe('tour dates — toggle, then Publish, slotted by date', () => {
   it('CRITICAL: adding a date lands it on-site in the draft and public only after Publish', async () => {
     const { addContentAction, publishEntityAction } = await actions()
-    expect(await addContentAction('tour_date', artistA, fd({ date: '2030-05-05', venue: 'LP Venue' }))).toEqual({})
+    const added = await addContentAction('tour_date', artistA, fd({ date: '2030-05-05', venue: 'LP Venue' }))
     const row = await newest('tour_dates', 'venue', 'LP Venue')
+    expect(added).toEqual({ id: row.id })
     expect(row.on_site).toBe(true)
     expect(await revisionsFor(row.id)).toBe(0)
     expect(await publicList('tour_dates', 'venue')).not.toContain('LP Venue')

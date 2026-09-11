@@ -141,7 +141,9 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
     }
   }
 
-  const textClass = cx(size === 'row' ? 'text-[15px]' : 'text-[15px]', mono && 'font-space text-[13px]')
+  // Text and input share ONE box — same height, same line, a bottom border on both
+  // (transparent on text, ink on the input) — so clicking a row never moves the modal.
+  const textClass = cx('block h-6 min-w-0 flex-1 truncate border-b leading-6', mono ? 'font-space text-[13px]' : 'text-[15px]', size === 'cell' && 'h-6')
 
   if (options) {
     const shownLabel = options.find((o) => o.value === current)?.label ?? current
@@ -160,7 +162,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
             </option>
           ))}
         </select>
-        <span className={cx('block truncate', textClass, !current && 'text-hairline')}>{current ? shownLabel : '—'}</span>
+        <span className={cx(textClass, 'border-transparent', !current && 'text-hairline')}>{current ? shownLabel : '—'}</span>
       </div>
     )
   }
@@ -175,7 +177,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => void commit(draft.trim())}
         onKeyDown={onKey}
-        className={cx('min-w-0 flex-1 border-b border-ink bg-transparent pb-px outline-none', textClass)}
+        className={cx(textClass, 'border-ink bg-transparent p-0 outline-none')}
       />
     )
   }
@@ -195,7 +197,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
           setEditing(true)
         }
       }}
-      className={cx('block min-w-0 flex-1 cursor-text truncate', textClass, !current && 'text-hairline')}
+      className={cx(textClass, 'cursor-text border-transparent', !current && 'text-hairline')}
     >
       {current || '—'}
     </span>
