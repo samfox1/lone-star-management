@@ -7,7 +7,10 @@ import { toast } from '../toast'
 import { mergeSongsAction } from './actions'
 
 /** A song this one can be merged into (id + title, for the selector). */
-export type MergeTarget = { id: string; title: string }
+/** A song that can be merged into. `release_id` lets the song modal tell an intended twin
+ *  (the same song on another release — one row per release, 2026-09-11) from a real
+ *  duplicate (same title on the SAME release, or with no release at all). */
+export type MergeTarget = { id: string; title: string; release_id?: string | null }
 
 /**
  * "Merge into…" — fold a duplicate song into the one that should survive.

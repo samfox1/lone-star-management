@@ -144,13 +144,21 @@ describe('the modal grammar', () => {
     expect(within(dialog).queryByText(/listens/i)).toBeNull()
   })
 
-  it('offers "Merge duplicate…" only when another song has THIS title', () => {
+  it('offers "Merge duplicate…" only for a same-title song that is not just the same song on another release', () => {
     // Sam (2026-09-11) could not tell what "Merge into…" was for on a song with no twin.
-    // A target with a different title is not a duplicate, so no button.
-    openModal(track(), { mergeTargets: [{ id: 't2', title: 'Other' }] })
+    // A different title is not a duplicate; a same title on ANOTHER release is the
+    // intended one-row-per-release twin; a same title with no release, or on the same
+    // release, is a duplicate to fold in.
+    openModal(track(), { mergeTargets: [{ id: 't2', title: 'Other', release_id: null }] })
     expect(screen.queryByRole('button', { name: /Merge/ })).toBeNull()
     cleanup()
-    openModal(track(), { mergeTargets: [{ id: 't2', title: 'demo (feat. X)' }] })
+    openModal(track({ release_id: 'r1' }), { mergeTargets: [{ id: 't2', title: 'Demo', release_id: 'r2' }] })
+    expect(screen.queryByRole('button', { name: /Merge/ })).toBeNull()
+    cleanup()
+    openModal(track({ release_id: 'r1' }), { mergeTargets: [{ id: 't2', title: 'demo (feat. X)', release_id: null }] })
+    expect(screen.getByRole('button', { name: 'Merge duplicate…' })).toBeInTheDocument()
+    cleanup()
+    openModal(track({ release_id: 'r1' }), { mergeTargets: [{ id: 't2', title: 'Demo', release_id: 'r1' }] })
     expect(screen.getByRole('button', { name: 'Merge duplicate…' })).toBeInTheDocument()
   })
 })

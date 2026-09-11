@@ -146,10 +146,17 @@ export function SongModal({
 
   const releaseOptions = releases.map((r) => ({ value: r.id, label: r.title }))
   // "Merge duplicate…" only when there IS a likely duplicate: another song whose title
-  // normalises to this one's (the sync's own match rule). Sam (2026-09-11) could not
-  // tell what the button was for on a song with no twin — now it appears only when
-  // there is one to fold this into.
-  const twins = mergeTargets.filter((t) => normalizeTitle(t.title) === normalizeTitle(track.title))
+  // normalises to this one's (the sync's own match rule) AND that is not the SAME song
+  // on another release — a single that is also an album track is two rows on purpose
+  // (2026-09-11), not a duplicate. A twin on the same release, or with no release (a
+  // stray upload, a refused sync match), is one. Sam could not tell what the button
+  // was for on a song with no twin — now it appears only when there is one to fold in.
+  const twins = mergeTargets.filter((t) => {
+    if (normalizeTitle(t.title) !== normalizeTitle(track.title)) return false
+    const theirs = t.release_id ?? null
+    const ours = releaseId || null
+    return theirs === null || ours === null || theirs === ours
+  })
   const date = track.release_date?.slice(0, 10) ?? ''
 
   // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP

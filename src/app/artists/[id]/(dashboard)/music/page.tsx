@@ -181,7 +181,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   // Merge targets span the WHOLE catalog, not just the visible bucket: the sync's refusal
   // to guess a cross-platform match leaves the two halves of one song wherever they landed,
   // and a Released row's twin is routinely an Unreleased upload (or the reverse).
-  const mergeTargets = tracks.map((t) => ({ id: t.id, title: t.title }))
+  const mergeTargets = tracks.map((t) => ({ id: t.id, title: t.title, release_id: t.release_id }))
 
   return (
     <>
