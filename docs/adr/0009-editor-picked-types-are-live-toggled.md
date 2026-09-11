@@ -1,6 +1,6 @@
 # 0009 — A type the editor can pick is live-toggled, never publish-reconciled
 
-Status: Accepted (2026-07-15). Amended by ADR 0010 (2026-09-10): releases and songs are
+Status: Accepted (2026-07-15). Amended by ADR 0011 (2026-09-10): releases and songs are
 DRAFT-PRESENCE now (doors read the snapshot), merch is live-toggled, and tour dates and
 merch auto-publish on every write. The reconcile path this ADR describes no longer exists.
 

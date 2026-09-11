@@ -1,7 +1,7 @@
 # Presence: what "on the site" means, per kind of thing
 
 Plan of record, 2026-09-10. Supersedes the presence half of ADR 0009 for the types
-named here (ADR 0010 records the decision).
+named here (ADR 0011 records the decision).
 
 ## The rule, in Sam's words
 
@@ -79,7 +79,7 @@ show the "checked, publish to put on site" state.
 
 ## Status (2026-09-10)
 S1 shipped c212ee3 + 71b2ef3 (migrations 20260910130000/140000/150000 applied). S2 + S3
-shipped 511a4ac (20260910160000 applied). ADR 0010 records the decision. S4: full suite,
+shipped 511a4ac (20260910160000 applied). ADR 0011 records the decision. S4: full suite,
 `mutation:changed`, browser pass — see the commits that follow.
 
 ## Not in scope

@@ -1,4 +1,4 @@
-# 0010 — Presence waits for Publish: tracks, releases, tour dates and merch
+# 0011 — Presence waits for Publish: tracks, releases, tour dates and merch
 Status: Accepted (2026-09-10; revised 2026-09-11). Amends ADR 0009.
 
 ## Context
