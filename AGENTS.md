@@ -23,6 +23,25 @@ copy (~162 MB) into `~/.npm/_npx/` and runs *that* instead. Two things break:
 (If `SUPABASE_ACCESS_TOKEN` is set in the environment, the CLI skips the keychain
 entirely and neither binary prompts — but the version-skew reason stands regardless.)
 
+# Grants: revoke `from public, anon, authenticated`, never just `from public`
+
+Supabase's default privileges on the `public` schema grant EXECUTE on every NEW function
+to `anon`, `authenticated` and `service_role` **by role**. `revoke all on function … from
+public` removes only the PUBLIC pseudo-role's grant and leaves those three untouched, so a
+function meant for managers or the service key stays callable by anon. This bit
+`submit_enquiry` (2026-08-04) and `record_event_v2` (2026-09-11, caught by its own test
+four minutes after the push), and left four analytics readers and two manager RPCs
+anon-executable for weeks.
+
+- Service-only: `revoke all on function public.f(…) from public, anon, authenticated;
+  grant execute … to service_role;`
+- Manager-facing: `revoke all … from public, anon; grant execute … to authenticated, service_role;`
+- A denial test pins the door: `expectExecuteDenied(error, 'f')` (`tests/helpers/rls.ts`)
+  — 42501 AND the function name, never bare `not.toBeNull()`.
+- `npm run audit:grants` lists every function anon can execute and fails on any that is
+  not an intended door (`scripts/audit-grants.ts` holds the allowlist). Run it after any
+  migration that creates or replaces a function.
+
 # Test discipline: a test must be able to FAIL
 
 The 2026-08-04/05 review found the same defect shape over and over, across every

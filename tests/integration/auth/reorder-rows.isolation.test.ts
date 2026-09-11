@@ -22,6 +22,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { expectExecuteDenied } from '@tests/helpers/rls'
 
 const svc = serviceClient()
 
@@ -91,16 +92,18 @@ describe('reorder_rows — the artist_id filter and the caller RLS', () => {
     ])
   })
 
-  it("CRITICAL: anon can CALL it (PUBLIC execute) but still changes nothing", async () => {
-    // The migration never revoked the default PUBLIC grant. That is only safe while the
-    // function stays SECURITY INVOKER — flip it to DEFINER and this becomes an
-    // unauthenticated write endpoint for four tables.
+  it("CRITICAL: anon cannot call it at all — and the rows are the witness", async () => {
+    // Until 20260911180000 the function carried Supabase's default anon EXECUTE grant and
+    // this test pinned "anon can call it but RLS makes it a no-op" — safe only while it
+    // stayed SECURITY INVOKER. The grant is revoked now (AGENTS.md: revoke from public,
+    // anon, authenticated), so the door is closed one layer earlier; the row-state check
+    // stays, because a denial without a witness proves nothing.
     const { error } = await anonClient().rpc('reorder_rows', {
       p_table: 'tracks',
       p_artist: artistB,
       p_ids: [bSecond, bFirst],
     })
-    expect(error).toBeNull()
+    expectExecuteDenied(error, 'reorder_rows')
 
     const order = await bOrder()
     expect(order.map((t) => t.id), 'anon reordered a tenant’s tracks').toEqual([bFirst, bSecond])
