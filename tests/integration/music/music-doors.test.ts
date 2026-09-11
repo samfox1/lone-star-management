@@ -55,9 +55,9 @@ async function makeRelease(title: string, slug: string, patch: Record<string, un
   return data!.id
 }
 
-async function publicSiteTracks(): Promise<{ title: string }[]> {
+async function publicSiteTracks(): Promise<{ title: string; release_type?: string | null }[]> {
   const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
-  return (data?.tracks as { title: string }[] | null) ?? []
+  return (data?.tracks as { title: string; release_type?: string | null }[] | null) ?? []
 }
 
 async function releasePage(slug: string): Promise<{ title: string; tracks: { title: string }[] } | null> {
@@ -118,6 +118,11 @@ beforeAll(async () => {
     audio_path: `${artistA}/toggle.mp3`,
   })
 
+  // A standalone LIVE SET (no release). Its type is per-song (20260726120000) and the
+  // site shelves by it, so it must ride the track snapshot — it did not until 2026-09-11,
+  // which is why Skeen's Navy Pier recording sat under Singles after being retagged.
+  await makeTrack('Navy Live Set', { stream_url: 'https://soundcloud.com/x/navy' }, { release_type: 'live' })
+
   await publishContent(asA, 'release', artistA)
   await publishContent(asA, 'track', artistA)
 
@@ -156,6 +161,11 @@ describe('get_public_site — tracks gate on on_site, not Released', () => {
 
   it('shows a provenance-less legacy snapshot (no live row → coalesce on_site)', async () => {
     expect((await publicSiteTracks()).map((t) => t.title)).toContain('Legacy Snapshot')
+  })
+
+  it("CRITICAL: a standalone song's TYPE reaches the site (the shelf it lands on)", async () => {
+    const live = (await publicSiteTracks()).find((t) => t.title === 'Navy Live Set')
+    expect(live?.release_type).toBe('live')
   })
 })
 

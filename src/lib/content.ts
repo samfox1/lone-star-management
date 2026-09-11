@@ -211,7 +211,11 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // `on_site` rides the snapshot (20260910130000): the public doors read presence from
     // the published copy, so a tick on the Music page is a draft until Publish. Backfilled
     // into every latest revision by that migration, so nothing reads as dirty on arrival.
-    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'release_date', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released', 'on_site'],
+    // `release_type` is the song's OWN type tag (20260726120000). The site shelves a
+    // standalone song by it (Live set / Single), and it was never snapshotted, so a
+    // retagged SoundCloud recording stayed under Singles however often it was published
+    // (2026-09-11). Absent on older revisions — readers use `?? 'single'`.
+    snapshot: ['id', 'title', 'cover_url', 'stream_url', 'provider_url', 'apple_url', 'soundcloud_url', 'audio_path', 'sort_order', 'release_date', 'featured_artists', 'album_name', 'release_id', 'source', 'spotify_id', 'apple_id', 'deezer_id', 'released', 'on_site', 'release_type'],
     orderBy: ['sort_order', 'created_at'],
   },
   tour_date: {

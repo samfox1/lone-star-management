@@ -48,6 +48,11 @@ export type SiteTrack = {
    *  date and wear the NEW badge; ABSENT on every revision published before that, so
    *  always read it with `?? null`. */
   release_date?: string | null
+  /** The song's OWN type tag (`single` / `ep` / `album` / `remix` / `live` / `featured`).
+   *  A STANDALONE song is shelved by it — a `live` recording is a Live set, not a
+   *  Single. Snapshotted from 2026-09-11; ABSENT on every revision published before,
+   *  so read it with `?? 'single'`. A song on a record is typed by the record. */
+  release_type?: string | null
   /** Provenance (who created the row + which platforms carry it). Rides the
    *  snapshot for the doors' Released/Unreleased gate; public-safe (the ids are
    *  platform-URL components). Absent on revisions published before the union
