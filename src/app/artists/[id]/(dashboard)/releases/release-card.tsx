@@ -305,10 +305,13 @@ export function ReleaseCard({
                 {/* Click a song → its own modal, the same grammar as a standalone song. Merge
                     into… on hover: a sync-refusal duplicate frequently lives HERE, inside a
                     release, and its twin can be anywhere in the catalog. */}
-                <ol className="-mt-0.5 min-w-0 flex-1">
+                {/* The number hangs in the gutter (-ml) so every TITLE starts on the value
+                    edge, flush with Title / Type / Date above (Sam, 2026-09-11); rows are
+                    20px lines, no padding, so a five-song EP reads as one block. */}
+                <ol className="-ml-7 -mt-0.5 min-w-0 flex-1">
                   {release.songs.map((s, i) => (
-                    <li key={s.id} className="group/row flex items-baseline gap-2 py-px text-[15px] leading-6">
-                      <span className="w-5 flex-none text-right font-space text-[11px] text-ink-faint">{i + 1}</span>
+                    <li key={s.id} className="group/row flex items-baseline gap-2 text-[15px] leading-5">
+                      <span className="w-5 flex-none text-right font-space text-[10px] text-ink-faint">{i + 1}</span>
                       <button
                         type="button"
                         onClick={() => {
