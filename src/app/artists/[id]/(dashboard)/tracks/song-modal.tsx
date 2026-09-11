@@ -53,7 +53,7 @@ const TYPE_OPTIONS = RELEASE_TYPES.map((t) => ({ value: t, label: RELEASE_TYPE_L
 /**
  * THE song modal — one for every place a song opens (Sam, 2026-09-11: "clicking from a
  * song of an album should bring me to the same song modal seen for singles"). Built on
- * modal-kit: cover · title · type / date / platforms meta. Rows: Title, Type, Release,
+ * modal-kit: cover · title · kind / year meta. Two columns: Title, Type, Release,
  * Also on, Date, one per listen platform, Audio — each saves its own field when it
  * changes. Footer: the Unreleased pill (only where the flag can decide anything), Merge
  * into… (when there is a target), Delete, Done. No Save, no nested Edit sheet, no click
@@ -165,6 +165,7 @@ export function SongModal({
       <CardModal
         open={open}
         onClose={() => !mergeOpen && onClose()}
+        wide
         label={track.title}
         analyticsHref={`/artists/${artistId}`}
         deleteAction={deleteContentAction.bind(null, 'track', track.id, artistId)}
@@ -222,71 +223,75 @@ export function SongModal({
           }
           title={track.title}
           meta={
+            // Kind · year, like a release's meta — no platform names (Sam, 2026-09-11):
+            // the logos on the right already say where the song is.
             <>
               <span>{kind}</span>
               {date ? (
                 <>
                   <MetaDot />
-                  <span>{date}</span>
-                </>
-              ) : null}
-              {platforms.length > 0 ? (
-                <>
-                  <MetaDot />
-                  <span>{platforms.map((p) => p.label).join(' · ')}</span>
+                  <span>{date.slice(0, 4)}</span>
                 </>
               ) : null}
             </>
           }
         />
-        <div className="mt-5">
-          <KvField label="Title" value={track.title} onSave={saveField('title')} onError={fail} />
-          {/* SONG TYPE — straight off RELEASE_TYPES, so a type added to the registry appears
-              here the day it lands (a hand-kept list is how 'live' shipped unpickable). Not
-              offered on a song that lives on a record: the record's type is the song's. */}
-          {!releaseId && <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />}
-          {releases.length > 0 && (
-            <>
-              <KvField label="Release" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />
-              {/* "Also appears on": a bigger EP/album this song is part of beyond its home
-                  release, so it shows in that project's tracklist too. Can't be its home. */}
-              <KvField label="Also on" value={parentId} options={parentOptions} onSave={saveParent} onError={fail} />
-            </>
-          )}
-          <KvField label="Date" value={date} type="date" mono onSave={saveField('release_date')} onError={fail} />
-          {SONG_PLATFORMS.map((p) => {
-            const value = track[p.field] ?? ''
-            const href = safeHref(value)
-            return (
-              <KvField
-                key={p.field}
-                label={p.label}
-                value={value}
-                type="url"
-                mono
-                onSave={saveField(p.field)}
-                onError={fail}
-                trailing={
-                  href ? (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${p.label} link in a new tab`}
-                      title="Open link to check it works"
-                      className="flex-none text-ink-faint transition-colors hover:text-ink"
-                    >
-                      <Icon name="external" size={14} />
-                    </a>
-                  ) : null
-                }
-              />
-            )
-          })}
-          {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
-          <KvRow label="Audio">
-            <TrackAudio artistId={artistId} trackId={track.id} audioPath={track.audio_path} />
-          </KvRow>
+        {/* Two columns, like the release modal (Sam, 2026-09-11: "it should look like this"):
+            the song on the left, its listen links on the right under the platforms' logos —
+            black when a link is set, grey when empty. */}
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)_320px] gap-x-10">
+          <div>
+            <KvField label="Title" value={track.title} onSave={saveField('title')} onError={fail} />
+            {/* SONG TYPE — straight off RELEASE_TYPES, so a type added to the registry appears
+                here the day it lands (a hand-kept list is how 'live' shipped unpickable). Not
+                offered on a song that lives on a record: the record's type is the song's. */}
+            {!releaseId && <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />}
+            {releases.length > 0 && (
+              <>
+                <KvField label="Release" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />
+                {/* "Also appears on": a bigger EP/album this song is part of beyond its home
+                    release, so it shows in that project's tracklist too. Can't be its home. */}
+                <KvField label="Also on" value={parentId} options={parentOptions} onSave={saveParent} onError={fail} />
+              </>
+            )}
+            <KvField label="Date" value={date} type="date" mono onSave={saveField('release_date')} onError={fail} />
+            {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
+            <KvRow label="Audio">
+              <TrackAudio artistId={artistId} trackId={track.id} audioPath={track.audio_path} />
+            </KvRow>
+          </div>
+          <div>
+            {SONG_PLATFORMS.map((p) => {
+              const value = track[p.field] ?? ''
+              const href = safeHref(value)
+              return (
+                <KvField
+                  key={p.field}
+                  label={p.label}
+                  labelNode={<p.Icon size={18} className={value ? 'text-ink' : 'text-ink-faint/60'} />}
+                  value={value}
+                  type="url"
+                  mono
+                  onSave={saveField(p.field)}
+                  onError={fail}
+                  trailing={
+                    href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open ${p.label} link in a new tab`}
+                        title="Open link to check it works"
+                        className="flex-none text-ink-faint transition-colors hover:text-ink"
+                      >
+                        <Icon name="external" size={14} />
+                      </a>
+                    ) : null
+                  }
+                />
+              )
+            })}
+          </div>
         </div>
       </CardModal>
 

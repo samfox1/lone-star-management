@@ -166,7 +166,9 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
 
   if (options) {
     return (
-      <SelectMenu label={label} value={current} options={options} required={required} mono={mono} onChange={(v) => void commit(v)} />
+      // No chevron here: the row already wears the pencil on hover; a click on the value
+      // opens the menu (Sam, 2026-09-11).
+      <SelectMenu label={label} value={current} options={options} required={required} mono={mono} chevron={false} onChange={(v) => void commit(v)} />
     )
   }
 
@@ -250,6 +252,7 @@ export function SelectMenu({
   options,
   required,
   mono,
+  chevron = true,
   onChange,
   placeholder = '—',
 }: {
@@ -259,6 +262,9 @@ export function SelectMenu({
   /** No empty choice — for a value that always has to be something. */
   required?: boolean
   mono?: boolean
+  /** The small arrow after the value. Off inside a row, whose hover pencil already says
+   *  "this is editable". */
+  chevron?: boolean
   onChange: (value: string) => void
   placeholder?: string
 }) {
@@ -319,7 +325,7 @@ export function SelectMenu({
         )}
       >
         <span className="truncate">{value ? shown : placeholder}</span>
-        <Icon name="chevronRight" size={12} className={cx('flex-none rotate-90 text-ink-faint transition-transform', open && '-rotate-90')} />
+        {chevron ? <Icon name="chevronRight" size={12} className={cx('flex-none rotate-90 text-ink-faint transition-transform', open && '-rotate-90')} /> : null}
       </button>
       {open && (
         <div id={listId} role="listbox" aria-label={label} className="absolute left-0 top-full z-20 mt-1 max-h-64 min-w-[180px] overflow-auto rounded-xl border border-hairline bg-paper py-1 shadow-2xl">
