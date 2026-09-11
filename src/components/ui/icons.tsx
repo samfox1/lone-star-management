@@ -209,7 +209,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       textAnchor="middle"
       fontSize="13"
       fontWeight="700"
-      fontFamily="var(--font-inter, 'Inter'), system-ui, sans-serif"
+      fontFamily="var(--font-body), system-ui, sans-serif"
       fill="currentColor"
       stroke="none"
     >

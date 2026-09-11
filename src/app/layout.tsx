@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Archivo, Geist, Geist_Mono, Inter, Space_Mono } from "next/font/google";
+import { Archivo, Geist, Geist_Mono, Instrument_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 // Redesign design system: Space Mono for labels/numbers/handles (paired with
-// Inter, below, for names/UI). Space Mono is not a variable font — weights are
+// Instrument Sans, below, for names/UI). Space Mono is not a variable font — weights are
 // explicit. Only applied where the new `font-space` utility is used.
 const spaceMono = Space_Mono({
   variable: "--font-space-mono",
@@ -28,7 +28,10 @@ const archivo = Archivo({
   weight: ["700", "800", "900"],
 });
 
-const inter = Inter({
+// The UI face for names, titles and body: Instrument Sans (Sam, 2026-09-11 — chosen
+// over Inter from prototypes/font_variations_20260911_1600.html). A variable font, so
+// every weight the dashboard uses (400–700) comes from one file.
+const instrumentSans = Instrument_Sans({
   variable: "--font-body",
   subsets: ["latin"],
 });
@@ -46,7 +49,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${archivo.variable} ${inter.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${archivo.variable} ${instrumentSans.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

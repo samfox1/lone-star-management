@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — Modal variations (2026-09-11)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens = src/app/globals.css */
+  :root{ --ink:#111111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --surface:#fafafa; --surface-hover:#f6f7f8;
+    --hair:#ececec; --hair-soft:#f1f1f3; --blue:#2563eb; --blue-soft:#eef4ff; --red:#e5484d; --danger-soft:#fef5f5;
+    --mono:'Space Mono',monospace; --sans:'Inter',sans-serif; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);color:var(--ink);background:#e9e9ec;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:26px auto 80px;padding:0 24px;}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 6px;}
+  .hint b{color:var(--ink);}
+  h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 4px;}
+  .sec{margin-top:44px;}
+  .sec > .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .sec > .lbl:after{content:"";flex:1;height:1px;background:#d9d9de;}
+  .stage{background:#8b8b90;border-radius:14px;padding:34px 24px;display:flex;justify-content:center;align-items:flex-start;min-height:420px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6;margin:10px 0 0;}
+  .note b{color:var(--ink);font-weight:700;}
+
+  /* ---------- the modal system ---------- */
+  .card{background:var(--paper);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:28px;position:relative;}
+  .card.s{width:480px;} .card.m{width:640px;} .card.l{width:880px;}
+  .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+  .ic.sm{width:14px;height:14px;} .ic.xs{width:12px;height:12px;}
+  .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .mono{font-family:var(--mono);}
+  .ibtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;border:none;background:transparent;color:var(--muted);cursor:pointer;}
+  .ibtn:hover{background:var(--surface);color:var(--ink);}
+  .btn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--hair);background:#fff;color:var(--ink);border-radius:9px;padding:8px 14px;cursor:pointer;}
+  .btn:hover{border-color:#cbd5e1;}
+  .btn.solid{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn.danger{color:var(--red);border-color:transparent;padding-left:6px;padding-right:6px;}
+  .btn.danger:hover{background:var(--danger-soft);}
+  .close{position:absolute;top:18px;right:18px;}
+  /* header */
+  .hd{display:flex;align-items:flex-start;gap:16px;padding-right:36px;}
+  .hd .title{font-size:20px;font-weight:700;letter-spacing:-.015em;line-height:1.15;}
+  .hd .meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:5px;display:flex;gap:10px;align-items:center;}
+  .hd .meta .dot{width:3px;height:3px;border-radius:99px;background:var(--faint);}
+  /* date block */
+  .db{width:56px;flex:none;text-align:center;border:1px solid var(--hair);border-radius:12px;padding:8px 0 7px;}
+  .db .d{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1;letter-spacing:-.03em;}
+  .db .m{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--faint);margin-top:4px;}
+  .db.past .d{font-size:10px;letter-spacing:.1em;padding:6px 0;color:var(--faint);}
+  /* footer */
+  .ft{display:flex;align-items:center;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid var(--hair);}
+  .ft .r{display:flex;gap:8px;}
+  /* stat chip */
+  .stat{display:inline-flex;align-items:baseline;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .stat b{font-size:13px;color:var(--ink);}
+  /* inputs: quiet, hairline underline only, label above */
+  .f{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .f input,.f select{font-family:var(--sans);font-size:14px;color:var(--ink);border:none;border-bottom:1px solid var(--hair);background:transparent;padding:6px 0;outline:none;width:100%;border-radius:0;}
+  .f input:focus,.f select:focus{border-bottom-color:var(--ink);}
+  .f input::placeholder{color:var(--faint);}
+  .f input.mono{font-family:var(--mono);font-size:13px;}
+  .g{display:grid;gap:18px 22px;}
+  .g.c2{grid-template-columns:1fr 1fr;} .g.c3{grid-template-columns:2fr 1fr 1fr;} .g.c21{grid-template-columns:2fr 1fr;}
+  /* section label with hairline */
+  .sl{display:flex;align-items:center;gap:10px;margin:22px 0 10px;}
+  .sl .k{white-space:nowrap;} .sl:after{content:"";flex:1;height:1px;background:var(--hair);}
+  .sl .cnt{font-family:var(--mono);font-size:10px;color:var(--faint);}
+  /* toggle pill (BoolToggle) */
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);border-radius:9px;padding:6px 10px 6px 7px;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;background:#fff;}
+  .pill .bx{width:14px;height:14px;border-radius:4px;border:1px solid #cfd2d6;display:inline-flex;align-items:center;justify-content:center;background:#fff;}
+  .pill.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);}
+  .pill.on .bx{background:var(--blue);border-color:var(--blue);color:#fff;}
+  /* lineup rows */
+  .acts{display:flex;flex-direction:column;}
+  .act{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--hair-soft);}
+  .act:last-child{border-bottom:none;}
+  .act .nm{font-size:14px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .act .lk{font-family:var(--mono);font-size:11px;color:var(--faint);display:inline-flex;align-items:center;gap:5px;}
+  .act .lk.none{color:#c9ccd1;}
+  .act .tools{display:flex;gap:2px;opacity:0;transition:opacity .12s;}
+  .act:hover .tools{opacity:1;}
+  .act .chev{transition:transform .15s;}
+  .act.open .chev{transform:rotate(180deg);}
+  .act-x{display:none;padding:6px 0 12px 0;border-bottom:1px solid var(--hair-soft);}
+  .act.open + .act-x{display:block;}
+  .act-x .g{gap:12px 16px;}
+  .addrow{display:flex;align-items:center;gap:12px;padding-top:8px;}
+  .addrow .f{flex:1;}
+  /* kv rows (variant B) */
+  .kv{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--hair-soft);cursor:text;}
+  .kv:last-child{border-bottom:none;}
+  .kv .k{width:88px;flex:none;}
+  .kv .v{flex:1;font-size:14px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kv .v.empty{color:#c9ccd1;}
+  .kv .v.mono{font-family:var(--mono);font-size:13px;}
+  .kv .pen{opacity:0;color:var(--faint);} .kv:hover .pen{opacity:1;}
+  .kv input{flex:1;font-family:var(--sans);font-size:14px;border:none;outline:none;background:transparent;color:var(--ink);padding:0;border-bottom:1px solid var(--ink);}
+  /* variant C left rail */
+  .split{display:grid;grid-template-columns:170px 1fr;gap:0;}
+  .rail{border-right:1px solid var(--hair);padding-right:22px;display:flex;flex-direction:column;gap:18px;}
+  .rail .db{width:100%;padding:16px 0 14px;}
+  .rail .db .d{font-size:34px;}
+  .rail .db .y{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:6px;letter-spacing:.08em;}
+  .main{padding-left:24px;min-width:0;}
+  /* disclosure (small +) */
+  .disc{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--faint);cursor:pointer;background:none;border:none;padding:0;}
+  .disc:hover{color:var(--ink);}
+  .disc .ic{width:12px;height:12px;}
+  .hidden{display:none;}
+  /* system sheet */
+  .sys{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  .sysc{background:#fff;border:1px solid var(--hair);border-radius:12px;padding:16px;}
+  .sysc .k{margin-bottom:10px;display:block;}
+  .sysc p{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6;margin:0;}
+  .sysc p b{color:var(--ink);}
+  .swatch{display:flex;gap:6px;margin-top:8px;}
+  .swatch i{width:26px;height:26px;border-radius:7px;border:1px solid var(--hair);display:block;}
+  .before{background:#fff;border-radius:16px;padding:28px;width:520px;box-shadow:0 24px 70px rgba(0,0,0,.28);}
+  .before h3{margin:0 0 14px;font-size:18px;}
+  .before .box{border:1px solid var(--hair);border-radius:9px;padding:10px 12px;font-size:14px;color:var(--faint);margin-bottom:8px;}
+  .before .box.stat{display:block;background:var(--surface);height:80px;color:var(--faint);font-size:10px;letter-spacing:.1em;}
+  .picker{position:fixed;top:0;left:0;right:0;z-index:5;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid #d9d9de;padding:10px 24px;display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:11px;}
+  .picker a{color:var(--muted);text-decoration:none;border:1px solid var(--hair);border-radius:7px;padding:5px 9px;background:#fff;}
+  .picker a:hover{color:var(--ink);border-color:#cbd5e1;}
+  .picker span{color:var(--faint);margin-right:6px;}
+</style>
+</head>
+<body>
+<div class="picker"><span>JUMP</span><a href="#a">A · Sheet</a><a href="#b">B · Spec rows</a><a href="#c">C · Stub</a><a href="#sys">System</a><a href="#apply">Applied: song</a><a href="#before">Before</a></div>
+<div class="wrap" style="padding-top:38px">
+  <h1>Modal variations · Edit date</h1>
+  <p class="hint">Same data as today's modal (Scoot Inn · Austin, TX · Jigitz). Hover a lineup row for its tools; click a row or a <b>+</b> to open what's hidden. Tokens, Inter + Space Mono, and the icon set are the site's.</p>
+
+  <!-- ================= A: SHEET ================= -->
+  <div class="sec" id="a">
+    <div class="lbl">A · Sheet — wide, two columns, secondary fields folded</div>
+    <div class="stage">
+      <div class="card l">
+        <button class="ibtn close" title="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hd">
+          <div class="db"><div class="d">11</div><div class="m">NOV</div></div>
+          <div style="min-width:0;flex:1">
+            <div class="title">Scoot Inn</div>
+            <div class="meta">Austin, TX <i class="dot"></i> <span class="stat"><b>0</b> ticket clicks · 30d</span></div>
+          </div>
+        </div>
+
+        <div class="g c2" style="margin-top:26px;align-items:start">
+          <!-- left: the show -->
+          <div>
+            <div class="sl" style="margin-top:0"><span class="k">Show</span></div>
+            <div class="g c2">
+              <div class="f"><span class="k">Date</span><input class="mono" value="2026-11-11"></div>
+              <div class="f"><span class="k">Venue</span><input value="Scoot Inn"></div>
+              <div class="f"><span class="k">City</span><input value="Austin"></div>
+              <div class="f"><span class="k">State</span><select><option>TX · Texas</option></select></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap">
+              <button class="disc" onclick="tog('a-country',this)"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>country</button>
+              <button class="disc" onclick="tog('a-tix',this)"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>tickets link</button>
+            </div>
+            <div id="a-country" class="hidden" style="margin-top:14px"><div class="f"><span class="k">Country</span><input placeholder="Outside the US"></div></div>
+            <div id="a-tix" class="hidden" style="margin-top:14px"><div class="f"><span class="k">Tickets</span><input class="mono" placeholder="https://"></div></div>
+          </div>
+          <!-- right: lineup + flags -->
+          <div>
+            <div class="sl" style="margin-top:0"><span class="k">Lineup</span><span class="cnt">1</span></div>
+            <div class="acts">
+              <div class="act" onclick="this.classList.toggle('open')">
+                <span class="nm">Jigitz</span>
+                <span class="lk"><svg class="ic xs" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+                <span class="tools"><button class="ibtn" title="Remove" onclick="event.stopPropagation()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span>
+                <svg class="ic sm chev" viewBox="0 0 24 24" style="color:var(--faint)"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <div class="act-x"><div class="g c2"><div class="f"><span class="k">Name</span><input value="Jigitz"></div><div class="f"><span class="k">Website</span><input class="mono" value="https://www.jigitz.online/"></div></div></div>
+            </div>
+            <div class="addrow"><div class="f"><input placeholder="Add an act"></div><button class="ibtn" title="Add"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+
+            <div class="sl"><span class="k">Flags</span></div>
+            <label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label>
+          </div>
+        </div>
+
+        <div class="ft">
+          <button class="btn danger"><svg class="ic sm" viewBox="0 0 24 24" style="vertical-align:-2px;margin-right:6px"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Delete</button>
+          <div class="r"><button class="btn">Done</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>Idea:</b> the venue IS the title, the date is a block, analytics is one number in the header. Country and tickets fold behind a <b>+</b>. Autosave on blur, so the only buttons are Delete / Done. 880 wide.</p>
+  </div>
+
+  <!-- ================= B: SPEC ROWS ================= -->
+  <div class="sec" id="b">
+    <div class="lbl">B · Spec rows — key / value, hover pencil, click to edit (the editor's version-A rows)</div>
+    <div class="stage">
+      <div class="card m">
+        <button class="ibtn close" title="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hd">
+          <div style="min-width:0;flex:1">
+            <div class="title">Scoot Inn</div>
+            <div class="meta">NOV 11 <i class="dot"></i> Austin, TX <i class="dot"></i> <span class="stat"><b>0</b> clicks · 30d</span></div>
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">City</span><span class="v">Austin, TX</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Country</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv" onclick="edit(this)"><span class="k">Tickets</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        </div>
+
+        <div class="sl"><span class="k">Lineup</span><span class="cnt">1</span></div>
+        <div class="acts">
+          <div class="act" onclick="this.classList.toggle('open')">
+            <span class="nm">Jigitz</span>
+            <span class="lk">jigitz.online</span>
+            <span class="tools"><button class="ibtn" title="Remove" onclick="event.stopPropagation()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span>
+            <svg class="ic sm chev" viewBox="0 0 24 24" style="color:var(--faint)"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="act-x"><div class="g c2"><div class="f"><span class="k">Name</span><input value="Jigitz"></div><div class="f"><span class="k">Website</span><input class="mono" value="https://www.jigitz.online/"></div></div></div>
+        </div>
+        <div class="addrow"><div class="f"><input placeholder="Add an act"></div><button class="ibtn" title="Add"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+
+        <div class="ft">
+          <div style="display:flex;align-items:center;gap:14px">
+            <label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label>
+            <button class="btn danger">Delete</button>
+          </div>
+          <div class="r"><button class="btn">Done</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>Idea:</b> nothing is a text box until you touch it. Empty fields read as "—", so the modal is as short as the data. Same row grammar the editor's Text / Links / Merch panels use, so one component serves both. 640 wide.</p>
+  </div>
+
+  <!-- ================= C: STUB ================= -->
+  <div class="sec" id="c">
+    <div class="lbl">C · Stub — date rail on the left, everything else in sections</div>
+    <div class="stage">
+      <div class="card l">
+        <button class="ibtn close" title="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="split">
+          <div class="rail">
+            <div class="db"><div class="d">11</div><div class="m">NOV</div><div class="y">2026</div></div>
+            <div class="f"><span class="k">Date</span><input class="mono" value="2026-11-11"></div>
+            <label class="pill on"><span class="bx"><svg class="ic xs" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>old show</label>
+            <div class="stat" style="margin-top:auto"><b>0</b> clicks · 30d</div>
+          </div>
+          <div class="main">
+            <div class="hd" style="padding-right:24px">
+              <div style="min-width:0;flex:1">
+                <div class="f"><input value="Scoot Inn" style="font-size:20px;font-weight:700;letter-spacing:-.015em;padding:0 0 6px;border-bottom-color:transparent"></div>
+              </div>
+            </div>
+            <div class="g c3" style="margin-top:8px">
+              <div class="f"><span class="k">City</span><input value="Austin"></div>
+              <div class="f"><span class="k">State</span><select><option>TX</option></select></div>
+              <div class="f"><span class="k">Country</span><input placeholder="—"></div>
+            </div>
+
+            <div class="sl"><span class="k">Tickets</span></div>
+            <div class="f"><input class="mono" placeholder="https://"></div>
+
+            <div class="sl"><span class="k">Lineup</span><span class="cnt">1</span></div>
+            <div class="acts">
+              <div class="act" onclick="this.classList.toggle('open')">
+                <span class="nm">Jigitz</span>
+                <span class="lk">jigitz.online</span>
+                <span class="tools"><button class="ibtn" title="Remove" onclick="event.stopPropagation()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button></span>
+                <svg class="ic sm chev" viewBox="0 0 24 24" style="color:var(--faint)"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <div class="act-x"><div class="g c2"><div class="f"><span class="k">Name</span><input value="Jigitz"></div><div class="f"><span class="k">Website</span><input class="mono" value="https://www.jigitz.online/"></div></div></div>
+            </div>
+            <div class="addrow"><div class="f"><input placeholder="Add an act"></div><button class="ibtn" title="Add"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+          </div>
+        </div>
+        <div class="ft">
+          <button class="btn danger">Delete</button>
+          <div class="r"><button class="btn">Done</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>Idea:</b> the thing that makes a tour date a tour date — the day — owns a rail; the venue is the editable headline. Sections read down like a set list. 880 wide, fits without scrolling.</p>
+  </div>
+
+  <!-- ================= SYSTEM ================= -->
+  <div class="sec" id="sys">
+    <div class="lbl">The system (applies to every modal)</div>
+    <div class="sys">
+      <div class="sysc"><span class="k">Sizes</span><p><b>S 480</b> confirm / add one thing<br><b>M 640</b> edit one item<br><b>L 880</b> item with a list or two columns<br>28px padding · 16px radius · no inner scroll under 88vh</p></div>
+      <div class="sysc"><span class="k">Header</span><p><b>Title = the thing's name</b>, not "Edit date"<br>mono meta line under it (date · place · one stat)<br>× top-right, Esc, click-out</p></div>
+      <div class="sysc"><span class="k">Fields</span><p>label above, mono caps 10px<br><b>underline only</b>, ink on focus<br>grid 2–3 across, never stacked boxes<br>secondary fields fold behind <b>+</b> or read "—"<br>autosave on blur, no Save button</p></div>
+      <div class="sysc"><span class="k">Lists &amp; footer</span><p>rows with hover tools, click to expand<br>section = mono label + hairline + count<br>footer: <b>Delete left · Done right</b>, hairline above<br>flags are pills, never checkboxes in a column</p>
+        <div class="swatch"><i style="background:#111"></i><i style="background:#6b7280"></i><i style="background:#9aa0a6"></i><i style="background:#ececec"></i><i style="background:#2563eb"></i><i style="background:#e5484d"></i></div></div>
+    </div>
+  </div>
+
+  <!-- ================= APPLIED ================= -->
+  <div class="sec" id="apply">
+    <div class="lbl">Applied elsewhere — a song (B grammar, M size)</div>
+    <div class="stage" style="min-height:0">
+      <div class="card m">
+        <button class="ibtn close" title="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hd">
+          <div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#222,#666);flex:none"></div>
+          <div style="min-width:0;flex:1">
+            <div class="title">What I Want</div>
+            <div class="meta">Single <i class="dot"></i> 2025-06-14 <i class="dot"></i> <span class="stat"><b>128</b> plays · 30d</span></div>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <div class="kv"><span class="k">Type</span><span class="v">Single</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Release</span><span class="v empty">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Spotify</span><span class="v mono">open.spotify.com/track/3k…</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">SoundCloud</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+          <div class="kv"><span class="k">Apple</span><span class="v empty mono">—</span><svg class="ic sm pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/></svg></div>
+        </div>
+        <div class="ft">
+          <div style="display:flex;align-items:center;gap:14px">
+            <label class="pill"><span class="bx"></span>unreleased</label>
+            <button class="btn danger">Delete</button>
+          </div>
+          <div class="r"><button class="btn">Done</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= BEFORE ================= -->
+  <div class="sec" id="before">
+    <div class="lbl">Before — today's modal, for the record</div>
+    <div class="stage" style="min-height:0">
+      <div class="before">
+        <h3>Edit date</h3>
+        <div class="box stat">TICKET CLICKS · 30D</div>
+        <div style="display:flex;gap:8px"><div class="box" style="width:150px">mm/dd/yyyy</div><div class="box" style="flex:1;color:#111">Austin</div></div>
+        <div style="display:flex;gap:8px"><div class="box" style="flex:1;color:#111">Scoot Inn</div><div class="box" style="width:110px;color:#111">TX · Texas</div></div>
+        <div class="box">Country (outside the US)</div>
+        <div class="box">Tickets URL</div>
+        <div style="display:flex;gap:8px;align-items:center;margin:4px 0 12px"><span class="pill on"><span class="bx">✓</span>This was an old show</span><span class="btn">Save</span></div>
+        <div style="display:flex;gap:8px"><div class="box" style="flex:1;color:#111">Jigitz</div><div class="box" style="flex:1;color:#111">https://www.jigitz.online/</div></div>
+        <div style="display:flex;gap:8px"><div class="box" style="flex:1">Also performing…</div><div class="box" style="flex:1">Website</div><div class="box">+</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:14px"><span style="color:#e5484d;font-size:13px">Delete date</span><span class="btn">Done</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  function tog(id,btn){ const el=document.getElementById(id); el.classList.toggle('hidden'); btn.classList.toggle('hidden'); }
+  function edit(row){ const v=row.querySelector('.v'); if(row.querySelector('input')) return; const i=document.createElement('input'); i.className='mono'; i.placeholder='https://'; v.replaceWith(i); i.focus(); }
+</script>
+</body>
+</html>

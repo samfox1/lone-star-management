@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lone Star — Title font (2026-09-11)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Geist:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Sans:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Onest:wght@400;500;600;700;800&family=Familjen+Grotesk:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700;800&family=Host+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#111; --muted:#6b7280; --faint:#9aa0a6; --paper:#fff; --surface:#fafafa; --hair:#ececec; --hair-soft:#f1f1f3;
+    --blue:#2563eb; --blue-soft:#eef4ff; --red:#e5484d; --mono:'Space Mono',monospace; --sans:'Inter',sans-serif; --pick:'Inter'; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);color:var(--ink);background:#e9e9ec;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px;margin:26px auto 80px;padding:0 24px;}
+  h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 4px;}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 18px;}
+  .hint b{color:var(--ink);}
+  .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+  .ic.sm{width:14px;height:14px;}
+
+  /* hero: dashboard strip + modal B in the picked font */
+  .hero{background:#8b8b90;border-radius:14px;padding:0;overflow:hidden;position:sticky;top:12px;z-index:3;box-shadow:0 10px 40px rgba(0,0,0,.18);}
+  .hero .strip{background:#fff;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:24px;padding:12px 22px;}
+  .hero .strip .brand{font-family:var(--pick),var(--sans);font-weight:700;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;}
+  .hero .strip .brand i{width:22px;height:22px;border-radius:99px;background:#ececef;display:inline-block;}
+  .hero .strip .tabs{display:flex;gap:18px;margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;}
+  .hero .strip .tabs b{color:var(--ink);font-weight:400;}
+  .hero .body{display:grid;grid-template-columns:1fr 560px;gap:0;}
+  .hero .list{background:#fff;padding:14px 22px;border-right:1px solid var(--hair);}
+  .hero .row{display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair-soft);}
+  .hero .row .bx{width:16px;height:16px;border-radius:4px;background:var(--blue);flex:none;}
+  .hero .row .past{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--faint);width:36px;}
+  .hero .row .nm{font-family:var(--pick),var(--sans);font-weight:600;font-size:14px;flex:1;}
+  .hero .row .pl{font-family:var(--mono);font-size:11px;color:var(--muted);flex:1;}
+  .hero .row .sp{font-family:var(--mono);font-size:11px;color:var(--faint);flex:1;}
+  .hero .modalstage{padding:22px;display:flex;justify-content:center;}
+  .card{background:var(--paper);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:26px;position:relative;width:500px;}
+  .card .title{font-family:var(--pick),var(--sans);font-size:20px;font-weight:700;letter-spacing:-.015em;line-height:1.15;}
+  .card .meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:5px;}
+  .kv{display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--hair-soft);}
+  .kv .k{width:84px;flex:none;}
+  .kv .v{flex:1;font-family:var(--pick),var(--sans);font-size:14px;}
+  .kv .v.empty{color:#c9ccd1;} .kv .v.mono{font-family:var(--mono);font-size:13px;}
+  .sl{display:flex;align-items:center;gap:10px;margin:18px 0 6px;} .sl:after{content:"";flex:1;height:1px;background:var(--hair);}
+  .act{display:flex;align-items:center;gap:10px;padding:9px 0;} .act .nm{font-family:var(--pick),var(--sans);font-size:14px;font-weight:500;flex:1;} .act .lk{font-family:var(--mono);font-size:11px;color:var(--faint);}
+  .ft{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:14px;border-top:1px solid var(--hair);}
+  .btn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--hair);background:#fff;color:var(--ink);border-radius:9px;padding:8px 14px;}
+  .btn.danger{color:var(--red);border-color:transparent;padding:8px 6px;}
+  .picked{position:absolute;top:-30px;right:0;font-family:var(--mono);font-size:11px;color:#fff;opacity:.85;}
+
+  /* candidate grid */
+  .sec{margin-top:34px;}
+  .sec .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .sec .lbl:after{content:"";flex:1;height:1px;background:#d9d9de;}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .fc{background:#fff;border:1px solid var(--hair);border-radius:14px;padding:18px 18px 14px;cursor:pointer;transition:border-color .12s, box-shadow .12s;position:relative;}
+  .fc:hover{border-color:#cbd5e1;} .fc.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink);}
+  .fc .name{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);display:flex;justify-content:space-between;margin-bottom:12px;}
+  .fc .name b{color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none;}
+  .fc .t{font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.1;}
+  .fc .m{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;}
+  .fc .r{display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:10px;border-top:1px solid var(--hair-soft);}
+  .fc .r .n{font-weight:600;font-size:14px;flex:1;} .fc .r .p{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .fc .w{margin-top:12px;display:flex;gap:10px;align-items:baseline;font-size:15px;color:var(--muted);}
+  .fc .w span:nth-child(1){font-weight:400;} .fc .w span:nth-child(2){font-weight:500;} .fc .w span:nth-child(3){font-weight:600;} .fc .w span:nth-child(4){font-weight:700;color:var(--ink);}
+  .fc .w i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em;margin-left:auto;}
+  .fc .note{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:10px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Title font · replacing Inter Bold</h1>
+  <p class="hint">Click a card: the strip and the modal above switch to that font for names and titles. Labels, meta and buttons stay <b>Space Mono</b> in every case. Inter is first, for reference.</p>
+
+  <div class="hero" id="hero">
+    <div class="strip">
+      <div class="brand"><i></i>Skeen</div>
+      <div class="tabs"><b>Tour</b><span>Music</span><span>Merch</span><span>Editor</span></div>
+    </div>
+    <div class="body">
+      <div class="list">
+        <div class="row"><span class="bx"></span><span class="past">PAST</span><span class="nm">Scoot Inn</span><span class="pl">Austin, TX</span><span class="sp">+ Jigitz</span></div>
+        <div class="row"><span class="bx"></span><span class="past">PAST</span><span class="nm">Lakeshore Music Festival</span><span class="pl">Chicago, IL</span><span class="sp"></span></div>
+        <div class="row"><span class="bx"></span><span class="past">PAST</span><span class="nm">The Majestic Theatre</span><span class="pl">Madison, WI</span><span class="sp">+ Jigitz</span></div>
+        <div class="row"><span class="bx"></span><span class="past">PAST</span><span class="nm">Navy Pier</span><span class="pl">Chicago, IL</span><span class="sp">+ ZHU</span></div>
+        <div class="row"><span class="bx"></span><span class="past">PAST</span><span class="nm">Hideaway</span><span class="pl">Chicago, IL</span><span class="sp">+ Jigitz</span></div>
+      </div>
+      <div class="modalstage">
+        <div class="card">
+          <div class="picked" id="picked">Inter</div>
+          <div class="title">Scoot Inn</div>
+          <div class="meta">NOV 11 · Austin, TX · <b style="color:var(--ink)">0</b> clicks · 30d</div>
+          <div style="margin-top:14px">
+            <div class="kv"><span class="k">Date</span><span class="v mono">2026-11-11</span></div>
+            <div class="kv"><span class="k">Venue</span><span class="v">Scoot Inn</span></div>
+            <div class="kv"><span class="k">City</span><span class="v">Austin, TX</span></div>
+            <div class="kv"><span class="k">Tickets</span><span class="v empty mono">—</span></div>
+          </div>
+          <div class="sl"><span class="k">Lineup</span></div>
+          <div class="act"><span class="nm">Jigitz</span><span class="lk">jigitz.online</span></div>
+          <div class="ft"><span class="btn danger">Delete</span><span class="btn">Done</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="lbl">Candidates · grotesques &amp; geometrics that sit well beside Space Mono</div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+<script>
+  const FONTS = [
+    ['Inter','today','Neutral. What everything is set in now.'],
+    ['Geist','Vercel','Already loaded in layout.tsx, unused. Cleaner than Inter, same skeleton; tight bold.'],
+    ['Space Grotesk','same family as Space Mono','Quirky bold with a strong personality; the mono already lives on the site.'],
+    ['Host Grotesk','new, 2024','Swiss and compact; bold has real weight without going heavy.'],
+    ['Schibsted Grotesk','editorial','Newspaper grotesque: narrow, dark, confident headlines.'],
+    ['Instrument Sans','','Warm grotesque, slightly wide. Reads friendlier than Inter.'],
+    ['Manrope','geometric','Rounded geometry, very even. Bold is soft-edged.'],
+    ['DM Sans','geometric','Low contrast, open shapes. Familiar, product-ish.'],
+    ['Bricolage Grotesque','display','Big-personality bold with sharp cuts. Loud at 20px.'],
+    ['Hanken Grotesk','','Quiet, humanist. Bold stays calm.'],
+    ['Familjen Grotesk','','Narrow-ish Scandinavian grotesque; sits nicely with mono labels.'],
+    ['Plus Jakarta Sans','geometric','Rounder, more designed; can read "startup".'],
+    ['Onest','','Compact, modern, sturdy bold.'],
+    ['Sora','geometric','Wide geometric; bold gets very black.'],
+    ['Figtree','','Friendly, slightly rounded. Bold is punchy.'],
+    ['Archivo','already loaded (public template)','Grotesque with a wide, industrial bold. Loaded for the cinematic template today.'],
+  ];
+  const grid=document.getElementById('grid');
+  FONTS.forEach(([f,tag,note],i)=>{
+    const el=document.createElement('div'); el.className='fc'+(i===0?' on':''); el.style.fontFamily=`'${f}',sans-serif`;
+    el.innerHTML=`<div class="name"><span>${f}</span><b>${tag}</b></div>
+      <div class="t">Scoot Inn</div><div class="m">NOV 11 · Austin, TX</div>
+      <div class="r"><span class="n">Lakeshore Music Festival</span><span class="p">Chicago, IL</span></div>
+      <div class="w"><span>Aa</span><span>Aa</span><span>Aa</span><span>Aa</span><i>400 · 500 · 600 · 700</i></div>
+      <div class="note">${note}</div>`;
+    el.onclick=()=>{ document.querySelectorAll('.fc').forEach(c=>c.classList.remove('on')); el.classList.add('on');
+      document.documentElement.style.setProperty('--pick',`'${f}'`); document.getElementById('picked').textContent=f; };
+    grid.appendChild(el);
+  });
+</script>
+</body>
+</html>
