@@ -13,14 +13,7 @@ import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { SONG_PLATFORMS } from '../music/platforms'
 import { TrackAudio } from '../track-audio'
 import { toast } from '../toast'
-import {
-  deleteContentAction,
-  setTrackReleasedAction,
-  setTrackParentReleaseAction,
-  setTrackReleaseAction,
-  setTrackTypeAction,
-  updateContentAction,
-} from '../actions'
+import { deleteContentAction, setTrackReleasedAction, setTrackReleaseAction, setTrackTypeAction, updateContentAction } from '../actions'
 
 /** A release the track can be assigned to (id + title, for the selector). `release_type`
  *  lets a song's modal say "Track from EP OutWest" when its home is a multi-song record. */
@@ -34,7 +27,9 @@ export type Track = TrackPlatformIds & {
   source: string | null
   audio_path: string | null
   release_id: string | null
-  /** "Also appears on" — a bigger EP/album this track is part of, beyond its own home. */
+  /** Legacy "also appears on" link — no longer read or written (2026-09-11): a song that is
+   *  a single AND an album track is two rows, one per release. Nulled by migration
+   *  20260911213000; the column stays until the rest of the row types drop it. */
   parent_release_id: string | null
   /** Optional own release date (orphan singles); album songs show the album's year instead. */
   release_date: string | null
@@ -91,8 +86,9 @@ export function SongModal({
 }) {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [type, setType] = useState<ReleaseType>(track.release_type)
+  // `parent_release_id` ("also appears on") is no longer read or written (2026-09-11): a
+  // song that is a single AND an album track is two rows, one per release.
   const [releaseId, setReleaseId] = useState(track.release_id ?? '')
-  const [parentId, setParentId] = useState(track.parent_release_id ?? '')
   const platforms = trackPlatforms(track)
   // The Unreleased pill is offered ONLY where the flag can decide anything: a manual
   // song with no Spotify/Apple/Deezer presence (a SoundCloud link is not a release —
@@ -139,35 +135,21 @@ export function SongModal({
     const fd = new FormData()
     fd.set('release_id', value)
     const res = await setTrackReleaseAction(track.id, artistId, fd)
-    if (res?.error) return res
-    setReleaseId(value)
-    // A song can't "also appear on" its own home — clear a now-equal parent.
-    if (value && value === parentId) await saveParent('')
-    return res
-  }
-
-  async function saveParent(value: string) {
-    const fd = new FormData()
-    fd.set('parent_release_id', value)
-    const res = await setTrackParentReleaseAction(track.id, artistId, fd)
-    if (!res?.error) setParentId(value)
+    if (!res?.error) setReleaseId(value)
     return res
   }
 
   const releaseOptions = releases.map((r) => ({ value: r.id, label: r.title }))
-  const parentOptions = releaseOptions.filter((o) => o.value !== releaseId)
   const date = track.release_date?.slice(0, 10) ?? ''
 
   // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP
   // or Album for the individual track … it should say Track from EP/Album {title}"), so
   // the Type row is the release's to edit, not the song's, and the meta names the record.
-  // THE record: the one it was opened from when that is its home or a record it also
-  // appears on; else a bigger record it appears on (parent); else its home release.
+  // THE record: its home release — the one it was opened from when the caller knows it
+  // (a release card), else looked up among the artist's releases.
   const isRecord = (r?: ReleaseOption) => r?.release_type === 'ep' || r?.release_type === 'album'
-  const fromHere = home && (home.id === releaseId || home.id === parentId) ? home : undefined
-  const parentRecord = parentId ? releases.find((r) => r.id === parentId) : undefined
-  const homeRelease = releaseId ? releases.find((r) => r.id === releaseId) : undefined
-  const record = fromHere ?? (isRecord(parentRecord) ? parentRecord : homeRelease)
+  const homeRelease = releaseId ? (home?.id === releaseId ? home : releases.find((r) => r.id === releaseId)) : undefined
+  const record = homeRelease
   const onRecord = isRecord(record)
   const kind = onRecord && record ? `Track from ${RELEASE_TYPE_LABEL[record.release_type!]} ` : RELEASE_TYPE_LABEL[type]
 
@@ -315,14 +297,7 @@ export function SongModal({
                 here the day it lands (a hand-kept list is how 'live' shipped unpickable). Not
                 offered on a song that lives on a record: the record's type is the song's. */}
             {!releaseId && <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />}
-            {releases.length > 0 && (
-              <>
-                <KvField label="Release" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />
-                {/* "Also appears on": a bigger EP/album this song is part of beyond its home
-                    release, so it shows in that project's tracklist too. Can't be its home. */}
-                <KvField label="Also on" value={parentId} options={parentOptions} onSave={saveParent} onError={fail} />
-              </>
-            )}
+            {releases.length > 0 && <KvField label="Release" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />}
             <KvField label="Date" value={date} type="date" mono onSave={saveField('release_date')} onError={fail} />
             {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
             <KvRow label="Audio">

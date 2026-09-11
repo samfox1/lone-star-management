@@ -107,9 +107,9 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
     return { ...t, bucket }
   })
 
-  // Songs grouped under their home release (`release_id`) AND any `parent_release_id` — so a
-  // single that also appears on a bigger EP/album (its parent) shows in that project's
-  // tracklist too, while still living standalone as its own single. Not album name, not cover.
+  // Songs grouped under their HOME release (`release_id`) only. A song that is both a
+  // single and an album track is two rows now (Sam, 2026-09-11: "keep these separate") —
+  // the sync gives each release's copy its own row — so nothing is filed twice.
   const songsByRelease = new Map<string, ReleaseSong[]>()
   const featuredById = new Map(trackRows.map((row) => [row.id as string, (row.featured_artists as string[] | null) ?? []]))
   for (const t of tracks) {
@@ -120,15 +120,10 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
       featured_artists: featuredById.get(t.id) ?? [],
       stat: metricValue(counts, 'release', [t.id]),
     }
-    // Dedup the keys: if a row's home and parent are the same release (shouldn't happen,
-    // but the union UI could produce it), never file the song twice under one release —
-    // that would double-render the tracklist row and double-count its listens.
-    for (const key of new Set([t.release_id, t.parent_release_id])) {
-      if (!key) continue
-      const list = songsByRelease.get(key) ?? []
-      list.push(song)
-      songsByRelease.set(key, list)
-    }
+    if (!t.release_id) continue
+    const list = songsByRelease.get(t.release_id) ?? []
+    list.push(song)
+    songsByRelease.set(t.release_id, list)
   }
   const toReleaseCard = (row: Record<string, unknown>) => {
     const rid = row.id as string

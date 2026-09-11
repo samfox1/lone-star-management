@@ -92,7 +92,9 @@ describe('error shaping', () => {
 })
 
 describe('getDiscographyTracks', () => {
-  it('collects album tracks and dedupes by title', async () => {
+  it('CRITICAL: a song on two releases is one track PER RELEASE, not collapsed by title', async () => {
+    // Sam (2026-09-11): a single that is also on the album stays separate. Spotify gives
+    // each release's copy its own id; keying on the title used to keep only the first.
     const fetchImpl = vi.fn(async (url: string) => {
       if (url === TOKEN_URL) return tokenOk as unknown as Response
       if (url.includes('/artists/')) {
@@ -124,8 +126,10 @@ describe('getDiscographyTracks', () => {
     })
 
     const tracks = await client(fetchImpl as unknown as typeof fetch).getDiscographyTracks('a')
-    expect(tracks.map((t) => t.title)).toEqual(['Song A', 'Song B'])
+    expect(tracks.map((t) => t.spotify_id)).toEqual(['t1', 't2', 't3'])
+    expect(tracks.map((t) => t.title)).toEqual(['Song A', 'Song A', 'Song B'])
     expect(tracks[0]).toMatchObject({ spotify_id: 't1', stream_url: 'u1', cover_url: 'cover1', duration_ms: 210000 })
+    expect(tracks[1]).toMatchObject({ spotify_id: 't2', stream_url: 'u2', cover_url: 'cover2' })
   })
 })
 
@@ -190,7 +194,7 @@ describe('getDiscography (releases)', () => {
     expect(byId['al3'].spotify_url).toBeNull() // no external_urls → null
   })
 
-  it('returns the same deduped track list as getDiscographyTracks, from one fetch', async () => {
+  it('returns the same track list as getDiscographyTracks, from one fetch', async () => {
     const { tracks } = await client(discoFetch() as unknown as typeof fetch).getDiscography('a')
     expect(tracks.map((t) => t.title)).toEqual(['One', 'Two', 'Three', 'Four'])
   })

@@ -150,10 +150,15 @@ export function createSpotifyClient(opts: Options = {}) {
   }
 
   /**
-   * Pull the artist's discography as a de-duplicated track list PLUS the releases
-   * (albums/EPs/singles) they belong to — one albums+tracks fetch feeds both.
-   * Tracks that appear on multiple releases collapse to the first seen (keyed by
-   * lowercased title), so a track links to whichever release's version was kept.
+   * Pull the artist's discography as a track list PLUS the releases (albums/EPs/singles)
+   * they belong to — one albums+tracks fetch feeds both.
+   *
+   * A song that appears on SEVERAL releases is one track PER RELEASE (Sam, 2026-09-11:
+   * "some songs are released as singles … and then are also a part of an album. I
+   * think it would be best to keep these separate, even though they are the same
+   * song"). Spotify gives each release's copy its own track id, so keying on the id
+   * keeps them apart; it used to key on the lowercased title and collapse them to
+   * whichever release came first. Only a literal repeat of the same id is dropped.
    */
   async function getDiscography(
     artistId: string,
@@ -174,9 +179,8 @@ export function createSpotifyClient(opts: Options = {}) {
         track_spotify_ids: albumTracks.map((t) => t.id),
       })
       for (const t of albumTracks) {
-        const key = t.name.trim().toLowerCase()
-        if (seen.has(key)) continue
-        seen.add(key)
+        if (seen.has(t.id)) continue
+        seen.add(t.id)
         tracks.push({
           spotify_id: t.id,
           title: t.name,

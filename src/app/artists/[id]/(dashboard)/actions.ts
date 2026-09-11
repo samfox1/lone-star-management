@@ -1226,12 +1226,6 @@ export async function setTrackReleaseAction(
 }
 
 /**
- * Set a track's "also appears on" project (`parent_release_id`) — the bigger EP/album a
- * standalone single is also part of. Separate from `release_id` (the track's own home), so a
- * single can live on its own AND show in the album's tracklist. Empty clears it. RLS scopes
- * the write to the owner.
- */
-/**
  * The song editor's Unreleased switch (Sam, 2026-09-10). Offered only for a song with no
  * Spotify/Apple/Deezer presence — a manual upload or a SoundCloud-only link — because for
  * anything else the flag cannot matter (the law reads platform presence first).
@@ -1299,25 +1293,6 @@ export async function setTrackTypeAction(
     .from('tracks')
     .update({ release_type })
     .eq('id', trackId)
-  if (error) return { error: error.message }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
-}
-
-export async function setTrackParentReleaseAction(
-  trackId: string,
-  artistId: string,
-  formData: FormData,
-): Promise<{ error?: string }> {
-  let parent_release_id = String(formData.get('parent_release_id') ?? '').trim() || null
-  const supabase = await createClient()
-  // A song can't "also appear on" its own home release — that would file it twice under one
-  // release (double tracklist row + double-counted listens). Clear the parent in that case.
-  if (parent_release_id) {
-    const { data: t } = await supabase.from('tracks').select('release_id').eq('id', trackId).single()
-    if ((t?.release_id ?? null) === parent_release_id) parent_release_id = null
-  }
-  const { error } = await supabase.from('tracks').update({ parent_release_id }).eq('id', trackId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}

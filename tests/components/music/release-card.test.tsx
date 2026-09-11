@@ -222,21 +222,15 @@ describe('a song inside the release', () => {
     expect(screen.getByRole('dialog', { name: 'Night EP' })).toBeInTheDocument()
   })
 
-  it('a song that only APPEARS on the album (its home is a single) still reads as a track from it', () => {
-    const r = release({ release_type: 'album', songs: [song('s1', 'Alpha', { release_id: 'x-single', parent_release_id: 'r1' })] })
-    const dialog = openRelease(r)
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Alpha' }))
-    const songDialog = screen.getByRole('dialog', { name: 'Alpha' })
-    expect(songDialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from Album Night EP/)
-  })
-
-  it('offers the Release / Also on rows when the card knows the releases', () => {
+  it('offers the Release row when the card knows the releases — and no "Also on"', () => {
     render(<ReleaseCard release={release()} artistId="a1" artistSlug="lone-pine" releases={[{ id: 'r1', title: 'Night EP' }, { id: 'r2', title: 'Day LP' }]} />)
     fireEvent.click(screen.getByRole('button', { name: /^Night EP — / }))
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
     expect(rowOf(songDialog, 'Release')).toBeInTheDocument()
-    expect(rowOf(songDialog, 'Also on')).toBeInTheDocument()
+    // A single that is also on an album is two songs now (Sam, 2026-09-11) — nothing to
+    // "also appear on".
+    expect(within(songDialog).queryByText('Also on', { selector: 'span' })).toBeNull()
     expect(within(songDialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
     expect(within(songDialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
   })

@@ -10,7 +10,7 @@
  * (`provider_url` and `released` are read straight off the row and never stored on
  * MusicSong), and the rule is simply handed `undefined`. It doesn't throw — the song
  * quietly classifies Unreleased and drops off the public site. Same for a dropped
- * `parent_release_id`: the song just stops appearing in its album's tracklist.
+ * `release_id`: the song just stops appearing in its release's tracklist.
  *
  * So this asserts the WIRING, not the rules. The per-column tests give a row exactly
  * ONE piece of platform evidence: if that column doesn't reach the rule, the song
@@ -226,8 +226,10 @@ describe('orphanSingles — Released AND parentless', () => {
   })
 })
 
-describe('songsByRelease — union of release_id and parent_release_id, deduped', () => {
-  it('files a song under BOTH its home release and its parent', async () => {
+describe('songsByRelease — by HOME release only', () => {
+  it('CRITICAL: a song is filed under its home release and nowhere else', async () => {
+    // Sam (2026-09-11): a single that is also on an album is TWO rows, one per release;
+    // the old parent link (which filed one row under both) is no longer read.
     releaseRows = [
       release({ id: 'single', slug: 'single', spotify_id: 'sp1' }),
       release({ id: 'album', slug: 'album', spotify_id: 'sp2' }),
@@ -236,19 +238,10 @@ describe('songsByRelease — union of release_id and parent_release_id, deduped'
     const props = await musicProps()
     const byId = Object.fromEntries(props.releases.map((r) => [r.id as string, r.songs as ReleaseSong[]]))
     expect(byId.single.map((s) => s.id)).toEqual(['t1'])
-    expect(byId.album.map((s) => s.id)).toEqual(['t1'])
+    expect(byId.album).toEqual([])
   })
 
-  it('CRITICAL: files it ONCE when home and parent are the same release', async () => {
-    // A duplicate here double-renders the tracklist row AND double-counts its listens,
-    // because the release stat sums over its songs.
-    releaseRows = [release({ id: 'r1', spotify_id: 'sp1' })]
-    trackRows = [track({ id: 't1', release_id: 'r1', parent_release_id: 'r1' })]
-    const props = await musicProps()
-    expect((props.releases[0].songs as ReleaseSong[]).map((s) => s.id)).toEqual(['t1'])
-  })
-
-  it('a null parent_release_id files nothing under a null key', async () => {
+  it('a song with no home release files nowhere', async () => {
     releaseRows = [release({ id: 'r1', spotify_id: 'sp1' })]
     trackRows = [track({ id: 'loose', stream_url: 'https://x' })]
     const props = await musicProps()
