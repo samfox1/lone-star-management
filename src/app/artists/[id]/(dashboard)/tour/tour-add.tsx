@@ -7,7 +7,7 @@ import type { SupportAct } from '@/lib/content'
 import { US_STATES } from '@/lib/us-states'
 import { CardModal } from '../card-modal'
 import { AddTrigger } from '../create-modal'
-import { DateSquare, KvRow, ModalHeader } from '../modal-kit'
+import { DateSquare, KvRow, ModalHeader, SelectMenu } from '../modal-kit'
 import { addContentAction, setSupportActsAction } from '../actions'
 import { toast } from '../toast'
 import { SupportActs } from './support-acts'
@@ -36,7 +36,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
   const busyRef = useRef(false) // re-entry latch: two fast clicks must not add two rows
   const [busy, setBusy] = useState(false)
 
-  const set = (k: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set = (k: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setV((d) => ({ ...d, [k]: e.target.value }))
 
   function close() {
@@ -111,14 +111,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
               </label>
               <label className="flex min-w-0 flex-col gap-0.5">
                 <span className="font-space text-[9px] uppercase tracking-[0.12em] text-ink-faint">State</span>
-                <select aria-label="State" value={v.state} onChange={set('state')} className={`${rowInput} ${v.state ? '' : 'text-hairline'}`}>
-                  <option value="">—</option>
-                  {STATE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value} className="text-ink">
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <SelectMenu label="State" value={v.state} options={STATE_OPTIONS} onChange={(state) => setV((d) => ({ ...d, state }))} />
               </label>
               <label className="flex min-w-0 flex-col gap-0.5">
                 <span className="font-space text-[9px] uppercase tracking-[0.12em] text-ink-faint">Country</span>

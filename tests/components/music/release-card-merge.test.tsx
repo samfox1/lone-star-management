@@ -40,6 +40,12 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setReleaseLinkAction: vi.fn(async () => ({})),
   setReleaseTypeAction: vi.fn(async () => ({})),
   updateReleaseDetailsAction: vi.fn(async () => ({})),
+  // The song modal's own actions (a tracklist song opens the shared SongModal).
+  setTrackReleaseAction: vi.fn(async () => ({})),
+  setTrackTypeAction: vi.fn(async () => ({})),
+  setTrackParentReleaseAction: vi.fn(async () => ({})),
+  setTrackOnSiteAction: vi.fn(async () => ({})),
+  setTrackReleasedAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/music/actions', () => ({
   mergeSongsAction: vi.fn(async () => ({})),
@@ -51,7 +57,8 @@ afterEach(() => {
 })
 
 const song = (id: string, title: string): ReleaseSong => ({
-  id, title, featured_artists: [], stream_url: null, audio_path: null,
+  id, title, featured_artists: [], stream_url: null, audio_path: null, cover_url: null, source: 'spotify',
+  release_id: 'r1', parent_release_id: null, release_date: null, release_type: 'ep', on_site: true,
   spotify_id: null, apple_id: null, deezer_id: null,
   apple_url: null, soundcloud_url: null, deezer_url: null,
 })

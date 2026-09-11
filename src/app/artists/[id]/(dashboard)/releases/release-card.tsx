@@ -1,41 +1,28 @@
 'use client'
 
 import { useState } from 'react'
-import { type IconType } from 'react-icons'
-import { SiApplemusic, SiDeezer, SiSoundcloud, SiSpotify } from 'react-icons/si'
 import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { safeHref } from '@/lib/url'
-import { type TrackPlatformIds } from '@/lib/music'
 import { CardModal } from '../card-modal'
 import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
+import { STREAMING_PLATFORMS } from '../music/platforms'
+import { SongModal, type ReleaseOption, type Track } from '../tracks/song-modal'
 import { toast } from '../toast'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { TrackAudio } from '../track-audio'
 import { coverThumbUrl } from '@/lib/cover-url'
-import {
-  deleteContentAction,
-  setReleaseLinkAction,
-  setReleaseTypeAction,
-  updateContentAction,
-  updateReleaseDetailsAction,
-} from '../actions'
+import { deleteContentAction, setReleaseLinkAction, setReleaseTypeAction, updateReleaseDetailsAction } from '../actions'
 
 export type ReleaseLink = { label: string; url: string }
-/** A song in a release's tracklist. Carries the union-model platform fields so the
- *  tracklist can show which platforms it's on and edit its primary Listen link. */
-export type ReleaseSong = TrackPlatformIds & {
-  id: string
-  title: string
+/** A song in a release's tracklist: a FULL song (it opens the same modal a standalone one
+ *  does — Sam, 2026-09-11) plus what the tracklist row itself prints. */
+export type ReleaseSong = Track & {
   featured_artists: string[]
   stat?: number
-  /** Primary Listen link (paste a Spotify / SoundCloud / … URL). Editable per song. */
-  stream_url: string | null
-  /** Uploaded-audio object path (private bucket) — drives the modal's audio player. */
-  audio_path: string | null
 }
 export type Release = {
   id: string
@@ -64,33 +51,6 @@ function feat(song: ReleaseSong): string | null {
   return song.featured_artists.length ? `feat. ${song.featured_artists.join(', ')}` : null
 }
 
-/** The streaming services a release can link out to — one fixed slot each, with its brand
- *  mark (react-icons) and colour, shown coloured when a link is set, grey when empty. The
- *  `label` is also the key stored in `release.links`. */
-const STREAMING_PLATFORMS: { label: string; Icon: IconType; color: string; placeholder: string }[] = [
-  { label: 'Spotify', Icon: SiSpotify, color: 'text-[#1DB954]', placeholder: 'Spotify link' },
-  { label: 'Apple Music', Icon: SiApplemusic, color: 'text-[#FA243C]', placeholder: 'Apple Music link' },
-  { label: 'SoundCloud', Icon: SiSoundcloud, color: 'text-[#FF5500]', placeholder: 'SoundCloud link' },
-  { label: 'Deezer', Icon: SiDeezer, color: 'text-[#A238FF]', placeholder: 'Deezer link' },
-]
-
-/** A song's editable per-platform link fields (the sync-only ids like spotify_id/deezer_id
- *  aren't manually set, so they aren't slots here). */
-/** A song's editable per-platform link fields — shared with the orphan-single (TrackCard)
- *  modal so a song opens the same everywhere it appears. */
-export const SONG_PLATFORMS: {
-  field: 'stream_url' | 'soundcloud_url' | 'apple_url' | 'deezer_url'
-  label: string
-  Icon: IconType
-  color: string
-  placeholder: string
-}[] = [
-  { field: 'stream_url', label: 'Spotify', Icon: SiSpotify, color: 'text-[#1DB954]', placeholder: 'Spotify link' },
-  { field: 'apple_url', label: 'Apple Music', Icon: SiApplemusic, color: 'text-[#FA243C]', placeholder: 'Apple Music link' },
-  { field: 'soundcloud_url', label: 'SoundCloud', Icon: SiSoundcloud, color: 'text-[#FF5500]', placeholder: 'SoundCloud link' },
-  { field: 'deezer_url', label: 'Deezer', Icon: SiDeezer, color: 'text-[#A238FF]', placeholder: 'Deezer link' },
-]
-
 /**
  * A release as a grid tile: cover with a select checkbox + live badge + type badge, then
  * title and meta. Selection drives the password-gated publish; the checkbox is owned by
@@ -107,10 +67,13 @@ export function ReleaseCard({
   selected,
   onToggleSelect,
   mergeTargets = [],
+  releases = [],
 }: {
   release: Release
   artistId: string
   artistSlug: string
+  /** Every release the artist has (for a song's Release / Also on rows in its modal). */
+  releases?: ReleaseOption[]
   /** On-site selection (publish flow). Omit both for an UNRELEASED release —
    *  publish doesn't apply, so no checkbox / live badge is shown. */
   selected?: boolean
@@ -127,8 +90,9 @@ export function ReleaseCard({
   const [title, setTitle] = useState(release.title)
   const [date, setDate] = useState(release.release_date?.slice(0, 10) ?? '')
   const [type, setType] = useState<ReleaseType>(release.release_type)
-  // The tracklist song whose modal is open (click a song to see and edit its links).
-  const [linkSong, setLinkSong] = useState<ReleaseSong | null>(null)
+  // The tracklist song whose modal is open. Opening it CLOSES the release's modal (Sam,
+  // 2026-09-11: "I don't want to see the album modal behind it").
+  const [song, setSong] = useState<ReleaseSong | null>(null)
   // The tracklist song being merged away. Same modal + server action as the standalone
   // song cards — one merge implementation, wherever the song lives.
   const [mergeSong, setMergeSong] = useState<ReleaseSong | null>(null)
@@ -202,13 +166,6 @@ export function ReleaseCard({
     const fd = new FormData()
     fd.set('url', value)
     return setReleaseLinkAction(release.id, artistId, label, fd)
-  }
-
-  // A song's own platform link (track column) — one row, one field.
-  const saveSongLink = (songId: string, field: string) => async (value: string) => {
-    const fd = new FormData()
-    fd.set(field, value)
-    return updateContentAction('track', songId, artistId, fd)
   }
 
   /** The ↗ beside a link row: opens the saved link to check it works. */
@@ -285,7 +242,7 @@ export function ReleaseCard({
         open={editing}
         // Escape / click-outside closes ONE layer: while a song or merge modal is open it
         // guards this one, so the top layer dismisses first.
-        onClose={() => !linkSong && !mergeSong && setEditing(false)}
+        onClose={() => !mergeSong && setEditing(false)}
         label={title}
         analyticsHref={`/artists/${artistId}`}
         deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
@@ -348,11 +305,18 @@ export function ReleaseCard({
                 {/* Click a song → its own modal, the same grammar as a standalone song. Merge
                     into… on hover: a sync-refusal duplicate frequently lives HERE, inside a
                     release, and its twin can be anywhere in the catalog. */}
-                <ol className="min-w-0 flex-1">
+                <ol className="-mt-0.5 min-w-0 flex-1">
                   {release.songs.map((s, i) => (
-                    <li key={s.id} className="group/row flex items-baseline gap-2 py-1 text-[15px]">
+                    <li key={s.id} className="group/row flex items-baseline gap-2 py-px text-[15px] leading-6">
                       <span className="w-5 flex-none text-right font-space text-[11px] text-ink-faint">{i + 1}</span>
-                      <button type="button" onClick={() => setLinkSong(s)} className="min-w-0 flex-1 truncate text-left hover:text-accent">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditing(false)
+                          setSong(s)
+                        }}
+                        className="min-w-0 flex-1 truncate text-left hover:text-accent"
+                      >
                         {s.title}
                       </button>
                       {feat(s) && <span className="max-w-[40%] flex-none truncate font-space text-[11px] text-ink-faint">{feat(s)}</span>}
@@ -415,53 +379,17 @@ export function ReleaseCard({
         />
       )}
 
-      {/* A tracklist song's own modal — the album's cover, the song's title, feat. and the
-          release as meta; then its per-platform links and audio. Same grammar as TrackCard. */}
-      {linkSong && (
-        <CardModal
+      {/* A tracklist song opens THE song modal — the same one a standalone song opens,
+          with the release's modal already closed behind it. */}
+      {song && (
+        <SongModal
+          track={song}
+          artistId={artistId}
+          releases={releases}
           open
-          onClose={() => !mergeSong && setLinkSong(null)}
-          label={linkSong.title}
-          analyticsHref={`/artists/${artistId}`}
-          footerLeft={
-            targetsFor(linkSong.id).length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setMergeSong(linkSong)}
-                className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-              >
-                Merge into…
-              </button>
-            ) : null
-          }
-        >
-          <ModalHeader
-            square={cover(112)}
-            title={linkSong.title}
-            meta={
-              <>
-                {feat(linkSong) ? (
-                  <>
-                    <span>{feat(linkSong)}</span>
-                    <MetaDot />
-                  </>
-                ) : null}
-                <span>{title}</span>
-              </>
-            }
-          />
-          <div className="mt-5">
-            {SONG_PLATFORMS.map((p) => {
-              const value = linkSong[p.field] ?? ''
-              return (
-                <KvField key={p.field} label={p.label} value={value} type="url" mono onSave={saveSongLink(linkSong.id, p.field)} onError={fail} trailing={openMark(p.label, value)} />
-              )
-            })}
-            <KvRow label="Audio">
-              <TrackAudio artistId={artistId} trackId={linkSong.id} audioPath={linkSong.audio_path} />
-            </KvRow>
-          </div>
-        </CardModal>
+          onClose={() => setSong(null)}
+          mergeTargets={targetsFor(song.id)}
+        />
       )}
     </div>
   )

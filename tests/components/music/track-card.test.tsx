@@ -106,14 +106,15 @@ describe('TrackCard song type', () => {
     // Derived from RELEASE_TYPES (AGENTS.md rule 4) — the check that would have caught
     // 'live' being unpickable.
     const dialog = openModal()
-    const select = within(dialog).getByRole('combobox', { name: 'Type' })
-    const labels = [...select.querySelectorAll('option')].map((o) => o.textContent)
+    fireEvent.click(within(dialog).getByRole('combobox', { name: 'Type' }))
+    const labels = within(dialog).getAllByRole('option').map((o) => o.textContent)
     expect(labels).toEqual(RELEASE_TYPES.map((t) => RELEASE_TYPE_LABEL[t]))
   })
 
   it('CRITICAL: picking Live saves it against the song at once', async () => {
     const dialog = openModal(track({ release_type: 'remix' }))
-    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Type' }), { target: { value: 'live' } })
+    fireEvent.click(within(dialog).getByRole('combobox', { name: 'Type' }))
+    fireEvent.click(within(dialog).getByRole('option', { name: 'Live set' }))
     await waitFor(() => expect(setTrackTypeAction).toHaveBeenCalledTimes(1))
     const [id, artistId, fd] = vi.mocked(setTrackTypeAction).mock.calls[0]
     expect([id, artistId]).toEqual(['t1', 'a1'])

@@ -95,7 +95,6 @@ describe('KvCells', () => {
       />,
     )
     expect(screen.getByText('Austin')).toBeInTheDocument()
-    // The select's own empty option also reads "—"; the cell's display is the span.
     expect(screen.getByText('—', { selector: 'span' })).toBeInTheDocument()
     fireEvent.click(screen.getByText('Austin'))
     fireEvent.change(screen.getByRole('textbox', { name: 'City' }), { target: { value: 'Chicago' } })
@@ -103,8 +102,11 @@ describe('KvCells', () => {
     await waitFor(() => expect(city).toHaveBeenCalledWith('Chicago'))
     expect(state).not.toHaveBeenCalled()
     expect(country).not.toHaveBeenCalled()
-    // A select cell saves on change.
-    fireEvent.change(screen.getByRole('combobox', { name: 'State' }), { target: { value: 'IL' } })
+    // A choice cell is the site's own menu (no native select): open it, pick, it saves.
+    fireEvent.click(screen.getByRole('combobox', { name: 'State' }))
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['—', 'TX · Texas', 'IL · Illinois'])
+    fireEvent.click(screen.getByRole('option', { name: 'IL · Illinois' }))
     await waitFor(() => expect(state).toHaveBeenCalledWith('IL'))
+    expect(screen.queryByRole('listbox')).toBeNull()
   })
 })

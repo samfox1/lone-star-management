@@ -111,32 +111,25 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   // single that also appears on a bigger EP/album (its parent) shows in that project's
   // tracklist too, while still living standalone as its own single. Not album name, not cover.
   const songsByRelease = new Map<string, ReleaseSong[]>()
-  for (const row of trackRows) {
+  const featuredById = new Map(trackRows.map((row) => [row.id as string, (row.featured_artists as string[] | null) ?? []]))
+  for (const t of tracks) {
+    // The FULL song (it opens the same modal a standalone one does), plus what the
+    // tracklist row prints.
     const song: ReleaseSong = {
-      id: row.id as string,
-      title: row.title as string,
-      featured_artists: (row.featured_artists as string[] | null) ?? [],
-      stat: metricValue(counts, 'release', [row.id as string]),
-      stream_url: (row.stream_url as string | null) ?? null,
-      spotify_id: (row.spotify_id as string | null) ?? null,
-      apple_id: (row.apple_id as string | null) ?? null,
-      deezer_id: (row.deezer_id as string | null) ?? null,
-      apple_url: (row.apple_url as string | null) ?? null,
-      soundcloud_url: (row.soundcloud_url as string | null) ?? null,
-      deezer_url: (row.deezer_url as string | null) ?? null,
-      audio_path: (row.audio_path as string | null) ?? null,
+      ...t,
+      featured_artists: featuredById.get(t.id) ?? [],
+      stat: metricValue(counts, 'release', [t.id]),
     }
     // Dedup the keys: if a row's home and parent are the same release (shouldn't happen,
     // but the union UI could produce it), never file the song twice under one release —
     // that would double-render the tracklist row and double-count its listens.
-    for (const key of new Set([row.release_id as string | null, row.parent_release_id as string | null])) {
+    for (const key of new Set([t.release_id, t.parent_release_id])) {
       if (!key) continue
       const list = songsByRelease.get(key) ?? []
       list.push(song)
       songsByRelease.set(key, list)
     }
   }
-
   const toReleaseCard = (row: Record<string, unknown>) => {
     const rid = row.id as string
     const songs = songsByRelease.get(rid) ?? []

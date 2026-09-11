@@ -302,6 +302,7 @@ export function MusicBrowser({
                     release={e.item}
                     artistId={artistId}
                     artistSlug={artistSlug}
+                    releases={releaseOptions}
                     selected={flag.onSite(e.item.id)}
                     onToggleSelect={() => flag.toggle(e.item.id)}
                     // The FULL catalog, not targetsFor: the card filters per tracklist row
@@ -332,7 +333,7 @@ export function MusicBrowser({
       {shownUnreleasedReleases.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,192px)] gap-x-5 gap-y-8">
           {shownUnreleasedReleases.map((r) => (
-            <ReleaseCard key={r.id} release={r} artistId={artistId} artistSlug={artistSlug} mergeTargets={mergeTargets} />
+            <ReleaseCard key={r.id} release={r} artistId={artistId} artistSlug={artistSlug} releases={releaseOptions} mergeTargets={mergeTargets} />
           ))}
         </div>
       )}

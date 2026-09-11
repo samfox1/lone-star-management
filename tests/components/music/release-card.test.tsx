@@ -9,8 +9,8 @@
  *   release  header = cover · title · type / year / song count; rows Title, Type, Date,
  *            one per streaming platform (release.links), Songs (EP/album) or Audio (single);
  *            footer Share · Delete · Done; no Save, no Edit sheet, no listens.
- *   song     header = the album's cover · song title · feat. / release; rows one per
- *            platform (the song's own fields) and Audio; footer Merge into… · Done.
+ *   song     THE song modal (tracks/song-modal.tsx) — the same one a standalone song
+ *            opens — with the release's modal closed behind it.
  *
  * What is pinned:
  *   - Title / Date each save through updateReleaseDetailsAction carrying BOTH values (the
@@ -18,7 +18,8 @@
  *   - Type offers only the sensible pair (EP ⇄ Album for a multi-track release, Single ⇄
  *     Remix for a single) and saves the pick at once; an unrelated edit never writes it;
  *   - a platform row saves through setReleaseLinkAction with that platform's label;
- *   - a tracklist song opens its own dialog whose rows save the SONG's field;
+ *   - a tracklist song opens the shared song modal (album closed), whose rows save the
+ *     SONG's field;
  *   - no Save / Close / Cancel buttons; Done, Share, Analytics present.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -42,6 +43,12 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setReleaseLinkAction: vi.fn(async () => ({})),
   setReleaseTypeAction: vi.fn(async () => ({})),
   updateReleaseDetailsAction: vi.fn(async () => ({})),
+  // The song modal's own actions (a tracklist song opens the shared SongModal).
+  setTrackReleaseAction: vi.fn(async () => ({})),
+  setTrackTypeAction: vi.fn(async () => ({})),
+  setTrackParentReleaseAction: vi.fn(async () => ({})),
+  setTrackOnSiteAction: vi.fn(async () => ({})),
+  setTrackReleasedAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/music/actions', () => ({
   mergeSongsAction: vi.fn(async () => ({})),
@@ -53,7 +60,8 @@ afterEach(() => {
 })
 
 const song = (id: string, title: string, over: Partial<ReleaseSong> = {}): ReleaseSong => ({
-  id, title, featured_artists: [], stream_url: null, audio_path: null,
+  id, title, featured_artists: [], stream_url: null, audio_path: null, cover_url: null, source: 'spotify',
+  release_id: 'r1', parent_release_id: null, release_date: null, release_type: 'ep', on_site: true,
   spotify_id: null, apple_id: null, deezer_id: null,
   apple_url: null, soundcloud_url: null, deezer_url: null, ...over,
 })
@@ -116,9 +124,9 @@ describe('the release modal', () => {
 
   it('CRITICAL: Type offers only EP ⇄ Album for a multi-track release and saves the pick at once', async () => {
     const dialog = openRelease()
-    const select = within(dialog).getByRole('combobox', { name: 'Type' })
-    expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['EP', 'Album'])
-    fireEvent.change(select, { target: { value: 'album' } })
+    fireEvent.click(within(dialog).getByRole('combobox', { name: 'Type' }))
+    expect(within(dialog).getAllByRole('option').map((o) => o.textContent)).toEqual(['EP', 'Album'])
+    fireEvent.click(within(dialog).getByRole('option', { name: 'Album' }))
     await waitFor(() => expect(setReleaseTypeAction).toHaveBeenCalledTimes(1))
     expect((vi.mocked(setReleaseTypeAction).mock.calls[0][2] as FormData).get('release_type')).toBe('album')
   })
@@ -128,7 +136,10 @@ describe('the release modal', () => {
     // Album. The current type rides along so a Featured appearance (or a one-song EP) never
     // shows a value the list cannot hold.
     const single = openRelease(release({ release_type: 'single', songs: [song('s1', 'Alpha')] }))
-    const opts = (d: HTMLElement) => [...within(d).getByRole('combobox', { name: 'Type' }).querySelectorAll('option')].map((o) => o.textContent)
+    const opts = (d: HTMLElement) => {
+      fireEvent.click(within(d).getByRole('combobox', { name: 'Type' }))
+      return within(d).getAllByRole('option').map((o) => o.textContent)
+    }
     expect(opts(single)).toEqual(['Single', 'Remix', 'Live set'])
     cleanup()
     const featured = openRelease(release({ release_type: 'featured', songs: [song('s1', 'Alpha')] }))
@@ -174,13 +185,16 @@ describe('the release modal', () => {
 })
 
 describe('a song inside the release', () => {
-  it('opens its own dialog: album cover, song title, feat. and the release as meta', () => {
+  it('CRITICAL: opens THE song modal — the one a standalone song opens — and closes the album behind it', () => {
+    // Sam (2026-09-11): "clicking from a song of an album should bring me to the same song
+    // modal seen for singles. I also don't want to see the album modal behind it."
     const dialog = openRelease()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Beta' }))
+    expect(screen.queryByRole('dialog', { name: 'Night EP' })).toBeNull()
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
     expect(within(songDialog).getByRole('heading', { name: 'Beta' })).toBeInTheDocument()
-    expect(within(songDialog).getByText(/feat\. Arlo/)).toBeInTheDocument()
-    expect(within(songDialog).getByText(/Night EP/)).toBeInTheDocument()
+    // The full song grammar, not a links-only sheet.
+    for (const label of ['Title', 'Type', 'Date', 'Spotify', 'Audio']) expect(rowOf(songDialog, label)).toBeInTheDocument()
     expect(within(songDialog).queryByText(/listens/i)).toBeNull()
   })
 
@@ -196,11 +210,13 @@ describe('a song inside the release', () => {
     expect(setReleaseLinkAction).not.toHaveBeenCalled()
   })
 
-  it('has Audio, Done, and no Save', () => {
-    const dialog = openRelease()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Beta' }))
+  it('offers the Release / Also on rows when the card knows the releases', () => {
+    render(<ReleaseCard release={release()} artistId="a1" artistSlug="lone-pine" releases={[{ id: 'r1', title: 'Night EP' }, { id: 'r2', title: 'Day LP' }]} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Night EP — / }))
+    fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
-    expect(rowOf(songDialog, 'Audio')).toBeInTheDocument()
+    expect(rowOf(songDialog, 'Release')).toBeInTheDocument()
+    expect(rowOf(songDialog, 'Also on')).toBeInTheDocument()
     expect(within(songDialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
     expect(within(songDialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
   })
