@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { CardModal } from '../card-modal'
@@ -9,6 +9,7 @@ import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
+import { toast } from '../toast'
 import { SaveForm } from '../save-form'
 import { TagInput } from '../tag-input'
 import { BoolToggle } from '../bool-toggle'
@@ -51,8 +52,9 @@ function dateBlock(date: string | null): { day: string; month: string } {
 /**
  * A tour date as a prototype-style list row (toggle · mono date block · venue/city ·
  * tickets). Tour has no cover art, so it's a dense list rather than a grid. The
- * checkbox is a LIVE on-site toggle owned by the parent browser (ADR 0009); clicking
- * the row opens the edit modal.
+ * checkbox is a draft on-site toggle owned by the parent browser (ADR 0010); clicking
+ * the row opens the edit modal, and the row's own ⋯ menu offers Edit / Remove (Sam,
+ * 2026-09-11) so neither needs a trip through the modal footer.
  */
 export function TourRow({
   tour,
@@ -67,11 +69,38 @@ export function TourRow({
   onToggleOnSite: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const { day, month } = dateBlock(tour.date)
   const badge = tour.source && tour.source !== 'manual' ? tour.source : null
   // "Austin, TX" — state preferred (US shows), country as the fallback for a date
   // booked outside the US. Same join the public site uses, so the row previews it.
   const place = [tour.city, tour.state ?? tour.country].filter(Boolean).join(', ')
+
+  // Same close rules as the song card's menu: a click anywhere else, or Escape.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
+  // The same prompt CardModal's footer Delete uses — a removal is the one thing on this
+  // row with no undo, so it is never one click.
+  async function remove() {
+    setMenuOpen(false)
+    if (!window.confirm("Delete this date? This can't be undone.")) return
+    const res = await deleteContentAction('tour_date', tour.id, artistId)
+    if (res?.error) toast(res.error, 'error')
+    else toast('Date removed')
+  }
 
   return (
     <>
@@ -136,6 +165,44 @@ export function TourRow({
             <Icon name="ticket" size={16} />
           </a>
         )}
+        <div ref={menuRef} className="relative flex-none">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={`${tour.venue || 'date'} options`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+          >
+            <Icon name="more" size={18} />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-hairline bg-paper py-1 shadow-2xl"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setOpen(true)
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+              >
+                <Icon name="edit" size={15} /> Edit
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={remove}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-red hover:bg-danger-soft"
+              >
+                <Icon name="trash" size={15} /> Remove
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <CardModal
