@@ -121,6 +121,26 @@ function Fields({
  * pasted URL and prefills the fields (video oEmbed, merch Open-Graph). Styled with
  * the site primitives (buttonClass / inputClass / Icon), so it matches everything else.
  */
+/** The header "+" every page adds with: a plus that slides an "Add" label open on hover
+ *  (matches Music Refresh). ONE definition — Sam (2026-09-11) caught the tour page's
+ *  copy drifting from the merch page's. */
+export function AddTrigger({ onClick, label = 'Add' }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+    >
+      <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
+        {label}
+      </span>
+      <Icon name="plus" size={14} />
+    </button>
+  )
+}
+
 export function CreateModal({
   kind,
   title,
@@ -228,19 +248,7 @@ export function CreateModal({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Add"
-        aria-label="Add"
-        className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
-      >
-        {/* Label collapsed until hover, then slides open to the left (matches Music Refresh). */}
-        <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
-          Add
-        </span>
-        <Icon name="plus" size={14} />
-      </button>
+      <AddTrigger onClick={() => setOpen(true)} />
 
       {open && (
         <div

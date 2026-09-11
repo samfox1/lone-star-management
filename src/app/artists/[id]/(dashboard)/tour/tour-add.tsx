@@ -3,10 +3,10 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { buttonClass } from '@/components/ui/ui'
-import { Icon } from '@/components/ui/icons'
 import type { SupportAct } from '@/lib/content'
 import { US_STATES } from '@/lib/us-states'
 import { CardModal } from '../card-modal'
+import { AddTrigger } from '../create-modal'
 import { DateSquare, KvRow, ModalHeader } from '../modal-kit'
 import { addContentAction, setSupportActsAction } from '../actions'
 import { toast } from '../toast'
@@ -77,15 +77,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Add date"
-        title="Add date"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
-      >
-        <Icon name="plus" size={14} />
-      </button>
+      <AddTrigger onClick={() => setOpen(true)} />
 
       <CardModal
         open={open}
