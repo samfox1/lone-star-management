@@ -68,6 +68,7 @@ export function SongModal({
   mergeTargets = [],
   onTakenOffSite,
   home,
+  onOpenRelease,
   artistSlug,
 }: {
   track: Track
@@ -75,9 +76,11 @@ export function SongModal({
   /** The artist's public slug — the release page a song shares lives under it. */
   artistSlug?: string
   releases: ReleaseOption[]
-  /** The song's home release, when the caller knows it better than `releases` does (the
-   *  release card opening one of its own songs). */
+  /** The record this song was opened FROM (the release card opening one of its songs) —
+   *  its home, or a bigger record it also appears on. Names the record in the meta. */
   home?: ReleaseOption
+  /** Go back to that record's modal — the record's name in the meta becomes a button. */
+  onOpenRelease?: () => void
   open: boolean
   onClose: () => void
   /** The artist's other songs, for "Merge into…". Empty hides the option. */
@@ -158,18 +161,24 @@ export function SongModal({
   // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP
   // or Album for the individual track … it should say Track from EP/Album {title}"), so
   // the Type row is the release's to edit, not the song's, and the meta names the record.
-  const homeRelease = releaseId ? (home?.id === releaseId ? home : releases.find((r) => r.id === releaseId)) : undefined
-  const homeType = homeRelease?.release_type
-  const onRecord = homeType === 'ep' || homeType === 'album'
-  const kind = onRecord && homeRelease ? `Track from ${RELEASE_TYPE_LABEL[homeType]} ${homeRelease.title}` : RELEASE_TYPE_LABEL[type]
+  // THE record: the one it was opened from when that is its home or a record it also
+  // appears on; else a bigger record it appears on (parent); else its home release.
+  const isRecord = (r?: ReleaseOption) => r?.release_type === 'ep' || r?.release_type === 'album'
+  const fromHere = home && (home.id === releaseId || home.id === parentId) ? home : undefined
+  const parentRecord = parentId ? releases.find((r) => r.id === parentId) : undefined
+  const homeRelease = releaseId ? releases.find((r) => r.id === releaseId) : undefined
+  const record = fromHere ?? (isRecord(parentRecord) ? parentRecord : homeRelease)
+  const onRecord = isRecord(record)
+  const kind = onRecord && record ? `Track from ${RELEASE_TYPE_LABEL[record.release_type!]} ` : RELEASE_TYPE_LABEL[type]
 
   // What Share hands out (Sam, 2026-09-11: every song has a Share): the home release's
   // public page when there is one, else the song's own listen link. Nothing to share →
   // no button, rather than a button that copies nothing.
   const shareUrl = (() => {
-    if (homeRelease?.slug && artistSlug) {
+    const page = record ?? homeRelease
+    if (page?.slug && artistSlug) {
       const origin = typeof window === 'undefined' ? '' : window.location.origin
-      return `${origin}/${artistSlug}/r/${homeRelease.slug}`
+      return `${origin}/${artistSlug}/r/${page.slug}`
     }
     for (const p of SONG_PLATFORMS) {
       const href = safeHref(track[p.field] ?? '')
@@ -274,7 +283,19 @@ export function SongModal({
             // Kind · year, like a release's meta — no platform names (Sam, 2026-09-11):
             // the logos on the right already say where the song is.
             <>
-              <span>{kind}</span>
+              <span>
+                {kind}
+                {/* The record's name is a way BACK to its modal (Sam, 2026-09-11). */}
+                {onRecord && record ? (
+                  onOpenRelease ? (
+                    <button type="button" onClick={onOpenRelease} className="text-ink underline-offset-2 hover:underline">
+                      {record.title}
+                    </button>
+                  ) : (
+                    <span className="text-ink">{record.title}</span>
+                  )
+                ) : null}
+              </span>
               {date ? (
                 <>
                   <MetaDot />

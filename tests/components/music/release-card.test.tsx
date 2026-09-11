@@ -213,6 +213,23 @@ describe('a song inside the release', () => {
     expect(setReleaseLinkAction).not.toHaveBeenCalled()
   })
 
+  it('CRITICAL: the record’s name in the meta brings the album modal back', () => {
+    const dialog = openRelease()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Beta' }))
+    const songDialog = screen.getByRole('dialog', { name: 'Beta' })
+    fireEvent.click(within(songDialog).getByRole('button', { name: 'Night EP' }))
+    expect(screen.queryByRole('dialog', { name: 'Beta' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Night EP' })).toBeInTheDocument()
+  })
+
+  it('a song that only APPEARS on the album (its home is a single) still reads as a track from it', () => {
+    const r = release({ release_type: 'album', songs: [song('s1', 'Alpha', { release_id: 'x-single', parent_release_id: 'r1' })] })
+    const dialog = openRelease(r)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Alpha' }))
+    const songDialog = screen.getByRole('dialog', { name: 'Alpha' })
+    expect(songDialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from Album Night EP/)
+  })
+
   it('offers the Release / Also on rows when the card knows the releases', () => {
     render(<ReleaseCard release={release()} artistId="a1" artistSlug="lone-pine" releases={[{ id: 'r1', title: 'Night EP' }, { id: 'r2', title: 'Day LP' }]} />)
     fireEvent.click(screen.getByRole('button', { name: /^Night EP — / }))

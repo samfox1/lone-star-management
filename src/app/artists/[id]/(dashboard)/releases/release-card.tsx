@@ -390,6 +390,10 @@ export function ReleaseCard({
           artistId={artistId}
           releases={releases}
           home={{ id: release.id, title, release_type: type, slug: release.slug }}
+          onOpenRelease={() => {
+            setSong(null)
+            setEditing(true)
+          }}
           artistSlug={artistSlug}
           open
           onClose={() => setSong(null)}
