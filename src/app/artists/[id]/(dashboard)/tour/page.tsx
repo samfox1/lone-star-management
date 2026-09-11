@@ -57,6 +57,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
         // row cannot disagree with itself between server and client (lib/tour).
         past: isPastShow({ date: (row.date as string | null) ?? null, is_past: (row.is_past as boolean | null) ?? false }, today),
         support: (row.support as string[] | null) ?? [],
+        support_urls: (row.support_urls as Record<string, string> | null) ?? {},
         ticket_url: (row.ticket_url as string | null) ?? null,
         source: (row.source as string | null) ?? null,
         on_site: (row.on_site as boolean | null) ?? true,

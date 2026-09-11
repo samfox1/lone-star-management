@@ -18,7 +18,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent, setSupportUrl, updateContent } from '@/lib/content'
+import { createContent, publishContent, setSupportActs, setSupportUrl, updateContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 type PublicTourDate = {
@@ -198,6 +198,84 @@ describe('tour date without a date (TBA row)', () => {
     } finally {
       await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', oldId)
       await svc.from('tour_dates').delete().eq('id', oldId)
+    }
+  })
+})
+
+/**
+ * The tour page edits acts AS A LIST — name + website together, one at a time (Sam,
+ * 2026-09-11). One write carries both columns, so a rename cannot orphan a link under
+ * the old name and a removed act cannot leave its link behind.
+ */
+describe('setSupportActs — names and links written as one lineup', () => {
+  let actsId: string
+  const read = async () => {
+    const { data } = await asA.from('tour_dates').select('support, support_urls').eq('id', actsId).single()
+    return data as { support: string[]; support_urls: Record<string, string> }
+  }
+
+  beforeAll(async () => {
+    const row = await createContent(asA, 'tour_date', artistA, { venue: 'M4 acts venue', support: ['Old Act'] })
+    actsId = row.id as string
+  })
+  afterAll(async () => {
+    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', actsId)
+    await svc.from('tour_dates').delete().eq('id', actsId)
+  })
+
+  it('writes the names and the links together, in bill order', async () => {
+    const acts = await setSupportActs(asA, artistA, actsId, [
+      { name: 'Arlo', url: 'https://arlo.example' },
+      { name: 'Bo Reed', url: null },
+    ])
+    expect(acts).toEqual([{ name: 'Arlo', url: 'https://arlo.example' }, { name: 'Bo Reed', url: null }])
+    expect(await read()).toEqual({ support: ['Arlo', 'Bo Reed'], support_urls: { Arlo: 'https://arlo.example' } })
+  })
+
+  it('a renamed act keeps its link under the NEW name; the old key is gone', async () => {
+    await setSupportActs(asA, artistA, actsId, [
+      { name: 'Arlo Parks', url: 'https://arlo.example' },
+      { name: 'Bo Reed', url: null },
+    ])
+    expect(await read()).toEqual({ support: ['Arlo Parks', 'Bo Reed'], support_urls: { 'Arlo Parks': 'https://arlo.example' } })
+  })
+
+  it('a removed act takes its link with it', async () => {
+    await setSupportActs(asA, artistA, actsId, [{ name: 'Bo Reed', url: 'https://bo.example' }])
+    expect(await read()).toEqual({ support: ['Bo Reed'], support_urls: { 'Bo Reed': 'https://bo.example' } })
+  })
+
+  it('trims, drops blanks, and dedupes names (first one wins)', async () => {
+    const acts = await setSupportActs(asA, artistA, actsId, [
+      { name: '  Bo Reed ', url: 'https://bo.example' },
+      { name: '', url: 'https://nobody.example' },
+      { name: 'Bo Reed', url: 'https://second.example' },
+    ])
+    expect(acts).toEqual([{ name: 'Bo Reed', url: 'https://bo.example' }])
+  })
+
+  it('CRITICAL: an unsafe URL is refused and NOTHING is written', async () => {
+    const before = await read()
+    await expect(
+      setSupportActs(asA, artistA, actsId, [{ name: 'Bo Reed', url: 'javascript:alert(1)' }]),
+    ).rejects.toThrow(/valid URL/i)
+    expect(await read()).toEqual(before)
+  })
+
+  it("CRITICAL: cannot write another tenant's date", async () => {
+    // Plant a witness on the OTHER artist, then try to write it through A's session.
+    const artistB = await artistIdBySlug(SEED.artistBSlug)
+    const { data: planted } = await svc
+      .from('tour_dates')
+      .insert({ artist_id: artistB, venue: 'B witness', support: ['Keep Me'] })
+      .select('id')
+      .single()
+    try {
+      await expect(setSupportActs(asA, artistB, planted!.id, [{ name: 'Hijack', url: null }])).rejects.toThrow()
+      const { data } = await svc.from('tour_dates').select('support').eq('id', planted!.id).single()
+      expect(data?.support).toEqual(['Keep Me'])
+    } finally {
+      await svc.from('tour_dates').delete().eq('id', planted!.id)
     }
   })
 })

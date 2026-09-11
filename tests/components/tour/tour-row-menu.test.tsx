@@ -41,6 +41,7 @@ const tour: TourDate = {
   past: false,
   ticket_url: null,
   support: [],
+  support_urls: {},
   source: 'manual',
   on_site: true,
 }

@@ -11,7 +11,8 @@ import { EntitySparkline } from '../entity-sparkline'
 import { deleteContentAction, updateContentAction } from '../actions'
 import { toast } from '../toast'
 import { SaveForm } from '../save-form'
-import { TagInput } from '../tag-input'
+import { SupportActs } from './support-acts'
+import { supportActsOf } from '@/lib/content'
 import { BoolToggle } from '../bool-toggle'
 import { US_STATES } from '@/lib/us-states'
 
@@ -31,6 +32,8 @@ export type TourDate = {
   ticket_url: string | null
   /** The other acts on the bill. Never null — the column is NOT NULL DEFAULT '{}'. */
   support: string[]
+  /** Where each act links out, by name (20260717140000). Edited with the names. */
+  support_urls: Record<string, string>
   source: string | null
   /** Whether the date is currently live on the public site. */
   on_site: boolean
@@ -243,13 +246,16 @@ export function TourRow({
           <input name="country" defaultValue={tour.country ?? ''} placeholder="Country (outside the US)" className={`${inputClass} w-full`} />
           <input name="ticket_url" type="url" defaultValue={tour.ticket_url ?? ''} placeholder="Tickets URL" className={`${inputClass} w-full`} />
           <BoolToggle name="is_past" label="This was an old show" defaultChecked={tour.is_past} />
-          {/* Uncontrolled like its siblings' defaultValue, and remounted by CardModal
-              on every open — so an abandoned edit doesn't linger. */}
-          <TagInput name="support" defaultValue={tour.support} placeholder="Also performing…" />
           <button type="submit" className={buttonClass('ghost')}>
             Save
           </button>
         </SaveForm>
+        {/* The lineup saves itself, act by act (see SupportActs) — it is outside the
+            SaveForm so the form's Save never posts `support` and overwrites it. Remounted
+            with the modal, like everything else in it. */}
+        <div className="mt-4">
+          <SupportActs artistId={artistId} tourDateId={tour.id} acts={supportActsOf(tour)} />
+        </div>
       </CardModal>
     </>
   )

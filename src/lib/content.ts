@@ -510,6 +510,61 @@ export async function setSupportUrl(
   return map
 }
 
+/** One act on a tour date's bill: its name and, optionally, where it links out to. */
+export type SupportAct = { name: string; url: string | null }
+
+/** Zip a date's two support columns into the list the tour page edits. Older rows
+ *  (before 20260717140000) can carry a null map; a name with no entry has no link. */
+export function supportActsOf(row: { support?: string[] | null; support_urls?: Record<string, string> | null }): SupportAct[] {
+  const urls = row.support_urls ?? {}
+  return (row.support ?? []).map((name) => ({ name, url: urls[name] ?? null }))
+}
+
+/**
+ * Write a tour date's WHOLE lineup — names and links — in one update (Sam, 2026-09-11:
+ * acts are added one at a time with their website, and edited or removed in place).
+ * `support` (names, bill order) and `support_urls` (name→url) are two columns keyed by
+ * the name, so they are only ever written TOGETHER here: a rename moves the link to the
+ * new name, a removal takes its link with it, and neither can drift from the other.
+ *
+ * Names are trimmed, blanks dropped, duplicates collapsed (first one wins — it is the
+ * React key on the tour page). Every URL goes through safeHref so a javascript:/data:
+ * link can never ride the snapshot to the public site; one bad URL refuses the WHOLE
+ * write (nothing is silently dropped). Returns the lineup as stored.
+ */
+export async function setSupportActs(
+  supabase: SupabaseClient,
+  artistId: string,
+  tourDateId: string,
+  acts: readonly SupportAct[],
+): Promise<SupportAct[]> {
+  const seen = new Set<string>()
+  const clean: SupportAct[] = []
+  for (const act of acts) {
+    const name = act.name.trim()
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    const raw = (act.url ?? '').trim()
+    const url = raw ? safeHref(raw) : null
+    if (raw && !url) throw new Error(`Enter a valid URL for ${name}.`)
+    clean.push({ name, url: url ?? null })
+  }
+  const support_urls: Record<string, string> = {}
+  for (const a of clean) if (a.url) support_urls[a.name] = a.url
+
+  // `.select()` makes a row-filtered write bite: RLS turns a foreign row into zero rows
+  // matched with no error, and `.single()` on nothing is the error a caller can trust.
+  const { error } = await supabase
+    .from('tour_dates')
+    .update({ support: clean.map((a) => a.name), support_urls })
+    .eq('id', tourDateId)
+    .eq('artist_id', artistId)
+    .select('id')
+    .single()
+  if (error) throw new Error(error.message)
+  return clean
+}
+
 /**
  * Reconcile the published state of one content type to match the working rows.
  *

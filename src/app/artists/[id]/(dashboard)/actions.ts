@@ -27,6 +27,7 @@ import {
   type ToggleKind,
   type LiveTogglePublishable,
   type PublishableEntity,
+  type SupportAct,
   type UnpublishedDiff,
   TOGGLE_KIND,
   PUBLISHABLE,
@@ -37,6 +38,7 @@ import {
   publishContent,
   publishProfile,
   restoreToPublished,
+  setSupportActs,
   listPublishMoments,
   type PublishMoment,
   setSupportUrl,
@@ -761,6 +763,31 @@ export async function setSupportUrlAction(
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
+}
+
+/**
+ * Write a tour date's whole lineup (names + links) — the tour page's acts editor. One
+ * call per add / edit / remove, carrying the full list, so the two columns can never
+ * disagree. Validation lives in setSupportActs; its message comes back as the error.
+ * Draft until the Tour section is republished. RLS scopes the write.
+ */
+export async function setSupportActsAction(
+  artistId: string,
+  tourDateId: string,
+  acts: SupportAct[],
+): Promise<{ error?: string; acts?: SupportAct[] }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+  try {
+    const saved = await setSupportActs(supabase, artistId, tourDateId, acts)
+    revalidatePath(`/artists/${artistId}`, 'layout')
+    return { acts: saved }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Save failed.' }
+  }
 }
 
 /**
