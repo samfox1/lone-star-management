@@ -178,6 +178,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
   const releaseOptions: ReleaseOption[] = releaseRows.map((r) => ({
     id: r.id as string,
     title: r.title as string,
+    release_type: toReleaseType(r.release_type as string | null),
   }))
 
   // Merge targets span the WHOLE catalog, not just the visible bucket: the sync's refusal

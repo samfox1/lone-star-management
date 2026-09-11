@@ -146,9 +146,10 @@ export function TourRow({
               </>
             )}
           </div>
-          {/* Venue · city · featured artists as three columns on the (now wide) row —
-              stacked on mobile, side-by-side from sm up. The empty columns keep their
-              width, so venues/cities/lineups line up straight down the list. */}
+          {/* Venue · place · lineup as three columns — stacked on mobile, side-by-side from
+              sm up. Venue takes the slack; place and lineup are fixed widths, so the
+              columns line up down the list AND the ⋯ sits right after the lineup instead
+              of a row-width away (Sam, 2026-09-11). */}
           <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
             <div className="min-w-0 sm:flex-1">
               <div className="truncate text-sm font-semibold group-hover:text-accent">
@@ -156,9 +157,9 @@ export function TourRow({
               </div>
               <CardStat value={tour.stat ?? 0} label={metricLabel('tour_date')} />
             </div>
-            <div className="min-w-0 truncate font-space text-xs text-ink-muted sm:flex-1">{place}</div>
+            <div className="min-w-0 truncate font-space text-xs text-ink-muted sm:w-40 sm:flex-none">{place}</div>
             {/* Reads the same as the public site's tour list ("+ Arlo, Bo Reed"). */}
-            <div className="min-w-0 truncate font-space text-xs text-ink-faint sm:flex-1">
+            <div className="min-w-0 truncate font-space text-xs text-ink-faint sm:w-36 sm:flex-none">
               {tour.support.length > 0 ? `+ ${tour.support.join(', ')}` : ''}
             </div>
           </div>

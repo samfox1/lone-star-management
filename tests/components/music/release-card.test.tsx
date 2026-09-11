@@ -193,8 +193,11 @@ describe('a song inside the release', () => {
     expect(screen.queryByRole('dialog', { name: 'Night EP' })).toBeNull()
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
     expect(within(songDialog).getByRole('heading', { name: 'Beta' })).toBeInTheDocument()
-    // The full song grammar, not a links-only sheet.
-    for (const label of ['Title', 'Type', 'Date', 'Spotify', 'Audio']) expect(rowOf(songDialog, label)).toBeInTheDocument()
+    // The full song grammar, not a links-only sheet — minus Type: a song on a record is
+    // typed by the record, and the meta says which one ("Track from EP Night EP").
+    for (const label of ['Title', 'Date', 'Spotify', 'Audio']) expect(rowOf(songDialog, label)).toBeInTheDocument()
+    expect(within(songDialog).queryByText('Type', { selector: 'span' })).toBeNull()
+    expect(songDialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from EP Night EP/)
     expect(within(songDialog).queryByText(/listens/i)).toBeNull()
   })
 

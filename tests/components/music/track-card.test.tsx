@@ -211,3 +211,34 @@ describe('the Unreleased pill', () => {
     await waitFor(() => expect(screen.getByRole('checkbox', { name: /Demo — off site/ })).toHaveAttribute('aria-checked', 'false'))
   })
 })
+
+/* ── a song that lives on a record (Sam, 2026-09-11) ─────────────────────────────── */
+describe('a song on a record', () => {
+  it('CRITICAL: is typed by the record — no Type row, and the meta says "Track from EP …"', () => {
+    render(
+      <TrackCard
+        track={track({ release_id: 'r1', release_type: 'ep' })}
+        artistId="a1"
+        releases={[{ id: 'r1', title: 'Night EP', release_type: 'ep' }]}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Demo/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByRole('combobox', { name: 'Type' })).toBeNull()
+    expect(dialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from EP Night EP/)
+  })
+
+  it('a song on a one-song release keeps its plain type in the meta, still without a Type row', () => {
+    render(
+      <TrackCard
+        track={track({ release_id: 'r1', release_type: 'single' })}
+        artistId="a1"
+        releases={[{ id: 'r1', title: 'Demo', release_type: 'single' }]}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Demo/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByRole('combobox', { name: 'Type' })).toBeNull()
+    expect(dialog.querySelector('h3 + div')?.textContent).toMatch(/^Single/)
+  })
+})

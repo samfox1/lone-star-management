@@ -22,8 +22,9 @@ import {
   updateContentAction,
 } from '../actions'
 
-/** A release the track can be assigned to (id + title, for the selector). */
-export type ReleaseOption = { id: string; title: string }
+/** A release the track can be assigned to (id + title, for the selector). `release_type`
+ *  lets a song's modal say "Track from EP OutWest" when its home is a multi-song record. */
+export type ReleaseOption = { id: string; title: string; release_type?: ReleaseType }
 
 export type Track = TrackPlatformIds & {
   id: string
@@ -66,10 +67,14 @@ export function SongModal({
   onClose,
   mergeTargets = [],
   onTakenOffSite,
+  home,
 }: {
   track: Track
   artistId: string
   releases: ReleaseOption[]
+  /** The song's home release, when the caller knows it better than `releases` does (the
+   *  release card opening one of its own songs). */
+  home?: ReleaseOption
   open: boolean
   onClose: () => void
   /** The artist's other songs, for "Merge into…". Empty hides the option. */
@@ -147,6 +152,14 @@ export function SongModal({
   const parentOptions = releaseOptions.filter((o) => o.value !== releaseId)
   const date = track.release_date?.slice(0, 10) ?? ''
 
+  // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP
+  // or Album for the individual track … it should say Track from EP/Album {title}"), so
+  // the Type row is the release's to edit, not the song's, and the meta names the record.
+  const homeRelease = releaseId ? (home?.id === releaseId ? home : releases.find((r) => r.id === releaseId)) : undefined
+  const homeType = homeRelease?.release_type
+  const onRecord = homeType === 'ep' || homeType === 'album'
+  const kind = onRecord && homeRelease ? `Track from ${RELEASE_TYPE_LABEL[homeType]} ${homeRelease.title}` : RELEASE_TYPE_LABEL[type]
+
   return (
     <>
       <CardModal
@@ -210,7 +223,7 @@ export function SongModal({
           title={track.title}
           meta={
             <>
-              <span>{RELEASE_TYPE_LABEL[type]}</span>
+              <span>{kind}</span>
               {date ? (
                 <>
                   <MetaDot />
@@ -229,8 +242,9 @@ export function SongModal({
         <div className="mt-5">
           <KvField label="Title" value={track.title} onSave={saveField('title')} onError={fail} />
           {/* SONG TYPE — straight off RELEASE_TYPES, so a type added to the registry appears
-              here the day it lands (a hand-kept list is how 'live' shipped unpickable). */}
-          <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />
+              here the day it lands (a hand-kept list is how 'live' shipped unpickable). Not
+              offered on a song that lives on a record: the record's type is the song's. */}
+          {!releaseId && <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />}
           {releases.length > 0 && (
             <>
               <KvField label="Release" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />
