@@ -385,9 +385,11 @@ describe('page-level plumbing', () => {
   it('offers EVERY release as a move target, released or not', async () => {
     releaseRows = [release({ id: 'r1', title: 'Album', spotify_id: 'sp1' }), release({ id: 'r2', title: 'Demo EP' })]
     const props = await musicProps()
+    // Each option carries the release's type too (2026-09-11), so a song's modal can say
+    // "Track from EP Demo EP" for a song that lives on it.
     expect(props.releaseOptions).toEqual([
-      { id: 'r1', title: 'Album' },
-      { id: 'r2', title: 'Demo EP' },
+      { id: 'r1', title: 'Album', release_type: expect.any(String) },
+      { id: 'r2', title: 'Demo EP', release_type: expect.any(String) },
     ])
   })
 
