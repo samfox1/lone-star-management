@@ -123,12 +123,28 @@ describe('the release modal', () => {
     expect((vi.mocked(setReleaseTypeAction).mock.calls[0][2] as FormData).get('release_type')).toBe('album')
   })
 
-  it('a single offers Single ⇄ Remix; a featured appearance has no type row', () => {
+  it('one song offers Single / Remix / Live set; the current type is always offered too', () => {
+    // Sam (2026-09-11): a one-song release "can also be a live set"; several songs → EP or
+    // Album. The current type rides along so a Featured appearance (or a one-song EP) never
+    // shows a value the list cannot hold.
     const single = openRelease(release({ release_type: 'single', songs: [song('s1', 'Alpha')] }))
-    expect([...within(single).getByRole('combobox', { name: 'Type' }).querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Single', 'Remix'])
+    const opts = (d: HTMLElement) => [...within(d).getByRole('combobox', { name: 'Type' }).querySelectorAll('option')].map((o) => o.textContent)
+    expect(opts(single)).toEqual(['Single', 'Remix', 'Live set'])
     cleanup()
     const featured = openRelease(release({ release_type: 'featured', songs: [song('s1', 'Alpha')] }))
-    expect(within(featured).queryByRole('combobox', { name: 'Type' })).toBeNull()
+    expect(opts(featured)).toEqual(['Single', 'Remix', 'Live set', 'Featured'])
+    cleanup()
+    const oneSongEp = openRelease(release({ release_type: 'ep', songs: [song('s1', 'Alpha')] }))
+    expect(opts(oneSongEp)).toEqual(['Single', 'Remix', 'Live set', 'EP'])
+  })
+
+  it('the listen links sit in their own column, labelled by logo — black when set, grey when empty', () => {
+    const dialog = openRelease()
+    // The Spotify row has a link, Apple Music does not; the logo's colour says which.
+    const spotifyLogo = rowOf(dialog, 'Spotify').querySelector('svg')
+    const appleLogo = rowOf(dialog, 'Apple Music').querySelector('svg')
+    expect(spotifyLogo?.getAttribute('class')).toMatch(/text-ink(?!-faint)/)
+    expect(appleLogo?.getAttribute('class')).toMatch(/text-ink-faint/)
   })
 
   it('a platform row saves the release link under that platform, and shows the current one', async () => {

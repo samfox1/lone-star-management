@@ -146,13 +146,11 @@ export function ReleaseCard({
   const meta = expandable
     ? [year, songCount ? `${songCount} song${songCount === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
     : year
-  // Type is constrained to sensible conversions: EP ⇄ Album for a multi-track release,
-  // Single ⇄ Remix for a single. `null` (e.g. Featured) has no Type row at all.
-  const typeOptions: readonly ReleaseType[] | null = expandable
-    ? ['ep', 'album']
-    : type === 'single' || type === 'remix'
-      ? ['single', 'remix']
-      : null
+  // Type is constrained by the release's SIZE (Sam, 2026-09-11): several songs → EP or
+  // Album; one song → Single, Remix or Live set. The current type is always offered too,
+  // so a release never shows a value it cannot keep (a one-song EP, a Featured appearance).
+  const typeChoices: ReleaseType[] = songCount > 1 ? ['ep', 'album'] : ['single', 'remix', 'live']
+  const typeOptions: readonly ReleaseType[] = typeChoices.includes(type) ? typeChoices : [...typeChoices, type]
 
   const fail = (message: string) => toast(message, 'error')
 
@@ -293,13 +291,16 @@ export function ReleaseCard({
         deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
         deleteLabel="Delete"
         deleteNoun="Release"
-        footerLeft={
+        wide
+        corner={
           <button
             type="button"
             onClick={share}
-            className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+            aria-label="Share"
+            title="Share the release page"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
           >
-            Share
+            <Icon name="share" size={16} />
           </button>
         }
       >
@@ -326,25 +327,21 @@ export function ReleaseCard({
             </>
           }
         />
-        <div className="mt-5">
+        {/* Two columns (Sam, 2026-09-11): the release on the left, its listen links on the
+            right — each link row labelled by the platform's logo, black when a link is set,
+            grey when empty. */}
+        <div className="mt-5 grid grid-cols-[1fr_320px] gap-x-10">
+          <div>
           <KvField label="Title" value={title} onSave={(v) => saveDetails(v, date)} onError={fail} />
-          {typeOptions && (
-            <KvField
-              label="Type"
-              value={type}
-              options={typeOptions.map((t) => ({ value: t, label: RELEASE_TYPE_LABEL[t] }))}
-              required
-              onSave={saveType}
-              onError={fail}
-            />
-          )}
+          <KvField
+            label="Type"
+            value={type}
+            options={typeOptions.map((t) => ({ value: t, label: RELEASE_TYPE_LABEL[t] }))}
+            required
+            onSave={saveType}
+            onError={fail}
+          />
           <KvField label="Date" value={date} type="date" mono onSave={(v) => saveDetails(title, v)} onError={fail} />
-          {STREAMING_PLATFORMS.map((p) => {
-            const url = release.links.find((l) => l.label === p.label)?.url ?? ''
-            return (
-              <KvField key={p.label} label={p.label} value={url} type="url" mono onSave={saveReleaseLink(p.label)} onError={fail} trailing={openMark(p.label, url)} />
-            )
-          })}
           {expandable ? (
             songCount > 0 && (
               <KvRow label="Songs" align="start">
@@ -383,6 +380,25 @@ export function ReleaseCard({
               </KvRow>
             )
           )}
+          </div>
+          <div>
+            {STREAMING_PLATFORMS.map((p) => {
+              const url = release.links.find((l) => l.label === p.label)?.url ?? ''
+              return (
+                <KvField
+                  key={p.label}
+                  label={p.label}
+                  labelNode={<p.Icon size={18} className={url ? 'text-ink' : 'text-ink-faint/60'} />}
+                  value={url}
+                  type="url"
+                  mono
+                  onSave={saveReleaseLink(p.label)}
+                  onError={fail}
+                  trailing={openMark(p.label, url)}
+                />
+              )
+            })}
+          </div>
         </div>
       </CardModal>
 

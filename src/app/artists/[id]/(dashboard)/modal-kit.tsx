@@ -64,11 +64,15 @@ export function MetaDot() {
 /** The row shell: a mono label on the left, whatever the row holds on the right. */
 export function KvRow({
   label,
+  labelNode,
   children,
   className,
   align = 'center',
 }: {
   label: string
+  /** Something to show INSTEAD of the label text — a platform's logo, say. The text stays
+   *  for screen readers (and tests) as an sr-only span. */
+  labelNode?: ReactNode
   children: ReactNode
   className?: string
   /** `start` keeps the label on the FIRST line when the row can grow (a lineup with its
@@ -83,9 +87,16 @@ export function KvRow({
         className,
       )}
     >
-      <span className={cx('w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint', align === 'start' && 'pt-2')}>
-        {label}
-      </span>
+      {labelNode ? (
+        <span className={cx('flex w-7 flex-none items-center', align === 'start' && 'pt-2')}>
+          {labelNode}
+          <span className="sr-only">{label}</span>
+        </span>
+      ) : (
+        <span className={cx('w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint', align === 'start' && 'pt-2')}>
+          {label}
+        </span>
+      )}
       <div className={cx('relative flex min-w-0 flex-1 gap-3', align === 'start' ? 'items-start' : 'items-center')}>{children}</div>
     </div>
   )
@@ -164,7 +175,10 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
             </option>
           ))}
         </select>
-        <span className={cx(textClass, 'border-transparent', !current && 'text-hairline')}>{current ? shownLabel : '—'}</span>
+        <span className={cx(textClass, 'flex items-center gap-1.5 border-transparent group-hover:text-ink', !current && 'text-hairline')}>
+          <span className="truncate">{current ? shownLabel : '—'}</span>
+          <Icon name="chevronRight" size={12} className="flex-none rotate-90 text-ink-faint" />
+        </span>
       </div>
     )
   }
@@ -208,9 +222,9 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
 
 /** One `LABEL  value` row that saves its own field. `trailing` sits after the value —
  *  an "open in a new tab" mark beside a link, say — and shows whatever the hover state. */
-export function KvField({ trailing, ...props }: EditableProps & { trailing?: ReactNode }) {
+export function KvField({ trailing, labelNode, ...props }: EditableProps & { trailing?: ReactNode; labelNode?: ReactNode }) {
   return (
-    <KvRow label={props.label}>
+    <KvRow label={props.label} labelNode={labelNode}>
       <Editable {...props} size="row" />
       {trailing}
       <Icon name="edit" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover:opacity-100" />

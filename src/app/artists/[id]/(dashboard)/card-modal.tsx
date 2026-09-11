@@ -29,6 +29,7 @@ export function CardModal({
   footerLeft,
   label,
   analyticsHref,
+  corner,
   children,
 }: {
   open: boolean
@@ -54,6 +55,8 @@ export function CardModal({
    *  TODO(analytics): deep-link to THIS item once the analytics page can take one
    *  (being built separately); today every button lands on the artist's page. */
   analyticsHref?: string
+  /** Extra icon buttons in the top-right corner, between Analytics and × (Share, say). */
+  corner?: ReactNode
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -114,6 +117,7 @@ export function CardModal({
               <Icon name="analytics" size={16} />
             </Link>
           ) : null}
+          {corner}
           <button
             type="button"
             onClick={onClose}
