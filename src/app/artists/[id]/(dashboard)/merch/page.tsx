@@ -47,6 +47,7 @@ export default async function MerchPage({ params }: { params: Promise<{ id: stri
         url: (row.url as string | null) ?? null,
         image_url: (row.image_url as string | null) ?? null,
         source: (row.source as string | null) ?? null,
+        in_stock: (row.in_stock as boolean | null) ?? true,
         on_site: (row.on_site as boolean | null) ?? true,
         published_on_site: publishedOnSite.get(row.id as string) ?? false,
         stat: metricValue(counts, 'merch', [row.id as string]),

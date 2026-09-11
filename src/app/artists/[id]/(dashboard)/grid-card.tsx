@@ -28,6 +28,8 @@ export function GridCard({
   onToggleSelect,
   onSite,
   selectLabel,
+  label,
+  analyticsHref,
 }: {
   tile: ReactNode
   deleteAction?: BoundAction
@@ -41,6 +43,10 @@ export function GridCard({
   onSite?: boolean
   /** Accessible name for the checkbox, e.g. the item title. */
   selectLabel?: string
+  /** The modal's accessible name (the item's title). */
+  label?: string
+  /** The modal's Analytics button target (see CardModal). */
+  analyticsHref?: string
 }) {
   const [open, setOpen] = useState(false)
 
@@ -71,6 +77,8 @@ export function GridCard({
         deleteAction={deleteAction}
         deleteLabel={deleteLabel}
         deleteNoun={deleteNoun}
+        label={label}
+        analyticsHref={analyticsHref}
       >
         {children}
       </CardModal>

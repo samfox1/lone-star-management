@@ -116,6 +116,8 @@ type EditableProps = {
   options?: SelectOption[]
   /** Drop the empty option — for a value that always has to be something (a song's type). */
   required?: boolean
+  /** Shown, never edited — a value another system owns (a Shopify product's price). */
+  readOnly?: boolean
 }
 
 /**
@@ -123,7 +125,7 @@ type EditableProps = {
  * value is saved — an untouched row never writes — and a refused save puts the old
  * value back and reports why. Optimistic: the new value shows while the save is out.
  */
-function Editable({ label, value, onSave, onError, mono, type = 'text', options, required, size }: EditableProps & { size: 'row' | 'cell' }) {
+function Editable({ label, value, onSave, onError, mono, type = 'text', options, required, readOnly, size }: EditableProps & { size: 'row' | 'cell' }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   // What the row SHOWS. Seeded from the prop and re-seeded when the prop changes (a
@@ -157,6 +159,10 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
   // Text and input share ONE box — same height, same line, a bottom border on both
   // (transparent on text, ink on the input) — so clicking a row never moves the modal.
   const textClass = cx('block h-6 min-w-0 flex-1 truncate border-b leading-6', mono ? 'font-space text-[13px]' : 'text-[15px]', size === 'cell' && 'h-6')
+
+  if (readOnly) {
+    return <span className={cx(textClass, 'border-transparent', !current && 'text-hairline')}>{current || '—'}</span>
+  }
 
   if (options) {
     return (
@@ -208,7 +214,7 @@ export function KvField({ trailing, labelNode, ...props }: EditableProps & { tra
     <KvRow label={props.label} labelNode={labelNode}>
       <Editable {...props} size="row" />
       {trailing}
-      <Icon name="edit" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover:opacity-100" />
+      {props.readOnly ? null : <Icon name="edit" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover:opacity-100" />}
     </KvRow>
   )
 }

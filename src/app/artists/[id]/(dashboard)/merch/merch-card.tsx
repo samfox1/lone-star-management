@@ -1,13 +1,13 @@
 'use client'
 
-import { buttonClass, inputClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
+import { safeHref } from '@/lib/url'
 import { GridCard } from '../grid-card'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
-import { EntitySparkline } from '../entity-sparkline'
+import { KvField, MetaDot, ModalHeader } from '../modal-kit'
 import { deleteContentAction, updateContentAction } from '../actions'
-import { SaveForm } from '../save-form'
+import { toast } from '../toast'
 
 export type MerchItem = {
   id: string
@@ -20,6 +20,8 @@ export type MerchItem = {
   on_site: boolean
   /** What the PUBLISHED copy says (draft presence, 2026-09-11). */
   published_on_site?: boolean
+  /** Manager-owned even for a Shopify product — the sync never writes it (lib/merch/sync). */
+  in_stock?: boolean
   /** 30-day buy-clicks (from analytics_by_entity). */
   stat?: number
 }
@@ -32,10 +34,22 @@ function priceLabel(price: string | number | null): string | null {
   return `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`
 }
 
+const STOCK_OPTIONS = [
+  { value: 'true', label: 'In stock' },
+  { value: 'false', label: 'Sold out' },
+]
+
 /**
- * A merch item as a cover-grid tile; opens a modal to edit its fields or delete. A
- * select checkbox + "On site" badge drive the password-gated publish (owned by the
- * parent browser).
+ * A merch item as a cover-grid tile; opens its modal — built on modal-kit (prototype G,
+ * Sam, 2026-09-11): image · title · price / source / stock meta, then rows that save
+ * their own field (Title, Price, Link, Image, Stock), Delete / Done in the footer.
+ *
+ * READ-ONLY WHERE SHOPIFY OWNS IT — the rule the editor's merch panel got on 2026-09-09
+ * (1f95083): nothing typed here can reach Shopify, the next pull overwrites title, price,
+ * link and image, and the site prices the product LIVE at render — an edited price would
+ * show in the dashboard, be reverted on the next sync, and never be what a buyer is
+ * charged. Those rows are still SHOWN (a card that hides them reads as broken, not as
+ * owned elsewhere); a Source row says where they are edited. Stock stays the manager's.
  */
 export function MerchCard({
   item,
@@ -53,105 +67,97 @@ export function MerchCard({
   // `source`, not a shopify_product_id: it is what this card is handed, and the sync
   // sets both together (lib/merch/sync.ts `source: 'shopify'`).
   const fromShopify = item.source === 'shopify'
+  const inStock = item.in_stock !== false
+  const buyHref = safeHref(item.url ?? '')
+
+  const fail = (message: string) => toast(message, 'error')
+  /** One row → one field. Absent keys are skipped server-side (extractUpdate). */
+  const saveField = (field: string) => async (value: string) => {
+    if (field === 'title' && !value) return { error: 'Give the item a name.' }
+    const fd = new FormData()
+    fd.set(field, value)
+    return updateContentAction('merch', item.id, artistId, fd)
+  }
+
+  const image = (size: 'tile' | 'square') =>
+    item.image_url ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={item.image_url} alt="" className="h-full w-full object-cover" />
+    ) : (
+      <div className="flex h-full w-full items-center justify-center rounded-xl bg-surface text-ink-faint">
+        <Icon name="merch" size={size === 'tile' ? 30 : 22} />
+      </div>
+    )
 
   return (
     <GridCard
       deleteAction={deleteContentAction.bind(null, 'merch', item.id, artistId)}
-      deleteLabel="Delete item"
+      deleteLabel="Delete"
       deleteNoun="Product"
       selected={selected}
       onToggleSelect={onToggleSelect}
       onSite={item.published_on_site ?? item.on_site}
       selectLabel={item.title}
+      label={item.title}
+      analyticsHref={`/artists/${artistId}`}
       tile={
         <>
-          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface text-ink-faint">
-            {item.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <Icon name="merch" size={30} />
-            )}
-          </div>
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface text-ink-faint">{image('tile')}</div>
           <div className="mt-2.5 truncate text-sm font-semibold group-hover:text-accent">{item.title}</div>
           <div className="mt-0.5 flex items-center gap-2">
             {price && <span className="font-space text-[13px] font-bold tracking-[-0.01em]">{price}</span>}
-            {badge && (
-              <span className="font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">{badge}</span>
-            )}
+            {badge && <span className="font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">{badge}</span>}
           </div>
           <CardStat value={item.stat ?? 0} label={metricLabel('merch')} />
         </>
       }
     >
-      <div className="flex items-start gap-4">
-        <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface text-ink-faint">
-          {item.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.image_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <Icon name="merch" size={22} />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-lg font-bold tracking-[-0.01em]">{item.title}</h3>
-          {badge && (
-            <div className="mt-1 font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">from {badge}</div>
-          )}
-        </div>
+      <ModalHeader
+        square={image('square')}
+        title={item.title}
+        meta={
+          <>
+            {price ? <b className="text-[14px] text-ink">{price}</b> : null}
+            {price && badge ? <MetaDot /> : null}
+            {badge ? <span className="capitalize">{badge}</span> : null}
+            {price || badge ? <MetaDot /> : null}
+            <span>{inStock ? 'In stock' : 'Sold out'}</span>
+          </>
+        }
+      />
+      <div className="mt-5">
+        <KvField label="Title" value={item.title} readOnly={fromShopify} onSave={saveField('title')} onError={fail} />
+        <KvField label="Price" value={item.price === null ? '' : String(item.price)} mono readOnly={fromShopify} onSave={saveField('price')} onError={fail} />
+        <KvField
+          label="Link"
+          value={item.url ?? ''}
+          type="url"
+          mono
+          readOnly={fromShopify}
+          onSave={saveField('url')}
+          onError={fail}
+          trailing={
+            buyHref ? (
+              <a
+                href={buyHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open buy page in a new tab"
+                title="Open buy page"
+                className="flex-none text-ink-faint transition-colors hover:text-ink"
+              >
+                <Icon name="external" size={14} />
+              </a>
+            ) : null
+          }
+        />
+        <KvField label="Image" value={item.image_url ?? ''} type="url" mono readOnly={fromShopify} onSave={saveField('image_url')} onError={fail} />
+        {/* Stock is the manager's call on every product; the sync never touches it. */}
+        <KvField label="Stock" value={String(inStock)} options={STOCK_OPTIONS} required onSave={saveField('in_stock')} onError={fail} />
+        {fromShopify && (
+          <KvField label="Source" value="Shopify" readOnly onSave={async () => undefined} trailing={<span className="flex-none font-space text-[11px] text-ink-faint">name, price, link and image are edited in Shopify</span>} />
+        )}
       </div>
-
-      <div className="mt-4">
-        <EntitySparkline artistId={artistId} entityIds={[item.id]} label="Buy clicks · 30d" />
-      </div>
-
-      {/* READ-ONLY WHERE SHOPIFY OWNS IT — the rule the editor's merch panel got on
-          2026-09-09 (1f95083), applied here by the review a day later. Nothing typed on
-          this card can reach Shopify, the next pull overwrites these four columns, and the
-          site prices the product LIVE at render: an edited price here would show in the
-          dashboard, be reverted on the next sync, and never be what a buyer is charged.
-          The values are still SHOWN — a card that hides them reads as broken, not as
-          owned elsewhere. */}
-      {fromShopify ? (
-        <div className="mt-5 space-y-1.5">
-          <div className="flex items-baseline gap-3">
-            <span className="w-14 flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">Price</span>
-            <span className="text-[13px] text-ink">{price ?? 'Not set'}</span>
-          </div>
-          <div className="flex items-baseline gap-3">
-            <span className="w-14 flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">Link</span>
-            <span className="min-w-0 truncate text-[13px] text-ink-muted">{item.url ?? 'Not set'}</span>
-          </div>
-          <p className="pt-1 font-space text-[10px] leading-relaxed text-ink-faint">
-            Synced from Shopify. Change the name, price, link or image in Shopify — the site
-            reads the price live, so it updates without republishing.
-          </p>
-          {item.url && (
-            <a href={item.url} target="_blank" rel="noopener noreferrer" className="inline-block pt-1 font-space text-xs text-ink-muted hover:underline">
-              Open buy page ↗
-            </a>
-          )}
-        </div>
-      ) : (
-      <SaveForm action={updateContentAction.bind(null, 'merch', item.id, artistId)} className="mt-5 space-y-2">
-        <input name="title" defaultValue={item.title} required placeholder="Item name" className={`${inputClass} w-full`} />
-        <div className="flex gap-2">
-          <input name="price" type="number" step="any" defaultValue={item.price ?? ''} placeholder="Price" className={`${inputClass} w-28`} />
-          <input name="url" type="url" defaultValue={item.url ?? ''} placeholder="Buy URL" className={`${inputClass} flex-1`} />
-        </div>
-        <input name="image_url" type="url" defaultValue={item.image_url ?? ''} placeholder="Image URL" className={`${inputClass} w-full`} />
-        <div className="flex items-center gap-2">
-          <button type="submit" className={buttonClass('ghost')}>
-            Save
-          </button>
-          {item.url && (
-            <a href={item.url} target="_blank" rel="noopener noreferrer" className="font-space text-xs text-ink-muted hover:underline">
-              Open buy page ↗
-            </a>
-          )}
-        </div>
-      </SaveForm>
-      )}
     </GridCard>
   )
 }
