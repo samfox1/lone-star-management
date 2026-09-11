@@ -34,6 +34,9 @@ describe('isPastShow', () => {
   it('an undated, unflagged show is not past', () => {
     expect(isPastShow({ date: null, is_past: false }, TODAY)).toBe(false)
   })
+  // One Stryker survivor is EQUIVALENT and recorded here: dropping the `date !== null`
+  // guard changes nothing, because `null < '2026-09-11'` is already false in JavaScript
+  // (null coerces to 0, the string to NaN). The guard stays for the reader.
   it('todayIso is the UTC calendar date', () => {
     expect(todayIso(new Date('2026-09-11T23:59:00Z'))).toBe('2026-09-11')
     expect(todayIso(new Date('2026-09-12T00:00:01Z'))).toBe('2026-09-12')
