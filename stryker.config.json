@@ -29,6 +29,7 @@
     "src/lib/merch/probe.ts",
     "src/lib/cover-url.ts",
     "src/lib/insert-position.ts",
+    "src/lib/tour.ts",
     "src/lib/og.ts",
     "src/lib/seo-audit.ts",
     "src/lib/seo.ts",

@@ -18,6 +18,8 @@ export type MerchItem = {
   source: string | null
   /** Whether the item is currently live on the public site. */
   on_site: boolean
+  /** What the PUBLISHED copy says (draft presence, 2026-09-11). */
+  published_on_site?: boolean
   /** 30-day buy-clicks (from analytics_by_entity). */
   stat?: number
 }
@@ -59,7 +61,7 @@ export function MerchCard({
       deleteNoun="Product"
       selected={selected}
       onToggleSelect={onToggleSelect}
-      onSite={item.on_site}
+      onSite={item.published_on_site ?? item.on_site}
       selectLabel={item.title}
       tile={
         <>

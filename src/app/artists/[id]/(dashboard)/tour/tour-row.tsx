@@ -23,13 +23,18 @@ export type TourDate = {
   state: string | null
   country: string | null
   /** Manager marked this as an old show — it renders in Past regardless of date. */
+  /** The stored flag — the edit modal's "This was an old show". Raw; see `past`. */
   is_past: boolean
+  /** DERIVED by the page (lib/tour isPastShow): by date, or the flag. What the row shows. */
+  past: boolean
   ticket_url: string | null
   /** The other acts on the bill. Never null — the column is NOT NULL DEFAULT '{}'. */
   support: string[]
   source: string | null
   /** Whether the date is currently live on the public site. */
   on_site: boolean
+  /** What the PUBLISHED copy says (draft presence, 2026-09-11). */
+  published_on_site?: boolean
   /** 30-day ticket-clicks (from analytics_by_entity). */
   stat?: number
 }
@@ -71,11 +76,12 @@ export function TourRow({
   return (
     <>
       <div className="flex items-center gap-5 border-b border-hairline py-5 last:border-0">
-        {/* selected === onSite under a live toggle, so this only ever reads live or
-            off — SelectToggle's pending-add/pending-drop states can't arise here. */}
+        {/* `selected` is the draft (optimistic), `onSite` what is PUBLISHED — a toggle is a
+            draft until Publish (PRESENCE_PLAN, revised 2026-09-11), so the pending states
+            "checked, publish to put on site" / "on site, publish to remove" are real here. */}
         <SelectToggle
           selected={onSite}
-          onSite={onSite}
+          onSite={tour.published_on_site ?? onSite}
           onToggle={onToggleOnSite}
           label={tour.venue || 'date'}
           liveClassName="border-accent bg-accent text-white"
@@ -88,7 +94,7 @@ export function TourRow({
           <div className="w-11 flex-none text-center">
             {/* A flagged old show reads "PAST" where the day would be — often it has
                 no date at all, and either way it's an old show, not an upcoming one. */}
-            {tour.is_past ? (
+            {tour.past ? (
               <div className="font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">Past</div>
             ) : (
               <>
@@ -117,7 +123,8 @@ export function TourRow({
             <span className="font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">{badge}</span>
           )}
         </button>
-        {tour.ticket_url && (
+        {/* No ticket button on a past show — nothing to buy (Sam, 2026-09-11). */}
+        {tour.ticket_url && !tour.past && (
           <a
             href={tour.ticket_url}
             target="_blank"

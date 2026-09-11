@@ -44,15 +44,21 @@ export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
  *  The editor's vocabulary differs from the entities' on purpose (`photo` is a `media`
  *  row, `tour` a `tour_date`), so this map is the translation — and the reason the two
  *  paths can't be compared by eye. Tables come from PUBLISHABLE, never hand-copied. */
-export type LiveToggleKind = 'photo' | 'link' | 'video' | 'tour' | 'merch'
+export type LiveToggleKind = 'photo' | 'link' | 'video'
 export const LIVE_TOGGLE: Record<LiveToggleKind, PublishableEntity> = {
   photo: 'media',
   link: 'link',
   video: 'video',
+}
+
+/** Every editor/page kind whose on_site a toggle writes, live OR draft — the table the
+ *  toggle action needs. LIVE_TOGGLE and DRAFT_PRESENCE partition its entities. */
+export type ToggleKind = LiveToggleKind | 'tour' | 'merch' | 'track'
+export const TOGGLE_KIND: Record<ToggleKind, PublishableEntity> = {
+  ...LIVE_TOGGLE,
   tour: 'tour_date',
-  // Merch joined 2026-09-10 (PRESENCE_PLAN S2): "tour dates and merch can just go right
-  // to the site" — a product is always a list entry, so its check IS the site change.
   merch: 'merch',
+  track: 'track',
 }
 
 /**
@@ -61,16 +67,18 @@ export const LIVE_TOGGLE: Record<LiveToggleKind, PublishableEntity> = {
  * FROM THE SNAPSHOT, so nothing reaches fans until Publish. The editor preview renders
  * working rows, so the manager sees where the song lands before anyone else does.
  *
- * Sam, 2026-09-10: "blindly adding songs to the site seems problematic." An asset can be
- * used many ways on a site; tour dates and merch are always a list, so those stay live.
+ * Sam, 2026-09-10: "blindly adding songs to the site seems problematic." And the next
+ * day, for tour dates and merch: "The user toggles, hits publish, and it updates on the
+ * live site" — the same draft-then-Publish model. Videos, photos and links keep ADR
+ * 0009's live toggle.
  *
  * `on_site` therefore rides these types' SNAPSHOT (see PUBLISHABLE), and the
  * "selection reconciled at publish" machinery that used to serve releases and merch is
  * gone: nothing reconciles from a selection any more. A type is in exactly one of
  * DRAFT_PRESENCE / LIVE_TOGGLE (tests/on-site-paths.test.ts).
  */
-export type DraftPresenceEntity = 'track' | 'release'
-export const DRAFT_PRESENCE: readonly DraftPresenceEntity[] = ['track', 'release']
+export type DraftPresenceEntity = 'track' | 'release' | 'tour_date' | 'merch'
+export const DRAFT_PRESENCE: readonly DraftPresenceEntity[] = ['track', 'release', 'tour_date', 'merch']
 
 /** LIVE-TOGGLE types that publish their OWN content from their own page — snapshot
  *  only, NEVER reconciled (presence is already live). `publishEntityAction` takes this,
@@ -228,6 +236,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
       'support_urls',
       'is_past',
       'sort_order',
+      'on_site', // presence from the snapshot (20260911120000)
     ],
     // created_at is the final tiebreak, matching every other entity: a dated row keeps
     // the sort_order it was backfilled with, so clearing its date could tie it against
@@ -251,7 +260,7 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // Public-safe — a product gid appears in every Storefront response and is not a
     // credential. Chosen over `handle`, which changes when an artist renames a product
     // and would silently break the join until the next publish.
-    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants', 'shopify_product_id', 'shipping_estimate', 'preorder_note', 'record_label', 'shipping_days'],
+    snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants', 'shopify_product_id', 'shipping_estimate', 'preorder_note', 'record_label', 'shipping_days', 'on_site'], // on_site: presence from the snapshot (20260911120000)
     orderBy: ['sort_order', 'created_at'],
   },
   link: {
@@ -372,26 +381,11 @@ export async function listContent(
  *  publish gate for merch.
  *  (Releases keep their own path: manual adds stay live, Spotify imports set false in
  *  the sync — so `release` is intentionally not here.) */
-/**
- * AUTO-PUBLISHED types (PRESENCE_PLAN.md S2/S3, Sam 2026-09-10: "tour dates and merch can
- * just go right to the site … they are always going to be added to a list"). Every write
- * to one of these — add, edit, delete, toggle, reorder, sync — also snapshots the type,
- * so the list on the page IS the list on the site and there is no Publish step. A
- * subset of LIVE_TOGGLE by construction (the type says so), because a draft-presence
- * type auto-published would be a contradiction.
- */
-export const AUTO_PUBLISH: readonly LiveTogglePublishable[] = ['tour_date', 'merch']
-
-/** Snapshot `type` now if it is auto-published; a no-op for every other type. */
-export async function autoPublish(supabase: SupabaseClient, type: PublishableEntity, artistId: string): Promise<void> {
-  if ((AUTO_PUBLISH as readonly string[]).includes(type)) await publishContent(supabase, type, artistId)
-}
-
 /** Only videos still land off-site on a manual add (83 YouTube imports must never
  *  auto-appear, and the same door serves hand-added ones). A hand-added tour date or
- *  product is ON the site — that is what adding one means now (S2/S3). Syncs keep
- *  inserting off-site through their own `insertDefaults`; the library is where things
- *  arrive, the toggle is where they are chosen. */
+ *  product is ON the site IN THE DRAFT — Publish is what shows it (S2/S3, revised
+ *  2026-09-11). Syncs keep inserting off-site through their own `insertDefaults`; the
+ *  library is where things arrive, the toggle is where they are chosen. */
 const INSERT_OFF_SITE: readonly CrudEntity[] = ['video']
 
 /** Where a NEW row lands (lib/insert-position): merch on top, a tour date by its date. */

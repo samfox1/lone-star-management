@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
 import { CardGrid } from '../card-grid'
+import { PublishBar } from '../publish-bar'
 import { EmptyState } from '../empty-state'
 import { OnSiteFilter, filterBySite, siteEmptyTitle, type SiteFilter } from '../on-site-filter'
 import { OriginSection, groupByOrigin } from '../origin'
 import { useLiveOnSite } from '../use-live-on-site'
+import { publishEntityAction } from '../actions'
 import { MerchCard, type MerchItem } from './merch-card'
 
 type Sort = 'added' | 'az' | 'price'
@@ -36,11 +39,15 @@ export function MerchBrowser({
   items,
   artistId,
   trailing,
+  dirty = false,
 }: {
   items: MerchItem[]
   artistId: string
   trailing?: ReactNode
+  /** Unpublished content edits — presence is live, so this is what the pill is for. */
+  dirty?: boolean
 }) {
+  const router = useRouter()
   const [site, setSite] = useState<SiteFilter>('all')
   const [sort, setSort] = useState<Sort>('added')
   // LIVE (PRESENCE_PLAN S2, Sam 2026-09-10: "tour dates and merch can just go right to
@@ -52,6 +59,12 @@ export function MerchBrowser({
   else if (sort === 'price') shown = [...shown].sort((a, b) => priceValue(a.price) - priceValue(b.price))
 
   const groups = groupByOrigin(shown, (i) => i.source ?? 'manual', ORIGIN_ORDER, sourceLabel)
+
+  async function publish(password: string) {
+    const res = await publishEntityAction('merch', artistId, password)
+    if (res.ok) router.refresh()
+    return res
+  }
 
   return (
     <div className="space-y-6 pb-24">
@@ -102,6 +115,8 @@ export function MerchBrowser({
           ))}
         </div>
       )}
+
+      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="merch" />
     </div>
   )
 }

@@ -14,7 +14,6 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createShopifyClient, syncShopifyMerch } from '@/lib/merch'
 import { probeShopify, type ShopifyProbe } from '@/lib/merch/probe'
-import { autoPublish } from '@/lib/content'
 
 /**
  * TEST CONNECTION — read one page from the store and show it back (MERCH_PLAN step 7).
@@ -120,10 +119,6 @@ export async function syncShopifyAction(
   // Before the failure check, not after: a partial pull DID write rows, and returning
   // an error over a stale list would tell the manager two contradictory things at once.
   revalidatePath(`/artists/${artistId}`, 'layout')
-  // Merch goes straight to the site (AUTO_PUBLISH): the snapshot follows every pull so a
-  // product toggled on later is already there for the door to serve. Synced products
-  // still ARRIVE off-site (insertDefaults), so nothing appears until it is chosen.
-  await autoPublish(supabase, 'merch', artistId)
 
   if (result.failed > 0) {
     // The first message is the diagnostic one — a unique-constraint name says "that

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { setOnSiteAction } from './actions'
-import type { LiveToggleKind } from '@/lib/content'
+import type { ToggleKind } from '@/lib/content'
 import { toast } from './toast'
 
 /**
@@ -24,7 +24,7 @@ import { toast } from './toast'
  */
 export function useLiveOnSite<T extends { id: string; on_site: boolean }>(
   items: T[],
-  kind: LiveToggleKind,
+  kind: ToggleKind,
   artistId: string,
 ) {
   const liveKey = useMemo(

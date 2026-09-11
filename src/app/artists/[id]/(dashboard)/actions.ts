@@ -24,17 +24,18 @@ import { placeInSlot } from '@/lib/site-editor/slots'
 import {
   type CrudEntity,
   type GenericEntity,
-  type LiveToggleKind,
+  type ToggleKind,
   type LiveTogglePublishable,
   type PublishableEntity,
   type UnpublishedDiff,
   LIVE_TOGGLE,
+  TOGGLE_KIND,
   PUBLISHABLE,
   createContent,
   deleteContent,
   diffUnpublished,
   publishAll,
-  autoPublish, publishContent,
+  publishContent,
   publishProfile,
     restoreToPublished,
   listPublishMoments,
@@ -103,8 +104,6 @@ export async function addContentAction(
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Add failed.' }
   }
-  // Tour dates and merch go straight to the site (AUTO_PUBLISH); a no-op for the rest.
-  await autoPublish(supabase, type, artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }
@@ -123,7 +122,6 @@ export async function updateContentAction(
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Save failed.' }
   }
-  await autoPublish(supabase, type, artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }
@@ -168,7 +166,6 @@ export async function deleteContentAction(
   // a half-failed delete confuses the manager into deleting twice.
   if (type === 'video') await gcDeletedVideoObject(supabase, id, videoPath)
   if (type === 'track') await gcDeletedAudioObject(supabase, id, audioPath)
-  await autoPublish(supabase, type, artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }
@@ -718,16 +715,15 @@ export async function setMediaLabelAction(
  * gate it on this working row. RLS scopes the write to the caller's tenant.
  */
 export async function setOnSiteAction(
-  kind: LiveToggleKind,
+  kind: ToggleKind,
   id: string,
   artistId: string,
   onSite: boolean,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const table = PUBLISHABLE[LIVE_TOGGLE[kind]].table
+  const table = PUBLISHABLE[TOGGLE_KIND[kind]].table
   const { error } = await supabase.from(table).update({ on_site: onSite }).eq('id', id).eq('artist_id', artistId)
   if (error) return { error: error.message }
-  await autoPublish(supabase, LIVE_TOGGLE[kind], artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }
@@ -890,7 +886,6 @@ export async function reorderContentAction(
   const supabase = await createClient()
   const { error } = await supabase.rpc('reorder_rows', { p_table: table, p_artist: artistId, p_ids: orderedIds })
   if (error) return { error: error.message }
-  await autoPublish(supabase, type, artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }
@@ -1539,8 +1534,6 @@ export async function syncBandsintownAction(artistId: string): Promise<{ ok: boo
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
-  // Tour dates go straight to the site: a pull is a write like any other (AUTO_PUBLISH).
-  await autoPublish(supabase, 'tour_date', artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return syncOutcome(result, 'tour date')
 }
@@ -1568,8 +1561,6 @@ export async function syncTicketmasterAction(artistId: string): Promise<{ ok: bo
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
-  // Tour dates go straight to the site: a pull is a write like any other (AUTO_PUBLISH).
-  await autoPublish(supabase, 'tour_date', artistId)
   revalidatePath(`/artists/${artistId}`, 'layout')
   return { ok: true }
 }

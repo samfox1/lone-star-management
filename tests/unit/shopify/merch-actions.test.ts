@@ -24,13 +24,6 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }))
 
-// The pull auto-publishes merch now (PRESENCE_PLAN S2). The library function needs a real
-// database; this file's fake client cannot serve it, and the pull's REPORTING is what is
-// under test here — so publish is a spy, asserted below, not run.
-vi.mock('@/lib/content', async (orig) => ({
-  ...(await orig<typeof import('@/lib/content')>()),
-  autoPublish: vi.fn(async () => {}),
-}))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ rpc: mocks.rpc }),
@@ -144,18 +137,5 @@ describe('the pre-existing failure paths still hold', () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
     const res = await syncShopifyAction(ARTIST)
     expect(res).toEqual({ ok: false, error: 'permission denied' })
-  })
-})
-
-/* ── the pull publishes merch (PRESENCE_PLAN S2, 2026-09-10) ─────────────────────────── */
-import { autoPublish } from '@/lib/content'
-
-describe('syncShopifyAction publishes what it pulled', () => {
-  it('CRITICAL: a pull auto-publishes merch, so a product switched on later is already at the door', async () => {
-    // Synced products arrive off-site; without this publish the check on the Merch page
-    // would do nothing until someone found a Publish button that no longer exists.
-    vi.mocked(autoPublish).mockClear()
-    await syncShopifyAction(ARTIST) // beforeEach: a clean pull of 3
-    expect(autoPublish).toHaveBeenCalledWith(expect.anything(), 'merch', ARTIST)
   })
 })

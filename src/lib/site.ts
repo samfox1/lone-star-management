@@ -11,7 +11,7 @@
  * separate mock (PLAN decision #7).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ARTIST_SNAPSHOT, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
+import { ARTIST_SNAPSHOT, DRAFT_PRESENCE, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
 import { FONT_SLOTS, type FontSlot, type FontSlotMap } from '@/lib/fonts'
 import { mediaUrl } from '@/lib/storage-url'
 
@@ -101,7 +101,15 @@ async function workingSection<T>(
   // On-site-gated types (tour_date/merch/video) are hidden from the public door
   // when on_site=false; drop them here too so preview matches the live site.
   const kept = onSiteOnly ? rows.filter((r) => r.on_site !== false) : rows
-  return kept.map((r) => publicSnapshot(type, r)) as T[]
+  // `on_site` rides the DRAFT-PRESENCE snapshots so the door can read it, but the door
+  // strips it from what it emits — a gate, not content (20260910150000, 20260911120000).
+  // The preview strips it the same way, or preview-parity reports a key the site never
+  // sends.
+  return kept.map((r) => {
+    const snap = publicSnapshot(type, r) as Record<string, unknown>
+    if ((DRAFT_PRESENCE as readonly string[]).includes(type)) delete snap.on_site
+    return snap
+  }) as T[]
 }
 
 /**

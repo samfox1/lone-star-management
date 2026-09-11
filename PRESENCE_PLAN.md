@@ -67,6 +67,16 @@ publish" machinery — go away: nothing reconciles from a selection any more.
 
 **S4 — prove it.** Full suite, `mutation:changed`, and a browser pass of each page.
 
+## Revised 2026-09-11
+
+> "I do still want the publish button on the merch and tour pages. The user toggles,
+> hits publish, and it updates on the live site."
+
+So S2/S3's AUTO_PUBLISH is withdrawn. Tour dates and merch are DRAFT_PRESENCE like
+music: toggle = draft, Publish = commit, doors read the snapshot (20260911120000). The
+position rules stay (product on top, date slotted). Both pages keep their PublishBar and
+show the "checked, publish to put on site" state.
+
 ## Status (2026-09-10)
 S1 shipped c212ee3 + 71b2ef3 (migrations 20260910130000/140000/150000 applied). S2 + S3
 shipped 511a4ac (20260910160000 applied). ADR 0010 records the decision. S4: full suite,

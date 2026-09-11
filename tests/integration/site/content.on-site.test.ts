@@ -12,9 +12,8 @@
  *     it. That's the contract the public site depends on, and it holds per-type — which is
  *     why it is asserted per-type rather than for whichever type came to mind: the door
  *     joins each section separately, so the rule can be broken for exactly one of them.
- *  2. (2026-09-10) There is no reconcile path any more — merch joined the live-toggle
- *     types, and tour dates and merch also AUTO-PUBLISH on every write (S2/S3). This
- *     file pins the door contract that both models share: the live flag gates.
+ *  2. (2026-09-11) Two models: a video's flag is live; a tour date's or product's flag
+ *     is a draft the door reads from the snapshot (ADR 0010). Both pinned per kind.
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -82,26 +81,33 @@ const writeFlag = (client: SupabaseClient, c: Case, id: string, on: boolean, art
   client.from(c.table).update({ on_site: on }).eq('id', id).eq('artist_id', artistId)
 
 describe.each(CASES)('on-site gating: $type', (c) => {
-  it('createContent lands the row where its KIND says: a video off-site, a date or product ON', async () => {
-    // PRESENCE_PLAN S2/S3 (Sam, 2026-09-10): "tour dates and merch can just go right to
-    // the site" — adding one IS putting it on the list. A video still arrives off-site,
-    // because 83 YouTube imports must never auto-appear and the same door serves both.
+  it('createContent lands the row where its KIND says: a video off-site, a date or product ON (in the draft)', async () => {
+    // A video still arrives off-site (83 YouTube imports must never auto-appear). A
+    // hand-added date or product is on-site IN THE DRAFT: Publish is what shows it
+    // (PRESENCE_PLAN, revised 2026-09-11).
     const row = await create(c)
     const { data } = await svc.from(c.table).select('on_site').eq('id', row.id as string).single()
     expect(data!.on_site).toBe(c.type !== 'video')
   })
 
-  it('CRITICAL: the flag alone moves a published row on and off the site — no republish', async () => {
+  it('CRITICAL: the flag moves a video at once, but a date or product only after Publish', async () => {
+    // Two models, on purpose. A video is LIVE-TOGGLED (ADR 0009): the door reads the
+    // working row. A tour date or product is DRAFT-PRESENCE (ADR 0010, revised
+    // 2026-09-11: "the user toggles, hits publish, and it updates on the live site"):
+    // the door reads the snapshot, so a flip is invisible until the next publish.
     const row = await create(c)
     const id = row.id as string
-    const start = c.type !== 'video' // where createContent left it (see above)
-    await publishContent(asA, c.type, artistA) // snapshot exists; presence is the LIVE flag
+    const start = c.type !== 'video'
+    await publishContent(asA, c.type, artistA)
     expect(await onSite(c)).toBe(start)
-    // The door gates on the WORKING row, so the flag alone moves it — no republish.
     await writeFlag(asA, c, id, !start, artistA)
-    expect(await onSite(c)).toBe(!start)
-    await writeFlag(asA, c, id, start, artistA)
-    expect(await onSite(c)).toBe(start)
+    if (c.type === 'video') {
+      expect(await onSite(c)).toBe(!start) // live: the flag alone moved it
+    } else {
+      expect(await onSite(c), 'a draft flip reached the public site without a publish').toBe(start)
+      await publishContent(asA, c.type, artistA)
+      expect(await onSite(c)).toBe(!start) // published: now it moved
+    }
   })
 
   it('CRITICAL: a published row whose WORKING row was deleted stays live until a tombstone', async () => {
