@@ -62,11 +62,31 @@ export function MetaDot() {
 }
 
 /** The row shell: a mono label on the left, whatever the row holds on the right. */
-export function KvRow({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+export function KvRow({
+  label,
+  children,
+  className,
+  align = 'center',
+}: {
+  label: string
+  children: ReactNode
+  className?: string
+  /** `start` keeps the label on the FIRST line when the row can grow (a lineup with its
+   *  act panel open); `center` is the one-line default. */
+  align?: 'center' | 'start'
+}) {
   return (
-    <div className={cx('group flex min-h-[44px] items-center gap-4 border-b border-hairline-soft py-3 last:border-b-0', className)}>
-      <span className="w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">{label}</span>
-      <div className="relative flex min-w-0 flex-1 items-center gap-3">{children}</div>
+    <div
+      className={cx(
+        'group flex min-h-[44px] gap-4 border-b border-hairline-soft py-3 last:border-b-0',
+        align === 'start' ? 'items-start' : 'items-center',
+        className,
+      )}
+    >
+      <span className={cx('w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint', align === 'start' && 'pt-2')}>
+        {label}
+      </span>
+      <div className={cx('relative flex min-w-0 flex-1 gap-3', align === 'start' ? 'items-start' : 'items-center')}>{children}</div>
     </div>
   )
 }

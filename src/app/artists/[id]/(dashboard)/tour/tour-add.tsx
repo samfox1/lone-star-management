@@ -137,7 +137,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
           <KvRow label="Tickets">
             <input aria-label="Tickets" type="url" value={v.ticket_url} onChange={set('ticket_url')} placeholder="https://" className={`${rowInput} font-space text-[13px]`} />
           </KvRow>
-          <KvRow label="Lineup">
+          <KvRow label="Lineup" align="start">
             <SupportActs artistId={artistId} acts={acts} onChange={setActs} />
           </KvRow>
         </div>
