@@ -271,13 +271,29 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
    (`enablejsapi=1` + a postMessage listener; no visual change, more code). Until then video
    is the one content type with no signal from skeen.
 
-6. **Page** — the four blocks on the read RPCs from step 2. **Sequencing note (2026-09-12):**
-   the readers work, but skeen's 1,204 views in the last 30 days carry NO source, NO
-   location and NO visitor hash, because skeen still posts to the old `record_event` door.
-   Until step 5 moves it onto `/event`, a Sources block would show one "unknown" row and
-   Places would be empty. Step 5 first, or the page ships against a single artist's blank
-   context. Sources first, because it is
-   the question that started this. Timeline shows `bots` as the filtered count.
+6. **Page.** ✅ FIRST PASS (2026-09-12). The artist's Analytics tab now reads the
+   window RPCs from step 2.
+   - ONE filter row (7 / 30 / 90, `?days=`) above everything it scopes — never a
+     control per block.
+   - Headline stays VIEWS, because views are the one figure that runs unbroken across
+     the cut-over; visitors and bots-filtered join the stat row beside the click kinds.
+   - Timeline: views as a filled track, visitors as a line over it, on ONE scale that
+     starts at ZERO. Monochrome dashboard, so the series are told apart by FORM. A
+     hover readout names one day at a time; an `sr-only` table carries every value, so
+     nothing is reachable only by pointer.
+   - Three ranked lists: where they came from, where they are, what they used. Same
+     weight on every bar — shading by size would encode the length twice.
+   - When the window reaches before 2026-09-12 the page SAYS so, rather than drawing
+     one line across a boundary where the measure changed.
+   - `tests/unit/analytics/traffic-window.test.ts` (11) + `tests/components/analytics/
+     traffic-blocks.test.tsx` (13). Mutation-checked: dropping the zero-fill and
+     min-normalising the scale both go red. The zero-scale test had to be REWRITTEN to
+     bite — its first fixture contained a 0, which made a min-normalised scale draw
+     identically, so it passed against the exact bug it named.
+   - LEFT for the next pass: top content (songs / dates / videos / merch by clicks —
+     it needs a title lookup per kind, which the section pages already do), release and
+     show markers on the timeline, and the roster-wide view.
+
 7. **PostHog** — env var on Skeen, 30-day comparison, exit or tune.
 8. **Search Console** (already hooked on Skeen, `GOOGLE_SITE_VERIFICATION`) — a later
    phase pulls impressions / clicks / queries via its API into the same page.
@@ -309,6 +325,8 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 
 ## Status / lessons
 
+- 2026-09-12 (later): **step 6 first pass DONE** — the Analytics tab reads the window
+  RPCs: filter row, two-series timeline, and three ranked lists. Top content next.
 - 2026-09-12 (later): **step 5 DONE** — bridge 0.37.0 published, both sites moved, skeen live
   and reporting with full context, `record_event` dropped. Next: step 6, the page. Sam wants
   the old view history KEPT with the boundary marked, not wiped: rows before the cut-over
