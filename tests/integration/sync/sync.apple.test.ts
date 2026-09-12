@@ -152,19 +152,43 @@ describe('syncAppleTracks — cross-platform merge', () => {
     expect(count).toBe(2) // two distinct songs that happen to share a title
   })
 
-  it('does NOT merge when a duration is unknown on either side — a duplicate beats losing a song', async () => {
+  it('CRITICAL: with no duration to compare, ONE candidate merges — and the pull names it', async () => {
+    // THE RULE CHANGED ON 2026-09-12 (Sam: "the merge should be sorted upon sync. If
+    // there are duplicates, notify me when the sync happens"). It used to refuse outright
+    // whenever a duration was missing, because a wrong merge is silent and permanent while
+    // a duplicate is visible and cheap. The asymmetry that rested on was the SILENCE — so
+    // the merge is reported by name, and the hand-added song whose platform link arrives
+    // on a later pull (the case Sam described) is no longer left with a twin.
     await svc.from('tracks').insert([
       { artist_id: artistA, title: 'Unknown Length', spotify_id: 'sp4', source: 'spotify', duration_ms: null },
     ])
 
     const result = await syncAppleTracks(asA, artistA, [ap('ap4', 'Unknown Length', { duration_ms: 120000 })])
+    expect(result).toMatchObject({ added: 0, merged: 1 })
+    expect(result.notes).toEqual([{ title: 'Unknown Length', kind: 'merged-by-title' }])
+
+    const { data } = await svc.from('tracks').select('id, apple_id').eq('artist_id', artistA)
+    expect(data).toHaveLength(1)
+    expect(data![0].apple_id).toBe('ap4')
+  })
+
+  it('CRITICAL: with no duration and SEVERAL candidates it still refuses — and names the duplicate', async () => {
+    // Nothing can tell two same-titled recordings apart, so absorbing one is the permanent
+    // loss the old rule feared. The song is inserted, and the manager is told.
+    await svc.from('tracks').insert([
+      { artist_id: artistA, title: 'Twin', spotify_id: 'sp4a', source: 'spotify', duration_ms: null },
+      { artist_id: artistA, title: 'Twin', spotify_id: 'sp4b', source: 'spotify', duration_ms: null },
+    ])
+
+    const result = await syncAppleTracks(asA, artistA, [ap('ap4b', 'Twin', { duration_ms: null })])
     expect(result).toMatchObject({ added: 1, merged: 0 })
+    expect(result.notes).toEqual([{ title: 'Twin', kind: 'possible-duplicate' }])
 
     const { count } = await svc
       .from('tracks')
       .select('id', { count: 'exact', head: true })
       .eq('artist_id', artistA)
-    expect(count).toBe(2)
+    expect(count).toBe(3)
   })
 
   it('keeps an alternate take as its OWN song even at an identical duration', async () => {
