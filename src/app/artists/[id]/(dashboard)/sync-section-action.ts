@@ -3,6 +3,7 @@
 import { INTEGRATIONS } from './integrations'
 import { SHOPIFY_KEY } from './sync-sections'
 import { syncShopifyAction } from './merch/actions'
+import type { SyncNote } from '@/lib/sync'
 import type { SyncRunResult } from './sync-dialog'
 
 /**
@@ -28,7 +29,7 @@ export async function syncSectionAction(
   section: string,
   keys: string[],
 ): Promise<{ results: SyncRunResult[] }> {
-  const jobs: { key: string; label: string; run: () => Promise<{ ok: boolean; error?: string; message?: string }> }[] =
+  const jobs: { key: string; label: string; run: () => Promise<{ ok: boolean; error?: string; message?: string; notes?: SyncNote[] }> }[] =
     section === 'merch'
       ? keys.includes(SHOPIFY_KEY)
         ? [{ key: SHOPIFY_KEY, label: 'Shopify', run: () => syncShopifyAction(artistId) }]
@@ -46,7 +47,7 @@ export async function syncSectionAction(
     // worked. Every `pull` catches its own already, so this is the belt.
     try {
       const res = await job.run()
-      results.push({ key: job.key, label: job.label, ok: res.ok, message: res.message, error: res.error })
+      results.push({ key: job.key, label: job.label, ok: res.ok, message: res.message, error: res.error, notes: res.notes })
     } catch (e) {
       results.push({ key: job.key, label: job.label, ok: false, error: e instanceof Error ? e.message : 'Pull failed.' })
     }

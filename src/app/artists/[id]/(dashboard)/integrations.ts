@@ -1,3 +1,4 @@
+import type { SyncNote } from '@/lib/sync'
 import {
   checkDriveFolderAction,
   saveAppleIdAction,
@@ -55,8 +56,9 @@ export const SECTION_LABEL: Record<IntegrationSection, string> = {
 }
 
 type SaveAction = (artistId: string, formData: FormData) => Promise<{ error?: string }>
-/** Pull-style actions may report a dynamic success line (e.g. "Found 12 media files"). */
-type PullAction = (artistId: string) => Promise<{ ok: boolean; error?: string; message?: string }>
+/** Pull-style actions may report a dynamic success line (e.g. "Found 12 media files"),
+ *  and the track pulls may name songs the run could not settle (SyncNote). */
+type PullAction = (artistId: string) => Promise<{ ok: boolean; error?: string; message?: string; notes?: SyncNote[] }>
 
 export type Integration = {
   key: string

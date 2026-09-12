@@ -290,28 +290,80 @@ describe('syncTracks — refusing a destructive merge', () => {
     expect(rows).toHaveLength(5)
   })
 
-  it('refuses a title-only merge when the EXISTING row has no duration', async () => {
-    // With no duration on either side there is no evidence these are the same
-    // recording. A duplicate is a manager's two-second cleanup; a wrong merge is
-    // silent, permanent data loss.
+  it('CRITICAL: with no duration to compare, ONE candidate merges — and the pull says so by name', async () => {
+    // THE RULE CHANGED ON 2026-09-12 (Sam: "the merge should be sorted upon sync. If
+    // there are duplicates, notify me when the sync happens"). It used to refuse outright
+    // whenever a duration was missing, on the grounds that a wrong merge is silent,
+    // permanent loss while a duplicate is a two-second cleanup. The asymmetry that
+    // argument rests on is the SILENCE — so the merge is now reported by name, and a
+    // title match with exactly ONE candidate (the hand-added song whose platform link
+    // arrives later — the case Sam described) is taken.
     const { db, rows } = fakeDb([{ spotify_id: 'sp1', source: 'spotify', title: 'Rain', duration_ms: null }])
     const res = await syncAppleTracks(db, ARTIST, [ap({ duration_ms: 200_000 })])
-    expect(res).toMatchObject({ added: 1, merged: 0 })
-    expect(rows).toHaveLength(2)
+    expect(res).toMatchObject({ added: 0, merged: 1 })
+    expect(res.notes).toEqual([{ title: 'Rain', kind: 'merged-by-title' }])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].apple_id).toBe('ap1')
   })
 
-  it('refuses a title-only merge when the INCOMING song has no duration', async () => {
+  it('merges by title when the INCOMING song has no duration either', async () => {
     const { db, rows } = fakeDb([{ spotify_id: 'sp1', source: 'spotify', title: 'Rain', duration_ms: 200_000 }])
     const res = await syncAppleTracks(db, ARTIST, [ap({ duration_ms: null })])
-    expect(res).toMatchObject({ added: 1, merged: 0 })
-    expect(rows).toHaveLength(2)
+    expect(res).toMatchObject({ added: 0, merged: 1 })
+    expect(res.notes).toEqual([{ title: 'Rain', kind: 'merged-by-title' }])
+    expect(rows).toHaveLength(1)
   })
 
-  it('refuses a merge when the durations disagree', async () => {
+  it('CRITICAL: with no duration and SEVERAL candidates it still refuses — and reports the duplicate', async () => {
+    // Two recordings share the title and nothing can tell them apart: absorbing one is
+    // the permanent loss the old rule feared, so the song is inserted and NAMED.
+    const { db, rows } = fakeDb([
+      { spotify_id: 'sp-a', source: 'spotify', title: 'Rain', duration_ms: null },
+      { spotify_id: 'sp-b', source: 'spotify', title: 'Rain', duration_ms: null },
+    ])
+    const res = await syncAppleTracks(db, ARTIST, [ap({ duration_ms: null })])
+    expect(res).toMatchObject({ added: 1, merged: 0 })
+    expect(res.notes).toEqual([{ title: 'Rain', kind: 'possible-duplicate' }])
+    expect(rows).toHaveLength(3)
+  })
+
+  it('CRITICAL: refuses a merge when the durations DISAGREE, and reports the duplicate', async () => {
+    // Both sides know the length and they are 100s apart: this is evidence they are
+    // different recordings, not missing evidence. The title-only path must not rescue it.
     const { db, rows } = fakeDb([{ spotify_id: 'sp1', source: 'spotify', title: 'Rain', duration_ms: 100_000 }])
     const res = await syncAppleTracks(db, ARTIST, [ap({ duration_ms: 200_000 })])
     expect(res).toMatchObject({ added: 1, merged: 0 })
+    expect(res.notes).toEqual([{ title: 'Rain', kind: 'possible-duplicate' }])
     expect(rows).toHaveLength(2)
+  })
+
+  it('CRITICAL: a song nobody has is just added — no duplicate note', async () => {
+    // The notice only means something if it is rare. If it fired for every new song the
+    // manager would stop reading it, which is the same as not having it.
+    const { db, rows } = fakeDb([{ spotify_id: 'sp1', source: 'spotify', title: 'Rain', duration_ms: 200_000 }])
+    const res = await syncAppleTracks(db, ARTIST, [ap({ title: 'Totally Different', duration_ms: 111_000 })])
+    expect(res).toMatchObject({ added: 1, merged: 0, notes: [] })
+    expect(rows).toHaveLength(2)
+  })
+
+  it('CRITICAL: a row already carrying THIS platform is never stamped a second time', async () => {
+    // Not the same as the claimed-this-run guard: this row came back from the database
+    // already holding an apple_id. Stamping it again would move the song's Apple link to
+    // a different recording; it is inserted instead, and named.
+    const { db, rows } = fakeDb([
+      { spotify_id: 'sp1', apple_id: 'ap-old', source: 'spotify', title: 'Rain', duration_ms: 200_000 },
+    ])
+    const res = await syncAppleTracks(db, ARTIST, [ap({ apple_id: 'ap-new', duration_ms: 200_000 })])
+    expect(res).toMatchObject({ added: 1, merged: 0 })
+    expect(res.notes).toEqual([{ title: 'Rain', kind: 'possible-duplicate' }])
+    expect(rows.find((r) => r.spotify_id === 'sp1')!.apple_id).toBe('ap-old')
+  })
+
+  it('a clean pull carries no notes at all', async () => {
+    // The dialog shows a line PER note, so a quiet sync has to be quiet.
+    const { db } = fakeDb([{ spotify_id: 'sp1', source: 'spotify', title: 'Rain', duration_ms: 200_000 }])
+    const res = await syncAppleTracks(db, ARTIST, [ap({ duration_ms: 200_100 })])
+    expect(res).toMatchObject({ merged: 1, notes: [] })
   })
 
   it('reads candidates in a pinned order', async () => {
@@ -343,6 +395,8 @@ describe('syncTracks — refusing a destructive merge', () => {
     ])
     expect(res).toMatchObject({ merged: 1, added: 1 })
     expect(rows).toHaveLength(2)
+    // The second one had nothing left to merge into, so it is a duplicate worth naming.
+    expect(res.notes).toEqual([{ title: 'Rain', kind: 'possible-duplicate' }])
   })
 })
 

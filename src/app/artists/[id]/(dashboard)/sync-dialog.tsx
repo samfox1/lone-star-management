@@ -145,6 +145,20 @@ export function SyncDialog({
                             {result.ok ? result.message : result.error}
                           </span>
                         )}
+                        {/* The songs the pull could not settle on its own, BY NAME (Sam,
+                            2026-09-12). A count cannot say which song, and the name is
+                            the whole value of the notice. */}
+                        {result?.notes?.map((n) => (
+                          <span
+                            key={`${n.kind}:${n.title}`}
+                            className={cx(
+                              'mt-0.5 block font-space text-[11px] leading-snug',
+                              n.kind === 'possible-duplicate' ? 'text-status-pending' : 'text-ink-faint',
+                            )}
+                          >
+                            {n.title} — {n.kind === 'possible-duplicate' ? 'possible duplicate' : 'merged by title'}
+                          </span>
+                        ))}
                       </span>
                     </li>
                   )

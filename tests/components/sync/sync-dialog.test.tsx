@@ -122,6 +122,39 @@ describe('the dialog reports what each source did', () => {
 })
 
 describe('a section with NOTHING connected offers a way in, not a dead button', () => {
+  it('CRITICAL: a duplicate the pull could not settle is NAMED under its source', async () => {
+    // Sam, 2026-09-12: the sync sorts what it can and tells the manager the rest. A count
+    // in the summary line cannot say which song, so the titles are printed.
+    const run: Run = async () => ({
+      results: [
+        {
+          key: 'spotify',
+          label: 'Spotify',
+          ok: true,
+          message: '1 added',
+          notes: [
+            { title: 'Rain', kind: 'possible-duplicate' },
+            { title: 'Sun', kind: 'merged-by-title' },
+          ],
+        },
+      ],
+    })
+    open([src({})], run)
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    expect(await screen.findByText(/Rain/)).toBeInTheDocument()
+    expect(screen.getByText(/possible duplicate/i)).toBeInTheDocument()
+    expect(screen.getByText(/Sun/)).toBeInTheDocument()
+    expect(screen.getByText(/merged/i)).toBeInTheDocument()
+  })
+
+  it('a clean pull prints no note line at all', async () => {
+    const run: Run = async () => ({ results: [{ key: 'spotify', label: 'Spotify', ok: true, message: '2 added', notes: [] }] })
+    open([src({})], run)
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    expect(await screen.findByText('2 added')).toBeInTheDocument()
+    expect(screen.queryByText(/duplicate/i)).toBeNull()
+  })
+
   it('CRITICAL: it names what KIND of service is missing, and offers to connect one', () => {
     // Sam, 2026-09-09: "it should say no merchandise service integrations. and then have
     // the button to connect more." The screenshot that prompted it showed "Shopify NOT

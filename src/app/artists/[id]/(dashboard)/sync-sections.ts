@@ -1,3 +1,4 @@
+import type { SyncNote } from '@/lib/sync'
 import { INTEGRATIONS, isConnected, type IntegrationArtist } from './integrations'
 
 /**
@@ -21,8 +22,16 @@ import { INTEGRATIONS, isConnected, type IntegrationArtist } from './integration
  *  is connected; it chooses among what it is given and reports what happened. */
 export type SyncSource = { key: string; label: string; connected: boolean }
 
-/** What one source did on this run. `syncOutcome` (lib/sync) writes both strings. */
-export type SyncRunResult = { key: string; label: string; ok: boolean; message?: string; error?: string }
+/** What one source did on this run. `syncOutcome` (lib/sync) writes both strings, and
+ *  `notes` names the songs it could not settle on its own (Sam, 2026-09-12). */
+export type SyncRunResult = {
+  key: string
+  label: string
+  ok: boolean
+  message?: string
+  error?: string
+  notes?: SyncNote[]
+}
 
 export const SYNC_SECTIONS = ['music', 'videos', 'tour', 'files', 'merch'] as const
 export type SyncSection = (typeof SYNC_SECTIONS)[number]

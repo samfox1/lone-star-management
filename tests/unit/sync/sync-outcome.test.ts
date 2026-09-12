@@ -17,10 +17,33 @@ import { syncOutcome } from '@/lib/sync'
 import type { SyncResult } from '@/lib/sync'
 
 const result = (over: Partial<SyncResult> = {}): SyncResult => ({
-  added: 0, updated: 0, skipped: 0, merged: 0, failed: 0, errors: [], ...over,
+  added: 0, updated: 0, skipped: 0, merged: 0, failed: 0, errors: [], notes: [], ...over,
 })
 
 describe('syncOutcome — what a pull tells the manager', () => {
+  // Sam, 2026-09-12: "if there are duplicates, notify me when the sync happens." A count
+  // cannot say WHICH song, and the whole value of the notice is the name.
+  it('CRITICAL: carries the per-song notes through, so the dialog can name them', () => {
+    const notes = [
+      { title: 'Rain', kind: 'merged-by-title' as const },
+      { title: 'Sun', kind: 'possible-duplicate' as const },
+    ]
+    expect(syncOutcome(result({ added: 1, merged: 1, notes }), 'song').notes).toEqual(notes)
+  })
+
+  it('CRITICAL: a duplicate is reported even when nothing else changed', () => {
+    // "Already up to date" is the quiet path, and a pull that added nothing can still
+    // have found a twin worth looking at — swallowing it there is how it stays hidden.
+    const notes = [{ title: 'Rain', kind: 'possible-duplicate' as const }]
+    const out = syncOutcome(result({ skipped: 3, notes }), 'song')
+    expect(out).toMatchObject({ ok: true, message: 'Already up to date' })
+    expect(out.notes).toEqual(notes)
+  })
+
+  it('a clean pull carries no notes', () => {
+    expect(syncOutcome(result({ added: 2 }), 'song').notes).toEqual([])
+  })
+
   it('CRITICAL: a partial failure is NOT ok, and says how many landed', () => {
     // The whole point. "12 pulled" over a run where 3 rows never saved is a lie the
     // manager acts on — they publish, and the products are not there.

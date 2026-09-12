@@ -44,7 +44,7 @@ const CREDS = [{ store_domain: 'lone-pine.myshopify.com', token: 'tok' }]
  * rather than a field the action silently stops reporting (AGENTS.md rule 4).
  */
 function result(over: Partial<SyncResult> = {}): SyncResult {
-  return { added: 0, updated: 0, skipped: 0, merged: 0, failed: 0, errors: [], ...over }
+  return { added: 0, updated: 0, skipped: 0, merged: 0, failed: 0, errors: [], notes: [], ...over }
 }
 
 const COLLISION = 'duplicate key value violates unique constraint "merch_handle_uniq"'

@@ -74,6 +74,7 @@ import {
   syncTicketmasterTourDates,
   syncYouTubeVideos,
   syncOutcome,
+  type SyncOutcome,
 } from '@/lib/sync'
 
 export async function addContentAction(
@@ -1416,7 +1417,7 @@ export async function saveSpotifyIdAction(artistId: string, formData: FormData) 
  * SPOTIFY_CLIENT_ID/SECRET configured.
  */
 /** Shared pull: import the artist's Spotify catalog into draft releases + tracks. */
-async function pullSpotify(artistId: string): Promise<{ ok: boolean; error?: string }> {
+async function pullSpotify(artistId: string): Promise<SyncOutcome | { ok: false; error: string; notes?: never }> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -1429,11 +1430,12 @@ async function pullSpotify(artistId: string): Promise<{ ok: boolean; error?: str
   // Need a linked Spotify artist to pull from.
   if (!artist?.spotify_artist_id) return { ok: false, error: 'No Spotify artist linked yet.' }
 
+  let result
   try {
     const client = createSpotifyClient()
     const { tracks, releases } = await client.getDiscography(artist.spotify_artist_id)
     // Tracks first — releases link them by Spotify id.
-    await syncSpotifyTracks(supabase, artistId, tracks)
+    result = await syncSpotifyTracks(supabase, artistId, tracks)
     await syncSpotifyReleases(supabase, artistId, releases)
     // Snapshot a release revision so each imported release has a smart-link ready;
     // `on_site` (false on import) still gates public exposure until a password publish.
@@ -1442,17 +1444,20 @@ async function pullSpotify(artistId: string): Promise<{ ok: boolean; error?: str
     return { ok: false, error: e instanceof Error ? e.message : 'Refresh failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  // The track pull's own report. It used to be thrown away, so a Spotify sync was the one
+  // source that said nothing about what it did — and would have swallowed the duplicate
+  // notes with it (Sam, 2026-09-12).
+  return syncOutcome(result, 'song')
 }
 
 /** Integrations "Pull from Spotify". Returns status so the panel can toast. */
-export async function syncSpotifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function syncSpotifyAction(artistId: string): Promise<SyncOutcome | { ok: false; error: string }> {
   return pullSpotify(artistId)
 }
 
 /** Music-page "Refresh" button: same pull, but returns status so the button can
  *  show a spinner and surface any error inline. */
-export async function refreshSpotifyAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function refreshSpotifyAction(artistId: string): Promise<SyncOutcome | { ok: false; error: string }> {
   return pullSpotify(artistId)
 }
 
@@ -1484,7 +1489,7 @@ export async function saveSoundcloudUrlAction(artistId: string, formData: FormDa
 
 /** Pull the artist's Deezer catalog into draft tracks (metadata + link-out). Merges
  *  into the union track set alongside any other connected service. */
-export async function syncDeezerAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
+export async function syncDeezerAction(artistId: string): Promise<SyncOutcome | { ok: false; error: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
@@ -1513,7 +1518,7 @@ export async function saveAppleIdAction(artistId: string, formData: FormData) {
 /** Pull the artist's Apple Music catalog into draft tracks (metadata + link-out) via
  *  the free iTunes Search API. Merges into the union track set alongside any other
  *  connected service. */
-export async function syncAppleAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
+export async function syncAppleAction(artistId: string): Promise<SyncOutcome | { ok: false; error: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')

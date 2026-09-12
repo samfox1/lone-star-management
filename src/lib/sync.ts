@@ -28,8 +28,25 @@ import type { AppleTrackInput } from '@/lib/apple'
 import type { YouTubeVideoInput } from '@/lib/youtube'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { TicketmasterTourDate } from '@/lib/ticketmaster'
+import { matchTrackCandidate, normalizeTitle } from '@/lib/sync-match'
+
+// The merge DECISIONS live in sync-match (pure, mutation-tested); this module writes.
+export { normalizeTitle, matchTrackCandidate } from '@/lib/sync-match'
 
 export type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
+
+/**
+ * Something the manager has to KNOW about a pull, named by the song it happened to
+ * (Sam, 2026-09-12: "if there are duplicates, notify me when the sync happens").
+ *
+ *  `merged-by-title`    two rows became one on the strength of the title alone, because
+ *                       neither side could offer a duration. Almost always right, and
+ *                       the one case where a wrong answer quietly loses a recording —
+ *                       so it is never done quietly.
+ *  `possible-duplicate` a song was added even though the artist already has one by that
+ *                       name: several candidates, or the only one was already taken.
+ */
+export type SyncNote = { title: string; kind: 'merged-by-title' | 'possible-duplicate' }
 
 export type SyncResult = {
   added: number
@@ -43,6 +60,9 @@ export type SyncResult = {
   failed: number
   /** Per-item failures, in encounter order. Empty on a fully clean sync. */
   errors: SyncError[]
+  /** Judgement calls worth a sentence, in encounter order. Empty on a clean sync —
+   *  the dialog prints a line per note, so silence has to mean nothing happened. */
+  notes: SyncNote[]
 }
 
 /**
@@ -63,31 +83,35 @@ export type SyncResult = {
  * rides along because it is the difference between "retry" and "look at your store", and
  * so does the first error message: a constraint name says which of those it is.
  */
+export type SyncOutcome = { ok: boolean; message?: string; error?: string; notes: SyncNote[] }
+
 export function syncOutcome(
   result: SyncResult,
   /** Singular noun for the thing pulled — "product", "song", "tour date". */
   noun: string,
-): { ok: boolean; message?: string; error?: string } {
+): SyncOutcome {
   const plural = (n: number) => `${n} ${noun}${n === 1 ? '' : 's'}`
   if (result.failed > 0) {
     const landed = result.added + result.updated + result.merged
     // Empty `errors` with a non-zero `failed` would be a bug in the sync, but swallowing
     // the count because the detail is missing is worse than reporting it bare.
     const reason = result.errors[0]?.message ?? 'unknown error'
-    return { ok: false, error: `${plural(result.failed)} failed to save (${landed} saved): ${reason}` }
+    return { ok: false, error: `${plural(result.failed)} failed to save (${landed} saved): ${reason}`, notes: result.notes }
   }
   // NOTHING CHANGED is the normal outcome of a second pull, and it has to read that way.
   // `skipped` alone is that case: rows were looked at and deliberately left, which is
   // "up to date", not "7 left alone" — a count with no verb reads as a problem.
+  // A pull that changed nothing can still have found a twin: the notes ride every path
+  // out of here, or the one case worth reporting is the one that stays hidden.
   if (!result.added && !result.updated && !result.merged) {
-    return { ok: true, message: 'Already up to date' }
+    return { ok: true, message: 'Already up to date', notes: result.notes }
   }
   const parts: string[] = []
   if (result.added) parts.push(`${result.added} added`)
   if (result.updated) parts.push(`${result.updated} updated`)
   if (result.merged) parts.push(`${result.merged} merged`)
   if (result.skipped) parts.push(`${result.skipped} left alone`)
-  return { ok: true, message: parts.join(', ') }
+  return { ok: true, message: parts.join(', '), notes: result.notes }
 }
 
 /** Postgres RLS / authorization denial — a hard contract breach, never partial. */
@@ -171,7 +195,7 @@ export async function syncExternal(supabase: SupabaseClient, spec: SyncSpec): Pr
     } else updated++
   }
 
-  return { added, updated, skipped, merged: 0, failed: errors.length, errors }
+  return { added, updated, skipped, merged: 0, failed: errors.length, errors, notes: [] }
 }
 
 // ── Multi-platform track merge ─────────────────────────────────────────────────
@@ -217,75 +241,6 @@ type TrackRow = {
   stream_url: string | null
   apple_url: string | null
   featured_artists: string[] | null
-}
-
-/** Songs within ±3s of each other (same normalized title) are treated as the same. */
-const DURATION_TOLERANCE_MS = 3000
-
-/**
- * Parenthetical qualifiers that name a DIFFERENT recording of the same composition.
- * They are part of a song's identity: "Rain (Live)" is not "Rain", and the app already
- * models `remix` as its own release_type. Folding them into the base title made an
- * alternate take get absorbed into the studio row on import — the take was never
- * inserted, so it simply vanished from the catalog.
- *
- * Deliberately narrow. A qualifier NOT listed here ("(feat. X)", "[Explicit]",
- * "(Deluxe)") is still dropped, because those name the same recording.
- */
-const VERSION_MARKER = /\b(?:live|acoustic|unplugged|remix(?:ed|es)?|demo|edit|instrumental|radio|extended|reprise)\b/g
-
-/**
- * Normalize a title for cross-platform matching: lowercase, drop apostrophes, drop
- * non-version qualifiers and punctuation, collapse whitespace — so "Don't Look Back"
- * and "Dont look  back" match. Any version marker found inside a qualifier is
- * appended as a sorted, deduped suffix, so marked takes key apart from the base title
- * and from each other while still matching their own counterpart on another platform.
- * Scoped per-artist.
- */
-export function normalizeTitle(t: string): string {
-  const markers = new Set<string>()
-  const base = t
-    .toLowerCase()
-    .replace(/[’ʼ']/g, '')
-    .replace(/\(([^)]*)\)|\[([^\]]*)\]/g, (_m, paren?: string, bracket?: string) => {
-      for (const found of (paren ?? bracket ?? '').match(VERSION_MARKER) ?? []) markers.add(found)
-      return ' '
-    })
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
-    .replace(/\s+/g, ' ')
-  if (markers.size === 0) return base
-  return `${base} ~${[...markers].sort().join('+')}`
-}
-
-/**
- * Pick an existing row that is the SAME song as `item` but not yet on this platform:
- * same normalized title AND a duration within tolerance (closest wins). Rows already
- * claimed this run, or already carrying this platform's id, are skipped.
- *
- * A duration on BOTH sides is required. Title alone cannot tell two recordings apart,
- * and the two outcomes are not symmetric: a merge absorbs the incoming song so it is
- * never inserted (silent, permanent loss), while a refusal leaves a duplicate the
- * manager can delete in seconds. So an unknown duration refuses.
- */
-function matchTrackCandidate(
-  cands: TrackRow[] | undefined,
-  item: IncomingTrack,
-  idCol: TrackIdCol,
-  claimed: Set<string>,
-): TrackRow | undefined {
-  if (!cands || item.duration_ms == null) return undefined
-  let best: TrackRow | undefined
-  let bestDelta = Infinity
-  for (const r of cands) {
-    if (claimed.has(r.id) || r[idCol] != null || r.duration_ms == null) continue
-    const d = Math.abs(r.duration_ms - item.duration_ms)
-    if (d <= DURATION_TOLERANCE_MS && d < bestDelta) {
-      best = r
-      bestDelta = d
-    }
-  }
-  return best
 }
 
 /**
@@ -351,6 +306,7 @@ async function syncTracks(
   let skipped = 0
   let merged = 0
   const errors: SyncError[] = []
+  const notes: SyncNote[] = []
 
   for (const item of deduped) {
     // 1) A row already carries THIS platform's id → refresh it, but only if this
@@ -380,8 +336,9 @@ async function syncTracks(
 
     // 2) The same song imported from ANOTHER platform → stamp this platform onto it
     //    (its id + link + any fields it was missing), never touching title/source.
-    const cand = matchTrackCandidate(byTitle.get(normalizeTitle(item.title)), item, idCol, claimed)
-    if (cand) {
+    const match = matchTrackCandidate(byTitle.get(normalizeTitle(item.title)), item, idCol, claimed)
+    if (match.kind === 'match') {
+      const cand = match.row
       claimed.add(cand.id)
       const fill: Record<string, unknown> = { [idCol]: item.externalId }
       if (cand.duration_ms == null && item.duration_ms != null) fill.duration_ms = item.duration_ms
@@ -396,6 +353,8 @@ async function syncTracks(
         errors.push({ externalId: item.externalId, op: 'update', message: mErr.message })
       } else {
         merged++
+        // Say it out loud when the title was the only evidence (see matchTrackCandidate).
+        if (match.byTitleOnly) notes.push({ title: cand.title, kind: 'merged-by-title' })
         cand[idCol] = item.externalId // reflect locally so a later item can't re-merge it
       }
       continue
@@ -420,10 +379,15 @@ async function syncTracks(
     if (iErr) {
       if (iErr.code === RLS_DENIED) throw new Error(iErr.message)
       errors.push({ externalId: item.externalId, op: 'insert', message: iErr.message })
-    } else added++
+    } else {
+      added++
+      // A song by this name was already here and could not take the new one: the manager
+      // is the only one who can say whether that is two recordings or one mess.
+      if (match.sawCandidate) notes.push({ title: item.title, kind: 'possible-duplicate' })
+    }
   }
 
-  return { added, updated, skipped, merged, failed: errors.length, errors }
+  return { added, updated, skipped, merged, failed: errors.length, errors, notes }
 }
 
 export function syncSpotifyTracks(

@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { syncSpotifyTracks } from '@/lib/sync'
+import { syncAppleTracks, syncSpotifyTracks } from '@/lib/sync'
 import type { SpotifyTrackInput } from '@/lib/spotify'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
@@ -60,6 +60,44 @@ describe('syncSpotifyTracks', () => {
     // `not null default true` and the public doors coalesce to true, so this
     // explicit false is the only thing keeping a raw import off the artist's site.
     expect(bySpotify['sp-new']).toMatchObject({ title: 'Brand New', source: 'spotify', on_site: false })
+  })
+
+  it('CRITICAL: a song already here on Spotify gains its Apple link on the same row', async () => {
+    // Sam's own description of what a sync should do (2026-09-12): "if a song exists on
+    // the site with only a spotify link, and we do a sync with spotify and apple music,
+    // and the song is also on apple music, it should just naturally add the link to the
+    // song to go along aside the spotify link." One row, both links, no duplicate.
+    await syncSpotifyTracks(asA, artistA, [
+      { spotify_id: 'sp-union', title: 'Union Song', cover_url: null, stream_url: 'https://open.spotify.com/track/u', featured_artists: [], album_name: null, duration_ms: 201_000 },
+    ])
+    const res = await syncAppleTracks(asA, artistA, [
+      { apple_id: 'ap-union', title: 'Union Song', cover_url: null, provider_url: 'https://music.apple.com/u', album_name: null, duration_ms: 201_400 },
+    ])
+    expect(res).toMatchObject({ merged: 1, added: 0 })
+    const { data } = await svc.from('tracks').select('title, source, spotify_id, apple_id, stream_url, apple_url').eq('artist_id', artistA)
+    expect(data).toHaveLength(1)
+    expect(data![0]).toMatchObject({
+      source: 'spotify', // the row stays the platform's that created it
+      spotify_id: 'sp-union',
+      apple_id: 'ap-union',
+      stream_url: 'https://open.spotify.com/track/u',
+      apple_url: 'https://music.apple.com/u',
+    })
+  })
+
+  it('CRITICAL: a HAND-ADDED song gains the link too, and the pull says it went by title', async () => {
+    // The case that used to leave a twin: a song typed in by hand has no duration, so the
+    // old rule refused and inserted a second row every pull. Now it merges, and names it.
+    await svc.from('tracks').insert({ artist_id: artistA, title: 'Handmade', source: 'manual', soundcloud_url: 'https://soundcloud.com/x/handmade' })
+    const res = await syncAppleTracks(asA, artistA, [
+      { apple_id: 'ap-hand', title: 'Handmade', cover_url: null, provider_url: 'https://music.apple.com/h', album_name: null, duration_ms: 180_000 },
+    ])
+    expect(res).toMatchObject({ merged: 1, added: 0 })
+    expect(res.notes).toEqual([{ title: 'Handmade', kind: 'merged-by-title' }])
+    const { data } = await svc.from('tracks').select('title, source, apple_id, soundcloud_url').eq('artist_id', artistA)
+    expect(data).toHaveLength(1)
+    // Still the manager's row — the stamp adds the platform, it never takes the song over.
+    expect(data![0]).toMatchObject({ source: 'manual', apple_id: 'ap-hand', soundcloud_url: 'https://soundcloud.com/x/handmade' })
   })
 
   it('CRITICAL: collaborators are seeded by a pull and then belong to the manager', async () => {
