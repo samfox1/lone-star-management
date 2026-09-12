@@ -3,7 +3,7 @@ import { cx } from '@/lib/cx'
 import { Icon, type IconName } from './icons'
 
 /* ── Button ──────────────────────────────────────────────────────────────── */
-export type ButtonVariant = 'solid' | 'accent' | 'ghost'
+export type ButtonVariant = 'solid' | 'accent' | 'ghost' | 'danger'
 
 /** Button classes, exported so links that should look like buttons (e.g. a
  *  next/link) can share them without nesting a <button> inside an <a>. */
@@ -17,6 +17,10 @@ export function buttonClass(variant: ButtonVariant = 'solid', className?: string
     solid: 'border-ink bg-ink text-paper hover:opacity-85',
     accent: 'border-accent bg-accent text-white hover:bg-accent-hover',
     ghost: 'border-hairline bg-paper text-ink-muted hover:border-accent hover:text-accent',
+    // The destructive half of a pair — the SAME pill as its neighbour (Sam, 2026-09-12:
+    // "put a border around the delete button just like the Done button"), saying what it
+    // is in colour rather than by being the only bare word in the row.
+    danger: 'border-hairline bg-paper text-accent-red hover:border-accent-red hover:bg-danger-soft',
   }
   return cx(base, styles[variant], className)
 }

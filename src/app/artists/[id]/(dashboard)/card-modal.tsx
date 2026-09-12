@@ -65,22 +65,30 @@ export function CardModal({
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
+  const [asking, setAsking] = useState(false)
   const deletingRef = useRef(false)
   useLockBodyScroll(open)
 
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    // While the question is up, Escape answers IT — dismissing the card underneath would
+    // lose the manager's place to a keypress meant for the dialog on top.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (asking) {
+        if (!deleting) setAsking(false)
+        return
+      }
+      onClose()
+    }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, asking, deleting])
 
   async function del() {
     // `deleting` is STATE: two fast clicks both read the pre-render value and delete
     // twice. The ref is the actual latch; the state only drives the label.
     if (!deleteAction || deleting || deletingRef.current) return
-    // Every card grid deletes through this footer, and there is no undo and no trash.
-    if (!window.confirm(confirmText ?? `Delete this ${deleteNoun.toLowerCase()}? This can't be undone.`)) return
     deletingRef.current = true
     setDeleting(true)
     try {
@@ -90,6 +98,7 @@ export function CardModal({
         return
       }
       toast(`${deleteNoun} deleted`)
+      setAsking(false)
       onClose()
     } catch {
       toast(`Couldn't delete that ${deleteNoun.toLowerCase()}.`, 'error')
@@ -140,23 +149,46 @@ export function CardModal({
             <div className="flex items-center gap-3">
               {footerLeft}
               {deleteAction ? (
-                <button
-                  type="button"
-                  onClick={del}
-                  disabled={deleting}
-                  className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-accent-red transition-colors hover:bg-danger-soft disabled:opacity-60"
-                >
+                <button type="button" onClick={() => setAsking(true)} disabled={deleting} className={buttonClass('danger')}>
                   {deleting ? 'Deleting…' : deleteLabel}
                 </button>
               ) : null}
             </div>
             {footerFill ? <div className="min-w-0 flex-1">{footerFill}</div> : null}
-            <button type="button" onClick={onClose} className={buttonClass('ghost')}>
+            {/* The way OUT, and the one button a manager reaches for most — in ink, not
+                the quiet grey the shared ghost wears elsewhere (Sam, 2026-09-12). */}
+            <button type="button" onClick={onClose} className={buttonClass('ghost', 'text-ink hover:text-accent')}>
               Done
             </button>
           </div>
         )}
       </div>
+
+      {/* THE QUESTION, in the app's own voice. A browser confirm cannot be styled, arrives
+          in the OS's wording ("OK"), and over an already-dimmed page reads like an error
+          rather than a choice. Above the card (z-[70]) so it also clears the small dialogs
+          a card can open — an act, a collaborator. */}
+      {asking && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-6"
+          onMouseDown={(e) => e.target === e.currentTarget && !deleting && setAsking(false)}
+        >
+          <div role="dialog" aria-modal="true" aria-label={`Delete ${deleteNoun.toLowerCase()}`} className="w-[340px] max-w-full rounded-2xl bg-paper p-5 shadow-2xl">
+            <p className="text-[15px] leading-snug">
+              {confirmText ?? `Delete this ${deleteNoun.toLowerCase()}? This can't be undone.`}
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setAsking(false)} disabled={deleting} className={buttonClass('ghost', 'text-ink hover:text-accent')}>
+                Cancel
+              </button>
+              {/* Named for what it DOES — never an "OK" that could mean either half. */}
+              <button type="button" onClick={del} disabled={deleting} className={buttonClass('danger')}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
