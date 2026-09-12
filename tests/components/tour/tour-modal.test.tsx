@@ -107,10 +107,10 @@ describe('tour date modal', () => {
     expect(within(dialog).getByRole('button', { name: 'Add act' })).toBeInTheDocument()
   })
 
-  it('the footer is Delete and Done only', () => {
+  it('the footer is Delete and Save only', () => {
     const dialog = openModal()
     expect(within(dialog).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: /Save/ })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /^Cancel$/ })).toBeNull()
   })
 })

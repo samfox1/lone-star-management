@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
+import { useConfirm } from './confirm-dialog'
 import { useLockBodyScroll } from './use-lock-body-scroll'
 import { toast } from './toast'
 
@@ -65,7 +66,7 @@ export function CardModal({
   children: ReactNode
 }) {
   const [deleting, setDeleting] = useState(false)
-  const [asking, setAsking] = useState(false)
+  const { ask, dialog: confirmDialog } = useConfirm()
   const deletingRef = useRef(false)
   useLockBodyScroll(open)
 
@@ -73,22 +74,17 @@ export function CardModal({
     if (!open) return
     // While the question is up, Escape answers IT — dismissing the card underneath would
     // lose the manager's place to a keypress meant for the dialog on top.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (asking) {
-        if (!deleting) setAsking(false)
-        return
-      }
-      onClose()
-    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose, asking, deleting])
+  }, [open, onClose])
 
   async function del() {
     // `deleting` is STATE: two fast clicks both read the pre-render value and delete
     // twice. The ref is the actual latch; the state only drives the label.
     if (!deleteAction || deleting || deletingRef.current) return
+    // Every card grid deletes through this footer, and there is no undo and no trash.
+    if (!(await ask(confirmText ?? `Delete this ${deleteNoun.toLowerCase()}? This can't be undone.`, { action: deleteLabel }))) return
     deletingRef.current = true
     setDeleting(true)
     try {
@@ -98,7 +94,6 @@ export function CardModal({
         return
       }
       toast(`${deleteNoun} deleted`)
-      setAsking(false)
       onClose()
     } catch {
       toast(`Couldn't delete that ${deleteNoun.toLowerCase()}.`, 'error')
@@ -149,46 +144,24 @@ export function CardModal({
             <div className="flex items-center gap-3">
               {footerLeft}
               {deleteAction ? (
-                <button type="button" onClick={() => setAsking(true)} disabled={deleting} className={buttonClass('danger')}>
+                <button type="button" onClick={del} disabled={deleting} className={buttonClass('danger')}>
                   {deleting ? 'Deleting…' : deleteLabel}
                 </button>
               ) : null}
             </div>
             {footerFill ? <div className="min-w-0 flex-1">{footerFill}</div> : null}
-            {/* The way OUT, and the one button a manager reaches for most — in ink, not
-                the quiet grey the shared ghost wears elsewhere (Sam, 2026-09-12). */}
+            {/* SAVE, not Done (Sam, 2026-09-12) — in ink, not the quiet grey the shared
+                ghost wears elsewhere. Every row in a card saves itself as it is edited, so
+                this closes rather than writing; it is named for what the manager means by
+                pressing it. */}
             <button type="button" onClick={onClose} className={buttonClass('ghost', 'text-ink hover:text-accent')}>
-              Done
+              Save
             </button>
           </div>
         )}
       </div>
 
-      {/* THE QUESTION, in the app's own voice. A browser confirm cannot be styled, arrives
-          in the OS's wording ("OK"), and over an already-dimmed page reads like an error
-          rather than a choice. Above the card (z-[70]) so it also clears the small dialogs
-          a card can open — an act, a collaborator. */}
-      {asking && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-6"
-          onMouseDown={(e) => e.target === e.currentTarget && !deleting && setAsking(false)}
-        >
-          <div role="dialog" aria-modal="true" aria-label={`Delete ${deleteNoun.toLowerCase()}`} className="w-[340px] max-w-full rounded-2xl bg-paper p-5 shadow-2xl">
-            <p className="text-[15px] leading-snug">
-              {confirmText ?? `Delete this ${deleteNoun.toLowerCase()}? This can't be undone.`}
-            </p>
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setAsking(false)} disabled={deleting} className={buttonClass('ghost', 'text-ink hover:text-accent')}>
-                Cancel
-              </button>
-              {/* Named for what it DOES — never an "OK" that could mean either half. */}
-              <button type="button" onClick={del} disabled={deleting} className={buttonClass('danger')}>
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {confirmDialog}
     </div>
   )
 }

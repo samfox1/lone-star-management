@@ -39,7 +39,7 @@ function open(deleteAction: () => Promise<{ error?: string } | void>) {
 /** Open the footer's Delete and return the question's own dialog. */
 function ask(action: () => Promise<{ error?: string } | void>) {
   fireEvent.click(open(action))
-  return screen.getByRole('dialog', { name: /delete release/i })
+  return screen.getByRole('dialog', { name: /delete this release/i })
 }
 
 describe('CardModal delete', () => {
@@ -57,7 +57,7 @@ describe('CardModal delete', () => {
     const dialog = ask(action)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     expect(action).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: /delete release/i })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: /delete this release/i })).toBeNull()
     expect(screen.getByText('body')).toBeInTheDocument()
   })
 
@@ -84,15 +84,22 @@ describe('CardModal delete', () => {
   })
 
   it('a failed delete releases the latch so the manager can retry', async () => {
-    // Without a finally the modal is permanently dead after one transient failure.
+    // Without a finally the modal is permanently dead after one transient failure — the
+    // footer's Delete would raise a question whose confirm could never fire again.
     const action = vi.fn(async () => ({ error: 'nope' }))
     const dialog = ask(action)
-    const go = within(dialog).getByRole('button', { name: 'Delete' })
     await act(async () => {
-      go.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
     })
+    expect(action).toHaveBeenCalledTimes(1)
+
+    // Ask again, and answer again.
     await act(async () => {
-      go.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    })
+    const again = screen.getByRole('dialog', { name: /delete this release/i })
+    await act(async () => {
+      fireEvent.click(within(again).getByRole('button', { name: 'Delete' }))
     })
     expect(action).toHaveBeenCalledTimes(2)
   })
@@ -113,7 +120,7 @@ describe('the footer pair', () => {
     // red word beside a pill read as a link, not the other half of a pair.
     open(vi.fn(async () => {}))
     const del = screen.getByRole('button', { name: 'Delete' })
-    const done = screen.getByRole('button', { name: 'Done' })
+    const done = screen.getByRole('button', { name: 'Save' })
     for (const b of [del, done]) expect(b.className).toMatch(/\bborder\b/)
     expect(done.className).toMatch(/text-ink\b/)
     expect(del.className).toMatch(/text-accent-red\b/)

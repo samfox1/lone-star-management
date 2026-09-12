@@ -17,7 +17,7 @@
  *     a Source row says they are edited in Shopify, the buy page still opens;
  *   - Stock is the manager's on every product (the sync never writes it) and saves as a
  *     boolean string the action understands;
- *   - no Save button anywhere; Done, Delete, Analytics.
+ *   - no form-style Save: the rows save themselves, and the footer's Save just closes.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -77,10 +77,12 @@ describe('a MANUAL product — the manager owns all of it', () => {
     expect(fd.get('in_stock')).toBe('false')
   })
 
-  it('has no Save button; Done, Delete and Analytics are there', () => {
+  it('closes with Save, and has no Cancel to pair it', () => {
+    // Every row saves itself as it is edited, so the footer's Save just closes — there is
+    // no second, form-style Save to press and no Cancel to undo one (Sam, 2026-09-12).
     const dialog = openCard(base)
-    expect(within(dialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
-    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /^Cancel$/ })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
     expect(within(dialog).getByRole('link', { name: 'Analytics' })).toHaveAttribute('href', '/artists/a1')
   })
@@ -97,7 +99,6 @@ describe('a SHOPIFY product — Shopify owns what Shopify sends', () => {
       fireEvent.click(within(row).getAllByText(/./, { selector: 'span' }).at(-1)!)
     }
     expect(within(dialog).queryByRole('textbox'), 'a click opened an input').toBeNull()
-    expect(within(dialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
   })
 
   it('CRITICAL: the values are still SHOWN — read-only is not invisible', () => {

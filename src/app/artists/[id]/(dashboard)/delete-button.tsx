@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from 'react'
 import { deleteContentAction } from './actions'
+import { useConfirm } from './confirm-dialog'
 import { toast } from './toast'
 import type { CrudEntity } from '@/lib/content'
 
@@ -11,7 +12,7 @@ import type { CrudEntity } from '@/lib/content'
  * Card grids use CardModal's built-in delete; this is for the plain list rows.
  *
  * The delete is IRREVERSIBLE — the row is gone, there is no undo and no trash — so it
- * is gated behind window.confirm, the same gate ActionButton's `confirm` prop applies
+ * is gated behind the app's own confirm dialog, the same gate ActionButton's `confirm` applies
  * to its destructive callers. `confirm` overrides the wording; it can't be waived.
  */
 export function DeleteButton({
@@ -33,10 +34,11 @@ export function DeleteButton({
   children: ReactNode
 }) {
   const [busy, setBusy] = useState(false)
+  const { ask, dialog } = useConfirm()
   const busyRef = useRef(false) // hard re-entry latch (state is a stale closure across fast clicks)
   async function onClick() {
     if (busyRef.current) return
-    if (!window.confirm(confirm ?? `Delete this ${noun.toLowerCase()}? This can't be undone.`)) return
+    if (!(await ask(confirm ?? `Delete this ${noun.toLowerCase()}? This can't be undone.`))) return
     busyRef.current = true
     setBusy(true)
     try {
@@ -54,8 +56,11 @@ export function DeleteButton({
     }
   }
   return (
-    <button type="button" onClick={onClick} disabled={busy} className={className}>
-      {busy ? 'Deleting…' : children}
-    </button>
+    <>
+      <button type="button" onClick={onClick} disabled={busy} className={className}>
+        {busy ? 'Deleting…' : children}
+      </button>
+      {dialog}
+    </>
   )
 }

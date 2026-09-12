@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
+import { useConfirm } from './confirm-dialog'
 import { toast } from './toast'
 
 /**
@@ -9,7 +10,8 @@ import { toast } from './toast'
  * Publish, integration Pull, Shopify Disconnect). The action may return `{ error? }`
  * or `{ ok, error? }`; a non-empty `error` toasts as a failure, otherwise the action's
  * own `message` (e.g. "Found 12 media files") or the static `savedMessage`.
- * An optional `confirm` string gates destructive actions behind window.confirm.
+ * An optional `confirm` string gates destructive actions behind the app's own confirm
+ * dialog (useConfirm), never the browser's.
  */
 export function ActionButton({
   action,
@@ -29,11 +31,12 @@ export function ActionButton({
   children: ReactNode
 }) {
   const [busy, setBusy] = useState(false)
+  const { ask, dialog } = useConfirm()
   const busyRef = useRef(false) // hard re-entry latch (state is a stale closure across fast clicks)
 
   async function onClick() {
     if (busyRef.current) return
-    if (confirm && !window.confirm(confirm)) return
+    if (confirm && !(await ask(confirm, { action: 'Continue', tone: 'solid' }))) return
     busyRef.current = true
     setBusy(true)
     try {
@@ -52,8 +55,11 @@ export function ActionButton({
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={disabled || busy} className={className}>
-      {busy && busyLabel ? busyLabel : children}
-    </button>
+    <>
+      <button type="button" onClick={onClick} disabled={disabled || busy} className={className}>
+        {busy && busyLabel ? busyLabel : children}
+      </button>
+      {dialog}
+    </>
   )
 }

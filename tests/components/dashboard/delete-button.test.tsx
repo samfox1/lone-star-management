@@ -3,11 +3,11 @@
 /**
  * DeleteButton / MediaDeleteButton — client deletes for server-rendered list rows and
  * media assets. Both are IRREVERSIBLE and there is no undo, so both gate on a
- * window.confirm (the ActionButton pattern) and latch against a double click. The action
+ * the app's own confirm dialog (the ActionButton pattern) and latch against a double click. The action
  * module is mocked so the test never touches the server/DB.
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { act, render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { DeleteButton } from '@/app/artists/[id]/(dashboard)/delete-button'
 import { MediaDeleteButton } from '@/app/artists/[id]/(dashboard)/media-delete-button'
 import { Toaster } from '@/app/artists/[id]/(dashboard)/toast'
@@ -20,10 +20,20 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
 const mockDelete = vi.mocked(deleteContentAction)
 const mockDeleteMedia = vi.mocked(deleteMediaAction)
 
-/** Accept the confirmation. Every delete is gated, so a test that wants the action to
- *  run must say yes first — otherwise it is testing the declined path by accident. */
-function accept() {
-  return vi.spyOn(window, 'confirm').mockReturnValue(true)
+/** Answer the question the click raises. Every delete is gated, so a test that wants the
+ *  action to run must say yes — otherwise it is testing the declined path by accident.
+ *  The dialog is the app's own now (useConfirm), so the answer is a CLICK, after the
+ *  trigger rather than stubbed before it. */
+async function say(answer: 'Delete' | 'Cancel') {
+  const dialog = await screen.findByRole('dialog')
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole('button', { name: answer }))
+  })
+}
+
+/** The question raised by the last click, for asserting on its wording. */
+function question() {
+  return screen.getByRole('dialog').textContent ?? ''
 }
 
 /**
@@ -38,10 +48,6 @@ async function doubleClick(el: HTMLElement) {
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
 }
-function decline() {
-  return vi.spyOn(window, 'confirm').mockReturnValue(false)
-}
-
 beforeEach(() => {
   mockDelete.mockReset()
   mockDeleteMedia.mockReset()
@@ -64,54 +70,55 @@ function setup() {
 
 describe('DeleteButton', () => {
   it('toasts "{noun} deleted" on success', async () => {
-    accept()
     mockDelete.mockResolvedValue({})
     setup()
     fireEvent.click(screen.getByText('Delete'))
+    await say('Delete')
     expect(await screen.findByText('Track deleted')).toBeInTheDocument()
     expect(mockDelete).toHaveBeenCalledWith('track', 't1', 'a1')
   })
 
   it('toasts the returned error on failure', async () => {
-    accept()
     mockDelete.mockResolvedValue({ error: 'Delete failed.' })
     setup()
     fireEvent.click(screen.getByText('Delete'))
+    await say('Delete')
     expect(await screen.findByText('Delete failed.')).toBeInTheDocument()
   })
 
   it('toasts a fallback when the action THROWS', async () => {
-    accept()
     mockDelete.mockRejectedValue(new Error('network down'))
     setup()
     fireEvent.click(screen.getByText('Delete'))
+    await say('Delete')
     expect(await screen.findByText("Couldn't delete that track.")).toBeInTheDocument()
   })
 
-  it('CRITICAL: a declined confirmation does NOT delete', () => {
+  it('CRITICAL: a declined confirmation does NOT delete', async () => {
     // One click on a list row destroys the row: no undo, no trash. The confirm is the
     // only thing between a mis-click and permanent data loss.
-    const confirmed = decline()
     setup()
     fireEvent.click(screen.getByText('Delete'))
-    expect(confirmed).toHaveBeenCalled()
+    await say('Cancel')
     expect(mockDelete).not.toHaveBeenCalled()
   })
 
-  it('asks before deleting, naming what is about to go', () => {
-    const confirmed = decline()
+  it('asks before deleting, naming what is about to go', async () => {
     setup()
     fireEvent.click(screen.getByText('Delete'))
-    expect(confirmed.mock.calls[0][0]).toMatch(/track/i)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(question()).toMatch(/track/i)
+    expect(mockDelete).not.toHaveBeenCalled()
   })
 
-  it('latches against a double click (the delete runs once)', async () => {
-    accept()
+  it('latches against a double click on the confirm (the delete runs once)', async () => {
     let resolve!: (v: { error?: string }) => void
     mockDelete.mockReturnValue(new Promise((r) => (resolve = r)))
     setup()
+    fireEvent.click(screen.getByText('Delete'))
+    const dialog = await screen.findByRole('dialog')
 
-    await doubleClick(screen.getByText('Delete'))
+    await doubleClick(within(dialog).getByRole('button', { name: 'Delete' }))
     expect(mockDelete).toHaveBeenCalledTimes(1)
 
     resolve({})
@@ -130,38 +137,38 @@ function setupMedia() {
 
 describe('MediaDeleteButton', () => {
   it('toasts "{noun} removed" on success', async () => {
-    accept()
     mockDeleteMedia.mockResolvedValue({})
     setupMedia()
     fireEvent.click(screen.getByText('Delete'))
+    await say('Delete')
     expect(await screen.findByText('Video removed')).toBeInTheDocument()
     expect(mockDeleteMedia).toHaveBeenCalledWith('m1', 'a1/hero.mp4', 'a1')
   })
 
   it('toasts a fallback when the action THROWS', async () => {
-    accept()
     mockDeleteMedia.mockRejectedValue(new Error('network down'))
     setupMedia()
     fireEvent.click(screen.getByText('Delete'))
+    await say('Delete')
     expect(await screen.findByText("Couldn't remove that video.")).toBeInTheDocument()
   })
 
-  it('CRITICAL: a declined confirmation does NOT delete the asset', () => {
+  it('CRITICAL: a declined confirmation does NOT delete the asset', async () => {
     // The file leaves Storage as well as the row — nothing to restore it from.
-    const confirmed = decline()
     setupMedia()
     fireEvent.click(screen.getByText('Delete'))
-    expect(confirmed).toHaveBeenCalled()
+    await say('Cancel')
     expect(mockDeleteMedia).not.toHaveBeenCalled()
   })
 
-  it('latches against a double click (the delete runs once)', async () => {
-    accept()
+  it('latches against a double click on the confirm (the delete runs once)', async () => {
     let resolve!: (v: { error?: string }) => void
     mockDeleteMedia.mockReturnValue(new Promise((r) => (resolve = r)))
     setupMedia()
+    fireEvent.click(screen.getByText('Delete'))
+    const dialog = await screen.findByRole('dialog')
 
-    await doubleClick(screen.getByText('Delete'))
+    await doubleClick(within(dialog).getByRole('button', { name: 'Delete' }))
     expect(mockDeleteMedia).toHaveBeenCalledTimes(1)
 
     resolve({})

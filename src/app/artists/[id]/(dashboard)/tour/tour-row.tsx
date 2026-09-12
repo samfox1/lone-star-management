@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { CardModal } from '../card-modal'
+import { useConfirm } from '../confirm-dialog'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
@@ -72,6 +73,7 @@ export function TourRow({
   onToggleOnSite: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const { ask, dialog } = useConfirm()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const { day, month } = dateBlock(tour.date)
@@ -99,7 +101,7 @@ export function TourRow({
   // row with no undo, so it is never one click.
   async function remove() {
     setMenuOpen(false)
-    if (!window.confirm("Delete this date? This can't be undone.")) return
+    if (!(await ask("Delete this date? This can't be undone."))) return
     const res = await deleteContentAction('tour_date', tour.id, artistId)
     if (res?.error) toast(res.error, 'error')
     else toast('Date removed')
@@ -261,6 +263,7 @@ export function TourRow({
           </KvRow>
         </div>
       </CardModal>
+      {dialog}
     </>
   )
 }

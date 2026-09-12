@@ -17,7 +17,8 @@
  *   - confirm declined → NOTHING is called (the merge deletes a row; the confirm
  *     is the only undo).
  *
- * Actions are mocked as in the sibling card tests; the confirm is stubbed per test.
+ * Actions are mocked as in the sibling card tests; the confirm is the app's own dialog
+ * (useConfirm), answered per test.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
@@ -98,27 +99,31 @@ describe('ReleaseCard tracklist merge', () => {
     expect(options).not.toContain('Beta')
   })
 
-  it('confirm accepted → calls mergeSongsAction with (artistId, keepId, dropId) — the row song is the one dropped', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    openTracklist()
+  /** Fill in the keeper and press Merge; returns the question that raises. */
+  async function askToMerge() {
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
     fireEvent.change(screen.getByLabelText(/Keep this song/i), { target: { value: 's1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
+    return screen.findByRole('dialog', { name: /Merge/ })
+  }
+
+  it('confirm accepted → calls mergeSongsAction with (artistId, keepId, dropId) — the row song is the one dropped', async () => {
+    openTracklist()
+    const ask = await askToMerge()
+    // The question NAMES both songs, so the manager can see which one disappears.
+    expect(ask).toHaveTextContent(/“Beta” will be deleted/)
+    fireEvent.click(within(ask).getByRole('button', { name: 'Merge' }))
 
     await waitFor(() => expect(mergeSongsAction).toHaveBeenCalledTimes(1))
     expect(mergeSongsAction).toHaveBeenCalledWith('a1', 's1', 's2')
   })
 
   it('CRITICAL: confirm declined → nothing is called', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     openTracklist()
-    fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
-    fireEvent.change(screen.getByLabelText(/Keep this song/i), { target: { value: 's1' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
-
-    // The confirm actually gated the click — otherwise this test passes while the
+    const ask = await askToMerge()
+    // The question actually gated the click — otherwise this test passes while the
     // merge silently races the assertion below.
-    expect(confirm).toHaveBeenCalledTimes(1)
+    fireEvent.click(within(ask).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(mergeSongsAction).not.toHaveBeenCalled())
   })
 

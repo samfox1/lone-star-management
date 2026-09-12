@@ -8,7 +8,7 @@
  *
  *   release  header = cover · title · type / year / song count; rows Title, Type, Date,
  *            one per streaming platform (release.links), Songs (EP/album) or Audio (single);
- *            footer Share · Delete · Done; no Save, no Edit sheet, no listens.
+ *            footer Share · Delete · Save; no Edit sheet, no listens.
  *   song     THE song modal (tracks/song-modal.tsx) — the same one a standalone song
  *            opens — with the release's modal closed behind it.
  *
@@ -20,7 +20,7 @@
  *   - a platform row saves through setReleaseLinkAction with that platform's label;
  *   - a tracklist song opens the shared song modal (album closed), whose rows save the
  *     SONG's field;
- *   - no Save / Close / Cancel buttons; Done, Share, Analytics present.
+ *   - no Cancel; Save (which closes), Share and Analytics present.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -190,20 +190,22 @@ describe('the release modal', () => {
   it('CRITICAL: a single plays its song from the FOOTER, between Delete and Done', () => {
     // Sam (2026-09-12): the player is long and sits with the actions, not as a row.
     const dialog = openRelease(release({ release_type: 'single', songs: [song('s1', 'Alpha')] }))
-    const footer = within(dialog).getByRole('button', { name: 'Done' }).parentElement!
+    const footer = within(dialog).getByRole('button', { name: 'Save' }).parentElement!
     expect(within(footer).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
     expect(within(footer).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
     expect(within(dialog).queryByText('Audio', { selector: 'span' })).toBeNull()
     expect(within(dialog).queryByText('Songs', { selector: 'span' })).toBeNull()
   })
 
-  it('the footer is Share · Delete · Done, with Analytics in the corner and no Save', () => {
+  it('the footer is Share · Delete · Save, with Analytics in the corner and no Cancel', () => {
     const dialog = openRelease()
     expect(within(dialog).getByRole('button', { name: 'Share' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument()
     expect(within(dialog).getByRole('link', { name: 'Analytics' })).toHaveAttribute('href', '/artists/a1')
-    expect(within(dialog).queryByRole('button', { name: /^(Save|Cancel)$/ })).toBeNull() // × is "Close"; nothing else is
+    // Every row saves itself as it is edited, so the footer's Save just closes — there is
+    // no second, form-style Save to press and no Cancel to undo one (Sam, 2026-09-12).
+    expect(within(dialog).queryByRole('button', { name: /^Cancel$/ })).toBeNull()
   })
 })
 
@@ -220,7 +222,7 @@ describe('a song inside the release', () => {
     // typed by the record, and the meta says which one ("Track from EP Night EP").
     for (const label of ['Title', 'Date', 'Spotify', 'Featuring']) expect(rowOf(songDialog, label)).toBeInTheDocument()
     // The player is in the footer now, not a row (Sam, 2026-09-12).
-    expect(within(within(songDialog).getByRole('button', { name: 'Done' }).parentElement!).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
+    expect(within(within(songDialog).getByRole('button', { name: 'Save' }).parentElement!).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
     expect(within(songDialog).queryByText('Type', { selector: 'span' })).toBeNull()
     expect(songDialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from EP Night EP/)
     expect(within(songDialog).queryByText(/listens/i)).toBeNull()
@@ -256,7 +258,7 @@ describe('a song inside the release', () => {
     // A single that is also on an album is two songs now (Sam, 2026-09-11) — nothing to
     // "also appear on".
     expect(within(songDialog).queryByText('Also on', { selector: 'span' })).toBeNull()
-    expect(within(songDialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
-    expect(within(songDialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
+    expect(within(songDialog).getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    expect(within(songDialog).queryByRole('button', { name: /^Cancel$/ })).toBeNull()
   })
 })

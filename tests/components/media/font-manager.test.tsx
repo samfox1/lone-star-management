@@ -7,14 +7,15 @@
  *   1. Each font is PREVIEWED IN ITSELF. A font is draft until publish, so this list is
  *      the only place a manager can see the face before committing the site to it. A
  *      preview that silently falls back to the UI font makes the whole page a lie.
- *   2. Destructive clicks confirm, and the re-entry guard is a REF. `busyId` is state:
+ *   2. Destructive clicks confirm (the app's own dialog), and the re-entry guard is a
+ *      REF. `busyId` is state:
  *      two fast clicks both read the pre-render value and both fire.
  *   3. The name is required BEFORE the file, because the CSS family token is derived
  *      from it and cannot be changed afterwards.
  *   4. Every action reports — a Remove blocked by RLS must not look like one that worked.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { FontManager } from '@/app/artists/[id]/(dashboard)/brand/font-manager'
 import {
   addArtistFontAction,
@@ -66,7 +67,6 @@ const styleOf = ({ container }: { container: HTMLElement }): string =>
     .map((s) => s.innerHTML)
     .join('')
 
-let confirmed = true
 beforeEach(() => {
   // THE PREVIEW CSS IS BUILT FROM THIS. `fontFaceCss` resolves each font's URL against
   // NEXT_PUBLIC_SUPABASE_URL, and a font whose URL fails SAFE_URL is skipped — so with
@@ -78,8 +78,6 @@ beforeEach(() => {
   // the workflow has never once reported a score. Stubbing pins the test to a value it
   // controls instead of to whether an env file happens to exist.
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://stub.supabase.co')
-  confirmed = true
-  vi.stubGlobal('confirm', vi.fn(() => confirmed))
   mockedRemove.mockResolvedValue({})
   mockedSlot.mockResolvedValue({})
 })
@@ -92,6 +90,15 @@ afterEach(() => {
 const clickRemove = async (name = 'Remove PP Mori') => {
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name }))
+  })
+}
+
+/** Answer the question a destructive click raises. The dialog is the app's own now
+ *  (useConfirm), so the answer is a click after the trigger rather than a stubbed global. */
+const say = async (answer: string) => {
+  const dialog = await screen.findByRole('dialog')
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole('button', { name: answer }))
   })
 }
 
@@ -155,15 +162,16 @@ describe('FontManager — uploading', () => {
 
 describe('FontManager — removing', () => {
   it('CRITICAL: confirms first, and does nothing when the manager says no', async () => {
-    confirmed = false
     renderList()
     await clickRemove()
+    await say('Cancel')
     expect(mockedRemove).not.toHaveBeenCalled()
   })
 
   it('removes and reports when confirmed', async () => {
     renderList()
     await clickRemove()
+    await say('Remove')
     expect(mockedRemove).toHaveBeenCalledWith('a1', 'f1')
     expect(mockedToast).toHaveBeenCalledWith('Font removed')
   })
@@ -174,10 +182,13 @@ describe('FontManager — removing', () => {
     let release: (v: { error?: string }) => void = () => {}
     mockedRemove.mockImplementationOnce(() => new Promise((r) => (release = r)))
     renderList()
-    const button = screen.getByRole('button', { name: 'Remove PP Mori' })
+    await clickRemove()
+    // The latch guards the ACTION, so the double click is on the confirm — the trigger
+    // only raises a question.
+    const go = within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' })
     await act(async () => {
-      fireEvent.click(button)
-      fireEvent.click(button)
+      go.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      go.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(mockedRemove).toHaveBeenCalledTimes(1)
     await act(async () => release({}))
@@ -189,6 +200,7 @@ describe('FontManager — removing', () => {
     mockedRemove.mockResolvedValueOnce({ error: 'Not found.' })
     renderList()
     await clickRemove()
+    await say('Remove')
     expect(mockedToast).toHaveBeenCalledWith('Not found.', 'error')
     expect(mockedToast).not.toHaveBeenCalledWith('Font removed')
   })
@@ -218,7 +230,7 @@ describe('FontManager — slots', () => {
       fireEvent.click(chip('secondary', 'PP Mori'))
     })
     expect(mockedSlot).toHaveBeenCalledWith('a1', 'secondary', 'f1')
-    expect(globalThis.confirm).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('CRITICAL: ONE font can fill SEVERAL slots — no slot is vacated behind the manager', async () => {
@@ -237,12 +249,12 @@ describe('FontManager — slots', () => {
   it('CRITICAL: confirms before TAKING a slot off another font', async () => {
     // One small button, and the site's heading typeface changes everywhere. The button
     // itself gives no hint that a second font is about to lose the slot.
-    confirmed = false
     renderList()
     await act(async () => {
       fireEvent.click(chip('primary', 'PP Mori')) // Bebas Neue currently holds primary
     })
-    expect(globalThis.confirm).toHaveBeenCalled()
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/Bebas Neue is the primary font/i)
+    await say('Cancel')
     expect(mockedSlot).not.toHaveBeenCalled()
   })
 

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CardModal } from '../card-modal'
+import { useConfirm } from '../confirm-dialog'
 import { toast } from '../toast'
 import { mergeSongsAction } from './actions'
 
@@ -43,6 +44,7 @@ export function MergeSongModal({
 }) {
   const router = useRouter()
   const [keepId, setKeepId] = useState('')
+  const { ask, dialog } = useConfirm()
   const [merging, setMerging] = useState(false)
   // `merging` is STATE: two fast clicks both read the pre-render value and fire the merge
   // twice, and the second one runs against a row the first already deleted. The ref is the
@@ -57,13 +59,11 @@ export function MergeSongModal({
     }
     const keeper = targets.find((t) => t.id === keepId)
     // Destructive and irreversible: one of these two rows is about to stop existing.
-    if (
-      !window.confirm(
-        `Merge “${song.title}” into “${keeper?.title ?? 'the selected song'}”?\n\n` +
-          `“${song.title}” will be deleted and its links moved across. This can't be undone.`,
-      )
+    const go = await ask(
+      `Merge “${song.title}” into “${keeper?.title ?? 'the selected song'}”? “${song.title}” will be deleted and its links moved across. This can't be undone.`,
+      { action: 'Merge' },
     )
-      return
+    if (!go) return
 
     mergingRef.current = true
     setMerging(true)
@@ -131,6 +131,7 @@ export function MergeSongModal({
           </select>
         </label>
       </div>
+      {dialog}
     </CardModal>
   )
 }

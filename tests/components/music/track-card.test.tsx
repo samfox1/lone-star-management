@@ -6,7 +6,7 @@
  * modal was the picture he liked). Header = cover · title · type / date meta. Rows: Title,
  * Type, Release, Also on, Date, one per listen platform, Audio. Footer: Unreleased pill
  * (where it can decide anything), Merge into… (when there is a target), Delete, Done.
- * No Save, no Edit sheet, no click numbers.
+ * No Edit sheet, no click numbers, no form-style Save.
  *
  * What is pinned:
  *   - a pasted Spotify link saves on blur through updateContentAction (stream_url), which
@@ -17,7 +17,8 @@
  *   - the tile's on-site mark (orphans only) flips through the same action as before;
  *   - Unreleased is offered only where the flag can decide (manual + SoundCloud-only),
  *     and flipping it also takes the song off the site;
- *   - no Save / Close buttons, one Analytics button, Merge only when there is a target.
+ *   - one Analytics button, one Save that closes (no Cancel to pair it), Merge only when
+ *     there is a target.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
@@ -138,17 +139,18 @@ describe('the modal grammar', () => {
     // Sam (2026-09-12): "maybe the audio button can be longer and in between delete and
     // done." A row boxed it to the value column; the footer gives it the whole width.
     const dialog = openModal()
-    const footer = within(dialog).getByRole('button', { name: 'Done' }).parentElement!
+    const footer = within(dialog).getByRole('button', { name: 'Save' }).parentElement!
     expect(within(footer).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
     expect(within(footer).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
     expect(within(dialog).queryByText('Audio', { selector: 'span' })).toBeNull()
   })
 
-  it('has no Save or Close buttons, one Done, and an Analytics button', () => {
+  it('closes with Save, and has no Cancel to pair it', () => {
+    // Every row saves itself as it is edited, so the footer's Save just closes — there is
+    // no second, form-style Save to press and no Cancel to undo one (Sam, 2026-09-12).
     const dialog = openModal()
-    expect(within(dialog).queryByRole('button', { name: /^Save$/ })).toBeNull()
     expect(within(dialog).queryByRole('button', { name: /^Cancel$/ })).toBeNull()
-    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument() // the × only
     expect(within(dialog).getByRole('link', { name: 'Analytics' })).toHaveAttribute('href', '/artists/a1')
     expect(within(dialog).queryByText(/listens/i)).toBeNull()

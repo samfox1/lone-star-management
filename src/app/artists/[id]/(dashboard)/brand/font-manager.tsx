@@ -12,6 +12,7 @@ import {
 } from '@/lib/fonts'
 import { FONT_UPLOAD_RULES, acceptFor } from '@/lib/upload'
 import { cx } from '@/lib/cx'
+import { useConfirm } from '../confirm-dialog'
 import { Icon } from '@/components/ui/icons'
 import { inputClass } from '@/components/ui/ui'
 import { UploadField } from '../upload-field'
@@ -39,6 +40,7 @@ const slotLabel = (slot: FontSlot) => slot.replace(/_/g, ' ')
  */
 export function FontManager({ artistId, fonts }: { artistId: string; fonts: ArtistFont[] }) {
   const [label, setLabel] = useState('')
+  const { ask, dialog } = useConfirm()
   /** Which row is mid-write, for the disabled/label state. NOT the re-entry guard. */
   const [busyId, setBusyId] = useState<string | null>(null)
   /**
@@ -73,10 +75,10 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
     }
   }
 
-  function remove(font: ArtistFont) {
+  async function remove(font: ArtistFont) {
     // There is no undo and no trash, and any region already styled with this font falls
     // back to the template face the moment it goes.
-    if (!window.confirm(`Remove ${font.label}? Anything using it falls back to the template font.`)) return
+    if (!(await ask(`Remove ${font.label}? Anything using it falls back to the template font.`, { action: 'Remove' }))) return
     void run(font.id, () => removeArtistFontAction(artistId, font.id), 'Font removed')
   }
 
@@ -86,13 +88,14 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
    * A font may hold SEVERAL slots at once (one typeface for headings and body is the
    * ordinary case), so this toggles one slot at a time and never touches the others.
    */
-  function assign(font: ArtistFont, slot: FontSlot) {
+  async function assign(font: ArtistFont, slot: FontSlot) {
     const clearing = font.slots.includes(slot)
     const incumbent = fonts.find((f) => f.slots.includes(slot) && f.id !== font.id)
     const name = slotLabel(slot)
     // Taking a slot off another font is a site-wide typeface change made by clicking one
     // small button, and the button gives no hint that a second font is about to lose it.
-    if (!clearing && incumbent && !window.confirm(`${incumbent.label} is the ${name} font. Use ${font.label} instead?`))
+    // Not destructive, so the action is named for the change rather than a removal.
+    if (!clearing && incumbent && !(await ask(`${incumbent.label} is the ${name} font. Use ${font.label} instead?`, { action: 'Use it', tone: 'solid' })))
       return
     void run(
       font.id,
@@ -208,6 +211,7 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
         Most foundry licences are sold per use, and a desktop licence does not cover a
         website.
       </p>
+      {dialog}
     </div>
   )
 }

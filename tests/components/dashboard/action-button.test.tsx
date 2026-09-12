@@ -4,10 +4,11 @@
 /**
  * ActionButton — the field-less click-to-run control (per-section Publish, integration
  * Pull, Shopify Disconnect). Toasts savedMessage on success, the returned error on
- * failure, gates destructive actions behind window.confirm, and respects `disabled`.
+ * failure, gates destructive actions behind the app's own confirm dialog, and respects
+ * `disabled`.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { act, render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { ActionButton } from '@/app/artists/[id]/(dashboard)/action-button'
 import { Toaster } from '@/app/artists/[id]/(dashboard)/toast'
 
@@ -56,21 +57,36 @@ describe('ActionButton', () => {
     expect(await screen.findByText('No Spotify artist linked yet.')).toBeInTheDocument()
   })
 
-  it('confirm=false blocks the action entirely', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('CRITICAL: cancelling the question blocks the action entirely', async () => {
     const action = vi.fn(async () => ({}))
     setup(action, { confirm: 'Disconnect this store?' })
     fireEvent.click(screen.getByText('Publish'))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Disconnect this store?')
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
     expect(action).not.toHaveBeenCalled()
   })
 
-  it('confirm=true lets the action run', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+  it('confirming lets the action run', async () => {
     const action = vi.fn(async () => ({}))
     setup(action, { confirm: 'Disconnect this store?' })
     fireEvent.click(screen.getByText('Publish'))
+    const dialog = await screen.findByRole('dialog')
+    // Not a destroy, so the action is named for what it does rather than "Delete".
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    })
     await screen.findByText('Published tracks')
     expect(action).toHaveBeenCalledTimes(1)
+  })
+
+  it('no `confirm` prop means no question at all', () => {
+    const action = vi.fn(async () => ({}))
+    setup(action)
+    fireEvent.click(screen.getByText('Publish'))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('disabled prevents the click', () => {

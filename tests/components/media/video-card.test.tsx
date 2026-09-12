@@ -4,8 +4,8 @@
  * VideoCard on modal-kit (prototype G, Sam, 2026-09-11). The two-column player / sparkline
  * modal with a ⋯ menu and a separate "Rename video" sheet becomes one card: the player,
  * then rows — Title (saves through renameVideoAction), Link (read-only, with the open
- * mark) — Share and Analytics in the corner, Delete / Done in the footer. No Save, no
- * Rename sheet, no click numbers.
+ * mark) — Share and Analytics in the corner, Delete / Save in the footer. No Rename
+ * sheet, no click numbers.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -73,13 +73,14 @@ describe('the video modal', () => {
     expect(dialog.querySelector('iframe')?.parentElement?.className).toMatch(/aspect-\[9\/16\]/)
   })
 
-  it('Share and Analytics sit in the corner; the footer is Delete and Done; no Save, no Rename sheet', () => {
+  it('Share and Analytics sit in the corner; the footer is Delete and Save; no Rename sheet', () => {
     const dialog = openVideo()
     expect(within(dialog).getByRole('button', { name: 'Share' })).toBeInTheDocument()
     expect(within(dialog).getByRole('link', { name: 'Analytics' })).toHaveAttribute('href', '/artists/a1')
     expect(within(dialog).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: /^(Save|Rename|Cancel)$/ })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    // Every row saves itself, so there is no Rename sheet and no Cancel to pair the Save.
+    expect(within(dialog).queryByRole('button', { name: /^(Rename|Cancel)$/ })).toBeNull()
     expect(within(dialog).queryByRole('button', { name: /options/ })).toBeNull()
   })
 })

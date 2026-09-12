@@ -10,7 +10,8 @@
  *   - Remove asks first, then calls deleteContentAction('tour_date', id, artistId);
  *   - a declined confirm calls NOTHING — the confirm is the only undo.
  *
- * Actions mocked as in the sibling card tests; the confirm is stubbed per test.
+ * Actions mocked as in the sibling card tests; the confirm is the app's own dialog
+ * (useConfirm), answered per test.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -74,19 +75,25 @@ describe('TourRow ⋯ menu', () => {
     expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Mohawk' })).toBeInTheDocument()
   })
 
-  it('CRITICAL: Remove confirms, then deletes THIS date', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true))
+  /** Open the ⋯ menu, press Remove, and return the question it raises. */
+  async function askToRemove() {
     renderRow()
     fireEvent.click(screen.getByRole('button', { name: /Mohawk options/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Remove/ }))
+    return screen.findByRole('dialog')
+  }
+
+  it('CRITICAL: Remove confirms, then deletes THIS date', async () => {
+    const ask = await askToRemove()
+    expect(ask).toHaveTextContent(/can't be undone/i)
+    expect(deleteContentAction).not.toHaveBeenCalled()
+    fireEvent.click(within(ask).getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(deleteContentAction).toHaveBeenCalledWith('tour_date', 'td-1', ARTIST))
   })
 
   it('CRITICAL: a declined confirm deletes nothing', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false))
-    renderRow()
-    fireEvent.click(screen.getByRole('button', { name: /Mohawk options/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Remove/ }))
+    const ask = await askToRemove()
+    fireEvent.click(within(ask).getByRole('button', { name: 'Cancel' }))
     await new Promise((r) => setTimeout(r, 20))
     expect(deleteContentAction).not.toHaveBeenCalled()
   })
