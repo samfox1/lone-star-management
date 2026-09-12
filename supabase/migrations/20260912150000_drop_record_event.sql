@@ -1,0 +1,21 @@
+-- The cut-over: one ingest path, and `record_event` is not it.
+--
+-- Every site now posts to `POST /functions/v1/event`, which calls `record_site_event` with
+-- the service key (bridge 0.37.0; skeen deployed and verified live 2026-09-12 — a page view
+-- arrived carrying source, device, browser and a visitor hash, and a headless browser was
+-- correctly flagged as a bot). Leaving the old anon door open would leave a second way in
+-- that writes rows with NO context at all: no source, no location, no device, no visitor,
+-- never bot-flagged. A door nobody is supposed to use is a door somebody eventually uses.
+--
+-- CHECKED BEFORE DROPPING, because this is the part that fails silently: `skeen` is the only
+-- artist that has ever recorded an event (2,904 of them) and it is on the new door. The
+-- other custom artist, `ftbk`, points at a localhost URL and has zero events ever. No other
+-- repository calls it — the one remaining match on disk is a portfolio page quoting the SQL
+-- as a writing sample.
+--
+-- What this does NOT delete: the 2,895 rows recorded through it since 2026-07-01. Their view
+-- counts are real and stay, they simply carry no context and never can, because the user
+-- agent was never stored — so they can never be bot-filtered or given a visitor either. The
+-- page must show the boundary rather than draw one line across it (Sam, 2026-09-12: keep the
+-- history, mark where the measure changed).
+drop function if exists public.record_event(text, text, text, uuid, text);

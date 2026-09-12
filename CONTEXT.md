@@ -149,9 +149,9 @@ decisions behind them (esp. ADR-0002).
   dashboard): a `view` on load, or a `play` / `link_click` / `ticket_click` /
   `buy_click` / `video_click`. Declared through `trackAttrs` (`src/lib/events.ts`) —
   the one typed seam, so an emitter can't forget an attribute or use an off-allowlist
-  type — and ingested today by the `record_event` public door (anon, type-allowlisted); the `/event`
-  Edge Function (step 3, deployed) calls `record_site_event` instead and takes over at the
-  step-5 cut-over, when the bridge posts to it and `record_event` is dropped.
+  type — and ingested by the `/event` Edge Function, which calls `record_site_event` — the ONLY path in
+  since the 2026-09-12 cut-over (`record_event` is dropped). Sites report through
+  `@samfox1/site-bridge/analytics`, never by hand.
   `SiteAnalytics` (`src/components/site-analytics.tsx`) is the delegated listener,
   mounted only on public pages.
 - **Attribution** — the content row an event is about: `entity_id` + `entity_type`

@@ -1,10 +1,14 @@
 // Fans record events only through one guarded door; nobody can insert rows or read another
 //   artist's.
 /**
- * PHASE 5 (Analytics) — the secure ingest gate. Anon fans record events ONLY
- * through record_event (a SECURITY DEFINER door that resolves the artist from
- * the slug); nobody can insert arbitrary rows, and an owner can read only their
- * own events.
+ * The secure ingest gate. Nobody can insert an analytics row directly, and an owner reads
+ * only their own events.
+ *
+ * The INGEST side moved (2026-09-12): fans reach `POST /functions/v1/event`, which calls
+ * `record_site_event` with the service key, and the old anon `record_event` is gone. That
+ * the door accepts an anonymous fan and lands a row is
+ * tests/integration/analytics/event-door.test.ts; what this file still owns is the part no
+ * door can grant — the table itself refuses a direct write from anyone.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -37,32 +41,32 @@ afterAll(async () => {
 })
 
 describe('analytics ingest + isolation', () => {
-  it('anon records an event via record_event; the owner can read it', async () => {
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view' })
+  it('an event recorded for A is readable by A', async () => {
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'view' })
     const { data } = await asA.from('analytics_events').select('type').eq('artist_id', artistA)
     expect((data ?? []).some((e) => e.type === 'view')).toBe(true)
   })
 
   it("CRITICAL: A cannot READ B's analytics events", async () => {
-    // Plant on B and PROVE the plant landed before asserting the denial. record_event is
-    // built to fail silently — an unknown slug, an unknown type, and the 120/min burst
-    // cap all return null with no error — so an unchecked plant can leave B's table
-    // empty, and "A reads zero rows" over an empty table is not evidence of anything.
-    await anon.rpc('record_event', { p_slug: SEED.artistBSlug, p_type: 'view' })
+    // Plant on B and PROVE the plant landed before asserting the denial. record_site_event
+    // is built to fail silently — an unknown slug, an unknown type, and the burst cap all
+    // return without error — so an unchecked plant can leave B's table empty, and "A reads
+    // zero rows" over an empty table is not evidence of anything.
+    await svc.rpc('record_site_event', { p_slug: SEED.artistBSlug, p_type: 'view' })
     const { data: planted } = await svc
       .from('analytics_events')
       .select('id')
       .eq('artist_id', artistB)
     expect(
       (planted ?? []).length,
-      'record_event planted nothing on B — the denial below would be vacuous',
+      'record_site_event planted nothing on B — the denial below would be vacuous',
     ).toBeGreaterThan(0)
 
     const { data } = await asA.from('analytics_events').select('*').eq('artist_id', artistB)
     expect(data ?? []).toHaveLength(0)
   })
 
-  it('CRITICAL: nobody can INSERT events directly (only via record_event)', async () => {
+  it('CRITICAL: nobody can INSERT events directly (only the door, through record_site_event)', async () => {
     // analytics_events has a read policy and NO write policy at all, while anon and
     // authenticated both still hold the stock table-level INSERT grant. The missing
     // policy is the entire control, so pin that that is what refuses the row.

@@ -56,7 +56,8 @@ Three questions had a considered alternative and settled the shape of everything
   invoker`, granted to `service_role` only — the ADR 0010 inverse (the caller bypasses RLS
   anyway; INVOKER fails closed if the grant is ever widened). Real and bot traffic have
   separate per-artist burst caps (120 / 60 per minute) so a flood can neither fill the
-  table nor crowd out fans. `record_event` (the anon door) is dropped at the cut-over.
+  table nor crowd out fans. `record_event` (the anon door) was dropped at the cut-over (`20260912150000`, 2026-09-12):
+  one ingest path, so no second way in can write rows with no context at all.
 
 ## Consequences
 

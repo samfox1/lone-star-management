@@ -65,7 +65,7 @@ async function fillWindow(artistId: string, n: number) {
  */
 async function recordEvent(slug: string, artistId: string): Promise<number> {
   const before = await snapshotIds(svc, 'analytics_events', { artist_id: artistId })
-  const { error } = await anon.rpc('record_event', { p_slug: slug, p_type: 'view' })
+  const { error } = await svc.rpc('record_site_event', { p_slug: slug, p_type: 'view' })
   expect(error).toBeNull() // fire-and-forget: the fan's page must never see this
   const added = await idsAddedSince(svc, 'analytics_events', { artist_id: artistId }, before)
   createdIds.push(...added)
@@ -81,7 +81,11 @@ afterAll(async () => {
   if (createdIds.length) await svc.from('analytics_events').delete().in('id', createdIds)
 })
 
-describe('record_event — per-artist burst cap', () => {
+describe('record_site_event — per-artist burst cap', () => {
+  // The FLOOR under the door's own per-(site, IP) cap: even a caller that spreads itself
+  // across addresses cannot write more than this for one artist. The 120-real / 60-bot
+  // split is pinned in analytics-context.test.ts; what only this file pins is that the cap
+  // is per ARTIST, so flooding one cannot silence another.
   // These run in order and share the window: the first fills to CAP-1 and lands
   // the CAPth event; the second then finds the artist already at the cap.
   it('still records while the window is under the cap', async () => {

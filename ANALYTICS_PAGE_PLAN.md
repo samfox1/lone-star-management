@@ -247,15 +247,16 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
      published row's UUID. `components/reporting.test.tsx` pins it (3 of 4 go red when
      reverted). Verified live against the deployed door from skeen's production origin: a
      play attributed to a real song id, source `instagram`, device and browser derived.
-   - ⏸ **NEEDS A YES: push skeen** (2 commits: this and the Search Console hook). Push =
-     deploy. Redeploy WITHOUT build cache — a cached build ships the old bridge and the new
-     module simply is not there.
-   - ⏸ **THEN** drop `record_event`: a migration, `scripts/audit-grants.ts` line 28, and
-     three suites that call it (`analytics.test.ts` 12 sites, `analytics-rate-limit.test.ts`
-     — it tests the OLD per-artist cap, the door's is per-(site, IP) — and
-     `analytics.isolation.test.ts`, whose premise "record_event is the sole ingest path"
-     becomes false). Do NOT drop before skeen is live on the door.
-
+   - ✅ **Skeen pushed and live** (2026-09-12). Verified on the deployed site: a page view
+     arrived carrying `source`, `device`, `browser`, `path` and a visitor hash, and a
+     headless browser was correctly flagged as a bot. The lockfile bump forced a fresh
+     install, so the build cache could not ship the old bridge.
+   - ✅ **`record_event` dropped** (`20260912150000`). One ingest path now. Checked first:
+     skeen is the only artist that has ever recorded an event and it is on the door; `ftbk`
+     points at a localhost URL with zero events; nothing else calls it. The three suites that
+     used it now drive `record_site_event` with the service key, which is what the door does —
+     no rule dropped, including the one only `analytics-rate-limit.test.ts` pins (the cap is
+     per ARTIST, so flooding one cannot silence another).
    **Judgement calls, so they are not re-litigated as bugs.** Skeen's music covers and
    tracklist rows stay unreported: they open a modal, and counting them would inflate
    "listens", which is plays + link-outs. The listen is the link-out, and it now carries the
@@ -308,9 +309,11 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 
 ## Status / lessons
 
-- 2026-09-12 (later): step 5 BUILT — bridge 0.37.0 published, template site moved, skeen
-  moved + instrumented and verified live. Waiting on a yes to push skeen; the `record_event`
-  drop follows that push, never before it.
+- 2026-09-12 (later): **step 5 DONE** — bridge 0.37.0 published, both sites moved, skeen live
+  and reporting with full context, `record_event` dropped. Next: step 6, the page. Sam wants
+  the old view history KEPT with the boundary marked, not wiped: rows before the cut-over
+  have no source, no visitor and were never bot-filtered, and never can be (the user agent
+  was never stored), so views may run continuously but visitors and sources start at the line.
 - 2026-09-12: step 4 DONE — readers on tallies, and the roll-up + prune run nightly on
   pg_cron with a readout and tests. Next: step 5 (bridge `track()` + cut-over) or step 6
   (the page). Step 6 is now unblocked and is the one Sam asked for first.

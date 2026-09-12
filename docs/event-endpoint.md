@@ -1,9 +1,9 @@
 # The analytics event endpoint — setup, smoke test, abuse controls
 
-`POST /functions/v1/event` is the ingest door every artist site posts fan events to
-(ADR 0010 shape, ADR 0012 data). Code: `supabase/functions/event/` (`index.ts` is
-plumbing, `derive.ts` decides everything and is unit + mutation tested). The site side
-(the bridge's `track()`) arrives in step 5 and is documented in CONNECTING.md.
+`POST /functions/v1/event` is the ONLY way a fan event enters this system (ADR 0010 shape,
+ADR 0012 data). Code: `supabase/functions/event/` (`index.ts` is plumbing, `derive.ts`
+decides everything and is unit + mutation tested). The site side is
+`@samfox1/site-bridge/analytics`, documented in CONNECTING §12.
 
 ## Secrets (state as of 2026-09-11)
 
@@ -20,8 +20,9 @@ plumbing, `derive.ts` decides everything and is unit + mutation tested). The sit
 1. `npm run db:push` — the door needs `record_site_event`, `bump_event_attempt`,
    `lookup_geo_cache`, `cache_geo` (migrations `20260911180000`, `…190000`, `…200000`).
 2. `npm run fn:deploy:event` (or `npm run fn:deploy` for every door).
-3. Smoke test below. Then `npm run audit:grants` — the four RPCs must NOT appear (they
-   are service-only); `record_event` still does until the step-5 cut-over.
+3. Smoke test below. Then `npm run audit:grants` — the four RPCs must NOT appear (they are
+   service-only). Since the 2026-09-12 cut-over this door is the ONLY ingest path; the old
+   anon `record_event` is dropped (`20260912150000`).
 
 ## Smoke test
 

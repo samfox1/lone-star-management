@@ -25,7 +25,6 @@ const ALLOWED: Record<string, string> = {
   get_release: 'one release smart-link page',
   get_public_releases: 'released music for the site',
   audio_path_for_play: 'signed audio for a published track',
-  record_event: 'analytics ingest (anon) — closes at the step-5 cut-over, then remove this line',
   subscribe: 'mailing-list signup',
   submit_application: 'the roster application form',
   public_custom_site: 'redirect target for custom-hosted sites',

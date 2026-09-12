@@ -1,5 +1,11 @@
 // Recording an event: resolve the artist from the slug, store a typed event, and ignore junk.
 /**
+ * These drive `record_site_event` directly with the service key, which is what the `/event`
+ * Edge Function does. The anon `record_event` they used to call was dropped at the
+ * 2026-09-12 cut-over: there is one ingest path now, and it is the door.
+ * tests/integration/analytics/event-door.test.ts covers the HTTP half.
+ */
+/**
  * PHASE 5 (Analytics) — record_event behavior: resolves the artist from the slug,
  * stores a typed event (+ optional target, no PII), and ignores junk (unknown
  * type or unknown slug) rather than erroring.
@@ -77,17 +83,17 @@ async function sinceAfter(target: string): Promise<string> {
   return data!.created_at as string
 }
 
-describe('record_event', () => {
+describe('record_site_event', () => {
   it('records exactly one typed event with its target', async () => {
     const target = ownTarget('link')
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: target })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: target })
     // Exactly one: a door that inserted twice would still satisfy `some(...)`.
     expect(await rowsFor(target)).toEqual([{ type: 'link_click', target }])
   })
 
   it('ignores an unknown event type (no row, no error)', async () => {
     const target = ownTarget('badtype')
-    const { error } = await anon.rpc('record_event', {
+    const { error } = await svc.rpc('record_site_event', {
       p_slug: SEED.artistASlug,
       p_type: 'definitely_not_a_type',
       p_target: target,
@@ -98,7 +104,7 @@ describe('record_event', () => {
 
   it('ignores an unknown slug (records nothing, for any artist)', async () => {
     const target = ownTarget('badslug')
-    await anon.rpc('record_event', { p_slug: 'no-such-artist-slug', p_type: 'view', p_target: target })
+    await svc.rpc('record_site_event', { p_slug: 'no-such-artist-slug', p_type: 'view', p_target: target })
     // Unscoped by artist: an unknown slug must not land the row on SOME other artist.
     expect(await rowsFor(target)).toEqual([])
   })
@@ -107,10 +113,10 @@ describe('record_event', () => {
     const target = ownTarget('summary')
     // The first event is also the window boundary, so the window holds this test's
     // rows and nothing earlier.
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view', p_target: target })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'view', p_target: target })
     const since = await sinceAfter(target)
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'view', p_target: target })
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'view', p_target: target })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target })
 
     const { data } = await asA.rpc('analytics_summary', { p_artist_id: artistA, p_since: since })
     const counts = Object.fromEntries(
@@ -124,7 +130,7 @@ describe('record_event', () => {
 describe('per-item attribution (record_event entity + analytics_by_entity)', () => {
   it('stores entity_id + entity_type exactly once and accepts the new video_click type', async () => {
     const video = ownEntity()
-    await anon.rpc('record_event', {
+    await svc.rpc('record_site_event', {
       p_slug: SEED.artistASlug,
       p_type: 'video_click',
       p_target: ownTarget('video'),
@@ -142,9 +148,9 @@ describe('per-item attribution (record_event entity + analytics_by_entity)', () 
   it('analytics_by_entity groups exact counts per (entity, type) for the owner', async () => {
     const merch = ownEntity()
     const target = ownTarget('merch')
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_target: target, p_entity_id: merch, p_entity_type: 'merch' })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_target: target, p_entity_id: merch, p_entity_type: 'merch' })
     const since = await sinceAfter(target)
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_target: target, p_entity_id: merch, p_entity_type: 'merch' })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'buy_click', p_target: target, p_entity_id: merch, p_entity_type: 'merch' })
 
     const { data } = await asA.rpc('analytics_by_entity', { p_artist_id: artistA, p_since: since })
     const rows = ((data ?? []) as { entity_id: string; type: string; count: number }[]).filter(
@@ -167,11 +173,11 @@ describe('per-item attribution (record_event entity + analytics_by_entity)', () 
     const b = ownEntity()
     const other = ownEntity()
     const target = ownTarget('daily')
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target, p_entity_id: a, p_entity_type: 'track' })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target, p_entity_id: a, p_entity_type: 'track' })
     const since = await sinceAfter(target)
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: target, p_entity_id: b, p_entity_type: 'track' })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'link_click', p_target: target, p_entity_id: b, p_entity_type: 'track' })
     // Not in p_entity_ids: pins that the filter narrows, so a dropped WHERE reads as 3.
-    await anon.rpc('record_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target, p_entity_id: other, p_entity_type: 'track' })
+    await svc.rpc('record_site_event', { p_slug: SEED.artistASlug, p_type: 'play', p_target: target, p_entity_id: other, p_entity_type: 'track' })
 
     const { data } = await asA.rpc('analytics_entity_daily', { p_artist_id: artistA, p_entity_ids: [a, b], p_since: since })
     const total = ((data ?? []) as { day: string; count: number }[]).reduce((n, r) => n + Number(r.count), 0)
