@@ -8,6 +8,10 @@ import { useConfirm } from './confirm-dialog'
 import { useLockBodyScroll } from './use-lock-body-scroll'
 import { toast } from './toast'
 
+/** The footer pair is one control read twice: same pill, same width, so neither reads as
+ *  the bigger half (Sam, 2026-09-12: "the same size as the delete button"). */
+const PAIR = 'min-w-[88px] justify-center'
+
 /** A delete server action, pre-bound to its (type, id, artistId), returning {error?}. */
 type DeleteAction = () => Promise<{ error?: string } | void>
 
@@ -43,13 +47,13 @@ export function CardModal({
   confirmText?: string
   /** Wide, two-column card that sizes to its content instead of scrolling. */
   wide?: boolean
-  /** Replaces the default Delete / Done footer row (e.g. a single Save button). Pass `null`
+  /** Replaces the default Delete / Save footer row (e.g. a single Add button). Pass `null`
    *  to render NO footer at all — for modals that carry their own action inside the body. */
   footer?: ReactNode | null
   /** Extra controls in the footer's LEFT group, before Delete (a flag pill, "Merge into…").
    *  Ignored when `footer` replaces the whole row. */
   footerLeft?: ReactNode
-  /** One control STRETCHED across the footer between the left group and Done — the song
+  /** One control STRETCHED across the footer between the left group and Save — the song
    *  player, which wants the width (Sam, 2026-09-12) and belongs with the actions rather
    *  than boxed into a row's value column. */
   footerFill?: ReactNode
@@ -144,17 +148,16 @@ export function CardModal({
             <div className="flex items-center gap-3">
               {footerLeft}
               {deleteAction ? (
-                <button type="button" onClick={del} disabled={deleting} className={buttonClass('danger')}>
+                <button type="button" onClick={del} disabled={deleting} className={buttonClass('danger', PAIR)}>
                   {deleting ? 'Deleting…' : deleteLabel}
                 </button>
               ) : null}
             </div>
             {footerFill ? <div className="min-w-0 flex-1">{footerFill}</div> : null}
-            {/* SAVE, not Done (Sam, 2026-09-12) — in ink, not the quiet grey the shared
-                ghost wears elsewhere. Every row in a card saves itself as it is edited, so
-                this closes rather than writing; it is named for what the manager means by
-                pressing it. */}
-            <button type="button" onClick={onClose} className={buttonClass('ghost', 'text-ink hover:text-accent')}>
+            {/* SAVE, not Done (Sam, 2026-09-12) — in ink, and the same size as Delete
+                beside it. Every row in a card saves itself as it is edited, so this closes
+                rather than writing; it is named for what the manager means by pressing. */}
+            <button type="button" onClick={onClose} className={buttonClass('confirm', PAIR)}>
               Save
             </button>
           </div>

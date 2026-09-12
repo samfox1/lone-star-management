@@ -163,8 +163,8 @@ export function SupportActs({
               ) : (
                 <span />
               )}
-              <button type="button" onClick={commit} className={buttonClass('ghost')}>
-                Done
+              <button type="button" onClick={commit} className={buttonClass('confirm')}>
+                Save
               </button>
             </div>
           </div>

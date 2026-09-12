@@ -66,7 +66,7 @@ describe('add a tour date', () => {
     const pop = screen.getByRole('dialog', { name: /act/i })
     fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Jigitz' } })
     fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'https://www.jigitz.online/' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
     expect(within(dialog).getByRole('button', { name: 'Jigitz, linked' })).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add date' }))
     await waitFor(() => expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, 'td-new', [{ name: 'Jigitz', url: 'https://www.jigitz.online/' }]))

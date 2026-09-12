@@ -28,7 +28,7 @@ export type ItemEditorConfig = {
   /** The image's alt text and JSON-LD kind (SEO_GEO_PLAN B6b) — gallery photos only. */
   alt?: { value: string; preset: string; onSave: (next: string) => void }
   kind?: { value: MediaKind | null; onSave: (next: MediaKind) => void }
-  /** The object's file name (sans extension) and the recommended one; saved on Done. */
+  /** The object's file name (sans extension) and the recommended one; saved on Save. */
   slug?: { value: string; preset: string; onSave: (next: string) => void }
   key: string
   preview: React.ReactNode

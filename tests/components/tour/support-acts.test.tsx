@@ -52,7 +52,7 @@ describe('SupportActs (chips)', () => {
     const pop = popover()
     fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'ZHU' } })
     fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'https://zhumusic.com' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
     await waitFor(() =>
       expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [...two, { name: 'ZHU', url: 'https://zhumusic.com' }]),
     )
@@ -82,7 +82,7 @@ describe('SupportActs (chips)', () => {
     expect(within(pop).getByLabelText('Name')).toHaveValue('Gudfella')
     fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Gudfella Trio' } })
     fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'https://gudfella.example' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
     await waitFor(() =>
       expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [two[0], { name: 'Gudfella Trio', url: 'https://gudfella.example' }]),
     )
@@ -105,7 +105,7 @@ describe('SupportActs (chips)', () => {
     const pop = popover()
     fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bad' } })
     fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'javascript:alert(1)' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(toast).toHaveBeenCalledWith('Enter a valid URL.', 'error'))
     expect(screen.queryByRole('button', { name: /^Bad/ })).toBeNull()
     expect(chip('Jigitz')).toBeInTheDocument()

@@ -2006,7 +2006,7 @@ describe('EditorInspector — the Revert changes button (session undo; named by 
     // dismissed the undo buffer was a second word for "save" that saved nothing.
     editPage()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
   })
 
@@ -2616,11 +2616,11 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     // …in a MODAL, not more side panel (Sam, 2026-08-26).
     const dialog = screen.getByRole('dialog', { name: /^Alt text for/ })
     expect((within(dialog).getByRole('textbox', { name: /^Alt text for/ }) as HTMLInputElement).placeholder).toBe('Skeen, Backstage, Oslo')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog', { name: /^Alt text for/ })).toBeNull()
   })
 
-  it('CRITICAL: the file name saves on Done (a storage copy), with the alt as its recommended slug', async () => {
+  it('CRITICAL: the file name saves on Save (a storage copy), with the alt as its recommended slug', async () => {
     const captionKey = (HELD_SLOT[0].siteRole as string).replace(/_photo$/, '_caption')
     renderInspector(HELD_SLOT, {
       components: [POLAROID],
@@ -2635,7 +2635,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(file.placeholder).toBe('skeen-tour-with-jigitz')
     fireEvent.change(file, { target: { value: 'skeen-oslo' } })
     expect(renameFileMock).not.toHaveBeenCalled() // not per keystroke
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await vi.waitFor(() => expect(renameFileMock).toHaveBeenCalledWith('artist-1', HELD_SLOT[0].id, 'skeen-oslo'))
   })
 
@@ -2758,7 +2758,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     }
   }
 
-  it('the palette opens as a modal and closes on Escape, Done, or the backdrop', () => {
+  it('the palette opens as a modal and closes on Escape, Save, or the backdrop', () => {
     renderInspector(HELD_SLOT, { components: [POLAROID] })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
@@ -2771,7 +2771,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
 
     openIt()
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog')).toBeNull()
 
     openIt()
@@ -2786,7 +2786,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.pointerDown(area, { clientX: 200, clientY: 0 })
     expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#0000ff]')
     // No confirm step: the edit is already applied, so closing just closes.
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect((screen.getByLabelText('Slot 1 Border color hex') as HTMLInputElement).value).toBe('#0000ff')
   })
@@ -2908,7 +2908,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
       fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
       expect(screen.queryByText('On site')).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
       const hex = screen.getByLabelText('Slot 1 Border color hex')
       fireEvent.change(hex, { target: { value: '#ff8800' } })
       fireEvent.blur(hex)

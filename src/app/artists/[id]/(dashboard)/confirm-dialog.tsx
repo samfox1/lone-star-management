@@ -22,6 +22,9 @@ import { buttonClass } from '@/components/ui/ui'
  * is not the named action is a no. It never rejects: a caller writing
  * `if (!(await ask(…))) return` must not need a try/catch to be safe.
  */
+/** Both answers are the same size: neither is the default by being the bigger target. */
+const PAIR = 'min-w-[88px] justify-center'
+
 export function useConfirm(): {
   /** Ask, and resolve true only if the manager presses the named action. */
   ask: (question: string, opts?: { action?: string; tone?: 'danger' | 'solid' }) => Promise<boolean>
@@ -72,11 +75,11 @@ export function useConfirm(): {
       <div role="dialog" aria-modal="true" aria-label={pending.question} className="w-[340px] max-w-full rounded-2xl bg-paper p-5 shadow-2xl">
         <p className="text-[15px] leading-snug">{pending.question}</p>
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" onClick={() => settle(false)} className={buttonClass('ghost', 'text-ink hover:text-accent')}>
+          <button type="button" onClick={() => settle(false)} className={buttonClass('confirm', PAIR)}>
             Cancel
           </button>
           {/* Named for what it DOES — never an "OK" that could mean either half. */}
-          <button type="button" onClick={() => settle(true)} className={buttonClass(pending.tone)}>
+          <button type="button" onClick={() => settle(true)} className={buttonClass(pending.tone, PAIR)}>
             {pending.action}
           </button>
         </div>

@@ -3,7 +3,7 @@ import { cx } from '@/lib/cx'
 import { Icon, type IconName } from './icons'
 
 /* ── Button ──────────────────────────────────────────────────────────────── */
-export type ButtonVariant = 'solid' | 'accent' | 'ghost' | 'danger'
+export type ButtonVariant = 'solid' | 'accent' | 'ghost' | 'danger' | 'confirm'
 
 /** Button classes, exported so links that should look like buttons (e.g. a
  *  next/link) can share them without nesting a <button> inside an <a>. */
@@ -21,6 +21,12 @@ export function buttonClass(variant: ButtonVariant = 'solid', className?: string
     // "put a border around the delete button just like the Done button"), saying what it
     // is in colour rather than by being the only bare word in the row.
     danger: 'border-hairline bg-paper text-accent-red hover:border-accent-red hover:bg-danger-soft',
+    // The affirming half — ghost's pill, but in INK (Sam asked twice: "I want the text
+    // black"). A VARIANT rather than `buttonClass('ghost', 'text-ink')`, because cx is a
+    // plain joiner with no Tailwind conflict resolution: both text colours would land in
+    // the class list and the stylesheet's order would pick the winner — which it did,
+    // leaving Save grey.
+    confirm: 'border-hairline bg-paper text-ink hover:border-accent hover:text-accent',
   }
   return cx(base, styles[variant], className)
 }

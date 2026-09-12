@@ -36,7 +36,7 @@ const KEY_STEP = 0.02
  * it, so the dialog covers as little of the frame as it can while still giving the square
  * enough room to aim in. Edits apply live through the same `onChange` as everything else,
  * so there is nothing to confirm — closing is the only action, by Escape, the backdrop, or
- * Done.
+ * Save.
  */
 function ColorModal({
   aria,
@@ -85,9 +85,9 @@ function ColorModal({
         <button
           type="button"
           onClick={onClose}
-          className="mt-1 w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors hover:border-accent hover:text-accent"
+          className="mt-1 w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink transition-colors hover:border-accent hover:text-accent"
         >
-          Done
+          Save
         </button>
       </div>
     </div>

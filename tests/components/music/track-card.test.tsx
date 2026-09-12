@@ -306,7 +306,7 @@ describe('the Featuring row', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add collaborator' }))
     const pop = screen.getByRole('dialog', { name: 'Collaborator' })
     fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bo Reed' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('t1', 'a1', ['Arlo', 'Bo Reed']))
     expect(within(dialog).getByRole('button', { name: 'Bo Reed' })).toBeInTheDocument()
   })
