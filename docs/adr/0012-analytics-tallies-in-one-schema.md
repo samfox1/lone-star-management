@@ -72,6 +72,13 @@ Three questions had a considered alternative and settled the shape of everything
   half alone would make the same query answer differently once a day was rolled up. A day
   already stamped `pruned_at` cannot be rebuilt and is simply absent from the per-type
   tally; only test fixtures have ever been pruned.
+- **The maintenance runs on `pg_cron`** (`20260912130000`): roll-up 03:10 UTC, prune 03:40,
+  in that order because prune only removes raw rows for ledger days and would otherwise be
+  deleting a running roll-up's input. It rests on one assumption: cron runs as `postgres`,
+  which holds BYPASSRLS. Both functions are `security invoker`, so a runner that cannot see
+  `analytics_events` writes EMPTY tallies over correct ones — silently. `analytics_schedule()`
+  exposes the jobs, the runner, its BYPASSRLS bit and the last run's status to service_role,
+  and `tests/integration/analytics/schedule.test.ts` asserts every part of it.
 - The `rolled_days` ledger is load-bearing for BOTH halves of every reader. Its policy is
   `using (true)` (it names no artist). Tighten it and managers' numbers vanish rather
   than double — the failure mode chosen on purpose; the positive-manager test in

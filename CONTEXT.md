@@ -176,8 +176,9 @@ decisions behind them (esp. ADR-0002).
   never counted as a view or a visitor by any reader.
 - **Tally / rolled day** — one row per (artist, day, dimension value) in schema
   `analytics` (`daily_total`, `daily_type`, `daily_source`, `daily_place`, …), written by
-  `roll_up_analytics(day)`. A day in `analytics.rolled_days` is authoritative: readers use
-  its tallies and ignore its raw rows. The last two complete days are re-rolled nightly;
+  `roll_up_analytics(day)`, nightly on `pg_cron` at 03:10 UTC (prune 03:40). A day in
+  `analytics.rolled_days` is authoritative: readers use its tallies and ignore its raw rows.
+  `analytics_schedule()` reports whether the jobs ran. The last two complete days are re-rolled nightly;
   a pruned day (`pruned_at`) is never re-rolled.
   Every reader's window is whole UTC days, so an answer never moves when a day is rolled.
 - **Raw window** — 90 days of raw `analytics_events` rows; `prune_analytics` deletes

@@ -210,22 +210,38 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
    DEPLOYED function).
    Contract: `POST { slug, type, url, referrer, entity? }` → 204 / 400 / 401 / 429;
    `url` = `location.href`, everything else is derived at the door.
-4. **Roll-up schedule.** ✅ PREREQUISITE DONE (2026-09-12, `20260912120000`): all four older
-   readers now use tallies for rolled days and raw for the rest, in whole UTC days on both
-   sides so an answer never moves when a day is rolled. It needed a NEW tally,
-   `analytics.daily_type` (artist, day, type, count): `daily_total` holds views only and
-   `daily_entity` needs an entity, so an entity-less `play` or `ticket_click` — 265 of them
-   in the last 90 days — sat in no tally at all. Pinned by
-   `tests/integration/analytics/reader-parity.test.ts` (raw → rolled → pruned, same answer;
-   3 live mutants killed). REMAINING: try `pg_cron`; else the opportunistic path. Test: plant raw rows for a
-   day, run `roll_up_analytics`, assert tallies; run it twice, assert no doubling; prune
-   with an un-rolled day, assert it is kept.
+4. ✅ **Roll-up schedule** (2026-09-12). Two parts.
+   - PREREQUISITE (`20260912120000`): all four older readers use tallies for rolled days and
+     raw for the rest, in whole UTC days on both sides so an answer never moves when a day
+     is rolled. It needed a NEW tally, `analytics.daily_type` (artist, day, type, count):
+     `daily_total` holds views only and `daily_entity` needs an entity, so an entity-less
+     `play` or `ticket_click` — 265 of them in the last 90 days — sat in no tally at all.
+     Pinned by `tests/integration/analytics/reader-parity.test.ts` (raw → rolled → pruned,
+     same answer; 3 live mutants killed).
+   - THE SCHEDULE (`20260912130000`): `pg_cron` turned out to be available (1.6.4), so the
+     opportunistic fallback was not needed. `analytics-roll-up` at 03:10 UTC runs
+     `roll_up_pending()`; `analytics-prune` at 03:40 runs `prune_analytics()`. Both
+     idempotent, so a missed night self-heals. The schedule rests on ONE assumption — cron
+     runs as `postgres`, which holds BYPASSRLS, because both functions are `security
+     invoker` and a runner that could not see `analytics_events` would write EMPTY tallies
+     over good ones. `analytics_schedule()` (`20260912140000`, service-only) reports the
+     jobs, the runner, whether it bypasses RLS, and the last run's status;
+     `tests/integration/analytics/schedule.test.ts` asserts all of it (unscheduling a job
+     and deactivating one both turned it red).
+   - Verified on REAL data: backfilled 72 days and skeen's `analytics_summary`,
+     `analytics_daily` and `analytics_by_entity` answers were byte-identical before and
+     after. Nothing is deleted yet — the oldest real row is 73 days old, inside the window.
 5. **Bridge + cut-over** — `@samfox1/site-bridge/analytics`; the template site and Skeen
    move to it (Skeen: pageview, ticket, buy, PLUS play, video, social); publish the bridge;
    redeploy sites without build cache (memory: bridge deploy cache gotcha); THEN DROP
    `record_event` and remove it from `scripts/audit-grants.ts`. Test: a call to the old
    name fails to resolve (PGRST202) — and `npm run audit:grants` stays clean.
-6. **Page** — the four blocks on the read RPCs from step 2. Sources first, because it is
+6. **Page** — the four blocks on the read RPCs from step 2. **Sequencing note (2026-09-12):**
+   the readers work, but skeen's 1,204 views in the last 30 days carry NO source, NO
+   location and NO visitor hash, because skeen still posts to the old `record_event` door.
+   Until step 5 moves it onto `/event`, a Sources block would show one "unknown" row and
+   Places would be empty. Step 5 first, or the page ships against a single artist's blank
+   context. Sources first, because it is
    the question that started this. Timeline shows `bots` as the filtered count.
 7. **PostHog** — env var on Skeen, 30-day comparison, exit or tune.
 8. **Search Console** (already hooked on Skeen, `GOOGLE_SITE_VERIFICATION`) — a later
@@ -258,6 +274,9 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 
 ## Status / lessons
 
+- 2026-09-12: step 4 DONE — readers on tallies, and the roll-up + prune run nightly on
+  pg_cron with a readout and tests. Next: step 5 (bridge `track()` + cut-over) or step 6
+  (the page). Step 6 is now unblocked and is the one Sam asked for first.
 - 2026-09-12: step 4's prerequisite done — the four older readers read tallies; windows are
   whole UTC days on both sides (a tally is day-granular, so anything else would move an
   answer at roll-up). Prune is now safe to schedule.

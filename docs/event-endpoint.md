@@ -84,10 +84,33 @@ to anyone without the salt; the operator, who holds it, could recompute
 `hash(salt, day, ip, ua)` for a known IP and UA — a policy statement, not a technical
 impossibility. Rotate the salt if that guarantee ever needs to be technical.
 
+## Nightly maintenance, and how to check it ran
+
+Two `pg_cron` jobs, since 2026-09-12: `analytics-roll-up` at 03:10 UTC tallies every
+complete day (and re-tallies the last two, for rows that arrived late); `analytics-prune` at
+03:40 deletes raw rows older than 90 days for days already tallied, and expires
+`analytics.event_attempts` (one day) and `analytics.geo_cache` (two).
+
+```sql
+-- the jobs, the runner, whether it can see the rows it aggregates, and the last run
+select * from public.analytics_schedule();
+```
+
+`bypasses_rls` must be true for both. Both maintenance functions are `security invoker`, so
+a runner without it reads nothing through `analytics_events`'s owner-only policy and writes
+EMPTY tallies over correct ones — no error, just zeroes. `last_status` should be
+`succeeded`; `null` means nothing has fired since it was scheduled.
+
+Both are idempotent, so a missed night self-heals on the next one. To force a catch-up:
+
+```sql
+select public.roll_up_pending();   -- returns the number of days rolled
+select public.prune_analytics();   -- returns the number of raw rows deleted
+```
+
 ## Cleanup
 
-Events cascade with their artist. `analytics.event_attempts` rows expire after a day and
-`analytics.geo_cache` after two, both through `prune_analytics` (step 4 schedules it).
+Events cascade with their artist.
 
 ## Verifying a change to the door
 
