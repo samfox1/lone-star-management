@@ -25,7 +25,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ReleaseCard, type Release, type ReleaseSong } from '@/app/artists/[id]/(dashboard)/releases/release-card'
-import { setReleaseLinkAction, setReleaseTypeAction, updateContentAction, updateReleaseDetailsAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { setReleaseLinkAction, setReleaseTypeAction, setTrackFeaturedAction, updateContentAction, updateReleaseDetailsAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
@@ -49,6 +49,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   setTrackParentReleaseAction: vi.fn(async () => ({})),
   setTrackOnSiteAction: vi.fn(async () => ({})),
   setTrackReleasedAction: vi.fn(async () => ({})),
+  setTrackFeaturedAction: vi.fn(async (_t: string, _a: string, names: string[]) => ({ names })),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/music/actions', () => ({
   mergeSongsAction: vi.fn(async () => ({})),
@@ -168,9 +169,31 @@ describe('the release modal', () => {
     expect((fd as FormData).get('url')).toBe('https://music.apple.com/x')
   })
 
-  it('a single shows Audio instead of Songs', () => {
+  it('CRITICAL: a ONE-SONG release carries its song’s collaborators (Sam, 2026-09-12)', async () => {
+    // A single, remix or live set IS its song, and this modal is the only place it opens
+    // from — so the Featuring row has to be here, writing that song's list. An EP or album
+    // has no collaborators of its own: each of its songs carries its own.
+    const dialog = openRelease(release({ release_type: 'single', songs: [song('s1', 'Alpha', { featured_artists: ['Arlo'] })] }))
+    expect(within(dialog).getByRole('button', { name: 'Arlo' })).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add collaborator' }))
+    const pop = screen.getByRole('dialog', { name: 'Collaborator' })
+    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bo Reed' } })
+    fireEvent.click(within(pop).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('s1', 'a1', ['Arlo', 'Bo Reed']))
+  })
+
+  it('an EP has no Featuring row of its own — each song carries one', () => {
+    const dialog = openRelease()
+    expect(within(dialog).queryByText('Featuring', { selector: 'span' })).toBeNull()
+  })
+
+  it('CRITICAL: a single plays its song from the FOOTER, between Delete and Done', () => {
+    // Sam (2026-09-12): the player is long and sits with the actions, not as a row.
     const dialog = openRelease(release({ release_type: 'single', songs: [song('s1', 'Alpha')] }))
-    expect(rowOf(dialog, 'Audio')).toBeInTheDocument()
+    const footer = within(dialog).getByRole('button', { name: 'Done' }).parentElement!
+    expect(within(footer).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
+    expect(within(footer).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
+    expect(within(dialog).queryByText('Audio', { selector: 'span' })).toBeNull()
     expect(within(dialog).queryByText('Songs', { selector: 'span' })).toBeNull()
   })
 
@@ -195,7 +218,9 @@ describe('a song inside the release', () => {
     expect(within(songDialog).getByRole('heading', { name: 'Beta' })).toBeInTheDocument()
     // The full song grammar, not a links-only sheet — minus Type: a song on a record is
     // typed by the record, and the meta says which one ("Track from EP Night EP").
-    for (const label of ['Title', 'Date', 'Spotify', 'Audio']) expect(rowOf(songDialog, label)).toBeInTheDocument()
+    for (const label of ['Title', 'Date', 'Spotify', 'Featuring']) expect(rowOf(songDialog, label)).toBeInTheDocument()
+    // The player is in the footer now, not a row (Sam, 2026-09-12).
+    expect(within(within(songDialog).getByRole('button', { name: 'Done' }).parentElement!).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
     expect(within(songDialog).queryByText('Type', { selector: 'span' })).toBeNull()
     expect(songDialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from EP Night EP/)
     expect(within(songDialog).queryByText(/listens/i)).toBeNull()

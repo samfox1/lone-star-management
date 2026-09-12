@@ -134,6 +134,16 @@ describe('TrackCard song type', () => {
 })
 
 describe('the modal grammar', () => {
+  it('CRITICAL: the player sits in the FOOTER, between Delete and Done — not as a row', () => {
+    // Sam (2026-09-12): "maybe the audio button can be longer and in between delete and
+    // done." A row boxed it to the value column; the footer gives it the whole width.
+    const dialog = openModal()
+    const footer = within(dialog).getByRole('button', { name: 'Done' }).parentElement!
+    expect(within(footer).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
+    expect(within(footer).getByRole('button', { name: /Delete/ })).toBeInTheDocument()
+    expect(within(dialog).queryByText('Audio', { selector: 'span' })).toBeNull()
+  })
+
   it('has no Save or Close buttons, one Done, and an Analytics button', () => {
     const dialog = openModal()
     expect(within(dialog).queryByRole('button', { name: /^Save$/ })).toBeNull()

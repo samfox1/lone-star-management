@@ -227,6 +227,7 @@ export function SongModal({
         deleteAction={deleteContentAction.bind(null, 'track', track.id, artistId)}
         deleteLabel="Delete"
         deleteNoun="Song"
+        footerFill={<TrackAudio artistId={artistId} trackId={track.id} audioPath={track.audio_path} />}
         footerLeft={
           <>
             {/* Unreleased (Sam, 2026-09-10) — only where the flag can decide: manual +
@@ -321,10 +322,6 @@ export function SongModal({
                 "feat. …" on the site. */}
             <KvRow label="Featuring">
               <FeaturedChips artistId={artistId} trackId={track.id} names={track.featured_artists ?? []} />
-            </KvRow>
-            {/* Audio: the always-present player (greyed until a file exists) + add/replace. */}
-            <KvRow label="Audio">
-              <TrackAudio artistId={artistId} trackId={track.id} audioPath={track.audio_path} />
             </KvRow>
           </div>
           <div>

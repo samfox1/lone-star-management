@@ -27,6 +27,7 @@ export function CardModal({
   wide = false,
   footer,
   footerLeft,
+  footerFill,
   label,
   analyticsHref,
   corner,
@@ -47,6 +48,10 @@ export function CardModal({
   /** Extra controls in the footer's LEFT group, before Delete (a flag pill, "Merge into…").
    *  Ignored when `footer` replaces the whole row. */
   footerLeft?: ReactNode
+  /** One control STRETCHED across the footer between the left group and Done — the song
+   *  player, which wants the width (Sam, 2026-09-12) and belongs with the actions rather
+   *  than boxed into a row's value column. */
+  footerFill?: ReactNode
   /** Accessible name for the dialog (the thing's name, or "Add date"). */
   label?: string
   /** Where the analytics button goes. The modal shows no numbers of its own (Sam,
@@ -131,7 +136,7 @@ export function CardModal({
         {footer === null ? null : footer !== undefined ? (
           <div className="mt-6">{footer}</div>
         ) : (
-          <div className="mt-7 flex items-center justify-between">
+          <div className="mt-7 flex items-center justify-between gap-5">
             <div className="flex items-center gap-3">
               {footerLeft}
               {deleteAction ? (
@@ -145,6 +150,7 @@ export function CardModal({
                 </button>
               ) : null}
             </div>
+            {footerFill ? <div className="min-w-0 flex-1">{footerFill}</div> : null}
             <button type="button" onClick={onClose} className={buttonClass('ghost')}>
               Done
             </button>

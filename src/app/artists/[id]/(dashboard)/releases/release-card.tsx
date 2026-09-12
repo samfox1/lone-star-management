@@ -9,6 +9,7 @@ import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { STREAMING_PLATFORMS } from '../music/platforms'
 import { SongModal, type ReleaseOption, type Track } from '../tracks/song-modal'
+import { FeaturedChips } from '../tracks/featured-chips'
 import { toast } from '../toast'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
@@ -248,6 +249,13 @@ export function ReleaseCard({
         deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
         deleteLabel="Delete"
         deleteNoun="Release"
+        // A single, remix or live set IS one song: its player gets the footer's width,
+        // the same as the song modal's (Sam, 2026-09-12).
+        footerFill={
+          !expandable && release.songs[0] ? (
+            <TrackAudio artistId={artistId} trackId={release.songs[0].id} audioPath={release.songs[0].audio_path} />
+          ) : null
+        }
         wide
         corner={
           <button
@@ -340,10 +348,12 @@ export function ReleaseCard({
               </KvRow>
             )
           ) : (
-            // A single IS one song: its audio sits where a tracklist would.
+            // A single IS one song, so its collaborators are the release's — and this modal
+            // is the only place it opens from (Sam, 2026-09-12). An EP or album shows none:
+            // each of its songs carries its own, in the song's own modal.
             release.songs[0] && (
-              <KvRow label="Audio">
-                <TrackAudio artistId={artistId} trackId={release.songs[0].id} audioPath={release.songs[0].audio_path} />
+              <KvRow label="Featuring">
+                <FeaturedChips artistId={artistId} trackId={release.songs[0].id} names={release.songs[0].featured_artists} />
               </KvRow>
             )
           )}
