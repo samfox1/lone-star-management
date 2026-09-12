@@ -175,10 +175,11 @@ decisions behind them (esp. ADR-0002).
 - **Bot** — a flagged row (`is_bot`), kept for audit and counted on `daily_total.bots`,
   never counted as a view or a visitor by any reader.
 - **Tally / rolled day** — one row per (artist, day, dimension value) in schema
-  `analytics` (`daily_total`, `daily_source`, `daily_place`, …), written by
+  `analytics` (`daily_total`, `daily_type`, `daily_source`, `daily_place`, …), written by
   `roll_up_analytics(day)`. A day in `analytics.rolled_days` is authoritative: readers use
   its tallies and ignore its raw rows. The last two complete days are re-rolled nightly;
   a pruned day (`pruned_at`) is never re-rolled.
+  Every reader's window is whole UTC days, so an answer never moves when a day is rolled.
 - **Raw window** — 90 days of raw `analytics_events` rows; `prune_analytics` deletes
   older rows only for rolled days, in whole UTC days. The schema is not exposed through
   PostgREST; the six `analytics_*` readers in `public` are the only way in.

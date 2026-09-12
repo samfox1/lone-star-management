@@ -78,6 +78,8 @@ step 5, then is DROPPED (not merely revoked): one door, one name.
 `visitors int` (count distinct visitor on that day), `security invoker`, owner-read RLS
 like `analytics_events`:
 
+- `analytics.daily_type (artist_id, day, type, count)` — every non-bot event, entity or
+  not; the only tally `analytics_summary` can be rebuilt from (`20260912120000`)
 - `analytics.daily_source (artist_id, day, source, referrer_host, views, visitors)`
 - `analytics.daily_place (artist_id, day, country, region, city, views, visitors)`
 - `analytics.daily_device (artist_id, day, device, browser, views, visitors)`
@@ -208,10 +210,14 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
    DEPLOYED function).
    Contract: `POST { slug, type, url, referrer, entity? }` → 204 / 400 / 401 / 429;
    `url` = `location.href`, everything else is derived at the door.
-4. **Roll-up schedule** — PREREQUISITE: `analytics_summary`, `analytics_daily`,
-   `analytics_by_entity`, `analytics_entity_daily` must read `daily_total` / `daily_entity`
-   for days past the raw window BEFORE prune is scheduled, or any window > 90 days
-   undercounts (ADR 0012 consequences). Then try `pg_cron`; else the opportunistic path. Test: plant raw rows for a
+4. **Roll-up schedule.** ✅ PREREQUISITE DONE (2026-09-12, `20260912120000`): all four older
+   readers now use tallies for rolled days and raw for the rest, in whole UTC days on both
+   sides so an answer never moves when a day is rolled. It needed a NEW tally,
+   `analytics.daily_type` (artist, day, type, count): `daily_total` holds views only and
+   `daily_entity` needs an entity, so an entity-less `play` or `ticket_click` — 265 of them
+   in the last 90 days — sat in no tally at all. Pinned by
+   `tests/integration/analytics/reader-parity.test.ts` (raw → rolled → pruned, same answer;
+   3 live mutants killed). REMAINING: try `pg_cron`; else the opportunistic path. Test: plant raw rows for a
    day, run `roll_up_analytics`, assert tallies; run it twice, assert no doubling; prune
    with an un-rolled day, assert it is kept.
 5. **Bridge + cut-over** — `@samfox1/site-bridge/analytics`; the template site and Skeen
@@ -252,6 +258,9 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 
 ## Status / lessons
 
+- 2026-09-12: step 4's prerequisite done — the four older readers read tallies; windows are
+  whole UTC days on both sides (a tally is day-granular, so anything else would move an
+  answer at roll-up). Prune is now safe to schedule.
 - 2026-09-11 (later): step 3 done and reviewed — door redeployed with the review fixes
   (/64 keys, per-(site, IP) cap, lookup budget, salt guard, Origin/page check, shared
   helpers, runbook); unit 42 + e2e 14; `npm run audit:grants` clean.

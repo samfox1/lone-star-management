@@ -55,6 +55,12 @@ const byPath = async (path: string) => {
   const { data } = await svc.from('analytics_events').select('*').eq('artist_id', artistF).eq('path', path)
   return data ?? []
 }
+/** Post and require it to have been recorded, so a refusal fails HERE, naming itself. */
+async function postOk(body: unknown, opts: Parameters<typeof post>[1] = {}) {
+  const res = await post(body, opts)
+  expect(res.status, `expected the door to record this event, got ${res.status}`).toBe(204)
+  return res
+}
 const entity = (label: string, kind = 'tour_date') => ({ kind, id: crypto.randomUUID(), label })
 const view = (label: string, extra: Record<string, unknown> = {}) => ({ slug: slugF, type: 'view', url: `${SITE}/`, referrer: '', entity: entity(label, 'link'), ...extra })
 
@@ -115,9 +121,9 @@ describe('the deployed door records', () => {
     const a = `vh-${crypto.randomUUID()}`
     const b = `vh-${crypto.randomUUID()}`
     const c = `vh-${crypto.randomUUID()}`
-    await post(view(a))
-    await post(view(b))
-    await post(view(c), { ua: SAFARI_UA })
+    await postOk(view(a))
+    await postOk(view(b))
+    await postOk(view(c), { ua: SAFARI_UA })
     if (new Date().toISOString().slice(0, 10) !== day) return // crossed UTC midnight mid-test: the hash legitimately rotated
     const [ra, rb, rc] = await Promise.all([a, b, c].map(byTarget))
     expect(ra[0].visitor_hash).toBe(rb[0].visitor_hash)
@@ -127,11 +133,11 @@ describe('the deployed door records', () => {
 
   it('a same-site referrer is direct; a crawler UA is a bot row', async () => {
     const a = `direct-${crypto.randomUUID()}`
-    await post(view(a, { url: `${SITE}/about`, referrer: `${SITE}/` }))
+    await postOk(view(a, { url: `${SITE}/about`, referrer: `${SITE}/` }))
     expect((await byTarget(a))[0]).toMatchObject({ referrer_host: null, source: 'direct', is_bot: false })
 
     const b = `bot-${crypto.randomUUID()}`
-    await post(view(b), { ua: BOT_UA })
+    await postOk(view(b), { ua: BOT_UA })
     expect((await byTarget(b))[0]).toMatchObject({ is_bot: true, source: 'direct' })
   })
 
@@ -228,28 +234,35 @@ describe('the helper RPCs', () => {
 
 describe('the per-(site, IP) cap through the deployed door — LAST, it spends this runner\'s budget', () => {
   it('CRITICAL: within one minute the 61st request from one address to one site is a 429 with Retry-After and CORS', async () => {
-    // A second throwaway slug: the cap is per (site, IP), so the tests above are untouched
-    // and a rerun of this file inside the same minute is not starved by this one.
+    // A fresh throwaway slug: the cap is per (site, IP), so the tests above are untouched and
+    // a rerun of this file inside the same minute is not starved by this one.
     const slugCap = `t-cap-${crypto.randomUUID().slice(0, 8)}`
     const { data: cap } = await svc.from('artists').insert({ slug: slugCap, name: 'Cap throwaway' }).select('id').single()
+    const site = `https://${slugCap}.example`
     try {
-      const site = `https://${slugCap}.example`
-      const body = (i: number) => ({ slug: slugCap, type: 'view', url: `${site}/cap-${i}`, referrer: '' })
-      const statuses: number[] = []
-      for (let i = 0; i < 64; i++) {
-        const r = await post(body(i), { origin: site, slug: slugCap })
-        statuses.push(r.status)
-        if (r.status === 429) {
-          expect(r.headers.get('retry-after')).toBe('60')
-          expect(r.headers.get('access-control-allow-origin')).toBe(site)
-          expect(await r.json()).toEqual({ ok: false, error: 'rate_limited' })
-          break
-        }
+      // CONCURRENTLY, in one shot. The ledger key is date_trunc('minute'), so 61 requests
+      // spread over ~13 seconds could straddle a minute boundary, reset the counter and
+      // never trip the cap — which is how this test first flaked. A burst lands inside one
+      // minute; `minute` before and after proves it, and a straddle retries instead of
+      // failing for the wrong reason.
+      const minute = () => new Date().toISOString().slice(0, 16)
+      let responses: Response[] = []
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const before = minute()
+        responses = await Promise.all(
+          Array.from({ length: 61 }, (_, i) => post({ slug: slugCap, type: 'view', url: `${site}/cap-${attempt}-${i}`, referrer: '' }, { origin: site })),
+        )
+        if (minute() === before) break
+        responses = [] // the burst straddled a minute; the counter restarted, so try again
       }
-      const accepted = statuses.filter((s) => s === 204).length
-      expect(statuses.at(-1)).toBe(429)
-      expect(accepted).toBeLessThanOrEqual(60)
-      expect(accepted).toBeGreaterThanOrEqual(55) // the minute may have started before this test
+      const statuses = responses.map((r) => r.status)
+      expect(statuses, 'every burst straddled a minute boundary').not.toEqual([])
+      expect(statuses.filter((s) => s === 204)).toHaveLength(60)
+      const refused = responses.filter((r) => r.status === 429)
+      expect(refused).toHaveLength(1)
+      expect(refused[0].headers.get('retry-after')).toBe('60')
+      expect(refused[0].headers.get('access-control-allow-origin')).toBe(site)
+      expect(await refused[0].json()).toEqual({ ok: false, error: 'rate_limited' })
     } finally {
       await svc.from('artists').delete().eq('id', (cap as { id: string }).id)
     }

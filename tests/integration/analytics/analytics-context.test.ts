@@ -351,10 +351,11 @@ describe('roll-up: tallies answer exactly what raw answered, then raw can go', (
     expect(await rowsLeft([keptRow])).toBe(1) // un-rolled day, past the window: kept
     await expectAllReaders(svc) // the page still has every number
 
-    // Honest gap: the per-entity readers still read raw only, so the pruned click is gone
-    // from them until step 6 points them at analytics.daily_entity (which holds it).
+    // The per-entity readers survive prune too, since 20260912120000 pointed them at
+    // analytics.daily_entity for rolled days (this assertion used to record the opposite as
+    // an honest gap — step 4's prerequisite closed it).
     const { data: byEntity } = await svc.rpc('analytics_by_entity', { p_artist_id: artistF, p_since: at(ROLLED_DAY, 0) })
-    expect((byEntity as { entity_id: string; type: string }[]).some((r) => r.entity_id === entityE && r.type === ticket)).toBe(false)
+    expect((byEntity as { entity_id: string; type: string }[]).some((r) => r.entity_id === entityE && r.type === ticket)).toBe(true)
   })
 
   it('CRITICAL: re-rolling a pruned day keeps its tallies instead of rebuilding them from nothing', async () => {

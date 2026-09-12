@@ -1,6 +1,8 @@
 # 0012 — Analytics: one schema per subject, tallied daily, bots flagged not counted
 
-Status: Accepted (2026-09-11; migrations `20260911170000` → `20260911180000`). Extends 0001; the door half extends 0010.
+Status: Accepted (2026-09-11; migrations `20260911170000` → `20260911180000`, extended by
+`20260911190000`/`200000` for the door's RPCs and `20260912120000` for `daily_type`).
+Extends 0001; the door half extends 0010.
 
 ## Context
 
@@ -27,7 +29,7 @@ Three questions had a considered alternative and settled the shape of everything
   migration N times, make roster-wide questions N queries, and cost per project. The
   hierarchy is real; it is enforced by the database, not by folders.
 - **Grouping is by SUBJECT: the new analytics tables live in schema `analytics`**
-  (`daily_total`, `daily_source`, `daily_place`, `daily_device`, `daily_path`,
+  (`daily_total`, `daily_type`, `daily_source`, `daily_place`, `daily_device`, `daily_path`,
   `daily_campaign`, `daily_entity`, `rolled_days`, `geo_cache`, `event_attempts`).
   The schema is **not exposed through PostgREST**: `db.schemas` is unchanged, `anon` has
   no `usage`, and the only way in is the `public` RPCs. That is defence in depth (a
@@ -62,11 +64,14 @@ Three questions had a considered alternative and settled the shape of everything
   dimension means a new tally table, a new branch in the roll-up, and a new reader; the
   test suite asserts tally state THROUGH the readers, because nothing else can reach the
   schema.
-- The per-entity readers (`analytics_by_entity`, `analytics_entity_daily`) and the
-  artist-wide `analytics_summary` / `analytics_daily` still read raw only. **Prune must
-  not be scheduled until they read `daily_entity` / `daily_total` for days past the raw
-  window**, or any window longer than 90 days undercounts. ANALYTICS_PAGE_PLAN.md step 4
-  carries this as a hard prerequisite.
+- ~~The per-entity and artist-wide readers still read raw only.~~ DISCHARGED 2026-09-12
+  (`20260912120000`): all four use tallies for rolled days and raw for the rest. It needed a
+  new tally, `analytics.daily_type`, because an event that is neither a view nor
+  entity-attributed appeared in no tally at all. **Every reader's window is whole UTC days,
+  on both halves** — a tally is day-granular, so honouring an exact `p_since` on the raw
+  half alone would make the same query answer differently once a day was rolled up. A day
+  already stamped `pruned_at` cannot be rebuilt and is simply absent from the per-type
+  tally; only test fixtures have ever been pruned.
 - The `rolled_days` ledger is load-bearing for BOTH halves of every reader. Its policy is
   `using (true)` (it names no artist). Tighten it and managers' numbers vanish rather
   than double — the failure mode chosen on purpose; the positive-manager test in
