@@ -76,6 +76,56 @@ Nothing since 0.36.0.
 
 ---
 
+## 0.37.0 — one way to report what a fan did
+
+**What it adds.** `@samfox1/site-bridge/analytics`: `createAnalytics({ supabaseUrl, anonKey,
+slug })` returning `pageview()`, `track(type, { entity?, label? })`, and `attrs()` +
+`listen(document)` for server-rendered elements that should stay server-rendered. It posts
+to lone-star's `/functions/v1/event` door, which derives the page, the referrer and source,
+the location, the device, whether the caller is a crawler, and a visitor hash that rotates
+daily. A site sends four facts; everything else is the door's job.
+
+**Why.** Every site hand-rolled its own reporting, and the results diverged without anyone
+noticing: skeen has been sending page views, ticket clicks and buy clicks and NOTHING else
+for months, so its songs, videos and social links look like content no fan ever touched. A
+missing event is indistinguishable from a fan who never clicked, which is why this went
+unseen. One helper makes a site's coverage something `checkContract` can check.
+
+**Two details that matter more than they look.**
+- `keepalive` is set on every send. A plain fetch started by a click on an outbound link is
+  cancelled the moment the browser leaves the page — which silently loses exactly the ticket
+  and buy clicks worth the most.
+- `label` rides alongside `entity`, and either may be absent. Plenty of real fan actions have
+  no row to point at: a social icon, a mailto, a checkout button. Without a label they arrive
+  as anonymous `link_click`s among hundreds.
+
+**site action: adopt to report anything.** A site on an older bridge keeps whatever it
+hand-rolled; nothing breaks. To adopt:
+
+```ts
+const analytics = createAnalytics({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  slug: process.env.NEXT_PUBLIC_ARTIST_SLUG,
+})
+analytics.pageview()                 // on mount
+return analytics.listen(document)    // one delegated listener for every attrs() element
+analytics.track('play', { entity: { kind: 'track', id: track.id, label: track.title } })
+analytics.track('link_click', { label: 'TikTok' })   // no row to point at
+```
+
+**Three things that will reject you.** `entity.id` must be a real UUID — a slug, a handle or
+a lower-cased label is a `400 bad_entity`. The page URL you send must live on the request's
+`Origin`, or it is a `403`. And the door caps one address at 60 events a minute per site,
+answering `429` with `Retry-After`.
+
+**If you set `data-*` by hand, don't.** Use `attrs()`. The names are `data-track`,
+`data-entity-kind`, `data-entity-id`, `data-label` — the last two of those are renames from
+the template site's older private seam (`data-entity-type`, `data-target`), which no
+published bridge ever exposed.
+
+---
+
 ## 0.36.0 — `checkContract` catches a key used twice
 
 **What it adds.** One new finding, `duplicate-key`: a key declared twice in the same list

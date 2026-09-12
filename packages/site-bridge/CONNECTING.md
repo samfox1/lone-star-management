@@ -503,6 +503,56 @@ handle.current.pageChanged(current)
   browse, set state, and call `pageChanged` — otherwise the click navigates the iframe and
   the bridge goes with it.
 
+## 12. Report what a fan did (0.37.0)
+
+A connected site tells us four facts; the door works out the rest. Import
+`createAnalytics` from `@samfox1/site-bridge/analytics`, mount it once on the public site,
+and never on `/edit`.
+
+```ts
+const analytics = createAnalytics({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  slug: process.env.NEXT_PUBLIC_ARTIST_SLUG,
+})
+analytics.pageview()                 // on mount
+return analytics.listen(document)    // one delegated listener, returns its own cleanup
+```
+
+Then report each action, either by handler or by attribute:
+
+```tsx
+analytics.track('play', { entity: { kind: 'track', id: track.id, label: track.title } })
+analytics.track('link_click', { label: 'TikTok' })          // nothing in the database to point at
+<a {...analytics.attrs('ticket_click', { entity: { kind: 'tour_date', id: show.id, label: show.venue } })} href={show.ticketUrl}>
+```
+
+**What the door derives, so you never send it:** the page path, the UTM tags, where the fan
+came from, their country and city, their device and browser, whether they are a crawler, and
+a visitor hash that rotates at UTC midnight. It also knows your site's own host from the URL
+you send, so a fan moving between your own pages reads as `direct` rather than as traffic
+from yourself.
+
+**The six events**, and what each means on the artist's page: `view` (a page loaded),
+`play` (a song started), `link_click` (any outbound or in-page link, including socials),
+`ticket_click`, `buy_click`, `video_click`.
+
+**Attribute a click whenever you hold the row.** `entity.id` must be a real UUID from the
+published payload — a slug, a Shopify handle, or a lower-cased label is a `400 bad_entity`.
+Where a site groups content of its own accord (a cover-art release built from loose songs,
+say) the group has no id in our database: attribute to a song that does. Where nothing has
+an id, send a `label` instead; a named click beats an anonymous one.
+
+**What will turn you away.** The page URL you send must live on the request's `Origin`
+(`403`), the body must be under 8 KB (`413`), and one address gets 60 events a minute per
+site (`429`, with `Retry-After`). Every send is fire-and-forget: a refusal never reaches the
+fan and never blocks navigation.
+
+**Coverage is not machine-checked yet.** `checkContract` cannot see which of your elements
+report, so a song grid that reports nothing looks exactly like a song grid nobody clicked.
+Until it can, the rule is: every element a fan can click to reach music, a video, a ticket, a
+product, or another platform reports something.
+
 ## Known rough edges
 
 Written down so nobody rediscovers them.
