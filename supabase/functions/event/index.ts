@@ -13,8 +13,10 @@
  * Keep it that way. Runbook: docs/event-endpoint.md.
  *
  * Contract (the bridge's `track()` speaks it; CONNECTING.md carries it from step 5):
- *   body  { slug, type, url, referrer, entity?: { kind, id, label? } }
+ *   body  { slug, type, url, referrer, entity?: { kind, id, label? }, label? }
  *         url = location.href (path, UTM and the site host are derived from it)
+ *         label names what was clicked when there is no row to point at (a social icon, a
+ *         mailto, a checkout button); it falls back to the entity's own label
  *   204   recorded — or deliberately not (edit shell, unknown slug, per-artist cap): the
  *         browser cannot tell, and there is nothing useful for it to do with the difference
  *   400   { ok: false, error: "missing_field" | "bad_type" | "bad_entity" }
@@ -168,7 +170,7 @@ Deno.serve(async (req: Request) => {
     await rpc('record_site_event', {
       p_slug: body.slug,
       p_type: body.type,
-      p_target: body.entity?.label ?? null,
+      p_target: body.label,
       p_entity_id: body.entity?.id ?? null,
       p_entity_type: body.entity?.kind ?? null,
       p_path: path,

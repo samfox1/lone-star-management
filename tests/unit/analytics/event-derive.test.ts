@@ -55,9 +55,24 @@ describe('the pinned registries mirror their originals', () => {
 
 describe('validateEvent', () => {
   const ok = { slug: 'skeen', type: 'view', url: 'https://skeenmusic.com/?utm_source=ig', referrer: '' }
-  it('accepts the minimal body and defaults referrer + entity', () => {
+  it('accepts the minimal body and defaults referrer, entity and label', () => {
     const v = validateEvent({ slug: 'skeen', type: 'view', url: 'https://skeenmusic.com/' })
-    expect(v).toEqual({ kind: 'ok', value: { slug: 'skeen', type: 'view', url: 'https://skeenmusic.com/', referrer: '', entity: null } })
+    expect(v).toEqual({ kind: 'ok', value: { slug: 'skeen', type: 'view', url: 'https://skeenmusic.com/', referrer: '', entity: null, label: null } })
+  })
+
+  it('CRITICAL: a label survives without an entity — a social icon or a checkout button has no row to point at', () => {
+    const v = validateEvent({ slug: 'skeen', type: 'link_click', url: 'https://skeenmusic.com/', label: 'TikTok' })
+    expect(v).toMatchObject({ kind: 'ok', value: { label: 'TikTok', entity: null } })
+    // An entity's own label is the fallback, so a caller holding a row never repeats its title…
+    const id = crypto.randomUUID()
+    expect(validateEvent({ slug: 'skeen', type: 'play', url: 'https://skeenmusic.com/', entity: { kind: 'track', id, label: 'Navy Pier' } }))
+      .toMatchObject({ value: { label: 'Navy Pier' } })
+    // …and an explicit label wins over it.
+    expect(validateEvent({ slug: 'skeen', type: 'play', url: 'https://skeenmusic.com/', label: 'shuffle', entity: { kind: 'track', id, label: 'Navy Pier' } }))
+      .toMatchObject({ value: { label: 'shuffle' } })
+    // Junk and over-long labels are dropped, never stored.
+    expect(validateEvent({ slug: 'skeen', type: 'view', url: 'https://skeenmusic.com/', label: 7 })).toMatchObject({ value: { label: null } })
+    expect(validateEvent({ slug: 'skeen', type: 'view', url: 'https://skeenmusic.com/', label: 'x'.repeat(201) })).toMatchObject({ value: { label: null } })
   })
   it('rejects a missing slug or url, a non-object, and an off-list type', () => {
     expect(validateEvent(null)).toEqual({ kind: 'error', error: 'missing_field' })

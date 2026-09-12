@@ -25,29 +25,15 @@ export type EntityKind = (typeof ENTITY_KINDS)[number]
  *  name / item title we store as `target` for readability). */
 export type TrackedEntity = { kind: EntityKind; id: string; label?: string }
 
-type TrackAttrs = {
-  'data-track': OnSiteEvent
-  'data-target'?: string
-  'data-entity-id'?: string
-  'data-entity-type'?: EntityKind
-}
-
 /**
- * The typed emitter seam. Spread the result onto a public-site element and its click
- * (or, for `view`, mount) records the event. Passing an `entity` attributes the event
- * to a specific content row — you can't forget an attribute or use an off-allowlist
- * type, which is exactly what used to break silently across the hand-written emitters.
+ * The typed emitter seam, re-exported from the bridge so the DECLARATION and the LISTENER
+ * cannot drift: `@samfox1/site-bridge/analytics` writes these attributes and its delegated
+ * listener is the only thing that reads them. Spread the result onto a public-site element
+ * and its click reports.
+ *
+ * Pass an `entity` to attribute the click to a content row, a `label` to name a click with
+ * no row behind it (a mailto, a social icon), or both. You cannot forget an attribute or
+ * use an off-allowlist type, which is exactly what used to break silently across the
+ * hand-written emitters.
  */
-export function trackAttrs(
-  event: OnSiteEvent,
-  opts: { entity?: TrackedEntity; label?: string } = {},
-): TrackAttrs {
-  const attrs: TrackAttrs = { 'data-track': event }
-  const label = opts.label ?? opts.entity?.label
-  if (label) attrs['data-target'] = label
-  if (opts.entity) {
-    attrs['data-entity-id'] = opts.entity.id
-    attrs['data-entity-type'] = opts.entity.kind
-  }
-  return attrs
-}
+export { trackAttrs, type TrackAttrs, type TrackOptions } from '@samfox1/site-bridge/analytics'

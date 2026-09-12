@@ -10,25 +10,31 @@ import { trackAttrs } from '@/lib/events'
 import { metricValue, metricLabel, type EntityCounts } from '@/lib/analytics'
 
 describe('trackAttrs (event emission seam)', () => {
-  it('attributes an event to an entity with all four data-attributes', () => {
+  // Re-exported from @samfox1/site-bridge/analytics since 2026-09-12, so the attributes an
+  // emitter WRITES and the delegated listener that READS them cannot drift apart. The
+  // names changed with the move: `data-target` → `data-label` (target is the database
+  // column, not what the site is declaring) and `data-entity-type` → `data-entity-kind`
+  // (matching the `kind` field it carries). Every emitter goes through this function, so
+  // nothing hand-writes the old names. Full rules: tests/unit/analytics/site-bridge-analytics.test.ts.
+  it('attributes an event to an entity, lifting its label to the top level', () => {
     expect(trackAttrs('buy_click', { entity: { kind: 'merch', id: 'm1', label: 'Tee' } })).toEqual({
       'data-track': 'buy_click',
-      'data-target': 'Tee',
+      'data-label': 'Tee',
       'data-entity-id': 'm1',
-      'data-entity-type': 'merch',
+      'data-entity-kind': 'merch',
     })
   })
 
-  it('emits just the event (+ optional label) when there is no entity', () => {
+  it('emits just the event, or the event and a label when there is no row to point at', () => {
     expect(trackAttrs('view')).toEqual({ 'data-track': 'view' })
-    expect(trackAttrs('link_click', { label: 'booking' })).toEqual({ 'data-track': 'link_click', 'data-target': 'booking' })
+    expect(trackAttrs('link_click', { label: 'booking' })).toEqual({ 'data-track': 'link_click', 'data-label': 'booking' })
   })
 
-  it('omits data-target when the entity has no label', () => {
+  it('omits the label when the entity has none', () => {
     expect(trackAttrs('play', { entity: { kind: 'track', id: 't1' } })).toEqual({
       'data-track': 'play',
       'data-entity-id': 't1',
-      'data-entity-type': 'track',
+      'data-entity-kind': 'track',
     })
   })
 })

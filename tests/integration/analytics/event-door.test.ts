@@ -107,6 +107,14 @@ describe('the deployed door records', () => {
     expect(row.visitor_hash).toMatch(/^[0-9a-f]{32}$/)
   })
 
+  it('CRITICAL: a label with no entity is kept — a social icon or checkout button has no row to point at', async () => {
+    const path = `/l-${crypto.randomUUID().slice(0, 8)}`
+    await postOk({ slug: slugF, type: 'link_click', url: `${SITE}${path}`, referrer: '', label: 'TikTok' })
+    const rows = await byPath(path)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ type: 'link_click', target: 'TikTok', entity_id: null, entity_type: null })
+  })
+
   it('CRITICAL: a plain page view with no entity — the most common event — lands with the three entity columns null', async () => {
     const path = `/p-${crypto.randomUUID().slice(0, 8)}`
     const res = await post({ slug: slugF, type: 'view', url: `${SITE}${path}`, referrer: 'https://news.ycombinator.com/' })

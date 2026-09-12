@@ -32,6 +32,14 @@ export type EventBody = {
   /** document.referrer, or '' */
   referrer: string
   entity: { kind: EntityKind; id: string; label?: string } | null
+  /**
+   * A human name for what was clicked, when there is no row to point at: "TikTok",
+   * "community_signup", "cart_checkout". Plenty of real fan actions have no id — a social
+   * icon, a mailto, a checkout button — and without this they would arrive as an anonymous
+   * `link_click` among hundreds of others. Stored as `analytics_events.target`, which is
+   * what an entity's own label has always been stored as too.
+   */
+  label: string | null
 }
 
 export type Validated = { kind: 'ok'; value: EventBody } | { kind: 'error'; error: 'missing_field' | 'bad_type' | 'bad_entity' }
@@ -56,7 +64,10 @@ export function validateEvent(raw: unknown): Validated {
     }
     entity = { kind: e.kind as EntityKind, id: String(e.id).toLowerCase(), ...(str(e.label, 200) ? { label: str(e.label, 200)! } : {}) }
   }
-  return { kind: 'ok', value: { slug, type: r.type as EventType, url, referrer, entity } }
+  // An explicit label wins over the entity's own; an entity's label is the fallback so a
+  // caller that has a row never has to repeat its title.
+  const label = str(r.label, 200) ?? entity?.label ?? null
+  return { kind: 'ok', value: { slug, type: r.type as EventType, url, referrer, entity, label } }
 }
 
 /** Requests above this are not analytics beacons. Checked on Content-Length before parsing. */
