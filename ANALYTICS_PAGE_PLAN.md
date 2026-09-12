@@ -231,11 +231,45 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
    - Verified on REAL data: backfilled 72 days and skeen's `analytics_summary`,
      `analytics_daily` and `analytics_by_entity` answers were byte-identical before and
      after. Nothing is deleted yet — the oldest real row is 73 days old, inside the window.
-5. **Bridge + cut-over** — `@samfox1/site-bridge/analytics`; the template site and Skeen
-   move to it (Skeen: pageview, ticket, buy, PLUS play, video, social); publish the bridge;
-   redeploy sites without build cache (memory: bridge deploy cache gotcha); THEN DROP
-   `record_event` and remove it from `scripts/audit-grants.ts`. Test: a call to the old
-   name fails to resolve (PGRST202) — and `npm run audit:grants` stays clean.
+5. **Bridge + cut-over.** Built 2026-09-12, NOT yet live.
+   - ✅ `@samfox1/site-bridge/analytics` published as **0.37.0** (CHANGELOG + CONNECTING §12).
+     `createAnalytics` → `pageview()`, `track(type, { entity?, label? })`, `attrs()` +
+     `listen()`. `keepalive` on every send, or a click on an outbound link is cancelled by
+     the navigation it caused.
+   - ✅ The door gained a top-level `label` — a gap in step 3, not a feature: a click with no
+     row behind it (a social icon, a mailto, a checkout button) had nowhere to put its name.
+   - ✅ Template site moved over; `trackAttrs` re-exports the bridge's, so the attributes a
+     site writes and the listener that reads them cannot drift. Attribute names changed with
+     the move (`data-target` → `data-label`, `data-entity-type` → `data-entity-kind`).
+   - ✅ Skeen moved over and INSTRUMENTED (`901381c`, local): every merch card, add-to-cart,
+     buy-on-store, the tour MAP's ticket links and the hero's social icons were silent;
+     ticket clicks and song link-outs named only a city or a platform. All now carry the
+     published row's UUID. `components/reporting.test.tsx` pins it (3 of 4 go red when
+     reverted). Verified live against the deployed door from skeen's production origin: a
+     play attributed to a real song id, source `instagram`, device and browser derived.
+   - ⏸ **NEEDS A YES: push skeen** (2 commits: this and the Search Console hook). Push =
+     deploy. Redeploy WITHOUT build cache — a cached build ships the old bridge and the new
+     module simply is not there.
+   - ⏸ **THEN** drop `record_event`: a migration, `scripts/audit-grants.ts` line 28, and
+     three suites that call it (`analytics.test.ts` 12 sites, `analytics-rate-limit.test.ts`
+     — it tests the OLD per-artist cap, the door's is per-(site, IP) — and
+     `analytics.isolation.test.ts`, whose premise "record_event is the sole ingest path"
+     becomes false). Do NOT drop before skeen is live on the door.
+
+   **Judgement calls, so they are not re-litigated as bugs.** Skeen's music covers and
+   tracklist rows stay unreported: they open a modal, and counting them would inflate
+   "listens", which is plays + link-outs. The listen is the link-out, and it now carries the
+   SONG's id — never the release's, since a release grouped from loose songs by cover art
+   carries that cover's URL as its id, which is not a UUID. Socials send a label and no
+   entity because `mapConfig` flattens links to label and href.
+
+   **Known gap, needs a decision (not a wiring fix): skeen's video tiles.** A click inside a
+   YouTube iframe belongs to the embedded document and never reaches the page — the same
+   reason the edit-mode shield exists. Measuring it needs either a click-to-load facade (the
+   template site's approach; changes how a video behaves) or the YouTube JS API
+   (`enablejsapi=1` + a postMessage listener; no visual change, more code). Until then video
+   is the one content type with no signal from skeen.
+
 6. **Page** — the four blocks on the read RPCs from step 2. **Sequencing note (2026-09-12):**
    the readers work, but skeen's 1,204 views in the last 30 days carry NO source, NO
    location and NO visitor hash, because skeen still posts to the old `record_event` door.
@@ -274,6 +308,9 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 
 ## Status / lessons
 
+- 2026-09-12 (later): step 5 BUILT — bridge 0.37.0 published, template site moved, skeen
+  moved + instrumented and verified live. Waiting on a yes to push skeen; the `record_event`
+  drop follows that push, never before it.
 - 2026-09-12: step 4 DONE — readers on tallies, and the roll-up + prune run nightly on
   pg_cron with a readout and tests. Next: step 5 (bridge `track()` + cut-over) or step 6
   (the page). Step 6 is now unblocked and is the one Sam asked for first.
