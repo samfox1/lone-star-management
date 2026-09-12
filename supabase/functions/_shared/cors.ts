@@ -33,3 +33,23 @@ export function json(
     headers: { ...corsHeaders(allowOrigin), 'Content-Type': 'application/json', ...extra },
   })
 }
+
+/** Parse a comma-separated origin allowlist secret (trailing slashes and blanks dropped). */
+export function parseAllowedOrigins(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+}
+
+/**
+ * The Access-Control-Allow-Origin to answer with when a door HAS an allowlist: the
+ * caller's origin if it is listed, else the first listed origin (so an unlisted caller's
+ * browser refuses the response), else 'null' (nobody listed → nobody allowed). This is
+ * the /contact semantics; a door that means "any origin" must say so in its own code
+ * (see event/derive.ts reflectOrAllowlisted), never by passing an empty list here.
+ */
+export function pickAllowedOrigin(origin: string | null, allowed: string[]): string {
+  if (origin && allowed.includes(origin)) return origin
+  return allowed[0] ?? 'null'
+}

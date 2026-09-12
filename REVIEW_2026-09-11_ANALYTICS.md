@@ -74,3 +74,91 @@ evidence. Of the new rules this step introduced, three have no test (caps, re-ro
 five raw branches), one test cannot fail, and the fixture guarantees a rising flake
 rate. And one real data-loss path exists (S1). Step 2 is not done until S1–S3 and
 T1–T6 are closed; the rest is a morning of polish and doc hygiene.
+
+---
+
+# Step 3 — the `event` door (reviewed 2026-09-11, evening)
+
+Same three lenses over `supabase/functions/event/{index,derive}.ts`,
+`20260911190000_event_door_rpcs.sql`, the two suites, and the config. Plus two live probes
+against the deployed door: header spoofing (a client-set `cf-connecting-ip` is refused by
+the gateway with 403; spoofed `x-forwarded-for` / `x-real-ip` leave the visitor hash
+unchanged) and the per-IP cap (70 rapid POSTs → 57 × 204, 13 × 429).
+
+## Verified sound (live or by reading)
+
+- `bump_event_attempt` is one row-locked statement returning the post-update count; two
+  concurrent requests get 59 and 60. Grants exactly service_role; `search_path` pinned.
+- `record_site_event` normalises every column, so no client value reaches a CHECK and 500s;
+  `artist_id` always comes from the slug.
+- CORS on every path incl. 429/500, `Vary: Origin`, no credentials, preflight before auth.
+- The IP the door trusts cannot be chosen by the client while the gateway is Cloudflare.
+- `bucketForHost` walks whole labels (`notinstagram.com`, `instagram.com.evil` → other).
+- Nothing raw is stored or logged: no IP, no full UA, no full referrer, no cookies.
+
+## Findings
+
+| # | Sev | Where | Finding | Fix | Status |
+|---|-----|-------|---------|-----|--------|
+| D1 | HIGH | door | Cap + ipinfo budget keyed on the full IP: an IPv6 /64 pool gives a fresh counter per request — cap never trips, one ipinfo call per request, ledger and cache grow a row each. 50k/month quota gone in minutes; location blank for every artist until month end. Prune not yet scheduled. | Normalise IPv6 to /64 before hashing; global lookup budget through the same ledger (`ipinfo:<hour>`, 500/h); validate IP syntax; negative-cache failed lookups. | FIXED |
+| D2 | MED | door | Missing `ANALYTICS_SALT` runs unsalted (`?? ''`): `geo_cache.ip_hash` becomes a 2^32 brute-force away from an IP → city table. Contact has the same gap. | Refuse to start if the salt is shorter than 32 chars. Contact: same, on its next deploy. | FIXED |
+| D3 | MED | door | `x-forwarded-for` fallback is client-controlled (Cloudflare appends; `[0]` is the client's). Dormant while `cf-connecting-ip` is present; if it ever isn't, the attacker picks the hash (cap bypass) and the looked-up IP (geo poisoning). Contact's comment states the trust direction backwards. | No `cf-connecting-ip` → `'unknown'` (one strict shared bucket, no lookup). Note on contact. | FIXED |
+| D4 | MED | door | Any origin can post for any slug. Inflation is design-accepted; the CROWD-OUT is not: one attacker holding an artist's 120/min full drops every real fan event silently. | For browser traffic require the page host (from `url`) to match the `Origin` host; key the per-IP ledger per (slug, ip) so one source can't starve an artist; a per-visitor click dedupe in the readers later. | FIXED (host check); per-visitor dedupe = step 6 |
+| D5 | MED | door | No body size limit before `req.json()`; no negative cache, so while ipinfo is rate-limiting every uncached IP waits 2.5 s on a doomed call. | 413 above 8 KB by `content-length`; cache nulls on failure. | FIXED |
+| D6 | LOW | derive | `isBot` matches `bot` unanchored → Cubot phones are bots forever. `Edg/` misses `EdgA/` / `EdgiOS/`. | Bound the token; add the Edge variants. | FIXED |
+| D7 | LOW | door | ipinfo token in the URL query string; `allowed === false` fails open on null; no `Retry-After` on 429; `console.error` may echo PostgREST `details` (a failing row incl. `visitor_hash`, city). | Bearer header; `!== true`; `Retry-After: 60`; truncate error text. | FIXED |
+| D8 | LOW | derive | `isLookupable` misses `100.64/10`, `::ffff:` mapped, `::`; `referrerHost` treats a public-suffix referrer as same-site; trailing-dot hosts fall to `other`. | Extend; strip the trailing dot in `hostOf`; note the suffix case. | FIXED |
+| D9 | LOW | policy | A static salt lets the OPERATOR link visitor hashes across days; unlinkability holds against outsiders only. The lookup runs before the slug is resolved, so unknown-slug floods still spend quota (bounded by D1's budget). | Document both in the runbook. | DOCUMENTED (docs/event-endpoint.md) |
+| T1 | HIGH | e2e | The door's 429 branch has never fired end to end; only the RPC is tested. `allowed === true`, a dropped `if`, or a dropped `p_limit` all survive. | Last test in the file: 61 POSTs, assert a 429 with body + CORS; header documents the spent budget. | FIXED |
+| T2 | HIGH | unit | The known-answer hash cannot detect the `padStart(2,'')` mutant: no byte in the first 16 of `sha256("salt:1.2.3.4")` is < 0x10. The survivor is still alive. | Inputs with a leading-zero nibble: `ipHash('salt','8.8.8.8')`, `visitorHash('pepper','2026-09-11','1.2.3.4','UA')`, asserted exactly. | FIXED |
+| T3 | HIGH | e2e | The most common event — a `view` with no entity — never goes through the deployed door; `body.entity?.label` regressing to `body.entity.label` (500 on every page view) survives. | One entity-less POST; find by artist + path; assert the three nulls. | FIXED |
+| T4 | MED | e2e | `source: 'instagram'` is satisfied by UTM AND referrer at once; `entity_id` never asserted; visitor hash asserted by shape only; CORS on 400/401 unasserted; 401 body unasserted (a gateway 401 would pass). | Make UTM and referrer disagree; assert `entity_id`; two same-UA POSTs share a hash, a third UA differs; assert CORS + bodies on errors; add 405 + `Vary`. | FIXED |
+| T5 | MED | unit | In-app-before-family order in `parseUa` is unpinned (every in-app fixture lacks `Chrome/`); `BOT_UA` names hand-listed in the test (rule 4). | Android IG UA carrying `Chrome/`; export the bot name list and build the regex from it. | FIXED |
+| T6 | MED | e2e | The geo path (cache hit / miss / ipinfo fail / catch / bots skip) is dead with `IPINFO_TOKEN` unset and lives in untestable `index.ts`; the header claims index.ts is exercised. | Move `locate` into `derive.ts` as `locateWith(deps)` and unit-test the branches with stubs; header lists what remains unpinned. | FIXED |
+| T7 | LOW | unit | `pagePath('foo://host')` kills the `|| '/'` mutant; a test name lies ("robots.txt"); hand-listed hosts at one `it`; mid-file import; describe names narrate the session. | As listed. | FIXED |
+| O1 | HIGH | shared | `pickOrigin` exists twice under one name with OPPOSITE defaults (contact: empty allowlist → deny; event: → reflect). | `_shared/cors.ts` gets contact's `pickAllowedOrigin` + `parseAllowedOrigins`; the door's variant gets a distinct name with its one-line why. Contact behaviour unchanged (validate.ts re-exports). | FIXED |
+| O2 | MED | shared | `hashIp`/`ipHash` identical; `clientIp` vs `firstForwardedIp` NOT identical. | `_shared/hash.ts` (`sha256Hex`, `hashIp`); `_shared/request.ts` (`clientIp`, strict per D3). Contact keeps `firstForwardedIp` with a note — moving it is a deliberate change + redeploy, not a refactor. | FIXED |
+| O3 | MED | plan | The plan makes `derive.ts` the page's source of labels; `src/` importing from `supabase/functions/**` inverts app → lib. | `src/lib/analytics-sources.ts` is canonical (`SOURCES` + labels); `derive.ts` pins a copy; the unit test diffs, like the allowlists. | FIXED |
+| O4 | MED | scripts | `fn:deploy` / `fn:serve` deploy/serve one of two doors; ADR 0010 and the runbook say "`npm run fn:deploy`". | Bare `supabase functions deploy` / `serve` (all doors) + per-door scripts. | FIXED |
+| O5 | MED | docs | Plan drift (24 h vs 2 days, `firstForwardedIp`, a "referer cross-check" never built, `record_event_v2` in step 5, `src/lib/sources.ts`, IPINFO open item, step 3 progress duplicated in Status); CONTEXT.md "the ONE public entry" now false, "step-3 cut-over" is step 5; `.env.example` header says contact only; `index.ts` contract omits 405/500. | Fix each. | FIXED |
+| O6 | MED | docs | No runbook, unlike `docs/contact-endpoint.md`. | `docs/event-endpoint.md`: secrets and their current state, deploy order, curl checklist, abuse controls, never-stored list, the operator-linkability note (D9), cleanup. | FIXED |
+| O7 | LOW | polish | `geo_cache_get/put` are the only noun-first RPCs; tsconfig/eslint list entrypoints one by one; Stryker comment lost a literal dash and lacks the "joined" line; `src/lib/events.ts` header should name both copies and both guards; ratchet `break` only after a real full sweep. | Rename via `alter function … rename to`; globs; comments. | FIXED |
+
+## Stryker survivors on derive.ts, classified (26 at the 93% run)
+
+Killed since the run: `indexOf("")` (whole-label test), `v.trim()` → `v` (whitespace geo).
+Real, still alive: `padStart(2,'')` (T2), `pagePath || ""` (T7).
+Equivalent: `str` length checks (empty string is falsy downstream), `typeof raw !== 'object'`
+(a primitive's `.slug` is undefined), the entity guard variants (null excluded earlier),
+`> 200` vs `>= 200` (slice is identity at 200), `hostOf`/`bucketForHost` null guards
+(`new URL('')` throws; `while ('')` never enters), `dot <= 0` (hostname cannot start with
+`.`), `[0]?.trim()` (split never returns `[]`), `typeof r.country` (regex coerces).
+
+## Resolution (same evening)
+
+`derive.ts` rewritten: IPv6 → /64 keys via `_shared/request.ts` (`clientIp` trusts only
+`cf-connecting-ip`, `normalizeIp`), `_shared/hash.ts` (one SHA-256), `_shared/cors.ts`
+(`parseAllowedOrigins`, `pickAllowedOrigin`; contact re-exports, behaviour unchanged);
+`reflectOrAllowlisted` is the door's distinctly named origin rule; `pageMatchesOrigin`
+(403); `BOT_UA_NAMES` builds the regex (`bot` bounded); `Edg/EdgA/EdgiOS`; `hostOf` strips
+a trailing dot; `isLookupable` covers CGNAT / mapped / zero; `locateWith(deps)` with cache
+→ hourly budget (500) → lookup → negative cache, unit-tested branch by branch. `index.ts`:
+salt guard at load, 413 above 8 KB, per-(site, IP) ledger key, `!== true`, `Retry-After`,
+ipinfo token in a header, truncated error text, 405/500 in the contract. RPCs renamed
+`lookup_geo_cache` / `cache_geo` (`20260911200000`). `src/lib/analytics-sources.ts` is the
+canonical source list; derive pins + diffs. `fn:deploy` deploys every door.
+`docs/event-endpoint.md` written; plan, CONTEXT.md, `.env.example`, `events.ts` header,
+tsconfig/eslint globs, Stryker comment fixed. Suites rewritten: unit 42 (tables entry by
+entry, bot names iterated, known-answer hashes with leading-zero nibbles, in-app-before-
+family, /64 keys, every geo branch), e2e 14 (the 429 end to end on its own slug, the
+entity-less view, UTM vs referrer disagreeing, `entity_id`, hash stability, CORS + bodies
+on 401/400/403/405/413, preflight, helper RPCs). Live: door redeployed, grants audit clean.
+
+## Verdict (at review time)
+
+The door is safe to leave running: the IP cannot be chosen by the client, the caps hold,
+grants are right, nothing raw is stored. What is not yet right is resilience against a
+patient attacker with an IPv6 pool (D1), the silent unsalted mode (D2), and evidence: the
+door's own rate limit, the entity-less page view, and the geo path have never been
+exercised by a test. Fix D1–D5, T1–T6, O1–O4 before calling step 3 done; the rest is a
+morning of hygiene like last time.

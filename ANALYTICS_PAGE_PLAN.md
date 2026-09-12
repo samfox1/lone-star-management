@@ -40,9 +40,11 @@ claude.ai, you.com. This bucket is the one direct GEO signal that costs nothing.
 
 Rules: `utm_source` present → bucket by it (lower-cased, mapped; unknown → `other`).
 Else referrer host → bucket by suffix table. Empty referrer → `direct`. Host stored
-raw either way. The table lives in ONE place (`src/lib/sources.ts`) and is copied into the
-edge function at build (same TS↔Deno duplication as the event allowlist; a test reads
-both and diffs them).
+raw either way. The table lives in ONE place: `supabase/functions/event/derive.ts`
+(`SOURCES`, `bucketForHost`, `sourceFor`) — the function directory cannot import from
+`src/`, but `src/` and the tests CAN import from it (tsconfig includes it, as it does
+`contact/validate.ts`), so the page's labels come from the same list. The event-type and
+entity-kind allowlists are pinned copies of `src/lib/events.ts` and the unit test diffs them.
 
 ## Data model
 
@@ -103,31 +105,39 @@ that straddles the boundary is exact.
 
 ## The door: `supabase/functions/event`
 
-Thin, like `contact`. Copies its shape: `_shared/cors.ts` allowlist from
-`EVENT_ALLOWED_ORIGINS`, `firstForwardedIp`, salted hashing (`ANALYTICS_SALT`), service
-key to a service-only RPC, `verify_jwt = false` with the same config.toml note.
+Thin, like `contact`, and sharing its helpers: `_shared/cors.ts` (CORS, origin rules),
+`_shared/hash.ts` (the one SHA-256), `_shared/request.ts` (`clientIp` — the gateway's
+`cf-connecting-ip` only — and `normalizeIp`, IPv6 → /64). Salted hashing with
+`ANALYTICS_SALT` (refuses to start below 32 chars), service key to service-only RPCs,
+`verify_jwt = false` with the same config.toml note. Runbook: docs/event-endpoint.md.
 
-Request: `POST { slug, type, path, referrer, utm: {source, medium, campaign}, entity?: {kind, id, label} }`.
-Response: `204` always on the happy path; `429` on the per-IP cap; `400` on bad shape.
+Request: `POST { slug, type, url, referrer, entity?: {kind, id, label} }` — `url` is
+`location.href`; path, UTM and the site's own host (for same-site → direct) are derived
+from it, never trusted separately.
+Response: `204` always on the happy path (and for the edit shell, an unknown slug, or a
+per-artist cap — the browser has no use for the difference); `429` on the per-IP cap;
+`400` on bad shape; `401` without the anon key.
 
 Per event it derives, server-side, never trusting the client for any of it:
 
-1. `ip` → per-IP cap (60 / minute, hashed key in a small `event_attempts` ledger like
-   `contact_attempts`, or an in-memory map if the ledger proves noisy) → `visitor` hash.
+1. `ip` (normalised; IPv6 → /64) → per-(site, IP) cap (60 / minute, `bump_event_attempt`
+   on the `analytics.event_attempts` ledger, one statement) → visitor hash.
 2. `user-agent` → `is_bot` (a maintained list: known crawlers, headless, `HeadlessChrome`,
    empty UA) → `device` → `browser`.
-3. `referrer` (the body field, cross-checked against the `referer` header when present)
-   → `referrer_host` → `source`. `utm_source` wins.
+3. `referrer` (the body field) → `referrer_host` (same-site → null) → `source`.
+   `utm_source` wins. The page URL must live on the request's `Origin` host, or 403.
 4. Location. **Probe result (2026-09-11, step 1 DONE):** the gateway is Cloudflare-fronted
    but supplies NO location header. Headers that arrive: `cf-connecting-ip` (the clean
    client IP — prefer it over the first `x-forwarded-for` hop), `x-forwarded-for`,
    `referer`, `user-agent`, `cf-ray`. So country, region and city ALL come from an IP
-   lookup service, cached 24 h in `analytics.geo_cache(ip_hash, country, region, city,
-   fetched_at)`: one outbound call per visitor per day, not one per event. Service:
+   lookup service, cached two days in `analytics.geo_cache(ip_hash, country, region, city,
+   fetched_at)` behind a global budget of 500 lookups an hour: one outbound call per
+   visitor per two days, and a flood of fresh addresses cannot spend the quota. Service:
    ipinfo (free tier 50k lookups / month incl. city; volume today ~1.3k events / month,
    far fewer distinct IPs). Needs `IPINFO_TOKEN` in the function env (Sam creates the
-   account). Location failure never drops the event; the row just has null location.
-5. `record_event_v2(...)`.
+   account; unset today, rows carry no location). Location failure is cached as "no
+   location" and never drops the event.
+5. `record_site_event(...)`.
 
 What it will NOT do: read cookies, set cookies, store the IP, store the full UA, store
 the full referrer URL.
@@ -187,10 +197,17 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 2. ✅ **Schema** (2026-09-11) — `20260911170000/171000/172000/180000`; suite
    `tests/integration/analytics/analytics-context.test.ts` (17, mutation-checked live);
    reviewed in REVIEW_2026-09-11_ANALYTICS.md, all findings closed. Decisions in ADR 0012.
-3. **Door** — the edge function proper; `fn:serve` locally with the same env layout as
-   contact; unit tests for source / device / bot / visitor derivation (pure, DB-free,
-   in `tests/unit/analytics/`); an integration test that posts through the served
-   function and asserts the row STATE via the service client.
+3. ✅ **Door** (2026-09-11) — `supabase/functions/event` deployed. `derive.ts` holds every
+   decision (validation, path, referrer host with same-site → direct, UTM, source bucket,
+   UA → device/browser, bot list, client IP, both hashes, ipinfo shaping) and is in the
+   Stryker `mutate` slice; `index.ts` is plumbing. RPCs `bump_event_attempt` (one-statement
+   per-IP cap, 60/min), `geo_cache_get/put` (`20260911190000`). Secrets: `ANALYTICS_SALT`
+   set; `IPINFO_TOKEN` NOT yet (rows carry no location until Sam sets it; nothing else
+   waits on it). Tests: `tests/unit/analytics/event-derive.test.ts` (43; Stryker 93% on derive.ts, the
+   rest equivalent mutants), `tests/integration/analytics/event-door.test.ts` (8, hits the
+   DEPLOYED function).
+   Contract: `POST { slug, type, url, referrer, entity? }` → 204 / 400 / 401 / 429;
+   `url` = `location.href`, everything else is derived at the door.
 4. **Roll-up schedule** — PREREQUISITE: `analytics_summary`, `analytics_daily`,
    `analytics_by_entity`, `analytics_entity_daily` must read `daily_total` / `daily_entity`
    for days past the raw window BEFORE prune is scheduled, or any window > 90 days
@@ -216,8 +233,9 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
   proving the function exists (a service call succeeds).
 - Bot rows are planted and asserted ABSENT from every read RPC; delete the `is_bot`
   filter once, watch the suite go red, restore.
-- The source table is derived from `src/lib/sources.ts`, never hand-listed in a test; a
-  test diffs the edge copy against it.
+- The source list lives in `src/lib/analytics-sources.ts`; the edge copy is diffed against
+  it. The host/UTM lookup TABLES are checked entry by entry against an independent
+  expected table in the test (the map under test is never its own oracle).
 - Roll-up idempotence: run twice, counts equal.
 - Window straddling: plant rows on both sides of the raw/tally boundary, assert the
   timeline sums both.
@@ -227,13 +245,17 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 ## Open items
 
 - ~~Which location headers the gateway supplies~~ — RESOLVED: none; IP lookup + cache (see door §4).
-- Sam: create an ipinfo account and set `IPINFO_TOKEN` as a function secret before step 3 ships.
+- Sam: create an ipinfo account and set `IPINFO_TOKEN` as a function secret before the page shows places (step 6).
 - Whether `pg_cron` can be enabled on this project (step 4 decides schedule vs opportunistic).
 - Roster-wide sources / places view — after v1 is proven with one artist.
 - Engagement (time on page, scroll depth) — deliberately out of v1.
 
 ## Status / lessons
 
+- 2026-09-11 (later): step 3 done and reviewed — door redeployed with the review fixes
+  (/64 keys, per-(site, IP) cap, lookup budget, salt guard, Origin/page check, shared
+  helpers, runbook); unit 42 + e2e 14; `npm run audit:grants` clean.
+  Next: step 4 prerequisite (old readers onto tallies) or step 5 (bridge + cut-over).
 - 2026-09-11: steps 1–2 done and reviewed. The six page readers were pulled forward from
   step 6 because `analytics.*` is unreachable from tests; they are also where tally state
   is asserted. Two lessons became rules: the grants form (AGENTS.md, `npm run audit:grants`)

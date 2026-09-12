@@ -11,6 +11,7 @@
  * `crypto.subtle` is the one runtime API used, and it is a web standard present in both
  * Deno and Node 20+, so it does not break that rule.
  */
+import { parseAllowedOrigins, pickAllowedOrigin } from '../_shared/cors.ts'
 
 /** Mirrors the CHECK constraint on enquiries.message. */
 export const MESSAGE_MAX = 5000
@@ -96,16 +97,13 @@ export function validateBody(raw: unknown): ValidationResult {
 }
 
 /**
- * The client IP, as far as we can trust it.
+ * The client IP for /contact's rate limit: first `x-forwarded-for` hop, then `x-real-ip`.
  *
- * `x-forwarded-for` is a comma-separated chain and only the FIRST entry is the original
- * client; everything after it was appended by proxies and is trivially forgeable by
- * anyone who sends their own header. Taking the last entry (a common mistake) lets an
- * attacker pick their own rate-limit bucket per request.
- *
- * When no header is present at all we return the literal 'unknown' rather than skipping
- * the limit, so a caller who strips headers lands in ONE shared bucket and gets
- * STRICTER treatment than a normal visitor, not an exemption.
+ * NOTE (2026-09-11): the first XFF hop is the CLIENT-WRITABLE one — Cloudflare appends
+ * to whatever the client sent. The /event door therefore trusts only the gateway's
+ * `cf-connecting-ip` (see _shared/request.ts clientIp). Moving /contact onto that changes
+ * which bucket a request lands in on a deployed door, so it is a deliberate change with
+ * its own redeploy, not a silent refactor. Until then this stays as shipped.
  */
 export function firstForwardedIp(headers: { get(name: string): string | null }): string {
   const fwd = headers.get('x-forwarded-for')
@@ -127,14 +125,7 @@ export function firstForwardedIp(headers: { get(name: string): string | null }):
  * plaintext IP column wearing a disguise. Hashing here rather than in Postgres also
  * means the raw IP never crosses the wire into the database at all.
  */
-export async function hashIp(salt: string, ip: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`${salt}:${ip}`)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, 32)
-}
+export { hashIp } from '../_shared/hash.ts'
 
 /**
  * Strip anything that could break out of an SMTP header. CR and LF are the injection
@@ -177,18 +168,10 @@ export function buildSubject(purpose: Purpose, artistName: string, visitorName: 
  * verified sending domain into our artists' inboxes. The allowlist is the difference
  * between a contact form and an open relay with extra steps.
  */
-export function pickOrigin(origin: string | null, allowed: string[]): string {
-  if (origin && allowed.includes(origin)) return origin
-  return allowed[0] ?? 'null'
-}
+export const pickOrigin = pickAllowedOrigin
 
 /** Parse the comma-separated CONTACT_ALLOWED_ORIGINS secret. */
-export function parseAllowedOrigins(raw: string | undefined): string[] {
-  return (raw ?? '')
-    .split(',')
-    .map((s) => s.trim().replace(/\/$/, ''))
-    .filter(Boolean)
-}
+export { parseAllowedOrigins }
 
 /* ── Demo links and audio attachments ───────────────────────────────────────────── */
 

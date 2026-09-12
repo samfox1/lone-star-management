@@ -395,6 +395,12 @@ deno_version = 2
 [functions.contact]
 verify_jwt = false
 
+# The analytics ingest door (ADR 0010 shape, ADR 0012 data): supabase/functions/event.
+# verify_jwt off for the same preflight reason as contact; the speed bump lives in the
+# handler, the real controls are the per-IP cap and the per-artist caps in record_site_event.
+[functions.event]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

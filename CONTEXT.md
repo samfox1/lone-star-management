@@ -38,8 +38,8 @@ decisions behind them (esp. ADR-0002).
   fans read tenant data (ADR-0001). Each door is a thin **projection** over the
   published state into its output shape (`get_public_site`, `get_release`,
   `get_public_releases`, `audio_path_for_play`).
-- **Edge door** — the ONE public entry that is not a SQL function: the `/contact`
-  Edge Function (ADR-0010). Postgres provably cannot host it — it needs the client IP
+- **Edge door** — one of the TWO public entries that are not SQL functions (`/contact`, `/event`): the `/contact`
+  Edge Function (ADR-0010; since 2026-09-11 the `/event` analytics door is the second, ADR 0012). Postgres provably cannot host it — it needs the client IP
   (per-IP rate limiting) and an outbound call to Resend — so the door moved to the edge
   and the RPC behind it (`submit_enquiry`) is `service_role`-only. "Resolve the tenant
   from the slug, never trust the client" still holds; only the runtime changed.
@@ -149,8 +149,9 @@ decisions behind them (esp. ADR-0002).
   dashboard): a `view` on load, or a `play` / `link_click` / `ticket_click` /
   `buy_click` / `video_click`. Declared through `trackAttrs` (`src/lib/events.ts`) —
   the one typed seam, so an emitter can't forget an attribute or use an off-allowlist
-  type — and ingested by the `record_event` public door (anon, type-allowlisted) until the
-  step-3 cut-over, after which the `event` Edge Function calls `record_site_event`.
+  type — and ingested today by the `record_event` public door (anon, type-allowlisted); the `/event`
+  Edge Function (step 3, deployed) calls `record_site_event` instead and takes over at the
+  step-5 cut-over, when the bridge posts to it and `record_event` is dropped.
   `SiteAnalytics` (`src/components/site-analytics.tsx`) is the delegated listener,
   mounted only on public pages.
 - **Attribution** — the content row an event is about: `entity_id` + `entity_type`
@@ -167,7 +168,7 @@ decisions behind them (esp. ADR-0002).
   `referrer_host` + a **source** bucket (instagram / tiktok / … / `ai` / direct / other;
   `utm_source` wins), the UTM triple, `country` / `region` / `city` (from the IP, best
   effort), `device` / `browser`, a **visitor hash** and **is_bot**. Written only by
-  `record_site_event` (service_role, called by the `event` Edge Function once step 3 ships).
+  `record_site_event` (service_role, called by the `/event` Edge Function).
 - **Visitor hash** — `sha256(salt + UTC date + ip + user-agent)`: one visitor per person
   per day, nothing stored on the device, no banner. "Visitors" over a window = the sum of
   daily distinct hashes. Returning visitors across days are NOT a thing here, by design.

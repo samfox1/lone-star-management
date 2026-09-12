@@ -6,6 +6,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Edge Functions import siblings WITH the .ts extension (Deno requires it). Legal under
+    // noEmit; vitest resolves them too, so the pure modules stay typechecked and tested.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -33,8 +36,8 @@
   ],
   // The Edge Function ENTRYPOINT runs in Deno, not Next: it uses Deno.serve/Deno.env
   // and `./validate.ts`-style extension imports, neither of which typechecks under this
-  // config. Only the entrypoint is excluded — validate.ts and _shared/cors.ts are pure
-  // TS and stay covered here (and validate.ts is additionally pulled in, and therefore
-  // typechecked, via tests/contact-validate.test.ts).
-  "exclude": ["node_modules", "supabase/functions/contact/index.ts"]
+  // config. Only each door's entrypoint is excluded — the pure sibling beside it
+  // (contact/validate.ts, event/derive.ts) and _shared/* stay covered here, and are also
+  // pulled in, and therefore typechecked, by their unit tests under tests/unit/.
+  "exclude": ["node_modules", "supabase/functions/*/index.ts"]
 }
