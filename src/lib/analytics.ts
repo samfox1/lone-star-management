@@ -108,7 +108,51 @@ export type TrafficWindow = {
   sources: SourceRow[]
   places: PlaceRow[]
   devices: DeviceRow[]
+  /** Event type → one count per day, aligned index-for-index with `timeline`.
+   *  Zero-filled for the same reason the timeline is. */
+  byType: Record<string, number[]>
   totals: { views: number; visitors: number; bots: number }
+}
+
+/**
+ * The metrics the overview shows, and where each one comes from.
+ *
+ * This is the registry the page derives from — never a hand-written list at the
+ * call site, because a hand-written list silently omits every metric added after
+ * it. `type` names an `analytics_events.type`; the three without one are counted
+ * differently and come off the timeline (a visitor is a distinct hash, not an
+ * event, and a bot is the thing we refuse to count as either).
+ */
+export const METRICS = [
+  { key: 'views', label: 'Views', type: null },
+  { key: 'visitors', label: 'Visitors', type: null },
+  { key: 'plays', label: 'Plays', type: 'play' },
+  { key: 'link_clicks', label: 'Link clicks', type: 'link_click' },
+  { key: 'ticket_clicks', label: 'Ticket clicks', type: 'ticket_click' },
+  { key: 'buy_clicks', label: 'Buy clicks', type: 'buy_click' },
+  { key: 'bots', label: 'Bots filtered', type: null },
+] as const
+
+export type MetricKey = (typeof METRICS)[number]['key']
+export type Metric = { key: MetricKey; label: string; total: number; series: number[] }
+
+/**
+ * Every metric as a total and a daily series, in registry order.
+ *
+ * The series are what the sparklines draw, so they must be the same length as the
+ * timeline — a shorter one would draw a different window from the chart beside it
+ * and nothing on screen would say so.
+ */
+export function metrics(w: TrafficWindow): Metric[] {
+  const off = (k: 'views' | 'visitors' | 'bots') => w.timeline.map((d) => d[k])
+  const zero = () => w.timeline.map(() => 0)
+  return METRICS.map(({ key, label, type }) => {
+    const series =
+      type === null
+        ? off(key === 'visitors' ? 'visitors' : key === 'bots' ? 'bots' : 'views')
+        : (w.byType[type] ?? zero())
+    return { key, label, total: series.reduce((n, v) => n + v, 0), series }
+  })
 }
 
 const num = (v: unknown) => Number(v ?? 0)
@@ -122,11 +166,12 @@ export async function trafficWindow(
 ): Promise<TrafficWindow> {
   const w = analyticsWindow(days, nowMs)
   const args = { p_artist_id: artistId, p_since: w.since, p_until: w.until }
-  const [timeline, sources, places, devices] = await Promise.all([
+  const [timeline, sources, places, devices, byType] = await Promise.all([
     supabase.rpc('analytics_timeline', args),
     supabase.rpc('analytics_sources', args),
     supabase.rpc('analytics_places', args),
     supabase.rpc('analytics_devices', args),
+    supabase.rpc('analytics_type_timeline', args),
   ])
 
   const byDay = new Map<string, TimelineDay>()
@@ -140,9 +185,23 @@ export async function trafficWindow(
     filled.push(byDay.get(day) ?? { day, views: 0, visitors: 0, bots: 0 })
   }
 
+  // Type → day → count, then flattened onto the SAME day order as `filled`, so a
+  // sparkline and the chart beside it always describe the same window.
+  const typeDays = new Map<string, Map<string, number>>()
+  for (const r of (byType.data ?? []) as Record<string, unknown>[]) {
+    const type = String(r.type ?? '')
+    if (!typeDays.has(type)) typeDays.set(type, new Map())
+    typeDays.get(type)!.set(String(r.day), num(r.count))
+  }
+  const byTypeSeries: Record<string, number[]> = {}
+  for (const [type, days] of typeDays) {
+    byTypeSeries[type] = filled.map((d) => days.get(d.day) ?? 0)
+  }
+
   return {
     window: w,
     timeline: filled,
+    byType: byTypeSeries,
     sources: ((sources.data ?? []) as Record<string, unknown>[]).map((r) => ({
       source: String(r.source ?? ''), referrer_host: String(r.referrer_host ?? ''),
       views: num(r.views), visitors: num(r.visitors),

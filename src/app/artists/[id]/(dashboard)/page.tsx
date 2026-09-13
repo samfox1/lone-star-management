@@ -1,13 +1,14 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { type SectionDiff } from '@/lib/content'
-import { compactNumber, formatTrend, seriesTrend, trendTextClass } from '@/lib/format'
+import { formatTrend, seriesTrend, trendTextClass } from '@/lib/format'
 import { cx } from '@/lib/cx'
 import { TimelineChart } from '@/components/ui/timeline-chart'
 import { BarList } from '@/components/ui/bar-list'
+import { MetricPills } from '@/components/ui/metric-pills'
 import { KLabel, StatusDot } from '@/components/ui/ui'
 import { sourceLabel } from '@/lib/analytics-sources'
-import { reachesBeforeContext, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
 import { DIFF_SECTIONS } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 
@@ -19,13 +20,6 @@ function summarize(d: SectionDiff): string {
   if (d.deleted) parts.push(`${d.deleted} removed`)
   return parts.join(', ')
 }
-
-const KPIS = [
-  { type: 'play', label: 'Plays' },
-  { type: 'link_click', label: 'Link clicks' },
-  { type: 'ticket_click', label: 'Ticket clicks' },
-  { type: 'buy_click', label: 'Buy clicks' },
-] as const
 
 /** Sum rows to one bar per key, carrying the biggest contributor as the sub-label. */
 function rollBars<T>(
@@ -53,12 +47,6 @@ function rollBars<T>(
 
 const DEVICE_LABEL: Record<string, string> = { mobile: 'Phone', tablet: 'Tablet', desktop: 'Desktop' }
 
-// Lifted out of the component body so reading the clock isn't an impure call during
-// render (react-hooks/purity) — the same reason `thirtyDaysAgoIso` used to sit here.
-function windowSince(days: number): string {
-  return new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10)
-}
-
 export default async function OverviewPage({
   params,
   searchParams,
@@ -69,19 +57,19 @@ export default async function OverviewPage({
   const { id } = await params
   const days = windowDays((await searchParams).days)
   const supabase = await createClient()
-  // Independent round-trips — the ownership gate, the dirty-nav diff, the per-type
-  // counts and the whole traffic window — as ONE parallel wave, not a waterfall. The
-  // counts group-by is exact SQL (RLS-scoped), so it never undercounts past
-  // PostgREST's 1000-row cap.
-  const since = windowSince(days)
-  const [, diff, { data: rows }, traffic] = await Promise.all([
+  // Independent round-trips — the ownership gate, the dirty-nav diff and the whole
+  // traffic window — as ONE parallel wave, not a waterfall.
+  //
+  // The separate `analytics_summary` call that used to sit here is gone: every
+  // per-type total now comes off `metrics(traffic)`, which reads the SAME window as
+  // the chart. The old call took a timestamp `p_since` while the rest of the page
+  // counted whole UTC days, so on most days the KPI row and the chart beside it were
+  // describing slightly different slices and nothing on screen said so.
+  const [, diff, traffic] = await Promise.all([
     requireArtist(id),
     dashboardDiff(id),
-    supabase.rpc('analytics_summary', { p_artist_id: id, p_since: since }),
     trafficWindow(supabase, id, days),
   ])
-  const counts: Record<string, number> = {}
-  for (const r of (rows ?? []) as { type: string; count: number }[]) counts[r.type] = Number(r.count)
   const series = traffic.timeline.map((d) => d.views)
   const trend = formatTrend(seriesTrend(series))
   const partial = reachesBeforeContext(traffic.window)
@@ -110,41 +98,23 @@ export default async function OverviewPage({
       </div>
 
       <section>
-        {/* The headline is VIEWS, not visitors, because views are the one figure that
-            runs unbroken across the 2026-09-12 cut-over — every row before it was
-            written without a visitor hash and counts as none. */}
-        <div className="flex items-baseline gap-3 font-space text-[44px] font-bold leading-none tracking-[-0.015em]">
-          {compactNumber(traffic.totals.views)}
-          <span className={cx('text-sm font-bold', trendTextClass(trend.dir))}>{trend.label}</span>
-        </div>
-        <div className="mt-2 font-space text-xs uppercase tracking-[0.1em] text-ink-faint">
-          Site views · last {days} days
+        {/* The overview. Every metric carries its own 30-day shape, because "how big"
+            and "which way" are two different questions and the row of equal tiles
+            this replaces only answered the first.
+
+            Views leads, not visitors, because views are the one figure that runs
+            unbroken across the 2026-09-12 cut-over — every row before it was written
+            without a visitor hash and counts as no one. */}
+        <div className="flex items-baseline gap-3">
+          <span className="font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+            Last {days} days
+          </span>
+          <span className={cx('font-space text-xs font-bold', trendTextClass(trend.dir))}>{trend.label}</span>
         </div>
 
-        <TimelineChart points={traffic.timeline} className="mt-4" height={150} />
+        <MetricPills metrics={metrics(traffic)} className="mt-3" />
 
-        {/* KPI divider row */}
-        <div className="mt-6 flex flex-wrap gap-y-6 border-y border-hairline py-5">
-          {[
-            // Visitors first: one address is one visitor however many times it loads
-            // the page, so it is the figure a flood cannot inflate.
-            { type: 'visitors', label: 'Visitors', value: traffic.totals.visitors },
-            { type: 'bots', label: 'Bots filtered', value: traffic.totals.bots },
-            ...KPIS.map((k) => ({ type: k.type, label: k.label, value: counts[k.type] ?? 0 })),
-          ].map((k) => (
-            <div
-              key={k.type}
-              className="min-w-[110px] flex-1 border-hairline pr-9 [&:not(:last-child)]:mr-9 [&:not(:last-child)]:border-r"
-            >
-              <div className="font-space text-[25px] font-bold tabular-nums tracking-[-0.02em]">
-                {compactNumber(k.value)}
-              </div>
-              <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                {k.label}
-              </div>
-            </div>
-          ))}
-        </div>
+        <TimelineChart points={traffic.timeline} visitorsSince={CONTEXT_SINCE} className="mt-6" />
       </section>
 
       {/* WHERE FROM, WHERE, AND ON WHAT. Three ranked lists rather than three charts:

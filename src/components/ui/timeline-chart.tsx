@@ -2,20 +2,28 @@
 
 import { useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
+import { axisTicks, dayDelta, niceCeil } from '@/lib/chart'
+import { formatTrend, trendTextClass } from '@/lib/format'
 
 /**
- * Views and visitors over the window, on ONE scale that starts at zero.
+ * Views and visitors over the window, on ONE scale that starts at zero, drawn
+ * inside a contained black band.
  *
- * Both of those decisions are load-bearing. Two y-scales would invent a
- * relationship that is not in the data, and a scale that starts at the series
- * minimum — which the older `AreaChart` does, because a sparkline only has to show
- * shape — would make "visitors are about a third of views" unreadable. Here the
- * two marks can be compared by eye because they are drawn against the same zero.
+ * Both scale decisions are load-bearing. Two y-scales would invent a relationship
+ * that is not in the data; a scale that starts at the series minimum — which the
+ * older `AreaChart` does, because a sparkline only has to show shape — would make
+ * "visitors are about a third of views" unreadable. Here the two marks can be
+ * compared by eye because they are drawn against the same zero.
  *
- * The dashboard is monochrome, so the two series are told apart by FORM, not
- * colour: views are a filled track, visitors a line over them. Visitors is the
- * darker mark because it is the number that survives a bot flood — one address is
- * one visitor however many times it loads the page.
+ * The band is the one dark surface on the page, and it stays contained to this
+ * chart (Sam, 2026-09-13: "cool, but I don't want it to be the main part of the
+ * screen"). Views are the blue accent with a soft fill, visitors the red accent
+ * as a line; the two colours are already the page's, so the chart adds none.
+ *
+ * Hovering a day draws a vertical rule through it and a readout with that day's
+ * views, visitors, and the change on the day before as a signed percent. The
+ * percent is absent — not zero, not infinite — when yesterday was zero or does
+ * not exist; `dayDelta` decides that, and is tested on its own.
  *
  * The table underneath is not a fallback, it is the accessible twin: every value
  * is reachable without hovering anything.
@@ -26,11 +34,16 @@ const PAD_TOP = 8
 
 export function TimelineChart({
   points,
-  height = 150,
+  height = 260,
+  visitorsSince,
   className,
 }: {
   points: TimelinePoint[]
   height?: number
+  /** The first day visitors were counted. Before it the visitors line is not
+   *  drawn at all — a zero there would be a lie, the number was never taken —
+   *  and the span is shaded and labelled so the gap reads as a gap. */
+  visitorsSince?: string
   className?: string
 }) {
   const box = useRef<HTMLDivElement>(null)
@@ -38,80 +51,195 @@ export function TimelineChart({
 
   const w = 600
   const h = height
-  const max = Math.max(1, ...points.map((p) => Math.max(p.views, p.visitors)))
+  const peak = Math.max(0, ...points.map((p) => Math.max(p.views, p.visitors)))
+  const top = niceCeil(peak)
   const x = (i: number) => (points.length < 2 ? w / 2 : (i / (points.length - 1)) * w)
-  const y = (v: number) => PAD_TOP + (1 - v / max) * (h - PAD_TOP)
+  const y = (v: number) => PAD_TOP + (1 - v / top) * (h - PAD_TOP)
   const path = (key: 'views' | 'visitors') =>
     points.map((p, i) => `${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ')
+  // Visitors exist only from the cut-over. Days before it are not "0 visitors",
+  // they are unmeasured, so the line simply starts where the measurement does.
+  const firstVisitorIdx = visitorsSince ? points.findIndex((p) => p.day >= visitorsSince) : 0
+  const hasVisitors = (i: number) => firstVisitorIdx >= 0 && i >= firstVisitorIdx
+  const visitorsPath = points
+    .map((p, i) => (hasVisitors(i) ? `${x(i).toFixed(1)},${y(p.visitors).toFixed(1)}` : null))
+    .filter(Boolean)
+    .join(' ')
+  const unmeasuredUntil = firstVisitorIdx > 0 ? x(firstVisitorIdx) : firstVisitorIdx === -1 ? w : 0
 
+  const peakIndex = points.reduce((best, p, i) => (p.views > (points[best]?.views ?? -1) ? i : best), 0)
   const shown = at != null ? points[at] : null
+  const delta = shown ? dayDelta(points[at! - 1]?.views, shown.views) : null
+  const trend = delta === null ? null : formatTrend(delta)
+  const flip = at != null && points.length > 1 && at / (points.length - 1) > 0.62
 
   return (
-    <div className={className}>
-      {/* A legend is always present with two series; identity is never the mark alone.
-          A real list, because that is what it is — and it gives the marks a name a
-          screen reader and a test can both ask for. */}
-      <div className="flex items-center gap-5 font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">
-        <ul aria-label="Series" className="flex items-center gap-5">
+    <div className={cx('rounded-2xl bg-ink p-5 text-paper', className)}>
+      {/* A legend is always present with two series; identity is never the mark
+          alone. A real list, because that is what it is — and it gives the marks a
+          name a screen reader and a test can both ask for. */}
+      <div className="flex items-center justify-between gap-4 font-space text-[10px] uppercase tracking-[0.12em]">
+        <ul aria-label="Series" className="flex items-center gap-5 text-paper/60">
           <li className="flex items-center gap-1.5">
-            <span aria-hidden className="inline-block h-2 w-3 rounded-[1px] bg-track" />
+            <span aria-hidden className="inline-block h-[3px] w-4 rounded-full bg-accent" />
             Views
           </li>
           <li className="flex items-center gap-1.5">
-            <span aria-hidden className="inline-block h-[2px] w-3 rounded-full bg-ink" />
+            <span aria-hidden className="inline-block h-[3px] w-4 rounded-full bg-accent-red" />
             Visitors
           </li>
         </ul>
-        {/* One readout, not a number on every point. */}
-        <span className={cx('ml-auto tabular-nums', shown ? 'text-ink' : 'text-transparent')}>
-          {shown ? `${dayLabel(shown.day)} · ${shown.views} views · ${shown.visitors} visitors` : '—'}
-        </span>
+        {points.length > 0 && points[peakIndex].views > 0 && (
+          <span className="text-paper/60">
+            Best day {dayLabel(points[peakIndex].day)} · {points[peakIndex].views} views
+          </span>
+        )}
       </div>
 
-      <div
-        ref={box}
-        className="relative mt-2"
-        style={{ height }}
-        onPointerLeave={() => setAt(null)}
-        onPointerMove={(e) => {
-          const r = box.current?.getBoundingClientRect()
-          if (!r || r.width === 0 || points.length === 0) return
-          const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
-          setAt(Math.round(frac * (points.length - 1)))
-        }}
-      >
-        <svg
-          viewBox={`0 0 ${w} ${h}`}
-          preserveAspectRatio="none"
-          style={{ width: '100%', height }}
-          aria-hidden="true"
+      <div className="mt-4 flex gap-3">
+        {/* The axis, read back as words: the gridline values, top to bottom. */}
+        <div
+          aria-hidden
+          className="relative w-8 shrink-0 font-space text-[10px] tabular-nums text-paper/50"
+          style={{ height }}
         >
-          {/* Recessive: a solid hairline at the top of the scale and one at zero. */}
-          <line x1={0} y1={PAD_TOP} x2={w} y2={PAD_TOP} className="stroke-hairline" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          <line x1={0} y1={h} x2={w} y2={h} className="stroke-hairline" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {axisTicks(top).map((t) => (
+            <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: y(t) }}>
+              {t}
+            </span>
+          ))}
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: h }}>0</span>
+        </div>
 
-          <polygon points={`${path('views')} ${w},${h} 0,${h}`} style={{ fill: 'var(--color-track)' }} />
-          <polyline
-            points={path('visitors')}
-            fill="none"
-            className="stroke-ink"
-            strokeWidth={2}
-            vectorEffect="non-scaling-stroke"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {at != null && (
+        <div
+          ref={box}
+          className="relative min-w-0 flex-1"
+          style={{ height }}
+          onPointerLeave={() => setAt(null)}
+          onPointerMove={(e) => {
+            const r = box.current?.getBoundingClientRect()
+            if (!r || r.width === 0 || points.length === 0) return
+            const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+            setAt(Math.round(frac * (points.length - 1)))
+          }}
+        >
+          <svg
+            viewBox={`0 0 ${w} ${h}`}
+            preserveAspectRatio="none"
+            style={{ width: '100%', height }}
+            aria-hidden="true"
+          >
+            {/* Recessive grid: one hairline per tick, a firmer one at zero. */}
+            {axisTicks(top).map((t) => (
+              <line
+                key={t} x1={0} y1={y(t)} x2={w} y2={y(t)}
+                stroke="currentColor" className="text-paper" opacity={0.13}
+                strokeWidth={1} vectorEffect="non-scaling-stroke"
+              />
+            ))}
             <line
-              x1={x(at)} y1={PAD_TOP} x2={x(at)} y2={h}
-              className="stroke-ink-faint" strokeWidth={1} vectorEffect="non-scaling-stroke"
+              x1={0} y1={h} x2={w} y2={h}
+              stroke="currentColor" className="text-paper" opacity={0.32}
+              strokeWidth={1} vectorEffect="non-scaling-stroke"
             />
+
+            {unmeasuredUntil > 0 && (
+              <rect
+                data-unmeasured="visitors"
+                x={0} y={PAD_TOP} width={unmeasuredUntil} height={h - PAD_TOP}
+                fill="currentColor" className="text-paper" opacity={0.045}
+              />
+            )}
+            <polygon
+              data-series="views"
+              points={`${path('views')} ${w},${h} 0,${h}`}
+              fill="currentColor" className="text-accent" opacity={0.2}
+            />
+            <polyline
+              data-series="views"
+              points={path('views')}
+              fill="none" stroke="currentColor" className="text-accent"
+              strokeWidth={2.4} vectorEffect="non-scaling-stroke"
+              strokeLinecap="round" strokeLinejoin="round"
+            />
+            <polyline
+              data-series="visitors"
+              points={visitorsPath}
+              fill="none" stroke="currentColor" className="text-accent-red"
+              strokeWidth={1.8} vectorEffect="non-scaling-stroke"
+              strokeLinecap="round" strokeLinejoin="round"
+            />
+
+            {at != null && shown && (
+              <g data-crosshair>
+                <line
+                  x1={x(at)} y1={PAD_TOP} x2={x(at)} y2={h}
+                  stroke="currentColor" className="text-paper" opacity={0.45}
+                  strokeWidth={1} vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            )}
+          </svg>
+
+          {unmeasuredUntil > 0 && (
+            <span
+              className="pointer-events-none absolute top-2 font-space text-[10px] uppercase tracking-[0.1em] text-paper/40"
+              style={{ left: 8 }}
+            >
+              Visitors counted from {dayLabel(points[firstVisitorIdx === -1 ? points.length - 1 : firstVisitorIdx].day)}
+            </span>
           )}
-        </svg>
+
+          {/* The dots sit outside the stretched SVG so they stay round. */}
+          {at != null && shown && (
+            <>
+              <Dot left={x(at) / w} top={y(shown.views) / h} className="border-accent" />
+              {hasVisitors(at) && (
+                <Dot left={x(at) / w} top={y(shown.visitors) / h} className="border-accent-red" />
+              )}
+              <div
+                role="status"
+                className={cx(
+                  'absolute top-2 w-56 rounded-xl border border-hairline bg-paper px-3.5 py-3 text-ink',
+                  flip ? 'right-0' : 'left-0',
+                )}
+                style={flip
+                  ? { right: `${(1 - x(at) / w) * 100}%`, marginRight: 12 }
+                  : { left: `${(x(at) / w) * 100}%`, marginLeft: 12 }}
+              >
+                <div className="text-sm">{dayLabel(shown.day)}</div>
+                <dl className="mt-2 space-y-1 border-t border-hairline pt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                  <div className="flex justify-between gap-3">
+                    <dt>Views</dt>
+                    <dd className="text-[11px] font-bold tabular-nums text-ink">{shown.views}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>Visitors</dt>
+                    <dd className="whitespace-nowrap text-[11px] font-bold tabular-nums text-ink">
+                      {hasVisitors(at) ? shown.visitors : 'not yet counted'}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-2 whitespace-nowrap border-t border-hairline pt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                  {trend ? (
+                    <>
+                      <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span>
+                      {' '}vs {dayLabel(points[at! - 1].day)} · {points[at! - 1].views}
+                    </>
+                  ) : at === 0 ? (
+                    'First day of the window'
+                  ) : (
+                    <>No views on {dayLabel(points[at! - 1].day)}</>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* The window's ends, and nothing between them: an axis, not a label per point. */}
-      <div className="mt-1.5 flex justify-between font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+      <div className="mt-2 flex justify-between pl-11 font-space text-[10px] uppercase tracking-[0.1em] text-paper/50">
         <span>{points.length ? dayLabel(points[0].day) : ''}</span>
         <span>{points.length ? dayLabel(points[points.length - 1].day) : ''}</span>
       </div>
@@ -128,6 +256,16 @@ export function TimelineChart({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function Dot({ left, top, className }: { left: number; top: number; className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cx('pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-ink', className)}
+      style={{ left: `${left * 100}%`, top: `${top * 100}%` }}
+    />
   )
 }
 

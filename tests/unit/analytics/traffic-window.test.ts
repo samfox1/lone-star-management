@@ -12,7 +12,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CONTEXT_SINCE,
+  METRICS,
   analyticsWindow,
+  metrics,
   reachesBeforeContext,
   topBars,
   trafficWindow,
@@ -62,7 +64,8 @@ describe('trafficWindow', () => {
     const { client, calls } = fakeClient({})
     await trafficWindow(client, 'artist-1', 7, NOW)
     expect(calls.map((c) => c.fn).sort()).toEqual([
-      'analytics_devices', 'analytics_places', 'analytics_sources', 'analytics_timeline',
+      'analytics_devices', 'analytics_places', 'analytics_sources',
+      'analytics_timeline', 'analytics_type_timeline',
     ])
     for (const c of calls) {
       expect(c.args, c.fn).toEqual({ p_artist_id: 'artist-1', p_since: '2026-09-06', p_until: '2026-09-12' })
@@ -103,6 +106,72 @@ describe('trafficWindow', () => {
     expect(w.timeline).toHaveLength(30)
     expect(w.totals).toEqual({ views: 0, visitors: 0, bots: 0 })
     expect([w.sources, w.places, w.devices]).toEqual([[], [], []])
+  })
+})
+
+describe('the per-metric series the sparklines draw', () => {
+  const window7 = (rows: Record<string, unknown[]>) => trafficWindow(fakeClient(rows).client, 'a', 7, NOW)
+
+  it('CRITICAL: every series is as long as the timeline, so a pill and the chart agree', async () => {
+    const w = await window7({
+      analytics_timeline: [{ day: '2026-09-12', views: 10, visitors: 4, bots: 1 }],
+      analytics_type_timeline: [{ day: '2026-09-10', type: 'play', count: 3 }],
+    })
+    for (const m of metrics(w)) {
+      expect(m.series, m.key).toHaveLength(w.timeline.length)
+    }
+    // The quiet days are zeros, not absent: a play on one day of seven.
+    expect(w.byType.play).toEqual([0, 0, 0, 0, 3, 0, 0])
+  })
+
+  it('CRITICAL: a metric with no rows at all is a zero series, never an empty one', async () => {
+    const w = await window7({})
+    const buy = metrics(w).find((m) => m.key === 'buy_clicks')!
+    expect(buy.series).toEqual([0, 0, 0, 0, 0, 0, 0])
+    expect(buy.total).toBe(0)
+  })
+
+  it('offers every metric in the registry — the page never hand-lists them', async () => {
+    const w = await window7({})
+    // Derived from METRICS, so a metric added later cannot be silently dropped.
+    expect(metrics(w).map((m) => m.key)).toEqual(METRICS.map((m) => m.key))
+  })
+
+  it('counts visitors and bots off the timeline, not off the event types', async () => {
+    const w = await window7({
+      analytics_timeline: [
+        { day: '2026-09-11', views: 10, visitors: 4, bots: 2 },
+        { day: '2026-09-12', views: 6, visitors: 3, bots: 1 },
+      ],
+      // A bogus 'visitors' type must not be what the visitors metric reads.
+      analytics_type_timeline: [{ day: '2026-09-12', type: 'visitors', count: 999 }],
+    })
+    const by = Object.fromEntries(metrics(w).map((m) => [m.key, m]))
+    expect(by.visitors.total).toBe(7)
+    expect(by.bots.total).toBe(3)
+    expect(by.views.total).toBe(16)
+  })
+
+  it('a total is the sum of its own series, so a pill cannot disagree with its sparkline', async () => {
+    const w = await window7({
+      analytics_timeline: [{ day: '2026-09-12', views: 5, visitors: 2, bots: 0 }],
+      analytics_type_timeline: [
+        { day: '2026-09-11', type: 'ticket_click', count: 2 },
+        { day: '2026-09-12', type: 'ticket_click', count: 5 },
+      ],
+    })
+    for (const m of metrics(w)) {
+      expect(m.series.reduce((n, v) => n + v, 0), m.key).toBe(m.total)
+    }
+    expect(metrics(w).find((m) => m.key === 'ticket_clicks')!.total).toBe(7)
+  })
+
+  it('reads counts as numbers — PostgREST hands bigint back as a string', async () => {
+    const w = await window7({
+      analytics_type_timeline: [{ day: '2026-09-12', type: 'play', count: '4' }],
+    })
+    expect(w.byType.play.at(-1)).toBe(4)
+    expect(typeof w.byType.play.at(-1)).toBe('number')
   })
 })
 
