@@ -13,7 +13,7 @@ import { SelectToggle } from '../select-toggle'
 import { toast } from '../toast'
 import { ConnectModal } from './connect-modal'
 import { ConnectionMark } from './connection-mark'
-import { disconnectConnectionAction, pullConnectionAction } from './actions'
+import { disconnectConnectionAction, pullConnectionAction, syncProfileAction } from './actions'
 
 /**
  * THE CONNECTIONS LIST (Sam, 2026-09-13): "one organized list with all of the current
@@ -35,7 +35,7 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
   if (state.from !== initial) setState({ from: initial, rows: initial })
   const rows = state.rows
   const setRows = (fn: (rows: ConnectionRow[]) => ConnectionRow[]) => setState((s) => ({ ...s, rows: fn(s.rows) }))
-  const [connect, setConnect] = useState<null | { key?: string; url?: string }>(null)
+  const [connect, setConnect] = useState(false)
 
   async function publish(password: string) {
     // Snapshot only — links are already live or not by their ring; publish pushes edits.
@@ -49,7 +49,7 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
     // at the bottom for the floating Publish.
     <div className="mx-auto max-w-3xl pb-24">
       <div className="flex items-center justify-end">
-        <button type="button" onClick={() => setConnect({})} className={buttonClass('solid')}>
+        <button type="button" onClick={() => setConnect(true)} className={buttonClass('solid')}>
           <Icon name="plus" size={12} /> Connect
         </button>
       </div>
@@ -61,7 +61,6 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
             artistId={artistId}
             row={r}
             onChange={(next) => setRows((all) => (next ? all.map((x) => (x.key === r.key ? next : x)) : all.filter((x) => x.key !== r.key)))}
-            onConnect={() => setConnect({ key: r.key, url: r.url })}
           />
         ))}
       </div>
@@ -70,8 +69,7 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
         <ConnectModal
           artistId={artistId}
           taken={rows.map((r) => r.key)}
-          preselect={connect.key ? { key: connect.key, url: connect.url } : undefined}
-          onClose={() => setConnect(null)}
+          onClose={() => setConnect(false)}
           onDone={() => router.refresh()}
         />
       )}
@@ -91,17 +89,7 @@ export function handleOf(url: string): string {
     .replace(/\/+$/, '')
 }
 
-function ConnectionRowView({
-  artistId,
-  row,
-  onChange,
-  onConnect,
-}: {
-  artistId: string
-  row: ConnectionRow
-  onChange: (next: ConnectionRow | null) => void
-  onConnect: () => void
-}) {
+function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row: ConnectionRow; onChange: (next: ConnectionRow | null) => void }) {
   const router = useRouter()
   const { ask, dialog } = useConfirm()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -153,6 +141,19 @@ function ConnectionRowView({
         toast(res.error, 'error')
       }
     }
+  }
+
+  /** The first pull for a profile that is on the page but never synced — the id comes
+   *  out of the link, nothing is typed. After it, the chip reads synced (or says why not). */
+  async function sync() {
+    setMenuOpen(false)
+    setPulling(true)
+    const res = await syncProfileAction(artistId, row.key)
+    setPulling(false)
+    if (res.ok) {
+      toast(res.message ?? `${row.label} synced`)
+      router.refresh()
+    } else toast(res.error ?? `${row.label} didn’t sync.`, 'error')
   }
 
   async function pull() {
@@ -216,9 +217,11 @@ function ConnectionRowView({
             </button>
           </span>
         )}
+        {/* Not "Connect" — the check already says it is (Sam, 2026-09-13). The account is
+            here; its catalog has never been pulled. */}
         {row.state === 'connect' && (
-          <button type="button" onClick={onConnect} aria-label={`Connect ${row.label}`} className="inline-flex items-center gap-1 font-space text-[10.5px] text-ink-faint hover:text-ink">
-            <Icon name="plus" size={11} /> Connect
+          <button type="button" onClick={sync} disabled={pulling} aria-label={`Sync ${row.label}`} className="inline-flex items-center gap-1.5 font-space text-[10.5px] text-ink-faint hover:text-ink disabled:opacity-50">
+            <Icon name="refresh" size={11} className={cx(pulling && 'animate-spin')} /> {pulling ? 'Syncing…' : 'Sync'}
           </button>
         )}
       </span>
@@ -242,7 +245,7 @@ function ConnectionRowView({
                 <Icon name="external" size={15} /> Open
               </a>
             )}
-            {row.def.source && row.state !== 'connect' && <MenuItem icon="refresh" onClick={pull}>Pull now</MenuItem>}
+            {row.def.source && (row.state === 'connect' ? <MenuItem icon="refresh" onClick={sync}>Sync</MenuItem> : <MenuItem icon="refresh" onClick={pull}>Pull now</MenuItem>)}
             <MenuItem icon="trash" onClick={remove} danger>Remove</MenuItem>
           </div>
         )}

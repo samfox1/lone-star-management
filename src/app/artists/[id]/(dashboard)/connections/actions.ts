@@ -1,6 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { socialSlug } from '@samfox1/site-bridge/social'
+import { createClient } from '@/lib/supabase/server'
 import {
   SHOPIFY_KEY,
   connectInputError,
@@ -109,6 +111,31 @@ export async function disconnectConnectionAction(artistId: string, key: string, 
   if (def.key === SHOPIFY_KEY) return disconnectShopifyAction(artistId)
   if (def.source?.idField) return saveSourceIdAction(artistId, def.source.idField, '')
   return {}
+}
+
+/**
+ * SYNC a profile that is already on the page but whose catalog was never pulled (Sam,
+ * 2026-09-13: a check beside "+ Connect" read as a contradiction — the account IS
+ * connected; what it lacks is the sync). The artist id is inside the profile link for
+ * Spotify, Apple Music and Deezer, so this needs nothing typed: read the link, take the
+ * id, save it, pull. A link with no id in it (a playlist) says so, and Edit is the fix.
+ */
+export async function syncProfileAction(artistId: string, key: string): Promise<ConnectResult> {
+  const def = connectionByKey(key)
+  if (!def?.social || !def.source?.idField) return { ok: false, error: 'Nothing to sync.' }
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('links').select('label, url').eq('artist_id', artistId)
+  if (error) return { ok: false, error: error.message }
+  const link = (data ?? []).find((l) => socialSlug((l.label as string) ?? '') === def.social)
+  const id = link ? idFromProfileUrl(def, (link.url as string) ?? '') : null
+  if (!id) return { ok: false, error: `That ${def.label} link has no artist id in it — it needs to be the artist page.` }
+  try {
+    const res = await connectSource(artistId, def.source.idField, def.source.key, id)
+    revalidatePath(`/artists/${artistId}`, 'layout')
+    return res
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Couldn’t sync.' }
+  }
 }
 
 /** Pull this connection's content again — the ⋯ menu's "Pull now", and a failed row's Retry. */

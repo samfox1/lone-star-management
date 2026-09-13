@@ -7,9 +7,9 @@
  *     URL alone through updateContentAction('link');
  *   - the ring flips the link on/off the site INSTANTLY — links are LIVE_TOGGLE — and a
  *     refused flip puts the ring back and says why;
- *   - the right-hand chip says what the state IS: synced names the section, failed offers
- *     Retry, a profile with an unconnected source offers Connect, a plain social says
- *     nothing;
+ *   - the right-hand chip says what the state IS: synced, failed offers Retry, a profile
+ *     whose catalog was never pulled offers Sync (never "Connect" — the check beside it
+ *     already says it is), a plain social says nothing;
  *   - Remove asks first, then removes the link AND the source behind it;
  *   - Pull now pulls that connection and reports what came back.
  */
@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ConnectionList, handleOf } from '@/app/artists/[id]/(dashboard)/connections/connection-list'
 import { publishEntityAction, setOnSiteAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
-import { disconnectConnectionAction, pullConnectionAction } from '@/app/artists/[id]/(dashboard)/connections/actions'
+import { disconnectConnectionAction, pullConnectionAction, syncProfileAction } from '@/app/artists/[id]/(dashboard)/connections/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import { connectionByKey, type ConnectionRow } from '@/lib/connections'
 
@@ -32,6 +32,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/connections/actions', () => ({
   connectOneAction: vi.fn(async () => ({ ok: true })),
   disconnectConnectionAction: vi.fn(async () => ({})),
   pullConnectionAction: vi.fn(async () => ({ ok: true, message: '24 songs' })),
+  syncProfileAction: vi.fn(async () => ({ ok: true, message: '12 songs found' })),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
@@ -98,8 +99,9 @@ describe('the rows', () => {
     expect(rowOf('Spotify')).not.toHaveTextContent(/Music/) // just the word (Sam, 2026-09-13)
     expect(rowOf('Bandsintown')).toHaveTextContent(/Couldn’t connect/)
     expect(within(rowOf('Bandsintown')).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
-    expect(within(rowOf('Apple Music')).getByRole('button', { name: /Connect/ })).toBeInTheDocument()
-    expect(rowOf('Instagram')).not.toHaveTextContent(/synced|Connect|Retry/)
+    expect(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' })).toBeInTheDocument()
+    expect(rowOf('Apple Music')).not.toHaveTextContent(/Connect/) // a check beside "Connect" is a contradiction
+    expect(rowOf('Instagram')).not.toHaveTextContent(/synced|Sync|Connect|Retry/)
   })
 
   it('a source with no profile has no ring — the column stays, the control does not', () => {
@@ -182,12 +184,22 @@ describe('Connect', () => {
     expect(within(dialog).getByRole('button', { name: 'TikTok' })).toBeEnabled()
   })
 
-  it('a row’s own Connect opens straight on that connection’s details, link prefilled', () => {
+  it('CRITICAL: Sync on a never-pulled profile pulls it from the link, nothing typed', async () => {
+    // The Apple Music link already holds the artist id; the row should not send the
+    // manager to a form to retype what is on the screen.
     mount()
-    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: /Connect/ }))
-    const dialog = screen.getByRole('dialog', { name: 'Connect' })
-    expect(within(dialog).getByRole('textbox', { name: 'Apple Music link' })).toHaveValue('https://music.apple.com/artist/1')
-    expect(within(dialog).queryByRole('textbox', { name: 'Search' })).toBeNull()
+    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' }))
+    await waitFor(() => expect(syncProfileAction).toHaveBeenCalledWith('a1', 'apple music'))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('12 songs found'))
+    expect(screen.queryByRole('dialog', { name: 'Connect' })).toBeNull()
+  })
+
+  it('a link with no id in it says so, and the row stays', async () => {
+    vi.mocked(syncProfileAction).mockResolvedValueOnce({ ok: false, error: 'That Apple Music link has no artist id in it — it needs to be the artist page.' })
+    mount()
+    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' }))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringMatching(/no artist id/), 'error'))
+    expect(rowOf('Apple Music')).toBeInTheDocument()
   })
 })
 
