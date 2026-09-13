@@ -150,15 +150,17 @@ export type TrafficWindow = {
 export const METRICS = [
   { key: 'views', label: 'Views', type: null, chart: true },
   { key: 'visitors', label: 'Visitors', type: null, chart: true },
-  { key: 'plays', label: 'Plays', type: 'play', chart: true },
+  { key: 'plays', label: 'Plays', type: 'play', chart: false },
   { key: 'link_clicks', label: 'Link clicks', type: 'link_click', chart: false },
   { key: 'ticket_clicks', label: 'Ticket clicks', type: 'ticket_click', chart: false },
   { key: 'buy_clicks', label: 'Buy clicks', type: 'buy_click', chart: false },
   { key: 'bots', label: 'Bots', type: null, chart: true },
 ] as const
-/** The metrics the explorer offers a chart for. The click metrics are counted
- *  (they feed the content lists) but Sam did not want them on the chart row. */
+/** The metrics that can be on the chart: views always, visitors and bots as
+ *  toggles. Plays and the click metrics are counted (they feed the content
+ *  lists) but Sam did not want them on the chart. */
 export const CHART_METRICS: readonly MetricKey[] = METRICS.filter((m) => m.chart).map((m) => m.key)
+export const OVERLAYS: readonly MetricKey[] = CHART_METRICS.filter((k) => k !== 'views')
 
 export type MetricKey = (typeof METRICS)[number]['key']
 export type Metric = { key: MetricKey; label: string; total: number; series: number[] }

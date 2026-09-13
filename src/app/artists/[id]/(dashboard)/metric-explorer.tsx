@@ -3,41 +3,39 @@
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { CHART_METRICS, WINDOW_OPTIONS, metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
+import { OVERLAYS, WINDOW_OPTIONS, metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, trendTextClass } from '@/lib/format'
-import { TimelineChart } from '@/components/ui/timeline-chart'
+import { TimelineChart, type Series } from '@/components/ui/timeline-chart'
 import { Segmented } from './segmented'
 
 /**
- * One chart, one metric at a time, the facts about it beside it.
+ * The views chart, with visitors and bots as toggles onto the same chart, and
+ * the facts about what is drawn beside it.
  *
- * Sam, 2026-09-13: rather than a tile per metric, a row above where you pick
- * the metric, a taller and narrower chart of just that one, and its totals to
- * the right — total over the window, the change on the window before, the best
- * day, the daily average. Every number here is derived from the same zero-filled
- * series the chart draws, so the two can never disagree.
+ * Sam, 2026-09-13: "this chart should just be for views, and then the user can
+ * toggle on unique visitors and bots onto the same chart with a different
+ * colored line. It's all one chart." So: views is always drawn, in blue with the
+ * fill; visitors overlay in red; bots in ink. One scale, one legend.
  *
- * The metric switch and the window switch share one row and one control — the
- * dashboard's `Segmented` — so they read as the two halves of a single question:
- * WHICH number, over HOW LONG. The window lives in the URL (`?days=`) because the
- * server reads it; the control only navigates.
+ * The toggles and the window switch share one row and one control language —
+ * the dashboard's `Segmented` and a multi-select built from its classes — so
+ * they read as the two halves of a single question: WHAT is drawn, over HOW
+ * LONG. The window lives in the URL because the server reads it.
  *
- * Views is the default because it is the one series that runs unbroken across
- * the 2026-09-12 cut-over. Every metric charts alone; visitors start where they
- * were first counted. Only CHART_METRICS get a tab — the click metrics are
- * counted for the content lists but Sam did not want them here.
- *
- * `extra` carries the one metric-specific fact the data can back: how many plays
- * named a song, how many ticket clicks named a date. Nothing per-source, nothing
- * per-city: those tallies do not exist and the card does not pretend they do.
+ * Facts beside the chart: the views total, its change on the prior window,
+ * best day, per day; then one block per toggled series. Visitors and bots exist
+ * only from the 2026-09-12 cut-over, so their per-day figures divide by the
+ * counted days, and nothing said in the legend is said again in the panel.
  */
 export type MetricExtra = { label: string; value: string }
+
+const COLOR: Record<string, Series['color']> = { views: 'accent', visitors: 'accent-red', bots: 'ink' }
 
 export function MetricExplorer({
   metrics,
   timeline,
   prevTotals,
-  visitorsSince,
+  countedSince,
   windowKey,
   days,
   extras = {},
@@ -46,8 +44,8 @@ export function MetricExplorer({
   metrics: Metric[]
   timeline: TimelineDay[]
   prevTotals: Record<MetricKey, number>
-  visitorsSince?: string
-  /** The window in force: its `?days=` key and the days it resolved to. */
+  /** The first day the overlays (visitors, bots) were counted. */
+  countedSince?: string
   windowKey: string
   days: number
   extras?: Partial<Record<MetricKey, MetricExtra[]>>
@@ -55,32 +53,52 @@ export function MetricExplorer({
 }) {
   const router = useRouter()
   const pathname = usePathname()
+  const [on, setOn] = useState<Set<MetricKey>>(() => new Set())
   const allTime = windowKey === 'all'
   const windowLabel = allTime ? 'all time' : `${days}d`
-  const [key, setKey] = useState<MetricKey>('views')
-  const charted = metrics.filter((m) => CHART_METRICS.includes(m.key))
-  const metric = charted.find((m) => m.key === key) ?? charted[0]
-  // Facts run over the days the metric was actually counted. Visitors exist only
-  // from the cut-over; dividing their total by all 30 days read "7.5 per day" on
-  // a tab whose chart plainly shows two days.
-  const since = metric.key === 'visitors' ? visitorsSince : undefined
-  const countedIdx = timeline.map((d, i) => i).filter((i) => !since || timeline[i].day >= since)
-  const counted = { ...metric, series: countedIdx.map((i) => metric.series[i]) }
-  const facts = metricFacts(counted, countedIdx.map((i) => timeline[i].day), prevTotals[metric.key] ?? 0)
-  const trend = facts.delta === null ? null : formatTrend(facts.delta)
   const fmt = (n: number) => n.toLocaleString('en-US')
+  const byKey = Object.fromEntries(metrics.map((m) => [m.key, m])) as Record<MetricKey, Metric>
+  const days_ = timeline.map((d) => d.day)
+
+  const views = byKey.views
+  const drawn = [views, ...OVERLAYS.filter((k) => on.has(k)).map((k) => byKey[k])].filter(Boolean)
+  const series: Series[] = drawn.map((m) => ({
+    key: m.key, label: m.label, values: m.series, color: COLOR[m.key] ?? 'ink',
+    since: m.key === 'views' ? undefined : countedSince,
+  }))
+
+  /** Facts over the days a metric was counted — the whole window for views, from the cut-over for the rest. */
+  const factsFor = (m: Metric) => {
+    const since = m.key === 'views' ? undefined : countedSince
+    const idx = days_.map((_, i) => i).filter((i) => !since || days_[i] >= since)
+    return metricFacts({ ...m, series: idx.map((i) => m.series[i]) }, idx.map((i) => days_[i]), prevTotals[m.key] ?? 0)
+  }
+  const vf = factsFor(views)
+  const vt = vf.delta === null ? null : formatTrend(vf.delta)
+  const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
 
   return (
     <div className={className}>
-      {/* WHICH number, over HOW LONG: one row, one control language. Labels only —
-          the numbers live in the panel, where they can be read against each other. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Segmented
-          label="Metric"
-          options={charted.map((m) => ({ key: m.key, label: m.label }))}
-          value={metric.key}
-          onChange={setKey}
-        />
+        {/* Multi-select in the Segmented's own clothes: same container, same
+            active fill, but each segment is its own on/off. */}
+        <div role="group" aria-label="Series" className="inline-flex flex-none gap-0.5 rounded-lg border border-hairline p-0.5">
+          <span className="rounded-md bg-ink px-2.5 py-1 font-space text-xs font-semibold text-white" aria-hidden>Views</span>
+          {OVERLAYS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={on.has(k)}
+              onClick={() => toggle(k)}
+              className={cx(
+                'rounded-md px-2.5 py-1 font-space text-xs transition-colors',
+                on.has(k) ? 'bg-ink font-semibold text-white' : 'text-ink-muted hover:text-ink',
+              )}
+            >
+              {byKey[k]?.label ?? k}
+            </button>
+          ))}
+        </div>
         <Segmented
           label="Window"
           options={WINDOW_OPTIONS.map((o) => ({ key: o.key, label: o.label }))}
@@ -90,31 +108,16 @@ export function MetricExplorer({
       </div>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-4">
-        <TimelineChart
-          points={timeline}
-          height={420}
-          primary={{ label: metric.label, values: metric.series }}
-          since={metric.key === 'visitors' ? visitorsSince : undefined}
-          className="lg:col-span-3"
-        />
+        <TimelineChart points={timeline} height={420} series={series} className="lg:col-span-3" />
 
-        {/* One column of facts. The total leads; the rest are ways of reading the
-            same series. Nothing here is also said on the chart. */}
-        <div role="region" aria-label={`${metric.label} facts`} className="flex flex-col gap-5 rounded-2xl bg-surface p-5">
+        <div role="region" aria-label="Facts" className="flex flex-col gap-5 rounded-2xl bg-surface p-5">
           <div>
-            <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
-              {metric.label} · {windowLabel}
-            </div>
-            <div className="mt-2 font-space text-[44px] font-bold leading-none tracking-[-0.015em] tabular-nums text-ink">
-              {fmt(facts.total)}
-            </div>
+            <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Views · {windowLabel}</div>
+            <div className="mt-2 font-space text-[44px] font-bold leading-none tracking-[-0.015em] tabular-nums text-ink">{fmt(vf.total)}</div>
             {!allTime && (
               <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                {trend ? (
-                  <>
-                    <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span>
-                    {' '}vs prior {windowLabel}
-                  </>
+                {vt ? (
+                  <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(vt.dir))}>{vt.label}</span> vs prior {windowLabel}</>
                 ) : (
                   <>No prior {windowLabel}</>
                 )}
@@ -123,15 +126,28 @@ export function MetricExplorer({
           </div>
 
           <dl className="flex flex-col gap-4 border-t border-hairline pt-4">
-            <Fact label="Best day" value={facts.bestDay ? `${dayLabel(facts.bestDay.day)} · ${fmt(facts.bestDay.value)}` : '—'} />
-            <Fact label="Per day" value={facts.perDay >= 10 ? fmt(Math.round(facts.perDay)) : facts.perDay.toFixed(1)} />
-            {(extras[metric.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+            <Fact label="Best day" value={vf.bestDay ? `${dayLabel(vf.bestDay.day)} · ${fmt(vf.bestDay.value)}` : '—'} />
+            <Fact label="Per day" value={perDay(vf.perDay)} />
+            {(extras.views ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
           </dl>
+
+          {drawn.slice(1).map((m) => {
+            const f = factsFor(m)
+            return (
+              <dl key={m.key} data-facts={m.key} className="flex flex-col gap-4 border-t border-hairline pt-4">
+                <Fact label={m.label} value={fmt(f.total)} />
+                <Fact label="Per day" value={perDay(f.perDay)} />
+                {(extras[m.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+              </dl>
+            )
+          })}
         </div>
       </div>
     </div>
   )
 }
+
+const perDay = (n: number) => (n >= 10 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1))
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (

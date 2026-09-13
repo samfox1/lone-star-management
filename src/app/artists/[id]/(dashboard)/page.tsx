@@ -120,20 +120,11 @@ export default async function OverviewPage({
           metrics={allMetrics}
           timeline={traffic.timeline}
           prevTotals={traffic.prevTotals}
-          visitorsSince={CONTEXT_SINCE}
+          countedSince={CONTEXT_SINCE}
           windowKey={windowKey}
           days={days}
           extras={{
-            views: [
-              { label: 'Visitors', value: totalOf('visitors').toLocaleString('en-US') },
-              // Over the days BOTH were counted. Dividing 30 days of views by visitors
-              // that exist only since the cut-over read 5.94 on a page where the true
-              // figure was about 1.2.
-              { label: partial ? 'Views per visitor · since Sep 12' : 'Views per visitor', value: viewsPerVisitor },
-            ],
-            plays: [{ label: 'Named a song', value: `${lists.songs.attributed} of ${totalOf('plays')}` }],
-            ticket_clicks: [{ label: 'Named a date', value: `${lists.tour.attributed} of ${totalOf('ticket_clicks')}` }],
-            buy_clicks: [{ label: 'Named a product', value: `${lists.merch.attributed} of ${totalOf('buy_clicks')}` }],
+            views: [{ label: partial ? 'Views per visitor · since Sep 12' : 'Views per visitor', value: viewsPerVisitor }],
             bots: [{ label: 'Share of hits', value: totalOf('views') + totalOf('bots') ? `${((totalOf('bots') / (totalOf('views') + totalOf('bots'))) * 100).toFixed(1)}%` : '—' }],
           }}
         />
