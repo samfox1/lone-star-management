@@ -1,9 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { type SectionDiff } from '@/lib/content'
-import { cx } from '@/lib/cx'
 import { BarList } from '@/components/ui/bar-list'
-import { MetricExplorer } from '@/components/ui/metric-explorer'
+import { MetricExplorer } from './metric-explorer'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
@@ -103,23 +102,6 @@ export default async function OverviewPage({
 
   return (
     <div className="space-y-10">
-      {/* ONE filter row, above everything it scopes — never a control per block. */}
-      <div className="flex items-center gap-1">
-        {WINDOWS.map((n) => (
-          <Link
-            key={n}
-            href={`/artists/${id}?days=${n}`}
-            aria-current={n === days ? 'page' : undefined}
-            className={cx(
-              'rounded-full px-3 py-1 font-space text-[11px] uppercase tracking-[0.1em] transition-colors',
-              n === days ? 'bg-ink text-paper' : 'text-ink-faint hover:bg-surface-hover',
-            )}
-          >
-            {n} days
-          </Link>
-        ))}
-      </div>
-
       <section>
         {/* The overview: one chart, one metric at a time, its facts beside it.
             Views is the default because it is the one figure that runs unbroken
@@ -130,7 +112,8 @@ export default async function OverviewPage({
           timeline={traffic.timeline}
           prevTotals={traffic.prevTotals}
           visitorsSince={CONTEXT_SINCE}
-          windowLabel={`${days} days`}
+          days={days}
+          windows={WINDOWS}
           extras={{
             views: [
               { label: 'Visitors', value: totalOf('visitors').toLocaleString('en-US') },

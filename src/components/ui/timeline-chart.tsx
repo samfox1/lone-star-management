@@ -6,8 +6,7 @@ import { axisTicks, dayDelta, niceCeil } from '@/lib/chart'
 import { formatTrend, trendTextClass } from '@/lib/format'
 
 /**
- * Views and visitors over the window, on ONE scale that starts at zero, drawn
- * inside a contained black band.
+ * Views and visitors over the window, on ONE scale that starts at zero.
  *
  * Both scale decisions are load-bearing. Two y-scales would invent a relationship
  * that is not in the data; a scale that starts at the series minimum — which the
@@ -15,10 +14,10 @@ import { formatTrend, trendTextClass } from '@/lib/format'
  * "visitors are about a third of views" unreadable. Here the two marks can be
  * compared by eye because they are drawn against the same zero.
  *
- * The band is the one dark surface on the page, and it stays contained to this
- * chart (Sam, 2026-09-13: "cool, but I don't want it to be the main part of the
- * screen"). Views are the blue accent with a soft fill, visitors the red accent
- * as a line; the two colours are already the page's, so the chart adds none.
+ * Drawn on paper, not on a black band — Sam tried the band and did not like it
+ * (2026-09-13). Views are the blue accent with a soft fill, visitors the red
+ * accent as a line; the two colours are already the page's, so the chart adds
+ * none, and the grid is the same hairline every list on the page rules with.
  *
  * Hovering a day draws a vertical rule through it and a readout with that day's
  * views, visitors, and the change on the day before as a signed percent. The
@@ -84,12 +83,12 @@ export function TimelineChart({
   const flip = at != null && points.length > 1 && at / (points.length - 1) > 0.62
 
   return (
-    <div className={cx('rounded-2xl bg-ink p-5 text-paper', className)}>
+    <div className={cx('text-ink', className)}>
       {/* A legend is always present with two series; identity is never the mark
           alone. A real list, because that is what it is — and it gives the marks a
           name a screen reader and a test can both ask for. */}
       <div className="flex items-center justify-between gap-4 font-space text-[10px] uppercase tracking-[0.12em]">
-        <ul aria-label="Series" className="flex items-center gap-5 text-paper/60">
+        <ul aria-label="Series" className="flex items-center gap-5 text-ink-faint">
           <li className="flex items-center gap-1.5">
             <span aria-hidden className="inline-block h-[3px] w-4 rounded-full bg-accent" />
             {primaryLabel}
@@ -102,7 +101,7 @@ export function TimelineChart({
           )}
         </ul>
         {points.length > 0 && primaryAt(peakIndex) > 0 && (
-          <span className="text-paper/60">
+          <span className="text-ink-faint">
             Best day {dayLabel(points[peakIndex].day)} · {primaryAt(peakIndex)} {primaryLabel.toLowerCase()}
           </span>
         )}
@@ -112,7 +111,7 @@ export function TimelineChart({
         {/* The axis, read back as words: the gridline values, top to bottom. */}
         <div
           aria-hidden
-          className="relative w-8 shrink-0 font-space text-[10px] tabular-nums text-paper/50"
+          className="relative w-8 shrink-0 font-space text-[10px] tabular-nums text-ink-faint"
           style={{ height }}
         >
           {axisTicks(top).map((t) => (
@@ -145,13 +144,13 @@ export function TimelineChart({
             {axisTicks(top).map((t) => (
               <line
                 key={t} x1={0} y1={y(t)} x2={w} y2={y(t)}
-                stroke="currentColor" className="text-paper" opacity={0.13}
+                className="stroke-hairline"
                 strokeWidth={1} vectorEffect="non-scaling-stroke"
               />
             ))}
             <line
               x1={0} y1={h} x2={w} y2={h}
-              stroke="currentColor" className="text-paper" opacity={0.32}
+              className="stroke-ink-faint" opacity={0.6}
               strokeWidth={1} vectorEffect="non-scaling-stroke"
             />
 
@@ -159,7 +158,7 @@ export function TimelineChart({
               <rect
                 data-unmeasured="visitors"
                 x={0} y={PAD_TOP} width={unmeasuredUntil} height={h - PAD_TOP}
-                fill="currentColor" className="text-paper" opacity={0.045}
+                fill="currentColor" className="text-ink" opacity={0.035}
               />
             )}
             <polygon
@@ -188,7 +187,7 @@ export function TimelineChart({
               <g data-crosshair>
                 <line
                   x1={x(at)} y1={PAD_TOP} x2={x(at)} y2={h}
-                  stroke="currentColor" className="text-paper" opacity={0.45}
+                  className="stroke-ink-faint"
                   strokeWidth={1} vectorEffect="non-scaling-stroke"
                 />
               </g>
@@ -197,7 +196,7 @@ export function TimelineChart({
 
           {showVisitors && unmeasuredUntil > 0 && (
             <span
-              className="pointer-events-none absolute top-2 font-space text-[10px] uppercase tracking-[0.1em] text-paper/40"
+              className="pointer-events-none absolute top-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint"
               style={{ left: 8 }}
             >
               Visitors counted from {dayLabel(points[firstVisitorIdx === -1 ? points.length - 1 : firstVisitorIdx].day)}
@@ -214,7 +213,7 @@ export function TimelineChart({
               <div
                 role="status"
                 className={cx(
-                  'absolute top-2 w-56 rounded-xl border border-hairline bg-paper px-3.5 py-3 text-ink',
+                  'absolute top-2 w-56 rounded-xl bg-paper px-3.5 py-3 text-ink shadow-[0_8px_24px_rgba(17,17,17,0.12)]',
                   flip ? 'right-0' : 'left-0',
                 )}
                 style={flip
@@ -255,7 +254,7 @@ export function TimelineChart({
       </div>
 
       {/* The window's ends, and nothing between them: an axis, not a label per point. */}
-      <div className="mt-2 flex justify-between pl-11 font-space text-[10px] uppercase tracking-[0.1em] text-paper/50">
+      <div className="mt-2 flex justify-between pl-11 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
         <span>{points.length ? dayLabel(points[0].day) : ''}</span>
         <span>{points.length ? dayLabel(points[points.length - 1].day) : ''}</span>
       </div>
@@ -279,7 +278,7 @@ function Dot({ left, top, className }: { left: number; top: number; className: s
   return (
     <span
       aria-hidden
-      className={cx('pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-ink', className)}
+      className={cx('pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-paper', className)}
       style={{ left: `${left * 100}%`, top: `${top * 100}%` }}
     />
   )

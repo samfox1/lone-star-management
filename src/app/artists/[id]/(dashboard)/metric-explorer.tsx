@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, trendTextClass } from '@/lib/format'
 import { TimelineChart } from '@/components/ui/timeline-chart'
+import { Segmented } from './segmented'
 
 /**
  * One chart, one metric at a time, the facts about it beside it.
@@ -14,6 +16,11 @@ import { TimelineChart } from '@/components/ui/timeline-chart'
  * the right — total over the window, the change on the window before, the best
  * day, the daily average. Every number here is derived from the same zero-filled
  * series the chart draws, so the two can never disagree.
+ *
+ * The metric switch and the window switch share one row and one control — the
+ * dashboard's `Segmented` — so they read as the two halves of a single question:
+ * WHICH number, over HOW LONG. The window lives in the URL (`?days=`) because the
+ * server reads it; the control only navigates.
  *
  * Views is the default because it is the one series that runs unbroken across
  * the 2026-09-12 cut-over. Choosing Views keeps the visitors line on the chart;
@@ -31,7 +38,8 @@ export function MetricExplorer({
   timeline,
   prevTotals,
   visitorsSince,
-  windowLabel,
+  days,
+  windows,
   extras = {},
   className,
 }: {
@@ -39,11 +47,15 @@ export function MetricExplorer({
   timeline: TimelineDay[]
   prevTotals: Record<MetricKey, number>
   visitorsSince?: string
-  /** "30 days", for the stat labels. */
-  windowLabel: string
+  /** The window in force, and the ones on offer. */
+  days: number
+  windows: readonly number[]
   extras?: Partial<Record<MetricKey, MetricExtra[]>>
   className?: string
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const windowLabel = `${days} days`
   const [key, setKey] = useState<MetricKey>('views')
   const metric = metrics.find((m) => m.key === key) ?? metrics[0]
   const facts = metricFacts(metric, timeline.map((d) => d.day), prevTotals[metric.key] ?? 0)
@@ -52,25 +64,21 @@ export function MetricExplorer({
 
   return (
     <div className={className}>
-      {/* The row where the metric is chosen. Label and total: the number is what
-          you are choosing between, so it belongs on the control. */}
-      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Metric">
-        {metrics.map((m) => (
-          <button
-            key={m.key}
-            type="button"
-            role="tab"
-            aria-selected={m.key === metric.key}
-            onClick={() => setKey(m.key)}
-            className={cx(
-              'flex items-baseline gap-2 rounded-full px-3 py-1 font-space text-[11px] uppercase tracking-[0.1em] transition-colors',
-              m.key === metric.key ? 'bg-ink text-paper' : 'text-ink-faint hover:bg-surface-hover',
-            )}
-          >
-            {m.label}
-            <span className={cx('tabular-nums', m.key === metric.key ? 'text-paper/70' : 'text-ink-faint')}>{fmt(m.total)}</span>
-          </button>
-        ))}
+      {/* WHICH number, over HOW LONG: one row, one control language. Labels only —
+          the numbers live in the panel, where they can be read against each other. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented
+          label="Metric"
+          options={metrics.map((m) => ({ key: m.key, label: m.label }))}
+          value={metric.key}
+          onChange={setKey}
+        />
+        <Segmented
+          label="Window"
+          options={windows.map((n) => ({ key: String(n), label: `${n} days` }))}
+          value={String(days)}
+          onChange={(n) => router.push(`${pathname}?days=${n}`)}
+        />
       </div>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-3">
@@ -85,7 +93,7 @@ export function MetricExplorer({
 
         {/* The facts. The total is the headline; everything under it is a way of
             reading the same series. */}
-        <div role="tabpanel" aria-label={`${metric.label} facts`} className="flex flex-col gap-5 rounded-2xl bg-surface p-5">
+        <div role="region" aria-label={`${metric.label} facts`} className="flex flex-col gap-5 rounded-2xl bg-surface p-5">
           <div>
             <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
               {metric.label} · {windowLabel}
