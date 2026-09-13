@@ -6,6 +6,8 @@
  * ANALYTICS_STATS_PLAN.md.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { dayDelta } from '@/lib/chart'
+import { sourceLabel } from '@/lib/analytics-sources'
 
 export type EntityCounts = Map<string, Record<string, number>>
 
@@ -111,6 +113,9 @@ export type TrafficWindow = {
   /** Event type → one count per day, aligned index-for-index with `timeline`.
    *  Zero-filled for the same reason the timeline is. */
   byType: Record<string, number[]>
+  /** The same sources reader over the window immediately before this one, so a
+   *  source can say whether it grew. Everything else compares against nothing. */
+  prevSources: SourceRow[]
   totals: { views: number; visitors: number; bots: number }
 }
 
@@ -166,13 +171,20 @@ export async function trafficWindow(
 ): Promise<TrafficWindow> {
   const w = analyticsWindow(days, nowMs)
   const args = { p_artist_id: artistId, p_since: w.since, p_until: w.until }
-  const [timeline, sources, places, devices, byType] = await Promise.all([
+  const prev = previousWindow(w)
+  const [timeline, sources, places, devices, byType, prevSources] = await Promise.all([
     supabase.rpc('analytics_timeline', args),
     supabase.rpc('analytics_sources', args),
     supabase.rpc('analytics_places', args),
     supabase.rpc('analytics_devices', args),
     supabase.rpc('analytics_type_timeline', args),
+    supabase.rpc('analytics_sources', { p_artist_id: artistId, p_since: prev.since, p_until: prev.until }),
   ])
+  const sourceRows = (rows: unknown): SourceRow[] =>
+    ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+      source: String(r.source ?? ''), referrer_host: String(r.referrer_host ?? ''),
+      views: num(r.views), visitors: num(r.visitors),
+    }))
 
   const byDay = new Map<string, TimelineDay>()
   for (const r of (timeline.data ?? []) as Record<string, unknown>[]) {
@@ -202,10 +214,8 @@ export async function trafficWindow(
     window: w,
     timeline: filled,
     byType: byTypeSeries,
-    sources: ((sources.data ?? []) as Record<string, unknown>[]).map((r) => ({
-      source: String(r.source ?? ''), referrer_host: String(r.referrer_host ?? ''),
-      views: num(r.views), visitors: num(r.visitors),
-    })),
+    sources: sourceRows(sources.data),
+    prevSources: sourceRows(prevSources.data),
     places: ((places.data ?? []) as Record<string, unknown>[]).map((r) => ({
       country: String(r.country ?? ''), region: String(r.region ?? ''), city: String(r.city ?? ''),
       views: num(r.views), visitors: num(r.visitors),
@@ -219,6 +229,60 @@ export async function trafficWindow(
       { views: 0, visitors: 0, bots: 0 },
     ),
   }
+}
+
+/** The window of the same length that ends the day before `w` starts. */
+export function previousWindow(w: Window): Window {
+  const untilMs = Date.parse(`${w.since}T00:00:00Z`) - 86_400_000
+  return {
+    since: utcDay(untilMs - (w.days - 1) * 86_400_000),
+    until: utcDay(untilMs),
+    days: w.days,
+  }
+}
+
+/** One source, rolled up across its referrer hosts, with everything a source can
+ *  honestly say about itself: how many, what share, which hosts, and whether it
+ *  grew on the window before. Nothing per-song or per-click lives here, because
+ *  the tally that would answer that does not exist yet. */
+export type SourceSummary = {
+  source: string
+  label: string
+  views: number
+  visitors: number
+  /** Of all visitors in the window, the fraction that arrived from this source. */
+  share: number
+  hosts: { host: string; visitors: number }[]
+  /** Visitors against the previous window, as a fraction; null when there is
+   *  nothing to compare against (see `dayDelta`). */
+  trend: number | null
+}
+
+export function summarizeSources(cur: SourceRow[], prev: SourceRow[] = []): SourceSummary[] {
+  const by = new Map<string, { views: number; visitors: number; hosts: Map<string, number> }>()
+  for (const r of cur) {
+    if (!r.source) continue
+    const got = by.get(r.source) ?? { views: 0, visitors: 0, hosts: new Map() }
+    got.views += r.views
+    got.visitors += r.visitors
+    if (r.referrer_host) got.hosts.set(r.referrer_host, (got.hosts.get(r.referrer_host) ?? 0) + r.visitors)
+    by.set(r.source, got)
+  }
+  const prevBy = new Map<string, number>()
+  for (const r of prev) if (r.source) prevBy.set(r.source, (prevBy.get(r.source) ?? 0) + r.visitors)
+  const total = [...by.values()].reduce((n, s) => n + s.visitors, 0)
+  return [...by.entries()]
+    .filter(([, s]) => s.visitors > 0)
+    .map(([source, s]) => ({
+      source,
+      label: sourceLabel(source),
+      views: s.views,
+      visitors: s.visitors,
+      share: total === 0 ? 0 : s.visitors / total,
+      hosts: [...s.hosts.entries()].map(([host, visitors]) => ({ host, visitors })).sort((a, b) => b.visitors - a.visitors),
+      trend: dayDelta(prevBy.get(source), s.visitors),
+    }))
+    .sort((a, b) => b.visitors - a.visitors)
 }
 
 /**

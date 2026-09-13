@@ -6,9 +6,9 @@ import { cx } from '@/lib/cx'
 import { TimelineChart } from '@/components/ui/timeline-chart'
 import { BarList } from '@/components/ui/bar-list'
 import { MetricPills } from '@/components/ui/metric-pills'
+import { SourceRings } from '@/components/ui/source-rings'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { sourceLabel } from '@/lib/analytics-sources'
-import { CONTEXT_SINCE, metrics, reachesBeforeContext, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeSources, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
 import { DIFF_SECTIONS } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 
@@ -74,7 +74,6 @@ export default async function OverviewPage({
   const trend = formatTrend(seriesTrend(series))
   const partial = reachesBeforeContext(traffic.window)
 
-  const sources = rollBars(traffic.sources, (r) => r.source, (r) => sourceLabel(r.source), (r) => r.views, (r) => r.referrer_host)
   const places = rollBars(traffic.places, (r) => r.country, (r) => r.country, (r) => r.views, (r) => r.city)
   const devices = rollBars(traffic.devices, (r) => r.device, (r) => DEVICE_LABEL[r.device] ?? r.device, (r) => r.views, (r) => r.browser)
 
@@ -117,15 +116,16 @@ export default async function OverviewPage({
         <TimelineChart points={traffic.timeline} visitorsSince={CONTEXT_SINCE} className="mt-6" />
       </section>
 
-      {/* WHERE FROM, WHERE, AND ON WHAT. Three ranked lists rather than three charts:
-          the categories are named things of unequal length, and a reader comparing
-          "Instagram" to "AI assistants" is comparing magnitudes, which a bar does
-          plainly and a pie does not. */}
-      <div className="grid gap-10 md:grid-cols-3">
-        <section>
-          <KLabel>Where they came from</KLabel>
-          <BarList className="mt-3" bars={sources} empty="No visits yet." />
-        </section>
+      {/* WHERE FROM. One ring per source, its share of everyone as the arc. */}
+      <section>
+        <KLabel>Where they came from</KLabel>
+        <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources)} />
+      </section>
+
+      {/* WHERE, AND ON WHAT. Ranked lists rather than charts: the categories are
+          named things of unequal length, and a reader comparing them is comparing
+          magnitudes, which a bar does plainly and a pie does not. */}
+      <div className="grid gap-10 md:grid-cols-2">
 
         <section>
           <KLabel>Where they are</KLabel>

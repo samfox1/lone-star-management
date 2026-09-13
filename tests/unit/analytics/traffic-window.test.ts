@@ -15,6 +15,8 @@ import {
   METRICS,
   analyticsWindow,
   metrics,
+  previousWindow,
+  summarizeSources,
   reachesBeforeContext,
   topBars,
   trafficWindow,
@@ -64,12 +66,16 @@ describe('trafficWindow', () => {
     const { client, calls } = fakeClient({})
     await trafficWindow(client, 'artist-1', 7, NOW)
     expect(calls.map((c) => c.fn).sort()).toEqual([
-      'analytics_devices', 'analytics_places', 'analytics_sources',
+      'analytics_devices', 'analytics_places', 'analytics_sources', 'analytics_sources',
       'analytics_timeline', 'analytics_type_timeline',
     ])
-    for (const c of calls) {
-      expect(c.args, c.fn).toEqual({ p_artist_id: 'artist-1', p_since: '2026-09-06', p_until: '2026-09-12' })
-    }
+    const thisWindow = { p_artist_id: 'artist-1', p_since: '2026-09-06', p_until: '2026-09-12' }
+    const previous = { p_artist_id: 'artist-1', p_since: '2026-08-30', p_until: '2026-09-05' }
+    // Exactly one call reads the window BEFORE this one, and only for sources.
+    const [prevCall, ...rest] = calls.filter((c) => c.args.p_since !== thisWindow.p_since)
+    expect(rest).toEqual([])
+    expect(prevCall).toEqual({ fn: 'analytics_sources', args: previous })
+    for (const c of calls.filter((c) => c !== prevCall)) expect(c.args, c.fn).toEqual(thisWindow)
   })
 
   it('CRITICAL: zero-fills the quiet days — a day with no traffic is a zero, not a gap', async () => {
@@ -172,6 +178,61 @@ describe('the per-metric series the sparklines draw', () => {
     })
     expect(w.byType.play.at(-1)).toBe(4)
     expect(typeof w.byType.play.at(-1)).toBe('number')
+  })
+})
+
+describe('previousWindow', () => {
+  it('is the same length and ends the day before this one starts — no gap, no overlap', () => {
+    const w = analyticsWindow(7, NOW) // 2026-09-06 → 2026-09-12
+    expect(previousWindow(w)).toEqual({ since: '2026-08-30', until: '2026-09-05', days: 7 })
+    expect(previousWindow(analyticsWindow(30, NOW))).toEqual({ since: '2026-07-15', until: '2026-08-13', days: 30 })
+  })
+})
+
+describe('summarizeSources', () => {
+  const row = (source: string, referrer_host: string, visitors: number, views = visitors * 2) =>
+    ({ source, referrer_host, visitors, views })
+
+  it('rolls a source up across its hosts and ranks hosts by visitors', () => {
+    const [ig] = summarizeSources([
+      row('instagram', 'l.instagram.com', 30),
+      row('instagram', 'instagram.com', 70),
+    ])
+    expect(ig.visitors).toBe(100)
+    expect(ig.views).toBe(200)
+    expect(ig.hosts.map((h) => h.host)).toEqual(['instagram.com', 'l.instagram.com'])
+  })
+
+  it('CRITICAL: shares are of ALL visitors and sum to one — a ring is a share of everyone', () => {
+    const out = summarizeSources([row('instagram', 'a', 60), row('youtube', 'b', 30), row('direct', '', 10)])
+    expect(out.map((s) => s.share)).toEqual([0.6, 0.3, 0.1])
+    expect(out.reduce((n, s) => n + s.share, 0)).toBeCloseTo(1, 10)
+  })
+
+  it('CRITICAL: the trend is against the previous window, and withheld when there was none', () => {
+    const out = summarizeSources(
+      [row('instagram', 'a', 150), row('youtube', 'b', 40)],
+      [row('instagram', 'a', 100)],
+    )
+    const by = Object.fromEntries(out.map((s) => [s.source, s]))
+    expect(by.instagram.trend).toBeCloseTo(0.5, 10)
+    // YouTube had nothing last window: no percentage, not "+∞" and not "+100%".
+    expect(by.youtube.trend).toBeNull()
+  })
+
+  it('drops rows with no source and sources with no visitors', () => {
+    const out = summarizeSources([row('', 'x', 9), row('google', 'google.com', 0), row('tiktok', 't', 3)])
+    expect(out.map((s) => s.source)).toEqual(['tiktok'])
+  })
+
+  it('labels from the registry, and falls back to the raw key', () => {
+    const out = summarizeSources([row('apple_music', 'm', 1), row('mystery', 'm', 1)])
+    expect(out.map((s) => s.label).sort()).toEqual(['Apple Music', 'mystery'])
+  })
+
+  it('a window with no visitors at all yields no rings, not a division by zero', () => {
+    expect(summarizeSources([])).toEqual([])
+    expect(summarizeSources([row('instagram', 'a', 0)])).toEqual([])
   })
 })
 
