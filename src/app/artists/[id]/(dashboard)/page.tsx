@@ -7,8 +7,9 @@ import { TimelineChart } from '@/components/ui/timeline-chart'
 import { BarList } from '@/components/ui/bar-list'
 import { MetricPills } from '@/components/ui/metric-pills'
 import { SourceRings } from '@/components/ui/source-rings'
+import { DeviceSplit } from '@/components/ui/device-split'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeSources, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
 import { DIFF_SECTIONS } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 
@@ -45,8 +46,6 @@ function rollBars<T>(
   return topBars([...by.values()])
 }
 
-const DEVICE_LABEL: Record<string, string> = { mobile: 'Phone', tablet: 'Tablet', desktop: 'Desktop' }
-
 export default async function OverviewPage({
   params,
   searchParams,
@@ -75,7 +74,6 @@ export default async function OverviewPage({
   const partial = reachesBeforeContext(traffic.window)
 
   const places = rollBars(traffic.places, (r) => r.country, (r) => r.country, (r) => r.views, (r) => r.city)
-  const devices = rollBars(traffic.devices, (r) => r.device, (r) => DEVICE_LABEL[r.device] ?? r.device, (r) => r.views, (r) => r.browser)
 
   return (
     <div className="space-y-10">
@@ -136,11 +134,13 @@ export default async function OverviewPage({
           />
         </section>
 
-        <section>
-          <KLabel>What they used</KLabel>
-          <BarList className="mt-3" bars={devices} empty="No visits yet." />
-        </section>
       </div>
+
+      {/* ON WHAT. Mobile against web, one scale across both. */}
+      <section>
+        <KLabel>What they used</KLabel>
+        <DeviceSplit className="mt-3" split={summarizeDevices(traffic.devices)} />
+      </section>
 
       {/* The numbers above do not all reach as far back as the window does, and the
           page has to say which. */}

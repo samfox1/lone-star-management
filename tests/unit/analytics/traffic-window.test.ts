@@ -16,6 +16,7 @@ import {
   analyticsWindow,
   metrics,
   previousWindow,
+  summarizeDevices,
   summarizeSources,
   reachesBeforeContext,
   topBars,
@@ -233,6 +234,35 @@ describe('summarizeSources', () => {
   it('a window with no visitors at all yields no rings, not a division by zero', () => {
     expect(summarizeSources([])).toEqual([])
     expect(summarizeSources([row('instagram', 'a', 0)])).toEqual([])
+  })
+})
+
+describe('summarizeDevices', () => {
+  const row = (device: string, browser: string, visitors: number) => ({ device, browser, visitors, views: visitors * 2 })
+
+  it('CRITICAL: phones and tablets are MOBILE, desktops are WEB, and the unclassified are counted not drawn', () => {
+    const d = summarizeDevices([
+      row('mobile', 'instagram', 198), row('tablet', 'safari', 13), row('desktop', 'chrome', 88), row('', '', 9),
+    ])
+    expect(d.mobile.map((r) => r.browser)).toEqual(['instagram', 'safari'])
+    expect(d.web.map((r) => r.browser)).toEqual(['chrome'])
+    expect(d.mobileVisitors).toBe(211)
+    expect(d.webVisitors).toBe(88)
+    expect(d.otherVisitors).toBe(9)
+  })
+
+  it('CRITICAL: one maximum across BOTH groups, so a web bar and a mobile bar share a scale', () => {
+    const d = summarizeDevices([row('mobile', 'instagram', 198), row('desktop', 'chrome', 88)])
+    expect(d.max).toBe(198)
+  })
+
+  it('sums the same device × browser across days and ranks by visitors', () => {
+    const d = summarizeDevices([row('desktop', 'safari', 5), row('desktop', 'chrome', 40), row('desktop', 'safari', 30)])
+    expect(d.web.map((r) => [r.browser, r.visitors])).toEqual([['chrome', 40], ['safari', 35]])
+  })
+
+  it('an empty window has a floor of 1, never a divide by zero', () => {
+    expect(summarizeDevices([]).max).toBe(1)
   })
 })
 
