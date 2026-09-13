@@ -107,56 +107,57 @@ export function MetricExplorer({
         />
       </div>
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-4">
-        <TimelineChart points={timeline} height={420} series={series} className="lg:col-span-3" />
+      <TimelineChart points={timeline} height={380} series={series} className="mt-4" />
 
-        <div role="region" aria-label="Facts" className="flex flex-col gap-5 rounded-2xl bg-surface p-5">
-          <div>
-            <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Views · {windowLabel}</div>
-            <div className="mt-2 font-space text-[44px] font-bold leading-none tracking-[-0.015em] tabular-nums text-ink">{fmt(vf.total)}</div>
-            {!allTime && (
-              <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                {vt ? (
-                  <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(vt.dir))}>{vt.label}</span> vs prior {windowLabel}</>
-                ) : (
-                  <>No prior {windowLabel}</>
-                )}
-              </div>
-            )}
-          </div>
-
-          <dl className="flex flex-col gap-4 border-t border-hairline pt-4">
-            <Fact label="Best day" value={vf.bestDay ? `${dayLabel(vf.bestDay.day)} · ${fmt(vf.bestDay.value)}` : '—'} />
-            <Fact label="Per day" value={perDay(vf.perDay)} />
-            {(extras.views ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
-          </dl>
-
-          {drawn.slice(1).map((m) => {
-            const f = factsFor(m)
-            return (
-              <dl key={m.key} data-facts={m.key} className="flex flex-col gap-4 border-t border-hairline pt-4">
-                <Fact label={m.label} value={fmt(f.total)} />
-                <Fact label="Per day" value={perDay(f.perDay)} />
-                {(extras[m.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
-              </dl>
-            )
-          })}
+      {/* The facts as one strip under the chart, not a column beside it: a column
+          sat two-thirds empty whenever only views was drawn (Sam, 2026-09-13:
+          "use the space better"). The views total leads; each toggled series adds
+          its own cells to the same row. No container — the hairline does the work. */}
+      <div role="region" aria-label="Facts" className="mt-5 flex flex-wrap items-stretch gap-y-4 border-t border-hairline pt-4">
+        <div className="flex min-w-[180px] flex-col justify-center pr-8">
+          <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Views · {windowLabel}</div>
+          <div className="mt-1 font-space text-[34px] font-bold leading-none tracking-[-0.015em] tabular-nums text-ink">{fmt(vf.total)}</div>
+          {!allTime && (
+            <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+              {vt ? (
+                <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(vt.dir))}>{vt.label}</span> vs prior {windowLabel}</>
+              ) : (
+                <>No prior {windowLabel}</>
+              )}
+            </div>
+          )}
         </div>
+
+        <Cell label="Best day" value={vf.bestDay ? `${dayLabel(vf.bestDay.day)} · ${fmt(vf.bestDay.value)}` : '—'} />
+        <Cell label="Per day" value={perDay(vf.perDay)} />
+        {(extras.views ?? []).map((e) => <Cell key={e.label} label={e.label} value={e.value} />)}
+
+        {drawn.slice(1).map((m) => {
+          const f = factsFor(m)
+          return (
+            <div key={m.key} data-facts={m.key} className="flex flex-wrap">
+              <Cell label={m.label} value={fmt(f.total)} accent />
+              <Cell label="Per day" value={perDay(f.perDay)} />
+              {(extras[m.key] ?? []).map((e) => <Cell key={e.label} label={e.label} value={e.value} />)}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-const perDay = (n: number) => (n >= 10 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1))
-
-function Fact({ label, value }: { label: string; value: string }) {
+/** One fact in the strip, ruled from its neighbour by a hairline on the left. */
+function Cell({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="min-w-0">
-      <dt className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</dt>
-      <dd className="mt-1 truncate font-space text-[15px] font-bold tabular-nums text-ink">{value}</dd>
+    <div className={cx('flex min-w-[120px] flex-col justify-center border-l border-hairline px-6', accent && 'border-l-ink')}>
+      <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</div>
+      <div className="mt-1 whitespace-nowrap font-space text-[17px] font-bold tabular-nums text-ink">{value}</div>
     </div>
   )
 }
+
+const perDay = (n: number) => (n >= 10 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1))
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function dayLabel(day: string): string {
