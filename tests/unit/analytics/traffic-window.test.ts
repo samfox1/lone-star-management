@@ -15,6 +15,7 @@ import {
   METRICS,
   analyticsWindow,
   metrics,
+  metricFacts,
   previousWindow,
   summarizeDevices,
   summarizeSources,
@@ -68,17 +69,19 @@ describe('trafficWindow', () => {
   it('asks every reader for the SAME slice — one window, or the blocks disagree', async () => {
     const { client, calls } = fakeClient({})
     await trafficWindow(client, 'artist-1', 7, NOW)
-    expect(calls.map((c) => c.fn).sort()).toEqual([
-      'analytics_devices', 'analytics_places', 'analytics_sources', 'analytics_sources',
-      'analytics_timeline', 'analytics_type_timeline',
-    ])
     const thisWindow = { p_artist_id: 'artist-1', p_since: '2026-09-06', p_until: '2026-09-12' }
     const previous = { p_artist_id: 'artist-1', p_since: '2026-08-30', p_until: '2026-09-05' }
-    // Exactly one call reads the window BEFORE this one, and only for sources.
-    const [prevCall, ...rest] = calls.filter((c) => c.args.p_since !== thisWindow.p_since)
-    expect(rest).toEqual([])
-    expect(prevCall).toEqual({ fn: 'analytics_sources', args: previous })
-    for (const c of calls.filter((c) => c !== prevCall)) expect(c.args, c.fn).toEqual(thisWindow)
+    const cur = calls.filter((c) => c.args.p_since === thisWindow.p_since)
+    const prev = calls.filter((c) => c.args.p_since === previous.p_since)
+    expect(cur.length + prev.length, 'every call is one window or the other').toBe(calls.length)
+    expect(cur.map((c) => c.fn).sort()).toEqual([
+      'analytics_devices', 'analytics_places', 'analytics_sources', 'analytics_timeline', 'analytics_type_timeline',
+    ])
+    // The previous window is read only for what compares against it: sources, and
+    // the two readers every metric total comes from.
+    expect(prev.map((c) => c.fn).sort()).toEqual(['analytics_sources', 'analytics_timeline', 'analytics_type_timeline'])
+    for (const c of cur) expect(c.args, c.fn).toEqual(thisWindow)
+    for (const c of prev) expect(c.args, c.fn).toEqual(previous)
   })
 
   it('CRITICAL: zero-fills the quiet days — a day with no traffic is a zero, not a gap', async () => {
@@ -181,6 +184,45 @@ describe('the per-metric series the sparklines draw', () => {
     })
     expect(w.byType.play.at(-1)).toBe(4)
     expect(typeof w.byType.play.at(-1)).toBe('number')
+  })
+})
+
+describe('previous-window totals', () => {
+  it('CRITICAL: sums every metric over the window before, keyed like METRICS', async () => {
+    const prevRows = {
+      analytics_timeline: [{ day: '2026-09-01', views: 40, visitors: 10, bots: 3 }, { day: '2026-09-02', views: 60, visitors: 15, bots: 1 }],
+      analytics_type_timeline: [{ day: '2026-09-01', type: 'play', count: 4 }, { day: '2026-09-02', type: 'play', count: 6 }, { day: '2026-09-02', type: 'ticket_click', count: 2 }],
+    }
+    // The fake answers every call from one table, so the previous window sees the
+    // same rows as the current one — which is exactly what this test needs.
+    const w = await trafficWindow(fakeClient(prevRows).client, 'a', 7, NOW)
+    expect(w.prevTotals).toEqual({ views: 100, visitors: 25, bots: 4, plays: 10, link_clicks: 0, ticket_clicks: 2, buy_clicks: 0 })
+    expect(Object.keys(w.prevTotals).sort()).toEqual(METRICS.map((m) => m.key).sort())
+  })
+})
+
+describe('metricFacts', () => {
+  const days = ['2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']
+  const m = (series: number[]) => ({ key: 'views' as const, label: 'Views', series, total: series.reduce((a, b) => a + b, 0) })
+
+  it('total, best day and per-day all come off the one series', () => {
+    const f = metricFacts(m([10, 40, 5, 25]), days, 40)
+    expect(f.total).toBe(80)
+    expect(f.bestDay).toEqual({ day: '2026-09-11', value: 40 })
+    expect(f.perDay).toBe(20)
+    expect(f.delta).toBeCloseTo(1, 10)
+  })
+
+  it('CRITICAL: withholds the change when the previous window had none', () => {
+    expect(metricFacts(m([1, 2, 3, 4]), days, 0).delta).toBeNull()
+  })
+
+  it('a window of nothing has no best day, rather than "best day: 0"', () => {
+    expect(metricFacts(m([0, 0, 0, 0]), days, 0).bestDay).toBeNull()
+  })
+
+  it('the FIRST of tied best days wins, so the label is stable between renders', () => {
+    expect(metricFacts(m([7, 3, 7, 1]), days, 1).bestDay?.day).toBe('2026-09-10')
   })
 })
 

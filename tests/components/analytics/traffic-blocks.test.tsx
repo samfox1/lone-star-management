@@ -219,6 +219,19 @@ describe('TimelineChart', () => {
     })
   })
 
+  it('CRITICAL: charts a supplied series instead of views when asked, on the same zero-based scale', () => {
+    const { container } = render(
+      <TimelineChart points={points} primary={{ label: 'Plays', values: [20, 100, 0] }} height={100} />,
+    )
+    const y = ys(container.querySelector('polyline[data-series="views"]')!.getAttribute('points')!)
+    expect(y[1]).toBeCloseTo(8, 5) // the 100 sits at the top of the plot
+    expect(y[2]).toBe(100)         // the 0 on the floor
+    // Plays alone: no visitors line, and the legend names the series that is drawn.
+    expect(container.querySelector('polyline[data-series="visitors"]')).toBeNull()
+    expect(within(screen.getByRole('list', { name: 'Series' })).getByText('Plays')).toBeTruthy()
+    expect(screen.queryByText('Visitors')).toBeNull()
+  })
+
   it('names the best day, because the peak is the one point a reader will ask about', () => {
     render(<TimelineChart points={points} height={80} />)
     expect(screen.getByText(/best day sep 10 · 100 views/i)).toBeTruthy()

@@ -36,6 +36,8 @@ export function TimelineChart({
   points,
   height = 260,
   visitorsSince,
+  primary,
+  showVisitors = primary === undefined,
   className,
 }: {
   points: TimelinePoint[]
@@ -44,6 +46,13 @@ export function TimelineChart({
    *  drawn at all — a zero there would be a lie, the number was never taken —
    *  and the span is shaded and labelled so the gap reads as a gap. */
   visitorsSince?: string
+  /** Chart THIS series as the blue mark instead of views: one value per point,
+   *  same order. The explorer uses it to put plays or ticket clicks on the same
+   *  chart grammar. Defaults to views. */
+  primary?: { label: string; values: number[] }
+  /** Draw the red visitors line. On by default when charting views, off for
+   *  anything else — plays against visitors is not a comparison anyone makes. */
+  showVisitors?: boolean
   className?: string
 }) {
   const box = useRef<HTMLDivElement>(null)
@@ -51,12 +60,13 @@ export function TimelineChart({
 
   const w = 600
   const h = height
-  const peak = Math.max(0, ...points.map((p) => Math.max(p.views, p.visitors)))
+  const primaryLabel = primary?.label ?? 'Views'
+  const primaryAt = (i: number) => primary ? (primary.values[i] ?? 0) : points[i].views
+  const peak = Math.max(0, ...points.map((p, i) => Math.max(primaryAt(i), showVisitors ? p.visitors : 0)))
   const top = niceCeil(peak)
   const x = (i: number) => (points.length < 2 ? w / 2 : (i / (points.length - 1)) * w)
   const y = (v: number) => PAD_TOP + (1 - v / top) * (h - PAD_TOP)
-  const path = (key: 'views' | 'visitors') =>
-    points.map((p, i) => `${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ')
+  const primaryPath = points.map((_, i) => `${x(i).toFixed(1)},${y(primaryAt(i)).toFixed(1)}`).join(' ')
   // Visitors exist only from the cut-over. Days before it are not "0 visitors",
   // they are unmeasured, so the line simply starts where the measurement does.
   const firstVisitorIdx = visitorsSince ? points.findIndex((p) => p.day >= visitorsSince) : 0
@@ -67,9 +77,9 @@ export function TimelineChart({
     .join(' ')
   const unmeasuredUntil = firstVisitorIdx > 0 ? x(firstVisitorIdx) : firstVisitorIdx === -1 ? w : 0
 
-  const peakIndex = points.reduce((best, p, i) => (p.views > (points[best]?.views ?? -1) ? i : best), 0)
+  const peakIndex = points.reduce((best, _, i) => (primaryAt(i) > (best >= 0 ? primaryAt(best) : -1) ? i : best), 0)
   const shown = at != null ? points[at] : null
-  const delta = shown ? dayDelta(points[at! - 1]?.views, shown.views) : null
+  const delta = shown ? dayDelta(at! > 0 ? primaryAt(at! - 1) : undefined, primaryAt(at!)) : null
   const trend = delta === null ? null : formatTrend(delta)
   const flip = at != null && points.length > 1 && at / (points.length - 1) > 0.62
 
@@ -82,16 +92,18 @@ export function TimelineChart({
         <ul aria-label="Series" className="flex items-center gap-5 text-paper/60">
           <li className="flex items-center gap-1.5">
             <span aria-hidden className="inline-block h-[3px] w-4 rounded-full bg-accent" />
-            Views
+            {primaryLabel}
           </li>
-          <li className="flex items-center gap-1.5">
-            <span aria-hidden className="inline-block h-[3px] w-4 rounded-full bg-accent-red" />
-            Visitors
-          </li>
+          {showVisitors && (
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden className="inline-block h-[3px] w-4 rounded-full bg-accent-red" />
+              Visitors
+            </li>
+          )}
         </ul>
-        {points.length > 0 && points[peakIndex].views > 0 && (
+        {points.length > 0 && primaryAt(peakIndex) > 0 && (
           <span className="text-paper/60">
-            Best day {dayLabel(points[peakIndex].day)} · {points[peakIndex].views} views
+            Best day {dayLabel(points[peakIndex].day)} · {primaryAt(peakIndex)} {primaryLabel.toLowerCase()}
           </span>
         )}
       </div>
@@ -143,7 +155,7 @@ export function TimelineChart({
               strokeWidth={1} vectorEffect="non-scaling-stroke"
             />
 
-            {unmeasuredUntil > 0 && (
+            {showVisitors && unmeasuredUntil > 0 && (
               <rect
                 data-unmeasured="visitors"
                 x={0} y={PAD_TOP} width={unmeasuredUntil} height={h - PAD_TOP}
@@ -152,23 +164,25 @@ export function TimelineChart({
             )}
             <polygon
               data-series="views"
-              points={`${path('views')} ${w},${h} 0,${h}`}
+              points={`${primaryPath} ${w},${h} 0,${h}`}
               fill="currentColor" className="text-accent" opacity={0.2}
             />
             <polyline
               data-series="views"
-              points={path('views')}
+              points={primaryPath}
               fill="none" stroke="currentColor" className="text-accent"
               strokeWidth={2.4} vectorEffect="non-scaling-stroke"
               strokeLinecap="round" strokeLinejoin="round"
             />
-            <polyline
-              data-series="visitors"
-              points={visitorsPath}
-              fill="none" stroke="currentColor" className="text-accent-red"
-              strokeWidth={1.8} vectorEffect="non-scaling-stroke"
-              strokeLinecap="round" strokeLinejoin="round"
-            />
+            {showVisitors && (
+              <polyline
+                data-series="visitors"
+                points={visitorsPath}
+                fill="none" stroke="currentColor" className="text-accent-red"
+                strokeWidth={1.8} vectorEffect="non-scaling-stroke"
+                strokeLinecap="round" strokeLinejoin="round"
+              />
+            )}
 
             {at != null && shown && (
               <g data-crosshair>
@@ -181,7 +195,7 @@ export function TimelineChart({
             )}
           </svg>
 
-          {unmeasuredUntil > 0 && (
+          {showVisitors && unmeasuredUntil > 0 && (
             <span
               className="pointer-events-none absolute top-2 font-space text-[10px] uppercase tracking-[0.1em] text-paper/40"
               style={{ left: 8 }}
@@ -193,8 +207,8 @@ export function TimelineChart({
           {/* The dots sit outside the stretched SVG so they stay round. */}
           {at != null && shown && (
             <>
-              <Dot left={x(at) / w} top={y(shown.views) / h} className="border-accent" />
-              {hasVisitors(at) && (
+              <Dot left={x(at) / w} top={y(primaryAt(at)) / h} className="border-accent" />
+              {showVisitors && hasVisitors(at) && (
                 <Dot left={x(at) / w} top={y(shown.visitors) / h} className="border-accent-red" />
               )}
               <div
@@ -210,26 +224,28 @@ export function TimelineChart({
                 <div className="text-sm">{dayLabel(shown.day)}</div>
                 <dl className="mt-2 space-y-1 border-t border-hairline pt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
                   <div className="flex justify-between gap-3">
-                    <dt>Views</dt>
-                    <dd className="text-[11px] font-bold tabular-nums text-ink">{shown.views}</dd>
+                    <dt>{primaryLabel}</dt>
+                    <dd className="text-[11px] font-bold tabular-nums text-ink">{primaryAt(at)}</dd>
                   </div>
-                  <div className="flex justify-between gap-3">
-                    <dt>Visitors</dt>
-                    <dd className="whitespace-nowrap text-[11px] font-bold tabular-nums text-ink">
-                      {hasVisitors(at) ? shown.visitors : 'not yet counted'}
-                    </dd>
-                  </div>
+                  {showVisitors && (
+                    <div className="flex justify-between gap-3">
+                      <dt>Visitors</dt>
+                      <dd className="whitespace-nowrap text-[11px] font-bold tabular-nums text-ink">
+                        {hasVisitors(at) ? shown.visitors : 'not yet counted'}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
                 <div className="mt-2 whitespace-nowrap border-t border-hairline pt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
                   {trend ? (
                     <>
                       <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span>
-                      {' '}vs {dayLabel(points[at! - 1].day)} · {points[at! - 1].views}
+                      {' '}vs {dayLabel(points[at! - 1].day)} · {primaryAt(at! - 1)}
                     </>
                   ) : at === 0 ? (
                     'First day of the window'
                   ) : (
-                    <>No views on {dayLabel(points[at! - 1].day)}</>
+                    <>No {primaryLabel.toLowerCase()} on {dayLabel(points[at! - 1].day)}</>
                   )}
                 </div>
               </div>
@@ -245,13 +261,13 @@ export function TimelineChart({
       </div>
 
       <table className="sr-only">
-        <caption>Views and visitors per day</caption>
+        <caption>{showVisitors ? `${primaryLabel} and visitors per day` : `${primaryLabel} per day`}</caption>
         <thead>
-          <tr><th>Day</th><th>Views</th><th>Visitors</th></tr>
+          <tr><th>Day</th><th>{primaryLabel}</th>{showVisitors && <th>Visitors</th>}</tr>
         </thead>
         <tbody>
-          {points.map((p) => (
-            <tr key={p.day}><td>{p.day}</td><td>{p.views}</td><td>{p.visitors}</td></tr>
+          {points.map((p, i) => (
+            <tr key={p.day}><td>{p.day}</td><td>{primaryAt(i)}</td>{showVisitors && <td>{p.visitors}</td>}</tr>
           ))}
         </tbody>
       </table>

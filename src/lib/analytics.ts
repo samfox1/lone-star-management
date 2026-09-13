@@ -114,8 +114,11 @@ export type TrafficWindow = {
    *  Zero-filled for the same reason the timeline is. */
   byType: Record<string, number[]>
   /** The same sources reader over the window immediately before this one, so a
-   *  source can say whether it grew. Everything else compares against nothing. */
+   *  source can say whether it grew. */
   prevSources: SourceRow[]
+  /** Every metric's total over the previous window, keyed like METRICS, so the
+   *  explorer can say "vs the 30 days before" per metric. */
+  prevTotals: Record<MetricKey, number>
   totals: { views: number; visitors: number; bots: number }
 }
 
@@ -172,13 +175,16 @@ export async function trafficWindow(
   const w = analyticsWindow(days, nowMs)
   const args = { p_artist_id: artistId, p_since: w.since, p_until: w.until }
   const prev = previousWindow(w)
-  const [timeline, sources, places, devices, byType, prevSources] = await Promise.all([
+  const prevArgs = { p_artist_id: artistId, p_since: prev.since, p_until: prev.until }
+  const [timeline, sources, places, devices, byType, prevSources, prevTimeline, prevByType] = await Promise.all([
     supabase.rpc('analytics_timeline', args),
     supabase.rpc('analytics_sources', args),
     supabase.rpc('analytics_places', args),
     supabase.rpc('analytics_devices', args),
     supabase.rpc('analytics_type_timeline', args),
-    supabase.rpc('analytics_sources', { p_artist_id: artistId, p_since: prev.since, p_until: prev.until }),
+    supabase.rpc('analytics_sources', prevArgs),
+    supabase.rpc('analytics_timeline', prevArgs),
+    supabase.rpc('analytics_type_timeline', prevArgs),
   ])
   const sourceRows = (rows: unknown): SourceRow[] =>
     ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
@@ -210,10 +216,21 @@ export async function trafficWindow(
     byTypeSeries[type] = filled.map((d) => days.get(d.day) ?? 0)
   }
 
+  // Previous-window totals, summed straight off the rows: no zero-fill needed for a sum.
+  const prevTotals = Object.fromEntries(METRICS.map((m) => [m.key, 0])) as Record<MetricKey, number>
+  for (const r of (prevTimeline.data ?? []) as Record<string, unknown>[]) {
+    prevTotals.views += num(r.views); prevTotals.visitors += num(r.visitors); prevTotals.bots += num(r.bots)
+  }
+  for (const r of (prevByType.data ?? []) as Record<string, unknown>[]) {
+    const m = METRICS.find((x) => x.type === String(r.type ?? ''))
+    if (m) prevTotals[m.key] += num(r.count)
+  }
+
   return {
     window: w,
     timeline: filled,
     byType: byTypeSeries,
+    prevTotals,
     sources: sourceRows(sources.data),
     prevSources: sourceRows(prevSources.data),
     places: ((places.data ?? []) as Record<string, unknown>[]).map((r) => ({
@@ -228,6 +245,32 @@ export async function trafficWindow(
       (t, d) => ({ views: t.views + d.views, visitors: t.visitors + d.visitors, bots: t.bots + d.bots }),
       { views: 0, visitors: 0, bots: 0 },
     ),
+  }
+}
+
+/**
+ * What the explorer says beside a metric's chart. Every field is derived from the
+ * zero-filled series and the previous window's total — nothing here is a guess.
+ * `delta` is null when the previous window had none (see `dayDelta`), and
+ * `bestDay` is null when the whole window was zero, because "best day: nothing"
+ * is not a fact worth printing.
+ */
+export type MetricFacts = {
+  total: number
+  delta: number | null
+  bestDay: { day: string; value: number } | null
+  perDay: number
+}
+
+export function metricFacts(m: Metric, days: string[], prevTotal: number): MetricFacts {
+  let best = -1
+  m.series.forEach((v, i) => { if (v > (best === -1 ? -1 : m.series[best])) best = i })
+  const bestDay = best >= 0 && m.series[best] > 0 ? { day: days[best], value: m.series[best] } : null
+  return {
+    total: m.total,
+    delta: dayDelta(prevTotal, m.total),
+    bestDay,
+    perDay: m.series.length ? m.total / m.series.length : 0,
   }
 }
 

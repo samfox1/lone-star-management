@@ -1,11 +1,9 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { type SectionDiff } from '@/lib/content'
-import { formatTrend, seriesTrend, trendTextClass } from '@/lib/format'
 import { cx } from '@/lib/cx'
-import { TimelineChart } from '@/components/ui/timeline-chart'
 import { BarList } from '@/components/ui/bar-list'
-import { MetricPills } from '@/components/ui/metric-pills'
+import { MetricExplorer } from '@/components/ui/metric-explorer'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
@@ -83,7 +81,6 @@ export default async function OverviewPage({
     (async () => { const ids = idsFor('merch', 'buy_click'); return ids.length ? (await supabase.from('merch').select('id,title,image_url,price').in('id', ids)).data ?? [] : [] })(),
   ])
   const allMetrics = metrics(traffic)
-  const trend = formatTrend(seriesTrend(traffic.timeline.map((d) => d.views)))
   const totalOf = (key: string) => allMetrics.find((m) => m.key === key)?.total ?? 0
   const refs: Record<string, ContentRef[]> = {
     songs: (trackRows as { id: string; title: string; cover_url: string | null; album_name: string | null }[])
@@ -97,6 +94,10 @@ export default async function OverviewPage({
     CONTENT_KINDS.map((k) => [k.key, topContent(entityRows, { entity: k.entity, type: k.type }, refs[k.key], totalOf(k.metric))]),
   ) as Record<(typeof CONTENT_KINDS)[number]['key'], ReturnType<typeof topContent>>
   const partial = reachesBeforeContext(traffic.window)
+  const counted = traffic.timeline.filter((d) => d.day >= CONTEXT_SINCE)
+  const countedViews = counted.reduce((n, d) => n + d.views, 0)
+  const countedVisitors = counted.reduce((n, d) => n + d.visitors, 0)
+  const viewsPerVisitor = countedVisitors ? (countedViews / countedVisitors).toFixed(2) : '—'
 
   const places = rollBars(traffic.places, (r) => r.country, (r) => r.country, (r) => r.views, (r) => r.city)
 
@@ -120,23 +121,31 @@ export default async function OverviewPage({
       </div>
 
       <section>
-        {/* The overview. Every metric carries its own 30-day shape, because "how big"
-            and "which way" are two different questions and the row of equal tiles
-            this replaces only answered the first.
-
-            Views leads, not visitors, because views are the one figure that runs
-            unbroken across the 2026-09-12 cut-over — every row before it was written
-            without a visitor hash and counts as no one. */}
-        <div className="flex items-baseline gap-3">
-          <span className="font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-            Last {days} days
-          </span>
-          <span className={cx('font-space text-xs font-bold', trendTextClass(trend.dir))}>{trend.label}</span>
-        </div>
-
-        <MetricPills metrics={allMetrics} className="mt-3" />
-
-        <TimelineChart points={traffic.timeline} visitorsSince={CONTEXT_SINCE} className="mt-6" />
+        {/* The overview: one chart, one metric at a time, its facts beside it.
+            Views is the default because it is the one figure that runs unbroken
+            across the 2026-09-12 cut-over — every row before it was written without
+            a visitor hash and counts as no one. */}
+        <MetricExplorer
+          metrics={allMetrics}
+          timeline={traffic.timeline}
+          prevTotals={traffic.prevTotals}
+          visitorsSince={CONTEXT_SINCE}
+          windowLabel={`${days} days`}
+          extras={{
+            views: [
+              { label: 'Visitors', value: totalOf('visitors').toLocaleString('en-US') },
+              // Over the days BOTH were counted. Dividing 30 days of views by visitors
+              // that exist only since the cut-over read 5.94 on a page where the true
+              // figure was about 1.2.
+              { label: partial ? 'Views per visitor · since Sep 12' : 'Views per visitor', value: viewsPerVisitor },
+            ],
+            visitors: [{ label: 'Counted from', value: 'Sep 12' }],
+            plays: [{ label: 'Named a song', value: `${lists.songs.attributed} of ${totalOf('plays')}` }],
+            ticket_clicks: [{ label: 'Named a date', value: `${lists.tour.attributed} of ${totalOf('ticket_clicks')}` }],
+            buy_clicks: [{ label: 'Named a product', value: `${lists.merch.attributed} of ${totalOf('buy_clicks')}` }],
+            bots: [{ label: 'Share of hits', value: totalOf('views') + totalOf('bots') ? `${((totalOf('bots') / (totalOf('views') + totalOf('bots'))) * 100).toFixed(1)}%` : '—' }],
+          }}
+        />
       </section>
 
       {/* WHERE FROM. One ring per source, its share of everyone as the arc. */}
