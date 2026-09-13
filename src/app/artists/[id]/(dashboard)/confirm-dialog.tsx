@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { buttonClass } from '@/components/ui/ui'
+import { buttonClass, type ButtonVariant } from '@/components/ui/ui'
 
 /**
  * ASKING, IN THE APP'S OWN VOICE (Sam, 2026-09-12: "add a confirmation modal or dialogue
@@ -26,27 +26,40 @@ import { buttonClass } from '@/components/ui/ui'
 /** Both answers are the same size: neither is the default by being the bigger target. */
 const PAIR = 'min-w-[88px] justify-center'
 
+/** The answer button's voice. Tied to the button vocabulary rather than spelled out
+ *  again, so renaming a variant is a compile error here instead of a silent fallback. */
+export type ConfirmTone = Extract<ButtonVariant, 'danger' | 'solid'>
+
 export function useConfirm(): {
   /** Ask, and resolve true only if the manager presses the named action. */
-  ask: (question: string, opts?: { action?: string; tone?: 'danger' | 'solid' }) => Promise<boolean>
+  ask: (question: string, opts?: { action?: string; tone?: ConfirmTone }) => Promise<boolean>
   /** Render this wherever the asking component renders. */
   dialog: ReactNode
 } {
-  const [pending, setPending] = useState<{ question: string; action: string; tone: 'danger' | 'solid' } | null>(null)
+  const [pending, setPending] = useState<{ question: string; action: string; tone: ConfirmTone } | null>(null)
   const resolveRef = useRef<((answer: boolean) => void) | null>(null)
+  /** Who to hand focus back to once the question is answered. */
+  const openerRef = useRef<HTMLElement | null>(null)
 
   const settle = useCallback((answer: boolean) => {
     setPending(null)
+    // Back to whoever raised the question. Without this, focus is left on a button that
+    // no longer exists, and the next Tab starts from the top of the document.
+    openerRef.current?.focus?.()
+    openerRef.current = null
     const resolve = resolveRef.current
     resolveRef.current = null
     resolve?.(answer)
   }, [])
 
   const ask = useCallback(
-    (question: string, opts?: { action?: string; tone?: 'danger' | 'solid' }) => {
+    (question: string, opts?: { action?: string; tone?: ConfirmTone }) => {
       // A second ask while one is open answers the first NO rather than stranding its
       // promise — an await that never settles is a button that never comes back.
       resolveRef.current?.(false)
+      // Only the FIRST ask records the opener: a re-ask happens while the question is up,
+      // when the active element is already the dialog's own button.
+      if (!resolveRef.current) openerRef.current = document.activeElement as HTMLElement | null
       setPending({ question, action: opts?.action ?? 'Delete', tone: opts?.tone ?? 'danger' })
       return new Promise<boolean>((resolve) => {
         resolveRef.current = resolve
@@ -90,7 +103,9 @@ export function useConfirm(): {
       <div role="dialog" aria-modal="true" aria-label={pending.question} className="w-[340px] max-w-full rounded-2xl bg-paper p-5 shadow-2xl">
         <p className="text-[15px] leading-snug">{pending.question}</p>
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" onClick={() => settle(false)} className={buttonClass('confirm', PAIR)}>
+          {/* Focus lands on CANCEL, never on the destructive answer: a stray Enter or
+              Space arriving right after the question opens must not delete anything. */}
+          <button autoFocus type="button" onClick={() => settle(false)} className={buttonClass('confirm', PAIR)}>
             Cancel
           </button>
           {/* Named for what it DOES — never an "OK" that could mean either half. */}
