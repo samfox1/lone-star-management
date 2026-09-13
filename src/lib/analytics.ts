@@ -148,14 +148,17 @@ export type TrafficWindow = {
  * event, and a bot is the thing we refuse to count as either).
  */
 export const METRICS = [
-  { key: 'views', label: 'Views', type: null },
-  { key: 'visitors', label: 'Visitors', type: null },
-  { key: 'plays', label: 'Plays', type: 'play' },
-  { key: 'link_clicks', label: 'Link clicks', type: 'link_click' },
-  { key: 'ticket_clicks', label: 'Ticket clicks', type: 'ticket_click' },
-  { key: 'buy_clicks', label: 'Buy clicks', type: 'buy_click' },
-  { key: 'bots', label: 'Bots filtered', type: null },
+  { key: 'views', label: 'Views', type: null, chart: true },
+  { key: 'visitors', label: 'Visitors', type: null, chart: true },
+  { key: 'plays', label: 'Plays', type: 'play', chart: true },
+  { key: 'link_clicks', label: 'Link clicks', type: 'link_click', chart: false },
+  { key: 'ticket_clicks', label: 'Ticket clicks', type: 'ticket_click', chart: false },
+  { key: 'buy_clicks', label: 'Buy clicks', type: 'buy_click', chart: false },
+  { key: 'bots', label: 'Bots', type: null, chart: true },
 ] as const
+/** The metrics the explorer offers a chart for. The click metrics are counted
+ *  (they feed the content lists) but Sam did not want them on the chart row. */
+export const CHART_METRICS: readonly MetricKey[] = METRICS.filter((m) => m.chart).map((m) => m.key)
 
 export type MetricKey = (typeof METRICS)[number]['key']
 export type Metric = { key: MetricKey; label: string; total: number; series: number[] }

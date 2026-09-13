@@ -28,95 +28,103 @@ const points = [
 /** The y a value is drawn at, read back off a polyline's points. */
 const ys = (pts: string) => pts.trim().split(/\s+/).map((p) => Number(p.split(',')[1]))
 
-function marks(container: HTMLElement) {
-  const area = container.querySelector('polygon[data-series="views"]')!
-  const line = container.querySelector('polyline[data-series="visitors"]')!
-  return { area, line }
-}
-const visitorsLine = (c: HTMLElement) => c.querySelector('polyline[data-series="visitors"]')!
-
 describe('TimelineChart', () => {
-  it('CRITICAL: both series are drawn against ONE scale — the same value lands at the same height', () => {
-    const { container } = render(<TimelineChart points={points} height={100} />)
-    const { area, line } = marks(container)
-    // The polygon carries the views path plus two closing corners.
-    const viewY = ys(area.getAttribute('points')!).slice(0, points.length)
-    const visitorY = ys(line.getAttribute('points')!)
-    // Day 3: views 50 and visitors 50. One scale means one height.
-    expect(visitorY[2]).toBeCloseTo(viewY[2], 5)
-    // Day 1: views 100 is the max and sits higher than day 3's 50.
-    expect(viewY[0]).toBeLessThan(viewY[2])
-  })
+  const line = (c: HTMLElement) => c.querySelector('polyline[data-series="primary"]')!
+  const lineYs = (c: HTMLElement) => ys(line(c).getAttribute('points')!)
 
   it('CRITICAL: the scale starts at ZERO, not at the series minimum', () => {
-    // The fixture's smallest value is 20, deliberately. An earlier version of this
-    // test used a series containing a 0 — which made a min-normalised scale and a
-    // zero-based one draw IDENTICALLY, so it passed against the very bug it named.
-    // Confirmed by breaking the component: the old assertion did not notice.
+    // The fixture's smallest value is 20, deliberately. With a 0 in the series a
+    // min-normalised scale and a zero-based one draw IDENTICALLY, and the test
+    // would pass against the very bug it names.
     const h = 100
-    const PAD_TOP = 8
-    const nonZero = [
-      { day: '2026-09-10', views: 100, visitors: 20 },
-      { day: '2026-09-11', views: 60, visitors: 40 },
+    const { container } = render(<TimelineChart points={[
+      { day: '2026-09-10', views: 100, visitors: 0 }, { day: '2026-09-11', views: 20, visitors: 0 },
+    ]} height={h} />)
+    const y = lineYs(container)
+    expect(y[1]).toBeCloseTo(8 + (1 - 20 / 100) * (h - 8), 5)
+    expect(y[1]).not.toBeCloseTo(h, 1)
+  })
+
+  it('a zero day sits on the floor, and a day of nothing at all still draws', () => {
+    const { container } = render(<TimelineChart points={points} height={100} />)
+    expect(lineYs(container)[1]).toBe(100)
+    const flat = render(<TimelineChart points={[
+      { day: '2026-09-11', views: 0, visitors: 0 }, { day: '2026-09-12', views: 0, visitors: 0 },
+    ]} height={80} />)
+    expect(lineYs(flat.container)).toEqual([80, 80])
+  })
+
+  it('CRITICAL: charts a supplied series instead of views when asked, on the same zero-based scale', () => {
+    const { container } = render(<TimelineChart points={points} primary={{ label: 'Plays', values: [20, 100, 0] }} height={100} />)
+    const y = lineYs(container)
+    expect(y[1]).toBeCloseTo(8, 5)
+    expect(y[2]).toBe(100)
+    expect(within(screen.getByRole('list', { name: 'Series' })).getByText('Plays')).toBeTruthy()
+  })
+
+  it('draws exactly one series — the visitors overlay that streaked up the right edge is gone', () => {
+    const { container } = render(<TimelineChart points={points} height={80} />)
+    expect(container.querySelectorAll('polyline')).toHaveLength(1)
+    expect(container.querySelector('[data-series="visitors"]')).toBeNull()
+    expect(screen.queryByText('Visitors')).toBeNull()
+  })
+
+  describe('a series that was first counted mid-window', () => {
+    const across = [
+      { day: '2026-09-10', views: 40, visitors: 0 }, { day: '2026-09-11', views: 50, visitors: 0 },
+      { day: '2026-09-12', views: 60, visitors: 20 }, { day: '2026-09-13', views: 70, visitors: 30 },
     ]
-    const { container } = render(<TimelineChart points={nonZero} height={h} />)
-    const visitorY = ys(visitorsLine(container).getAttribute('points')!)
-    // Against ZERO, with max 100: 20 sits a fifth of the way up the plot.
-    expect(visitorY[0]).toBeCloseTo(PAD_TOP + (1 - 20 / 100) * (h - PAD_TOP), 5)
-    expect(visitorY[1]).toBeCloseTo(PAD_TOP + (1 - 40 / 100) * (h - PAD_TOP), 5)
-    // Against the series MINIMUM the smallest value would be pinned to the floor.
-    expect(visitorY[0]).not.toBeCloseTo(h, 1)
-  })
+    const vis = { label: 'Visitors', values: across.map((p) => p.visitors) }
 
-  it('a zero day sits on the floor', () => {
-    const h = 100
-    const { container } = render(<TimelineChart points={points} height={h} />)
-    const visitorY = ys(visitorsLine(container).getAttribute('points')!)
-    expect(visitorY[1]).toBe(h)
-  })
+    it('CRITICAL: starts the line where the counting started — an uncounted day is not a zero', () => {
+      const { container } = render(<TimelineChart points={across} primary={vis} since="2026-09-12" height={100} />)
+      expect(line(container).getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
+      expect(screen.getByText(/counted from sep 12/i)).toBeTruthy()
+      // No shaded span: the grey hue was the complaint.
+      expect(container.querySelector('rect')).toBeNull()
+    })
 
-  it('a day of nothing at all still draws, flat on the floor, rather than dividing by zero', () => {
-    const flat = [
-      { day: '2026-09-11', views: 0, visitors: 0 },
-      { day: '2026-09-12', views: 0, visitors: 0 },
-    ]
-    const { container } = render(<TimelineChart points={flat} height={80} />)
-    const visitorY = ys(visitorsLine(container).getAttribute('points')!)
-    expect(visitorY).toEqual([80, 80])
-    expect(visitorY.every((y) => Number.isFinite(y))).toBe(true)
-  })
+    it('scales to the counted days only, so two real points fill the box', () => {
+      const { container } = render(<TimelineChart points={across} primary={vis} since="2026-09-12" height={100} />)
+      expect(Math.min(...lineYs(container))).toBeCloseTo(8, 5) // the 30 reaches the top
+    })
 
-  it('names both series, because two marks are never identified by shape alone', () => {
-    render(<TimelineChart points={points} height={80} />)
-    // The legend, not the table header of the same name below it.
-    const legend = screen.getByRole('list', { name: 'Series' })
-    expect(within(legend).getByText('Views')).toBeTruthy()
-    expect(within(legend).getByText('Visitors')).toBeTruthy()
+    it('says nothing about "counted from" when the whole window was counted', () => {
+      render(<TimelineChart points={across.slice(2)} primary={vis} since="2026-09-12" height={100} />)
+      expect(screen.queryByText(/counted from/i)).toBeNull()
+    })
   })
 
   it('CRITICAL: every value is readable without hovering — the table is the twin, not a fallback', () => {
     render(<TimelineChart points={points} height={80} />)
-    const table = screen.getByRole('table', { name: /views and visitors per day/i })
+    const table = screen.getByRole('table', { name: /views per day/i })
     for (const p of points) {
       const row = within(table).getByRole('row', { name: new RegExp(p.day) })
-      // By POSITION, not by text: on a quiet day views and visitors are both "0",
-      // and a by-text lookup cannot tell which cell it found.
-      const cells = within(row).getAllByRole('cell').map((c) => c.textContent)
-      expect(cells, p.day).toEqual([p.day, String(p.views), String(p.visitors)])
+      expect(within(row).getAllByRole('cell').map((c) => c.textContent)).toEqual([p.day, String(p.views)])
     }
   })
 
-  it('labels the window ends only — an axis, not a number on every point', () => {
+  it('labels the window ends only, and reads the day off the string so it never slips west of Greenwich', () => {
     render(<TimelineChart points={points} height={80} />)
     expect(screen.getByText('Sep 10')).toBeTruthy()
     expect(screen.getByText('Sep 12')).toBeTruthy()
-    // The middle day is in the table, never on the axis.
     expect(screen.queryByText('Sep 11')).toBeNull()
   })
 
+  it('marks every day on the x axis with a small tick, weekly once the window is long', () => {
+    const day = (i: number) => ({ day: `2026-${String(1 + Math.floor(i / 28)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}`, views: 1, visitors: 0 })
+    const thirty = render(<TimelineChart points={Array.from({ length: 30 }, (_, i) => day(i))} height={80} />)
+    expect(thirty.container.querySelectorAll('[data-day-ticks] line')).toHaveLength(30)
+    const year = render(<TimelineChart points={Array.from({ length: 365 }, (_, i) => day(i % 336))} height={80} />)
+    expect(year.container.querySelectorAll('[data-day-ticks] line')).toHaveLength(Math.ceil(365 / 7))
+  })
+
+  it('does not name the best day itself — that is the panel beside it', () => {
+    render(<TimelineChart points={points} height={80} />)
+    expect(screen.queryByText(/best day/i)).toBeNull()
+  })
+
   describe('the hover crosshair', () => {
-    // jsdom lays nothing out, so the plot box reports zero width and the pointer
-    // maths bails. Give it a width so a pointer x maps to a day.
     const withWidth = () => {
       const orig = HTMLElement.prototype.getBoundingClientRect
       HTMLElement.prototype.getBoundingClientRect = function () {
@@ -125,123 +133,44 @@ describe('TimelineChart', () => {
       return () => { HTMLElement.prototype.getBoundingClientRect = orig }
     }
     const three = [
-      { day: '2026-09-10', views: 100, visitors: 25 },
-      { day: '2026-09-11', views: 60, visitors: 40 },
-      { day: '2026-09-12', views: 0, visitors: 0 },
+      { day: '2026-09-10', views: 100, visitors: 25 }, { day: '2026-09-11', views: 60, visitors: 40 }, { day: '2026-09-12', views: 0, visitors: 0 },
     ]
+    const plot = (c: HTMLElement) => c.querySelector('svg')!.parentElement!
 
-    it('CRITICAL: hovering a day says its views, visitors, and the change on the day before', () => {
+    it('CRITICAL: hovering a day says its value and the change on the day before', () => {
       const restore = withWidth()
       const { container } = render(<TimelineChart points={three} height={100} />)
-      const plot = container.querySelector('svg')!.parentElement!
-      fireEvent.pointerMove(plot, { clientX: 300 }) // the middle of three days
-      const status = screen.getByRole('status')
-      expect(status.textContent).toContain('Sep 11')
-      expect(status.textContent).toContain('60')
-      expect(status.textContent).toContain('40')
-      // (60 - 100) / 100 — a signed percent against yesterday, never against the window.
-      expect(status.textContent).toContain('-40.0%')
+      fireEvent.pointerMove(plot(container), { clientX: 300 })
+      const text = screen.getByRole('status').textContent!
+      expect(text).toContain('Sep 11')
+      expect(text).toContain('60')
+      expect(text).toContain('-40.0%')
       expect(container.querySelector('[data-crosshair] line')).not.toBeNull()
       restore()
     })
 
-    it('CRITICAL: refuses a percentage when yesterday was zero — says so instead', () => {
+    it('CRITICAL: refuses a percentage when yesterday was zero, and says so', () => {
       const restore = withWidth()
-      const zeroThenSpike = [
-        { day: '2026-09-10', views: 0, visitors: 0 },
-        { day: '2026-09-11', views: 30, visitors: 10 },
-      ]
-      const { container } = render(<TimelineChart points={zeroThenSpike} height={100} />)
-      fireEvent.pointerMove(container.querySelector('svg')!.parentElement!, { clientX: 600 })
+      const { container } = render(<TimelineChart points={[
+        { day: '2026-09-10', views: 0, visitors: 0 }, { day: '2026-09-11', views: 30, visitors: 10 },
+      ]} height={100} />)
+      fireEvent.pointerMove(plot(container), { clientX: 600 })
       const text = screen.getByRole('status').textContent!
-      expect(text).toMatch(/no views on sep 10/i)
+      expect(text).toMatch(/none on sep 10/i)
       expect(text).not.toMatch(/%/)
       restore()
     })
 
-    it('has nothing to compare on the first day, and says that too', () => {
+    it('the first counted day has nothing to compare against, and leaving clears everything', () => {
       const restore = withWidth()
       const { container } = render(<TimelineChart points={three} height={100} />)
-      fireEvent.pointerMove(container.querySelector('svg')!.parentElement!, { clientX: 0 })
-      expect(screen.getByRole('status').textContent).toMatch(/first day/i)
-      restore()
-    })
-
-    it('leaves nothing behind when the pointer leaves', () => {
-      const restore = withWidth()
-      const { container } = render(<TimelineChart points={three} height={100} />)
-      const plot = container.querySelector('svg')!.parentElement!
-      fireEvent.pointerMove(plot, { clientX: 300 })
-      expect(screen.queryByRole('status')).not.toBeNull()
-      fireEvent.pointerLeave(plot)
+      fireEvent.pointerMove(plot(container), { clientX: 0 })
+      expect(screen.getByRole('status').textContent).toMatch(/first day counted/i)
+      fireEvent.pointerLeave(plot(container))
       expect(screen.queryByRole('status')).toBeNull()
       expect(container.querySelector('[data-crosshair]')).toBeNull()
       restore()
     })
-  })
-
-  describe('the days before visitors were counted', () => {
-    const across = [
-      { day: '2026-09-10', views: 40, visitors: 0 },
-      { day: '2026-09-11', views: 50, visitors: 0 },
-      { day: '2026-09-12', views: 60, visitors: 20 },
-      { day: '2026-09-13', views: 70, visitors: 30 },
-    ]
-    const pts = (c: HTMLElement) => visitorsLine(c).getAttribute('points')!.trim().split(/\s+/)
-
-    it('CRITICAL: draws the visitors line only from the cut-over — an unmeasured day is not a zero', () => {
-      const { container } = render(<TimelineChart points={across} visitorsSince="2026-09-12" height={100} />)
-      expect(pts(container)).toHaveLength(2)
-      expect(container.querySelector('[data-unmeasured="visitors"]')).not.toBeNull()
-      expect(screen.getByText(/visitors counted from sep 12/i)).toBeTruthy()
-    })
-
-    it('draws every day and no shading when nothing is unmeasured', () => {
-      const { container } = render(<TimelineChart points={across} height={100} />)
-      expect(pts(container)).toHaveLength(4)
-      expect(container.querySelector('[data-unmeasured]')).toBeNull()
-    })
-
-    it('a window wholly after the cut-over has no shaded span either', () => {
-      const { container } = render(<TimelineChart points={across.slice(2)} visitorsSince="2026-09-12" height={100} />)
-      expect(container.querySelector('[data-unmeasured]')).toBeNull()
-    })
-
-    it('CRITICAL: the readout says "not yet counted" rather than 0 on an unmeasured day', () => {
-      const orig = HTMLElement.prototype.getBoundingClientRect
-      HTMLElement.prototype.getBoundingClientRect = function () {
-        return { left: 0, top: 0, width: 600, height: 100, right: 600, bottom: 100, x: 0, y: 0, toJSON() {} } as DOMRect
-      }
-      const { container } = render(<TimelineChart points={across} visitorsSince="2026-09-12" height={100} />)
-      fireEvent.pointerMove(container.querySelector('svg')!.parentElement!, { clientX: 0 })
-      expect(screen.getByRole('status').textContent).toMatch(/not yet counted/i)
-      HTMLElement.prototype.getBoundingClientRect = orig
-    })
-  })
-
-  it('CRITICAL: charts a supplied series instead of views when asked, on the same zero-based scale', () => {
-    const { container } = render(
-      <TimelineChart points={points} primary={{ label: 'Plays', values: [20, 100, 0] }} height={100} />,
-    )
-    const y = ys(container.querySelector('polyline[data-series="views"]')!.getAttribute('points')!)
-    expect(y[1]).toBeCloseTo(8, 5) // the 100 sits at the top of the plot
-    expect(y[2]).toBe(100)         // the 0 on the floor
-    // Plays alone: no visitors line, and the legend names the series that is drawn.
-    expect(container.querySelector('polyline[data-series="visitors"]')).toBeNull()
-    expect(within(screen.getByRole('list', { name: 'Series' })).getByText('Plays')).toBeTruthy()
-    expect(screen.queryByText('Visitors')).toBeNull()
-  })
-
-  it('does not name the best day itself — that is the panel beside it, and saying it twice was the complaint', () => {
-    render(<TimelineChart points={points} height={80} />)
-    expect(screen.queryByText(/best day/i)).toBeNull()
-  })
-
-  it('reads the day off the string, so a date never slips west of Greenwich', () => {
-    // `new Date('2026-09-12')` is UTC midnight, which formats as Sep 11 in any
-    // negative-offset zone — every US user, which is all of them.
-    render(<TimelineChart points={[{ day: '2026-01-01', views: 1, visitors: 1 }]} height={40} />)
-    expect(screen.getAllByText('Jan 1').length).toBeGreaterThan(0)
   })
 })
 

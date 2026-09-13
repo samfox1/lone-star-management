@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { WINDOW_OPTIONS, metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
+import { CHART_METRICS, WINDOW_OPTIONS, metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, trendTextClass } from '@/lib/format'
 import { TimelineChart } from '@/components/ui/timeline-chart'
 import { Segmented } from './segmented'
@@ -23,9 +23,9 @@ import { Segmented } from './segmented'
  * server reads it; the control only navigates.
  *
  * Views is the default because it is the one series that runs unbroken across
- * the 2026-09-12 cut-over. Choosing Views keeps the visitors line on the chart;
- * choosing anything else charts that metric alone — plays against visitors is
- * not a comparison anyone makes.
+ * the 2026-09-12 cut-over. Every metric charts alone; visitors start where they
+ * were first counted. Only CHART_METRICS get a tab — the click metrics are
+ * counted for the content lists but Sam did not want them here.
  *
  * `extra` carries the one metric-specific fact the data can back: how many plays
  * named a song, how many ticket clicks named a date. Nothing per-source, nothing
@@ -58,8 +58,15 @@ export function MetricExplorer({
   const allTime = windowKey === 'all'
   const windowLabel = allTime ? 'all time' : `${days}d`
   const [key, setKey] = useState<MetricKey>('views')
-  const metric = metrics.find((m) => m.key === key) ?? metrics[0]
-  const facts = metricFacts(metric, timeline.map((d) => d.day), prevTotals[metric.key] ?? 0)
+  const charted = metrics.filter((m) => CHART_METRICS.includes(m.key))
+  const metric = charted.find((m) => m.key === key) ?? charted[0]
+  // Facts run over the days the metric was actually counted. Visitors exist only
+  // from the cut-over; dividing their total by all 30 days read "7.5 per day" on
+  // a tab whose chart plainly shows two days.
+  const since = metric.key === 'visitors' ? visitorsSince : undefined
+  const countedIdx = timeline.map((d, i) => i).filter((i) => !since || timeline[i].day >= since)
+  const counted = { ...metric, series: countedIdx.map((i) => metric.series[i]) }
+  const facts = metricFacts(counted, countedIdx.map((i) => timeline[i].day), prevTotals[metric.key] ?? 0)
   const trend = facts.delta === null ? null : formatTrend(facts.delta)
   const fmt = (n: number) => n.toLocaleString('en-US')
 
@@ -70,7 +77,7 @@ export function MetricExplorer({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
           label="Metric"
-          options={metrics.map((m) => ({ key: m.key, label: m.label }))}
+          options={charted.map((m) => ({ key: m.key, label: m.label }))}
           value={metric.key}
           onChange={setKey}
         />
@@ -86,9 +93,8 @@ export function MetricExplorer({
         <TimelineChart
           points={timeline}
           height={420}
-          visitorsSince={visitorsSince}
           primary={{ label: metric.label, values: metric.series }}
-          showVisitors={metric.key === 'views'}
+          since={metric.key === 'visitors' ? visitorsSince : undefined}
           className="lg:col-span-3"
         />
 

@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MetricExplorer } from '@/app/artists/[id]/(dashboard)/metric-explorer'
-import { METRICS, WINDOW_OPTIONS, type Metric, type MetricKey } from '@/lib/analytics'
+import { CHART_METRICS, METRICS, WINDOW_OPTIONS, type Metric, type MetricKey } from '@/lib/analytics'
 
 const push = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/artists/x' }))
@@ -25,10 +25,11 @@ describe('MetricExplorer', () => {
   const metricBtn = (name: RegExp) => within(screen.getByRole('group', { name: 'Metric' })).getByRole('button', { name })
   const panel = () => screen.getByRole('region', { name: /facts$/i })
 
-  it('offers every metric in the registry, labels only — the numbers live in the panel', () => {
+  it('CRITICAL: offers only the chart metrics, labels only — the click metrics are counted elsewhere', () => {
     setup()
     const btns = within(screen.getByRole('group', { name: 'Metric' })).getAllByRole('button')
-    expect(btns.map((b) => b.textContent)).toEqual(metrics.map((m) => m.label))
+    expect(btns.map((b) => b.textContent)).toEqual(metrics.filter((m) => CHART_METRICS.includes(m.key)).map((m) => m.label))
+    expect(btns.map((b) => b.textContent)).not.toContain('Ticket clicks')
     for (const b of btns) expect(b.textContent).not.toMatch(/\d/)
   })
 
@@ -42,21 +43,37 @@ describe('MetricExplorer', () => {
     expect(push).toHaveBeenCalledWith('/artists/x?days=all')
   })
 
-  it('opens on views, with the visitors line still on the chart', () => {
+  it('opens on views, one series, no overlay', () => {
     const { container } = setup()
     expect(metricBtn(/^views$/i)).toHaveAttribute('aria-pressed', 'true')
-    expect(container.querySelector('polyline[data-series="visitors"]')).not.toBeNull()
+    expect(container.querySelectorAll('polyline')).toHaveLength(1)
     expect(within(panel()).getByText('200')).toBeTruthy()
+  })
+
+  it('CRITICAL: visitor facts run over the counted days only, and "counted from" is said once', () => {
+    const { container } = setup()
+    fireEvent.click(metricBtn(/^visitors$/i))
+    // 50 visitors over the 2 counted days, not over all 4.
+    expect(panel().textContent).toMatch(/per day25/i)
+    expect(container.textContent!.match(/counted from/gi)).toHaveLength(1)
+  })
+
+  it('CRITICAL: visitors start where they were counted, with no shaded span', () => {
+    const { container } = setup()
+    fireEvent.click(metricBtn(/^visitors$/i))
+    const pts = container.querySelector('polyline[data-series="primary"]')!.getAttribute('points')!.trim().split(/\s+/)
+    expect(pts).toHaveLength(2) // Sep 12 and 13 only
+    expect(screen.getByText(/counted from sep 12/i)).toBeTruthy()
+    expect(container.querySelector('rect')).toBeNull()
   })
 
   it('CRITICAL: choosing a metric charts THAT series and swaps the facts to match', () => {
     const { container } = setup()
     fireEvent.click(metricBtn(/^plays$/i))
     // The chart now draws plays: the peak is the 8 on Sep 13, and no visitors line.
-    const pts = container.querySelector('polyline[data-series="views"]')!.getAttribute('points')!.split(' ')
+    const pts = container.querySelector('polyline[data-series="primary"]')!.getAttribute('points')!.split(' ')
     const ys = pts.map((p) => Number(p.split(',')[1]))
     expect(Math.min(...ys)).toBe(ys[3])
-    expect(container.querySelector('polyline[data-series="visitors"]')).toBeNull()
     const p = panel()
     expect(p.textContent).toContain('12')
     expect(p.textContent).toMatch(/best day[\s\S]*sep 13 · 8/i)
@@ -85,8 +102,9 @@ describe('MetricExplorer', () => {
   })
 
   it('a metric with nothing in the window has no best day', () => {
-    setup()
-    fireEvent.click(metricBtn(/^ticket clicks$/i))
+    const zeroed = metrics.map((m) => (m.key === 'bots' ? { ...m, series: m.series.map(() => 0), total: 0 } : m))
+    render(<MetricExplorer metrics={zeroed} timeline={timeline} prevTotals={prevTotals} windowKey="7" days={4} />)
+    fireEvent.click(metricBtn(/^bots$/i))
     expect(panel().textContent).toMatch(/best day—/i)
   })
 })

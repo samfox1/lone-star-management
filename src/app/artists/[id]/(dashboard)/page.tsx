@@ -131,7 +131,6 @@ export default async function OverviewPage({
               // figure was about 1.2.
               { label: partial ? 'Views per visitor · since Sep 12' : 'Views per visitor', value: viewsPerVisitor },
             ],
-            visitors: [{ label: 'Counted from', value: 'Sep 12' }],
             plays: [{ label: 'Named a song', value: `${lists.songs.attributed} of ${totalOf('plays')}` }],
             ticket_clicks: [{ label: 'Named a date', value: `${lists.tour.attributed} of ${totalOf('ticket_clicks')}` }],
             buy_clicks: [{ label: 'Named a product', value: `${lists.merch.attributed} of ${totalOf('buy_clicks')}` }],
