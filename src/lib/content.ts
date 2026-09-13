@@ -84,8 +84,9 @@ export const DRAFT_PRESENCE: readonly DraftPresenceEntity[] = ['track', 'release
  *  only, NEVER reconciled (presence is already live). `publishEntityAction` takes this,
  *  so a reconcile type (release / merch) is a COMPILE error there and can't silently
  *  skip `reconcileOnSite` (ADR 0009). The other live-toggle types publish elsewhere:
- *  photo(media) via the Site publish, track with releases, link via a section publish. */
-export type LiveTogglePublishable = 'video' | 'tour_date' | 'merch'
+ *  photo(media) via the Site publish, track with releases. Link joined 2026-09-13: the
+ *  Connections page publishes it from the same floating, password-gated bar. */
+export type LiveTogglePublishable = 'video' | 'tour_date' | 'merch' | 'link'
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each

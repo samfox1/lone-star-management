@@ -5,7 +5,6 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import {
-  CONNECTION_SECTION_LABEL,
   SHOPIFY_KEY,
   connectInputError,
   connectionByKey,
@@ -282,7 +281,6 @@ function DetailRow({ pick, onChange }: { pick: Pick; onChange: (patch: ConnectIn
 function RunRow({ pick, editable, onChange }: { pick: Pick; editable: boolean; onChange: (patch: ConnectInput) => void }) {
   const { def, input, status, result } = pick
   const value = def.key === SHOPIFY_KEY ? input.domain ?? '' : def.social ? input.url ?? '' : input.id ?? ''
-  const section = def.source ? CONNECTION_SECTION_LABEL[def.source.section] : null
   return (
     <div className={cx('flex items-start gap-3.5 py-3', (status === 'wait' || status === 'busy') && 'text-ink-muted')}>
       <span className={cx('mt-0.5 flex w-5 flex-none justify-center', status === 'ok' ? 'text-ink' : 'text-ink-faint')}><ConnectionMark def={def} size={16} /></span>
@@ -299,10 +297,7 @@ function RunRow({ pick, editable, onChange }: { pick: Pick; editable: boolean; o
           <span className={cx('block h-6 truncate font-space text-[13px] leading-6', status === 'ok' ? 'text-ink' : 'text-ink-muted')}>{value}</span>
         )}
         {status === 'ok' && result?.message && (
-          <div className="mt-1 text-[12.5px] leading-snug text-ink-muted">
-            {section ? `${section} · ` : ''}
-            {result.message}
-          </div>
+          <div className="mt-1 text-[12.5px] leading-snug text-ink-muted">{result.message}</div>
         )}
         {status === 'fail' && result?.error && (
           <div role="alert" className="mt-1 text-[12.5px] leading-snug text-accent-red">

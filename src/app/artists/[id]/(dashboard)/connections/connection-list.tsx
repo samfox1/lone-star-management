@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
-import { CONNECTION_SECTION_LABEL, type ConnectionRow } from '@/lib/connections'
-import { setOnSiteAction, updateContentAction, saveSourceIdAction } from '../actions'
+import type { ConnectionRow } from '@/lib/connections'
+import { publishEntityAction, setOnSiteAction, updateContentAction, saveSourceIdAction } from '../actions'
 import { useConfirm } from '../confirm-dialog'
+import { PublishBar } from '../publish-bar'
 import { SelectToggle } from '../select-toggle'
 import { toast } from '../toast'
 import { ConnectModal } from './connect-modal'
@@ -25,7 +26,7 @@ import { disconnectConnectionAction, pullConnectionAction } from './actions'
  * Links flip on and off the site INSTANTLY (LIVE_TOGGLE, lib/content.ts), so the ring
  * is ink or empty — never the blue/red pending states the publish-gated grids wear.
  */
-export function ConnectionList({ artistId, rows: initial, publish }: { artistId: string; rows: ConnectionRow[]; publish?: ReactNode }) {
+export function ConnectionList({ artistId, rows: initial, dirty = false }: { artistId: string; rows: ConnectionRow[]; dirty?: boolean }) {
   const router = useRouter()
   // Seeded from the server's rows and RE-SEEDED when they change (a refresh after a
   // connect), so an optimistic row can't outlive the truth. Render-phase, not an effect —
@@ -36,13 +37,21 @@ export function ConnectionList({ artistId, rows: initial, publish }: { artistId:
   const setRows = (fn: (rows: ConnectionRow[]) => ConnectionRow[]) => setState((s) => ({ ...s, rows: fn(s.rows) }))
   const [connect, setConnect] = useState<null | { key?: string; url?: string }>(null)
 
+  async function publish(password: string) {
+    // Snapshot only — links are already live or not by their ring; publish pushes edits.
+    const res = await publishEntityAction('link', artistId, password)
+    if (res.ok) router.refresh()
+    return res
+  }
+
   return (
-    <div>
-      <div className="flex items-center justify-end gap-2">
+    // The tour list's width (Sam, 2026-09-13: "these rows can be less wide"), and room
+    // at the bottom for the floating Publish.
+    <div className="mx-auto max-w-3xl pb-24">
+      <div className="flex items-center justify-end">
         <button type="button" onClick={() => setConnect({})} className={buttonClass('solid')}>
           <Icon name="plus" size={12} /> Connect
         </button>
-        {publish}
       </div>
 
       <div className="mt-6">
@@ -66,6 +75,8 @@ export function ConnectionList({ artistId, rows: initial, publish }: { artistId:
           onDone={() => router.refresh()}
         />
       )}
+
+      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="connections" />
     </div>
   )
 }
@@ -164,7 +175,6 @@ function ConnectionRowView({
     toast(`${row.label} removed`)
   }
 
-  const section = row.def.source ? CONNECTION_SECTION_LABEL[row.def.source.section] : null
   const dim = row.linkId ? !row.onSite : false
 
   return (
@@ -190,10 +200,11 @@ function ConnectionRowView({
       />
 
       <span className="flex w-40 flex-none items-center justify-end">
-        {row.state === 'synced' && section && (
+        {/* Just the word (Sam, 2026-09-13: "It either says synced or connect"). */}
+        {row.state === 'synced' && (
           <span className="inline-flex items-center gap-1.5 font-space text-[10.5px] text-ink-muted">
             <Icon name="refresh" size={11} className={cx(pulling && 'animate-spin')} />
-            <b className="font-normal text-ink">{section}</b> synced
+            synced
           </span>
         )}
         {row.state === 'failed' && (

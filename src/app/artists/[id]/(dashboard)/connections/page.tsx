@@ -1,11 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { buttonClass } from '@/components/ui/ui'
 import { CONNECTIONS, buildConnectionRows, type ConnectionSection, type SourceCounts } from '@/lib/connections'
 import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
-import { ActionButton } from '../action-button'
-import { publishSectionAction } from '../actions'
-import { getShopifyDomain, requireArtist } from '../_data'
+import { dashboardDiff, getShopifyDomain, requireArtist } from '../_data'
 import { ConnectionList } from './connection-list'
 
 export const metadata = { title: 'Connections — Lone Star Management' }
@@ -47,11 +44,12 @@ async function sourceCounts(supabase: SupabaseClient, artistId: string): Promise
 export default async function ConnectionsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const [artist, shopifyDomain, links, counts] = await Promise.all([
+  const [artist, shopifyDomain, links, counts, diff] = await Promise.all([
     requireArtist(id),
     getShopifyDomain(id),
     listContent(supabase, 'link', id),
     sourceCounts(supabase, id),
+    dashboardDiff(id),
   ])
   const rows = buildConnectionRows({
     // ContentRow is a bag of unknowns; name the four columns the model reads.
@@ -67,20 +65,7 @@ export default async function ConnectionsPage({ params }: { params: Promise<{ id
     counts,
   })
 
-  return (
-    <ConnectionList
-      artistId={id}
-      rows={rows}
-      publish={
-        <ActionButton
-          action={publishSectionAction.bind(null, 'link', id)}
-          savedMessage="Published connections"
-          busyLabel="Publishing…"
-          className={buttonClass('ghost')}
-        >
-          Publish
-        </ActionButton>
-      }
-    />
-  )
+  // The floating Publish lights up on unpublished link EDITS — the same flag behind the
+  // nav's pending dot, so the two always agree (the tour page's rule).
+  return <ConnectionList artistId={id} rows={rows} dirty={diff.link.dirty} />
 }

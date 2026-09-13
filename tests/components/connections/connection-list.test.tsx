@@ -16,13 +16,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ConnectionList, handleOf } from '@/app/artists/[id]/(dashboard)/connections/connection-list'
-import { setOnSiteAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { publishEntityAction, setOnSiteAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { disconnectConnectionAction, pullConnectionAction } from '@/app/artists/[id]/(dashboard)/connections/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import { connectionByKey, type ConnectionRow } from '@/lib/connections'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
+  publishEntityAction: vi.fn(async () => ({ ok: true })),
   setOnSiteAction: vi.fn(async () => ({})),
   updateContentAction: vi.fn(async () => ({})),
   saveSourceIdAction: vi.fn(async () => ({})),
@@ -47,8 +48,8 @@ const ROWS: ConnectionRow[] = [
   { def: def('instagram'), key: 'instagram', label: 'Instagram', linkId: 'l-ig', url: 'https://www.instagram.com/skeen/', onSite: true, state: 'none' },
 ]
 
-function mount(rows = ROWS) {
-  render(<ConnectionList artistId="a1" rows={rows} />)
+function mount(rows = ROWS, dirty = false) {
+  render(<ConnectionList artistId="a1" rows={rows} dirty={dirty} />)
 }
 const rowOf = (label: string) => screen.getByText(label).closest('.group') as HTMLElement
 
@@ -93,7 +94,8 @@ describe('the rows', () => {
 
   it('the chip says what the state is', () => {
     mount()
-    expect(rowOf('Spotify')).toHaveTextContent(/Music\s*synced/)
+    expect(rowOf('Spotify')).toHaveTextContent(/synced/)
+    expect(rowOf('Spotify')).not.toHaveTextContent(/Music/) // just the word (Sam, 2026-09-13)
     expect(rowOf('Bandsintown')).toHaveTextContent(/Couldn’t connect/)
     expect(within(rowOf('Bandsintown')).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(within(rowOf('Apple Music')).getByRole('button', { name: /Connect/ })).toBeInTheDocument()
@@ -186,5 +188,21 @@ describe('Connect', () => {
     const dialog = screen.getByRole('dialog', { name: 'Connect' })
     expect(within(dialog).getByRole('textbox', { name: 'Apple Music link' })).toHaveValue('https://music.apple.com/artist/1')
     expect(within(dialog).queryByRole('textbox', { name: 'Search' })).toBeNull()
+  })
+})
+
+describe('Publish', () => {
+  it('is the floating bar every content page has, and it publishes the LINK snapshot', async () => {
+    // Nothing to publish → the bar is there but off. With edits → it opens the password
+    // prompt, and the password goes to the link publish, not a generic one.
+    mount(ROWS, false)
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled()
+    cleanup()
+    mount(ROWS, true)
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    const pw = screen.getByPlaceholderText('Your password')
+    fireEvent.change(pw, { target: { value: 'hunter2' } })
+    fireEvent.submit(pw.closest('form')!)
+    await waitFor(() => expect(publishEntityAction).toHaveBeenCalledWith('link', 'a1', 'hunter2'))
   })
 })

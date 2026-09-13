@@ -109,7 +109,8 @@ describe('run', () => {
     expect(vi.mocked(connectOneAction).mock.calls[1]).toEqual(['a1', 'bandsintown', { id: 'Skeen' }])
     await waitFor(() => expect(within(dialog).getAllByLabelText('connected')).toHaveLength(2))
     expect(dialog).toHaveTextContent('2 connected')
-    expect(dialog).toHaveTextContent('Music · 24 songs found')
+    expect(dialog).toHaveTextContent('24 songs found')
+    expect(dialog).not.toHaveTextContent('Music ·')
   })
 
   it('shows the row connecting while its request is out, and the others waiting', async () => {
