@@ -31,7 +31,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
     { value: unpublished ? `${unpublished} section${unpublished === 1 ? '' : 's'}` : 'Live', label: unpublished ? 'unpublished' : 'everything published', href: `/artists/${id}/site`, tone: unpublished ? 'accent' : undefined },
     { value: subscribers ?? 0, label: 'subscribers', href: `/artists/${id}/subscribers` },
     { value: enquiries ?? 0, label: 'unread enquiries', href: `/artists/${id}/enquiries`, tone: enquiries ? 'accent' : undefined },
-    { value: connected, label: `source${connected === 1 ? '' : 's'} connected`, href: `/artists/${id}/tools/integrations` },
+    { value: connected, label: `connection${connected === 1 ? '' : 's'}`, href: `/artists/${id}/connections` },
   ]
 
   return (

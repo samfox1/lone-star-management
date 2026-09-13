@@ -33,11 +33,11 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
 export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
   return (
     // The spacer holds the layout column; the nav (fixed) sits exactly inside it, both
-    // a constant 76px — wide enough for the stacked label, so nothing ever resizes.
-    <div className="hidden w-[76px] flex-none md:block">
+    // a constant 84px — wide enough for the stacked label, so nothing ever resizes.
+    <div className="hidden w-[84px] flex-none md:block">
       <nav
         aria-label="Asset types"
-        className="fixed left-0 top-0 z-10 flex h-screen w-[76px] flex-col border-r border-hairline bg-paper"
+        className="fixed left-0 top-0 z-10 flex h-screen w-[84px] flex-col border-r border-hairline bg-paper"
       >
         <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-2">
           {ITEMS.map((it) => (

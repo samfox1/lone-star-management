@@ -30,17 +30,17 @@ export { TOOLS, toolFor }
 // header's height. The icon group centres on 50vh of the VIEWPORT, which is where it
 // already sat (assets-rail.tsx does the same).
 /**
- * The manager tools as a 76px icon rail — the ASSETS rail, one to one (Sam,
+ * The manager tools as a 84px icon rail — the ASSETS rail, one to one (Sam,
  * 2026-08-28: "mimic the side panel used on the assets page"). Icons stacked and
  * vertically centred, 10px mono labels, active = accent. Tool pages with sections (SEO /
  * GEO) put their sections in a pill row at the top of the page, not a second rail.
  */
 export function ToolsRail({ artistId, active }: { artistId: string; active: string }) {
   return (
-    <div className="hidden w-[76px] flex-none md:block">
+    <div className="hidden w-[84px] flex-none md:block">
       <nav
         aria-label="Manager tools"
-        className="fixed left-0 top-0 z-10 flex h-screen w-[76px] flex-col border-r border-hairline bg-paper"
+        className="fixed left-0 top-0 z-10 flex h-screen w-[84px] flex-col border-r border-hairline bg-paper"
       >
         <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-1.5">
           {TOOLS.map((t) => {
@@ -56,7 +56,7 @@ export function ToolsRail({ artistId, active }: { artistId: string; active: stri
                 )}
               >
                 <Icon name={t.icon} size={20} />
-                <span className="max-w-[68px] truncate font-space text-[10px] tracking-[0.02em]">{t.short ?? t.label}</span>
+                <span className="max-w-[84px] truncate font-space text-[10px] tracking-[0.02em]">{t.short ?? t.label}</span>
               </Link>
             )
           })}

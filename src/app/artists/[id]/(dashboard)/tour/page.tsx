@@ -74,7 +74,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
             section="tour"
             sources={sourcesForSection('tour', artist, false)}
             run={syncSectionAction}
-            integrationsHref={`/artists/${id}/tools/integrations`}
+            integrationsHref={`/artists/${id}/connections`}
           />
           <TourAddButton artistId={id} />
         </>

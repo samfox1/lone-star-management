@@ -17,7 +17,7 @@ export const DIFF_SECTIONS: DiffSection[] = [
   { key: 'tour_date', label: 'Tour dates', seg: 'tour' },
   { key: 'merch', label: 'Merch', seg: 'merch' },
   { key: 'release', label: 'Releases', seg: 'music' },
-  { key: 'link', label: 'Links', seg: 'links' },
+  { key: 'link', label: 'Connections', seg: 'connections' },
   { key: 'media', label: 'Media', seg: 'site' },
   { key: 'site_content', label: 'Site text', seg: 'site' },
 ]

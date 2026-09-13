@@ -82,7 +82,7 @@ export default async function VideosPage({ params }: { params: Promise<{ id: str
             section="videos"
             sources={sourcesForSection('videos', artist, false)}
             run={syncSectionAction}
-            integrationsHref={`/artists/${id}/tools/integrations`}
+            integrationsHref={`/artists/${id}/connections`}
           />
           <VideoAddButton artistId={id} />
         </>

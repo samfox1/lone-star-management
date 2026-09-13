@@ -63,7 +63,7 @@ export default async function MerchPage({ params }: { params: Promise<{ id: stri
             section="merch"
             sources={sourcesForSection('merch', {}, Boolean(shopifyDomain))}
             run={syncSectionAction}
-            integrationsHref={`/artists/${id}/tools/integrations`}
+            integrationsHref={`/artists/${id}/connections`}
           />
           <MerchAddButton artistId={id} />
         </>

@@ -1,70 +1,7 @@
-import { KLabel } from '@/components/ui/ui'
-import { SyncPanel } from '../../sync-panel'
-import { ShopifyPanel } from '../../merch/shopify-panel'
-import { getShopifyDomain, requireArtist } from '../../_data'
-import { INTEGRATIONS_BY_SECTION, SECTION_LABEL } from '../../integrations'
-import {
-  connectShopifyAction,
-  disconnectShopifyAction,
-  probeShopifyAction,
-  syncShopifyAction,
-} from '../../merch/actions'
+import { redirect } from 'next/navigation'
 
-/**
- * Integrations hub (under Manager tools). Renders entirely from the INTEGRATIONS
- * registry, grouped by the section each source feeds (Music / Videos / Tour). Every
- * source is independent — the three music services coexist and their catalogs MERGE
- * into union tracks — and Shopify (token-based) is rendered on its own. Config
- * applies instantly (not part of the draft/publish flow); pulls land in draft rows
- * and never overwrite manual edits. Per-artist.
- */
+/** The Integrations hub became part of Connections (2026-09-13). Old links land there. */
 export default async function IntegrationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  // Both are independent round-trips — run them together, not gate-then-domain.
-  const [artist, shopifyDomain] = await Promise.all([requireArtist(id), getShopifyDomain(id)])
-
-  return (
-    <div className="space-y-10">
-
-      {/* Every integration, grouped by the section it feeds (Music shows all connected services) */}
-      {(Object.keys(SECTION_LABEL) as Array<keyof typeof SECTION_LABEL>).map((section) => {
-        const items = INTEGRATIONS_BY_SECTION[section] ?? []
-        if (items.length === 0) return null
-        return (
-          <section key={section}>
-            <KLabel>{SECTION_LABEL[section]}</KLabel>
-            <div className="mt-3 space-y-3">
-              {items.map((intg) => (
-                <SyncPanel
-                  key={intg.key}
-                  title={intg.label}
-                  idName={intg.idField}
-                  idValue={artist[intg.idField] ?? ''}
-                  placeholder={intg.placeholder}
-                  hasId={!!artist[intg.idField]}
-                  pullLabel={intg.pullLabel}
-                  saveAction={intg.save.bind(null, id)}
-                  pullAction={intg.pull.bind(null, id)}
-                />
-              ))}
-            </div>
-          </section>
-        )
-      })}
-
-      {/* Merch — Shopify's token flow, rendered on its own */}
-      <section>
-        <KLabel>Merch</KLabel>
-        <div className="mt-3">
-          <ShopifyPanel
-            storeDomain={shopifyDomain}
-            connectAction={connectShopifyAction.bind(null, id)}
-            pullAction={syncShopifyAction.bind(null, id)}
-            disconnectAction={disconnectShopifyAction.bind(null, id)}
-            probeAction={probeShopifyAction.bind(null, id)}
-          />
-        </div>
-      </section>
-    </div>
-  )
+  redirect(`/artists/${id}/connections`)
 }

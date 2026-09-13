@@ -204,7 +204,7 @@ export default async function MusicPage({ params }: { params: Promise<{ id: stri
           section="music"
           sources={sourcesForSection('music', artist, false)}
           run={syncSectionAction}
-          integrationsHref={`/artists/${id}/tools/integrations`}
+          integrationsHref={`/artists/${id}/connections`}
         />
       }
       dirty={musicDirty}

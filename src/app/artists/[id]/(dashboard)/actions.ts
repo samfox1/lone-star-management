@@ -1,5 +1,6 @@
 'use server'
 
+import { INTEGRATION_REGISTRY } from '@/lib/integrations-registry'
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import { renameMedia } from '@/lib/media-rename'
 import { artistFactUpdate } from '@/lib/artist-facts'
@@ -1029,6 +1030,18 @@ async function saveArtistField(
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
+}
+
+/**
+ * Save (or clear) ONE source id by its column, for the Connections page — where a pasted
+ * Spotify profile also sets `spotify_artist_id`. The column must be one the registry
+ * names; anything else is refused rather than written.
+ */
+export async function saveSourceIdAction(artistId: string, idField: string, value: string): Promise<{ error?: string }> {
+  if (!INTEGRATION_REGISTRY.some((i) => i.idField === idField)) return { error: 'Unknown source.' }
+  const fd = new FormData()
+  fd.set(idField, value)
+  return saveArtistField(artistId, idField, fd)
 }
 
 /** Save (or clear) the artist's YouTube channel id used to import their uploads. */

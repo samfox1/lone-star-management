@@ -12,12 +12,11 @@ export const TOOLS: readonly { seg: string; icon: IconName; label: string; short
   { seg: 'tools', icon: 'grid', label: 'Overview', desc: 'Status, publish, quick links' },
   { seg: 'site', icon: 'site', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video' },
   { seg: 'brand', icon: 'photo', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
-  { seg: 'links', icon: 'links', label: 'Links', desc: 'Social & external links' },
+  { seg: 'connections', icon: 'links', label: 'Connections', desc: 'Profiles & connected services' },
   { seg: 'tools/seo', icon: 'search', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers' },
   { seg: 'epk', icon: 'epk', label: 'Press kit', desc: 'Shareable EPK one-pager' },
   { seg: 'subscribers', icon: 'list', label: 'Subscribers', desc: 'Emails from the site popup' },
   { seg: 'enquiries', icon: 'note', label: 'Enquiries', desc: 'Booking & contact messages' },
-  { seg: 'tools/integrations', icon: 'integrations', label: 'Integrations', short: 'Sources', desc: 'Connected data sources' },
   { seg: 'settings', icon: 'settings', label: 'Settings', desc: 'Artist settings' },
 ]
 
