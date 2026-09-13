@@ -188,7 +188,7 @@ export default async function OverviewPage({
       <div className="grid gap-10 md:grid-cols-2">
         <section>
           <KLabel>Unpublished changes</KLabel>
-          <div className="mt-3 overflow-hidden rounded-xl border border-hairline">
+          <div className="mt-3 overflow-hidden rounded-xl bg-surface">
             {DIFF_SECTIONS.map((s, i) => {
               const d = diff[s.key]
               return (
@@ -219,7 +219,7 @@ export default async function OverviewPage({
 
         <section>
           <KLabel>Audience</KLabel>
-          <div className="mt-3 rounded-xl border border-dashed border-hairline p-5 font-space text-xs leading-relaxed text-ink-muted">
+          <div className="mt-3 rounded-xl bg-surface p-5 font-space text-xs leading-relaxed text-ink-muted">
             Streaming audience, top tracks, and cities appear here once this artist connects a
             streaming source (Spotify / Apple Music) on the Settings tab. Today we report exact
             last-30-day site events above.
