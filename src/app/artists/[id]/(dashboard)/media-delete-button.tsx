@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { deleteMediaAction } from './actions'
 import { useConfirm } from './confirm-dialog'
 import { toast } from './toast'
@@ -29,11 +29,10 @@ export function MediaDeleteButton({
 }) {
   const [busy, setBusy] = useState(false)
   const { ask, dialog } = useConfirm()
-  const busyRef = useRef(false)
+  // No re-entry ref: see DeleteButton. The question covers the button until it is answered,
+  // and `useConfirm` keeps only one question at a time.
   async function onClick() {
-    if (busyRef.current) return
     if (!(await ask(confirm ?? `Delete this ${noun.toLowerCase()}? This can't be undone.`))) return
-    busyRef.current = true
     setBusy(true)
     try {
       const res = await deleteMediaAction(mediaId, storagePath, artistId)
@@ -42,7 +41,6 @@ export function MediaDeleteButton({
     } catch {
       toast(`Couldn't remove that ${noun.toLowerCase()}.`, 'error')
     } finally {
-      busyRef.current = false
       setBusy(false)
     }
   }

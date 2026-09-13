@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { deleteContentAction } from './actions'
 import { useConfirm } from './confirm-dialog'
 import { toast } from './toast'
@@ -35,11 +35,14 @@ export function DeleteButton({
 }) {
   const [busy, setBusy] = useState(false)
   const { ask, dialog } = useConfirm()
-  const busyRef = useRef(false) // hard re-entry latch (state is a stale closure across fast clicks)
+  // No re-entry ref here, unlike ActionButton. The question is a full-screen dialog and the
+  // delete cannot start until it is answered, so there is no window in which a second click
+  // reaches this handler: the first click's own dialog is covering the button. `useConfirm`
+  // keeps ONE question at a time (confirm-dialog.tsx, pinned by its own test), which is what
+  // actually makes a second press harmless. A ref here latched nothing — deleting it changed
+  // no test, which is how it was found.
   async function onClick() {
-    if (busyRef.current) return
     if (!(await ask(confirm ?? `Delete this ${noun.toLowerCase()}? This can't be undone.`))) return
-    busyRef.current = true
     setBusy(true)
     try {
       const res = await deleteContentAction(type, id, artistId)
@@ -51,7 +54,6 @@ export function DeleteButton({
     } catch {
       toast(`Couldn't delete that ${noun.toLowerCase()}.`, 'error')
     } finally {
-      busyRef.current = false
       setBusy(false)
     }
   }

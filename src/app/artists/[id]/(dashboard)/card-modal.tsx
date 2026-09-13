@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
@@ -71,7 +71,6 @@ export function CardModal({
 }) {
   const [deleting, setDeleting] = useState(false)
   const { ask, dialog: confirmDialog } = useConfirm()
-  const deletingRef = useRef(false)
   useLockBodyScroll(open)
 
   useEffect(() => {
@@ -84,12 +83,13 @@ export function CardModal({
   }, [open, onClose])
 
   async function del() {
-    // `deleting` is STATE: two fast clicks both read the pre-render value and delete
-    // twice. The ref is the actual latch; the state only drives the label.
-    if (!deleteAction || deleting || deletingRef.current) return
+    // `deleting` guards the in-flight window; there is no ref latch beside it, unlike
+    // ActionButton. The delete cannot start until the question is answered, and the
+    // question is a full-screen dialog over this footer — so no second click reaches
+    // here first. One question at a time is `useConfirm`'s job (confirm-dialog.tsx).
+    if (!deleteAction || deleting) return
     // Every card grid deletes through this footer, and there is no undo and no trash.
     if (!(await ask(confirmText ?? `Delete this ${deleteNoun.toLowerCase()}? This can't be undone.`, { action: deleteLabel }))) return
-    deletingRef.current = true
     setDeleting(true)
     try {
       const res = await deleteAction()
@@ -103,7 +103,6 @@ export function CardModal({
       toast(`Couldn't delete that ${deleteNoun.toLowerCase()}.`, 'error')
     } finally {
       // In `finally` so one transient failure doesn't leave the modal permanently dead.
-      deletingRef.current = false
       setDeleting(false)
     }
   }

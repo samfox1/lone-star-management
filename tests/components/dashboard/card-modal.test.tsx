@@ -69,16 +69,27 @@ describe('CardModal delete', () => {
     expect(action).toHaveBeenCalledTimes(1)
   })
 
-  it('CRITICAL: a fast double-click on the confirm deletes ONCE', async () => {
-    // Both clicks dispatched inside ONE act batch — before React re-renders the button
-    // disabled, which is exactly what a real double-click hits. A `deleting` STATE guard
-    // reads stale in the second handler and fires the action twice.
+  it('two fast clicks on the footer raise ONE question and delete ONCE', async () => {
+    // Both clicks go to the FOOTER's Delete, inside one act batch — a real double-click.
+    //
+    // The previous version of this test clicked the DIALOG's Delete twice and was named
+    // for `deletingRef`. It never reached that ref: `useConfirm.settle` nulls its
+    // resolver before resolving, so the second click resolved nothing regardless. The
+    // ref could be deleted with the suite still green, so it has been (2026-09-12) —
+    // double-firing is prevented by shape now, not by a guard. The question must be
+    // answered before the delete starts, and `useConfirm` holds one question at a time
+    // (pinned in confirm-dialog.test.tsx). No mutation inside CardModal can redden this;
+    // it pins the end-to-end behaviour, which is the thing worth pinning.
     const action = vi.fn(async () => {})
-    const dialog = ask(action)
-    const go = within(dialog).getByRole('button', { name: 'Delete' })
+    const footer = open(action)
     await act(async () => {
-      go.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      go.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      footer.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      footer.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const dialogs = screen.getAllByRole('dialog', { name: /delete this release/i })
+    expect(dialogs).toHaveLength(1)
+    await act(async () => {
+      fireEvent.click(within(dialogs[0]).getByRole('button', { name: 'Delete' }))
     })
     expect(action).toHaveBeenCalledTimes(1)
   })

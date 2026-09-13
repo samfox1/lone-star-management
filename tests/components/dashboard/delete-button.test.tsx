@@ -111,14 +111,31 @@ describe('DeleteButton', () => {
     expect(mockDelete).not.toHaveBeenCalled()
   })
 
-  it('latches against a double click on the confirm (the delete runs once)', async () => {
+  it('two fast clicks on the row raise ONE question and delete ONCE', async () => {
+    // What this pins and what it CANNOT pin, stated plainly, because the honest version
+    // of this test is worth more than a reassuring one.
+    //
+    // It used to read "latches against a double click on the confirm" and it named
+    // `busyRef`. It never reached `busyRef`: both clicks landed on the DIALOG's Delete,
+    // and `useConfirm.settle` nulls its resolver before resolving, so the second click
+    // resolved nothing whether or not any latch existed. Deleting the ref left the whole
+    // suite green — which is how it was found (2026-09-12).
+    //
+    // The ref is gone. Double-firing is now prevented by SHAPE, not by a guard: the
+    // delete cannot begin until the question is answered, and `useConfirm` keeps exactly
+    // one question at a time. So no single-line mutation in THIS component can make this
+    // test red — the invariant it depends on lives in confirm-dialog.tsx and is pinned
+    // there ("a second ask answers the first NO"). This test pins the BEHAVIOUR end to
+    // end: however fast the row is clicked, the manager is asked once and the row dies
+    // once.
     let resolve!: (v: { error?: string }) => void
     mockDelete.mockReturnValue(new Promise((r) => (resolve = r)))
     setup()
-    fireEvent.click(screen.getByText('Delete'))
-    const dialog = await screen.findByRole('dialog')
 
-    await doubleClick(within(dialog).getByRole('button', { name: 'Delete' }))
+    await doubleClick(screen.getByText('Delete'))
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+
+    await say('Delete')
     expect(mockDelete).toHaveBeenCalledTimes(1)
 
     resolve({})
@@ -161,14 +178,18 @@ describe('MediaDeleteButton', () => {
     expect(mockDeleteMedia).not.toHaveBeenCalled()
   })
 
-  it('latches against a double click on the confirm (the delete runs once)', async () => {
+  it('two fast clicks on the row raise ONE question and remove ONCE', async () => {
+    // Same reasoning as DeleteButton's twin above: the ref latch is gone, and what
+    // prevents a double-remove is that the question must be answered first and only one
+    // question exists at a time.
     let resolve!: (v: { error?: string }) => void
     mockDeleteMedia.mockReturnValue(new Promise((r) => (resolve = r)))
     setupMedia()
-    fireEvent.click(screen.getByText('Delete'))
-    const dialog = await screen.findByRole('dialog')
 
-    await doubleClick(within(dialog).getByRole('button', { name: 'Delete' }))
+    await doubleClick(screen.getByText('Delete'))
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+
+    await say('Delete')
     expect(mockDeleteMedia).toHaveBeenCalledTimes(1)
 
     resolve({})

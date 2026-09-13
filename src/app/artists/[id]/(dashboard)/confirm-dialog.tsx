@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { buttonClass } from '@/components/ui/ui'
 
 /**
@@ -67,7 +68,21 @@ export function useConfirm(): {
     return () => document.removeEventListener('keydown', onKey, true)
   }, [pending, settle])
 
-  const dialog = pending ? (
+  // PORTALLED TO THE BODY, not left where the caller renders it. CardModal renders
+  // {dialog} as a DIRECT CHILD of the card overlay, and that overlay closes the card on
+  // any click whose target is the overlay itself — so the question's backdrop sat inside
+  // the very element whose job is to close the thing behind it. Dismissing on mousedown
+  // detaches that backdrop mid-gesture, and what the browser does with the click that
+  // follows is then down to the engine.
+  //
+  // Measured in Chromium (2026-09-12, real click on the backdrop of a song card's delete
+  // question): no click is dispatched AT ALL once the mousedown target is gone, so the
+  // card correctly stays open. The portal is therefore not a fix for an observed break —
+  // it removes the coupling that made the outcome engine-dependent in the first place,
+  // and it is the reason the question can be rendered by anything, at any nesting depth,
+  // without inheriting its host's dismissal behaviour. jsdom models none of this, so no
+  // test in this repo can hold the line; the structure has to.
+  const question = pending ? (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-6"
       onMouseDown={(e) => e.target === e.currentTarget && settle(false)}
@@ -86,6 +101,8 @@ export function useConfirm(): {
       </div>
     </div>
   ) : null
+
+  const dialog = question ? createPortal(question, document.body) : null
 
   return { ask, dialog }
 }
