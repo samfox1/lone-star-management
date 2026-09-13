@@ -8,9 +8,9 @@ import { BarList } from '@/components/ui/bar-list'
 import { MetricPills } from '@/components/ui/metric-pills'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
-import { TopSongs } from '@/components/ui/top-songs'
+import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, analyticsWindow, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topSongs, trafficWindow, windowDays, WINDOWS, type Bar, type EntityRow, type TrackRef } from '@/lib/analytics'
+import { CONTEXT_SINCE, analyticsWindow, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topContent, trafficWindow, windowDays, CONTENT_KINDS, WINDOWS, type Bar, type ContentRef, type EntityRow } from '@/lib/analytics'
 import { DIFF_SECTIONS } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 
@@ -72,18 +72,30 @@ export default async function OverviewPage({
     trafficWindow(supabase, id, days),
     supabase.rpc('analytics_by_entity', { p_artist_id: id, p_since: `${window.since}T00:00:00Z` }),
   ])
-  // Only a play names an entity today, so the one content list the data can back
-  // is songs. The titles are a second, dependent round-trip: the ids come from the
-  // first.
+  // The content lists. The ids come from the entity reader, the titles from the
+  // tables: a second, dependent wave, one query per kind, in parallel.
   const entityRows = (byEntity.data ?? []) as EntityRow[]
-  const songIds = [...new Set(entityRows.filter((r) => r.entity_type === 'track' && r.type === 'play').map((r) => r.entity_id))]
-  const { data: trackRows } = songIds.length
-    ? await supabase.from('tracks').select('id,title,cover_url,album_name').in('id', songIds)
-    : { data: [] as TrackRef[] }
+  const idsFor = (entity: string, type: string) =>
+    [...new Set(entityRows.filter((r) => r.entity_type === entity && r.type === type).map((r) => r.entity_id))]
+  const [trackRows, tourRows, merchRows] = await Promise.all([
+    (async () => { const ids = idsFor('track', 'play'); return ids.length ? (await supabase.from('tracks').select('id,title,cover_url,album_name').in('id', ids)).data ?? [] : [] })(),
+    (async () => { const ids = idsFor('tour_date', 'ticket_click'); return ids.length ? (await supabase.from('tour_dates').select('id,venue,city,date,image_url').in('id', ids)).data ?? [] : [] })(),
+    (async () => { const ids = idsFor('merch', 'buy_click'); return ids.length ? (await supabase.from('merch').select('id,title,image_url,price').in('id', ids)).data ?? [] : [] })(),
+  ])
   const allMetrics = metrics(traffic)
-  const songs = topSongs(entityRows, (trackRows ?? []) as TrackRef[], allMetrics.find((m) => m.key === 'plays')?.total ?? 0)
-  const series = traffic.timeline.map((d) => d.views)
-  const trend = formatTrend(seriesTrend(series))
+  const trend = formatTrend(seriesTrend(traffic.timeline.map((d) => d.views)))
+  const totalOf = (key: string) => allMetrics.find((m) => m.key === key)?.total ?? 0
+  const refs: Record<string, ContentRef[]> = {
+    songs: (trackRows as { id: string; title: string; cover_url: string | null; album_name: string | null }[])
+      .map((t) => ({ id: t.id, title: t.title, image: t.cover_url, sub: t.album_name })),
+    tour: (tourRows as { id: string; venue: string | null; city: string | null; date: string | null; image_url: string | null }[])
+      .map((d) => ({ id: d.id, title: d.venue ?? d.city ?? 'Show', image: d.image_url, sub: [d.city, d.date].filter(Boolean).join(' · ') || null })),
+    merch: (merchRows as { id: string; title: string; image_url: string | null; price: string | number | null }[])
+      .map((m) => ({ id: m.id, title: m.title, image: m.image_url, sub: m.price != null ? String(m.price) : null })),
+  }
+  const lists = Object.fromEntries(
+    CONTENT_KINDS.map((k) => [k.key, topContent(entityRows, { entity: k.entity, type: k.type }, refs[k.key], totalOf(k.metric))]),
+  ) as Record<(typeof CONTENT_KINDS)[number]['key'], ReturnType<typeof topContent>>
   const partial = reachesBeforeContext(traffic.window)
 
   const places = rollBars(traffic.places, (r) => r.country, (r) => r.country, (r) => r.views, (r) => r.city)
@@ -155,12 +167,12 @@ export default async function OverviewPage({
         <DeviceSplit className="mt-3" split={summarizeDevices(traffic.devices)} />
       </section>
 
-      {/* WHAT THEY PLAYED. Songs only: plays are the one event that names an entity.
-          Ticket and buy clicks arrive without a date or product, so there is no
-          honest tour or merch list to draw yet. */}
+      {/* WHAT THEY ACTED ON. Songs by plays, dates by ticket clicks, merch by buy
+          clicks — the three events the site attaches an entity to. No videos: the
+          site never sends a video event. */}
       <section>
-        <KLabel>What they played</KLabel>
-        <TopSongs className="mt-3" {...songs} />
+        <KLabel>What they acted on</KLabel>
+        <TopContent className="mt-3" lists={lists} />
       </section>
 
       {/* The numbers above do not all reach as far back as the window does, and the

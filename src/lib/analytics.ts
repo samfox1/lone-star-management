@@ -331,39 +331,48 @@ export function summarizeDevices(rows: DeviceRow[]): DeviceSplit {
 
 /** A row of `analytics_by_entity`: one entity, one event type, one count. */
 export type EntityRow = { entity_type: string; entity_id: string; type: string; count: number }
-export type TrackRef = { id: string; title: string; cover_url: string | null; album_name: string | null }
-export type TopSong = TrackRef & { plays: number }
+/** What a content row needs to be drawn: a title, a picture, a second line. */
+export type ContentRef = { id: string; title: string; image: string | null; sub: string | null }
+export type ContentItem = ContentRef & { count: number }
+export type ContentList = { items: ContentItem[]; attributed: number; unattributed: number }
 
 /**
- * Which songs were played, from the plays that NAMED a song.
+ * The content people acted on, for ONE kind of thing and the ONE event that
+ * names it: songs by plays, tour dates by ticket clicks, merch by buy clicks.
+ * Videos are not here because the site never sends a video event.
  *
- * Only a play carries an entity today — ticket and buy clicks arrive with no date
- * or product attached — so this is the one "top content" list the data can back,
- * and it is a list of songs. And not every play names one: a play fired from a
- * surface that has no track id is counted in `plays` but cannot appear here. The
- * caller prints both numbers, because a list of 24 under a metric of 70 needs to
- * say where the other 46 went.
- *
- * A play whose track no longer exists (deleted since) is dropped from the list but
- * still counted as attributed — it did name a song, the song just went away.
+ * Not every event names its entity — a play from a surface with no track id is
+ * counted in the metric but cannot appear in the list — so the caller prints
+ * both numbers. A list summing to 12 under a metric of 70 needs to say where
+ * the other 58 went. An event on something since deleted stays attributed but
+ * is not listed: it did name a thing, the thing just went away.
  */
-export function topSongs(rows: EntityRow[], tracks: TrackRef[], totalPlays: number): {
-  songs: TopSong[]
-  attributed: number
-  unattributed: number
-} {
-  const plays = new Map<string, number>()
+export function topContent(
+  rows: EntityRow[],
+  kind: { entity: string; type: string },
+  refs: ContentRef[],
+  total: number,
+): ContentList {
+  const counts = new Map<string, number>()
   for (const r of rows) {
-    if (r.entity_type !== 'track' || r.type !== 'play') continue
-    plays.set(r.entity_id, (plays.get(r.entity_id) ?? 0) + Number(r.count))
+    if (r.entity_type !== kind.entity || r.type !== kind.type) continue
+    counts.set(r.entity_id, (counts.get(r.entity_id) ?? 0) + Number(r.count))
   }
-  const attributed = [...plays.values()].reduce((n, v) => n + v, 0)
-  const byId = new Map(tracks.map((t) => [t.id, t]))
-  const songs = [...plays.entries()]
-    .flatMap(([id, n]) => { const t = byId.get(id); return t && n > 0 ? [{ ...t, plays: n }] : [] })
-    .sort((a, b) => b.plays - a.plays)
-  return { songs, attributed, unattributed: Math.max(0, totalPlays - attributed) }
+  const attributed = [...counts.values()].reduce((n, v) => n + v, 0)
+  const byId = new Map(refs.map((t) => [t.id, t]))
+  const items = [...counts.entries()]
+    .flatMap(([id, n]) => { const t = byId.get(id); return t && n > 0 ? [{ ...t, count: n }] : [] })
+    .sort((a, b) => b.count - a.count)
+  return { items, attributed, unattributed: Math.max(0, total - attributed) }
 }
+
+/** The three lists the toggle switches between, in the order they are offered. */
+export const CONTENT_KINDS = [
+  { key: 'songs', label: 'Songs', entity: 'track', type: 'play', metric: 'plays', noun: 'plays', named: 'a song' },
+  { key: 'tour', label: 'Tour', entity: 'tour_date', type: 'ticket_click', metric: 'ticket_clicks', noun: 'ticket clicks', named: 'a date' },
+  { key: 'merch', label: 'Merch', entity: 'merch', type: 'buy_click', metric: 'buy_clicks', noun: 'buy clicks', named: 'a product' },
+] as const
+export type ContentKind = (typeof CONTENT_KINDS)[number]
 
 /**
  * Rows summed to one bar list: a key, a label, and the number the bar is drawn from.

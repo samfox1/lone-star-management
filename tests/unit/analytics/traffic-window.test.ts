@@ -18,7 +18,8 @@ import {
   previousWindow,
   summarizeDevices,
   summarizeSources,
-  topSongs,
+  topContent,
+  CONTENT_KINDS,
   reachesBeforeContext,
   topBars,
   trafficWindow,
@@ -267,48 +268,55 @@ describe('summarizeDevices', () => {
   })
 })
 
-describe('topSongs', () => {
-  const play = (entity_id: string, count: number) => ({ entity_type: 'track', entity_id, type: 'play', count })
-  const tracks = [
-    { id: 'a', title: 'Summer Sun', cover_url: 'x', album_name: null },
-    { id: 'b', title: 'Home Again', cover_url: null, album_name: 'Home' },
+describe('topContent', () => {
+  const ev = (entity_type: string, entity_id: string, type: string, count: number) => ({ entity_type, entity_id, type, count })
+  const SONG = { entity: 'track', type: 'play' }
+  const refs = [
+    { id: 'a', title: 'Summer Sun', image: 'x', sub: null },
+    { id: 'b', title: 'Home Again', image: null, sub: 'Home' },
   ]
 
-  it('joins plays to their song and ranks by plays', () => {
-    const out = topSongs([play('b', 3), play('a', 9)], tracks, 12)
-    expect(out.songs.map((s) => [s.title, s.plays])).toEqual([['Summer Sun', 9], ['Home Again', 3]])
+  it('joins events to their thing and ranks by count', () => {
+    const out = topContent([ev('track', 'b', 'play', 3), ev('track', 'a', 'play', 9)], SONG, refs, 12)
+    expect(out.items.map((s) => [s.title, s.count])).toEqual([['Summer Sun', 9], ['Home Again', 3]])
   })
 
-  it('CRITICAL: says how many plays named a song and how many did not — the list must not look short', () => {
-    const out = topSongs([play('a', 9), play('b', 3)], tracks, 70)
+  it('CRITICAL: says how many events named a thing and how many did not — the list must not look short', () => {
+    const out = topContent([ev('track', 'a', 'play', 9), ev('track', 'b', 'play', 3)], SONG, refs, 70)
     expect(out.attributed).toBe(12)
     expect(out.unattributed).toBe(58)
   })
 
-  it('ignores every event that is not a play on a track', () => {
-    const out = topSongs([
-      play('a', 2),
-      { entity_type: 'tour_date', entity_id: 'a', type: 'ticket_click', count: 5 },
-      { entity_type: 'track', entity_id: 'a', type: 'link_click', count: 4 },
-    ], tracks, 2)
-    expect(out.songs).toEqual([{ ...tracks[0], plays: 2 }])
+  it('CRITICAL: counts only the ONE event that names this kind — a ticket click on a date is not a play on a song', () => {
+    const out = topContent([
+      ev('track', 'a', 'play', 2),
+      ev('tour_date', 'a', 'ticket_click', 5),
+      ev('track', 'a', 'link_click', 4),
+    ], SONG, refs, 2)
+    expect(out.items).toEqual([{ ...refs[0], count: 2 }])
     expect(out.attributed).toBe(2)
   })
 
-  it('a play on a deleted song stays counted as attributed but is not listed', () => {
-    const out = topSongs([play('gone', 4), play('a', 1)], tracks, 5)
-    expect(out.songs.map((s) => s.id)).toEqual(['a'])
+  it('an event on a deleted thing stays attributed but is not listed', () => {
+    const out = topContent([ev('track', 'gone', 'play', 4), ev('track', 'a', 'play', 1)], SONG, refs, 5)
+    expect(out.items.map((s) => s.id)).toEqual(['a'])
     expect(out.attributed).toBe(5)
     expect(out.unattributed).toBe(0)
   })
 
   it('reads counts as numbers — PostgREST hands bigint back as a string', () => {
-    const out = topSongs([{ entity_type: 'track', entity_id: 'a', type: 'play', count: '7' as unknown as number }], tracks, 7)
-    expect(out.songs[0].plays).toBe(7)
+    const out = topContent([{ entity_type: 'track', entity_id: 'a', type: 'play', count: '7' as unknown as number }], SONG, refs, 7)
+    expect(out.items[0].count).toBe(7)
   })
 
-  it('never reports negative unattributed plays if the tallies disagree by a day', () => {
-    expect(topSongs([play('a', 9)], tracks, 5).unattributed).toBe(0)
+  it('never reports negative unattributed events if the tallies disagree by a day', () => {
+    expect(topContent([ev('track', 'a', 'play', 9)], SONG, refs, 5).unattributed).toBe(0)
+  })
+
+  it('offers exactly the kinds the site attaches an entity to — and never video', () => {
+    expect(CONTENT_KINDS.map((k) => k.entity)).toEqual(['track', 'tour_date', 'merch'])
+    // Widened on purpose: the type already forbids 'video', so the check has to be a runtime one.
+    expect((CONTENT_KINDS as readonly { entity: string }[]).some((k) => k.entity === 'video')).toBe(false)
   })
 })
 
