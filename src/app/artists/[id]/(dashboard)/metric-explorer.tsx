@@ -80,10 +80,10 @@ export function MetricExplorer({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Multi-select in the Segmented's own clothes: same container, same
-            active fill, but each segment is its own on/off. */}
+        {/* Add-ons only — views is always drawn and needs no switch. Multi-select in
+            the Segmented's own clothes: same container, same active fill, each
+            segment its own on/off. */}
         <div role="group" aria-label="Series" className="inline-flex flex-none gap-0.5 rounded-lg border border-hairline p-0.5">
-          <span className="rounded-md bg-ink px-2.5 py-1 font-space text-xs font-semibold text-white" aria-hidden>Views</span>
           {OVERLAYS.map((k) => (
             <button
               key={k}

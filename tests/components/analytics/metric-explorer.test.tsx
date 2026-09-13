@@ -24,9 +24,10 @@ const toggles = () => screen.getByRole('group', { name: 'Series' })
 const facts = () => screen.getByRole('region', { name: 'Facts' })
 
 describe('MetricExplorer', () => {
-  it('CRITICAL: the chart is views, always; the toggles are exactly the overlays and nothing is Plays', () => {
+  it('CRITICAL: the chart is views, always, with no switch for it; the toggles are exactly the overlays and nothing is Plays', () => {
     const { container } = setup()
     expect(container.querySelectorAll('polyline')).toHaveLength(1)
+    expect(within(toggles()).queryByText('Views')).toBeNull()
     const btns = within(toggles()).getAllByRole('button')
     expect(btns.map((b) => b.textContent)).toEqual(OVERLAYS.map((k) => metrics.find((m) => m.key === k)!.label))
     expect(btns.map((b) => b.textContent)).not.toContain('Plays')
@@ -36,14 +37,14 @@ describe('MetricExplorer', () => {
   it('CRITICAL: toggling visitors and bots adds each as its own line on the SAME chart, and off again removes it', () => {
     const { container } = setup()
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Visitors' }))
-    expect(container.querySelectorAll('polyline')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots' }))
-    expect(container.querySelectorAll('polyline')).toHaveLength(3)
+    expect(container.querySelectorAll('[data-series]')).toHaveLength(3)
     expect(within(screen.getByRole('list', { name: 'Series' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'Views', 'Visitors · from Sep 12', 'Bots · from Sep 12',
     ])
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Visitors' }))
-    expect(container.querySelectorAll('polyline')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
   })
 
   it('facts lead with views: total, change on the prior window, best day, per day', () => {
