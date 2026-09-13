@@ -130,13 +130,6 @@ export function TimelineChart({
               )
             })}
 
-            {/* Drawn after the marks so the fill never hides them. */}
-            <g data-day-ticks className="stroke-ink-muted">
-              {ticks.map((i) => (
-                <line key={i} x1={x(i)} y1={h - 5} x2={x(i)} y2={h} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-              ))}
-            </g>
-
             {at != null && (
               <g data-crosshair>
                 <line x1={x(at)} y1={PAD_TOP} x2={x(at)} y2={h} className="stroke-ink-faint" strokeWidth={1} vectorEffect="non-scaling-stroke" />
@@ -191,7 +184,20 @@ export function TimelineChart({
         </div>
       </div>
 
-      <div className="mt-2 flex justify-between pl-11 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+      {/* The day ticks hang BELOW the baseline in their own strip, so they never
+          sit under the fill (Sam, 2026-09-13). Same x mapping as the plot. */}
+      <div className="flex gap-3">
+        <div aria-hidden className="w-8 shrink-0" />
+        <svg viewBox={`0 0 ${w} 6`} preserveAspectRatio="none" className="h-[6px] min-w-0 flex-1" aria-hidden="true">
+          <g data-day-ticks className="stroke-ink-muted">
+            {ticks.map((i) => (
+              <line key={i} x1={x(i)} y1={0} x2={x(i)} y2={6} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            ))}
+          </g>
+        </svg>
+      </div>
+
+      <div className="mt-1.5 flex justify-between pl-11 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
         <span>{points.length ? dayLabel(points[0].day) : ''}</span>
         <span>{points.length ? dayLabel(points[points.length - 1].day) : ''}</span>
       </div>

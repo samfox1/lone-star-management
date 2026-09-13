@@ -115,6 +115,9 @@ describe('TimelineChart', () => {
     const day = (i: number) => ({ day: `2026-${String(1 + Math.floor(i / 28)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}`, views: 1, visitors: 0 })
     const thirty = render(<TimelineChart points={Array.from({ length: 30 }, (_, i) => day(i))} height={80} />)
     expect(thirty.container.querySelectorAll('[data-day-ticks] line')).toHaveLength(30)
+    // Below the baseline, in their own strip — never inside the plot under the fill.
+    expect(thirty.container.querySelector('svg:has([data-series]) [data-day-ticks]')).toBeNull()
+    expect(thirty.container.querySelector('svg:has([data-day-ticks])')).not.toBeNull()
     const year = render(<TimelineChart points={Array.from({ length: 365 }, (_, i) => day(i % 336))} height={80} />)
     expect(year.container.querySelectorAll('[data-day-ticks] line')).toHaveLength(Math.ceil(365 / 7))
   })
