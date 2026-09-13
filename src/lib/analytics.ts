@@ -329,6 +329,42 @@ export function summarizeDevices(rows: DeviceRow[]): DeviceSplit {
   }
 }
 
+/** A row of `analytics_by_entity`: one entity, one event type, one count. */
+export type EntityRow = { entity_type: string; entity_id: string; type: string; count: number }
+export type TrackRef = { id: string; title: string; cover_url: string | null; album_name: string | null }
+export type TopSong = TrackRef & { plays: number }
+
+/**
+ * Which songs were played, from the plays that NAMED a song.
+ *
+ * Only a play carries an entity today — ticket and buy clicks arrive with no date
+ * or product attached — so this is the one "top content" list the data can back,
+ * and it is a list of songs. And not every play names one: a play fired from a
+ * surface that has no track id is counted in `plays` but cannot appear here. The
+ * caller prints both numbers, because a list of 24 under a metric of 70 needs to
+ * say where the other 46 went.
+ *
+ * A play whose track no longer exists (deleted since) is dropped from the list but
+ * still counted as attributed — it did name a song, the song just went away.
+ */
+export function topSongs(rows: EntityRow[], tracks: TrackRef[], totalPlays: number): {
+  songs: TopSong[]
+  attributed: number
+  unattributed: number
+} {
+  const plays = new Map<string, number>()
+  for (const r of rows) {
+    if (r.entity_type !== 'track' || r.type !== 'play') continue
+    plays.set(r.entity_id, (plays.get(r.entity_id) ?? 0) + Number(r.count))
+  }
+  const attributed = [...plays.values()].reduce((n, v) => n + v, 0)
+  const byId = new Map(tracks.map((t) => [t.id, t]))
+  const songs = [...plays.entries()]
+    .flatMap(([id, n]) => { const t = byId.get(id); return t && n > 0 ? [{ ...t, plays: n }] : [] })
+    .sort((a, b) => b.plays - a.plays)
+  return { songs, attributed, unattributed: Math.max(0, totalPlays - attributed) }
+}
+
 /**
  * Rows summed to one bar list: a key, a label, and the number the bar is drawn from.
  * `other` collects the tail, because past about seven bars a reader is reading a

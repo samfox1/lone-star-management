@@ -8,8 +8,9 @@ import { BarList } from '@/components/ui/bar-list'
 import { MetricPills } from '@/components/ui/metric-pills'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
+import { TopSongs } from '@/components/ui/top-songs'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, trafficWindow, windowDays, WINDOWS, type Bar } from '@/lib/analytics'
+import { CONTEXT_SINCE, analyticsWindow, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topSongs, trafficWindow, windowDays, WINDOWS, type Bar, type EntityRow, type TrackRef } from '@/lib/analytics'
 import { DIFF_SECTIONS } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 
@@ -64,11 +65,23 @@ export default async function OverviewPage({
   // the chart. The old call took a timestamp `p_since` while the rest of the page
   // counted whole UTC days, so on most days the KPI row and the chart beside it were
   // describing slightly different slices and nothing on screen said so.
-  const [, diff, traffic] = await Promise.all([
+  const window = analyticsWindow(days)
+  const [, diff, traffic, byEntity] = await Promise.all([
     requireArtist(id),
     dashboardDiff(id),
     trafficWindow(supabase, id, days),
+    supabase.rpc('analytics_by_entity', { p_artist_id: id, p_since: `${window.since}T00:00:00Z` }),
   ])
+  // Only a play names an entity today, so the one content list the data can back
+  // is songs. The titles are a second, dependent round-trip: the ids come from the
+  // first.
+  const entityRows = (byEntity.data ?? []) as EntityRow[]
+  const songIds = [...new Set(entityRows.filter((r) => r.entity_type === 'track' && r.type === 'play').map((r) => r.entity_id))]
+  const { data: trackRows } = songIds.length
+    ? await supabase.from('tracks').select('id,title,cover_url,album_name').in('id', songIds)
+    : { data: [] as TrackRef[] }
+  const allMetrics = metrics(traffic)
+  const songs = topSongs(entityRows, (trackRows ?? []) as TrackRef[], allMetrics.find((m) => m.key === 'plays')?.total ?? 0)
   const series = traffic.timeline.map((d) => d.views)
   const trend = formatTrend(seriesTrend(series))
   const partial = reachesBeforeContext(traffic.window)
@@ -109,7 +122,7 @@ export default async function OverviewPage({
           <span className={cx('font-space text-xs font-bold', trendTextClass(trend.dir))}>{trend.label}</span>
         </div>
 
-        <MetricPills metrics={metrics(traffic)} className="mt-3" />
+        <MetricPills metrics={allMetrics} className="mt-3" />
 
         <TimelineChart points={traffic.timeline} visitorsSince={CONTEXT_SINCE} className="mt-6" />
       </section>
@@ -140,6 +153,14 @@ export default async function OverviewPage({
       <section>
         <KLabel>What they used</KLabel>
         <DeviceSplit className="mt-3" split={summarizeDevices(traffic.devices)} />
+      </section>
+
+      {/* WHAT THEY PLAYED. Songs only: plays are the one event that names an entity.
+          Ticket and buy clicks arrive without a date or product, so there is no
+          honest tour or merch list to draw yet. */}
+      <section>
+        <KLabel>What they played</KLabel>
+        <TopSongs className="mt-3" {...songs} />
       </section>
 
       {/* The numbers above do not all reach as far back as the window does, and the

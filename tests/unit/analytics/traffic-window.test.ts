@@ -18,6 +18,7 @@ import {
   previousWindow,
   summarizeDevices,
   summarizeSources,
+  topSongs,
   reachesBeforeContext,
   topBars,
   trafficWindow,
@@ -263,6 +264,51 @@ describe('summarizeDevices', () => {
 
   it('an empty window has a floor of 1, never a divide by zero', () => {
     expect(summarizeDevices([]).max).toBe(1)
+  })
+})
+
+describe('topSongs', () => {
+  const play = (entity_id: string, count: number) => ({ entity_type: 'track', entity_id, type: 'play', count })
+  const tracks = [
+    { id: 'a', title: 'Summer Sun', cover_url: 'x', album_name: null },
+    { id: 'b', title: 'Home Again', cover_url: null, album_name: 'Home' },
+  ]
+
+  it('joins plays to their song and ranks by plays', () => {
+    const out = topSongs([play('b', 3), play('a', 9)], tracks, 12)
+    expect(out.songs.map((s) => [s.title, s.plays])).toEqual([['Summer Sun', 9], ['Home Again', 3]])
+  })
+
+  it('CRITICAL: says how many plays named a song and how many did not — the list must not look short', () => {
+    const out = topSongs([play('a', 9), play('b', 3)], tracks, 70)
+    expect(out.attributed).toBe(12)
+    expect(out.unattributed).toBe(58)
+  })
+
+  it('ignores every event that is not a play on a track', () => {
+    const out = topSongs([
+      play('a', 2),
+      { entity_type: 'tour_date', entity_id: 'a', type: 'ticket_click', count: 5 },
+      { entity_type: 'track', entity_id: 'a', type: 'link_click', count: 4 },
+    ], tracks, 2)
+    expect(out.songs).toEqual([{ ...tracks[0], plays: 2 }])
+    expect(out.attributed).toBe(2)
+  })
+
+  it('a play on a deleted song stays counted as attributed but is not listed', () => {
+    const out = topSongs([play('gone', 4), play('a', 1)], tracks, 5)
+    expect(out.songs.map((s) => s.id)).toEqual(['a'])
+    expect(out.attributed).toBe(5)
+    expect(out.unattributed).toBe(0)
+  })
+
+  it('reads counts as numbers — PostgREST hands bigint back as a string', () => {
+    const out = topSongs([{ entity_type: 'track', entity_id: 'a', type: 'play', count: '7' as unknown as number }], tracks, 7)
+    expect(out.songs[0].plays).toBe(7)
+  })
+
+  it('never reports negative unattributed plays if the tallies disagree by a day', () => {
+    expect(topSongs([play('a', 9)], tracks, 5).unattributed).toBe(0)
   })
 })
 
