@@ -11,8 +11,12 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import {
+  ALL_TIME,
   CONTEXT_SINCE,
   METRICS,
+  WINDOW_OPTIONS,
+  daysSince,
+  isAllTime,
   analyticsWindow,
   metrics,
   metricFacts,
@@ -55,6 +59,21 @@ describe('the window itself', () => {
     for (const junk of [undefined, '', '0', '31', 'all', '-7', '7.5', '1e2']) {
       expect(windowDays(junk), String(junk)).toBe(30)
     }
+  })
+
+  it('offers the fixed windows and all time, in that order, derived from WINDOWS', () => {
+    expect(WINDOW_OPTIONS.map((o) => o.key)).toEqual([...WINDOWS.map(String), ALL_TIME])
+    expect(isAllTime('all')).toBe(true)
+    expect(isAllTime('30')).toBe(false)
+  })
+
+  it('CRITICAL: all time counts whole days from the first event through today, inclusive', () => {
+    expect(daysSince('2026-09-12', NOW)).toBe(1 + 0 + 0) // yesterday → 2 days? no: 12th and 12th
+    expect(daysSince('2026-09-12', NOW)).toBe(1)
+    expect(daysSince('2026-09-06', NOW)).toBe(7)
+    expect(daysSince('2026-07-01', NOW)).toBe(74)
+    // A first event later than "now" (clock skew) still yields a window of one day.
+    expect(daysSince('2026-09-20', NOW)).toBe(1)
   })
 
   it('knows when the window reaches back past the day context started', () => {

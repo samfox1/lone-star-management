@@ -7,7 +7,7 @@ import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, analyticsWindow, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topContent, trafficWindow, windowDays, CONTENT_KINDS, WINDOWS, type Bar, type ContentRef, type EntityRow } from '@/lib/analytics'
+import { CONTEXT_SINCE, analyticsWindow, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topContent, trafficWindow, windowDays, daysSince, isAllTime, CONTENT_KINDS, type Bar, type ContentRef, type EntityRow } from '@/lib/analytics'
 import { DIFF_SECTIONS } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 
@@ -52,8 +52,17 @@ export default async function OverviewPage({
   searchParams: Promise<{ days?: string }>
 }) {
   const { id } = await params
-  const days = windowDays((await searchParams).days)
+  const rawDays = (await searchParams).days
   const supabase = await createClient()
+  // "All time" runs from the artist's first event. One cheap, indexed read; the
+  // rest of the page then treats it as a window like any other.
+  const days = isAllTime(rawDays)
+    ? daysSince(
+        (await supabase.from('analytics_events').select('created_at').eq('artist_id', id).order('created_at').limit(1).maybeSingle())
+          .data?.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+      )
+    : windowDays(rawDays)
+  const windowKey = isAllTime(rawDays) ? 'all' : String(days)
   // Independent round-trips — the ownership gate, the dirty-nav diff and the whole
   // traffic window — as ONE parallel wave, not a waterfall.
   //
@@ -112,8 +121,8 @@ export default async function OverviewPage({
           timeline={traffic.timeline}
           prevTotals={traffic.prevTotals}
           visitorsSince={CONTEXT_SINCE}
+          windowKey={windowKey}
           days={days}
-          windows={WINDOWS}
           extras={{
             views: [
               { label: 'Visitors', value: totalOf('visitors').toLocaleString('en-US') },

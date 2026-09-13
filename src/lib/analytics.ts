@@ -88,13 +88,29 @@ export function analyticsWindow(days: number, nowMs: number = Date.now()): Windo
 }
 
 /** The windows the page offers. A filter row, never a per-block control. */
-export const WINDOWS = [7, 30, 90] as const
+export const WINDOWS = [7, 30, 90, 180, 365] as const
 export type WindowDays = (typeof WINDOWS)[number]
+/** The `?days=` value that means "since the first event". */
+export const ALL_TIME = 'all'
+/** What the window switch offers, in order. Derived from WINDOWS plus all time. */
+export const WINDOW_OPTIONS = [
+  ...WINDOWS.map((n) => ({ key: String(n), label: `${n}d`, days: n as number | null })),
+  { key: ALL_TIME, label: 'All', days: null },
+] as const
 
-/** `?days=` → one of the offered windows. Anything else is 30. */
+/** `?days=` → one of the offered fixed windows. Anything else, including "all", is 30. */
 export function windowDays(raw: string | undefined): WindowDays {
   const n = Number(raw)
   return (WINDOWS as readonly number[]).includes(n) ? (n as WindowDays) : 30
+}
+
+export const isAllTime = (raw: string | undefined) => raw === ALL_TIME
+
+/** Whole UTC days from `firstDay` (YYYY-MM-DD) up to and including today. Never below 1. */
+export function daysSince(firstDay: string, nowMs: number = Date.now()): number {
+  const first = Date.parse(`${firstDay}T00:00:00Z`)
+  const today = Date.parse(`${utcDay(nowMs)}T00:00:00Z`)
+  return Math.max(1, Math.round((today - first) / 86_400_000) + 1)
 }
 
 export type TimelineDay = { day: string; views: number; visitors: number; bots: number }

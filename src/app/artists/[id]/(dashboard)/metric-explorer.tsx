@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
+import { WINDOW_OPTIONS, metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, trendTextClass } from '@/lib/format'
 import { TimelineChart } from '@/components/ui/timeline-chart'
 import { Segmented } from './segmented'
@@ -38,8 +38,8 @@ export function MetricExplorer({
   timeline,
   prevTotals,
   visitorsSince,
+  windowKey,
   days,
-  windows,
   extras = {},
   className,
 }: {
@@ -47,15 +47,16 @@ export function MetricExplorer({
   timeline: TimelineDay[]
   prevTotals: Record<MetricKey, number>
   visitorsSince?: string
-  /** The window in force, and the ones on offer. */
+  /** The window in force: its `?days=` key and the days it resolved to. */
+  windowKey: string
   days: number
-  windows: readonly number[]
   extras?: Partial<Record<MetricKey, MetricExtra[]>>
   className?: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const windowLabel = `${days} days`
+  const allTime = windowKey === 'all'
+  const windowLabel = allTime ? 'all time' : `${days}d`
   const [key, setKey] = useState<MetricKey>('views')
   const metric = metrics.find((m) => m.key === key) ?? metrics[0]
   const facts = metricFacts(metric, timeline.map((d) => d.day), prevTotals[metric.key] ?? 0)
@@ -75,24 +76,24 @@ export function MetricExplorer({
         />
         <Segmented
           label="Window"
-          options={windows.map((n) => ({ key: String(n), label: `${n} days` }))}
-          value={String(days)}
-          onChange={(n) => router.push(`${pathname}?days=${n}`)}
+          options={WINDOW_OPTIONS.map((o) => ({ key: o.key, label: o.label }))}
+          value={windowKey}
+          onChange={(k) => router.push(`${pathname}?days=${k}`)}
         />
       </div>
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-3">
+      <div className="mt-4 grid gap-6 lg:grid-cols-4">
         <TimelineChart
           points={timeline}
-          height={340}
+          height={420}
           visitorsSince={visitorsSince}
           primary={{ label: metric.label, values: metric.series }}
           showVisitors={metric.key === 'views'}
-          className="lg:col-span-2"
+          className="lg:col-span-3"
         />
 
-        {/* The facts. The total is the headline; everything under it is a way of
-            reading the same series. */}
+        {/* One column of facts. The total leads; the rest are ways of reading the
+            same series. Nothing here is also said on the chart. */}
         <div role="region" aria-label={`${metric.label} facts`} className="flex flex-col gap-5 rounded-2xl bg-surface p-5">
           <div>
             <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
@@ -101,19 +102,21 @@ export function MetricExplorer({
             <div className="mt-2 font-space text-[44px] font-bold leading-none tracking-[-0.015em] tabular-nums text-ink">
               {fmt(facts.total)}
             </div>
-            <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-              {trend ? (
-                <>
-                  <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span>
-                  {' '}vs the {windowLabel} before · {fmt(prevTotals[metric.key] ?? 0)}
-                </>
-              ) : (
-                <>Nothing in the {windowLabel} before to compare against</>
-              )}
-            </div>
+            {!allTime && (
+              <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                {trend ? (
+                  <>
+                    <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span>
+                    {' '}vs prior {windowLabel}
+                  </>
+                ) : (
+                  <>No prior {windowLabel}</>
+                )}
+              </div>
+            )}
           </div>
 
-          <dl className="grid grid-cols-2 gap-4 border-t border-hairline pt-4">
+          <dl className="flex flex-col gap-4 border-t border-hairline pt-4">
             <Fact label="Best day" value={facts.bestDay ? `${dayLabel(facts.bestDay.day)} · ${fmt(facts.bestDay.value)}` : '—'} />
             <Fact label="Per day" value={facts.perDay >= 10 ? fmt(Math.round(facts.perDay)) : facts.perDay.toFixed(1)} />
             {(extras[metric.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}

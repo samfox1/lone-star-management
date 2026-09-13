@@ -232,9 +232,9 @@ describe('TimelineChart', () => {
     expect(screen.queryByText('Visitors')).toBeNull()
   })
 
-  it('names the best day, because the peak is the one point a reader will ask about', () => {
+  it('does not name the best day itself — that is the panel beside it, and saying it twice was the complaint', () => {
     render(<TimelineChart points={points} height={80} />)
-    expect(screen.getByText(/best day sep 10 · 100 views/i)).toBeTruthy()
+    expect(screen.queryByText(/best day/i)).toBeNull()
   })
 
   it('reads the day off the string, so a date never slips west of Greenwich', () => {

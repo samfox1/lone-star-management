@@ -76,7 +76,6 @@ export function TimelineChart({
     .join(' ')
   const unmeasuredUntil = firstVisitorIdx > 0 ? x(firstVisitorIdx) : firstVisitorIdx === -1 ? w : 0
 
-  const peakIndex = points.reduce((best, _, i) => (primaryAt(i) > (best >= 0 ? primaryAt(best) : -1) ? i : best), 0)
   const shown = at != null ? points[at] : null
   const delta = shown ? dayDelta(at! > 0 ? primaryAt(at! - 1) : undefined, primaryAt(at!)) : null
   const trend = delta === null ? null : formatTrend(delta)
@@ -100,11 +99,6 @@ export function TimelineChart({
             </li>
           )}
         </ul>
-        {points.length > 0 && primaryAt(peakIndex) > 0 && (
-          <span className="text-ink-faint">
-            Best day {dayLabel(points[peakIndex].day)} · {primaryAt(peakIndex)} {primaryLabel.toLowerCase()}
-          </span>
-        )}
       </div>
 
       <div className="mt-4 flex gap-3">

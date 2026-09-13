@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MetricExplorer } from '@/app/artists/[id]/(dashboard)/metric-explorer'
-import { METRICS, WINDOWS, type Metric, type MetricKey } from '@/lib/analytics'
+import { METRICS, WINDOW_OPTIONS, type Metric, type MetricKey } from '@/lib/analytics'
 
 const push = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/artists/x' }))
@@ -16,8 +16,8 @@ const series: Record<MetricKey, number[]> = {
 }
 const metrics: Metric[] = METRICS.map((m) => ({ key: m.key, label: m.label, series: series[m.key], total: series[m.key].reduce((a, b) => a + b, 0) }))
 const prevTotals: Record<MetricKey, number> = { views: 100, visitors: 0, plays: 6, link_clicks: 8, ticket_clicks: 0, buy_clicks: 0, bots: 0 }
-const setup = () => render(
-  <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={prevTotals} days={4} windows={WINDOWS} visitorsSince="2026-09-12"
+const setup = (windowKey = '7', days = 4) => render(
+  <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={prevTotals} windowKey={windowKey} days={days} visitorsSince="2026-09-12"
     extras={{ plays: [{ label: 'Named a song', value: '5 of 12' }] }} />,
 )
 
@@ -35,9 +35,11 @@ describe('MetricExplorer', () => {
   it('CRITICAL: the window switch sits on the same row and navigates by URL, where the server reads it', () => {
     setup()
     const win = screen.getByRole('group', { name: 'Window' })
-    expect(within(win).getAllByRole('button').map((b) => b.textContent)).toEqual(WINDOWS.map((n) => `${n} days`))
-    fireEvent.click(within(win).getByRole('button', { name: '90 days' }))
+    expect(within(win).getAllByRole('button').map((b) => b.textContent)).toEqual(WINDOW_OPTIONS.map((o) => o.label))
+    fireEvent.click(within(win).getByRole('button', { name: '90d' }))
     expect(push).toHaveBeenCalledWith('/artists/x?days=90')
+    fireEvent.click(within(win).getByRole('button', { name: 'All' }))
+    expect(push).toHaveBeenCalledWith('/artists/x?days=all')
   })
 
   it('opens on views, with the visitors line still on the chart', () => {
@@ -66,8 +68,20 @@ describe('MetricExplorer', () => {
   it('CRITICAL: withholds the change when the window before had nothing', () => {
     setup()
     fireEvent.click(metricBtn(/^visitors$/i))
-    expect(panel().textContent).toMatch(/nothing in the 4 days before/i)
+    expect(panel().textContent).toMatch(/no prior 4d/i)
     expect(panel().textContent).not.toMatch(/%/)
+  })
+
+  it('CRITICAL: all time has no prior window to compare against, so the line is absent — not "no prior all time"', () => {
+    setup('all', 74)
+    expect(panel().textContent).toMatch(/all time/i)
+    expect(panel().textContent).not.toMatch(/prior/i)
+    expect(panel().textContent).not.toMatch(/%/)
+  })
+
+  it('does not say the best day twice — the chart header lost it, the panel keeps it', () => {
+    const { container } = setup()
+    expect(container.textContent!.match(/best day/gi)).toHaveLength(1)
   })
 
   it('a metric with nothing in the window has no best day', () => {
