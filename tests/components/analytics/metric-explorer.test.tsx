@@ -36,14 +36,14 @@ describe('MetricExplorer', () => {
 
   it('CRITICAL: toggling visitors and bots adds each as its own line on the SAME chart, and off again removes it', () => {
     const { container } = setup()
-    fireEvent.click(within(toggles()).getByRole('button', { name: 'Visitors' }))
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
     expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
-    fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots' }))
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots filtered' }))
     expect(container.querySelectorAll('[data-series]')).toHaveLength(3)
     expect(within(screen.getByRole('list', { name: 'Series' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Views', 'Visitors · from Sep 12', 'Bots · from Sep 12',
+      'Views', 'Unique visitors · from Sep 12', 'Bots filtered · from Sep 12',
     ])
-    fireEvent.click(within(toggles()).getByRole('button', { name: 'Visitors' }))
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
     expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
   })
 
@@ -58,13 +58,13 @@ describe('MetricExplorer', () => {
 
   it('CRITICAL: a toggled series gets its own facts, over the counted days only, saying nothing the legend already says', () => {
     const { container } = setup()
-    fireEvent.click(within(toggles()).getByRole('button', { name: 'Visitors' }))
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
     const block = container.querySelector('[data-facts="visitors"]')!
     // 50 visitors over 2 counted days → 25, not 12.5 over four.
-    expect(block.textContent).toMatch(/visitors50/i)
+    expect(block.textContent).toMatch(/unique visitors50/i)
     expect(block.textContent).toMatch(/per day25/i)
     expect(container.textContent!.match(/from sep 12/gi)).toHaveLength(1)
-    fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots' }))
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots filtered' }))
     expect(container.querySelector('[data-facts="bots"]')!.textContent).toContain('2.0%')
   })
 

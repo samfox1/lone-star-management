@@ -80,10 +80,10 @@ export function MetricExplorer({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Add-ons only — views is always drawn and needs no switch. Multi-select in
-            the Segmented's own clothes: same container, same active fill, each
-            segment its own on/off. */}
-        <div role="group" aria-label="Series" className="inline-flex flex-none gap-0.5 rounded-lg border border-hairline p-0.5">
+        {/* Add-ons only — views is always drawn and needs no switch. Two separate
+            buttons, each its own on/off in the Segmented's clothes, not one shared
+            container: they are not a choice between two things. */}
+        <div role="group" aria-label="Series" className="flex flex-wrap items-center gap-2">
           {OVERLAYS.map((k) => (
             <button
               key={k}
@@ -91,8 +91,8 @@ export function MetricExplorer({
               aria-pressed={on.has(k)}
               onClick={() => toggle(k)}
               className={cx(
-                'rounded-md px-2.5 py-1 font-space text-xs transition-colors',
-                on.has(k) ? 'bg-ink font-semibold text-white' : 'text-ink-muted hover:text-ink',
+                'rounded-lg border px-3 py-1.5 font-space text-xs transition-colors',
+                on.has(k) ? 'border-ink bg-ink font-semibold text-white' : 'border-hairline text-ink-muted hover:text-ink',
               )}
             >
               {byKey[k]?.label ?? k}

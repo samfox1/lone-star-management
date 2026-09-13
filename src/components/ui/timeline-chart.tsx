@@ -34,10 +34,9 @@ export type Series = {
 }
 
 const PAD_TOP = 8
-/** Fewer counted points than this and a series is drawn as dots, not a line. A
- *  line through two points asserts a trend nobody measured; it also draws as a
- *  near-vertical streak when the two sit at the end of a long window, which is
- *  exactly how visitors and bots looked the week they were first counted. */
+/** Fewer counted points than this and an overlay also marks each measured day
+ *  with a dot, so two points at the end of a long window read as two readings
+ *  joined, not as a streak (Sam, 2026-09-13: "the dots should be connected"). */
 const MIN_LINE_POINTS = 4
 const STROKE: Record<Series['color'], string> = { accent: 'text-accent', 'accent-red': 'text-accent-red', ink: 'text-ink' }
 const SWATCH: Record<Series['color'], string> = { accent: 'bg-accent', 'accent-red': 'bg-accent-red', ink: 'bg-ink' }
@@ -122,24 +121,21 @@ export function TimelineChart({
               const pts = pathOf(s)
               if (!pts.length) return null
               const first = pts[0].split(',')[0], last = pts[pts.length - 1].split(',')[0]
-              const asDots = n > 0 && pts.length < MIN_LINE_POINTS
+              const withDots = n > 0 && pts.length < MIN_LINE_POINTS
               return (
-                <g key={s.key} data-series={s.key} data-mark={asDots ? 'dots' : 'line'} className={STROKE[s.color]}>
+                <g key={s.key} data-series={s.key} data-mark={withDots ? 'line+dots' : 'line'} className={STROKE[s.color]}>
                   {n === 0 && <polygon points={`${pts.join(' ')} ${last},${h} ${first},${h}`} fill="currentColor" opacity={0.2} />}
-                  {asDots ? (
-                    pts.map((p) => {
-                      const [cx, cy] = p.split(',')
-                      // Drawn as an unscaled ellipse so the stretched viewBox keeps it round.
-                      return <ellipse key={p} cx={cx} cy={cy} rx={5.5 * (w / 1000)} ry={5.5 * (h / 420)} fill="currentColor" />
-                    })
-                  ) : (
-                    <polyline
-                      points={pts.join(' ')}
-                      fill="none" stroke="currentColor"
-                      strokeWidth={n === 0 ? 2.4 : 1.8} vectorEffect="non-scaling-stroke"
-                      strokeLinecap="round" strokeLinejoin="round"
-                    />
-                  )}
+                  <polyline
+                    points={pts.join(' ')}
+                    fill="none" stroke="currentColor"
+                    strokeWidth={n === 0 ? 2.4 : 1.8} vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round" strokeLinejoin="round"
+                  />
+                  {withDots && pts.map((p) => {
+                    const [cx, cy] = p.split(',')
+                    // An ellipse scaled against the stretched viewBox, so it stays round.
+                    return <ellipse key={p} cx={cx} cy={cy} rx={5.5 * (w / 1000)} ry={5.5 * (h / 420)} fill="currentColor" />
+                  })}
                 </g>
               )
             })}

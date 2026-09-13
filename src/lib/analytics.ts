@@ -149,12 +149,12 @@ export type TrafficWindow = {
  */
 export const METRICS = [
   { key: 'views', label: 'Views', type: null, chart: true },
-  { key: 'visitors', label: 'Visitors', type: null, chart: true },
+  { key: 'visitors', label: 'Unique visitors', type: null, chart: true },
   { key: 'plays', label: 'Plays', type: 'play', chart: false },
   { key: 'link_clicks', label: 'Link clicks', type: 'link_click', chart: false },
   { key: 'ticket_clicks', label: 'Ticket clicks', type: 'ticket_click', chart: false },
   { key: 'buy_clicks', label: 'Buy clicks', type: 'buy_click', chart: false },
-  { key: 'bots', label: 'Bots', type: null, chart: true },
+  { key: 'bots', label: 'Bots filtered', type: null, chart: true },
 ] as const
 /** The metrics that can be on the chart: views always, visitors and bots as
  *  toggles. Plays and the click metrics are counted (they feed the content

@@ -94,24 +94,24 @@ describe('TimelineChart', () => {
 
     it('CRITICAL: starts where the counting started — an uncounted day is not a zero — and says from when, once', () => {
       const { container } = render(<TimelineChart points={across} height={100} series={two} />)
-      expect(container.querySelectorAll('[data-series="visitors"] ellipse')).toHaveLength(2)
+      expect(lineOf(container, 'visitors').getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
       expect(lineOf(container, 'views').getAttribute('points')!.trim().split(/\s+/)).toHaveLength(4)
       expect(container.querySelectorAll('[data-since]')).toHaveLength(1)
       expect(screen.getByText(/from sep 12/i)).toBeTruthy()
       expect(container.querySelector('rect')).toBeNull() // no shaded span
     })
 
-    it('CRITICAL: an overlay with fewer than four counted points is dots, not a line — a line through two points is a streak', () => {
+    it('CRITICAL: an overlay with fewer than four counted points is a line WITH a dot on each measured day', () => {
       const { container } = render(<TimelineChart points={across} height={100} series={two} />)
       const vis = container.querySelector('[data-series="visitors"]')!
-      expect(vis.getAttribute('data-mark')).toBe('dots')
+      expect(vis.getAttribute('data-mark')).toBe('line+dots')
       expect(vis.querySelectorAll('ellipse')).toHaveLength(2)
-      expect(vis.querySelector('polyline')).toBeNull()
-      // The lead series is always the line and the fill, however short.
-      expect(container.querySelector('[data-series="views"] polyline')).not.toBeNull()
+      expect(vis.querySelector('polyline')!.getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
+      // The lead series never gets dots, however short.
+      expect(container.querySelectorAll('[data-series="views"] ellipse')).toHaveLength(0)
     })
 
-    it('becomes a line once four days have been counted', () => {
+    it('drops the dots once four days have been counted', () => {
       const six = Array.from({ length: 6 }, (_, i) => ({ day: `2026-09-1${i}`, views: 10, visitors: i >= 2 ? 5 + i : 0 }))
       const { container } = render(<TimelineChart points={six} height={100} series={[
         S('views', six.map((p) => p.views)), S('visitors', six.map((p) => p.visitors), 'accent-red', '2026-09-12'),
