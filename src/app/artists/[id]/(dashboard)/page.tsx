@@ -7,9 +7,10 @@ import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, analyticsWindow, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topContent, trafficWindow, windowDays, daysSince, isAllTime, CONTENT_KINDS, type Bar, type ContentRef, type EntityRow } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topContent, trafficWindow, entityRows, CONTENT_KINDS, type Bar, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { DIFF_SECTIONS } from './sections'
-import { dashboardDiff, requireArtist } from './_data'
+import { analyticsScope, dashboardDiff, requireArtist } from './_data'
 
 function summarize(d: SectionDiff): string {
   if (!d.dirty) return 'Published'
@@ -44,6 +45,29 @@ function rollBars<T>(
   return topBars([...by.values()])
 }
 
+/**
+ * How each content kind's rows become something drawable — a title, a picture,
+ * a second line. Keyed by `ContentKind['key']`, so a kind added to the registry
+ * without a loader here is a compile error, not an empty list.
+ */
+const REFS: Record<ContentKind['key'], (supabase: SupabaseClient, ids: string[]) => Promise<ContentRef[]>> = {
+  songs: async (supabase, ids) => {
+    const rows = (await supabase.from('tracks').select('id,title,cover_url,album_name').in('id', ids)).data ?? []
+    return (rows as { id: string; title: string; cover_url: string | null; album_name: string | null }[])
+      .map((t) => ({ id: t.id, title: t.title, image: t.cover_url, sub: t.album_name }))
+  },
+  tour: async (supabase, ids) => {
+    const rows = (await supabase.from('tour_dates').select('id,venue,city,date,image_url').in('id', ids)).data ?? []
+    return (rows as { id: string; venue: string | null; city: string | null; date: string | null; image_url: string | null }[])
+      .map((d) => ({ id: d.id, title: d.venue ?? d.city ?? 'Show', image: d.image_url, sub: [d.city, d.date].filter(Boolean).join(' · ') || null }))
+  },
+  merch: async (supabase, ids) => {
+    const rows = (await supabase.from('merch').select('id,title,image_url,price').in('id', ids)).data ?? []
+    return (rows as { id: string; title: string; image_url: string | null; price: string | number | null }[])
+      .map((m) => ({ id: m.id, title: m.title, image: m.image_url, sub: m.price != null ? String(m.price) : null }))
+  },
+}
+
 export default async function OverviewPage({
   params,
   searchParams,
@@ -54,15 +78,8 @@ export default async function OverviewPage({
   const { id } = await params
   const rawDays = (await searchParams).days
   const supabase = await createClient()
-  // "All time" runs from the artist's first event. One cheap, indexed read; the
-  // rest of the page then treats it as a window like any other.
-  const days = isAllTime(rawDays)
-    ? daysSince(
-        (await supabase.from('analytics_events').select('created_at').eq('artist_id', id).order('created_at').limit(1).maybeSingle())
-          .data?.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-      )
-    : windowDays(rawDays)
-  const windowKey = isAllTime(rawDays) ? 'all' : String(days)
+  // One read of the clock for the whole page (see analyticsScope).
+  const { now, days, windowKey, window } = await analyticsScope(id, rawDays)
   // Independent round-trips — the ownership gate, the dirty-nav diff and the whole
   // traffic window — as ONE parallel wave, not a waterfall.
   //
@@ -71,36 +88,26 @@ export default async function OverviewPage({
   // the chart. The old call took a timestamp `p_since` while the rest of the page
   // counted whole UTC days, so on most days the KPI row and the chart beside it were
   // describing slightly different slices and nothing on screen said so.
-  const window = analyticsWindow(days)
   const [, diff, traffic, byEntity] = await Promise.all([
     requireArtist(id),
     dashboardDiff(id),
-    trafficWindow(supabase, id, days),
-    supabase.rpc('analytics_by_entity', { p_artist_id: id, p_since: `${window.since}T00:00:00Z` }),
+    trafficWindow(supabase, id, days, now),
+    entityRows(supabase, id, window.since),
   ])
   // The content lists. The ids come from the entity reader, the titles from the
-  // tables: a second, dependent wave, one query per kind, in parallel.
-  const entityRows = (byEntity.data ?? []) as EntityRow[]
+  // tables: a second, dependent wave, one query per kind, in parallel. The kinds
+  // come from the registry; REFS knows how to load each.
   const idsFor = (entity: string, type: string) =>
-    [...new Set(entityRows.filter((r) => r.entity_type === entity && r.type === type).map((r) => r.entity_id))]
-  const [trackRows, tourRows, merchRows] = await Promise.all([
-    (async () => { const ids = idsFor('track', 'play'); return ids.length ? (await supabase.from('tracks').select('id,title,cover_url,album_name').in('id', ids)).data ?? [] : [] })(),
-    (async () => { const ids = idsFor('tour_date', 'ticket_click'); return ids.length ? (await supabase.from('tour_dates').select('id,venue,city,date,image_url').in('id', ids)).data ?? [] : [] })(),
-    (async () => { const ids = idsFor('merch', 'buy_click'); return ids.length ? (await supabase.from('merch').select('id,title,image_url,price').in('id', ids)).data ?? [] : [] })(),
-  ])
+    [...new Set(byEntity.filter((r: EntityRow) => r.entity_type === entity && r.type === type).map((r) => r.entity_id))]
+  const refs = await Promise.all(CONTENT_KINDS.map(async (k) => {
+    const ids = idsFor(k.entity, k.type)
+    return [k.key, ids.length ? await REFS[k.key](supabase, ids) : []] as const
+  }))
   const allMetrics = metrics(traffic)
   const totalOf = (key: string) => allMetrics.find((m) => m.key === key)?.total ?? 0
-  const refs: Record<string, ContentRef[]> = {
-    songs: (trackRows as { id: string; title: string; cover_url: string | null; album_name: string | null }[])
-      .map((t) => ({ id: t.id, title: t.title, image: t.cover_url, sub: t.album_name })),
-    tour: (tourRows as { id: string; venue: string | null; city: string | null; date: string | null; image_url: string | null }[])
-      .map((d) => ({ id: d.id, title: d.venue ?? d.city ?? 'Show', image: d.image_url, sub: [d.city, d.date].filter(Boolean).join(' · ') || null })),
-    merch: (merchRows as { id: string; title: string; image_url: string | null; price: string | number | null }[])
-      .map((m) => ({ id: m.id, title: m.title, image: m.image_url, sub: m.price != null ? String(m.price) : null })),
-  }
   const lists = Object.fromEntries(
-    CONTENT_KINDS.map((k) => [k.key, topContent(entityRows, { entity: k.entity, type: k.type }, refs[k.key], totalOf(k.metric))]),
-  ) as Record<(typeof CONTENT_KINDS)[number]['key'], ReturnType<typeof topContent>>
+    CONTENT_KINDS.map((k, i) => [k.key, topContent(byEntity, { entity: k.entity, type: k.type }, refs[i][1], totalOf(k.metric))]),
+  ) as Record<ContentKind['key'], ContentList>
   const partial = reachesBeforeContext(traffic.window)
   const counted = traffic.timeline.filter((d) => d.day >= CONTEXT_SINCE)
   const countedViews = counted.reduce((n, d) => n + d.views, 0)
@@ -137,21 +144,18 @@ export default async function OverviewPage({
         <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources)} />
       </section>
 
-      {/* WHERE, AND ON WHAT. Ranked lists rather than charts: the categories are
-          named things of unequal length, and a reader comparing them is comparing
-          magnitudes, which a bar does plainly and a pie does not. */}
-      <div className="grid gap-10 md:grid-cols-2">
-
-        <section>
-          <KLabel>Where they are</KLabel>
-          <BarList
-            className="mt-3"
-            bars={places}
-            empty="Location needs an ipinfo key on the event door."
-          />
-        </section>
-
-      </div>
+      {/* WHERE. A ranked list rather than a chart: countries are named things of
+          unequal length, and a reader comparing them is comparing magnitudes,
+          which a bar does plainly and a pie does not. Empty until the event door
+          has an ipinfo key. */}
+      <section>
+        <KLabel>Where they are</KLabel>
+        <BarList
+          className="mt-3"
+          bars={places}
+          empty="Location needs an ipinfo key on the event door."
+        />
+      </section>
 
       {/* ON WHAT. Mobile against web, one scale across both. */}
       <section>
@@ -212,7 +216,7 @@ export default async function OverviewPage({
         <section>
           <KLabel>Audience</KLabel>
           <div className="mt-3 rounded-xl bg-surface p-5 font-space text-xs leading-relaxed text-ink-muted">
-            Streaming audience, top tracks, and cities appear here once this artist connects a
+            Streaming audience, top songs, and cities appear here once this artist connects a
             streaming source (Spotify / Apple Music) on the Settings tab. Today we report exact
             last-30-day site events above.
           </div>

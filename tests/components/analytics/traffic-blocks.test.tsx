@@ -1,20 +1,17 @@
 // @vitest-environment jsdom
 // The two marks the Analytics tab is made of, and the ways each one can lie.
 /**
- * The dashboard is monochrome, so neither of these can lean on colour to carry
- * meaning — which removes the usual way charts go wrong and leaves two others:
- *
- *   TimelineChart draws two series. They must share ONE scale that starts at ZERO,
- *   or the comparison a reader makes by eye ("visitors are about a third of views")
- *   is one the chart invented. The older Sparkline normalises to the series minimum,
- *   which is right for a shape and wrong for a comparison — these tests pin the
- *   difference, because the two components sit in the same folder.
+ *   TimelineChart draws up to three series. They must share ONE scale that starts
+ *   at ZERO, or the comparison a reader makes by eye ("visitors are about a third
+ *   of views") is one the chart invented. A series first counted mid-window starts
+ *   there, not at a row of zeros; the hover readout says what a day is and how far
+ *   it sits from the average.
  *
  *   BarList draws its label ON the row rather than inside the bar. A label inside a
  *   short bar is the commonest way these lists break, and it breaks worst for the
  *   smallest row, which is the one a person is squinting at.
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { TimelineChart } from '@/components/ui/timeline-chart'
 import { BarList } from '@/components/ui/bar-list'
@@ -79,6 +76,16 @@ describe('TimelineChart', () => {
     expect(within(legend).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Views', 'Visitors', 'Bots'])
   })
 
+  it('each series is drawn in its own colour — the blue accent, the red accent, ink', () => {
+    const { container } = render(<TimelineChart points={four} height={80} series={[
+      S('views', [1, 2, 3, 4]), S('visitors', [1, 1, 1, 1], 'accent-red'), S('bots', [0, 1, 0, 1], 'ink'),
+    ]} />)
+    const cls = (k: string) => container.querySelector(`[data-series="${k}"]`)!.getAttribute('class') ?? ''
+    expect(cls('views').split(' ')).toContain('text-accent')
+    expect(cls('visitors').split(' ')).toContain('text-accent-red')
+    expect(cls('bots').split(' ')).toContain('text-ink')
+  })
+
   it('draws views alone by default, with no overlay', () => {
     const { container } = render(<TimelineChart points={points} height={80} />)
     expect(container.querySelectorAll('polyline')).toHaveLength(1)
@@ -107,8 +114,16 @@ describe('TimelineChart', () => {
       expect(vis.getAttribute('data-mark')).toBe('line+dots')
       expect(vis.querySelectorAll('ellipse')).toHaveLength(2)
       expect(vis.querySelector('polyline')!.getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
-      // The lead series never gets dots, however short.
+    })
+
+    it('the lead series never gets dots, however short', () => {
+      // The lead counted from the cut-over too: two points, and still no dots.
+      const { container } = render(<TimelineChart points={across} height={100} series={[
+        S('views', across.map((p) => p.views), 'accent', '2026-09-12'),
+      ]} />)
+      expect(container.querySelector('[data-series="views"] polyline')!.getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
       expect(container.querySelectorAll('[data-series="views"] ellipse')).toHaveLength(0)
+      expect(container.querySelector('[data-series="views"]')!.getAttribute('data-mark')).toBe('line')
     })
 
     it('drops the dots once four days have been counted', () => {
@@ -151,20 +166,20 @@ describe('TimelineChart', () => {
   })
 
   describe('the hover crosshair', () => {
-    const withWidth = () => {
-      const orig = HTMLElement.prototype.getBoundingClientRect
+    // jsdom lays nothing out, so the plot is given a width for the pointer maths.
+    const orig = HTMLElement.prototype.getBoundingClientRect
+    beforeEach(() => {
       HTMLElement.prototype.getBoundingClientRect = function () {
         return { left: 0, top: 0, width: 600, height: 100, right: 600, bottom: 100, x: 0, y: 0, toJSON() {} } as DOMRect
       }
-      return () => { HTMLElement.prototype.getBoundingClientRect = orig }
-    }
+    })
+    afterEach(() => { HTMLElement.prototype.getBoundingClientRect = orig })
     const three = [
       { day: '2026-09-10', views: 100, visitors: 25 }, { day: '2026-09-11', views: 60, visitors: 40 }, { day: '2026-09-12', views: 0, visitors: 0 },
     ]
     const plot = (c: HTMLElement) => c.querySelector('svg')!.parentElement!
 
     it('CRITICAL: hovering a day names the date, lists every drawn series, and says how far the lead sits from the window average', () => {
-      const restore = withWidth()
       const { container } = render(<TimelineChart points={three} height={100} series={[
         S('views', [100, 60, 20]), S('visitors', [25, 40, 0], 'accent-red'),
       ]} />)
@@ -177,21 +192,17 @@ describe('TimelineChart', () => {
       expect(text).toMatch(/0\.0% vs average/i)
       fireEvent.pointerMove(plot(container), { clientX: 0 })
       expect(screen.getByRole('status').textContent).toMatch(/\+66\.7% vs average/i)
-      restore()
     })
 
     it('CRITICAL: withholds the deviation when the window average is zero — nothing to deviate from', () => {
-      const restore = withWidth()
       const { container } = render(<TimelineChart points={[
         { day: '2026-09-10', views: 0, visitors: 0 }, { day: '2026-09-11', views: 0, visitors: 0 },
       ]} height={100} />)
       fireEvent.pointerMove(plot(container), { clientX: 600 })
       expect(screen.getByRole('status').textContent).not.toMatch(/%/)
-      restore()
     })
 
     it('CRITICAL: the readout follows the hovered value — a low day puts it low, not flush with the top rule', () => {
-      const restore = withWidth()
       const { container } = render(<TimelineChart points={[
         { day: '2026-09-10', views: 100, visitors: 0 }, { day: '2026-09-11', views: 5, visitors: 0 },
       ]} height={100} />)
@@ -203,11 +214,22 @@ describe('TimelineChart', () => {
       expect(low).toBeGreaterThan(high)
       expect(high).toBeGreaterThanOrEqual(4)
       expect(low).toBeLessThanOrEqual(64)
-      restore()
+    })
+
+    it('the readout sits to the right of the dot, and flips to the left near the window end', () => {
+      const { container } = render(<TimelineChart points={three} height={100} />)
+      const plot = container.querySelector('svg')!.parentElement!
+      fireEvent.pointerMove(plot, { clientX: 0 })
+      const early = (container.querySelector('[data-readout]') as HTMLElement).style
+      expect(early.left).not.toBe('')
+      expect(early.right).toBe('')
+      fireEvent.pointerMove(plot, { clientX: 600 })
+      const late = (container.querySelector('[data-readout]') as HTMLElement).style
+      expect(late.right).not.toBe('')
+      expect(late.left).toBe('')
     })
 
     it('an uncounted day reads as a dash, and leaving clears everything', () => {
-      const restore = withWidth()
       const across = [{ day: '2026-09-10', views: 4, visitors: 0 }, { day: '2026-09-11', views: 5, visitors: 9 }]
       const { container } = render(<TimelineChart points={across} height={100} series={[
         S('views', [4, 5]), S('visitors', [0, 9], 'accent-red', '2026-09-11'),
@@ -216,7 +238,6 @@ describe('TimelineChart', () => {
       expect(screen.getByRole('status').textContent).toMatch(/visitors—/i)
       fireEvent.pointerLeave(plot(container))
       expect(screen.queryByRole('status')).toBeNull()
-      restore()
     })
   })
 })

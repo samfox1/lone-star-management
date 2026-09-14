@@ -16,6 +16,8 @@ import {
   METRICS,
   WINDOW_OPTIONS,
   daysSince,
+  entityRows,
+  firstAnalyticsDay,
   isAllTime,
   analyticsWindow,
   metrics,
@@ -35,17 +37,40 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const NOW = Date.parse('2026-09-12T18:00:00Z')
 
-/** A Supabase stand-in that answers each reader from a table of canned rows. */
-function fakeClient(rows: Record<string, unknown[]>) {
+/**
+ * A Supabase stand-in that answers each reader from a table of canned rows.
+ *
+ * Rows are keyed by function name, or by `name@p_since` when a test needs the
+ * current and the previous window to answer DIFFERENTLY — the only way to prove
+ * a "previous" total was not read off the current window's rows. `errors` makes
+ * a named reader fail. The chain (`order`/`limit`/`maybeSingle`) is accepted and
+ * ignored except that `maybeSingle` hands back the first row: whether PostgREST
+ * honours it on an RPC is pinned by the integration suite, not here.
+ */
+function fakeClient(rows: Record<string, unknown[]>, errors: Record<string, string> = {}) {
   const calls: { fn: string; args: Record<string, unknown> }[] = []
   const client = {
     rpc: (fn: string, args: Record<string, unknown>) => {
       calls.push({ fn, args })
-      return Promise.resolve({ data: rows[fn] ?? [], error: null })
+      const data = rows[`${fn}@${String(args.p_since)}`] ?? rows[fn] ?? []
+      const error = fn in errors ? { message: errors[fn] } : null
+      let single = false
+      const q = {
+        order: () => q,
+        limit: () => q,
+        maybeSingle: () => { single = true; return q },
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+          Promise.resolve({ data: error ? null : single ? (data[0] ?? null) : data, error }).then(res, rej),
+      }
+      return q
     },
   } as unknown as SupabaseClient
   return { client, calls }
 }
+
+/** Every metric's total for a window, keyed like METRICS. */
+const totalsOf = (w: Awaited<ReturnType<typeof trafficWindow>>) =>
+  Object.fromEntries(metrics(w).map((m) => [m.key, m.total])) as Record<string, number>
 
 describe('the window itself', () => {
   it('is whole UTC days, today included — the unit every reader counts in', () => {
@@ -68,7 +93,6 @@ describe('the window itself', () => {
   })
 
   it('CRITICAL: all time counts whole days from the first event through today, inclusive', () => {
-    expect(daysSince('2026-09-12', NOW)).toBe(1 + 0 + 0) // yesterday → 2 days? no: 12th and 12th
     expect(daysSince('2026-09-12', NOW)).toBe(1)
     expect(daysSince('2026-09-06', NOW)).toBe(7)
     expect(daysSince('2026-07-01', NOW)).toBe(74)
@@ -117,7 +141,7 @@ describe('trafficWindow', () => {
     ])
     expect(w.timeline.map((d) => d.views)).toEqual([0, 0, 40, 0, 0, 0, 10])
     // The totals come from the filled series, so they cannot drift from the chart.
-    expect(w.totals).toEqual({ views: 50, visitors: 16, bots: 3 })
+    expect(totalsOf(w)).toMatchObject({ views: 50, visitors: 16, bots: 3 })
   })
 
   it('reads counts as numbers — PostgREST hands bigint back as a string', async () => {
@@ -126,7 +150,7 @@ describe('trafficWindow', () => {
       analytics_sources: [{ source: 'instagram', referrer_host: 'l.instagram.com', views: '5', visitors: '2' }],
     })
     const w = await trafficWindow(client, 'a', 7, NOW)
-    expect(w.totals.views).toBe(7)
+    expect(totalsOf(w).views).toBe(7)
     expect(w.sources[0]).toEqual({ source: 'instagram', referrer_host: 'l.instagram.com', views: 5, visitors: 2 })
     expect(typeof w.sources[0].views).toBe('number')
   })
@@ -135,15 +159,59 @@ describe('trafficWindow', () => {
     const { client } = fakeClient({})
     const w = await trafficWindow(client, 'a', 30, NOW)
     expect(w.timeline).toHaveLength(30)
-    expect(w.totals).toEqual({ views: 0, visitors: 0, bots: 0 })
+    expect(totalsOf(w)).toMatchObject({ views: 0, visitors: 0, bots: 0 })
     expect([w.sources, w.places, w.devices]).toEqual([[], [], []])
   })
 })
 
-describe('the per-metric series the sparklines draw', () => {
+describe('trafficWindow when a reader fails', () => {
+  it('CRITICAL: throws — a revoked grant or a renamed reader must not render as a quiet zero', async () => {
+    for (const fn of ['analytics_timeline', 'analytics_sources', 'analytics_places', 'analytics_devices', 'analytics_type_timeline']) {
+      const { client } = fakeClient({}, { [fn]: `permission denied for function ${fn}` })
+      await expect(trafficWindow(client, 'a', 7, NOW), fn).rejects.toThrow(fn)
+    }
+  })
+})
+
+describe('entityRows', () => {
+  it('reads the entity reader from the window start as a UTC instant, counts as numbers', async () => {
+    const { client, calls } = fakeClient({
+      analytics_by_entity: [{ entity_type: 'track', entity_id: 'a', type: 'play', count: '3' }],
+    })
+    const rows = await entityRows(client, 'artist-1', '2026-09-06')
+    expect(calls).toEqual([{ fn: 'analytics_by_entity', args: { p_artist_id: 'artist-1', p_since: '2026-09-06T00:00:00Z' } }])
+    expect(rows).toEqual([{ entity_type: 'track', entity_id: 'a', type: 'play', count: 3 }])
+  })
+
+  it('CRITICAL: throws when the reader fails, rather than reporting "no plays yet"', async () => {
+    const { client } = fakeClient({}, { analytics_by_entity: 'permission denied for function analytics_by_entity' })
+    await expect(entityRows(client, 'a', '2026-09-06')).rejects.toThrow('analytics_by_entity')
+  })
+})
+
+describe('firstAnalyticsDay', () => {
+  it('CRITICAL: asks a TALLY-AWARE reader, not the raw table — the raw rows are pruned after 90 days', async () => {
+    const { client, calls } = fakeClient({ analytics_daily: [{ artist_id: 'a', day: '2024-03-09', views: 2 }] })
+    expect(await firstAnalyticsDay(client, 'a')).toBe('2024-03-09')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].fn).toBe('analytics_daily')
+    expect(calls[0].args).toEqual({ p_artist_id: 'a', p_since: '1970-01-01T00:00:00Z' })
+  })
+
+  it('is null for an artist with no traffic at all', async () => {
+    expect(await firstAnalyticsDay(fakeClient({}).client, 'a')).toBeNull()
+  })
+
+  it('throws when the reader fails', async () => {
+    const { client } = fakeClient({}, { analytics_daily: 'permission denied for function analytics_daily' })
+    await expect(firstAnalyticsDay(client, 'a')).rejects.toThrow('analytics_daily')
+  })
+})
+
+describe('the per-metric series the chart draws', () => {
   const window7 = (rows: Record<string, unknown[]>) => trafficWindow(fakeClient(rows).client, 'a', 7, NOW)
 
-  it('CRITICAL: every series is as long as the timeline, so a pill and the chart agree', async () => {
+  it('CRITICAL: every series is as long as the timeline, so a total and the chart agree', async () => {
     const w = await window7({
       analytics_timeline: [{ day: '2026-09-12', views: 10, visitors: 4, bots: 1 }],
       analytics_type_timeline: [{ day: '2026-09-10', type: 'play', count: 3 }],
@@ -183,7 +251,7 @@ describe('the per-metric series the sparklines draw', () => {
     expect(by.views.total).toBe(16)
   })
 
-  it('a total is the sum of its own series, so a pill cannot disagree with its sparkline', async () => {
+  it('a total is the sum of its own series, so the number cannot disagree with the line', async () => {
     const w = await window7({
       analytics_timeline: [{ day: '2026-09-12', views: 5, visitors: 2, bots: 0 }],
       analytics_type_timeline: [
@@ -207,16 +275,20 @@ describe('the per-metric series the sparklines draw', () => {
 })
 
 describe('previous-window totals', () => {
-  it('CRITICAL: sums every metric over the window before, keyed like METRICS', async () => {
-    const prevRows = {
-      analytics_timeline: [{ day: '2026-09-01', views: 40, visitors: 10, bots: 3 }, { day: '2026-09-02', views: 60, visitors: 15, bots: 1 }],
-      analytics_type_timeline: [{ day: '2026-09-01', type: 'play', count: 4 }, { day: '2026-09-02', type: 'play', count: 6 }, { day: '2026-09-02', type: 'ticket_click', count: 2 }],
+  it('CRITICAL: sums every metric over the window BEFORE, keyed like METRICS — never off this window\'s rows', async () => {
+    // The current window (from 2026-09-06) and the previous one (from 2026-08-30)
+    // answer with different rows, so a total read off the wrong window shows.
+    const rows = {
+      'analytics_timeline@2026-09-06': [{ day: '2026-09-10', views: 999, visitors: 999, bots: 999 }],
+      'analytics_type_timeline@2026-09-06': [{ day: '2026-09-10', type: 'play', count: 999 }],
+      'analytics_timeline@2026-08-30': [{ day: '2026-09-01', views: 40, visitors: 10, bots: 3 }, { day: '2026-09-02', views: 60, visitors: 15, bots: 1 }],
+      'analytics_type_timeline@2026-08-30': [{ day: '2026-09-01', type: 'play', count: 4 }, { day: '2026-09-02', type: 'play', count: 6 }, { day: '2026-09-02', type: 'ticket_click', count: 2 }],
     }
-    // The fake answers every call from one table, so the previous window sees the
-    // same rows as the current one — which is exactly what this test needs.
-    const w = await trafficWindow(fakeClient(prevRows).client, 'a', 7, NOW)
+    const w = await trafficWindow(fakeClient(rows).client, 'a', 7, NOW)
     expect(w.prevTotals).toEqual({ views: 100, visitors: 25, bots: 4, plays: 10, link_clicks: 0, ticket_clicks: 2, buy_clicks: 0 })
     expect(Object.keys(w.prevTotals).sort()).toEqual(METRICS.map((m) => m.key).sort())
+    // And the current window really did read its own rows.
+    expect(totalsOf(w).views).toBe(999)
   })
 })
 
@@ -303,15 +375,17 @@ describe('summarizeSources', () => {
 describe('summarizeDevices', () => {
   const row = (device: string, browser: string, visitors: number) => ({ device, browser, visitors, views: visitors * 2 })
 
-  it('CRITICAL: phones and tablets are MOBILE, desktops are WEB, and the unclassified are counted not drawn', () => {
+  it('CRITICAL: phones and tablets are MOBILE, desktops are WEB, and everything else is counted not drawn', () => {
+    // Two kinds of "else": a blank device the door could not classify, and one it
+    // classified as something neither group draws (a TV). Both must land in other.
     const d = summarizeDevices([
-      row('mobile', 'instagram', 198), row('tablet', 'safari', 13), row('desktop', 'chrome', 88), row('', '', 9),
+      row('mobile', 'instagram', 198), row('tablet', 'safari', 13), row('desktop', 'chrome', 88), row('', '', 9), row('tv', 'chrome', 4),
     ])
     expect(d.mobile.map((r) => r.browser)).toEqual(['instagram', 'safari'])
     expect(d.web.map((r) => r.browser)).toEqual(['chrome'])
     expect(d.mobileVisitors).toBe(211)
     expect(d.webVisitors).toBe(88)
-    expect(d.otherVisitors).toBe(9)
+    expect(d.otherVisitors).toBe(13)
   })
 
   it('CRITICAL: one maximum across BOTH groups, so a web bar and a mobile bar share a scale', () => {

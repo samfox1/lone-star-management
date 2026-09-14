@@ -15,6 +15,8 @@ const songs: ContentList = {
 const tourNoneNamed: ContentList = { items: [], attributed: 0, unattributed: 22 }
 const merchNothing: ContentList = { items: [], attributed: 0, unattributed: 0 }
 const lists = { songs, tour: tourNoneNamed, merch: merchNothing }
+/** Every play named a song, and every one of those songs has since been deleted. */
+const songsAllGone: ContentList = { items: [], attributed: 12, unattributed: 0 }
 
 describe('TopContent', () => {
   it('offers one tab per kind, derived from the registry', () => {
@@ -40,6 +42,16 @@ describe('TopContent', () => {
     expect(within(screen.getByRole('tabpanel')).getByText(/22 ticket clicks, none named a date yet/i)).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'Merch' }))
     expect(within(screen.getByRole('tabpanel')).getByText(/^No buy clicks yet\.$/i)).toBeTruthy()
+  })
+
+  it('CRITICAL: a list emptied by deletions says so — not "none named a song", which is the opposite of what happened', () => {
+    render(<TopContent lists={{ ...lists, songs: songsAllGone }} />)
+    const panel = screen.getByRole('tabpanel')
+    expect(panel.textContent).not.toMatch(/none named/i)
+    expect(panel.textContent).toMatch(/12 plays named a song/i)
+    expect(panel.textContent).toMatch(/removed/i)
+    // And with nothing unattributed, no "· 0 did not".
+    expect(panel.textContent).not.toMatch(/did not/i)
   })
 
   it('switching tabs marks the selected one and swaps the list', () => {

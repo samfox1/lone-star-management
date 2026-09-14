@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { OVERLAYS, WINDOW_OPTIONS, metricFacts, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
+import { OVERLAYS, WINDOW_OPTIONS, metricFacts, previousWindow, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
+import { dayLabel } from '@/lib/chart'
 import { formatTrend, trendTextClass } from '@/lib/format'
 import { TimelineChart, type Series } from '@/components/ui/timeline-chart'
 import { Segmented } from './segmented'
@@ -17,15 +18,17 @@ import { Segmented } from './segmented'
  * colored line. It's all one chart." So: views is always drawn, in blue with the
  * fill; visitors overlay in red; bots in ink. One scale, one legend.
  *
- * The toggles and the window switch share one row and one control language —
- * the dashboard's `Segmented` and a multi-select built from its classes — so
- * they read as the two halves of a single question: WHAT is drawn, over HOW
- * LONG. The window lives in the URL because the server reads it.
+ * One row above the chart: the two overlays as square checks on the left, both
+ * on by default, and the window switch (the dashboard's `Segmented`) on the
+ * right. WHAT is drawn, over HOW LONG. The window lives in the URL because the
+ * server reads it.
  *
- * Facts beside the chart: the views total, its change on the prior window,
- * best day, per day; then one block per toggled series. Visitors and bots exist
- * only from the 2026-09-12 cut-over, so their per-day figures divide by the
- * counted days, and nothing said in the legend is said again in the panel.
+ * The facts column beside the chart shows ONE series at a time, picked by a
+ * tab: total, change on the prior window, best day, per day. Visitors and bots
+ * exist only from the 2026-09-12 cut-over, so their facts are taken over the
+ * counted days, and their prior-window change is withheld until the prior
+ * window is wholly counted — two counted days against a prior window of none
+ * would print a gain that is not there.
  */
 export type MetricExtra = { label: string; value: string }
 
@@ -71,11 +74,16 @@ export function MetricExplorer({
     since: m.key === 'views' ? undefined : countedSince,
   }))
 
+  // The prior window is comparable for an overlay only if it was counted throughout.
+  const prior = days_.length ? previousWindow({ since: days_[0], until: days_[days_.length - 1], days }) : null
+  const priorCounted = !countedSince || (prior !== null && prior.since >= countedSince)
+
   /** Facts over the days a metric was counted — the whole window for views, from the cut-over for the rest. */
   const factsFor = (m: Metric) => {
     const since = m.key === 'views' ? undefined : countedSince
     const idx = days_.map((_, i) => i).filter((i) => !since || days_[i] >= since)
-    return metricFacts({ ...m, series: idx.map((i) => m.series[i]) }, idx.map((i) => days_[i]), prevTotals[m.key] ?? 0)
+    const prev = m.key === 'views' || priorCounted ? (prevTotals[m.key] ?? 0) : 0
+    return metricFacts({ ...m, series: idx.map((i) => m.series[i]) }, idx.map((i) => days_[i]), prev)
   }
   // The column shows ONE series at a time, picked by its tab. The tabs are always
   // there, drawn or not: the facts exist whether or not the line is on the chart.
@@ -89,20 +97,25 @@ export function MetricExplorer({
     <div className={className}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Add-ons only — views is always drawn and needs no switch. Each is a
-            small square check beside its name, not a button around the text
-            (Sam, 2026-09-13). */}
+            small square check beside its name, not a button drawn around the
+            text (Sam, 2026-09-13). ONE control per overlay, square and name
+            together: a label forwarding to a separate button fired twice. */}
         <div role="group" aria-label="Series" className="flex flex-wrap items-center gap-5">
           {OVERLAYS.map((k) => (
-            <label key={k} className="flex cursor-pointer select-none items-center gap-2 font-space text-xs text-ink">
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={on.has(k)}
-                aria-label={byKey[k]?.label ?? k}
-                onClick={() => toggle(k)}
+            <button
+              key={k}
+              type="button"
+              role="checkbox"
+              aria-checked={on.has(k)}
+              aria-label={byKey[k]?.label ?? k}
+              onClick={() => toggle(k)}
+              className="group flex cursor-pointer select-none items-center gap-2 font-space text-xs text-ink"
+            >
+              <span
+                aria-hidden
                 className={cx(
                   'flex h-4 w-4 items-center justify-center rounded-[3px] border transition-colors',
-                  on.has(k) ? 'border-ink bg-ink text-white' : 'border-hairline bg-paper hover:border-ink-faint',
+                  on.has(k) ? 'border-ink bg-ink text-white' : 'border-hairline bg-paper group-hover:border-ink-faint',
                 )}
               >
                 {on.has(k) && (
@@ -110,9 +123,9 @@ export function MetricExplorer({
                     <path d="M2.5 6.2 L5 8.6 L9.6 3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
-              </button>
-              <span onClick={() => toggle(k)}>{byKey[k]?.label ?? k}</span>
-            </label>
+              </span>
+              <span>{byKey[k]?.label ?? k}</span>
+            </button>
           ))}
         </div>
         <Segmented
@@ -189,9 +202,3 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 const perDay = (n: number) => (n >= 10 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1))
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-function dayLabel(day: string): string {
-  const [, m, d] = day.split('-')
-  return `${MONTHS[Number(m) - 1] ?? ''} ${Number(d)}`
-}

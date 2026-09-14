@@ -20,7 +20,7 @@ export async function entityCounts(
     p_artist_id: artistId,
     p_since: since.toISOString(),
   })
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(`analytics_by_entity: ${error.message}`)
 
   const map: EntityCounts = new Map()
   for (const r of (data ?? []) as { entity_id: string; type: string; count: number }[]) {
@@ -135,7 +135,6 @@ export type TrafficWindow = {
   /** Every metric's total over the previous window, keyed like METRICS, so the
    *  explorer can say "vs the 30 days before" per metric. */
   prevTotals: Record<MetricKey, number>
-  totals: { views: number; visitors: number; bots: number }
 }
 
 /**
@@ -168,23 +167,32 @@ export type Metric = { key: MetricKey; label: string; total: number; series: num
 /**
  * Every metric as a total and a daily series, in registry order.
  *
- * The series are what the sparklines draw, so they must be the same length as the
+ * The series are what the chart draws, so they must be the same length as the
  * timeline — a shorter one would draw a different window from the chart beside it
  * and nothing on screen would say so.
  */
 export function metrics(w: TrafficWindow): Metric[] {
+  // A metric with no event type is a column of the timeline, named by its key.
   const off = (k: 'views' | 'visitors' | 'bots') => w.timeline.map((d) => d[k])
   const zero = () => w.timeline.map(() => 0)
   return METRICS.map(({ key, label, type }) => {
-    const series =
-      type === null
-        ? off(key === 'visitors' ? 'visitors' : key === 'bots' ? 'bots' : 'views')
-        : (w.byType[type] ?? zero())
+    const series = type === null ? off(key as 'views' | 'visitors' | 'bots') : (w.byType[type] ?? zero())
     return { key, label, total: series.reduce((n, v) => n + v, 0), series }
   })
 }
 
 const num = (v: unknown) => Number(v ?? 0)
+
+/**
+ * A reader's rows, or a thrown error naming the reader. Every reader here is
+ * read this way: a revoked grant or a renamed function must fail the page, not
+ * render every metric as a quiet zero and "no plays yet".
+ */
+function must<T>(fn: string, res: { data: T | null; error: { message: string } | null }): T {
+  if (res.error) throw new Error(`${fn}: ${res.error.message}`)
+  return res.data as T
+}
+type Rows = Record<string, unknown>[]
 
 /** Every block's data, in one parallel wave. */
 export async function trafficWindow(
@@ -197,24 +205,25 @@ export async function trafficWindow(
   const args = { p_artist_id: artistId, p_since: w.since, p_until: w.until }
   const prev = previousWindow(w)
   const prevArgs = { p_artist_id: artistId, p_since: prev.since, p_until: prev.until }
+  const read = async (fn: string, a: typeof args): Promise<Rows> => must<Rows>(fn, await supabase.rpc(fn, a)) ?? []
   const [timeline, sources, places, devices, byType, prevSources, prevTimeline, prevByType] = await Promise.all([
-    supabase.rpc('analytics_timeline', args),
-    supabase.rpc('analytics_sources', args),
-    supabase.rpc('analytics_places', args),
-    supabase.rpc('analytics_devices', args),
-    supabase.rpc('analytics_type_timeline', args),
-    supabase.rpc('analytics_sources', prevArgs),
-    supabase.rpc('analytics_timeline', prevArgs),
-    supabase.rpc('analytics_type_timeline', prevArgs),
+    read('analytics_timeline', args),
+    read('analytics_sources', args),
+    read('analytics_places', args),
+    read('analytics_devices', args),
+    read('analytics_type_timeline', args),
+    read('analytics_sources', prevArgs),
+    read('analytics_timeline', prevArgs),
+    read('analytics_type_timeline', prevArgs),
   ])
-  const sourceRows = (rows: unknown): SourceRow[] =>
-    ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+  const sourceRows = (rows: Rows): SourceRow[] =>
+    rows.map((r) => ({
       source: String(r.source ?? ''), referrer_host: String(r.referrer_host ?? ''),
       views: num(r.views), visitors: num(r.visitors),
     }))
 
   const byDay = new Map<string, TimelineDay>()
-  for (const r of (timeline.data ?? []) as Record<string, unknown>[]) {
+  for (const r of timeline) {
     byDay.set(String(r.day), { day: String(r.day), views: num(r.views), visitors: num(r.visitors), bots: num(r.bots) })
   }
   // Zero-fill, so the chart's x axis is the window and not just the busy days.
@@ -225,9 +234,9 @@ export async function trafficWindow(
   }
 
   // Type → day → count, then flattened onto the SAME day order as `filled`, so a
-  // sparkline and the chart beside it always describe the same window.
+  // metric's series and the chart always describe the same window.
   const typeDays = new Map<string, Map<string, number>>()
-  for (const r of (byType.data ?? []) as Record<string, unknown>[]) {
+  for (const r of byType) {
     const type = String(r.type ?? '')
     if (!typeDays.has(type)) typeDays.set(type, new Map())
     typeDays.get(type)!.set(String(r.day), num(r.count))
@@ -239,10 +248,10 @@ export async function trafficWindow(
 
   // Previous-window totals, summed straight off the rows: no zero-fill needed for a sum.
   const prevTotals = Object.fromEntries(METRICS.map((m) => [m.key, 0])) as Record<MetricKey, number>
-  for (const r of (prevTimeline.data ?? []) as Record<string, unknown>[]) {
+  for (const r of prevTimeline) {
     prevTotals.views += num(r.views); prevTotals.visitors += num(r.visitors); prevTotals.bots += num(r.bots)
   }
-  for (const r of (prevByType.data ?? []) as Record<string, unknown>[]) {
+  for (const r of prevByType) {
     const m = METRICS.find((x) => x.type === String(r.type ?? ''))
     if (m) prevTotals[m.key] += num(r.count)
   }
@@ -252,21 +261,47 @@ export async function trafficWindow(
     timeline: filled,
     byType: byTypeSeries,
     prevTotals,
-    sources: sourceRows(sources.data),
-    prevSources: sourceRows(prevSources.data),
-    places: ((places.data ?? []) as Record<string, unknown>[]).map((r) => ({
+    sources: sourceRows(sources),
+    prevSources: sourceRows(prevSources),
+    places: places.map((r) => ({
       country: String(r.country ?? ''), region: String(r.region ?? ''), city: String(r.city ?? ''),
       views: num(r.views), visitors: num(r.visitors),
     })),
-    devices: ((devices.data ?? []) as Record<string, unknown>[]).map((r) => ({
+    devices: devices.map((r) => ({
       device: String(r.device ?? ''), browser: String(r.browser ?? ''),
       views: num(r.views), visitors: num(r.visitors),
     })),
-    totals: filled.reduce(
-      (t, d) => ({ views: t.views + d.views, visitors: t.visitors + d.visitors, bots: t.bots + d.bots }),
-      { views: 0, visitors: 0, bots: 0 },
-    ),
   }
+}
+
+/** The entity reader's rows from the start of a window (a UTC day), counts as numbers. */
+export async function entityRows(supabase: SupabaseClient, artistId: string, sinceDay: string): Promise<EntityRow[]> {
+  const rows = must<Rows>('analytics_by_entity', await supabase.rpc('analytics_by_entity', {
+    p_artist_id: artistId, p_since: `${sinceDay}T00:00:00Z`,
+  })) ?? []
+  return rows.map((r) => ({
+    entity_type: String(r.entity_type ?? ''), entity_id: String(r.entity_id ?? ''),
+    type: String(r.type ?? ''), count: num(r.count),
+  }))
+}
+
+/**
+ * The first UTC day this artist had a view, or null before any — where "All
+ * time" starts.
+ *
+ * Read off `analytics_daily`, which unions the day tallies with the raw rows,
+ * and NOT off `analytics_events` directly: the nightly prune deletes raw rows
+ * older than 90 days once they are rolled up, so a first day taken from the raw
+ * table would move forward one day every night and the all-time total would
+ * quietly shrink with it. The tallies keep every day.
+ */
+export async function firstAnalyticsDay(supabase: SupabaseClient, artistId: string): Promise<string | null> {
+  const row = must<{ day: string } | null>('analytics_daily', await supabase
+    .rpc('analytics_daily', { p_artist_id: artistId, p_since: '1970-01-01T00:00:00Z' })
+    .order('day', { ascending: true })
+    .limit(1)
+    .maybeSingle())
+  return row ? String(row.day).slice(0, 10) : null
 }
 
 /**

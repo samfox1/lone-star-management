@@ -17,8 +17,9 @@ describe('DeviceSplit', () => {
     render(<DeviceSplit split={split} />)
     const mobile = screen.getByRole('region', { name: 'Mobile' })
     const web = screen.getByRole('region', { name: 'Web' })
-    expect(mobile.textContent).toContain('309')
-    expect(web.textContent).toContain('130')
+    // Shares are of EVERYONE, the unclassified included: 309 and 130 of 448.
+    expect(mobile.textContent).toContain('309 · 69%')
+    expect(web.textContent).toContain('130 · 29%')
     expect(within(mobile).getAllByRole('listitem')).toHaveLength(3)
     expect(within(web).getAllByRole('listitem')).toHaveLength(2)
   })

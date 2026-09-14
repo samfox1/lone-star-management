@@ -16,10 +16,11 @@ const series: Record<MetricKey, number[]> = {
 const timeline = days.map((day, i) => ({ day, views: series.views[i], visitors: series.visitors[i], bots: series.bots[i] }))
 const metrics: Metric[] = METRICS.map((m) => ({ key: m.key, label: m.label, series: series[m.key], total: series[m.key].reduce((a, b) => a + b, 0) }))
 const prevTotals: Record<MetricKey, number> = { views: 100, visitors: 0, plays: 6, link_clicks: 8, ticket_clicks: 0, buy_clicks: 0, bots: 0 }
-const setup = (windowKey = '7', daysN = 4) => render(
-  <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={prevTotals} windowKey={windowKey} days={daysN} countedSince="2026-09-12"
+const setup = (windowKey = '7', daysN = 4, prev = prevTotals, countedSince = '2026-09-12') => render(
+  <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={prev} windowKey={windowKey} days={daysN} countedSince={countedSince}
     extras={{ bots: [{ label: 'Share of hits', value: '2.0%' }] }} />,
 )
+const lineOf = (c: HTMLElement, key: string) => c.querySelector(`[data-series="${key}"] polyline`)!.getAttribute('points')!.trim().split(/\s+/)
 const toggles = () => screen.getByRole('group', { name: 'Series' })
 const facts = () => screen.getByRole('region', { name: 'Facts' })
 
@@ -50,6 +51,23 @@ describe('MetricExplorer', () => {
     ])
   })
 
+  it('CRITICAL: clicking the NAME toggles once, exactly as the square does — not twice, which is not at all', () => {
+    const { container } = setup()
+    fireEvent.click(within(toggles()).getByText('Unique visitors'))
+    expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
+    expect(check('Unique visitors')).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(within(toggles()).getByText('Unique visitors'))
+    expect(container.querySelectorAll('[data-series]')).toHaveLength(3)
+  })
+
+  it('CRITICAL: an overlay starts at the cut-over on the chart; views runs the whole window', () => {
+    const { container } = setup()
+    // Four days, counted from the third: two points, not four zeros-then-values.
+    expect(lineOf(container, 'visitors')).toHaveLength(2)
+    expect(lineOf(container, 'bots')).toHaveLength(2)
+    expect(lineOf(container, 'views')).toHaveLength(4)
+  })
+
   it('the facts tabs are always there — Views, Visitors, Bots — drawn or not', () => {
     setup()
     const tabs = screen.getByRole('tablist', { name: 'Facts for' })
@@ -78,6 +96,20 @@ describe('MetricExplorer', () => {
     expect(facts().textContent).toMatch(/per day25/i)
     fireEvent.click(within(tabs).getByRole('tab', { name: 'Bots' }))
     expect(facts().textContent).toContain('2.0%')
+  })
+
+  it('CRITICAL: an overlay compares against the prior window only once that window was wholly counted', () => {
+    // Window 2026-09-10..13, so the prior one is 09-06..09-09. Counted from 09-12:
+    // the prior window has no counted days at all, and "+400%" against it would be
+    // 2 counted days against 0. Nothing is printed.
+    const partial = setup('7', 4, { ...prevTotals, visitors: 10 })
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Visitors' }))
+    expect(facts().textContent).not.toMatch(/%|prior/i)
+    partial.unmount()
+    // Counted from before the prior window started: both are whole, and 50 vs 10 prints.
+    setup('7', 4, { ...prevTotals, visitors: 10 }, '2026-09-01')
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Visitors' }))
+    expect(facts().textContent).toMatch(/\+400\.0%/)
   })
 
   it('withholds the views change when the prior window had nothing, and drops it entirely for all time', () => {

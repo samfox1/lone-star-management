@@ -1,7 +1,7 @@
-// The two numbers a chart decides before it draws: where the axis tops out, and
-// what "up 28%" means on hover.
+// The numbers a chart decides before it draws: where the axis tops out, what
+// "up 28%" means on hover, and how a day is named.
 import { describe, expect, it } from 'vitest'
-import { axisTicks, dayDelta, niceCeil } from '@/lib/chart'
+import { axisTicks, dayDelta, dayLabel, niceCeil } from '@/lib/chart'
 
 describe('niceCeil', () => {
   it('lands the axis top on a number a person can read back', () => {
@@ -22,7 +22,7 @@ describe('niceCeil', () => {
 
   it('CRITICAL: never wastes the box — the peak reaches at least the top gridline but one', () => {
     // 217 → 500 was the bug: the line lived in the bottom two fifths of the chart.
-    for (const v of [7, 61, 136, 217, 480, 1111]) {
+    for (const v of [1, 2, 3, 7, 61, 136, 217, 480, 1111]) {
       const top = niceCeil(v)
       expect(v / top, String(v)).toBeGreaterThan(0.6)
     }
@@ -44,6 +44,24 @@ describe('axisTicks', () => {
     expect(axisTicks(1111)).toEqual([200, 400, 600, 800, 1000, 1200])
   })
 
+  it('picks the NEAREST of 1 / 2 / 5 / 10, and each boundary falls the same way', () => {
+    // 30 / 4 = 7.5 is a 10, not a 5: three gridlines, not six.
+    expect(axisTicks(30)).toEqual([10, 20, 30])
+    // The three boundaries exactly: 1.5 is a 2, 3 is a 5, 7 is a 10.
+    expect(axisTicks(6)).toEqual([2, 4, 6])
+    expect(axisTicks(12)).toEqual([5, 10, 15])
+    expect(axisTicks(28)).toEqual([10, 20, 30])
+  })
+
+  it('CRITICAL: a count axis never draws a fractional gridline — a one-view week is 1, not 0.2 … 1', () => {
+    expect(axisTicks(1)).toEqual([1])
+    expect(axisTicks(2)).toEqual([1, 2])
+    expect(axisTicks(3)).toEqual([1, 2, 3])
+    for (const v of [1, 2, 3, 4, 5]) {
+      for (const t of axisTicks(v)) expect(Number.isInteger(t), `${v} → ${t}`).toBe(true)
+    }
+  })
+
   it('ends exactly on the axis top, so the top gridline is the ceiling', () => {
     for (const v of [1, 3, 7, 61, 136, 217, 999, 1111]) {
       expect(axisTicks(v).at(-1), String(v)).toBe(niceCeil(v))
@@ -63,5 +81,13 @@ describe('dayDelta', () => {
     expect(dayDelta(undefined, 40)).toBeNull()
     expect(dayDelta(0, 40)).toBeNull()
     expect(dayDelta(0, 0)).toBeNull()
+  })
+})
+
+describe('dayLabel', () => {
+  it('names a UTC day by reading the string, so it never shifts a day west of Greenwich', () => {
+    expect(dayLabel('2026-09-12')).toBe('Sep 12')
+    expect(dayLabel('2026-01-05')).toBe('Jan 5')
+    expect(dayLabel('2026-12-31')).toBe('Dec 31')
   })
 })

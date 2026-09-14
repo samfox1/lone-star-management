@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
-import { axisTicks, dayDelta, niceCeil } from '@/lib/chart'
+import { axisTicks, dayDelta, dayLabel, niceCeil } from '@/lib/chart'
 import { formatTrend, trendTextClass } from '@/lib/format'
 
 /**
@@ -16,8 +16,7 @@ import { formatTrend, trendTextClass } from '@/lib/format'
  * Colours are the page's own and nothing else: the blue accent, the red accent,
  * and ink. The legend always names every series drawn, so identity is never the
  * colour alone. A series that was first counted mid-window (`since`) starts
- * there rather than pretending the days before were zero, and the legend says
- * from when.
+ * there rather than pretending the days before were zero.
  *
  * Sam, 2026-09-13: "this chart should just be for views, and then the user can
  * toggle on unique visitors and bots onto the same chart with a different
@@ -40,6 +39,7 @@ const PAD_TOP = 8
 const MIN_LINE_POINTS = 4
 const STROKE: Record<Series['color'], string> = { accent: 'text-accent', 'accent-red': 'text-accent-red', ink: 'text-ink' }
 const SWATCH: Record<Series['color'], string> = { accent: 'bg-accent', 'accent-red': 'bg-accent-red', ink: 'bg-ink' }
+const RING: Record<Series['color'], string> = { accent: 'border-accent', 'accent-red': 'border-accent-red', ink: 'border-ink' }
 
 export function TimelineChart({
   points,
@@ -155,8 +155,7 @@ export function TimelineChart({
                 <span
                   key={s.key}
                   aria-hidden
-                  className={cx('pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-paper',
-                    s.color === 'accent' ? 'border-accent' : s.color === 'accent-red' ? 'border-accent-red' : 'border-ink')}
+                  className={cx('pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-paper', RING[s.color])}
                   style={{ left: `${(x(at) / w) * 100}%`, top: `${(y(valueAt(s, at)) / h) * 100}%` }}
                 />
               ))}
@@ -224,13 +223,4 @@ export function TimelineChart({
       </table>
     </div>
   )
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-/** `2026-09-12` → `Sep 12`. Parsed by hand: `new Date('2026-09-12')` is UTC
- *  midnight, which renders as the day BEFORE anywhere west of Greenwich. */
-function dayLabel(day: string): string {
-  const [, m, d] = day.split('-')
-  return `${MONTHS[Number(m) - 1] ?? ''} ${Number(d)}`
 }

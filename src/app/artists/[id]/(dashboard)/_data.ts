@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { diffUnpublished } from '@/lib/content'
+import { analyticsWindow, daysSince, firstAnalyticsDay, isAllTime, windowDays } from '@/lib/analytics'
 
 /**
  * Load the artist for the current dashboard request, or 404. `cache()` dedupes
@@ -57,4 +58,23 @@ export const getShopifyDomain = cache(async (id: string): Promise<string | null>
     .eq('provider', 'shopify')
     .maybeSingle()
   return (data?.metadata as { store_domain?: string } | null)?.store_domain ?? null
+})
+
+/**
+ * The analytics window this request describes, resolved once: how many days,
+ * the URL key, the window itself, and the instant the clock was read. Everything
+ * on the overview derives from that ONE read, so the chart, the entity list and
+ * the all-time span cannot straddle midnight. It lives here and not in the page
+ * body because a component must not read the clock during render.
+ *
+ * "All time" runs from the artist's first counted day — off the tallies, which
+ * outlive the raw rows (see `firstAnalyticsDay`). No traffic yet: a one-day window.
+ */
+export const analyticsScope = cache(async (id: string, rawDays: string | undefined) => {
+  const now = Date.now()
+  const supabase = await createClient()
+  const days = isAllTime(rawDays)
+    ? daysSince((await firstAnalyticsDay(supabase, id)) ?? analyticsWindow(1, now).since, now)
+    : windowDays(rawDays)
+  return { now, days, windowKey: isAllTime(rawDays) ? 'all' : String(days), window: analyticsWindow(days, now) }
 })
