@@ -8,10 +8,10 @@ import { toast } from '../toast'
 import { saveArtistNameAction, saveBookingEmailAction } from './actions'
 
 /**
- * SETTINGS, the way Sam settled it (2026-09-13): two columns, both centred. The keys sit
- * in their own column, each centred in it; the values in theirs, each centred in that;
- * and the pair of columns floats in the middle of the main area, a touch above dead
- * centre. No panel, no border, no arrows, no headings.
+ * SETTINGS (Sam, 2026-09-13): rows, left-aligned, in the same grammar as Brand — a mono
+ * key, then the value, each row only as wide as what is in it. It was centred for an
+ * evening; Sam moved it back beside Brand so the two tool pages read as one family. No
+ * panel, no border, no arrows, no headings.
  *
  * Booking email and Name are rows you click to edit — the whole row, with the same hover
  * the tour dates and connections wear (`rowHoverClass`) — and they save on blur or Enter.
@@ -40,20 +40,18 @@ export function SettingsView({ artistId, rows: initial }: { artistId: string; ro
   }
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center">
-      <div className="-mt-10 inline-grid grid-cols-[auto_auto] items-start">
-        {rows.map((row) => (
-          <Row key={row.key} row={row} onSave={(v) => save(row, v)} />
-        ))}
-      </div>
+    <div className="mt-2 flex flex-col items-start gap-0.5">
+      {rows.map((row) => (
+        <Row key={row.key} row={row} onSave={(v) => save(row, v)} />
+      ))}
     </div>
   )
 }
 
-const KEY = 'pt-[19px] text-center font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint'
+const KEY = 'w-[120px] flex-none pt-[7px] font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint'
 
-/** One row: two cells of the outer grid (subgrid), so the row can be hovered and clicked
- *  as ONE thing while its cells stay in their columns. */
+/** One row: key, then value. An editable row is a button — the whole row — and wears the
+ *  shared hover; a read-only row is text and wears nothing. */
 function Row({ row, onSave }: { row: SettingsRow; onSave: (v: string) => Promise<{ error?: string } | void> }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(row.value)
@@ -80,7 +78,7 @@ function Row({ row, onSave }: { row: SettingsRow; onSave: (v: string) => Promise
     }
   }
 
-  const box = cx('block h-6 min-w-[12ch] border-b text-center leading-6', row.mono ? 'font-space text-[13px]' : 'text-[15px]')
+  const box = cx('block h-6 min-w-[12ch] border-b leading-6', row.mono ? 'font-space text-[13px]' : 'text-[15px]')
   const value = editing ? (
     <input
       autoFocus
@@ -117,10 +115,10 @@ function Row({ row, onSave }: { row: SettingsRow; onSave: (v: string) => Promise
           begin()
         }
       }}
-      className={cx('col-span-2 grid grid-cols-subgrid items-start gap-x-9', row.editable && rowHoverClass)}
+      className={cx('inline-flex items-start gap-6 py-3', row.editable && rowHoverClass)}
     >
       <span className={KEY}>{row.label}</span>
-      <div className="justify-self-center py-3 text-center">
+      <div className="min-w-0">
         {value}
         {row.sub && <div className="mt-1 font-space text-[10.5px] text-ink-faint">{row.sub}</div>}
       </div>

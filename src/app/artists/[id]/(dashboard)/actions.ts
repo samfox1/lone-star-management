@@ -603,6 +603,25 @@ export async function publishSiteWithPasswordAction(artistId: string, password: 
   return { ok: true }
 }
 
+/**
+ * Publish what the Brand page holds: the logos and tab icon (media rows) and the fonts
+ * (artist_font). One password, both sections — a manager who uploaded a logo and set its
+ * font should not have to find two buttons.
+ */
+export async function publishBrandWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+  try {
+    await publishContent(supabase, 'media', artistId, gate.userId)
+    await publishContent(supabase, 'artist_font', artistId, gate.userId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
 /** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
 export async function saveSeoFieldAction(
   artistId: string,

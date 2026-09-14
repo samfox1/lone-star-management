@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   type ArtistFont,
   type FontSlot,
@@ -14,47 +14,37 @@ import { FONT_UPLOAD_RULES, acceptFor } from '@/lib/upload'
 import { cx } from '@/lib/cx'
 import { useConfirm } from '../confirm-dialog'
 import { Icon } from '@/components/ui/icons'
-import { inputClass } from '@/components/ui/ui'
+import { buttonClass } from '@/components/ui/ui'
 import { UploadField } from '../upload-field'
 import { toast } from '../toast'
 import { addArtistFontAction, removeArtistFontAction, setFontSlotAction } from './actions'
 
 /** The manager-facing spelling of a slot. DERIVED from the slot name, so a sixth slot
- *  gets a label without anyone remembering to add one — a hand-written map would render
- *  `undefined` on the button for the slot nobody updated. */
+ *  gets a label without anyone remembering to add one. */
 const slotLabel = (slot: FontSlot) => slot.replace(/_/g, ' ')
 
 /**
- * The artist's uploaded fonts.
+ * The artist's fonts, as ROWS (Sam, 2026-09-13): the name set in its own face, the
+ * format, the five slot chips, and a bare bin at the end. "+ Font" is the last row and
+ * opens a small dialog — name first, then the file — so the page itself carries no form
+ * and no captions.
  *
- * EVERY FONT IS PREVIEWED IN ITSELF. That is the entire point of the page: a list of
- * filenames tells a manager nothing about whether the face is right, and they cannot
- * "just look at the site" because a font is draft until it is published. So the component
- * injects the same `@font-face` CSS the public site will get and renders each row in its
- * own family — what you see here is literally what the site will be typeset in.
+ * EVERY FONT IS PREVIEWED IN ITSELF: the component injects the same `@font-face` CSS the
+ * public site gets and sets each row in its own family, because a font is draft until
+ * published and a filename tells a manager nothing.
  *
- * The name is asked for BEFORE the file, not after. The name is what the CSS family token
- * is derived from, and that token is stored verbatim in every per-region style row that
- * uses it — so it is fixed at upload and there is no rename. Asking first makes that
- * one-way door visible instead of surprising.
+ * The name is asked for BEFORE the file. The CSS family token derives from it and is
+ * stored verbatim in every per-region style row that uses it, so it is fixed at upload;
+ * asking first makes that one-way door visible instead of surprising.
  */
 export function FontManager({ artistId, fonts }: { artistId: string; fonts: ArtistFont[] }) {
-  const [label, setLabel] = useState('')
   const { ask, dialog } = useConfirm()
-  /** Which row is mid-write, for the disabled/label state. NOT the re-entry guard. */
+  const [adding, setAdding] = useState(false)
+  /** Which row is mid-write, for the disabled state. NOT the re-entry guard. */
   const [busyId, setBusyId] = useState<string | null>(null)
-  /**
-   * The actual re-entry latch. `busyId` is state: two fast clicks both read the value
-   * from before the re-render and both fire, so a double-clicked Remove deletes a font
-   * and then reports "that font is no longer there" for the second call. A ref updates
-   * synchronously.
-   */
+  /** The re-entry latch — a ref, because two fast clicks both read stale state. */
   const busyRef = useRef(false)
 
-  const named = label.trim()
-
-
-  /** One writer for both row actions, so the latch and the toasts cannot drift apart. */
   async function run(id: string, work: () => Promise<{ error?: string }>, done: string) {
     if (busyRef.current) return
     busyRef.current = true
@@ -69,32 +59,21 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
     } catch {
       toast('Something went wrong. Try again.', 'error')
     } finally {
-      // In `finally` so one transient failure doesn't leave the list permanently dead.
       busyRef.current = false
       setBusyId(null)
     }
   }
 
   async function remove(font: ArtistFont) {
-    // There is no undo and no trash, and any region already styled with this font falls
-    // back to the template face the moment it goes.
     if (!(await ask(`Remove ${font.label}? Anything using it falls back to the template font.`, { action: 'Remove' }))) return
     void run(font.id, () => removeArtistFontAction(artistId, font.id), 'Font removed')
   }
 
-  /**
-   * Put this font in a slot, or take it out of one.
-   *
-   * A font may hold SEVERAL slots at once (one typeface for headings and body is the
-   * ordinary case), so this toggles one slot at a time and never touches the others.
-   */
+  /** Put this font in a slot, or take it out of one. A font may hold several slots. */
   async function assign(font: ArtistFont, slot: FontSlot) {
     const clearing = font.slots.includes(slot)
     const incumbent = fonts.find((f) => f.slots.includes(slot) && f.id !== font.id)
     const name = slotLabel(slot)
-    // Taking a slot off another font is a site-wide typeface change made by clicking one
-    // small button, and the button gives no hint that a second font is about to lose it.
-    // Not destructive, so the action is named for the change rather than a removal.
     if (!clearing && incumbent && !(await ask(`${incumbent.label} is the ${name} font. Use ${font.label} instead?`, { action: 'Use it', tone: 'solid' })))
       return
     void run(
@@ -105,113 +84,128 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
   }
 
   return (
-    <div className="space-y-4">
-      {/* The same stylesheet the published site gets, so the previews below are the real
-          faces rather than a guess. Safe to inject: every value in it has been through
-          sanitizeFamily or is a known-safe enum (see lib/fonts.ts). */}
+    <div className="flex flex-col gap-0.5">
+      {/* Safe to inject: every value has been through sanitizeFamily or is a known enum. */}
       <style dangerouslySetInnerHTML={{ __html: fontFaceCss(fonts.map((f) => ({ ...f, path: f.storage_path }))) }} />
 
-      {fonts.length > 0 && (
-        <ul className="divide-y divide-hairline rounded-xl border border-hairline">
-          {fonts.map((font) => {
-            const rowBusy = busyId === font.id
-            return (
-              <li key={font.id} className="px-4 py-3">
-                <div className="flex items-center gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className="truncate text-[19px] leading-tight text-ink"
-                      style={{ fontFamily: `'${sanitizeFamily(font.family)}', sans-serif` }}
-                    >
-                      {font.label}
-                    </p>
-                    <p className="mt-0.5 font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint">
-                      {font.format} &middot; font-{sanitizeFamily(font.family)}
-                    </p>
-                  </div>
+      {fonts.map((font) => {
+        const rowBusy = busyId === font.id
+        return (
+          <div key={font.id} className={cx('flex items-center gap-4 py-1.5', rowBusy && 'opacity-60')}>
+            <span className="min-w-[120px] truncate text-[19px] leading-tight" style={{ fontFamily: `'${sanitizeFamily(font.family)}', sans-serif` }}>
+              {font.label}
+            </span>
+            <span className="w-9 flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint" title={`font-${sanitizeFamily(font.family)}`}>
+              {font.format}
+            </span>
+            <span className="flex flex-wrap gap-1.5">
+              {FONT_SLOTS.map((slot) => {
+                const held = font.slots.includes(slot)
+                return (
                   <button
+                    key={slot}
                     type="button"
-                    onClick={() => remove(font)}
+                    onClick={() => assign(font, slot)}
                     disabled={rowBusy}
-                    aria-label={`Remove ${font.label}`}
-                    className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-danger-soft hover:text-accent-red disabled:opacity-50"
+                    aria-pressed={held}
+                    aria-label={`${slotLabel(slot)} font: ${font.label}`}
+                    className={cx(
+                      'rounded-[7px] border px-2 py-1 font-space text-[10px] uppercase tracking-[0.06em] transition-colors disabled:opacity-50',
+                      held ? 'border-ink bg-ink text-white' : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
+                    )}
                   >
-                    <Icon name="trash" size={15} />
+                    {slotLabel(slot)}
                   </button>
-                </div>
+                )
+              })}
+            </span>
+            <button
+              type="button"
+              onClick={() => remove(font)}
+              disabled={rowBusy}
+              aria-label={`Remove ${font.label}`}
+              className="flex h-5 w-5 flex-none items-center justify-center text-ink-faint transition-colors hover:text-accent-red disabled:opacity-50"
+            >
+              <Icon name="trash" size={13} />
+            </button>
+          </div>
+        )
+      })}
 
-                {/* One chip per slot, DERIVED from FONT_SLOTS — a new slot appears here
-                    without an edit, and cannot be silently missing from the one place a
-                    manager can fill it. Pressed chips are how the list answers "which
-                    slots does this font fill", and a font may fill several. */}
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {FONT_SLOTS.map((slot) => {
-                    const held = font.slots.includes(slot)
-                    return (
-                      <button
-                        key={slot}
-                        type="button"
-                        onClick={() => assign(font, slot)}
-                        disabled={rowBusy}
-                        aria-pressed={held}
-                        aria-label={`${slotLabel(slot)} font: ${font.label}`}
-                        className={cx(
-                          'rounded-lg border px-2.5 py-1 font-space text-[11px] uppercase tracking-[0.08em] transition-colors disabled:opacity-50',
-                          held
-                            ? 'border-ink bg-ink text-white'
-                            : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
-                        )}
-                      >
-                        {slotLabel(slot)}
-                      </button>
-                    )
-                  })}
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      <button type="button" onClick={() => setAdding(true)} className="mt-1 inline-flex w-fit items-center gap-1 py-1 text-[15px] text-ink-muted transition-colors hover:text-ink">
+        <Icon name="plus" size={13} /> Font
+      </button>
 
-      <label className="block">
-        <span className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">Font name</span>
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="PP Mori"
-          aria-label="Font name"
-          maxLength={80}
-          className={cx(inputClass, 'mt-1.5 w-full max-w-xs')}
-        />
-      </label>
-
-      {/* The explicit allowlist, never a wildcard: the picker must not advertise what
-          validateUpload refuses, and an SVG font is a script vector on a public bucket. */}
-      <UploadField
-        accept={acceptFor(FONT_UPLOAD_RULES)}
-        label={named ? `Upload ${named}` : 'Name the font first'}
-        hint="WOFF2, WOFF, TTF or OTF, up to 2 MB. WOFF2 loads fastest."
-        disabled={!named}
-        kind="font"
-        bucket={FONTS_BUCKET}
-        artistId={artistId}
-        category={FONT_FOLDER}
-        noun="font"
-        rules={FONT_UPLOAD_RULES}
-        successMessage="Font uploaded"
-        writeRow={async (path, file) => {
-          const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
-          return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext })).error ?? null
-        }}
-        onSuccess={() => setLabel('')}
-      />
-
-      <p className="font-space text-xs leading-relaxed text-ink-faint">
-        You are responsible for holding a licence to use these fonts on a public website.
-        Most foundry licences are sold per use, and a desktop licence does not cover a
-        website.
-      </p>
+      {adding && <AddFontDialog artistId={artistId} onClose={() => setAdding(false)} />}
       {dialog}
+    </div>
+  )
+}
+
+/** Name first, then the file. The licence line lives HERE — the one moment it matters —
+ *  and nowhere on the page. */
+function AddFontDialog({ artistId, onClose }: { artistId: string; onClose: () => void }) {
+  const [label, setLabel] = useState('')
+  const named = label.trim()
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopImmediatePropagation()
+      onClose()
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-label="Add a font" className="w-[440px] max-w-full rounded-2xl bg-paper p-6 shadow-2xl">
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        <label className="mt-1 flex flex-col gap-1">
+          <span className="font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Name</span>
+          <input
+            autoFocus
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            aria-label="Font name"
+            maxLength={80}
+            className="h-7 border-b border-hairline bg-transparent text-[15px] leading-7 outline-none focus:border-ink"
+          />
+        </label>
+        <div className="mt-5">
+          {/* The explicit allowlist, never a wildcard: an SVG font is a script vector on a public bucket. */}
+          <UploadField
+            accept={acceptFor(FONT_UPLOAD_RULES)}
+            label={named ? `Upload ${named}` : 'Name the font first'}
+            disabled={!named}
+            kind="font"
+            bucket={FONTS_BUCKET}
+            artistId={artistId}
+            category={FONT_FOLDER}
+            noun="font"
+            rules={FONT_UPLOAD_RULES}
+            successMessage="Font uploaded"
+            writeRow={async (path, file) => {
+              const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
+              return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext })).error ?? null
+            }}
+            onSuccess={onClose}
+          />
+        </div>
+        <p className="mt-4 font-space text-[10.5px] leading-relaxed text-ink-faint">
+          You are responsible for holding a licence to use this font on a public website.
+        </p>
+        <div className="mt-4 flex justify-end">
+          <button type="button" onClick={onClose} className={buttonClass('confirm', 'min-w-[88px] justify-center')}>
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

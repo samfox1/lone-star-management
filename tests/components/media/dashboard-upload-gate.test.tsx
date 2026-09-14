@@ -24,7 +24,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { PhotoAddButton } from '@/app/artists/[id]/(dashboard)/images/photo-add'
-import { LogoUpload } from '@/app/artists/[id]/(dashboard)/brand/logo-upload'
+import { LogoRow } from '@/app/artists/[id]/(dashboard)/brand/logo-row'
 import { DEFAULT_BUDGETS } from '@/lib/site-editor/asset-budget'
 
 // The file that actually reaches storage — the whole point of the gate is which one.
@@ -151,7 +151,7 @@ describe('uploading a logo on the BRAND page', () => {
     // A second real call site, because the floor lives in UploadField and the claim is
     // that EVERY dashboard image door inherits it — not that one page was patched.
     render(
-      <LogoUpload artistId="a1" purpose="logo_primary" label="Primary logo" hint="h" currentUrl={null} />,
+      <LogoRow artistId="a1" purpose="logo_primary" label="Primary logo" currentUrl={null} />,
     )
     dropFile(phonePhoto())
 

@@ -127,16 +127,21 @@ describe('FontManager — previewing', () => {
   })
 
   it('shows the class token, so the manager can see what the editor will offer', () => {
+    // On the format, as its title — the row carries the token without spelling it out.
     renderList()
-    expect(screen.getByText(/font-pp-mori/)).toBeInTheDocument()
+    expect(screen.getByTitle('font-pp-mori')).toBeInTheDocument()
   })
 })
+
+/** The form lives in the + Font dialog now (Sam, 2026-09-13): open it first. */
+const openAdd = () => fireEvent.click(screen.getByRole('button', { name: 'Font' }))
 
 describe('FontManager — uploading', () => {
   it('CRITICAL: the file picker is disabled until the font is named', () => {
     // The name derives the CSS family token, which is written into every per-region style
     // that uses the font and can never be changed. An unnamed upload has no token.
     renderList()
+    openAdd()
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(input.disabled).toBe(true)
 
@@ -146,6 +151,7 @@ describe('FontManager — uploading', () => {
 
   it('CRITICAL: the picker offers exactly the validated allowlist — no SVG, no wildcard', () => {
     renderList()
+    openAdd()
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(input.accept).toBe(acceptFor(FONT_UPLOAD_RULES))
     expect(input.accept).not.toMatch(/svg/i)
@@ -154,8 +160,11 @@ describe('FontManager — uploading', () => {
 
   it('names the licence responsibility', () => {
     // Foundry licences are sold per use and a desktop licence does not cover a website.
-    // Uploading a font to a public bucket is the moment that becomes the artist's problem.
+    // Uploading a font to a public bucket is the moment that becomes the artist's problem —
+    // so the line is in the dialog where the upload happens, and nowhere on the page.
     renderList()
+    expect(screen.queryByText(/licence/i)).toBeNull()
+    openAdd()
     expect(screen.getByText(/licence/i)).toBeInTheDocument()
   })
 })
@@ -288,10 +297,11 @@ describe('FontManager — slots', () => {
 })
 
 describe('FontManager — empty', () => {
-  it('renders the uploader and no list when there are no fonts', () => {
+  it('renders only the way to add one when there are no fonts', () => {
     renderList([])
-    expect(screen.queryByRole('list')).toBeNull()
-    expect(document.querySelector('input[type="file"]')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Font' })).toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeNull() // the picker is in the dialog
   })
 
   it('the sanitizer is the one spelling of the token the preview uses', () => {
