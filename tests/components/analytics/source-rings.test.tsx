@@ -35,34 +35,39 @@ describe('SourceRings', () => {
     expect(arcLen(arcs[1])).toBeLessThan(C)
   })
 
-  it('CRITICAL: there is never an Other ring — the bucket unfolds into one ring per referrer host, at its rank', () => {
-    const withOther = [
+  it('CRITICAL: every search engine is ONE Search ring, and everything else without a mark is ONE Other ring', () => {
+    const mixed = [
       src('instagram', 80, 0.4),
-      src('other', 60, 0.3, { hosts: [{ host: 'search.brave.com', visitors: 50 }, { host: 'kagi.com', visitors: 10 }] }),
-      src('youtube', 30, 0.15), src('google', 20, 0.1), src('tiktok', 6, 0.03), src('direct', 4, 0.02),
+      src('google', 20, 0.1), src('bing', 4, 0.02),
+      // The catch-all holds two search engines the door did not know, and one true stranger.
+      src('other', 13, 0.065, { hosts: [{ host: 'duckduckgo.com', visitors: 5 }, { host: 'search.yahoo.com', visitors: 3 }, { host: 'weirdsite.net', visitors: 5 }] }),
+      src('youtube', 30, 0.15), src('direct', 53, 0.265),
     ]
-    render(<SourceRings sources={withOther} />)
+    render(<SourceRings sources={mixed} />)
     const list = screen.getByRole('list', { name: 'Sources' })
     const names = () => within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])
-    // Brave's 50 outrank YouTube's 30; kagi's 10 wait behind See all.
-    expect(names()).toEqual(['instagram', 'search.brave.com', 'youtube', 'google', 'kagi.com'])
-    expect(screen.queryByText(/^other$/i)).toBeNull()
-    // A host ring's share is of everyone, like any ring: 50 of 200.
-    expect(within(list).getByRole('img', { name: 'search.brave.com: 50 visitors, 25%' })).toBeTruthy()
-    const seeAll = within(list).getByRole('button', { name: /\+2see all/i })
-    expect(seeAll).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(seeAll)
-    expect(names()).toEqual(['instagram', 'search.brave.com', 'youtube', 'google', 'kagi.com', 'tiktok', 'direct'])
-    expect(screen.queryByText(/^other$/i)).toBeNull()
-    fireEvent.click(within(list).getByRole('button', { name: /show fewer/i }))
-    expect(within(list).getAllByRole('img')).toHaveLength(5)
+    // Search = 20 + 4 + 5 + 3 = 32 of 200; Other = 5 of 200 (2.5%, printed 3%). Direct keeps its own ring.
+    expect(names()).toEqual(['instagram', 'direct', 'Search', 'youtube', 'Other'])
+    expect(within(list).getByRole('img', { name: 'Search: 32 visitors, 16%' })).toBeTruthy()
+    expect(within(list).getByRole('img', { name: 'Other: 5 visitors, 3%' })).toBeTruthy()
+    for (const gone of [/^google$/i, /^bing$/i, /duckduckgo/, /yahoo/, /weirdsite/]) expect(screen.queryByText(gone)).toBeNull()
+    // Five rings, nothing hidden, no tile.
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('a host ring is marked by its first letter, since no platform mark fits it', () => {
-    render(<SourceRings sources={[src('other', 9, 1, { hosts: [{ host: 'search.brave.com', visitors: 9 }] })]} />)
-    const ring = screen.getByRole('img', { name: /^search\.brave\.com:/ })
-    expect(ring.querySelector('[data-mark]')!.textContent).toBe('s')
-    expect(ring.querySelector('[data-mark] svg')).toBeNull()
+  it('the Search ring wears a magnifying glass, not the Other mark', () => {
+    render(<SourceRings sources={[src('google', 9, 1)]} />)
+    const ring = screen.getByRole('img', { name: /^Search:/ })
+    expect(ring.querySelector('[data-mark] circle')).not.toBeNull()
+    expect(ring.querySelector('[data-mark] svg')!.innerHTML).not.toBe(
+      render(<SourceRings sources={[src('other', 9, 1, { hosts: [{ host: 'weirdsite.net', visitors: 9 }] })]} />)
+        .container.querySelector('[data-mark] svg')!.innerHTML,
+    )
+  })
+
+  it('other rows with no host at all still count as Other', () => {
+    render(<SourceRings sources={[src('other', 7, 1, { hosts: [] })]} />)
+    expect(screen.getByRole('img', { name: 'Other: 7 visitors, 100%' })).toBeTruthy()
   })
 
   it('counts every hidden source on the tile, named ones too', () => {

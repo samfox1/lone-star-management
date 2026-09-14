@@ -71,11 +71,19 @@ const GLYPHS: Record<SourceKey, ReactNode> = {
   ),
 }
 
+/** Marks for rings that are not buckets: the folded "Search" ring. Kept out of
+ *  GLYPH_KEYS, which must mirror SOURCE_KEYS exactly. */
+const EXTRA_GLYPHS: Record<string, ReactNode> = {
+  search: (
+    <><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.2"/><path d="M15.5 15.5 L21 21" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></>
+  ),
+}
+
 export function SourceGlyph({ source, className, size = 24 }: { source: string; className?: string; size?: number }) {
   const key = (SOURCES.find((s) => s.key === source)?.key ?? 'other') as SourceKey
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} className={className} aria-hidden="true">
-      {GLYPHS[key]}
+      {EXTRA_GLYPHS[source] ?? GLYPHS[key]}
     </svg>
   )
 }

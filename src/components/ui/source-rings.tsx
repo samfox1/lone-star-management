@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import type { SourceSummary } from '@/lib/analytics'
 import { SourceGlyph } from '@/components/ui/source-glyphs'
+import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
 
 /**
  * Where visitors came from: one ring per source, the platform's mark inside it,
@@ -14,9 +15,10 @@ import { SourceGlyph } from '@/components/ui/source-glyphs'
  *
  * Five rings show, ranked, and the sixth slot is a "See all" tile when anything
  * is hidden; expanded, everything shows with a "Show fewer" tile at the end.
- * There is never an "Other" ring (Sam, 2026-09-13: "I should see all the ones
- * that produce users"): the catch-all bucket is unfolded into one ring per
- * referrer host it holds, labelled by the host, marked by its first letter.
+ * Two folds before ranking (Sam, 2026-09-13): every search engine — Google,
+ * Bing, and any search host the door left in the catch-all — is ONE "Search"
+ * ring with a magnifying glass; whatever else has no mark of its own is ONE
+ * "Other" ring. Direct keeps its ring; it has a mark.
  *
  * Every ring is the blue accent. Colour never carries identity here — the mark
  * does — so a filter that drops a source cannot repaint the survivors.
@@ -27,23 +29,29 @@ const C = 2 * Math.PI * R
 const SHOWN = 5
 const OTHER = 'other'
 
-/** One ring: a named source, or one host out of the Other bucket. */
-type Ring = { key: string; label: string; visitors: number; share: number; glyph: string | null }
+const SEARCH = 'search'
 
-/** Every source as rings, the Other bucket unfolded into its hosts, biggest first. */
+/** One ring: a source with a mark, or one of the two folds. */
+type Ring = { key: string; label: string; visitors: number; share: number }
+
+/** Every source as rings: search engines folded into one, the markless into
+ *  Other, biggest first. Shares are of everyone. */
 export function ringsOf(sources: SourceSummary[]): Ring[] {
   const total = sources.reduce((n, s) => n + s.visitors, 0)
+  const share = (n: number) => (total ? n / total : 0)
   const rings: Ring[] = []
+  let search = 0
+  let other = 0
   for (const s of sources) {
-    if (s.source !== OTHER) {
-      rings.push({ key: s.source, label: s.label, visitors: s.visitors, share: s.share, glyph: s.source })
-      continue
-    }
-    for (const h of s.hosts) {
-      if (!h.host || h.visitors <= 0) continue
-      rings.push({ key: `host:${h.host}`, label: h.host, visitors: h.visitors, share: total ? h.visitors / total : 0, glyph: null })
-    }
+    if ((SEARCH_SOURCES as readonly string[]).includes(s.source)) { search += s.visitors; continue }
+    if (s.source !== OTHER) { rings.push({ key: s.source, label: s.label, visitors: s.visitors, share: s.share }); continue }
+    // The catch-all: a search engine the door did not know is still a search.
+    for (const h of s.hosts) (isSearchHost(h.host) ? (search += h.visitors) : (other += h.visitors))
+    // Hostless other rows (an unknown utm_source) have no host to test; they are other.
+    other += s.visitors - s.hosts.reduce((n, h) => n + h.visitors, 0)
   }
+  if (search > 0) rings.push({ key: SEARCH, label: 'Search', visitors: search, share: share(search) })
+  if (other > 0) rings.push({ key: OTHER, label: 'Other', visitors: other, share: share(other) })
   return rings.sort((a, b) => b.visitors - a.visitors)
 }
 
@@ -97,11 +105,7 @@ export function SourceRings({
                       className="relative h-16 w-16 transform-3d transition-transform duration-500 ease-[cubic-bezier(.4,0,.2,1)] group-hover:rotate-y-180 group-focus-visible:rotate-y-180 motion-reduce:transition-none"
                     >
                       <div data-mark className="absolute inset-0 flex items-center justify-center rounded-full bg-surface text-ink backface-hidden">
-                        {s.glyph ? (
-                          <SourceGlyph source={s.glyph} className="h-9 w-9" />
-                        ) : (
-                          <span className="font-space text-[22px] font-bold uppercase">{s.label[0]}</span>
-                        )}
+                        <SourceGlyph source={s.key} className="h-9 w-9" />
                       </div>
                       <div data-share className="absolute inset-0 flex items-center justify-center rounded-full bg-surface font-space text-[19px] font-bold tabular-nums text-ink backface-hidden rotate-y-180">
                         {pct}
