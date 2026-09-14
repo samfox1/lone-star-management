@@ -64,21 +64,22 @@ describe('MetricExplorer', () => {
     expect(screen.queryByRole('tablist', { name: 'Facts for' })).toBeNull() // views alone: no tabs
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
     const tabs = screen.getByRole('tablist', { name: 'Facts for' })
-    expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Views', 'Unique visitors'])
+    // One word each up here; the toggles keep the full names.
+    expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Views', 'Visitors'])
     expect(facts().textContent).toContain('200') // still views until picked
-    fireEvent.click(within(tabs).getByRole('tab', { name: 'Unique visitors' }))
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'Visitors' }))
     // 50 visitors over 2 counted days → 25, not 12.5 over four.
     expect(facts().textContent).toMatch(/total50/i)
     expect(facts().textContent).toMatch(/per day25/i)
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots filtered' }))
-    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Bots filtered' }))
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Bots' }))
     expect(facts().textContent).toContain('2.0%')
   })
 
   it('switching a series off while its facts are showing falls back to views', () => {
     setup()
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
-    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Unique visitors' }))
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Visitors' }))
     expect(facts().textContent).toMatch(/total50/i)
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
     expect(screen.queryByRole('tablist', { name: 'Facts for' })).toBeNull()

@@ -30,6 +30,8 @@ import { Segmented } from './segmented'
 export type MetricExtra = { label: string; value: string }
 
 const COLOR: Record<string, Series['color']> = { views: 'accent', visitors: 'accent-red', bots: 'ink' }
+/** The facts tabs are one word each; the toggles and legend keep the full names. */
+const SHORT: Record<string, string> = { views: 'Views', visitors: 'Visitors', bots: 'Bots' }
 
 export function MetricExplorer({
   metrics,
@@ -111,8 +113,10 @@ export function MetricExplorer({
         />
       </div>
 
-      <div className="mt-4 grid gap-8 lg:grid-cols-4">
-        <TimelineChart points={timeline} height={400} series={series} className="lg:col-span-3" />
+      {/* The column is as wide as its widest number and no wider; the chart takes
+          the rest (Sam, 2026-09-13: "make the right container smaller"). */}
+      <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
+        <TimelineChart points={timeline} height={400} series={series} className="min-w-0" />
 
         {/* The facts beside the chart, filling its height, ONE series at a time:
             when an overlay is drawn its name appears as a tab up here, and the
@@ -133,7 +137,7 @@ export function MetricExplorer({
                     m.key === shown.key ? 'border-ink text-ink' : 'border-transparent text-ink-faint hover:text-ink',
                   )}
                 >
-                  {m.label}
+                  {SHORT[m.key] ?? m.label}
                 </button>
               ))}
             </div>
