@@ -25,6 +25,7 @@ import {
   previousWindow,
   summarizeDevices,
   summarizeSources,
+  waffleCells,
   topContent,
   CONTENT_KINDS,
   DEVICE_KINDS,
@@ -426,6 +427,38 @@ describe('summarizeDevices', () => {
 
   it('an empty window is all zeros, never a divide by zero', () => {
     expect(summarizeDevices([])).toEqual({ mobile: 0, tablet: 0, desktop: 0, other: 0, total: 0 })
+  })
+})
+
+describe('waffleCells', () => {
+  const count = (cells: string[]) => cells.reduce<Record<string, number>>((m, c) => ({ ...m, [c]: (m[c] ?? 0) + 1 }), {})
+
+  it('CRITICAL: a hundred cells that sum to exactly a hundred, one per percent, in registry order then other', () => {
+    const cells = waffleCells({ mobile: 190, tablet: 7, desktop: 74, other: 0, total: 271 })
+    expect(cells).toHaveLength(100)
+    // 70.1 / 2.6 / 27.3 → 70 / 3 / 27 by largest remainder (the floors leave one cell; tablet's .6 takes it).
+    expect(count(cells)).toEqual({ mobile: 70, tablet: 3, desktop: 27 })
+    expect(cells.indexOf('tablet')).toBe(70)
+    expect(cells.indexOf('desktop')).toBe(73)
+  })
+
+  it('CRITICAL: never rounds a small kind to nothing while a big one rounds up — remainders decide', () => {
+    // Exact thirds: 33.33 each → floors 33/33/33, one left, goes to the largest remainder (a tie → first).
+    expect(count(waffleCells({ mobile: 1, tablet: 1, desktop: 1, other: 0, total: 3 }))).toEqual({ mobile: 34, tablet: 33, desktop: 33 })
+    // 0.6% tablet earns its one cell over mobile's .4 remainder.
+    expect(count(waffleCells({ mobile: 994, tablet: 6, desktop: 0, other: 0, total: 1000 }))).toEqual({ mobile: 99, tablet: 1 })
+    // 35.7 / 35.7 / 28.6 would ROUND to 101 cells; floors plus remainders give 36 / 36 / 28 = 100.
+    const tight = waffleCells({ mobile: 5, tablet: 5, desktop: 4, other: 0, total: 14 })
+    expect(tight).toHaveLength(100)
+    expect(count(tight)).toEqual({ mobile: 36, tablet: 36, desktop: 28 })
+  })
+
+  it('draws the unclassified as their own cells rather than pretending the three cover everyone', () => {
+    expect(count(waffleCells({ mobile: 50, tablet: 0, desktop: 40, other: 10, total: 100 }))).toEqual({ mobile: 50, desktop: 40, other: 10 })
+  })
+
+  it('draws nothing for an empty window', () => {
+    expect(waffleCells({ mobile: 0, tablet: 0, desktop: 0, other: 0, total: 0 })).toEqual([])
   })
 })
 

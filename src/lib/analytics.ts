@@ -445,6 +445,26 @@ export function summarizeDevices(rows: DeviceRow[]): DeviceShares {
   return out
 }
 
+export type WaffleCell = DeviceKind | 'other'
+
+/**
+ * One hundred cells, one per percent of everyone, in registry order then
+ * `other`. Largest-remainder rounding, so the cells always sum to exactly 100
+ * and a kind with any visitors at all gets at least the cell its remainder
+ * earns — 3% of visitors is three red squares, never rounded away to none
+ * while a bigger kind rounds up.
+ */
+export function waffleCells(shares: DeviceShares, cells = 100): WaffleCell[] {
+  if (shares.total <= 0) return []
+  const kinds: WaffleCell[] = [...DEVICE_KINDS.map((k) => k.key), 'other']
+  const exact = kinds.map((k) => (shares[k] / shares.total) * cells)
+  const counts = exact.map(Math.floor)
+  let left = cells - counts.reduce((n, c) => n + c, 0)
+  const byRemainder = kinds.map((_, i) => i).sort((a, b) => (exact[b] - counts[b]) - (exact[a] - counts[a]))
+  for (const i of byRemainder) { if (left <= 0) break; counts[i]++; left-- }
+  return kinds.flatMap((k, i) => Array.from({ length: counts[i] }, () => k))
+}
+
 /** A row of `analytics_by_entity`: one entity, one event type, one count. */
 export type EntityRow = { entity_type: string; entity_id: string; type: string; count: number }
 /** What a content row needs to be drawn: a title, a picture, a second line. */
