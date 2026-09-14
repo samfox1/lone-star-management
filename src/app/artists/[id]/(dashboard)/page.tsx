@@ -141,13 +141,13 @@ export default async function OverviewPage({
       {/* WHERE FROM and ON WHAT share a row (Sam, 2026-09-13): the rings, one per
           source with its share of everyone as the arc, beside the device waffle —
           mobile, tablet, computer, which view of the site to build out. */}
-      <div className="grid gap-10 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid gap-10 md:grid-cols-[minmax(0,1fr)_auto]">
         <section>
-          <KLabel>Where they came from</KLabel>
+          <KLabel>Source</KLabel>
           <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
         </section>
         <section>
-          <KLabel>What they used</KLabel>
+          <KLabel>Device</KLabel>
           <DeviceSplit className="mt-3" shares={summarizeDevices(traffic.devices)} />
         </section>
       </div>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The device waffle: a hundred squares, one per percent of everyone, and the three figures beside it.
 import { describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { DEVICE_KINDS, summarizeDevices, waffleCells } from '@/lib/analytics'
 
@@ -33,20 +33,14 @@ describe('DeviceSplit', () => {
     expect(flipped.container.querySelector('[data-waffle] [data-cell="tablet"]')!.className).toMatch(/\bbg-accent-red\b/)
   })
 
-  it('the legend is one share per kind from the registry, of EVERYONE — percentages only, no counts, no browser', () => {
+  it('the legend is the three names from the registry with their marks — no numbers until you hover, no browser', () => {
     const { container } = render(<DeviceSplit shares={shares} />)
-    expect(screen.getAllByRole('term').slice(0, 3).map((t) => t.textContent)).toEqual(DEVICE_KINDS.map((k) => k.label))
-    const text = container.textContent!
-    expect(text).toMatch(/Mobile66%Tablet3%Computer29%/)
-    expect(text).not.toMatch(/\d{2,} visitors|296|130|\b13\b/)
-    expect(text).not.toMatch(/chrome|safari|instagram/i)
-    // The unclassified are a share too: 9 of 448.
-    expect(text).toMatch(/2% on something the door could not classify/i)
-  })
-
-  it('every kind carries its device mark', () => {
-    render(<DeviceSplit shares={shares} />)
-    for (const t of screen.getAllByRole('term').slice(0, 3)) expect(t.parentElement!.querySelector('svg'), t.textContent ?? '').not.toBeNull()
+    const rows = within(screen.getByRole('list', { name: 'Devices' })).getAllByRole('listitem')
+    expect(rows.slice(0, 3).map((r) => r.textContent)).toEqual(DEVICE_KINDS.map((k) => k.label))
+    for (const r of rows.slice(0, 3)) expect(r.querySelector('svg'), r.textContent ?? '').not.toBeNull()
+    expect(container.textContent).not.toMatch(/chrome|safari|instagram|visitors/i)
+    // The unclassified are named as a share: 9 of 448.
+    expect(rows[3].textContent).toMatch(/^2% unclassified$/i)
   })
 
   it('CRITICAL: hovering a square shows that kind\'s share, lights its block, fades the rest, and leaving clears it', () => {
