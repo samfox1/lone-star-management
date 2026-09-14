@@ -215,5 +215,6 @@ export function Textarea({ className, ...rest }: ComponentProps<'textarea'>) {
  * I want something else between these two"). The negative x-margin lets the tint run past
  * the text without moving it.
  */
-export const listRowClass =
-  '-mx-3 flex cursor-pointer items-center rounded-xl px-3 transition-[background-color,transform] duration-150 hover:scale-[1.01] hover:bg-surface'
+export const rowHoverClass =
+  '-mx-3 cursor-pointer rounded-xl px-3 transition-[background-color,transform] duration-150 hover:scale-[1.01] hover:bg-surface'
+export const listRowClass = `flex items-center ${rowHoverClass}`

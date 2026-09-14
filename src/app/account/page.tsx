@@ -52,8 +52,8 @@ export default async function AccountPage() {
         </div>
 
         <div className="mt-5 rounded-xl border border-dashed border-hairline p-4 font-space text-xs leading-relaxed text-ink-muted">
-          Data sources connect <b className="font-bold text-ink">per artist</b> — open an artist and
-          use <b className="font-bold text-ink">Manager tools → Integrations</b> to connect Spotify,
+          Platforms connect <b className="font-bold text-ink">per artist</b> — open an artist and
+          use <b className="font-bold text-ink">Manager tools → Connections</b> to connect Spotify,
           YouTube, Bandsintown, Ticketmaster, and Shopify.
         </div>
       </div>
