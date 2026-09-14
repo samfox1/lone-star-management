@@ -122,9 +122,9 @@ export function MetricExplorer({
             when an overlay is drawn its name appears as a tab up here, and the
             column shows whichever is picked. Stacking every series overflowed the
             column (Sam, 2026-09-13). No box, no fill. */}
-        <div role="region" aria-label="Facts" className="flex flex-col">
+        <div role="region" aria-label="Facts" className="flex flex-col text-right">
           {drawn.length > 1 && (
-            <div role="tablist" aria-label="Facts for" className="mb-3 flex flex-wrap gap-x-4 gap-y-1 border-b border-hairline">
+            <div role="tablist" aria-label="Facts for" className="mb-3 flex flex-wrap justify-end gap-x-4 gap-y-1 border-b border-hairline">
               {drawn.map((m) => (
                 <button
                   key={m.key}
@@ -173,7 +173,7 @@ export function MetricExplorer({
 /** One fact as a row that grows to share the column's height with its siblings. */
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-1 flex-col justify-center py-3">
+    <div className="flex flex-1 flex-col items-end justify-center py-3">
       <dt className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</dt>
       <dd className="mt-1 truncate font-space text-[22px] font-bold leading-none tabular-nums text-ink">{value}</dd>
     </div>
