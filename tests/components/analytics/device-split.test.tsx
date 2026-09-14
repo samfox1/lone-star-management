@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The device waffle: a hundred squares, one per percent of everyone, and the three figures beside it.
+// The device waffle: a hundred squares, one per percent of everyone, the names beside it, the share on hover.
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { DeviceSplit } from '@/components/ui/device-split'
@@ -47,7 +47,10 @@ describe('DeviceSplit', () => {
     const { container } = render(<DeviceSplit shares={shares} />)
     const tablet = container.querySelector('[data-waffle] [data-cell="tablet"]')!
     fireEvent.pointerMove(tablet, { clientX: 40, clientY: 30 })
-    expect(screen.getByRole('status').textContent).toMatch(/^3% Tablet$/i)
+    const readout = () => container.querySelector('[data-readout]') as HTMLElement | null
+    expect(readout()!.textContent).toMatch(/^3% Tablet$/i)
+    // Decorative for assistive tech: the grid's own label already carries the split.
+    expect(readout()!.getAttribute('aria-hidden')).toBe('true')
     // Every other kind's cells and legend rows are dimmed; tablet's are not.
     expect(container.querySelectorAll('[data-cell="mobile"][data-dim]')).toHaveLength(66)
     expect(container.querySelectorAll('[data-cell="tablet"][data-dim]')).toHaveLength(0)
@@ -55,10 +58,27 @@ describe('DeviceSplit', () => {
     expect(container.querySelector('[data-legend="tablet"]')!.className).not.toMatch(/opacity-40/)
     // Move to a mobile square: the readout follows.
     fireEvent.pointerMove(container.querySelector('[data-waffle] [data-cell="mobile"]')!, { clientX: 10, clientY: 10 })
-    expect(screen.getByRole('status').textContent).toMatch(/^66% Mobile$/i)
+    expect(readout()!.textContent).toMatch(/^66% Mobile$/i)
     fireEvent.pointerLeave(container.querySelector('[data-waffle]')!.parentElement!)
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(readout()).toBeNull()
     expect(container.querySelectorAll('[data-dim]')).toHaveLength(0)
+  })
+
+  it('the readout sits beside the pointer, measured from the grid box, not the page', () => {
+    const orig = HTMLElement.prototype.getBoundingClientRect
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      return { left: 100, top: 50, width: 224, height: 224, right: 324, bottom: 274, x: 100, y: 50, toJSON() {} } as DOMRect
+    }
+    try {
+      const { container } = render(<DeviceSplit shares={shares} />)
+      fireEvent.pointerMove(container.querySelector('[data-waffle] [data-cell="mobile"]')!, { clientX: 140, clientY: 90 })
+      const style = (container.querySelector('[data-readout]') as HTMLElement).style
+      // pointer (140, 90) − box (100, 50) = (40, 40); +12 right, −34 up.
+      expect(style.left).toBe('52px')
+      expect(style.top).toBe('6px')
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = orig
+    }
   })
 
   it('says what is missing rather than drawing an empty grid', () => {

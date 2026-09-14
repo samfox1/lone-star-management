@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The two marks the Analytics tab is made of, and the ways each one can lie.
+// The timeline chart and the bar list, and the ways each one can lie.
 /**
  *   TimelineChart draws up to three series. They must share ONE scale that starts
  *   at ZERO, or the comparison a reader makes by eye ("visitors are about a third

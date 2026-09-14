@@ -75,7 +75,7 @@ const GLYPHS: Record<SourceKey, ReactNode> = {
   ),
 }
 
-/** Marks for rings that are not buckets: the folded "Search" ring. Kept out of
+/** Marks for rings that are not buckets: the folded "Web search" ring. Kept out of
  *  GLYPH_KEYS, which must mirror SOURCE_KEYS exactly. */
 const EXTRA_GLYPHS: Record<string, ReactNode> = {
   search: (

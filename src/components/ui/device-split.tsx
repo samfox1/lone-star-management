@@ -52,7 +52,7 @@ export function DeviceSplit({ shares, empty = 'No visits yet.', className }: { s
         </div>
         {hover && (
           <div
-            role="status"
+            aria-hidden
             data-readout
             className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-paper px-2.5 py-1.5 font-space text-[11px] font-bold tabular-nums text-ink shadow-[0_8px_24px_rgba(17,17,17,0.12)]"
             style={{ left: hover.x + 12, top: hover.y - 34 }}

@@ -1,4 +1,4 @@
-// The sentence under a source ring, and the rules that keep it honest.
+// The sentence about a source's visitors (built, not yet placed on the page), and the rules that keep it honest.
 /**
  * Every clause is derived from counts: the lead action is the one the largest
  * share of a source's VISITORS took, the fraction is that share, the comparison

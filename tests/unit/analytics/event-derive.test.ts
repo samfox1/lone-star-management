@@ -42,6 +42,20 @@ import { corsHeaders, json, pickAllowedOrigin } from '../../../supabase/function
 
 const headers = (h: Record<string, string>) => ({ get: (k: string) => h[k.toLowerCase()] ?? null })
 
+const IG_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0.0.0.0'
+const IG_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36 Instagram 300.0.0.0.0'
+const TIKTOK_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 musical_ly_2023 BytedanceWebview'
+const FB_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1 [FBAN/FBIOS;FBAV/400]'
+const SNAP_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Snapchat/12.0.0 (iPhone14,2; iOS 17.0; gzip)'
+const SAFARI_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
+const CHROME_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36'
+const CHROME_TABLET = 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
+const IPAD = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+const EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 Edg/120.0'
+const EDGE_ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 EdgA/120.0'
+const EDGE_IOS = 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/17 EdgiOS/120.0 Mobile/15E148 Safari/605.1'
+const FIREFOX = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+
 describe('the pinned registries mirror their originals', () => {
   it('event types (src/lib/events.ts)', () => {
     expect([...EVENT_TYPES].sort()).toEqual(TS_TYPES.map((e) => e.type).sort())
@@ -227,7 +241,10 @@ describe('source bucket', () => {
   })
   it('CRITICAL: no referrer but a known in-app browser → that app, not direct — TikTok strips the referrer every time', () => {
     for (const [browser, bucket] of Object.entries(IN_APP_SOURCES)) expect(sourceFor(null, null, browser), browser).toBe(bucket)
-    expect(Object.keys(IN_APP_SOURCES).sort()).toEqual(['facebook', 'instagram', 'snapchat', 'tiktok'])
+    // Tied to parseUa, not hand-listed: every in-app browser the UA parser can name
+    // must have a source, or a fifth app added to one and not the other files as direct.
+    const inApp = [IG_IOS, TIKTOK_ANDROID, FB_IOS, SNAP_IOS].map((ua) => parseUa(ua).browser)
+    expect(inApp.sort()).toEqual(Object.keys(IN_APP_SOURCES).sort())
     for (const b of Object.values(IN_APP_SOURCES)) expect(SOURCES).toContain(b)
     // The app only fills a GAP: a referrer, a utm, or a plain browser are unchanged.
     expect(sourceFor(null, 'youtube.com', 'tiktok')).toBe('youtube')
@@ -239,18 +256,6 @@ describe('source bucket', () => {
 })
 
 describe('user agent', () => {
-  const IG_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0.0.0.0'
-  const IG_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36 Instagram 300.0.0.0.0'
-  const TIKTOK_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 musical_ly_2023 BytedanceWebview'
-  const FB_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1 [FBAN/FBIOS;FBAV/400]'
-  const SAFARI_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
-  const CHROME_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36'
-  const CHROME_TABLET = 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
-  const IPAD = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
-  const EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 Edg/120.0'
-  const EDGE_ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 EdgA/120.0'
-  const EDGE_IOS = 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/17 EdgiOS/120.0 Mobile/15E148 Safari/605.1'
-  const FIREFOX = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
   it('device: phone, tablet, desktop', () => {
     expect(parseUa(IG_IOS).device).toBe('mobile')
     expect(parseUa(CHROME_ANDROID).device).toBe('mobile')

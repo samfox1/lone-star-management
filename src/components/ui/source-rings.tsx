@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import type { SourceSummary } from '@/lib/analytics'
 import { SourceGlyph } from '@/components/ui/source-glyphs'
-import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
+import { ringsOf } from '@/lib/analytics-sources'
 
 /**
  * Where visitors came from: one ring per source, the platform's mark inside it,
@@ -17,10 +17,8 @@ import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
  * a "See all" tile and seven rings show (Sam, 2026-09-14: "only show the see
  * all button when capping it at 8"); expanded, everything shows with a "Show
  * fewer" tile at the end.
- * Two folds before ranking (Sam, 2026-09-13): every search engine — Google,
- * Bing, and any search host the door left in the catch-all — is ONE "Web search"
- * ring with a magnifying glass; whatever else has no mark of its own is ONE
- * "Other" ring. Direct keeps its ring; it has a mark.
+ * The rings themselves — the two folds (Web search, Other) and the ranking —
+ * come from `ringsOf` in lib/analytics-sources.ts, where they are pure and pinned.
  *
  * Every ring is the blue accent. Colour never carries identity here — the mark
  * does — so a filter that drops a source cannot repaint the survivors.
@@ -29,36 +27,6 @@ const R = 42
 const C = 2 * Math.PI * R
 /** Slots in the short row: two rows of four. The last one is the See all tile when anything is hidden. */
 const SLOTS = 8
-const OTHER = 'other'
-
-const SEARCH = 'search'
-
-/** One ring: a source with a mark, or one of the two folds. */
-type Ring = { key: string; label: string; visitors: number; share: number }
-
-/** Every source as rings: search engines folded into one, the markless into
- *  Other, biggest first. Shares are of everyone. */
-export function ringsOf(sources: SourceSummary[]): Ring[] {
-  const total = sources.reduce((n, s) => n + s.visitors, 0)
-  const share = (n: number) => (total ? n / total : 0)
-  const rings: Ring[] = []
-  let search = 0
-  let other = 0
-  for (const s of sources) {
-    if ((SEARCH_SOURCES as readonly string[]).includes(s.source)) { search += s.visitors; continue }
-    if (s.source !== OTHER) { rings.push({ key: s.source, label: s.label, visitors: s.visitors, share: s.share }); continue }
-    // The catch-all: a search engine the door did not know is still a search.
-    for (const h of s.hosts) {
-      if (isSearchHost(h.host)) search += h.visitors
-      else other += h.visitors
-    }
-    // Hostless other rows (an unknown utm_source) have no host to test; they are other.
-    other += s.visitors - s.hosts.reduce((n, h) => n + h.visitors, 0)
-  }
-  if (search > 0) rings.push({ key: SEARCH, label: 'Web search', visitors: search, share: share(search) })
-  if (other > 0) rings.push({ key: OTHER, label: 'Other', visitors: other, share: share(other) })
-  return rings.sort((a, b) => b.visitors - a.visitors)
-}
 
 export function SourceRings({
   sources,

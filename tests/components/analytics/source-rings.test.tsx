@@ -85,11 +85,14 @@ describe('SourceRings', () => {
   })
 
   it('CRITICAL: the share lives IN the ring — the centre holds the mark and the number it flips to, and nothing is printed under the name', () => {
+    // Shares come from the visitors, not the fixture's `share`: 212 of 303 is 70%.
     const ig = src('instagram', 212, 0.42, { label: 'Instagram', views: 471 })
     const { container } = render(<SourceRings sources={[ig, src('youtube', 91, 0.18)]} />)
-    const ring = screen.getByRole('img', { name: 'Instagram: 212 visitors, 42%' })
+    const list = screen.getByRole('list', { name: 'Sources' })
+    expect(within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])).toEqual(['Instagram', 'youtube'])
+    const ring = screen.getByRole('img', { name: 'Instagram: 212 visitors, 70%' })
     expect(ring.querySelector('[data-mark]')).not.toBeNull()
-    expect(ring.querySelector('[data-share]')!.textContent).toBe('42%')
+    expect(ring.querySelector('[data-share]')!.textContent).toBe('70%')
     // The old "212 · 42%" line under the name, and the old detail card, are gone.
     expect(ring.textContent).not.toMatch(/212|471/)
     expect(container.querySelector('section')).toBeNull()
@@ -107,7 +110,7 @@ describe('SourceRings', () => {
   })
 
   it('rounds the share to a whole percent, a tiny source still shows one, and one visitor is singular', () => {
-    render(<SourceRings sources={[src('tiktok', 1, 0.004)]} />)
+    render(<SourceRings sources={[src('tiktok', 1, 0.004), src('instagram', 249, 0.996)]} />)
     expect(screen.getByRole('img', { name: 'tiktok: 1 visitor, 0%' }).querySelector('[data-share]')!.textContent).toBe('0%')
   })
 
