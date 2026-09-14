@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, type ReactNode } from 'react'
+import { useCallback, useId, type ReactNode } from 'react'
 
 import { useStorageUpload } from './use-storage-upload'
 import { useBudgetGate } from './budget-gate'
@@ -77,9 +77,10 @@ export function UploadField({
 )) {
   const { busy, error, progress, upload: send } = useStorageUpload(upload)
   const gate = useBudgetGate(kind, budget)
-  const inputRef = useRef<HTMLInputElement>(null)
-  // A callback, not a render-time read: the ref is touched only when the trigger is used.
-  const open = useCallback(() => inputRef.current?.click(), [])
+  // By id, not by ref: `trigger` is a render prop, so anything handed to it counts as
+  // reachable during render, and a ref read there is what the lint rule refuses.
+  const inputId = useId()
+  const open = useCallback(() => document.getElementById(inputId)?.click(), [inputId])
   const take = async (file: File | undefined) => {
     if (!file || busy || disabled) return
     const prepared = await gate.prepare(file)
@@ -89,7 +90,7 @@ export function UploadField({
     return (
       <>
         <input
-          ref={inputRef}
+          id={inputId}
           type="file"
           accept={accept}
           aria-label={label}
