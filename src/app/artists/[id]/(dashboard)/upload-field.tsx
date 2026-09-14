@@ -1,5 +1,7 @@
 'use client'
 
+import { useRef, type ReactNode } from 'react'
+
 import { useStorageUpload } from './use-storage-upload'
 import { useBudgetGate } from './budget-gate'
 import { FileDropField } from './file-drop-field'
@@ -36,12 +38,21 @@ export function UploadField({
   disabled,
   budget,
   kind,
+  trigger,
   ...upload
 }: {
   accept: string
   label: string
   hint?: string
   disabled?: boolean
+  /**
+   * TRIGGER MODE (2026-09-13): render this instead of the drop zone — a bare glyph, a
+   * dashed square — over a hidden file input, and call `open()` to pick. The gate is
+   * still composed HERE, which is the whole point of this component: a bare button that
+   * uploads must not become the next hand-rolled path with no gate on it
+   * (tests/unit/media/upload-field-coverage.test.ts).
+   */
+  trigger?: (open: () => void, state: { busy: boolean; error: string | null }) => ReactNode
   bucket: string
   artistId: string
   category: string
@@ -66,6 +77,32 @@ export function UploadField({
 )) {
   const { busy, error, progress, upload: send } = useStorageUpload(upload)
   const gate = useBudgetGate(kind, budget)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const take = async (file: File | undefined) => {
+    if (!file || busy || disabled) return
+    const prepared = await gate.prepare(file)
+    if (prepared) await send(prepared)
+  }
+  if (trigger) {
+    return (
+      <>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          aria-label={label}
+          disabled={busy || disabled}
+          className="sr-only"
+          onChange={(e) => {
+            void take(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        {trigger(() => inputRef.current?.click(), { busy, error: error ?? null })}
+        {gate.modal}
+      </>
+    )
+  }
 
   return (
     <>

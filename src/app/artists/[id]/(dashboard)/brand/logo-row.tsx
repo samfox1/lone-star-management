@@ -1,14 +1,12 @@
 'use client'
 
-import { useRef } from 'react'
 import { BRAND_FOLDER } from '@/lib/brand'
 import { cx } from '@/lib/cx'
 import { acceptFor, IMAGE_UPLOAD_RULES } from '@/lib/upload'
 import { Icon } from '@/components/ui/icons'
-import { useBudgetGate } from '../budget-gate'
 import { useConfirm } from '../confirm-dialog'
 import { toast } from '../toast'
-import { useStorageUpload } from '../use-storage-upload'
+import { UploadField } from '../upload-field'
 import { setBrandAssetAction } from './actions'
 
 /**
@@ -17,6 +15,8 @@ import { setBrandAssetAction } from './actions'
  * With no logo yet, the row is a dashed square that IS the picker. No caption: the label
  * on the left says which logo this is, and the checker says what a transparent PNG is for.
  *
+ * The upload goes through UploadField in TRIGGER mode, so the compression gate is
+ * composed in the one place it always is — a bare button is not a licence to skip it.
  * Removing the PRIMARY logo also clears the tab icon, which is derived from it. Both are
  * asked about first — there is no undo.
  */
@@ -31,24 +31,7 @@ export function LogoRow({
   label: string
   currentUrl: string | null
 }) {
-  const inputRef = useRef<HTMLInputElement>(null)
   const { ask, dialog } = useConfirm()
-  const { busy, upload } = useStorageUpload({
-    bucket: 'media',
-    artistId,
-    category: BRAND_FOLDER,
-    noun: 'logo',
-    rules: IMAGE_UPLOAD_RULES,
-    successMessage: `${label} uploaded`,
-    writeRow: async (path) => (await setBrandAssetAction(artistId, purpose, path)).error ?? null,
-  })
-  const gate = useBudgetGate('image', null)
-
-  async function pick(file: File | undefined) {
-    if (!file) return
-    const prepared = await gate.prepare(file)
-    if (prepared) await upload(prepared)
-  }
 
   async function remove() {
     if (!(await ask(`Remove the ${label.toLowerCase()}?${purpose === 'logo_primary' ? ' The tab icon is made from it and goes too.' : ''}`, { action: 'Remove' }))) return
@@ -65,46 +48,49 @@ export function LogoRow({
     <div className="flex items-center gap-2">
       {/* The explicit allowlist, never image/* — the picker must not advertise what the
           validator refuses (SVG is a script vector on a public bucket). */}
-      <input
-        ref={inputRef}
-        type="file"
+      <UploadField
         accept={acceptFor(IMAGE_UPLOAD_RULES)}
-        aria-label={`${label} file`}
-        className="sr-only"
-        onChange={(e) => {
-          void pick(e.target.files?.[0])
-          e.target.value = ''
-        }}
+        label={`${label} file`}
+        kind="image"
+        budget={null}
+        bucket="media"
+        artistId={artistId}
+        category={BRAND_FOLDER}
+        noun="logo"
+        rules={IMAGE_UPLOAD_RULES}
+        successMessage={`${label} uploaded`}
+        writeRow={async (path) => (await setBrandAssetAction(artistId, purpose, path)).error ?? null}
+        trigger={(open, { busy }) =>
+          currentUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={currentUrl}
+                alt={label}
+                className={cx('h-14 w-[88px] rounded-[10px] bg-[repeating-conic-gradient(#00000010_0_25%,transparent_0_50%)] bg-[length:12px_12px] object-contain p-1', busy && 'opacity-50')}
+              />
+              <span className="flex flex-col gap-1.5">
+                <button type="button" onClick={open} disabled={busy} aria-label={`Replace ${label.toLowerCase()}`} title="Replace" className={ACT}>
+                  <Icon name="upload" size={12} />
+                </button>
+                <button type="button" onClick={remove} disabled={busy} aria-label={`Remove ${label.toLowerCase()}`} title="Remove" className={cx(ACT, 'hover:text-accent-red')}>
+                  <Icon name="trash" size={12} />
+                </button>
+              </span>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={open}
+              disabled={busy}
+              aria-label={`Add ${label.toLowerCase()}`}
+              className="flex h-14 w-[88px] items-center justify-center rounded-[10px] border border-dashed border-hairline text-ink-faint transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-50"
+            >
+              <Icon name="plus" size={14} />
+            </button>
+          )
+        }
       />
-      {currentUrl ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={currentUrl}
-            alt={label}
-            className={cx('h-14 w-[88px] rounded-[10px] bg-[repeating-conic-gradient(#00000010_0_25%,transparent_0_50%)] bg-[length:12px_12px] object-contain p-1', busy && 'opacity-50')}
-          />
-          <span className="flex flex-col gap-1.5">
-            <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={`Replace ${label.toLowerCase()}`} title="Replace" className={ACT}>
-              <Icon name="upload" size={12} />
-            </button>
-            <button type="button" onClick={remove} disabled={busy} aria-label={`Remove ${label.toLowerCase()}`} title="Remove" className={cx(ACT, 'hover:text-accent-red')}>
-              <Icon name="trash" size={12} />
-            </button>
-          </span>
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          aria-label={`Add ${label.toLowerCase()}`}
-          className="flex h-14 w-[88px] items-center justify-center rounded-[10px] border border-dashed border-hairline text-ink-faint transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-50"
-        >
-          <Icon name="plus" size={14} />
-        </button>
-      )}
-      {gate.modal}
       {dialog}
     </div>
   )

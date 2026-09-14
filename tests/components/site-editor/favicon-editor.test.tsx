@@ -76,9 +76,12 @@ const renderEditor = async (framing = DEFAULT_FRAMING) => {
 
 describe('FaviconEditor', () => {
   it('offers nothing to frame when there is no primary logo', () => {
+    // No message either (Sam, 2026-09-13: no instruction copy on tool pages) — the row is
+    // simply empty until a primary logo exists.
     render(<FaviconEditor artistId="a1" logoUrl={null} initialFraming={DEFAULT_FRAMING} />)
-    expect(screen.getByText(/Add a primary logo/)).toBeInTheDocument()
+    expect(screen.queryByText(/Add a primary logo/)).toBeNull()
     expect(screen.queryByLabelText('Zoom')).toBeNull()
+    expect(screen.queryByLabelText('Tab icon at true size')).toBeNull()
   })
 
   it('CRITICAL: the true-size preview canvas is really 32px — not a flattering enlargement', () => {
@@ -90,14 +93,14 @@ describe('FaviconEditor', () => {
     expect(preview.height).toBe(FAVICON_PREVIEW_SIZE)
   })
 
-  it('CRITICAL: both canvases draw the SAME framing, each scaled to its own size', async () => {
+  it('CRITICAL: the one canvas on screen is the true-size preview, drawn with the framing', async () => {
+    // The big "adjust" canvas is gone (Sam, 2026-09-13): what you see at true size is the
+    // file that gets used, and there is no enlargement to mislead.
     await renderEditor()
     const bySize = new Map(draws.map((d) => [d.size, d.args]))
-    for (const [size, args] of bySize) {
-      const box = faviconDrawBox(LOGO, DEFAULT_FRAMING, size)
-      expect(args, `canvas ${size}`).toEqual([box.x, box.y, box.width, box.height])
-    }
-    expect(bySize.size).toBe(2) // the working view and the true-size preview
+    expect([...bySize.keys()]).toEqual([FAVICON_PREVIEW_SIZE])
+    const box = faviconDrawBox(LOGO, DEFAULT_FRAMING, FAVICON_PREVIEW_SIZE)
+    expect(bySize.get(FAVICON_PREVIEW_SIZE)).toEqual([box.x, box.y, box.width, box.height])
   })
 
   it('zooming redraws larger on every canvas', async () => {
@@ -162,11 +165,10 @@ describe('FaviconEditor — saving', () => {
     }
     await renderEditor()
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save tab icon' }))
-    })
+    // No Save button (Sam, 2026-09-13): the change writes itself a moment after it is made.
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '2' } })
 
-    await waitFor(() => expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalled())
+    await waitFor(() => expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalled(), { timeout: 3000 })
     const framingOrder = vi.mocked(saveFramingAction).mock.invocationCallOrder[0]
     const assetOrder = vi.mocked(setBrandAssetAction).mock.invocationCallOrder[0]
     expect(framingOrder).toBeLessThan(assetOrder)
@@ -188,9 +190,9 @@ describe('FaviconEditor — saving', () => {
     await renderEditor(chosen)
     draws = []
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save tab icon' }))
-    })
+    // Nudge up and back: `chosen` is exactly what saves.
+    fireEvent.click(screen.getByRole('button', { name: 'Move logo up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move logo down' }))
 
     await waitFor(() => expect(draws.some((d) => d.size === FAVICON_SIZE)).toBe(true))
     const exported = draws.find((d) => d.size === FAVICON_SIZE)!.args
