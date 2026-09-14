@@ -54,6 +54,7 @@ export function MetricExplorer({
   const router = useRouter()
   const pathname = usePathname()
   const [on, setOn] = useState<Set<MetricKey>>(() => new Set())
+  const [shownKey, setShownKey] = useState<MetricKey>('views')
   const allTime = windowKey === 'all'
   const windowLabel = allTime ? 'all time' : `${days}d`
   const fmt = (n: number) => n.toLocaleString('en-US')
@@ -73,8 +74,11 @@ export function MetricExplorer({
     const idx = days_.map((_, i) => i).filter((i) => !since || days_[i] >= since)
     return metricFacts({ ...m, series: idx.map((i) => m.series[i]) }, idx.map((i) => days_[i]), prevTotals[m.key] ?? 0)
   }
-  const vf = factsFor(views)
-  const vt = vf.delta === null ? null : formatTrend(vf.delta)
+  // The column shows ONE drawn series at a time, picked by its tab. A series
+  // switched off while it was showing falls back to views.
+  const shown = drawn.find((m) => m.key === shownKey) ?? views
+  const sf = factsFor(shown)
+  const st = sf.delta === null ? null : formatTrend(sf.delta)
   const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
 
   return (
@@ -110,20 +114,40 @@ export function MetricExplorer({
       <div className="mt-4 grid gap-8 lg:grid-cols-4">
         <TimelineChart points={timeline} height={400} series={series} className="lg:col-span-3" />
 
-        {/* The facts beside the chart, filling its height: the total on top, then
-            each fact as its own row spreading down the column, so the space beside
-            a 400px chart is used rather than left blank (Sam, 2026-09-13). No box, no
-            fill. A toggled series adds its own rows to the same column. */}
+        {/* The facts beside the chart, filling its height, ONE series at a time:
+            when an overlay is drawn its name appears as a tab up here, and the
+            column shows whichever is picked. Stacking every series overflowed the
+            column (Sam, 2026-09-13). No box, no fill. */}
         <div role="region" aria-label="Facts" className="flex flex-col">
+          {drawn.length > 1 && (
+            <div role="tablist" aria-label="Facts for" className="mb-3 flex flex-wrap gap-x-4 gap-y-1 border-b border-hairline">
+              {drawn.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={m.key === shown.key}
+                  onClick={() => setShownKey(m.key)}
+                  className={cx(
+                    '-mb-px border-b-2 pb-1.5 font-space text-[10px] font-bold uppercase tracking-[0.12em] transition-colors',
+                    m.key === shown.key ? 'border-ink text-ink' : 'border-transparent text-ink-faint hover:text-ink',
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div>
             <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
               {allTime ? 'Total · all time' : 'Total'}
             </div>
-            <div className="mt-2 font-space text-[52px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink">{fmt(vf.total)}</div>
-            {!allTime && (
+            <div className="mt-2 font-space text-[52px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink">{fmt(sf.total)}</div>
+            {!allTime && (st || shown.key === 'views') && (
               <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                {vt ? (
-                  <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(vt.dir))}>{vt.label}</span> vs prior {windowLabel}</>
+                {st ? (
+                  <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(st.dir))}>{st.label}</span> vs prior {windowLabel}</>
                 ) : (
                   <>No prior {windowLabel}</>
                 )}
@@ -132,22 +156,10 @@ export function MetricExplorer({
           </div>
 
           <dl className="mt-4 flex flex-1 flex-col divide-y divide-hairline border-t border-hairline">
-            <Fact label="Best day" value={vf.bestDay ? dayLabel(vf.bestDay.day) : '—'} />
-            <Fact label="Per day" value={perDay(vf.perDay)} />
-            {(extras.views ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+            <Fact label="Best day" value={sf.bestDay ? dayLabel(sf.bestDay.day) : '—'} />
+            <Fact label="Per day" value={perDay(sf.perDay)} />
+            {(extras[shown.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
           </dl>
-
-          {drawn.slice(1).map((m) => {
-            const f = factsFor(m)
-            return (
-              <dl key={m.key} data-facts={m.key} className="flex flex-1 flex-col divide-y divide-hairline border-t border-ink">
-                <Fact label={m.label} value={fmt(f.total)} big />
-                <Fact label="Best day" value={f.bestDay ? dayLabel(f.bestDay.day) : '—'} />
-                <Fact label="Per day" value={perDay(f.perDay)} />
-                {(extras[m.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
-              </dl>
-            )
-          })}
         </div>
       </div>
     </div>
@@ -155,11 +167,11 @@ export function MetricExplorer({
 }
 
 /** One fact as a row that grows to share the column's height with its siblings. */
-function Fact({ label, value, big = false }: { label: string; value: string; big?: boolean }) {
+function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-1 flex-col justify-center py-3">
       <dt className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</dt>
-      <dd className={cx('mt-1 truncate font-space font-bold tabular-nums text-ink', big ? 'text-[28px] leading-none' : 'text-[22px] leading-none')}>{value}</dd>
+      <dd className="mt-1 truncate font-space text-[22px] font-bold leading-none tabular-nums text-ink">{value}</dd>
     </div>
   )
 }

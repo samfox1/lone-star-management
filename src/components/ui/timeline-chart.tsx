@@ -86,7 +86,6 @@ export function TimelineChart({
           <li key={s.key} className="flex items-center gap-1.5">
             <span aria-hidden className={cx('inline-block h-[3px] w-4 rounded-full', SWATCH[s.color])} />
             {s.label}
-            {s.since && firstIdx(s) !== 0 && <span data-since className="normal-case tracking-normal"> · from {dayLabel(s.since)}</span>}
           </li>
         ))}
       </ul>

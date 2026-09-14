@@ -92,12 +92,12 @@ describe('TimelineChart', () => {
     ]
     const two = [S('views', across.map((p) => p.views)), S('visitors', across.map((p) => p.visitors), 'accent-red', '2026-09-12')]
 
-    it('CRITICAL: starts where the counting started — an uncounted day is not a zero — and says from when, once', () => {
+    it('CRITICAL: starts where the counting started — an uncounted day is not a zero', () => {
       const { container } = render(<TimelineChart points={across} height={100} series={two} />)
       expect(lineOf(container, 'visitors').getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
       expect(lineOf(container, 'views').getAttribute('points')!.trim().split(/\s+/)).toHaveLength(4)
-      expect(container.querySelectorAll('[data-since]')).toHaveLength(1)
-      expect(screen.getByText(/from sep 12/i)).toBeTruthy()
+      // The legend names the series only — no "from Sep 12" note (Sam, 2026-09-13).
+      expect(screen.queryByText(/from sep/i)).toBeNull()
       expect(container.querySelector('rect')).toBeNull() // no shaded span
     })
 
@@ -120,10 +120,6 @@ describe('TimelineChart', () => {
       expect(container.querySelectorAll('[data-series="visitors"] polyline')).toHaveLength(1)
     })
 
-    it('says nothing about "from" when the whole window was counted', () => {
-      const { container } = render(<TimelineChart points={across.slice(2)} height={100} series={two.map((s) => ({ ...s, values: s.values.slice(2) }))} />)
-      expect(container.querySelector('[data-since]')).toBeNull()
-    })
   })
 
   it('CRITICAL: every value is readable without hovering — the table is the twin, not a fallback', () => {

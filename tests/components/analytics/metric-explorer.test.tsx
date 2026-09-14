@@ -41,7 +41,7 @@ describe('MetricExplorer', () => {
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots filtered' }))
     expect(container.querySelectorAll('[data-series]')).toHaveLength(3)
     expect(within(screen.getByRole('list', { name: 'Series' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Views', 'Unique visitors · from Sep 12', 'Bots filtered · from Sep 12',
+      'Views', 'Unique visitors', 'Bots filtered',
     ])
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
     expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
@@ -59,16 +59,30 @@ describe('MetricExplorer', () => {
     expect(f).toMatch(/per day50/i)
   })
 
-  it('CRITICAL: a toggled series gets its own facts, over the counted days only, saying nothing the legend already says', () => {
-    const { container } = setup()
+  it('CRITICAL: a toggled series gets a tab in the column; picking it shows ITS facts over the counted days only', () => {
+    setup()
+    expect(screen.queryByRole('tablist', { name: 'Facts for' })).toBeNull() // views alone: no tabs
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
-    const block = container.querySelector('[data-facts="visitors"]')!
+    const tabs = screen.getByRole('tablist', { name: 'Facts for' })
+    expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Views', 'Unique visitors'])
+    expect(facts().textContent).toContain('200') // still views until picked
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'Unique visitors' }))
     // 50 visitors over 2 counted days → 25, not 12.5 over four.
-    expect(block.textContent).toMatch(/unique visitors50/i)
-    expect(block.textContent).toMatch(/per day25/i)
-    expect(container.textContent!.match(/from sep 12/gi)).toHaveLength(1)
+    expect(facts().textContent).toMatch(/total50/i)
+    expect(facts().textContent).toMatch(/per day25/i)
     fireEvent.click(within(toggles()).getByRole('button', { name: 'Bots filtered' }))
-    expect(container.querySelector('[data-facts="bots"]')!.textContent).toContain('2.0%')
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Bots filtered' }))
+    expect(facts().textContent).toContain('2.0%')
+  })
+
+  it('switching a series off while its facts are showing falls back to views', () => {
+    setup()
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Unique visitors' }))
+    expect(facts().textContent).toMatch(/total50/i)
+    fireEvent.click(within(toggles()).getByRole('button', { name: 'Unique visitors' }))
+    expect(screen.queryByRole('tablist', { name: 'Facts for' })).toBeNull()
+    expect(facts().textContent).toContain('200')
   })
 
   it('withholds the views change when the prior window had nothing, and drops it entirely for all time', () => {
