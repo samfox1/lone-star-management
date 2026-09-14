@@ -207,16 +207,27 @@ export function bucketForHost(host: string | null): Source | null {
 /**
  * The bucket: utm_source wins (a tag the artist wrote is the truth about the campaign,
  * even when we do not recognise the word → other); else the referrer host; no referrer
- * → direct; a referrer nothing matches → other (the raw host is stored beside it).
+ * → the in-app browser's app if the UA names one (IN_APP_SOURCES), else direct; a
+ * referrer nothing matches → other (the raw host is stored beside it).
  */
-export function sourceFor(utmSource: string | null, refHost: string | null): Source {
+export function sourceFor(utmSource: string | null, refHost: string | null, browser = ''): Source {
   if (utmSource) {
     const key = utmSource.toLowerCase().replace(/[^a-z]/g, '')
     return UTM_BUCKETS[key] ?? 'other'
   }
-  if (!refHost) return 'direct'
+  if (!refHost) return IN_APP_SOURCES[browser] ?? 'direct'
   return bucketForHost(refHost) ?? 'other'
 }
+
+/**
+ * In-app browsers that strip the referrer, and the bucket the visit came from
+ * anyway. TikTok's webview sent NO referrer on every one of its visits to Skeen
+ * (2026-09-12/13: twelve of twelve), so those were filed as direct; Instagram's
+ * usually keeps `l.instagram.com` but not always. When the referrer is empty
+ * and the UA says which app it is, the app is the source. Snapchat has no bucket
+ * yet, so it stays direct.
+ */
+export const IN_APP_SOURCES: Record<string, Source> = { instagram: 'instagram', tiktok: 'tiktok', facebook: 'facebook' }
 
 /* ── User agent ─────────────────────────────────────────────────────────────────── */
 

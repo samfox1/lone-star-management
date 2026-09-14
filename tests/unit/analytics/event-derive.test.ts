@@ -10,6 +10,7 @@ import {
   ENTITY_KINDS,
   EVENT_TYPES,
   HOST_BUCKETS,
+  IN_APP_SOURCES,
   NO_GEO,
   SOURCES,
   UTM_BUCKETS,
@@ -222,6 +223,17 @@ describe('source bucket', () => {
     expect(sourceFor(null, null)).toBe('direct')
     expect(sourceFor(null, 'news.ycombinator.com')).toBe('other')
     expect(sourceFor(null, 'google.co.uk')).toBe('google')
+  })
+  it('CRITICAL: no referrer but a known in-app browser → that app, not direct — TikTok strips the referrer every time', () => {
+    for (const [browser, bucket] of Object.entries(IN_APP_SOURCES)) expect(sourceFor(null, null, browser), browser).toBe(bucket)
+    expect(Object.keys(IN_APP_SOURCES).sort()).toEqual(['facebook', 'instagram', 'tiktok'])
+    for (const b of Object.values(IN_APP_SOURCES)) expect(SOURCES).toContain(b)
+    // The app only fills a GAP: a referrer, a utm, or a plain browser are unchanged.
+    expect(sourceFor(null, 'youtube.com', 'tiktok')).toBe('youtube')
+    expect(sourceFor('flyer-qr', null, 'tiktok')).toBe('other')
+    expect(sourceFor(null, null, 'safari')).toBe('direct')
+    expect(sourceFor(null, null, 'snapchat')).toBe('direct') // no bucket for it yet
+    expect(sourceFor(null, null)).toBe('direct')
   })
 })
 

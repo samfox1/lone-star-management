@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
       p_entity_type: body.entity?.kind ?? null,
       p_path: path,
       p_referrer_host: refHost,
-      p_source: sourceFor(utm.source, refHost),
+      p_source: sourceFor(utm.source, refHost, browser),
       p_utm_source: utm.source,
       p_utm_medium: utm.medium,
       p_utm_campaign: utm.campaign,
