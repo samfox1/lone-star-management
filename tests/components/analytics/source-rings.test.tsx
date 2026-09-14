@@ -35,17 +35,31 @@ describe('SourceRings', () => {
     expect(arcLen(arcs[1])).toBeLessThan(C)
   })
 
-  it('shows six, and the rest behind one control that names the count', () => {
-    render(<SourceRings sources={EIGHT} />)
+  it('CRITICAL: the short row is five NAMED sources plus See all — the Other bucket never takes a slot', () => {
+    // Other is the second-biggest source here; it still waits behind See all.
+    const withOther = [src('instagram', 80, 0.4), src('other', 60, 0.3), src('youtube', 30, 0.15), src('google', 20, 0.1), src('tiktok', 6, 0.03), src('direct', 4, 0.02)]
+    render(<SourceRings sources={withOther} />)
     const list = screen.getByRole('list', { name: 'Sources' })
-    expect(within(list).getAllByRole('listitem')).toHaveLength(6)
-    fireEvent.click(screen.getByRole('button', { name: /show all \(8\)/i }))
-    expect(within(list).getAllByRole('listitem')).toHaveLength(8)
+    expect(within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])).toEqual(['instagram', 'youtube', 'google', 'tiktok', 'direct'])
+    // The tile counts what is hidden: Other alone.
+    const seeAll = within(list).getByRole('button', { name: /\+1see all/i })
+    expect(seeAll).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(seeAll)
+    expect(within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])).toEqual(['instagram', 'other', 'youtube', 'google', 'tiktok', 'direct'])
+    fireEvent.click(within(list).getByRole('button', { name: /show fewer/i }))
+    expect(within(list).getAllByRole('img')).toHaveLength(5)
   })
 
-  it('has no expand control when six or fewer would fit anyway', () => {
-    render(<SourceRings sources={EIGHT.slice(0, 6)} />)
-    expect(screen.queryByRole('button', { name: /show all/i })).toBeNull()
+  it('counts every hidden source on the tile, named ones too', () => {
+    render(<SourceRings sources={EIGHT} />)
+    // Eight sources, none Other: five show, three wait.
+    expect(screen.getByRole('button', { name: /\+3see all/i })).toBeTruthy()
+  })
+
+  it('has no tile when everything already fits — five or fewer, with no Other', () => {
+    render(<SourceRings sources={EIGHT.slice(0, 5)} />)
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getAllByRole('img')).toHaveLength(5)
   })
 
   it('CRITICAL: the share lives IN the ring — the centre holds the mark and the number it flips to, and nothing is printed under the name', () => {

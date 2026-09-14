@@ -12,16 +12,20 @@ import { SourceGlyph } from '@/components/ui/source-glyphs'
  * over — the number lives IN the ring, not under it (Sam, 2026-09-13: no detail
  * container, no count line below the name, and "literally flip").
  *
- * The first six show; the rest sit behind one control. Six is the number a
- * person can compare by eye; past that they are reading a list, and the list is
- * there for them.
+ * Five named sources show, ranked, and the sixth slot is a "See all" tile when
+ * anything is hidden. The catch-all "Other" bucket never takes a slot in the
+ * short row (Sam, 2026-09-13: "instead of the other button, a see all button");
+ * expanded, every source shows at its rank, Other included, with a "Show fewer"
+ * tile at the end.
  *
  * Every ring is the blue accent. Colour never carries identity here — the mark
  * does — so a filter that drops a source cannot repaint the survivors.
  */
 const R = 42
 const C = 2 * Math.PI * R
-const SHOWN = 6
+/** Named rings in the short row; the sixth slot is the See all tile. */
+const SHOWN = 5
+const OTHER = 'other'
 
 export function SourceRings({
   sources,
@@ -33,7 +37,9 @@ export function SourceRings({
   className?: string
 }) {
   const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? sources : sources.slice(0, SHOWN)
+  const named = sources.filter((s) => s.source !== OTHER)
+  const hidden = sources.length - Math.min(named.length, SHOWN)
+  const visible = expanded ? sources : named.slice(0, SHOWN)
 
   if (sources.length === 0) {
     return <p className={cx('font-space text-xs text-ink-faint', className)}>{empty}</p>
@@ -84,17 +90,27 @@ export function SourceRings({
             </li>
           )
         })}
+        {hidden > 0 && (
+          <li>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((e) => !e)}
+              className="group flex w-full flex-col items-center gap-2.5 rounded-xl py-2 outline-none"
+            >
+              <span className="relative flex h-[104px] w-[104px] items-center justify-center">
+                <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
+                  <circle cx={50} cy={50} r={R} fill="none" className="stroke-hairline" strokeWidth={7} strokeDasharray="3 5" />
+                </svg>
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface font-space text-[19px] font-bold tabular-nums text-ink transition-colors group-hover:bg-surface-hover">
+                  {expanded ? '−' : `+${hidden}`}
+                </span>
+              </span>
+              <span className="font-space text-[11px] font-bold text-ink">{expanded ? 'Show fewer' : 'See all'}</span>
+            </button>
+          </li>
+        )}
       </ul>
-
-      {sources.length > SHOWN && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-3 rounded-full px-3 py-1 font-space text-[11px] uppercase tracking-[0.1em] text-ink-faint transition-colors hover:bg-surface-hover"
-        >
-          {expanded ? 'Show top 6' : `Show all (${sources.length})`}
-        </button>
-      )}
     </div>
   )
 }
