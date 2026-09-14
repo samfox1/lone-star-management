@@ -55,7 +55,8 @@ export function MetricExplorer({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const [on, setOn] = useState<Set<MetricKey>>(() => new Set())
+  // Both overlays on by default (Sam, 2026-09-13).
+  const [on, setOn] = useState<Set<MetricKey>>(() => new Set(OVERLAYS))
   const [shownKey, setShownKey] = useState<MetricKey>('views')
   const allTime = windowKey === 'all'
   const windowLabel = allTime ? 'all time' : `${days}d`
@@ -76,9 +77,10 @@ export function MetricExplorer({
     const idx = days_.map((_, i) => i).filter((i) => !since || days_[i] >= since)
     return metricFacts({ ...m, series: idx.map((i) => m.series[i]) }, idx.map((i) => days_[i]), prevTotals[m.key] ?? 0)
   }
-  // The column shows ONE drawn series at a time, picked by its tab. A series
-  // switched off while it was showing falls back to views.
-  const shown = drawn.find((m) => m.key === shownKey) ?? views
+  // The column shows ONE series at a time, picked by its tab. The tabs are always
+  // there, drawn or not: the facts exist whether or not the line is on the chart.
+  const chartable = [views, ...OVERLAYS.map((k) => byKey[k])].filter(Boolean)
+  const shown = chartable.find((m) => m.key === shownKey) ?? views
   const sf = factsFor(shown)
   const st = sf.delta === null ? null : formatTrend(sf.delta)
   const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
@@ -86,23 +88,31 @@ export function MetricExplorer({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Add-ons only — views is always drawn and needs no switch. Two separate
-            buttons, each its own on/off in the Segmented's clothes, not one shared
-            container: they are not a choice between two things. */}
-        <div role="group" aria-label="Series" className="flex flex-wrap items-center gap-2">
+        {/* Add-ons only — views is always drawn and needs no switch. Each is a
+            small square check beside its name, not a button around the text
+            (Sam, 2026-09-13). */}
+        <div role="group" aria-label="Series" className="flex flex-wrap items-center gap-5">
           {OVERLAYS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={on.has(k)}
-              onClick={() => toggle(k)}
-              className={cx(
-                'rounded-lg border px-3 py-1.5 font-space text-xs transition-colors',
-                on.has(k) ? 'border-ink bg-ink font-semibold text-white' : 'border-hairline text-ink-muted hover:text-ink',
-              )}
-            >
-              {byKey[k]?.label ?? k}
-            </button>
+            <label key={k} className="flex cursor-pointer select-none items-center gap-2 font-space text-xs text-ink">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={on.has(k)}
+                aria-label={byKey[k]?.label ?? k}
+                onClick={() => toggle(k)}
+                className={cx(
+                  'flex h-4 w-4 items-center justify-center rounded-[3px] border transition-colors',
+                  on.has(k) ? 'border-ink bg-ink text-white' : 'border-hairline bg-paper hover:border-ink-faint',
+                )}
+              >
+                {on.has(k) && (
+                  <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                    <path d="M2.5 6.2 L5 8.6 L9.6 3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+              <span onClick={() => toggle(k)}>{byKey[k]?.label ?? k}</span>
+            </label>
           ))}
         </div>
         <Segmented
@@ -123,9 +133,8 @@ export function MetricExplorer({
             column shows whichever is picked. Stacking every series overflowed the
             column (Sam, 2026-09-13). No box, no fill. */}
         <div role="region" aria-label="Facts" className="flex flex-col text-right">
-          {drawn.length > 1 && (
-            <div role="tablist" aria-label="Facts for" className="mb-3 flex flex-wrap justify-end gap-x-4 gap-y-1 border-b border-hairline">
-              {drawn.map((m) => (
+          <div role="tablist" aria-label="Facts for" className="mb-3 flex flex-wrap justify-end gap-x-4 gap-y-1 border-b border-hairline">
+            {chartable.map((m) => (
                 <button
                   key={m.key}
                   type="button"
@@ -140,8 +149,7 @@ export function MetricExplorer({
                   {SHORT[m.key] ?? m.label}
                 </button>
               ))}
-            </div>
-          )}
+          </div>
 
           <div>
             <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">

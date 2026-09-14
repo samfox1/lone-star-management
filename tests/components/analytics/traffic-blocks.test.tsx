@@ -163,29 +163,30 @@ describe('TimelineChart', () => {
     ]
     const plot = (c: HTMLElement) => c.querySelector('svg')!.parentElement!
 
-    it('CRITICAL: hovering a day lists every drawn series and the change on the day before for the first', () => {
+    it('CRITICAL: hovering a day names the date, lists every drawn series, and says how far the lead sits from the window average', () => {
       const restore = withWidth()
       const { container } = render(<TimelineChart points={three} height={100} series={[
-        S('views', [100, 60, 0]), S('visitors', [25, 40, 0], 'accent-red'),
+        S('views', [100, 60, 20]), S('visitors', [25, 40, 0], 'accent-red'),
       ]} />)
       fireEvent.pointerMove(plot(container), { clientX: 300 })
       const text = screen.getByRole('status').textContent!
       expect(text).toContain('Sep 11')
       expect(text).toMatch(/views60/i)
       expect(text).toMatch(/visitors40/i)
-      expect(text).toContain('-40.0%')
+      // Average of 100, 60, 20 is 60: the middle day sits exactly on it.
+      expect(text).toMatch(/0\.0% vs average/i)
+      fireEvent.pointerMove(plot(container), { clientX: 0 })
+      expect(screen.getByRole('status').textContent).toMatch(/\+66\.7% vs average/i)
       restore()
     })
 
-    it('CRITICAL: refuses a percentage when yesterday was zero, and says so', () => {
+    it('CRITICAL: withholds the deviation when the window average is zero — nothing to deviate from', () => {
       const restore = withWidth()
       const { container } = render(<TimelineChart points={[
-        { day: '2026-09-10', views: 0, visitors: 0 }, { day: '2026-09-11', views: 30, visitors: 10 },
+        { day: '2026-09-10', views: 0, visitors: 0 }, { day: '2026-09-11', views: 0, visitors: 0 },
       ]} height={100} />)
       fireEvent.pointerMove(plot(container), { clientX: 600 })
-      const text = screen.getByRole('status').textContent!
-      expect(text).toMatch(/none on sep 10/i)
-      expect(text).not.toMatch(/%/)
+      expect(screen.getByRole('status').textContent).not.toMatch(/%/)
       restore()
     })
 
@@ -201,18 +202,18 @@ describe('TimelineChart', () => {
       const low = parseFloat((container.querySelector('[data-readout]') as HTMLElement).style.top)
       expect(low).toBeGreaterThan(high)
       expect(high).toBeGreaterThanOrEqual(4)
-      expect(low).toBeLessThanOrEqual(58)
+      expect(low).toBeLessThanOrEqual(64)
       restore()
     })
 
-    it('an uncounted day reads "not counted", and leaving clears everything', () => {
+    it('an uncounted day reads as a dash, and leaving clears everything', () => {
       const restore = withWidth()
       const across = [{ day: '2026-09-10', views: 4, visitors: 0 }, { day: '2026-09-11', views: 5, visitors: 9 }]
       const { container } = render(<TimelineChart points={across} height={100} series={[
         S('views', [4, 5]), S('visitors', [0, 9], 'accent-red', '2026-09-11'),
       ]} />)
       fireEvent.pointerMove(plot(container), { clientX: 0 })
-      expect(screen.getByRole('status').textContent).toMatch(/visitorsnot counted/i)
+      expect(screen.getByRole('status').textContent).toMatch(/visitors—/i)
       fireEvent.pointerLeave(plot(container))
       expect(screen.queryByRole('status')).toBeNull()
       restore()

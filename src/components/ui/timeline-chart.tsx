@@ -75,7 +75,10 @@ export function TimelineChart({
 
   const lead = all[0]
   const shown = at != null ? points[at] : null
-  const delta = at != null && at > 0 && counted(lead, at - 1) ? dayDelta(valueAt(lead, at - 1), valueAt(lead, at)) : null
+  // The lead series' average over the days it was counted: what a day deviates from.
+  const leadDays = points.map((_, i) => i).filter((i) => counted(lead, i))
+  const avg = leadDays.length ? leadDays.reduce((n, i) => n + valueAt(lead, i), 0) / leadDays.length : 0
+  const delta = at != null ? dayDelta(avg, valueAt(lead, at)) : null
   const trend = delta === null ? null : formatTrend(delta)
   const flip = at != null && points.length > 1 && at / (points.length - 1) > 0.62
 
@@ -160,33 +163,29 @@ export function TimelineChart({
               <div
                 role="status"
                 data-readout
-                className={cx('absolute w-56 rounded-xl bg-paper px-3.5 py-3 text-ink shadow-[0_8px_24px_rgba(17,17,17,0.12)]', flip ? 'right-0' : 'left-0')}
+                className={cx('absolute w-44 rounded-xl bg-paper px-3 py-2.5 text-ink shadow-[0_8px_24px_rgba(17,17,17,0.12)]', flip ? 'right-0' : 'left-0')}
                 style={{
-                  // Beside the dot, at its height — clamped to stay inside the plot. A card
-                  // flush with the top rule read as a title (Sam, 2026-09-13).
-                  top: `${Math.min(58, Math.max(4, (y(valueAt(lead, at)) / h) * 100 - 6))}%`,
+                  // Beside the dot, at its height — clamped to stay inside the plot.
+                  top: `${Math.min(64, Math.max(4, (y(valueAt(lead, at)) / h) * 100 - 6))}%`,
                   ...(flip ? { right: `${(1 - x(at) / w) * 100}%`, marginRight: 12 } : { left: `${(x(at) / w) * 100}%`, marginLeft: 12 }),
                 }}
               >
-                <div className="text-sm">{dayLabel(shown.day)}</div>
-                <dl className="mt-2 space-y-1 border-t border-hairline pt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                <div className="font-space text-[15px] font-bold text-ink">{dayLabel(shown.day)}</div>
+                <dl className="mt-1.5 space-y-0.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
                   {all.map((s) => (
                     <div key={s.key} className="flex justify-between gap-3">
                       <dt>{s.label}</dt>
                       <dd className="whitespace-nowrap text-[11px] font-bold tabular-nums text-ink">
-                        {counted(s, at) ? valueAt(s, at) : 'not counted'}
+                        {counted(s, at) ? valueAt(s, at) : '—'}
                       </dd>
                     </div>
                   ))}
                 </dl>
-                <div className="mt-2 whitespace-nowrap border-t border-hairline pt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                  {trend ? (
-                    <>
-                      <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span>
-                      {' '}vs {dayLabel(points[at - 1].day)} · {valueAt(lead, at - 1)}
-                    </>
-                  ) : at === 0 ? 'First day' : <>None on {dayLabel(points[at - 1].day)}</>}
-                </div>
+                {trend && (
+                  <div className="mt-1.5 whitespace-nowrap font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                    <span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(trend.dir))}>{trend.label}</span> vs average
+                  </div>
+                )}
               </div>
             </>
           )}
