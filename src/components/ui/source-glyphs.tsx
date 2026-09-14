@@ -16,6 +16,10 @@ const GLYPHS: Record<SourceKey, ReactNode> = {
   instagram: (
     <><g fill="none" stroke="currentColor" strokeWidth="1.9"><rect x="2.7" y="2.7" width="18.6" height="18.6" rx="5.6"/><circle cx="12" cy="12" r="4.7"/></g><circle cx="17.4" cy="6.6" r="1.35" fill="currentColor"/></>
   ),
+  snapchat: (
+    // The ghost: a round head, wavy hem, and the two feet.
+    <><path d="M12 2.6 c3.3 0 5.4 2.4 5.4 5.6 v2.2 c0.7 0.2 1.5 -0.1 1.9 0.2 c-0.1 0.9 -1.3 1.2 -2 1.5 c0.6 1.9 2.2 3.3 4 3.8 c-0.2 0.8 -1.5 1 -2.4 1.2 c-0.2 0.5 -0.2 1.1 -0.6 1.3 c-0.9 0.1 -1.9 -0.3 -2.8 0.2 c-1 0.6 -1.9 1.6 -3.5 1.6 s-2.5 -1 -3.5 -1.6 c-0.9 -0.5 -1.9 -0.1 -2.8 -0.2 c-0.4 -0.2 -0.4 -0.8 -0.6 -1.3 c-0.9 -0.2 -2.2 -0.4 -2.4 -1.2 c1.8 -0.5 3.4 -1.9 4 -3.8 c-0.7 -0.3 -1.9 -0.6 -2 -1.5 c0.4 -0.3 1.2 0 1.9 -0.2 v-2.2 c0 -3.2 2.1 -5.6 5.4 -5.6 z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></>
+  ),
   tiktok: (
     <><path d="M13.4 2.6 h3.2 a5.2 5.2 0 0 0 4.8 4.6 v3.2 a8.3 8.3 0 0 1 -4.8 -1.7 v6.5 a6.5 6.5 0 1 1 -6.5 -6.5 q0.7 0 1.4 0.16 v3.3 a3.2 3.2 0 1 0 1.9 2.94 z" fill="currentColor"/></>
   ),

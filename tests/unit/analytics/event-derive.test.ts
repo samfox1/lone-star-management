@@ -168,6 +168,7 @@ describe('source bucket', () => {
   const EXPECTED_HOSTS: Record<string, string> = {
     'instagram.com': 'instagram', 'l.instagram.com': 'instagram',
     'tiktok.com': 'tiktok',
+    'snapchat.com': 'snapchat',
     'youtube.com': 'youtube', 'youtu.be': 'youtube', 'm.youtube.com': 'youtube',
     'facebook.com': 'facebook', 'l.facebook.com': 'facebook', 'lm.facebook.com': 'facebook', 'fb.com': 'facebook', 'm.facebook.com': 'facebook',
     'x.com': 'x', 't.co': 'x', 'twitter.com': 'x',
@@ -185,7 +186,7 @@ describe('source bucket', () => {
     'mail.google.com': 'email', 'outlook.live.com': 'email', 'outlook.office.com': 'email', 'mail.yahoo.com': 'email',
   }
   const EXPECTED_UTM: Record<string, string> = {
-    instagram: 'instagram', ig: 'instagram', tiktok: 'tiktok', youtube: 'youtube', yt: 'youtube', facebook: 'facebook', fb: 'facebook',
+    instagram: 'instagram', ig: 'instagram', tiktok: 'tiktok', snapchat: 'snapchat', snap: 'snapchat', youtube: 'youtube', yt: 'youtube', facebook: 'facebook', fb: 'facebook',
     x: 'x', twitter: 'x', spotify: 'spotify', applemusic: 'apple_music', apple: 'apple_music', soundcloud: 'soundcloud',
     bandcamp: 'bandcamp', google: 'google', bing: 'bing', chatgpt: 'ai', perplexity: 'ai', gemini: 'ai', copilot: 'ai', ai: 'ai',
     linktree: 'linktree', bandsintown: 'bandsintown', songkick: 'songkick', email: 'email', newsletter: 'email', mailchimp: 'email',
@@ -226,13 +227,13 @@ describe('source bucket', () => {
   })
   it('CRITICAL: no referrer but a known in-app browser → that app, not direct — TikTok strips the referrer every time', () => {
     for (const [browser, bucket] of Object.entries(IN_APP_SOURCES)) expect(sourceFor(null, null, browser), browser).toBe(bucket)
-    expect(Object.keys(IN_APP_SOURCES).sort()).toEqual(['facebook', 'instagram', 'tiktok'])
+    expect(Object.keys(IN_APP_SOURCES).sort()).toEqual(['facebook', 'instagram', 'snapchat', 'tiktok'])
     for (const b of Object.values(IN_APP_SOURCES)) expect(SOURCES).toContain(b)
     // The app only fills a GAP: a referrer, a utm, or a plain browser are unchanged.
     expect(sourceFor(null, 'youtube.com', 'tiktok')).toBe('youtube')
     expect(sourceFor('flyer-qr', null, 'tiktok')).toBe('other')
     expect(sourceFor(null, null, 'safari')).toBe('direct')
-    expect(sourceFor(null, null, 'snapchat')).toBe('direct') // no bucket for it yet
+    expect(sourceFor(null, null, 'discord')).toBe('direct') // no in-app entry: stays direct
     expect(sourceFor(null, null)).toBe('direct')
   })
 })

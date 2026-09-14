@@ -156,7 +156,7 @@ export function utmOf(url: string): Utm {
 
 /** PINNED copy of src/lib/analytics-sources.ts SOURCE_KEYS (a test diffs them). */
 export const SOURCES = [
-  'instagram', 'tiktok', 'youtube', 'facebook', 'x', 'spotify', 'apple_music', 'soundcloud', 'bandcamp',
+  'instagram', 'tiktok', 'snapchat', 'youtube', 'facebook', 'x', 'spotify', 'apple_music', 'soundcloud', 'bandcamp',
   'google', 'bing', 'ai', 'linktree', 'bandsintown', 'songkick', 'email', 'direct', 'other',
 ] as const
 export type Source = (typeof SOURCES)[number]
@@ -166,6 +166,7 @@ export type Source = (typeof SOURCES)[number]
 export const HOST_BUCKETS: Record<string, Source> = {
   'instagram.com': 'instagram', 'l.instagram.com': 'instagram',
   'tiktok.com': 'tiktok',
+  'snapchat.com': 'snapchat',
   'youtube.com': 'youtube', 'youtu.be': 'youtube', 'm.youtube.com': 'youtube',
   'facebook.com': 'facebook', 'l.facebook.com': 'facebook', 'lm.facebook.com': 'facebook', 'fb.com': 'facebook', 'm.facebook.com': 'facebook',
   'x.com': 'x', 't.co': 'x', 'twitter.com': 'x',
@@ -185,7 +186,7 @@ export const HOST_BUCKETS: Record<string, Source> = {
 
 /** utm_source values that name a bucket (case-insensitive, punctuation-insensitive). */
 export const UTM_BUCKETS: Record<string, Source> = {
-  instagram: 'instagram', ig: 'instagram', tiktok: 'tiktok', youtube: 'youtube', yt: 'youtube', facebook: 'facebook', fb: 'facebook',
+  instagram: 'instagram', ig: 'instagram', tiktok: 'tiktok', snapchat: 'snapchat', snap: 'snapchat', youtube: 'youtube', yt: 'youtube', facebook: 'facebook', fb: 'facebook',
   x: 'x', twitter: 'x', spotify: 'spotify', applemusic: 'apple_music', apple: 'apple_music', soundcloud: 'soundcloud',
   bandcamp: 'bandcamp', google: 'google', bing: 'bing', chatgpt: 'ai', perplexity: 'ai', gemini: 'ai', copilot: 'ai', ai: 'ai',
   linktree: 'linktree', bandsintown: 'bandsintown', songkick: 'songkick', email: 'email', newsletter: 'email', mailchimp: 'email',
@@ -224,10 +225,10 @@ export function sourceFor(utmSource: string | null, refHost: string | null, brow
  * anyway. TikTok's webview sent NO referrer on every one of its visits to Skeen
  * (2026-09-12/13: twelve of twelve), so those were filed as direct; Instagram's
  * usually keeps `l.instagram.com` but not always. When the referrer is empty
- * and the UA says which app it is, the app is the source. Snapchat has no bucket
- * yet, so it stays direct.
+ * and the UA says which app it is, the app is the source. Messenger carries
+ * Facebook's tokens, so it lands under facebook.
  */
-export const IN_APP_SOURCES: Record<string, Source> = { instagram: 'instagram', tiktok: 'tiktok', facebook: 'facebook' }
+export const IN_APP_SOURCES: Record<string, Source> = { instagram: 'instagram', tiktok: 'tiktok', facebook: 'facebook', snapchat: 'snapchat' }
 
 /* ── User agent ─────────────────────────────────────────────────────────────────── */
 
