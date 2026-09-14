@@ -418,48 +418,31 @@ export function summarizeSources(cur: SourceRow[], prev: SourceRow[] = [], actio
     .sort((a, b) => b.visitors - a.visitors)
 }
 
-/** One device × browser row, summed across the window. */
-export type DeviceSummary = { device: string; browser: string; visitors: number; views: number }
-
 /**
- * Devices, split the way Sam reads them (2026-09-13): MOBILE (phones and tablets)
- * against WEB (desktop browsers). Within a group, one row per device × browser,
- * biggest first. `other` holds rows the door could not classify — an empty
- * device string — and is a count, not a row, because there is nothing to draw.
+ * What visits were read on, as three shares: MOBILE, TABLET, COMPUTER. Sam,
+ * 2026-09-13: "a lot less specific … just show the artist if most people are
+ * viewing the site on mobile, tablet, or computer" — the point is knowing which
+ * view of the site to build out. `other` counts rows the door could not
+ * classify (a blank or unknown device) so the three shares are honest about
+ * what they leave out; `total` is everyone, and every share is of everyone.
  */
-export type DeviceSplit = {
-  mobile: DeviceSummary[]
-  web: DeviceSummary[]
-  mobileVisitors: number
-  webVisitors: number
-  otherVisitors: number
-  /** The largest single row across BOTH groups, so a mobile bar and a web bar
-   *  are on one scale and can be compared by eye. */
-  max: number
-}
+export const DEVICE_KINDS = [
+  { key: 'mobile', label: 'Mobile' },
+  { key: 'tablet', label: 'Tablet' },
+  { key: 'desktop', label: 'Computer' },
+] as const
+export type DeviceKind = (typeof DEVICE_KINDS)[number]['key']
+export type DeviceShares = Record<DeviceKind, number> & { other: number; total: number }
 
-export function summarizeDevices(rows: DeviceRow[]): DeviceSplit {
-  const by = new Map<string, DeviceSummary>()
-  let other = 0
+export function summarizeDevices(rows: DeviceRow[]): DeviceShares {
+  const out: DeviceShares = { mobile: 0, tablet: 0, desktop: 0, other: 0, total: 0 }
+  const kinds: readonly string[] = DEVICE_KINDS.map((k) => k.key)
   for (const r of rows) {
-    if (!r.device) { other += r.visitors; continue }
-    const k = `${r.device}|${r.browser}`
-    const got = by.get(k) ?? { device: r.device, browser: r.browser, visitors: 0, views: 0 }
-    got.visitors += r.visitors
-    got.views += r.views
-    by.set(k, got)
+    const k = kinds.includes(r.device) ? (r.device as DeviceKind) : 'other'
+    out[k] += r.visitors
+    out.total += r.visitors
   }
-  const all = [...by.values()].filter((d) => d.visitors > 0).sort((a, b) => b.visitors - a.visitors)
-  const mobile = all.filter((d) => d.device === 'mobile' || d.device === 'tablet')
-  const web = all.filter((d) => d.device === 'desktop')
-  const sum = (xs: DeviceSummary[]) => xs.reduce((n, d) => n + d.visitors, 0)
-  return {
-    mobile, web,
-    mobileVisitors: sum(mobile),
-    webVisitors: sum(web),
-    otherVisitors: other + sum(all.filter((d) => !mobile.includes(d) && !web.includes(d))),
-    max: Math.max(1, ...all.map((d) => d.visitors)),
-  }
+  return out
 }
 
 /** A row of `analytics_by_entity`: one entity, one event type, one count. */

@@ -157,10 +157,10 @@ export default async function OverviewPage({
         />
       </section>
 
-      {/* ON WHAT. Mobile against web, one scale across both. */}
+      {/* ON WHAT. Mobile, tablet, computer — which view of the site to build out. */}
       <section>
         <KLabel>What they used</KLabel>
-        <DeviceSplit className="mt-3" split={summarizeDevices(traffic.devices)} />
+        <DeviceSplit className="mt-3" shares={summarizeDevices(traffic.devices)} />
       </section>
 
       {/* WHAT THEY ACTED ON. Songs by plays, dates by ticket clicks, merch by buy

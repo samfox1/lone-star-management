@@ -27,6 +27,7 @@ import {
   summarizeSources,
   topContent,
   CONTENT_KINDS,
+  DEVICE_KINDS,
   reachesBeforeContext,
   topBars,
   trafficWindow,
@@ -410,31 +411,21 @@ describe('summarizeSources', () => {
 describe('summarizeDevices', () => {
   const row = (device: string, browser: string, visitors: number) => ({ device, browser, visitors, views: visitors * 2 })
 
-  it('CRITICAL: phones and tablets are MOBILE, desktops are WEB, and everything else is counted not drawn', () => {
-    // Two kinds of "else": a blank device the door could not classify, and one it
-    // classified as something neither group draws (a TV). Both must land in other.
+  it('CRITICAL: three shares — mobile, tablet, computer — summed across browsers, everything else counted as other', () => {
     const d = summarizeDevices([
-      row('mobile', 'instagram', 198), row('tablet', 'safari', 13), row('desktop', 'chrome', 88), row('', '', 9), row('tv', 'chrome', 4),
+      row('mobile', 'instagram', 198), row('mobile', 'safari', 20), row('tablet', 'safari', 13), row('desktop', 'chrome', 88),
+      row('', '', 9), row('tv', 'chrome', 4),
     ])
-    expect(d.mobile.map((r) => r.browser)).toEqual(['instagram', 'safari'])
-    expect(d.web.map((r) => r.browser)).toEqual(['chrome'])
-    expect(d.mobileVisitors).toBe(211)
-    expect(d.webVisitors).toBe(88)
-    expect(d.otherVisitors).toBe(13)
+    expect(d).toEqual({ mobile: 218, tablet: 13, desktop: 88, other: 13, total: 332 })
   })
 
-  it('CRITICAL: one maximum across BOTH groups, so a web bar and a mobile bar share a scale', () => {
-    const d = summarizeDevices([row('mobile', 'instagram', 198), row('desktop', 'chrome', 88)])
-    expect(d.max).toBe(198)
+  it('offers exactly the kinds the registry names, in its order', () => {
+    expect(DEVICE_KINDS.map((k) => k.key)).toEqual(['mobile', 'tablet', 'desktop'])
+    expect(DEVICE_KINDS.map((k) => k.label)).toEqual(['Mobile', 'Tablet', 'Computer'])
   })
 
-  it('sums the same device × browser across days and ranks by visitors', () => {
-    const d = summarizeDevices([row('desktop', 'safari', 5), row('desktop', 'chrome', 40), row('desktop', 'safari', 30)])
-    expect(d.web.map((r) => [r.browser, r.visitors])).toEqual([['chrome', 40], ['safari', 35]])
-  })
-
-  it('an empty window has a floor of 1, never a divide by zero', () => {
-    expect(summarizeDevices([]).max).toBe(1)
+  it('an empty window is all zeros, never a divide by zero', () => {
+    expect(summarizeDevices([])).toEqual({ mobile: 0, tablet: 0, desktop: 0, other: 0, total: 0 })
   })
 })
 
