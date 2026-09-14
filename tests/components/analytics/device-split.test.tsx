@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The device waffle: a hundred squares, one per percent of everyone, and the three figures beside it.
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { DEVICE_KINDS, summarizeDevices, waffleCells } from '@/lib/analytics'
 
@@ -47,6 +47,24 @@ describe('DeviceSplit', () => {
   it('every kind carries its device mark', () => {
     render(<DeviceSplit shares={shares} />)
     for (const t of screen.getAllByRole('term').slice(0, 3)) expect(t.parentElement!.querySelector('svg'), t.textContent ?? '').not.toBeNull()
+  })
+
+  it('CRITICAL: hovering a square shows that kind\'s share, lights its block, fades the rest, and leaving clears it', () => {
+    const { container } = render(<DeviceSplit shares={shares} />)
+    const tablet = container.querySelector('[data-waffle] [data-cell="tablet"]')!
+    fireEvent.pointerMove(tablet, { clientX: 40, clientY: 30 })
+    expect(screen.getByRole('status').textContent).toMatch(/^3% Tablet$/i)
+    // Every other kind's cells and legend rows are dimmed; tablet's are not.
+    expect(container.querySelectorAll('[data-cell="mobile"][data-dim]')).toHaveLength(66)
+    expect(container.querySelectorAll('[data-cell="tablet"][data-dim]')).toHaveLength(0)
+    expect(container.querySelector('[data-legend="mobile"]')!.className).toMatch(/opacity-40/)
+    expect(container.querySelector('[data-legend="tablet"]')!.className).not.toMatch(/opacity-40/)
+    // Move to a mobile square: the readout follows.
+    fireEvent.pointerMove(container.querySelector('[data-waffle] [data-cell="mobile"]')!, { clientX: 10, clientY: 10 })
+    expect(screen.getByRole('status').textContent).toMatch(/^66% Mobile$/i)
+    fireEvent.pointerLeave(container.querySelector('[data-waffle]')!.parentElement!)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(container.querySelectorAll('[data-dim]')).toHaveLength(0)
   })
 
   it('says what is missing rather than drawing an empty grid', () => {
