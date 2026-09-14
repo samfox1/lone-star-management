@@ -104,7 +104,7 @@ export function LogoRow({
                 confirmText={`Remove the ${lower}?${purpose === 'logo_primary' ? ' The tab icon is made from it and goes too.' : ''}`}
                 footerLeft={
                   <button type="button" onClick={pick} disabled={busy} className={buttonClass('ghost')}>
-                    <Icon name="upload" size={13} /> Replace
+                    Replace
                   </button>
                 }
               >
