@@ -1,7 +1,9 @@
 # 0012 — Analytics: one schema per subject, tallied daily, bots flagged not counted
 
 Status: Accepted (2026-09-11; migrations `20260911170000` → `20260911180000`, extended by
-`20260911190000`/`200000` for the door's RPCs and `20260912120000` for `daily_type`).
+`20260911190000`/`200000` for the door's RPCs, `20260912120000` for `daily_type`,
+`20260913170000` for the per-type timeline reader, and `20260913230000` for
+`daily_source_type`).
 Extends 0001; the door half extends 0010.
 
 ## Context

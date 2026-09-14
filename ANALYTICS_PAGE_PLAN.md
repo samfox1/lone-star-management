@@ -32,19 +32,24 @@ a storage emergency.
 
 ## Source buckets (v1)
 
-`instagram · tiktok · youtube · facebook · x · spotify · apple_music · soundcloud ·
+`instagram · tiktok · snapchat · youtube · facebook · x · spotify · apple_music · soundcloud ·
 bandcamp · google · bing · ai · linktree · bandsintown · songkick · email · direct · other`
 
 `ai` = chatgpt.com, chat.openai.com, perplexity.ai, gemini.google.com, copilot.microsoft.com,
 claude.ai, you.com. This bucket is the one direct GEO signal that costs nothing.
 
 Rules: `utm_source` present → bucket by it (lower-cased, mapped; unknown → `other`).
-Else referrer host → bucket by suffix table. Empty referrer → `direct`. Host stored
-raw either way. The table lives in ONE place: `supabase/functions/event/derive.ts`
-(`SOURCES`, `bucketForHost`, `sourceFor`) — the function directory cannot import from
-`src/`, but `src/` and the tests CAN import from it (tsconfig includes it, as it does
-`contact/validate.ts`), so the page's labels come from the same list. The event-type and
-entity-kind allowlists are pinned copies of `src/lib/events.ts` and the unit test diffs them.
+Else referrer host → bucket by suffix table. Empty referrer → the in-app browser's app
+when the UA names one (`IN_APP_SOURCES`: Instagram, TikTok, Facebook incl. Messenger,
+Snapchat — TikTok strips the referrer on every visit, 2026-09-14), else `direct`. Host
+stored raw either way. The registry's home is `src/lib/analytics-sources.ts`; the door
+keeps a PINNED copy in `supabase/functions/event/derive.ts` (`SOURCES`, `bucketForHost`,
+`sourceFor`) because the function directory cannot import from `src/`, and the unit test
+diffs the two — the same guard the event-type and entity-kind allowlists have.
+
+On the page, the buckets fold twice before ranking: every search engine (Google, Bing, and
+any search host left in `other`) is ONE "Web search" ring; whatever has no mark is ONE
+"Other" ring (`ringsOf` in analytics-sources.ts).
 
 ## Data model
 
