@@ -43,24 +43,20 @@ const PAIR = 'min-w-[88px] justify-center'
 export function ConnectModal({
   artistId,
   taken,
-  preselect,
   onClose,
   onDone,
 }: {
   artistId: string
   /** Keys already on the page — dimmed in the grid, not addable twice. */
   taken: string[]
-  /** Open straight on the details step for ONE connection (a row's "+ Connect"). */
-  preselect?: { key: string; url?: string }
   onClose: () => void
   /** Called once when the manager leaves with at least one connection made. */
   onDone: () => void
 }) {
   useLockBodyScroll(true)
-  const pre = preselect ? connectionByKey(preselect.key) : undefined
-  const [step, setStep] = useState<'pick' | 'details' | 'run'>(pre ? 'details' : 'pick')
+  const [step, setStep] = useState<'pick' | 'details' | 'run'>('pick')
   const [query, setQuery] = useState('')
-  const [picks, setPicks] = useState<Pick[]>(pre ? [{ def: pre, input: seed(pre, preselect?.url), status: 'wait' }] : [])
+  const [picks, setPicks] = useState<Pick[]>([])
   const [running, setRunning] = useState(false)
   const busyRef = useRef(false)
   const madeOne = useRef(false)
@@ -205,7 +201,7 @@ export function ConnectModal({
               ))}
             </div>
             <div className="mt-6 flex items-center justify-between">
-              {pre ? <span /> : <button type="button" onClick={() => setStep('pick')} className={buttonClass('confirm', PAIR)}>Back</button>}
+              <button type="button" onClick={() => setStep('pick')} className={buttonClass('confirm', PAIR)}>Back</button>
               <button type="button" onClick={() => void run()} className={buttonClass('solid', PAIR)}>
                 Connect{picks.length > 1 ? ` ${picks.length}` : ''}
               </button>
@@ -249,8 +245,8 @@ export function ConnectModal({
 }
 
 /** The first thing in the field: the platform's address, so a handle is all that's left to type. */
-function seed(def: ConnectionDef, url?: string): ConnectInput {
-  if (def.social) return { url: url ?? def.urlHint ?? '' }
+function seed(def: ConnectionDef): ConnectInput {
+  if (def.social) return { url: def.urlHint ?? '' }
   return {}
 }
 

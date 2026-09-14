@@ -235,7 +235,7 @@ export function epkReadiness(input: {
     {
       key: 'contact',
       label: 'A contact email',
-      hint: 'Add a booking address on the Links page, then publish.',
+      hint: 'Add a booking email in Settings.',
       met: hasContact,
     },
     {

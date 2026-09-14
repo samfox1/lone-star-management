@@ -21,7 +21,6 @@
 import { SOCIAL_PLATFORMS, platformFromUrl, socialSlug } from '@samfox1/site-bridge/social'
 import {
   INTEGRATION_REGISTRY,
-  SECTION_LABEL,
   isConnected,
   type ArtistIdField,
   type IntegrationArtist,
@@ -33,7 +32,6 @@ export const SHOPIFY_KEY = 'shopify'
 
 /** What a connection can feed. The registry's sections plus Merch (Shopify). */
 export type ConnectionSection = IntegrationSection | 'merch'
-export const CONNECTION_SECTION_LABEL: Record<ConnectionSection, string> = { ...SECTION_LABEL, merch: 'Merch' }
 
 export type ConnectionSource = {
   key: string

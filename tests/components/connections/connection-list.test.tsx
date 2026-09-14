@@ -16,7 +16,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ConnectionList, handleOf } from '@/app/artists/[id]/(dashboard)/connections/connection-list'
+import { ConnectionList } from '@/app/artists/[id]/(dashboard)/connections/connection-list'
 import { publishEntityAction, setOnSiteAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { disconnectConnectionAction, pullConnectionAction, syncProfileAction } from '@/app/artists/[id]/(dashboard)/connections/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
@@ -72,13 +72,6 @@ function editRow(dialog: HTMLElement, label: string, next: string) {
   fireEvent.change(input, { target: { value: next } })
   fireEvent.blur(input)
 }
-
-describe('handleOf', () => {
-  it('drops the scheme, www and a trailing slash — the handle, not the address', () => {
-    expect(handleOf('https://www.instagram.com/skeen/')).toBe('instagram.com/skeen')
-    expect(handleOf('http://tiktok.com/@skeen200')).toBe('tiktok.com/@skeen200')
-  })
-})
 
 describe('the rows', () => {
   it('shows the handle, not the URL, and has no ⋯', () => {
@@ -216,6 +209,22 @@ describe('the chip’s own actions', () => {
     fireEvent.click(within(rowOf('Bandsintown')).getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(pullConnectionAction).toHaveBeenCalledWith('a1', 'bandsintown'))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('CRITICAL: two fast clicks on Retry pull ONCE — the latch is a ref, not the disabled state', async () => {
+    // Both clicks in one act() batch: after one fireEvent.click React would already
+    // have disabled the button and the second click would never dispatch, pinning nothing.
+    // Two concurrent pulls both read "no row for this id" and both insert.
+    let release!: (v: { ok: boolean; message?: string }) => void
+    vi.mocked(pullConnectionAction).mockImplementationOnce(() => new Promise((res) => { release = res }))
+    mount()
+    const retry = within(rowOf('Bandsintown')).getByRole('button', { name: 'Retry' })
+    await act(async () => {
+      retry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      retry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(pullConnectionAction).toHaveBeenCalledTimes(1)
+    await act(async () => release({ ok: true, message: '2 dates' }))
   })
 })
 

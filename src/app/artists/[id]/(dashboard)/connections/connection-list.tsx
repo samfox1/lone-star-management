@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
+import { displayAddress } from '@/lib/settings'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, listRowClass } from '@/components/ui/ui'
 import type { ConnectionRow } from '@/lib/connections'
@@ -74,22 +75,14 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
   )
 }
 
-/** "instagram.com/skeen" from "https://www.instagram.com/skeen/" — the handle a manager
- *  recognises, not the whole address. The modal shows the full URL. */
-export function handleOf(url: string): string {
-  return url
-    .trim()
-    .replace(/^[a-z]+:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/+$/, '')
-}
-
 function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row: ConnectionRow; onChange: (next: ConnectionRow | null) => void }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pulling, setPulling] = useState(false)
+  /** The latch: two fast clicks both read `pulling === false`; only the ref stops the second. */
+  const pullingRef = useRef(false)
 
-  const shown = row.url ? handleOf(row.url) : (row.sourceId ?? '')
+  const shown = row.url ? displayAddress(row.url) : (row.sourceId ?? '')
 
   async function toggle() {
     if (!row.linkId) return
@@ -106,13 +99,19 @@ function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row:
    *  the link, nothing typed), or a retry for one that failed. */
   async function pull(e: React.MouseEvent) {
     e.stopPropagation()
+    if (pullingRef.current) return
+    pullingRef.current = true
     setPulling(true)
-    const res = row.state === 'connect' ? await syncProfileAction(artistId, row.key) : await pullConnectionAction(artistId, row.key)
-    setPulling(false)
-    if (res.ok) {
-      toast(res.message ?? `${row.label} synced`)
-      router.refresh()
-    } else toast(res.error ?? `${row.label} didn’t sync.`, 'error')
+    try {
+      const res = row.state === 'connect' ? await syncProfileAction(artistId, row.key) : await pullConnectionAction(artistId, row.key)
+      if (res.ok) {
+        toast(res.message ?? `${row.label} synced`)
+        router.refresh()
+      } else toast(res.error ?? `${row.label} didn’t sync.`, 'error')
+    } finally {
+      pullingRef.current = false
+      setPulling(false)
+    }
   }
 
   const dim = row.linkId ? !row.onSite : false

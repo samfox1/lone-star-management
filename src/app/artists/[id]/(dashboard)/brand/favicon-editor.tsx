@@ -56,6 +56,14 @@ export function FaviconEditor({
   /** Set by the manager's own changes only — the seed from the server must not save. */
   const touched = useRef(false)
   const savingRef = useRef(false)
+  /** An edit made WHILE a save was in flight: the save runs once more when it lands,
+   *  with whatever the framing is by then, so the last change never goes unsaved. */
+  const pendingRef = useRef(false)
+  /** The framing a save reads — the latest, not the one the save was scheduled with. */
+  const latest = useRef(framing)
+  useEffect(() => { latest.current = framing }, [framing])
+  /** The current `save`, so a save that finishes can run the next one without naming itself. */
+  const saveRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (!logoUrl) return
@@ -85,10 +93,12 @@ export function FaviconEditor({
   useEffect(paint, [paint])
 
   const save = useCallback(async () => {
-    if (!image || savingRef.current) return
+    if (!image) return
+    if (savingRef.current) { pendingRef.current = true; return }
     savingRef.current = true
     setSaving(true)
     try {
+      const framing = latest.current
       const canvas = document.createElement('canvas')
       canvas.width = FAVICON_SIZE
       canvas.height = FAVICON_SIZE
@@ -114,8 +124,13 @@ export function FaviconEditor({
     } finally {
       savingRef.current = false
       setSaving(false)
+      if (pendingRef.current) {
+        pendingRef.current = false
+        saveRef.current()
+      }
     }
-  }, [artistId, framing, image])
+  }, [artistId, image])
+  useEffect(() => { saveRef.current = () => void save() }, [save])
 
   // Autosave: a moment after the last change the manager made.
   useEffect(() => {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CONNECTIONS, buildConnectionRows, type ConnectionSection, type SourceCounts } from '@/lib/connections'
+import { provenBy, type IntegrationKey, type IntegrationSection } from '@/lib/integrations-registry'
 import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../_data'
@@ -27,14 +28,19 @@ const SECTION_TABLE: Record<ConnectionSection, string | null> = {
   merch: 'merch',
 }
 
-/** Rows per source, counted where they landed — derived from the connections that pull. */
+/** Rows per source, counted where they landed and by what proves them (`provenBy`:
+ *  a music source's id column, since merged catalogs never carry its `source`). A
+ *  failed count throws — a reader that answered 0 would print "couldn't connect". */
 async function sourceCounts(supabase: SupabaseClient, artistId: string): Promise<SourceCounts> {
   const pulling = CONNECTIONS.filter((d) => d.source)
   const counts = await Promise.all(
     pulling.map(async (d) => {
       const table = SECTION_TABLE[d.source!.section]
       if (!table) return [d.source!.key, 1] as const
-      const { count } = await supabase.from(table).select('id', { count: 'exact', head: true }).eq('artist_id', artistId).eq('source', d.source!.key)
+      const proof = provenBy({ key: d.source!.key as IntegrationKey, section: d.source!.section as IntegrationSection })
+      const base = supabase.from(table).select('id', { count: 'exact', head: true }).eq('artist_id', artistId)
+      const { count, error } = await (proof.op === 'not-null' ? base.not(proof.column, 'is', null) : base.eq(proof.column, proof.value!))
+      if (error) throw new Error(`${table} for ${d.source!.key}: ${error.message}`)
       return [d.source!.key, count ?? 0] as const
     }),
   )

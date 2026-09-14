@@ -3,7 +3,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { cx } from '@/lib/cx'
 import { rowHoverClass } from '@/components/ui/ui'
-import type { SettingsRow } from '@/lib/settings'
+import { recipientLine, type SettingsRow } from '@/lib/settings'
 import { toast } from '../toast'
 import { saveArtistNameAction, saveBookingEmailAction } from './actions'
 
@@ -29,7 +29,8 @@ export function SettingsView({ artistId, rows: initial }: { artistId: string; ro
   async function save(row: SettingsRow, value: string): Promise<{ error?: string } | void> {
     if (row.key === 'booking_email') {
       const res = await saveBookingEmailAction(artistId, value)
-      if (!res.error) patch(row.key, { value: res.value ?? '', sub: res.value ? 'Enquiries from the site go here' : 'No address for enquiries yet' })
+      // The address just saved is where enquiries now go, so the line is the resolver's own.
+      if (!res.error) patch(row.key, { value: res.value ?? '', sub: recipientLine(res.value ?? '', res.value ? { to_email: res.value, recipient_source: 'artist' } : null) })
       return res
     }
     if (row.key === 'name') {

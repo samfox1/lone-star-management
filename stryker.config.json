@@ -57,6 +57,7 @@
     "src/lib/chart.ts",
     "src/lib/source-story.ts",
     "src/lib/analytics-sources.ts",
+    "src/lib/integrations-registry.ts",
     "src/lib/format.ts",
     "src/lib/connections.ts",
     "src/lib/settings.ts"

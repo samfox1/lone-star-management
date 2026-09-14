@@ -323,7 +323,10 @@ function AddFontDialog({ artistId, slot, onClose }: { artistId: string; slot: Fo
           successMessage="Font uploaded"
           writeRow={async (path, file) => {
             const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
-            return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext }, slot)).error ?? null
+            const res = await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext }, slot)
+            // A warning is a font that exists but was not placed: say so, keep the file.
+            if (res.warning) toast(res.warning, 'error')
+            return res.error ?? null
           }}
           onSuccess={onClose}
         />

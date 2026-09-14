@@ -201,12 +201,3 @@ describe('run', () => {
     await act(async () => release({ ok: true }))
   })
 })
-
-describe('preselect', () => {
-  it('opens on the details step for that one connection, with no Back', () => {
-    const { dialog } = open({ preselect: { key: 'apple music', url: 'https://music.apple.com/artist/1' } })
-    expect(within(dialog).getByRole('textbox', { name: 'Apple Music link' })).toHaveValue('https://music.apple.com/artist/1')
-    expect(within(dialog).queryByRole('button', { name: 'Back' })).toBeNull()
-    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeInTheDocument()
-  })
-})

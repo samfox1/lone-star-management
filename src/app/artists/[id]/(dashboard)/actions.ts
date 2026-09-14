@@ -1042,11 +1042,15 @@ async function saveArtistField(
 ): Promise<{ error?: string }> {
   const value = String(formData.get(column) ?? '').trim()
   const supabase = await createClient()
+  // `.select().single()`: RLS ROW-FILTERS a write the caller may not make, returning no
+  // error and no rows; asking for the row back turns that into an error (AGENTS rule 3).
   const { error } = await supabase
     .from('artists')
     .update({ [column]: value || null })
     .eq('id', artistId)
-  if (error) return { error: error.message }
+    .select('id')
+    .single()
+  if (error) return { error: error.code === 'PGRST116' ? 'Not found.' : error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

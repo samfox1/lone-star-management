@@ -55,9 +55,14 @@ vi.mock('@/lib/supabase/server', () => ({
         return { eq: () => leaf }
       },
       update: (patch: Record<string, unknown>) => ({
-        eq: async () => {
+        eq: () => {
           writes.push({ table, patch })
-          return { error: null }
+          // Awaited directly by most actions; `saveArtistField` chains `.select().single()`
+          // to turn an RLS row-filtered write into an error, so the leaf offers both.
+          const done = Promise.resolve({ error: null })
+          return Object.assign(done, {
+            select: () => ({ single: async () => ({ data: { id: ARTIST }, error: null }) }),
+          })
         },
       }),
     }),

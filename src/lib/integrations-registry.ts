@@ -79,3 +79,25 @@ export function connectedCount(artist: IntegrationArtist, shopifyConnected: bool
   const configured = INTEGRATION_REGISTRY.filter((i) => isConnected(i, artist)).length
   return configured + (shopifyConnected ? 1 : 0)
 }
+
+/**
+ * Where a music source's rows are proven. The tracks sync MERGES catalogs into union
+ * rows: an artist who connected Spotify first and Apple Music second gets ONE row per
+ * song, `source = 'spotify'`, with `apple_id` stamped onto it — so "rows with
+ * source = 'apple'" is 0 forever and "synced" would read as "couldn't connect". The
+ * id column is what a source actually contributed. Every music integration must have
+ * one, or the page cannot judge it (a `satisfies` on the registry's music keys).
+ */
+export const TRACK_ID_COLUMN = {
+  spotify: 'spotify_id',
+  apple: 'apple_id',
+  deezer: 'deezer_id',
+} as const satisfies Record<Extract<IntegrationKey, 'spotify' | 'apple' | 'deezer'>, string>
+export type TrackIdColumn = (typeof TRACK_ID_COLUMN)[keyof typeof TRACK_ID_COLUMN]
+
+/** How a pulled source proves it pulled: rows carrying its id (music), or rows it
+ *  wrote (`source = key`) everywhere else. */
+export function provenBy(intg: Pick<IntegrationDef, 'key' | 'section'>): { column: string; op: 'not-null' | 'eq'; value?: string } {
+  if (intg.section === 'music') return { column: TRACK_ID_COLUMN[intg.key as keyof typeof TRACK_ID_COLUMN], op: 'not-null' }
+  return { column: 'source', op: 'eq', value: intg.key }
+}

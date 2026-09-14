@@ -8,7 +8,9 @@ import {
   connectInputError,
   connectionByKey,
   idFromProfileUrl,
+  isProfileLink,
   type ConnectInput,
+  type LinkRowLike,
 } from '@/lib/connections'
 import { probeAdvice } from '@/lib/merch/probe'
 import { addContentAction, deleteContentAction, saveSourceIdAction } from '../actions'
@@ -53,11 +55,16 @@ export async function connectOneAction(artistId: string, key: string, input: Con
     let pulled: ConnectResult | null = null
     if (def.social) {
       const url = input.url!.trim()
-      const fd = new FormData()
-      fd.set('label', def.label)
-      fd.set('url', url)
-      const added = await addContentAction('link', artistId, fd)
-      if (added.error) return { ok: false, error: added.error }
+      // Idempotent: a Retry after the link saved but the pull failed must not be refused
+      // with "Spotify is already on this site". The profile link that exists is the one.
+      const existing = (await profileLinks(artistId)).find((l) => socialSlug(l.label ?? '') === def.social)
+      if (!existing) {
+        const fd = new FormData()
+        fd.set('label', def.label)
+        fd.set('url', url)
+        const added = await addContentAction('link', artistId, fd)
+        if (added.error) return { ok: false, error: added.error }
+      }
       const id = input.id?.trim() || (def.source ? idFromProfileUrl(def, url) : null)
       if (def.source?.idField && id) pulled = await connectSource(artistId, def.source.idField, def.source.key, id)
     } else if (def.source?.idField) {
@@ -68,6 +75,15 @@ export async function connectOneAction(artistId: string, key: string, input: Con
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Couldn’t connect.' }
   }
+}
+
+/** The artist's profile links, as the page reads them: role-bound rows (the USB button's
+ *  playlist, labelled "Spotify") and contact rows are not profiles, whatever their label. */
+async function profileLinks(artistId: string): Promise<LinkRowLike[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('links').select('id, label, url, role').eq('artist_id', artistId)
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as LinkRowLike[]).filter(isProfileLink)
 }
 
 /** Save the id, then pull — a saved id that pulls nothing is not a connection. */
@@ -123,11 +139,13 @@ export async function disconnectConnectionAction(artistId: string, key: string, 
 export async function syncProfileAction(artistId: string, key: string): Promise<ConnectResult> {
   const def = connectionByKey(key)
   if (!def?.social || !def.source?.idField) return { ok: false, error: 'Nothing to sync.' }
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('links').select('label, url').eq('artist_id', artistId)
-  if (error) return { ok: false, error: error.message }
-  const link = (data ?? []).find((l) => socialSlug((l.label as string) ?? '') === def.social)
-  const id = link ? idFromProfileUrl(def, (link.url as string) ?? '') : null
+  let link: LinkRowLike | undefined
+  try {
+    link = (await profileLinks(artistId)).find((l) => socialSlug(l.label ?? '') === def.social)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Couldn’t read the links.' }
+  }
+  const id = link ? idFromProfileUrl(def, link.url ?? '') : null
   if (!id) return { ok: false, error: `That ${def.label} link has no artist id in it — it needs to be the artist page.` }
   try {
     const res = await connectSource(artistId, def.source.idField, def.source.key, id)
@@ -138,7 +156,7 @@ export async function syncProfileAction(artistId: string, key: string): Promise<
   }
 }
 
-/** Pull this connection's content again — the ⋯ menu's "Pull now", and a failed row's Retry. */
+/** Pull this connection's content again — the modal's "Pull now", and a failed row's Retry. */
 export async function pullConnectionAction(artistId: string, key: string): Promise<ConnectResult> {
   const def = connectionByKey(key)
   if (!def?.source) return { ok: false, error: 'Nothing to pull.' }

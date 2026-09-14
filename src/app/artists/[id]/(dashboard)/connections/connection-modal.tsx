@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
@@ -36,6 +36,7 @@ export function ConnectionModal({
 }) {
   const router = useRouter()
   const [pulling, setPulling] = useState(false)
+  const pullingRef = useRef(false)
   const [result, setResult] = useState<ConnectResult | null>(null)
   const fail = (message: string) => toast(message, 'error')
 
@@ -58,12 +59,18 @@ export function ConnectionModal({
   /** First pull for a never-synced profile (the id comes out of the link), or a fresh
    *  pull for one that has. Either way the page re-reads the truth afterwards. */
   async function pull() {
+    if (pullingRef.current) return
+    pullingRef.current = true
     setPulling(true)
     setResult(null)
-    const res = row.state === 'connect' ? await syncProfileAction(artistId, row.key) : await pullConnectionAction(artistId, row.key)
-    setPulling(false)
-    setResult(res)
-    if (res.ok) router.refresh()
+    try {
+      const res = row.state === 'connect' ? await syncProfileAction(artistId, row.key) : await pullConnectionAction(artistId, row.key)
+      setResult(res)
+      if (res.ok) router.refresh()
+    } finally {
+      pullingRef.current = false
+      setPulling(false)
+    }
   }
 
   const meta =

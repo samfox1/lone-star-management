@@ -110,9 +110,20 @@ describe('an upload started from a slot fills that slot (Sam, 2026-09-13)', () =
     expect(mockedSlot).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: a failed placement is reported — the font exists, the slot does not show it', async () => {
+  it('CRITICAL: a failed placement is a WARNING, never an error — an error would make performUpload delete the file from under the row', async () => {
     mockedSlot.mockResolvedValueOnce({ ok: false, error: 'Unknown font slot.' })
     const { addArtistFontAction } = await actions()
-    expect((await addArtistFontAction('a1', VALID, 'secondary')).error).toBe('Unknown font slot.')
+    const res = await addArtistFontAction('a1', VALID, 'secondary')
+    expect(res.error).toBeUndefined()
+    expect(res.warning).toBe('Unknown font slot.')
+    expect(mockedAdd).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed placement without a message still warns in plain words', async () => {
+    mockedSlot.mockResolvedValueOnce({ ok: false })
+    const { addArtistFontAction } = await actions()
+    const res = await addArtistFontAction('a1', VALID, 'secondary')
+    expect(res.error).toBeUndefined()
+    expect(res.warning).toBe('The font was added but could not be placed.')
   })
 })

@@ -157,6 +157,49 @@ describe('FaviconEditor', () => {
 })
 
 describe('FaviconEditor — saving', () => {
+  it('CRITICAL: mounting saves NOTHING — the server seed is not an edit', async () => {
+    // Without the `touched` guard every Brand page visit would re-export the PNG, upload
+    // it, and rewrite the favicon asset row, once per image decode.
+    const { saveFramingAction, setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
+    const { toast } = await import('@/app/artists/[id]/(dashboard)/toast')
+    // The export has to WORK for this test to bite: jsdom's own toBlob fails, and a save
+    // that dies before reaching the action looks exactly like a save that never started.
+    // (A mutation check found this test green with the guard deleted, 2026-09-14.)
+    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+      cb(new Blob(['png'], { type: 'image/png' }))
+    }
+    await renderEditor({ zoom: 2.5, offsetY: -0.2 })
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(toast)).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: an edit made while a save is in flight is saved after it — the last change never goes unsaved', async () => {
+    const { saveFramingAction, setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
+    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+      cb(new Blob(['png'], { type: 'image/png' }))
+    }
+    // The first save's upload step hangs until we let it go.
+    let release!: (v: { error?: string }) => void
+    vi.mocked(setBrandAssetAction).mockImplementationOnce(() => new Promise((res) => { release = res }))
+    await renderEditor()
+
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '2' } })
+    await waitFor(() => expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    expect(vi.mocked(saveFramingAction).mock.calls[0][1]).toMatchObject({ zoom: 2 })
+
+    // A second edit lands while that save is still in flight …
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '3' } })
+    await new Promise((r) => setTimeout(r, 900))
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(1) // latched, not a second save yet
+
+    // … and when the first save lands, it is saved, with the framing as it is NOW.
+    await act(async () => release({}))
+    await waitFor(() => expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    expect(vi.mocked(saveFramingAction).mock.calls[1][1]).toMatchObject({ zoom: 3 })
+  })
+
   it('CRITICAL: saves the framing BEFORE the asset, so a failed upload keeps the adjustment', async () => {
     const { saveFramingAction, setBrandAssetAction } = await import(
       '@/app/artists/[id]/(dashboard)/brand/actions'

@@ -21,7 +21,6 @@ import { SOCIAL_PLATFORMS } from '@samfox1/site-bridge/social'
 import { INTEGRATION_REGISTRY, type IntegrationArtist } from '@/lib/integrations-registry'
 import {
   CONNECTIONS,
-  CONNECTION_SECTION_LABEL,
   SHOPIFY_KEY,
   buildConnectionRows,
   connectInputError,
@@ -74,7 +73,6 @@ describe('the registry, derived', () => {
 
   it('Shopify is a connection even though neither registry holds it', () => {
     expect(byKey(SHOPIFY_KEY)).toMatchObject({ kind: 'service', source: { key: SHOPIFY_KEY, section: 'merch' } })
-    expect(CONNECTION_SECTION_LABEL.merch).toBe('Merch') // the chip's word for what Shopify feeds
   })
 
   it('no two connections share a label or a key', () => {
@@ -180,11 +178,15 @@ describe('isProfileLink — what belongs on the page', () => {
 
 describe('buildConnectionRows — only what is hooked up', () => {
   const links: LinkRowLike[] = [
+    // The USB button is a Spotify PLAYLIST labelled "Spotify" (save.ts labels role rows by
+    // their key's word), and it sorts FIRST — so only the profile-link guard keeps it from
+    // being taken as the Spotify profile. A label-only match would return l-usb.
+    { id: 'l-usb', label: 'Spotify', url: 'https://open.spotify.com/playlist/0', on_site: true, role: 'usb' },
     { id: 'l-sp', label: 'Spotify', url: 'https://open.spotify.com/artist/26K', on_site: true, role: null },
-    { id: 'l-ig', label: 'Instagram', url: 'https://instagram.com/skeen', on_site: true, role: null },
+    { id: 'l-ig', label: 'Instagram', url: 'https://instagram.com/skeen', on_site: false, role: null },
+    { id: 'l-x', label: 'X', url: 'https://x.com/skeen', on_site: true, role: null },
     { id: 'l-tt', label: 'TikTok', url: 'https://tiktok.com/@skeen', on_site: false, role: null },
     { id: 'l-am', label: 'Apple Music', url: 'https://music.apple.com/artist/1', on_site: true, role: null },
-    { id: 'l-usb', label: 'USB button', url: 'https://open.spotify.com/playlist/0', on_site: true, role: 'usb' },
     { id: 'l-bk', label: 'Booking email', url: 'ross@example.com', on_site: true, role: 'booking' },
     { id: 'l-null', label: null, url: 'https://example.com', on_site: true, role: null },
   ]
@@ -213,7 +215,8 @@ describe('buildConnectionRows — only what is hooked up', () => {
   })
 
   it('the ring follows the link when there is one, and the connection when there is not', () => {
-    expect(row('instagram').onSite).toBe(true)
+    expect(row('x').onSite).toBe(true)
+    expect(row('instagram').onSite).toBe(false)
     expect(row('tiktok').onSite).toBe(false)
     expect(row('youtube').onSite).toBe(true) // no link row: connected IS on
   })
@@ -224,7 +227,8 @@ describe('buildConnectionRows — only what is hooked up', () => {
   })
 
   it('CRITICAL: ranks synced, then failed, then on-site profiles, then off-site — A to Z within', () => {
-    expect(rows.map((r) => r.key)).toEqual(['spotify', 'youtube', 'bandsintown', 'apple music', 'instagram', 'tiktok'])
+    // X is on the site and Instagram is not, so X comes first although I sorts before X.
+    expect(rows.map((r) => r.key)).toEqual(['spotify', 'youtube', 'bandsintown', 'apple music', 'x', 'instagram', 'tiktok'])
   })
 
   it('Shopify joins the list when connected, and its state follows its products', () => {

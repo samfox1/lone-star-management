@@ -61,13 +61,18 @@ export async function saveFramingAction(
  * call returns `{}` and reads as success in the UI.
  */
 /** Add a font; with `slot`, it fills that slot too (Sam, 2026-09-13: a font is uploaded
- *  FROM a slot's picker, so the upload is the choice). The font stays even if the slot
- *  write fails — the manager can still pick it — and the failure is reported. */
+ *  FROM a slot's picker, so the upload is the choice).
+ *
+ *  This runs as `performUpload`'s `writeRow`, whose contract is "an error means the row
+ *  was NOT written, so delete the object". Once the row is in, the answer can never be
+ *  an error — the file would be deleted from under a row that still names it, and the
+ *  picker would offer a font that 404s on the site. A slot that will not take it is a
+ *  `warning`: the font stays, the manager can still pick it, and the caller says so. */
 export async function addArtistFontAction(
   artistId: string,
   input: { label: string; storagePath: string; format: string },
   slot?: FontSlot,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warning?: string }> {
   const supabase = await createClient()
   if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
   const res = await setArtistFont(supabase, artistId, input)
@@ -76,7 +81,7 @@ export async function addArtistFontAction(
     const placed = await setFontSlot(supabase, artistId, slot, res.font.id)
     if (!placed.ok) {
       revalidatePath(`/artists/${artistId}`, 'layout')
-      return { error: placed.error ?? 'The font was added but could not be placed.' }
+      return { warning: placed.error ?? 'The font was added but could not be placed.' }
     }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')

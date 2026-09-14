@@ -38,7 +38,7 @@ export type {
   IntegrationArtist,
   IntegrationSection,
 } from '@/lib/integrations-registry'
-export { SECTION_LABEL, connectedCount, isConnected } from '@/lib/integrations-registry'
+export { connectedCount, isConnected } from '@/lib/integrations-registry'
 
 type SaveAction = (artistId: string, formData: FormData) => Promise<{ error?: string }>
 /** Pull-style actions may report a dynamic success line (e.g. "Found 12 media files"),
@@ -72,11 +72,3 @@ const PULL: Record<IntegrationKey, PullAction> = {
 
 export const INTEGRATIONS: Integration[] = INTEGRATION_REGISTRY.map((d) => ({ ...d, save: SAVE[d.key], pull: PULL[d.key] }))
 
-/** Integrations grouped by the section they feed, in registry order. */
-export const INTEGRATIONS_BY_SECTION = INTEGRATIONS.reduce(
-  (acc, intg) => {
-    ;(acc[intg.section] ??= []).push(intg)
-    return acc
-  },
-  {} as Record<Integration['section'], Integration[]>,
-)
