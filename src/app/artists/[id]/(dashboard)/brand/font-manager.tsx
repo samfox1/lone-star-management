@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   type ArtistFont,
   type FontSlot,
@@ -25,34 +25,38 @@ import { addArtistFontAction, removeArtistFontAction, setFontSlotAction } from '
  *  gets a label without anyone remembering to add one. */
 const slotLabel = (slot: FontSlot) => slot.replace(/_/g, ' ')
 
+/** The CSS the preview sets a font in — the sanitized token, never the raw family. */
+const faceOf = (font: ArtistFont) => `'${sanitizeFamily(font.family)}', sans-serif`
+
 /**
- * The artist's fonts, as ROWS (Sam, 2026-09-13): the name set in its own face, the
- * format, the five slot chips, and a bare bin at the end. "+ Font" is the last row and
- * opens a small dialog — name first, then the file — so the page itself carries no form
- * and no captions.
+ * THE FONTS, SLOT-FIRST (Sam, 2026-09-13: "Each font (primary, secondary, custom, etc)
+ * should be next to a selector or a + font where you can upload one or you can choose
+ * from a list (with a search bar)… Each one should have a view").
  *
- * EVERY FONT IS PREVIEWED IN ITSELF: the component injects the same `@font-face` CSS the
- * public site gets and sets each row in its own family, because a font is draft until
- * published and a filename tells a manager nothing.
+ * One row per slot: the KEY, then the font that fills it as a picker, then an eye. The
+ * picker is the dashboard's own menu — a search line, every uploaded font set in itself,
+ * "None", and "+ Font" at the foot, which uploads a new font INTO this slot. Fonts are
+ * removed from inside the picker (the bin beside a font), because the list of fonts IS
+ * the picker; there is no second list on the page.
  *
- * The name is asked for BEFORE the file. The CSS family token derives from it and is
- * stored verbatim in every per-region style row that uses it, so it is fixed at upload;
- * asking first makes that one-way door visible instead of surprising.
+ * EVERY FONT IS SHOWN IN ITSELF: the component injects the same `@font-face` CSS the
+ * public site gets, because a font is draft until published and a filename tells a
+ * manager nothing. The eye opens a preview where any text is drawn in the face.
  */
 export function FontManager({ artistId, fonts }: { artistId: string; fonts: ArtistFont[] }) {
   const { ask, dialog } = useConfirm()
-  const [adding, setAdding] = useState(false)
-  /** The font whose preview is open. */
+  /** The slot an upload was started from, or null when the dialog is closed. */
+  const [adding, setAdding] = useState<FontSlot | null>(null)
   const [previewing, setPreviewing] = useState<ArtistFont | null>(null)
-  /** Which row is mid-write, for the disabled state. NOT the re-entry guard. */
-  const [busyId, setBusyId] = useState<string | null>(null)
+  /** Which slot is mid-write, for the disabled state. NOT the re-entry guard. */
+  const [busySlot, setBusySlot] = useState<string | null>(null)
   /** The re-entry latch — a ref, because two fast clicks both read stale state. */
   const busyRef = useRef(false)
 
-  async function run(id: string, work: () => Promise<{ error?: string }>, done: string) {
+  async function run(key: string, work: () => Promise<{ error?: string }>, done: string) {
     if (busyRef.current) return
     busyRef.current = true
-    setBusyId(id)
+    setBusySlot(key)
     try {
       const res = await work()
       if (res.error) {
@@ -64,8 +68,14 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
       toast('Something went wrong. Try again.', 'error')
     } finally {
       busyRef.current = false
-      setBusyId(null)
+      setBusySlot(null)
     }
+  }
+
+  /** Fill a slot, or empty it (`null`). The row shows what it replaces, so no question. */
+  function choose(slot: FontSlot, font: ArtistFont | null) {
+    const name = slotLabel(slot)
+    void run(slot, () => setFontSlotAction(artistId, slot, font?.id ?? null), font ? `${font.label} is now the ${name} font` : `No ${name} font`)
   }
 
   async function remove(font: ArtistFont) {
@@ -73,92 +83,182 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
     void run(font.id, () => removeArtistFontAction(artistId, font.id), 'Font removed')
   }
 
-  /** Put this font in a slot, or take it out of one. A font may hold several slots. */
-  async function assign(font: ArtistFont, slot: FontSlot) {
-    const clearing = font.slots.includes(slot)
-    const incumbent = fonts.find((f) => f.slots.includes(slot) && f.id !== font.id)
-    const name = slotLabel(slot)
-    if (!clearing && incumbent && !(await ask(`${incumbent.label} is the ${name} font. Use ${font.label} instead?`, { action: 'Use it', tone: 'solid' })))
-      return
-    void run(
-      font.id,
-      () => setFontSlotAction(artistId, slot, clearing ? null : font.id),
-      clearing ? `${font.label} is no longer the ${name} font` : `${font.label} is now the ${name} font`,
-    )
-  }
-
   return (
-    <div className="flex items-start gap-8">
+    <div className="flex flex-col gap-0.5">
       {/* Safe to inject: every value has been through sanitizeFamily or is a known enum. */}
       <style dangerouslySetInnerHTML={{ __html: fontFaceCss(fonts.map((f) => ({ ...f, path: f.storage_path }))) }} />
 
-      <div className="flex flex-col gap-0.5">
-      {fonts.map((font) => {
-        const rowBusy = busyId === font.id
+      {FONT_SLOTS.map((slot) => {
+        const font = fonts.find((f) => f.slots.includes(slot)) ?? null
+        const rowBusy = busySlot === slot
         return (
-          <div key={font.id} className={cx('flex items-center gap-4 py-1.5', rowBusy && 'opacity-60')}>
-            <span className="min-w-[120px] truncate text-[19px] leading-tight" style={{ fontFamily: `'${sanitizeFamily(font.family)}', sans-serif` }}>
-              {font.label}
-            </span>
-            <span className="w-9 flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint" title={`font-${sanitizeFamily(font.family)}`}>
-              {font.format}
-            </span>
-            {/* The eye: type anything, see it in this face (Sam, 2026-09-13). */}
-            <button
-              type="button"
-              onClick={() => setPreviewing(font)}
-              aria-label={`Preview ${font.label}`}
-              className="flex h-5 w-5 flex-none items-center justify-center text-ink-faint transition-colors hover:text-ink"
-            >
-              <Icon name="eye" size={14} />
-            </button>
-            {/* Reads as a sentence: "Sorg_font · used as · Primary". A pressed chip is a slot
-                this font fills; a font may fill several. */}
-            <span className="ml-2 font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">used as</span>
-            <span className="flex flex-wrap gap-1.5">
-              {FONT_SLOTS.map((slot) => {
-                const held = font.slots.includes(slot)
-                return (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => assign(font, slot)}
-                    disabled={rowBusy}
-                    aria-pressed={held}
-                    aria-label={`${slotLabel(slot)} font: ${font.label}`}
-                    className={cx(
-                      'rounded-[7px] border px-2 py-1 font-space text-[10px] uppercase tracking-[0.06em] transition-colors disabled:opacity-50',
-                      held ? 'border-ink bg-ink text-white' : 'border-hairline text-ink-muted hover:border-ink-faint hover:text-ink',
-                    )}
-                  >
-                    {slotLabel(slot)}
-                  </button>
-                )
-              })}
-            </span>
-            <button
-              type="button"
-              onClick={() => remove(font)}
+          <div key={slot} className={cx('flex h-8 items-center gap-4', rowBusy && 'opacity-60')}>
+            <span className="w-[96px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">{slotLabel(slot)}</span>
+            <FontPicker
+              slot={slot}
+              fonts={fonts}
+              value={font}
               disabled={rowBusy}
-              aria-label={`Remove ${font.label}`}
-              className="flex h-5 w-5 flex-none items-center justify-center text-ink-faint transition-colors hover:text-accent-red disabled:opacity-50"
-            >
-              <Icon name="trash" size={13} />
-            </button>
+              onChoose={(f) => choose(slot, f)}
+              onRemove={remove}
+              onAdd={() => setAdding(slot)}
+            />
+            {/* The eye (Sam, 2026-09-13): type anything, see it in this face. */}
+            {font ? (
+              <button
+                type="button"
+                onClick={() => setPreviewing(font)}
+                aria-label={`Preview ${slotLabel(slot)} font`}
+                className="flex h-5 w-5 flex-none items-center justify-center text-ink-faint transition-colors hover:text-ink"
+              >
+                <Icon name="eye" size={14} />
+              </button>
+            ) : null}
           </div>
         )
       })}
 
-      </div>
-
-      {/* At the far right of the fonts (Sam, 2026-09-13), level with the first row. */}
-      <button type="button" onClick={() => setAdding(true)} className={buttonClass('ghost', 'flex-none')}>
-        <Icon name="plus" size={12} /> Font
-      </button>
-
-      {adding && <AddFontDialog artistId={artistId} onClose={() => setAdding(false)} />}
+      {adding && <AddFontDialog artistId={artistId} slot={adding} onClose={() => setAdding(null)} />}
       {previewing && <PreviewDialog font={previewing} onClose={() => setPreviewing(null)} />}
       {dialog}
+    </div>
+  )
+}
+
+/**
+ * The slot's picker: reads as the row's value with a chevron; opens the paper menu with
+ * a search line, each font in its own face (a bin beside it), None, and + Font. The same
+ * `combobox` / `listbox` / `option` roles SelectMenu uses, so it reads as a select.
+ */
+function FontPicker({
+  slot,
+  fonts,
+  value,
+  disabled,
+  onChoose,
+  onRemove,
+  onAdd,
+}: {
+  slot: FontSlot
+  fonts: ArtistFont[]
+  value: ArtistFont | null
+  disabled: boolean
+  onChoose: (font: ArtistFont | null) => void
+  onRemove: (font: ArtistFont) => void
+  onAdd: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const listId = useId()
+  const label = `${slotLabel(slot)} font`
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopImmediatePropagation()
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
+
+  const toggle = () => {
+    setQ('')
+    setOpen((v) => !v)
+  }
+  const pick = (font: ArtistFont | null) => {
+    setOpen(false)
+    if ((font?.id ?? null) !== (value?.id ?? null)) onChoose(font)
+  }
+  const shown = fonts.filter((f) => f.label.toLowerCase().includes(q.trim().toLowerCase()))
+
+  return (
+    <div ref={ref} className="relative w-[200px]">
+      <button
+        type="button"
+        role="combobox"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        disabled={disabled}
+        onClick={toggle}
+        className={cx('flex h-8 w-full items-center gap-1.5 text-left text-[17px] leading-8 outline-none disabled:opacity-50', !value && 'text-hairline')}
+      >
+        <span className="min-w-0 flex-1 truncate" style={value ? { fontFamily: faceOf(value) } : undefined}>
+          {value ? value.label : 'Choose'}
+        </span>
+        <Icon name="chevronRight" size={12} className={cx('flex-none rotate-90 text-ink-faint transition-transform', open && '-rotate-90')} />
+      </button>
+      {open && (
+        <div id={listId} role="listbox" aria-label={label} className="absolute left-0 top-full z-20 mt-1 w-[260px] rounded-xl border border-hairline bg-paper shadow-2xl">
+          {fonts.length > 1 ? (
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              aria-label="Search fonts"
+              placeholder="Search"
+              className="mx-3 mt-2 h-7 w-[calc(100%-24px)] border-b border-hairline bg-transparent font-space text-[12px] leading-7 outline-none placeholder:text-ink-faint focus:border-ink"
+            />
+          ) : null}
+          <div className="max-h-64 overflow-auto py-1.5">
+            {shown.map((font) => {
+              const held = font.id === value?.id
+              return (
+                <div key={font.id} role="option" aria-selected={held} aria-label={font.label} className="group flex items-center gap-2 pl-3 pr-2 hover:bg-surface">
+                  <button type="button" onClick={() => pick(font)} className={cx('flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left', held ? 'text-ink' : 'text-ink-muted')}>
+                    <span className="min-w-0 flex-1 truncate text-[17px] leading-6" style={{ fontFamily: faceOf(font) }}>
+                      {font.label}
+                    </span>
+                    <span className="flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint" title={`font-${sanitizeFamily(font.family)}`}>
+                      {font.format}
+                    </span>
+                    {held ? <Icon name="check" size={13} className="flex-none" /> : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false)
+                      onRemove(font)
+                    }}
+                    aria-label={`Remove ${font.label}`}
+                    className="flex h-5 w-5 flex-none items-center justify-center text-ink-faint opacity-0 transition-[opacity,color] group-hover:opacity-100 hover:text-accent-red focus:opacity-100"
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                </div>
+              )
+            })}
+            {value ? (
+              <button type="button" role="option" aria-selected={false} onClick={() => pick(null)} className="flex w-full items-center px-3 py-1.5 text-left text-sm text-ink-faint hover:bg-surface">
+                None
+              </button>
+            ) : null}
+          </div>
+          <div className="border-t border-hairline p-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onAdd()
+              }}
+              className={buttonClass('ghost', 'w-full justify-center')}
+            >
+              <Icon name="plus" size={12} /> Font
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -172,16 +272,25 @@ function FaceSquare({ family, faint = false }: { family: string | null; faint?: 
   )
 }
 
-/** Name first, then the file. The licence line lives HERE — the one moment it matters —
- *  and nowhere on the page. */
-function AddFontDialog({ artistId, onClose }: { artistId: string; onClose: () => void }) {
+/** Name first, then the file, and the file goes straight into `slot`. The licence line
+ *  lives HERE — the one moment it matters — and nowhere on the page. */
+function AddFontDialog({ artistId, slot, onClose }: { artistId: string; slot: FontSlot; onClose: () => void }) {
   const [label, setLabel] = useState('')
   const named = label.trim()
 
   return (
     <CardModal open onClose={onClose} label="Add a font" footer={null}>
-      {/* The formats the picker takes, as the meta line — the one fact a manager needs. */}
-      <ModalHeader square={<FaceSquare family={null} faint />} title={named || 'Font'} meta={<span className="uppercase">{FONT_UPLOAD_RULES.allowedExt.join(' · ')}</span>} />
+      {/* The slot it goes into, and the formats the picker takes — the two facts a manager needs. */}
+      <ModalHeader
+        square={<FaceSquare family={null} faint />}
+        title={named || 'Font'}
+        meta={
+          <>
+            <span className="capitalize">{slotLabel(slot)}</span>
+            <span className="uppercase">{FONT_UPLOAD_RULES.allowedExt.join(' · ')}</span>
+          </>
+        }
+      />
       <label className="mt-7 flex flex-col gap-1">
         <span className="font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Name</span>
         <input
@@ -208,7 +317,7 @@ function AddFontDialog({ artistId, onClose }: { artistId: string; onClose: () =>
           successMessage="Font uploaded"
           writeRow={async (path, file) => {
             const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
-            return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext })).error ?? null
+            return (await addArtistFontAction(artistId, { label: named, storagePath: path, format: ext }, slot)).error ?? null
           }}
           onSuccess={onClose}
         />
@@ -232,7 +341,7 @@ function AddFontDialog({ artistId, onClose }: { artistId: string; onClose: () =>
  */
 function PreviewDialog({ font, onClose }: { font: ArtistFont; onClose: () => void }) {
   const [text, setText] = useState(font.label)
-  const family = `'${sanitizeFamily(font.family)}', sans-serif`
+  const family = faceOf(font)
 
   return (
     <CardModal open onClose={onClose} label={`Preview ${font.label}`} footer={null}>
@@ -255,7 +364,7 @@ function PreviewDialog({ font, onClose }: { font: ArtistFont; onClose: () => voi
         className="mt-7 h-7 w-full border-b border-hairline bg-transparent font-space text-[13px] leading-7 outline-none focus:border-ink"
       />
       <p data-testid="font-sample" className="mt-6 min-h-[120px] break-words text-[44px] leading-[1.1] text-ink" style={{ fontFamily: family }}>
-        {text || '\u00a0'}
+        {text || ' '}
       </p>
     </CardModal>
   )

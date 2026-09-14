@@ -60,14 +60,25 @@ export async function saveFramingAction(
  * ROW-FILTERS a blocked write rather than failing it, so without this a non-manager's
  * call returns `{}` and reads as success in the UI.
  */
+/** Add a font; with `slot`, it fills that slot too (Sam, 2026-09-13: a font is uploaded
+ *  FROM a slot's picker, so the upload is the choice). The font stays even if the slot
+ *  write fails — the manager can still pick it — and the failure is reported. */
 export async function addArtistFontAction(
   artistId: string,
   input: { label: string; storagePath: string; format: string },
+  slot?: FontSlot,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
   if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
   const res = await setArtistFont(supabase, artistId, input)
   if (!res.ok) return { error: res.error ?? 'Could not save that font.' }
+  if (slot && res.font) {
+    const placed = await setFontSlot(supabase, artistId, slot, res.font.id)
+    if (!placed.ok) {
+      revalidatePath(`/artists/${artistId}`, 'layout')
+      return { error: placed.error ?? 'The font was added but could not be placed.' }
+    }
+  }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
 }

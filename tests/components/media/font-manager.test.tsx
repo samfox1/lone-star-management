@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-// The Brand page's font list: each font previewed in itself, plus upload, remove and slots.
+// The Brand page's fonts, slot-first: a row per slot with a searchable picker and an eye.
 /**
- * FontManager — the Brand page's font list.
+ * FontManager — the Brand page's font slots.
  *
  * Four behaviours here are invisible from anywhere else:
- *   1. Each font is PREVIEWED IN ITSELF. A font is draft until publish, so this list is
- *      the only place a manager can see the face before committing the site to it. A
- *      preview that silently falls back to the UI font makes the whole page a lie.
+ *   1. Each font is SHOWN IN ITSELF, in the row and in the picker. A font is draft until
+ *      publish, so this is the only place a manager can see the face before committing
+ *      the site to it. A preview that silently falls back to the UI font makes the whole
+ *      page a lie.
  *   2. Destructive clicks confirm (the app's own dialog), and the re-entry guard is a
  *      REF. `busyId` is state:
  *      two fast clicks both read the pre-render value and both fire.
@@ -87,7 +88,15 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+/** The picker on one slot's row: `combobox` named "{slot} font". */
+const picker = (slot: string) => screen.getByRole('combobox', { name: `${slot.replace(/_/g, ' ')} font` })
+const openPicker = (slot = 'primary') => fireEvent.click(picker(slot))
+/** A font inside the open picker. */
+const option = (label: string) => screen.getByRole('option', { name: label })
+
+/** Fonts are removed from inside a picker — the list of fonts IS the picker. */
 const clickRemove = async (name = 'Remove PP Mori') => {
+  openPicker()
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name }))
   })
@@ -102,13 +111,19 @@ const say = async (answer: string) => {
   })
 }
 
-describe('FontManager — previewing', () => {
-  it('CRITICAL: renders each font in its OWN family', () => {
-    // The whole reason this list exists. A row set in the dashboard's UI font tells the
-    // manager nothing about the face they just paid a foundry for.
+describe('FontManager — every font in itself', () => {
+  it('CRITICAL: the slot value is set in the font that fills it', () => {
     renderList()
-    expect(screen.getByText('PP Mori')).toHaveStyle({ fontFamily: "'pp-mori', sans-serif" })
-    expect(screen.getByText('Bebas Neue')).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
+    expect(within(picker('primary')).getByText('Bebas Neue')).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
+  })
+
+  it('CRITICAL: the picker sets each font in its OWN family', () => {
+    // A list set in the dashboard's UI font tells the manager nothing about the face they
+    // just paid a foundry for.
+    renderList()
+    openPicker()
+    expect(within(option('PP Mori')).getByText('PP Mori')).toHaveStyle({ fontFamily: "'pp-mori', sans-serif" })
+    expect(within(option('Bebas Neue')).getByText('Bebas Neue')).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
   })
 
   it('CRITICAL: injects the @font-face rules, or every preview falls back silently', () => {
@@ -127,14 +142,107 @@ describe('FontManager — previewing', () => {
   })
 
   it('shows the class token, so the manager can see what the editor will offer', () => {
-    // On the format, as its title — the row carries the token without spelling it out.
+    // On the format, as its title — the option carries the token without spelling it out.
     renderList()
+    openPicker()
     expect(screen.getByTitle('font-pp-mori')).toBeInTheDocument()
+  })
+
+  it('the sanitizer is the one spelling of the token the preview uses', () => {
+    // Guards against a future refactor inlining `font.family` into the style attribute,
+    // which would put an unsanitized database value into the DOM.
+    renderList([font({ family: 'Weird Family' as string, slots: ['primary'] })])
+    expect(within(picker('primary')).getByText('PP Mori')).toHaveStyle({
+      fontFamily: `'${sanitizeFamily('Weird Family')}', sans-serif`,
+    })
   })
 })
 
-/** The form lives in the + Font dialog now (Sam, 2026-09-13): open it first. */
-const openAdd = () => fireEvent.click(screen.getByRole('button', { name: 'Font' }))
+describe('FontManager — choosing', () => {
+  it('CRITICAL: one row per slot, derived from FONT_SLOTS', () => {
+    // The Brand page is the only place a slot can be filled. A slot missing here is a slot
+    // the payload can carry and no manager can ever set — and nothing would fail; the
+    // site would just never get that font.
+    renderList()
+    for (const slot of FONT_SLOTS) expect(picker(slot), `slot ${slot}`).toBeInTheDocument()
+    expect(screen.getAllByRole('combobox')).toHaveLength(FONT_SLOTS.length)
+  })
+
+  it('shows which font fills which slot, and "Choose" where none does', () => {
+    renderList([font({ slots: ['primary', 'custom_2'] }), font({ id: 'f2', label: 'Bebas Neue', family: 'bebas-neue', slots: [] })])
+    expect(picker('primary')).toHaveTextContent('PP Mori')
+    expect(picker('custom_2')).toHaveTextContent('PP Mori')
+    expect(picker('secondary')).toHaveTextContent('Choose')
+  })
+
+  it('CRITICAL: picking a font writes THAT slot only — one font may fill several', async () => {
+    // Filling `custom_1` with the font that is already `primary` must be one write against
+    // one slot, not a move.
+    renderList()
+    openPicker('custom_1')
+    await act(async () => {
+      fireEvent.click(within(option('Bebas Neue')).getByText('Bebas Neue'))
+    })
+    expect(mockedSlot).toHaveBeenCalledTimes(1)
+    expect(mockedSlot).toHaveBeenCalledWith('a1', 'custom_1', 'f2')
+    expect(screen.queryByRole('listbox')).toBeNull() // a pick closes the menu
+  })
+
+  it('replacing the font in a slot needs no question — the row shows what it replaces', async () => {
+    renderList()
+    openPicker('primary') // Bebas Neue holds it
+    await act(async () => {
+      fireEvent.click(within(option('PP Mori')).getByText('PP Mori'))
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(mockedSlot).toHaveBeenCalledWith('a1', 'primary', 'f1')
+  })
+
+  it('None empties the slot; an empty slot offers no None', async () => {
+    renderList()
+    openPicker('secondary')
+    expect(screen.queryByRole('option', { name: 'None' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    openPicker('primary')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: 'None' }))
+    })
+    expect(mockedSlot).toHaveBeenCalledWith('a1', 'primary', null)
+  })
+
+  it('picking the font already in the slot writes nothing', async () => {
+    renderList()
+    openPicker('primary')
+    await act(async () => {
+      fireEvent.click(within(option('Bebas Neue')).getByText('Bebas Neue'))
+    })
+    expect(mockedSlot).not.toHaveBeenCalled()
+  })
+
+  it('the search line narrows the list (Sam: "a list with a search bar")', () => {
+    renderList()
+    openPicker()
+    fireEvent.change(screen.getByLabelText('Search fonts'), { target: { value: 'beb' } })
+    expect(screen.queryByRole('option', { name: 'PP Mori' })).toBeNull()
+    expect(option('Bebas Neue')).toBeInTheDocument()
+  })
+
+  it('a failed slot change is surfaced', async () => {
+    mockedSlot.mockResolvedValueOnce({ error: 'Not found.' })
+    renderList()
+    openPicker('secondary')
+    await act(async () => {
+      fireEvent.click(within(option('PP Mori')).getByText('PP Mori'))
+    })
+    expect(mockedToast).toHaveBeenCalledWith('Not found.', 'error')
+  })
+})
+
+/** The form lives in the + Font dialog, at the foot of any slot's picker. */
+const openAdd = (slot = 'secondary') => {
+  openPicker(slot)
+  fireEvent.click(screen.getByRole('button', { name: 'Font' }))
+}
 
 describe('FontManager — uploading', () => {
   it('CRITICAL: the file picker is disabled until the font is named', () => {
@@ -156,6 +264,14 @@ describe('FontManager — uploading', () => {
     expect(input.accept).toBe(acceptFor(FONT_UPLOAD_RULES))
     expect(input.accept).not.toMatch(/svg/i)
     expect(input.accept).not.toContain('*')
+  })
+
+  it('the dialog says which slot the upload fills', () => {
+    // The upload IS the choice: a font added from the secondary row becomes the secondary
+    // font (the action takes the slot). The header states it so the manager knows.
+    renderList()
+    openAdd('secondary')
+    expect(within(screen.getByRole('dialog', { name: 'Add a font' })).getByText('secondary')).toBeInTheDocument()
   })
 
   it('names the licence responsibility', () => {
@@ -215,119 +331,12 @@ describe('FontManager — removing', () => {
   })
 })
 
-/** The slot chip on one font's row. Named per-font, so a click can never land on the
- *  other row's chip for the same slot — which is exactly the assertion these tests make. */
-const chip = (slot: string, label: string) =>
-  screen.getByRole('button', { name: `${slot.replace(/_/g, ' ')} font: ${label}` })
-
-describe('FontManager — slots', () => {
-  it('CRITICAL: offers EVERY slot on every font, derived from FONT_SLOTS', () => {
-    // The Brand page is the only place a slot can be filled. A slot missing from this
-    // list is a slot the payload can carry and no manager can ever set — and nothing
-    // would fail; the site would just never get that font.
-    renderList()
-    for (const slot of FONT_SLOTS) {
-      expect(chip(slot, 'PP Mori'), `slot ${slot}`).toBeInTheDocument()
-      expect(chip(slot, 'Bebas Neue'), `slot ${slot}`).toBeInTheDocument()
-    }
-  })
-
-  it('fills a free slot without a prompt', async () => {
-    // Nothing is being taken away, so there is nothing to warn about.
-    renderList()
-    await act(async () => {
-      fireEvent.click(chip('secondary', 'PP Mori'))
-    })
-    expect(mockedSlot).toHaveBeenCalledWith('a1', 'secondary', 'f1')
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it('CRITICAL: ONE font can fill SEVERAL slots — no slot is vacated behind the manager', async () => {
-    // The whole reason slots left the font row. Filling `custom_1` with the font that is
-    // already `primary` must be one write against one slot, not a move.
-    renderList()
-    await act(async () => {
-      fireEvent.click(chip('custom_1', 'Bebas Neue')) // already the primary font
-    })
-    expect(mockedSlot).toHaveBeenCalledTimes(1)
-    expect(mockedSlot).toHaveBeenCalledWith('a1', 'custom_1', 'f2')
-    // Its existing slot is untouched: nothing was asked to clear `primary`.
-    expect(mockedSlot).not.toHaveBeenCalledWith('a1', 'primary', null)
-  })
-
-  it('CRITICAL: confirms before TAKING a slot off another font', async () => {
-    // One small button, and the site's heading typeface changes everywhere. The button
-    // itself gives no hint that a second font is about to lose the slot.
-    renderList()
-    await act(async () => {
-      fireEvent.click(chip('primary', 'PP Mori')) // Bebas Neue currently holds primary
-    })
-    expect(await screen.findByRole('dialog')).toHaveTextContent(/Bebas Neue is the primary font/i)
-    await say('Cancel')
-    expect(mockedSlot).not.toHaveBeenCalled()
-  })
-
-  it('clicking a slot the font already holds EMPTIES it', async () => {
-    renderList()
-    await act(async () => {
-      fireEvent.click(chip('primary', 'Bebas Neue'))
-    })
-    expect(mockedSlot).toHaveBeenCalledWith('a1', 'primary', null)
-  })
-
-  it('shows which slots each font fills', () => {
-    renderList([
-      font({ slots: ['primary', 'custom_2'] }),
-      font({ id: 'f2', label: 'Bebas Neue', family: 'bebas-neue', slots: [] }),
-    ])
-    expect(chip('primary', 'PP Mori')).toHaveAttribute('aria-pressed', 'true')
-    expect(chip('custom_2', 'PP Mori')).toHaveAttribute('aria-pressed', 'true')
-    expect(chip('secondary', 'PP Mori')).toHaveAttribute('aria-pressed', 'false')
-    expect(chip('primary', 'Bebas Neue')).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('a failed slot change is surfaced', async () => {
-    mockedSlot.mockResolvedValueOnce({ error: 'Not found.' })
-    renderList()
-    await act(async () => {
-      fireEvent.click(chip('secondary', 'PP Mori'))
-    })
-    expect(mockedToast).toHaveBeenCalledWith('Not found.', 'error')
-  })
-})
-
-describe('FontManager — empty', () => {
-  it('renders only the way to add one when there are no fonts', () => {
-    renderList([])
-    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Font' })).toBeInTheDocument()
-    expect(document.querySelector('input[type="file"]')).toBeNull() // the picker is in the dialog
-  })
-
-  it('the sanitizer is the one spelling of the token the preview uses', () => {
-    // Guards against a future refactor inlining `font.family` into the style attribute,
-    // which would put an unsanitized database value into the DOM.
-    renderList([font({ family: 'Weird Family' as string })])
-    expect(screen.getByText('PP Mori')).toHaveStyle({
-      fontFamily: `'${sanitizeFamily('Weird Family')}', sans-serif`,
-    })
-  })
-})
-
-describe('addArtistFontAction is wired for upload', () => {
-  it('is the action the uploader records with', () => {
-    // The upload hook itself is mocked (it needs a browser + a bucket), so this asserts
-    // the wiring exists rather than re-testing the hook.
-    expect(addArtistFontAction).toBeTypeOf('function')
-  })
-})
-
-describe('FontManager — previewing a font', () => {
-  it('CRITICAL: the eye opens a preview that draws whatever is typed in THAT face', () => {
+describe('FontManager — the eye', () => {
+  it('CRITICAL: opens a preview that draws whatever is typed in THAT face', () => {
     // Sam, 2026-09-13: "click like an eye icon to preview it and it allows the user to type
     // in whatever they want and it displays it as the font selected".
     renderList()
-    fireEvent.click(screen.getByRole('button', { name: 'Preview Bebas Neue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Preview primary font' }))
     const dialog = screen.getByRole('dialog', { name: 'Preview Bebas Neue' })
     const sample = within(dialog).getByTestId('font-sample')
     expect(sample).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
@@ -336,16 +345,36 @@ describe('FontManager — previewing a font', () => {
     expect(sample).toHaveTextContent('Salt Shed, Chicago')
   })
 
-  it('Escape closes it and leaves the list alone', () => {
+  it('only a filled slot has an eye — there is nothing to view in an empty one', () => {
     renderList()
-    fireEvent.click(screen.getByRole('button', { name: 'Preview PP Mori' }))
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByText('PP Mori')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Preview/ })).toHaveLength(1)
   })
 
-  it('the chips read as a sentence: the font, "used as", the slots', () => {
+  it('Escape closes it and leaves the rows alone', () => {
     renderList()
-    expect(screen.getAllByText('used as')).toHaveLength(FONTS.length)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview primary font' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(picker('primary')).toHaveTextContent('Bebas Neue')
+  })
+})
+
+describe('FontManager — empty', () => {
+  it('every slot says Choose, and the picker offers only + Font', () => {
+    renderList([])
+    for (const slot of FONT_SLOTS) expect(picker(slot)).toHaveTextContent('Choose')
+    openPicker()
+    expect(screen.queryByRole('option')).toBeNull()
+    expect(screen.queryByLabelText('Search fonts')).toBeNull() // nothing to search
+    expect(screen.getByRole('button', { name: 'Font' })).toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeNull() // the picker is in the dialog
+  })
+})
+
+describe('addArtistFontAction is wired for upload', () => {
+  it('is the action the uploader records with', () => {
+    // The upload hook itself is mocked (it needs a browser + a bucket), so this asserts
+    // the wiring exists rather than re-testing the hook.
+    expect(addArtistFontAction).toBeTypeOf('function')
   })
 })

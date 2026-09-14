@@ -95,3 +95,24 @@ describe('a manager gets through, and a failure underneath is reported', () => {
     expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'primary', null)
   })
 })
+
+describe('an upload started from a slot fills that slot (Sam, 2026-09-13)', () => {
+  it('CRITICAL: places the NEW font id in the slot, after the insert', async () => {
+    const { addArtistFontAction } = await actions()
+    expect((await addArtistFontAction('a1', VALID, 'secondary')).error).toBeUndefined()
+    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'secondary', 'f1')
+    expect(mockedAdd.mock.invocationCallOrder[0]).toBeLessThan(mockedSlot.mock.invocationCallOrder[0])
+  })
+
+  it('without a slot, nothing is placed', async () => {
+    const { addArtistFontAction } = await actions()
+    await addArtistFontAction('a1', VALID)
+    expect(mockedSlot).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: a failed placement is reported — the font exists, the slot does not show it', async () => {
+    mockedSlot.mockResolvedValueOnce({ ok: false, error: 'Unknown font slot.' })
+    const { addArtistFontAction } = await actions()
+    expect((await addArtistFontAction('a1', VALID, 'secondary')).error).toBe('Unknown font slot.')
+  })
+})
