@@ -70,16 +70,18 @@ describe('SourceRings', () => {
     expect(screen.getByRole('img', { name: 'Other: 7 visitors, 100%' })).toBeTruthy()
   })
 
-  it('counts every hidden source on the tile, named ones too', () => {
-    render(<SourceRings sources={EIGHT} />)
-    // Eight sources, none Other: five show, three wait.
-    expect(screen.getByRole('button', { name: /\+3see all/i })).toBeTruthy()
-  })
-
-  it('has no tile when everything already fits — five or fewer, with no Other', () => {
-    render(<SourceRings sources={EIGHT.slice(0, 5)} />)
-    expect(screen.queryByRole('button')).toBeNull()
-    expect(screen.getAllByRole('img')).toHaveLength(5)
+  it('CRITICAL: eight rings fit with no tile; a ninth turns the eighth slot into See all with everything past seven behind it', () => {
+    const nine = [...EIGHT, src('spotify', 1, 0.01)]
+    const eight = render(<SourceRings sources={EIGHT} />)
+    expect(within(eight.getByRole('list', { name: 'Sources' })).getAllByRole('img')).toHaveLength(8)
+    expect(eight.queryByRole('button')).toBeNull()
+    eight.unmount()
+    render(<SourceRings sources={nine} />)
+    const list = screen.getByRole('list', { name: 'Sources' })
+    expect(within(list).getAllByRole('img')).toHaveLength(7)
+    fireEvent.click(within(list).getByRole('button', { name: /\+2see all/i }))
+    expect(within(list).getAllByRole('img')).toHaveLength(9)
+    expect(within(list).getByRole('button', { name: /show fewer/i })).toBeTruthy()
   })
 
   it('CRITICAL: the share lives IN the ring — the centre holds the mark and the number it flips to, and nothing is printed under the name', () => {

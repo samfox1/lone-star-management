@@ -13,8 +13,10 @@ import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
  * over — the number lives IN the ring, not under it (Sam, 2026-09-13: no detail
  * container, no count line below the name, and "literally flip").
  *
- * Five rings show four to a row (the section is three fifths of one), ranked,
- * and the sixth slot is a "See all" tile when anything is hidden; expanded, everything shows with a "Show fewer" tile at the end.
+ * Up to eight rings show, four to a row, ranked. Past eight, the eighth slot is
+ * a "See all" tile and seven rings show (Sam, 2026-09-14: "only show the see
+ * all button when capping it at 8"); expanded, everything shows with a "Show
+ * fewer" tile at the end.
  * Two folds before ranking (Sam, 2026-09-13): every search engine — Google,
  * Bing, and any search host the door left in the catch-all — is ONE "Web search"
  * ring with a magnifying glass; whatever else has no mark of its own is ONE
@@ -25,8 +27,8 @@ import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
  */
 const R = 42
 const C = 2 * Math.PI * R
-/** Rings in the short row; the sixth slot is the See all tile. */
-const SHOWN = 5
+/** Slots in the short row: two rows of four. The last one is the See all tile when anything is hidden. */
+const SLOTS = 8
 const OTHER = 'other'
 
 const SEARCH = 'search'
@@ -69,8 +71,9 @@ export function SourceRings({
 }) {
   const [expanded, setExpanded] = useState(false)
   const rings = ringsOf(sources)
-  const hidden = Math.max(0, rings.length - SHOWN)
-  const visible = expanded ? rings : rings.slice(0, SHOWN)
+  const shown = rings.length <= SLOTS ? rings.length : SLOTS - 1
+  const hidden = rings.length - shown
+  const visible = expanded ? rings : rings.slice(0, shown)
 
   if (sources.length === 0) {
     return <p className={cx('font-space text-xs text-ink-faint', className)}>{empty}</p>
