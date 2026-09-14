@@ -16,7 +16,7 @@ import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
  * Five rings show, ranked, and the sixth slot is a "See all" tile when anything
  * is hidden; expanded, everything shows with a "Show fewer" tile at the end.
  * Two folds before ranking (Sam, 2026-09-13): every search engine — Google,
- * Bing, and any search host the door left in the catch-all — is ONE "Search"
+ * Bing, and any search host the door left in the catch-all — is ONE "Web search"
  * ring with a magnifying glass; whatever else has no mark of its own is ONE
  * "Other" ring. Direct keeps its ring; it has a mark.
  *
@@ -50,7 +50,7 @@ export function ringsOf(sources: SourceSummary[]): Ring[] {
     // Hostless other rows (an unknown utm_source) have no host to test; they are other.
     other += s.visitors - s.hosts.reduce((n, h) => n + h.visitors, 0)
   }
-  if (search > 0) rings.push({ key: SEARCH, label: 'Search', visitors: search, share: share(search) })
+  if (search > 0) rings.push({ key: SEARCH, label: 'Web search', visitors: search, share: share(search) })
   if (other > 0) rings.push({ key: OTHER, label: 'Other', visitors: other, share: share(other) })
   return rings.sort((a, b) => b.visitors - a.visitors)
 }

@@ -47,17 +47,17 @@ describe('SourceRings', () => {
     const list = screen.getByRole('list', { name: 'Sources' })
     const names = () => within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])
     // Search = 20 + 4 + 5 + 3 = 32 of 200; Other = 5 of 200 (2.5%, printed 3%). Direct keeps its own ring.
-    expect(names()).toEqual(['instagram', 'direct', 'Search', 'youtube', 'Other'])
-    expect(within(list).getByRole('img', { name: 'Search: 32 visitors, 16%' })).toBeTruthy()
+    expect(names()).toEqual(['instagram', 'direct', 'Web search', 'youtube', 'Other'])
+    expect(within(list).getByRole('img', { name: 'Web search: 32 visitors, 16%' })).toBeTruthy()
     expect(within(list).getByRole('img', { name: 'Other: 5 visitors, 3%' })).toBeTruthy()
     for (const gone of [/^google$/i, /^bing$/i, /duckduckgo/, /yahoo/, /weirdsite/]) expect(screen.queryByText(gone)).toBeNull()
     // Five rings, nothing hidden, no tile.
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('the Search ring wears a magnifying glass, not the Other mark', () => {
+  it('the Web search ring wears a magnifying glass, not the Other mark', () => {
     render(<SourceRings sources={[src('google', 9, 1)]} />)
-    const ring = screen.getByRole('img', { name: /^Search:/ })
+    const ring = screen.getByRole('img', { name: /^Web search:/ })
     expect(ring.querySelector('[data-mark] circle')).not.toBeNull()
     expect(ring.querySelector('[data-mark] svg')!.innerHTML).not.toBe(
       render(<SourceRings sources={[src('other', 9, 1, { hosts: [{ host: 'weirdsite.net', visitors: 9 }] })]} />)
