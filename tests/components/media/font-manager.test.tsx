@@ -321,3 +321,31 @@ describe('addArtistFontAction is wired for upload', () => {
     expect(addArtistFontAction).toBeTypeOf('function')
   })
 })
+
+describe('FontManager — previewing a font', () => {
+  it('CRITICAL: the eye opens a preview that draws whatever is typed in THAT face', () => {
+    // Sam, 2026-09-13: "click like an eye icon to preview it and it allows the user to type
+    // in whatever they want and it displays it as the font selected".
+    renderList()
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Bebas Neue' }))
+    const dialog = screen.getByRole('dialog', { name: 'Preview Bebas Neue' })
+    const sample = within(dialog).getByTestId('font-sample')
+    expect(sample).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
+    expect(sample).toHaveTextContent('Bebas Neue') // starts with the name, so it is never blank
+    fireEvent.change(within(dialog).getByLabelText('Text to preview'), { target: { value: 'Salt Shed, Chicago' } })
+    expect(sample).toHaveTextContent('Salt Shed, Chicago')
+  })
+
+  it('Escape closes it and leaves the list alone', () => {
+    renderList()
+    fireEvent.click(screen.getByRole('button', { name: 'Preview PP Mori' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('PP Mori')).toBeInTheDocument()
+  })
+
+  it('the chips read as a sentence: the font, "used as", the slots', () => {
+    renderList()
+    expect(screen.getAllByText('used as')).toHaveLength(FONTS.length)
+  })
+})

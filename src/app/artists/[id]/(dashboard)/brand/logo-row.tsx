@@ -7,6 +7,7 @@ import { acceptFor, IMAGE_UPLOAD_RULES } from '@/lib/upload'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
 import { CardModal } from '../card-modal'
+import { ModalHeader } from '../modal-kit'
 import { useConfirm } from '../confirm-dialog'
 import { toast } from '../toast'
 import { UploadField } from '../upload-field'
@@ -108,8 +109,16 @@ export function LogoRow({
                   </button>
                 }
               >
+                {/* The same header every card wears: square · name · meta (Sam, 2026-09-13:
+                    the bare version was "extremely minimal"). */}
+                <ModalHeader
+                  // eslint-disable-next-line @next/next/no-img-element
+                  square={<img src={currentUrl} alt="" className={cx('h-full w-full object-contain p-1.5', CHECKER)} />}
+                  title={label}
+                  meta={fileFormat(fullUrl ?? currentUrl) ? <span className="uppercase">{fileFormat(fullUrl ?? currentUrl)}</span> : undefined}
+                />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={fullUrl ?? currentUrl} alt={label} className={cx('mx-auto max-h-[360px] w-full rounded-2xl object-contain p-6', CHECKER, busy && 'opacity-50')} />
+                <img src={fullUrl ?? currentUrl} alt={label} className={cx('mx-auto mt-6 max-h-[360px] w-full rounded-2xl object-contain p-6', CHECKER, busy && 'opacity-50')} />
               </CardModal>
             </>
           ) : (
@@ -132,3 +141,9 @@ export function LogoRow({
 
 const CHECKER = 'bg-[repeating-conic-gradient(#00000010_0_25%,transparent_0_50%)] bg-[length:12px_12px]'
 const ACT = 'flex h-4 w-4 items-center justify-center text-ink-faint transition-colors hover:text-ink disabled:opacity-40'
+
+/** "png" from a storage URL, or null when the URL carries no extension (a signed thumb). */
+function fileFormat(url: string): string | null {
+  const m = /\.([a-z0-9]{2,5})(?:[?#]|$)/i.exec(url)
+  return m ? m[1].toLowerCase() : null
+}
