@@ -35,19 +35,34 @@ describe('SourceRings', () => {
     expect(arcLen(arcs[1])).toBeLessThan(C)
   })
 
-  it('CRITICAL: the short row is five NAMED sources plus See all — the Other bucket never takes a slot', () => {
-    // Other is the second-biggest source here; it still waits behind See all.
-    const withOther = [src('instagram', 80, 0.4), src('other', 60, 0.3), src('youtube', 30, 0.15), src('google', 20, 0.1), src('tiktok', 6, 0.03), src('direct', 4, 0.02)]
+  it('CRITICAL: there is never an Other ring — the bucket unfolds into one ring per referrer host, at its rank', () => {
+    const withOther = [
+      src('instagram', 80, 0.4),
+      src('other', 60, 0.3, { hosts: [{ host: 'search.brave.com', visitors: 50 }, { host: 'kagi.com', visitors: 10 }] }),
+      src('youtube', 30, 0.15), src('google', 20, 0.1), src('tiktok', 6, 0.03), src('direct', 4, 0.02),
+    ]
     render(<SourceRings sources={withOther} />)
     const list = screen.getByRole('list', { name: 'Sources' })
-    expect(within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])).toEqual(['instagram', 'youtube', 'google', 'tiktok', 'direct'])
-    // The tile counts what is hidden: Other alone.
-    const seeAll = within(list).getByRole('button', { name: /\+1see all/i })
+    const names = () => within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])
+    // Brave's 50 outrank YouTube's 30; kagi's 10 wait behind See all.
+    expect(names()).toEqual(['instagram', 'search.brave.com', 'youtube', 'google', 'kagi.com'])
+    expect(screen.queryByText(/^other$/i)).toBeNull()
+    // A host ring's share is of everyone, like any ring: 50 of 200.
+    expect(within(list).getByRole('img', { name: 'search.brave.com: 50 visitors, 25%' })).toBeTruthy()
+    const seeAll = within(list).getByRole('button', { name: /\+2see all/i })
     expect(seeAll).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(seeAll)
-    expect(within(list).getAllByRole('img').map((r) => r.getAttribute('aria-label')!.split(':')[0])).toEqual(['instagram', 'other', 'youtube', 'google', 'tiktok', 'direct'])
+    expect(names()).toEqual(['instagram', 'search.brave.com', 'youtube', 'google', 'kagi.com', 'tiktok', 'direct'])
+    expect(screen.queryByText(/^other$/i)).toBeNull()
     fireEvent.click(within(list).getByRole('button', { name: /show fewer/i }))
     expect(within(list).getAllByRole('img')).toHaveLength(5)
+  })
+
+  it('a host ring is marked by its first letter, since no platform mark fits it', () => {
+    render(<SourceRings sources={[src('other', 9, 1, { hosts: [{ host: 'search.brave.com', visitors: 9 }] })]} />)
+    const ring = screen.getByRole('img', { name: /^search\.brave\.com:/ })
+    expect(ring.querySelector('[data-mark]')!.textContent).toBe('s')
+    expect(ring.querySelector('[data-mark] svg')).toBeNull()
   })
 
   it('counts every hidden source on the tile, named ones too', () => {
@@ -84,9 +99,9 @@ describe('SourceRings', () => {
     expect(ring.getAttribute('tabindex')).toBe('0')
   })
 
-  it('rounds the share to a whole percent, and a tiny source still shows one', () => {
+  it('rounds the share to a whole percent, a tiny source still shows one, and one visitor is singular', () => {
     render(<SourceRings sources={[src('tiktok', 1, 0.004)]} />)
-    expect(screen.getByRole('img', { name: /^tiktok:/i }).querySelector('[data-share]')!.textContent).toBe('0%')
+    expect(screen.getByRole('img', { name: 'tiktok: 1 visitor, 0%' }).querySelector('[data-share]')!.textContent).toBe('0%')
   })
 
   it('says what is missing rather than drawing an empty row', () => {

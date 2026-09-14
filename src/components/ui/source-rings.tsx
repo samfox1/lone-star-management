@@ -12,20 +12,40 @@ import { SourceGlyph } from '@/components/ui/source-glyphs'
  * over — the number lives IN the ring, not under it (Sam, 2026-09-13: no detail
  * container, no count line below the name, and "literally flip").
  *
- * Five named sources show, ranked, and the sixth slot is a "See all" tile when
- * anything is hidden. The catch-all "Other" bucket never takes a slot in the
- * short row (Sam, 2026-09-13: "instead of the other button, a see all button");
- * expanded, every source shows at its rank, Other included, with a "Show fewer"
- * tile at the end.
+ * Five rings show, ranked, and the sixth slot is a "See all" tile when anything
+ * is hidden; expanded, everything shows with a "Show fewer" tile at the end.
+ * There is never an "Other" ring (Sam, 2026-09-13: "I should see all the ones
+ * that produce users"): the catch-all bucket is unfolded into one ring per
+ * referrer host it holds, labelled by the host, marked by its first letter.
  *
  * Every ring is the blue accent. Colour never carries identity here — the mark
  * does — so a filter that drops a source cannot repaint the survivors.
  */
 const R = 42
 const C = 2 * Math.PI * R
-/** Named rings in the short row; the sixth slot is the See all tile. */
+/** Rings in the short row; the sixth slot is the See all tile. */
 const SHOWN = 5
 const OTHER = 'other'
+
+/** One ring: a named source, or one host out of the Other bucket. */
+type Ring = { key: string; label: string; visitors: number; share: number; glyph: string | null }
+
+/** Every source as rings, the Other bucket unfolded into its hosts, biggest first. */
+export function ringsOf(sources: SourceSummary[]): Ring[] {
+  const total = sources.reduce((n, s) => n + s.visitors, 0)
+  const rings: Ring[] = []
+  for (const s of sources) {
+    if (s.source !== OTHER) {
+      rings.push({ key: s.source, label: s.label, visitors: s.visitors, share: s.share, glyph: s.source })
+      continue
+    }
+    for (const h of s.hosts) {
+      if (!h.host || h.visitors <= 0) continue
+      rings.push({ key: `host:${h.host}`, label: h.host, visitors: h.visitors, share: total ? h.visitors / total : 0, glyph: null })
+    }
+  }
+  return rings.sort((a, b) => b.visitors - a.visitors)
+}
 
 export function SourceRings({
   sources,
@@ -37,9 +57,9 @@ export function SourceRings({
   className?: string
 }) {
   const [expanded, setExpanded] = useState(false)
-  const named = sources.filter((s) => s.source !== OTHER)
-  const hidden = sources.length - Math.min(named.length, SHOWN)
-  const visible = expanded ? sources : named.slice(0, SHOWN)
+  const rings = ringsOf(sources)
+  const hidden = Math.max(0, rings.length - SHOWN)
+  const visible = expanded ? rings : rings.slice(0, SHOWN)
 
   if (sources.length === 0) {
     return <p className={cx('font-space text-xs text-ink-faint', className)}>{empty}</p>
@@ -51,11 +71,11 @@ export function SourceRings({
         {visible.map((s) => {
           const pct = `${Math.round(s.share * 100)}%`
           return (
-            <li key={s.source}>
+            <li key={s.key}>
               <div
                 tabIndex={0}
                 role="img"
-                aria-label={`${s.label}: ${s.visitors} visitors, ${pct}`}
+                aria-label={`${s.label}: ${s.visitors} ${s.visitors === 1 ? 'visitor' : 'visitors'}, ${pct}`}
                 className="group flex w-full flex-col items-center gap-2.5 rounded-xl py-2 outline-none"
               >
                 <div className="relative h-[104px] w-[104px]">
@@ -77,7 +97,11 @@ export function SourceRings({
                       className="relative h-16 w-16 transform-3d transition-transform duration-500 ease-[cubic-bezier(.4,0,.2,1)] group-hover:rotate-y-180 group-focus-visible:rotate-y-180 motion-reduce:transition-none"
                     >
                       <div data-mark className="absolute inset-0 flex items-center justify-center rounded-full bg-surface text-ink backface-hidden">
-                        <SourceGlyph source={s.source} className="h-9 w-9" />
+                        {s.glyph ? (
+                          <SourceGlyph source={s.glyph} className="h-9 w-9" />
+                        ) : (
+                          <span className="font-space text-[22px] font-bold uppercase">{s.label[0]}</span>
+                        )}
                       </div>
                       <div data-share className="absolute inset-0 flex items-center justify-center rounded-full bg-surface font-space text-[19px] font-bold tabular-nums text-ink backface-hidden rotate-y-180">
                         {pct}
