@@ -17,16 +17,25 @@ afterEach(() => {
 })
 
 describe('displayAddress', () => {
-  it('drops the scheme, www and a trailing slash', () => {
-    expect(displayAddress('https://www.skeenmusic.com/')).toBe('skeenmusic.com')
-    expect(displayAddress('http://lonestar.site')).toBe('lonestar.site')
+  it('drops the scheme, www and a trailing slash — each rule on its own', () => {
+    // One input per rule, so a rule that stops working is the one test that goes red.
+    expect(displayAddress('https://skeenmusic.com')).toBe('skeenmusic.com') // scheme only
+    expect(displayAddress('HTTPS://skeenmusic.com')).toBe('skeenmusic.com') // any case
+    expect(displayAddress('www.skeenmusic.com')).toBe('skeenmusic.com') // www only
+    expect(displayAddress('skeenmusic.com//')).toBe('skeenmusic.com') // trailing slashes only
+    expect(displayAddress('  https://www.skeenmusic.com/  ')).toBe('skeenmusic.com') // all three, padded
+    expect(displayAddress('lonestar.site/skeen')).toBe('lonestar.site/skeen') // an inner slash stays
     expect(displayAddress(null)).toBe('')
+    expect(displayAddress('')).toBe('')
   })
 })
 
 describe('recipientLine — state, not instruction', () => {
-  it('says enquiries go here when the resolver agrees with the address above', () => {
-    expect(recipientLine('ross@example.com', { to_email: 'Ross@Example.com', recipient_source: 'mail_settings' })).toBe('Enquiries from the site go here')
+  it('says enquiries go here when the resolver agrees with the address above — case and padding aside', () => {
+    expect(recipientLine('ross@example.com', { to_email: 'ross@example.com', recipient_source: 'mail_settings' })).toBe('Enquiries from the site go here')
+    expect(recipientLine('Ross@Example.com', { to_email: 'ross@example.com', recipient_source: 'mail_settings' })).toBe('Enquiries from the site go here')
+    expect(recipientLine('  ross@example.com ', { to_email: 'ross@example.com', recipient_source: 'mail_settings' })).toBe('Enquiries from the site go here')
+    expect(recipientLine('ross@example.com', { to_email: ' ROSS@example.com ', recipient_source: 'mail_settings' })).toBe('Enquiries from the site go here')
   })
 
   it('CRITICAL: names where they ACTUALLY go when the resolver answers from somewhere else', () => {
@@ -45,13 +54,13 @@ describe('settingsRows', () => {
   const skeen = { name: 'Skeen', slug: 'skeen', site_kind: 'custom', custom_site_url: 'https://www.skeenmusic.com' }
 
   it('CRITICAL: Site and Address are read-only; Booking email and Name are the editable ones', () => {
-    process.env.NEXT_PUBLIC_APP_URL = 'https://lonestar.site'
+    process.env.NEXT_PUBLIC_APP_URL = 'https://lonestar.site/' // a trailing slash on the origin must not double up
     const rows = settingsRows(skeen, 'ross@example.com', null)
-    expect(rows.map((r) => [r.key, r.editable])).toEqual([
-      ['booking_email', true],
-      ['site', false],
-      ['name', true],
-      ['address', false],
+    expect(rows).toEqual([
+      { key: 'booking_email', label: 'Booking email', value: 'ross@example.com', editable: true, mono: true, sub: null },
+      { key: 'site', label: 'Site', value: 'skeenmusic.com', editable: false, mono: true },
+      { key: 'name', label: 'Name', value: 'Skeen', editable: true, mono: false },
+      { key: 'address', label: 'Address', value: 'lonestar.site/skeen', editable: false, mono: true },
     ])
   })
 
