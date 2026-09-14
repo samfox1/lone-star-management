@@ -180,7 +180,7 @@ export function MetricExplorer({
             )}
           </div>
 
-          <dl className="mt-4 flex flex-1 flex-col divide-y divide-hairline border-t border-hairline">
+          <dl className="mt-4 flex flex-1 flex-col">
             <Fact label="Best day" value={sf.bestDay ? dayLabel(sf.bestDay.day) : '—'} />
             <Fact label="Per day" value={perDay(sf.perDay)} />
             {(extras[shown.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
