@@ -34,6 +34,7 @@ let artistF: string
 const slugF = `t-door-${crypto.randomUUID().slice(0, 8)}`
 const SITE = `https://${slugF}.example`
 
+const TIKTOK_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 musical_ly_2023 BytedanceWebview'
 const IG_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0.0.0.0'
 const SAFARI_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
 const BOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
@@ -139,14 +140,29 @@ describe('the deployed door records', () => {
     expect(rc[0]).toMatchObject({ device: 'desktop', browser: 'safari' })
   })
 
-  it('a same-site referrer is direct; a crawler UA is a bot row', async () => {
+  it('a same-site referrer in a plain browser is direct; a crawler UA is a bot row', async () => {
     const a = `direct-${crypto.randomUUID()}`
-    await postOk(view(a, { url: `${SITE}/about`, referrer: `${SITE}/` }))
+    await postOk(view(a, { url: `${SITE}/about`, referrer: `${SITE}/` }), { ua: SAFARI_UA })
     expect((await byTarget(a))[0]).toMatchObject({ referrer_host: null, source: 'direct', is_bot: false })
 
     const b = `bot-${crypto.randomUUID()}`
     await postOk(view(b), { ua: BOT_UA })
     expect((await byTarget(b))[0]).toMatchObject({ is_bot: true, source: 'direct' })
+  })
+
+  it('CRITICAL: no referrer from an in-app browser is that app, not direct — the deployed door, not just the unit', async () => {
+    // TikTok's webview strips the referrer on every visit (12 of 12 on Skeen, 2026-09-13).
+    const t = `tiktok-${crypto.randomUUID()}`
+    await postOk(view(t, { referrer: '' }), { ua: TIKTOK_UA })
+    expect((await byTarget(t))[0]).toMatchObject({ referrer_host: null, browser: 'tiktok', source: 'tiktok' })
+    // Same-site navigation inside the Instagram browser is still an Instagram visit.
+    const i = `ig-${crypto.randomUUID()}`
+    await postOk(view(i, { url: `${SITE}/about`, referrer: `${SITE}/` }))
+    expect((await byTarget(i))[0]).toMatchObject({ referrer_host: null, browser: 'instagram', source: 'instagram' })
+    // A real referrer still wins over the app.
+    const y = `yt-${crypto.randomUUID()}`
+    await postOk(view(y, { referrer: 'https://www.youtube.com/watch?v=x' }), { ua: TIKTOK_UA })
+    expect((await byTarget(y))[0]).toMatchObject({ referrer_host: 'youtube.com', source: 'youtube' })
   })
 
   it('the edit shell is not a visit: 204 and no row', async () => {
