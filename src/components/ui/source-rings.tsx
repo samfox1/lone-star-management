@@ -13,8 +13,8 @@ import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
  * over — the number lives IN the ring, not under it (Sam, 2026-09-13: no detail
  * container, no count line below the name, and "literally flip").
  *
- * Five rings show, ranked, and the sixth slot is a "See all" tile when anything
- * is hidden; expanded, everything shows with a "Show fewer" tile at the end.
+ * Five rings show in a 3 × 2 grid (the section is half a row), ranked, and the
+ * sixth slot is a "See all" tile when anything is hidden; expanded, everything shows with a "Show fewer" tile at the end.
  * Two folds before ranking (Sam, 2026-09-13): every search engine — Google,
  * Bing, and any search host the door left in the catch-all — is ONE "Web search"
  * ring with a magnifying glass; whatever else has no mark of its own is ONE
@@ -46,7 +46,10 @@ export function ringsOf(sources: SourceSummary[]): Ring[] {
     if ((SEARCH_SOURCES as readonly string[]).includes(s.source)) { search += s.visitors; continue }
     if (s.source !== OTHER) { rings.push({ key: s.source, label: s.label, visitors: s.visitors, share: s.share }); continue }
     // The catch-all: a search engine the door did not know is still a search.
-    for (const h of s.hosts) (isSearchHost(h.host) ? (search += h.visitors) : (other += h.visitors))
+    for (const h of s.hosts) {
+      if (isSearchHost(h.host)) search += h.visitors
+      else other += h.visitors
+    }
     // Hostless other rows (an unknown utm_source) have no host to test; they are other.
     other += s.visitors - s.hosts.reduce((n, h) => n + h.visitors, 0)
   }
@@ -75,7 +78,7 @@ export function SourceRings({
 
   return (
     <div className={className}>
-      <ul className="grid grid-cols-3 gap-4 sm:grid-cols-6" aria-label="Sources">
+      <ul className="grid grid-cols-3 gap-4" aria-label="Sources">
         {visible.map((s) => {
           const pct = `${Math.round(s.share * 100)}%`
           return (
