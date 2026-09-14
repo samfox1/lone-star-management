@@ -84,10 +84,11 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex items-start gap-8">
       {/* Safe to inject: every value has been through sanitizeFamily or is a known enum. */}
       <style dangerouslySetInnerHTML={{ __html: fontFaceCss(fonts.map((f) => ({ ...f, path: f.storage_path }))) }} />
 
+      <div className="flex flex-col gap-0.5">
       {fonts.map((font) => {
         const rowBusy = busyId === font.id
         return (
@@ -132,7 +133,10 @@ export function FontManager({ artistId, fonts }: { artistId: string; fonts: Arti
         )
       })}
 
-      <button type="button" onClick={() => setAdding(true)} className="mt-1 inline-flex w-fit items-center gap-1 py-1 text-[15px] text-ink-muted transition-colors hover:text-ink">
+      </div>
+
+      {/* At the far right of the fonts (Sam, 2026-09-13), level with the first row. */}
+      <button type="button" onClick={() => setAdding(true)} className="inline-flex flex-none items-center gap-1 py-1.5 text-[15px] text-ink-muted transition-colors hover:text-ink">
         <Icon name="plus" size={13} /> Font
       </button>
 

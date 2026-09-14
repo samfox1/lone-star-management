@@ -41,10 +41,10 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
     <div className="pb-24">
       <div className="mt-2 flex flex-col items-start gap-0.5">
         <Row label="Primary logo">
-          <LogoRow artistId={id} purpose="logo_primary" label="Primary logo" currentUrl={thumbOf('logo_primary')} />
+          <LogoRow artistId={id} purpose="logo_primary" label="Primary logo" currentUrl={thumbOf('logo_primary')} fullUrl={primaryPath ? mediaUrl(primaryPath) : null} />
         </Row>
         <Row label="Secondary logo">
-          <LogoRow artistId={id} purpose="logo_secondary" label="Secondary logo" currentUrl={thumbOf('logo_secondary')} />
+          <LogoRow artistId={id} purpose="logo_secondary" label="Secondary logo" currentUrl={thumbOf('logo_secondary')} fullUrl={pathOf('logo_secondary') ? mediaUrl(pathOf('logo_secondary')!) : null} />
         </Row>
         <Row label="Tab icon">
           <FaviconEditor artistId={id} logoUrl={primaryPath ? mediaUrl(primaryPath) : null} initialFraming={framing} />

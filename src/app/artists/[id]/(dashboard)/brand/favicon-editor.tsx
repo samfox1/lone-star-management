@@ -22,10 +22,14 @@ import { saveFramingAction, setBrandAssetAction } from './actions'
 const NUDGE_STEP = 0.05
 /** How long after the last change the icon is written. Long enough to drag the slider. */
 const SAVE_AFTER_MS = 700
+/** The magnified view — big enough to judge how the mark sits in the square (Sam,
+ *  2026-09-13: the true size alone was "way too small to see how it fits"). */
+const WORK_CANVAS_SIZE = 96
 
 /**
- * THE TAB ICON, as one row (Sam, 2026-09-13): the icon at its true 32px, the zoom line,
- * and up / down / reset as three bare glyphs. No headings, no explanation, and no Save
+ * THE TAB ICON, as one row (Sam, 2026-09-13): a magnified view to judge the crop by, the
+ * icon at its true 32px beside it, the zoom line, and up / down / reset as three bare
+ * glyphs. No headings, no explanation, and no Save
  * button — a change is written a moment after the manager stops making it, the way
  * every other row on the tool pages saves itself. What is on screen at true size is the
  * file that gets used, because preview and export call the same `drawFavicon`.
@@ -47,6 +51,7 @@ export function FaviconEditor({
   const [loaded, setLoaded] = useState<{ url: string; img: HTMLImageElement } | null>(null)
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const workRef = useRef<HTMLCanvasElement>(null)
   const trueRef = useRef<HTMLCanvasElement>(null)
   /** Set by the manager's own changes only — the seed from the server must not save. */
   const touched = useRef(false)
@@ -68,10 +73,14 @@ export function FaviconEditor({
   const image = loaded && loaded.url === logoUrl ? loaded.img : null
   const loadFailed = failedUrl !== null && failedUrl === logoUrl
 
+  // Both canvases draw the SAME framing, each at its own size — the same `drawFavicon`
+  // the export uses, so what is judged large is what ships small.
   const paint = useCallback(() => {
     if (!image) return
-    const ctx = trueRef.current?.getContext('2d')
-    if (ctx) drawFavicon(ctx, image, framing, FAVICON_PREVIEW_SIZE)
+    for (const [ref, size] of [[workRef, WORK_CANVAS_SIZE] as const, [trueRef, FAVICON_PREVIEW_SIZE] as const]) {
+      const ctx = ref.current?.getContext('2d')
+      if (ctx) drawFavicon(ctx, image, framing, size)
+    }
   }, [image, framing])
   useEffect(paint, [paint])
 
@@ -127,6 +136,13 @@ export function FaviconEditor({
 
   return (
     <div className="flex items-center gap-4">
+      <canvas
+        ref={workRef}
+        width={WORK_CANVAS_SIZE}
+        height={WORK_CANVAS_SIZE}
+        aria-label="Tab icon, magnified for adjusting"
+        className={cx('h-24 w-24 rounded-[14px] bg-[repeating-conic-gradient(#00000010_0_25%,transparent_0_50%)] bg-[length:12px_12px]', saving && 'opacity-60')}
+      />
       <canvas
         ref={trueRef}
         width={FAVICON_PREVIEW_SIZE}

@@ -7,7 +7,8 @@
  *   - removing the PRIMARY logo also clears the derived favicon; the SECONDARY does not;
  *   - a failed Remove is surfaced and does NOT go on to clear the favicon;
  *   - an empty slot offers Add and no Remove;
- *   - the picker offers exactly the validated allowlist — no SVG, no wildcard.
+ *   - the picker offers exactly the validated allowlist — no SVG, no wildcard;
+ *   - clicking the mark opens it large, with Replace and a Remove that asks first.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -87,5 +88,23 @@ describe('LogoRow', () => {
     const input = screen.getByLabelText('Primary logo file')
     expect(input).toHaveAttribute('accept', acceptFor(IMAGE_UPLOAD_RULES))
     expect(input.getAttribute('accept')).not.toMatch(/svg|image\/\*/)
+  })
+})
+
+describe('the bigger view', () => {
+  it('opens on click with the mark large, Replace, and a Remove that asks first', async () => {
+    const label = mount('logo_primary')
+    fireEvent.click(screen.getByRole('button', { name: `View ${label.toLowerCase()}` }))
+    const modal = screen.getByRole('dialog', { name: label })
+    expect(within(modal).getByRole('img', { name: label })).toBeInTheDocument()
+    expect(within(modal).getByRole('button', { name: /Replace/ })).toBeInTheDocument()
+    fireEvent.click(within(modal).getByRole('button', { name: 'Remove' }))
+    expect(mockedAction).not.toHaveBeenCalled()
+    const q = screen.getByRole('dialog', { name: /Remove the primary logo/ })
+    await act(async () => {
+      fireEvent.click(within(q).getByRole('button', { name: 'Remove' }))
+    })
+    expect(mockedAction).toHaveBeenNthCalledWith(1, 'a1', 'logo_primary', null)
+    expect(mockedAction).toHaveBeenNthCalledWith(2, 'a1', 'favicon', null)
   })
 })

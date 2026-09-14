@@ -93,14 +93,16 @@ describe('FaviconEditor', () => {
     expect(preview.height).toBe(FAVICON_PREVIEW_SIZE)
   })
 
-  it('CRITICAL: the one canvas on screen is the true-size preview, drawn with the framing', async () => {
-    // The big "adjust" canvas is gone (Sam, 2026-09-13): what you see at true size is the
-    // file that gets used, and there is no enlargement to mislead.
+  it('CRITICAL: both canvases draw the SAME framing, each scaled to its own size', async () => {
+    // A magnified view to judge the crop by (Sam, 2026-09-13: true size alone was "way
+    // too small to see how it fits") and the true-size preview — one framing, two sizes.
     await renderEditor()
     const bySize = new Map(draws.map((d) => [d.size, d.args]))
-    expect([...bySize.keys()]).toEqual([FAVICON_PREVIEW_SIZE])
-    const box = faviconDrawBox(LOGO, DEFAULT_FRAMING, FAVICON_PREVIEW_SIZE)
-    expect(bySize.get(FAVICON_PREVIEW_SIZE)).toEqual([box.x, box.y, box.width, box.height])
+    for (const [size, args] of bySize) {
+      const box = faviconDrawBox(LOGO, DEFAULT_FRAMING, size)
+      expect(args, `canvas ${size}`).toEqual([box.x, box.y, box.width, box.height])
+    }
+    expect([...bySize.keys()].sort((a, b) => a - b)).toEqual([FAVICON_PREVIEW_SIZE, 96])
   })
 
   it('zooming redraws larger on every canvas', async () => {
