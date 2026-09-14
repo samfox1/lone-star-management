@@ -192,11 +192,17 @@ function FontPicker({
         aria-controls={listId}
         disabled={disabled}
         onClick={toggle}
-        className={cx('flex h-8 w-full items-center gap-1.5 text-left text-[17px] leading-8 outline-none disabled:opacity-50', !value && 'text-hairline')}
+        className="flex h-8 w-full items-center gap-1.5 text-left leading-8 outline-none disabled:opacity-50"
       >
-        <span className="min-w-0 flex-1 truncate" style={value ? { fontFamily: faceOf(value) } : undefined}>
-          {value ? value.label : 'Choose'}
-        </span>
+        {/* The value in its own face; the placeholder in the site's own mono, like every
+            other empty value (Sam, 2026-09-14: "the correct font"). */}
+        {value ? (
+          <span className="min-w-0 flex-1 truncate text-[17px]" style={{ fontFamily: faceOf(value) }}>
+            {value.label}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate font-space text-[11px] uppercase tracking-[0.12em] text-ink-faint">Choose</span>
+        )}
         <Icon name="chevronRight" size={12} className={cx('flex-none rotate-90 text-ink-faint transition-transform', open && '-rotate-90')} />
       </button>
       {open && (
