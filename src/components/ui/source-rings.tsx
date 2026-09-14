@@ -13,8 +13,8 @@ import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
  * over — the number lives IN the ring, not under it (Sam, 2026-09-13: no detail
  * container, no count line below the name, and "literally flip").
  *
- * Five rings show in a 3 × 2 grid (the section is half a row), ranked, and the
- * sixth slot is a "See all" tile when anything is hidden; expanded, everything shows with a "Show fewer" tile at the end.
+ * Five rings show four to a row (the section is three fifths of one), ranked,
+ * and the sixth slot is a "See all" tile when anything is hidden; expanded, everything shows with a "Show fewer" tile at the end.
  * Two folds before ranking (Sam, 2026-09-13): every search engine — Google,
  * Bing, and any search host the door left in the catch-all — is ONE "Web search"
  * ring with a magnifying glass; whatever else has no mark of its own is ONE
@@ -78,7 +78,7 @@ export function SourceRings({
 
   return (
     <div className={className}>
-      <ul className="grid grid-cols-3 gap-4" aria-label="Sources">
+      <ul className="grid grid-cols-4 gap-4" aria-label="Sources">
         {visible.map((s) => {
           const pct = `${Math.round(s.share * 100)}%`
           return (
