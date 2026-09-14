@@ -118,7 +118,7 @@ describe('trafficWindow', () => {
     const prev = calls.filter((c) => c.args.p_since === previous.p_since)
     expect(cur.length + prev.length, 'every call is one window or the other').toBe(calls.length)
     expect(cur.map((c) => c.fn).sort()).toEqual([
-      'analytics_devices', 'analytics_places', 'analytics_sources', 'analytics_timeline', 'analytics_type_timeline',
+      'analytics_devices', 'analytics_places', 'analytics_source_types', 'analytics_sources', 'analytics_timeline', 'analytics_type_timeline',
     ])
     // The previous window is read only for what compares against it: sources, and
     // the two readers every metric total comes from.
@@ -155,6 +155,14 @@ describe('trafficWindow', () => {
     expect(typeof w.sources[0].views).toBe('number')
   })
 
+  it('reads what each source\'s visitors did, counts as numbers', async () => {
+    const { client } = fakeClient({
+      analytics_source_types: [{ source: 'instagram', type: 'play', count: '6', visitors: '4' }],
+    })
+    const w = await trafficWindow(client, 'a', 7, NOW)
+    expect(w.sourceActions).toEqual([{ source: 'instagram', type: 'play', count: 6, visitors: 4 }])
+  })
+
   it('survives a reader that returns nothing at all', async () => {
     const { client } = fakeClient({})
     const w = await trafficWindow(client, 'a', 30, NOW)
@@ -166,7 +174,7 @@ describe('trafficWindow', () => {
 
 describe('trafficWindow when a reader fails', () => {
   it('CRITICAL: throws — a revoked grant or a renamed reader must not render as a quiet zero', async () => {
-    for (const fn of ['analytics_timeline', 'analytics_sources', 'analytics_places', 'analytics_devices', 'analytics_type_timeline']) {
+    for (const fn of ['analytics_timeline', 'analytics_sources', 'analytics_source_types', 'analytics_places', 'analytics_devices', 'analytics_type_timeline']) {
       const { client } = fakeClient({}, { [fn]: `permission denied for function ${fn}` })
       await expect(trafficWindow(client, 'a', 7, NOW), fn).rejects.toThrow(fn)
     }
@@ -354,6 +362,33 @@ describe('summarizeSources', () => {
     expect(by.instagram.trend).toBeCloseTo(0.5, 10)
     // YouTube had nothing last window: no percentage, not "+∞" and not "+100%".
     expect(by.youtube.trend).toBeNull()
+  })
+
+  it('CRITICAL: carries each source\'s actions and a sentence built from them, compared across all sources', () => {
+    const act = (source: string, type: string, count: number, visitors: number) => ({ source, type, count, visitors })
+    const out = summarizeSources(
+      [row('instagram', 'a', 150), row('youtube', 'b', 40), row('direct', '', 110)],
+      [],
+      [
+        act('instagram', 'link_click', 70, 63), act('instagram', 'play', 6, 6), act('youtube', 'play', 9, 6), act('youtube', 'view', 99, 99),
+        // Neither of these sources had a VIEW in the window: a blank source (the old
+        // door's rows) and a tally-boundary orphan. Both must stay out of the site
+        // average, or every comparison below drifts.
+        act('', 'play', 50, 50), act('tiktok', 'play', 9, 9),
+      ],
+    )
+    const by = Object.fromEntries(out.map((s) => [s.source, s]))
+    expect(Object.keys(by).sort()).toEqual(['direct', 'instagram', 'youtube'])
+    expect(by.instagram.actions.link_click).toEqual({ count: 70, visitors: 63 })
+    expect(by.instagram.actions.play).toEqual({ count: 6, visitors: 6 })
+    expect(by.instagram.actions.ticket_click).toEqual({ count: 0, visitors: 0 })
+    // Site link rate = 63/300 = 21%; Instagram's 42% is twice that.
+    expect(by.instagram.story).toBe('Visitors from Instagram mostly click a social or streaming link: 4 in 10 do, twice the site average. 1 in 25 plays a song here.')
+    // Site play rate = 12/300 = 4% (NOT 71/300 with the orphans); YouTube's 15% is 4 times.
+    expect(by.youtube.story).toBe('Visitors from YouTube mostly play a song here: 1 in 7 do, 4 times the site average.')
+    expect(by.direct.story).toMatch(/look and leave/)
+    // A 'view' row is not an action, whatever the reader sends.
+    expect(Object.keys(by.youtube.actions)).not.toContain('view')
   })
 
   it('drops rows with no source and sources with no visitors', () => {

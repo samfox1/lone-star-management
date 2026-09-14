@@ -41,7 +41,9 @@ const GLYPHS: Record<SourceKey, ReactNode> = {
     <><path d="M2.6 16.9 L9.7 7.1 H21.4 L14.3 16.9 Z" fill="currentColor"/></>
   ),
   google: (
-    <><path d="M21 11.1 h-8.9 v3.05 h5.35 a5.4 5.4 0 0 1 -5.35 3.85 a6.9 6.9 0 1 1 4.6 -12.05 l2.2 -2.2 a10 10 0 1 0 2.1 7.35 z" fill="currentColor"/></>
+    // The G: a ring open at the upper right, its end cut flat on the midline, and
+    // the bar hanging from that line to the ring's outer edge.
+    <><path d="M18.13 6.86 A8 8 0 1 0 20 12" fill="none" stroke="currentColor" strokeWidth="3.6"/><rect x="12" y="12" width="9.8" height="3.6" fill="currentColor"/></>
   ),
   bing: (
     <><path d="M6.3 2.6 L10.5 4.15 v11.4 l4.05 -1.7 -2.1 -1 -1.95 -4.4 6.6 2.95 c1.75 0.8 2.55 1.6 2.55 3 0 1.6 -0.95 2.7 -3.15 3.8 L10.5 21.4 6.3 19 z" fill="currentColor"/></>

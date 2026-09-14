@@ -29,8 +29,8 @@ Three questions had a considered alternative and settled the shape of everything
   migration N times, make roster-wide questions N queries, and cost per project. The
   hierarchy is real; it is enforced by the database, not by folders.
 - **Grouping is by SUBJECT: the new analytics tables live in schema `analytics`**
-  (`daily_total`, `daily_type`, `daily_source`, `daily_place`, `daily_device`, `daily_path`,
-  `daily_campaign`, `daily_entity`, `rolled_days`, `geo_cache`, `event_attempts`).
+  (`daily_total`, `daily_type`, `daily_source`, `daily_source_type`, `daily_place`, `daily_device`,
+  `daily_path`, `daily_campaign`, `daily_entity`, `rolled_days`, `geo_cache`, `event_attempts`).
   The schema is **not exposed through PostgREST**: `db.schemas` is unchanged, `anon` has
   no `usage`, and the only way in is the `public` RPCs. That is defence in depth (a
   policy slip on a tally table is unreachable from the API), and it also happens to group

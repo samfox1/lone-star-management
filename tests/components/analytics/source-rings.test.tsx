@@ -2,10 +2,9 @@
 // The source rings, and the two ways a ring can misstate a share.
 /**
  * A ring is a share of EVERYONE, so its arc must be proportional to the share and
- * nothing else — not to the largest source, not to a shared max. The card under a
- * selected ring says only what a source carries in the data: visitors, views,
- * hosts, and the change on the previous window. It never shows a per-song or
- * per-click figure, because no tally exists that could supply one honestly.
+ * nothing else — not to the largest source, not to a shared max. The share is
+ * printed inside the ring on hover, never under it, and there is no detail card
+ * (Sam, 2026-09-13).
  */
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
@@ -13,9 +12,11 @@ import { SourceRings } from '@/components/ui/source-rings'
 import { GLYPH_KEYS } from '@/components/ui/source-glyphs'
 import { SOURCE_KEYS } from '@/lib/analytics-sources'
 import type { SourceSummary } from '@/lib/analytics'
+import { noActionCounts } from '@/lib/source-story'
 
 const src = (source: string, visitors: number, share: number, extra: Partial<SourceSummary> = {}): SourceSummary => ({
-  source, label: source, visitors, views: visitors * 2, share, hosts: [], trend: null, ...extra,
+  source, label: source, visitors, views: visitors * 2, share, hosts: [], trend: null,
+  actions: noActionCounts(), story: `Visitors from ${source} look and leave.`, ...extra,
 })
 
 const EIGHT = ['instagram', 'youtube', 'direct', 'google', 'tiktok', 'ai', 'facebook', 'x']
@@ -47,36 +48,26 @@ describe('SourceRings', () => {
     expect(screen.queryByRole('button', { name: /show all/i })).toBeNull()
   })
 
-  it('CRITICAL: selecting a ring opens a card with only what a source carries', () => {
-    const ig = src('instagram', 212, 0.42, {
-      label: 'Instagram', views: 471, trend: 0.34,
-      hosts: [{ host: 'l.instagram.com', visitors: 180 }, { host: 'instagram.com', visitors: 32 }],
-    })
-    render(<SourceRings sources={[ig, src('youtube', 91, 0.18)]} />)
-    fireEvent.click(screen.getByRole('button', { name: /^instagram:/i }))
-    const card = screen.getByRole('region', { name: /instagram detail/i })
-    const text = card.textContent!
-    expect(text).toContain('212')
-    expect(text).toContain('471')
-    expect(text).toContain('l.instagram.com')
-    expect(text).toContain('+34.0%')
-    // Never invented: no plays, no ticket rate, no top song, no new-vs-returning.
-    expect(text).not.toMatch(/play|ticket|song|returning/i)
+  it('CRITICAL: the share lives IN the ring — the centre holds the mark and the number it flips to, and nothing is printed under the name', () => {
+    const ig = src('instagram', 212, 0.42, { label: 'Instagram', views: 471 })
+    const { container } = render(<SourceRings sources={[ig, src('youtube', 91, 0.18)]} />)
+    const ring = screen.getByRole('img', { name: 'Instagram: 212 visitors, 42%' })
+    expect(ring.querySelector('[data-mark]')).not.toBeNull()
+    expect(ring.querySelector('[data-share]')!.textContent).toBe('42%')
+    // The old "212 · 42%" line under the name, and the old detail card, are gone.
+    expect(ring.textContent).not.toMatch(/212|471/)
+    expect(container.querySelector('section')).toBeNull()
+    expect(screen.queryByText(/visitors from/i)).toBeNull()
+    // The flip is CSS on hover/focus: the share starts hidden, the mark shown.
+    expect(ring.querySelector('[data-share]')!.getAttribute('class')).toMatch(/\bopacity-0\b/)
+    expect(ring.querySelector('[data-share]')!.getAttribute('class')).toMatch(/group-hover:opacity-100/)
+    expect(ring.querySelector('[data-mark]')!.getAttribute('class')).toMatch(/group-hover:opacity-0/)
+    expect(ring.getAttribute('tabindex')).toBe('0')
   })
 
-  it('says "no previous window" rather than a percent against nothing', () => {
-    render(<SourceRings sources={[src('tiktok', 5, 1, { trend: null })]} />)
-    fireEvent.click(screen.getByRole('button', { name: /^tiktok:/i }))
-    expect(screen.getByRole('region').textContent).toMatch(/no previous window/i)
-  })
-
-  it('selecting the open ring again closes it', () => {
-    render(<SourceRings sources={[src('direct', 9, 1)]} />)
-    const btn = screen.getByRole('button', { name: /^direct:/i })
-    fireEvent.click(btn)
-    expect(screen.queryByRole('region')).not.toBeNull()
-    fireEvent.click(btn)
-    expect(screen.queryByRole('region')).toBeNull()
+  it('rounds the share to a whole percent, and a tiny source still shows one', () => {
+    render(<SourceRings sources={[src('tiktok', 1, 0.004)]} />)
+    expect(screen.getByRole('img', { name: /^tiktok:/i }).querySelector('[data-share]')!.textContent).toBe('0%')
   })
 
   it('says what is missing rather than drawing an empty row', () => {

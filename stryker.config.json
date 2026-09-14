@@ -55,6 +55,7 @@
     "packages/site-bridge/src/analytics.ts",
     "src/lib/analytics.ts",
     "src/lib/chart.ts",
+    "src/lib/source-story.ts",
     "src/lib/format.ts",
     "src/lib/connections.ts",
     "src/lib/settings.ts"

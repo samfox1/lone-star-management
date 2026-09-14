@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dayDelta } from '@/lib/chart'
 import { sourceLabel } from '@/lib/analytics-sources'
+import { ACTION_TYPES, noActionCounts, noActors, sourceStory, type ActionCounts, type ActionType, type Actors } from '@/lib/source-story'
 
 export type EntityCounts = Map<string, Record<string, number>>
 
@@ -117,6 +118,8 @@ export type TimelineDay = { day: string; views: number; visitors: number; bots: 
 export type SourceRow = { source: string; referrer_host: string; views: number; visitors: number }
 export type PlaceRow = { country: string; region: string; city: string; views: number; visitors: number }
 export type DeviceRow = { device: string; browser: string; views: number; visitors: number }
+/** One non-view event type from one source: how many, and how many distinct visitors. */
+export type SourceActionRow = { source: string; type: string; count: number; visitors: number }
 
 export type TrafficWindow = {
   window: Window
@@ -124,6 +127,8 @@ export type TrafficWindow = {
    *  data but not a gap in the chart. */
   timeline: TimelineDay[]
   sources: SourceRow[]
+  /** What each source's visitors went on to do (`analytics_source_types`). */
+  sourceActions: SourceActionRow[]
   places: PlaceRow[]
   devices: DeviceRow[]
   /** Event type → one count per day, aligned index-for-index with `timeline`.
@@ -206,9 +211,10 @@ export async function trafficWindow(
   const prev = previousWindow(w)
   const prevArgs = { p_artist_id: artistId, p_since: prev.since, p_until: prev.until }
   const read = async (fn: string, a: typeof args): Promise<Rows> => must<Rows>(fn, await supabase.rpc(fn, a)) ?? []
-  const [timeline, sources, places, devices, byType, prevSources, prevTimeline, prevByType] = await Promise.all([
+  const [timeline, sources, sourceActions, places, devices, byType, prevSources, prevTimeline, prevByType] = await Promise.all([
     read('analytics_timeline', args),
     read('analytics_sources', args),
+    read('analytics_source_types', args),
     read('analytics_places', args),
     read('analytics_devices', args),
     read('analytics_type_timeline', args),
@@ -262,6 +268,9 @@ export async function trafficWindow(
     byType: byTypeSeries,
     prevTotals,
     sources: sourceRows(sources),
+    sourceActions: sourceActions.map((r) => ({
+      source: String(r.source ?? ''), type: String(r.type ?? ''), count: num(r.count), visitors: num(r.visitors),
+    })),
     prevSources: sourceRows(prevSources),
     places: places.map((r) => ({
       country: String(r.country ?? ''), region: String(r.region ?? ''), city: String(r.city ?? ''),
@@ -341,9 +350,10 @@ export function previousWindow(w: Window): Window {
 }
 
 /** One source, rolled up across its referrer hosts, with everything a source can
- *  honestly say about itself: how many, what share, which hosts, and whether it
- *  grew on the window before. Nothing per-song or per-click lives here, because
- *  the tally that would answer that does not exist yet. */
+ *  honestly say about itself: how many, what share, which hosts, whether it grew
+ *  on the window before, and what its visitors went on to do — as counts and as
+ *  one derived sentence (see `sourceStory`). Still nothing per-song: no tally
+ *  joins source to entity. */
 export type SourceSummary = {
   source: string
   label: string
@@ -355,9 +365,12 @@ export type SourceSummary = {
   /** Visitors against the previous window, as a fraction; null when there is
    *  nothing to compare against (see `dayDelta`). */
   trend: number | null
+  /** Per action: events, and the distinct visitors who took it. */
+  actions: ActionCounts
+  story: string
 }
 
-export function summarizeSources(cur: SourceRow[], prev: SourceRow[] = []): SourceSummary[] {
+export function summarizeSources(cur: SourceRow[], prev: SourceRow[] = [], actions: SourceActionRow[] = []): SourceSummary[] {
   const by = new Map<string, { views: number; visitors: number; hosts: Map<string, number> }>()
   for (const r of cur) {
     if (!r.source) continue
@@ -370,17 +383,38 @@ export function summarizeSources(cur: SourceRow[], prev: SourceRow[] = []): Sour
   const prevBy = new Map<string, number>()
   for (const r of prev) if (r.source) prevBy.set(r.source, (prevBy.get(r.source) ?? 0) + r.visitors)
   const total = [...by.values()].reduce((n, s) => n + s.visitors, 0)
+  // Actions by source, and across every source for the sentence's comparison.
+  // Only sources that had a view in the window count on either side: the site
+  // rate's denominator is `total`, so an action row whose source is absent from
+  // `by` (a blank source, or a tally-boundary orphan) would inflate the numerator.
+  const actionsBy = new Map<string, ActionCounts>()
+  const siteActors: Actors = noActors()
+  for (const r of actions) {
+    if (!by.has(r.source) || !(ACTION_TYPES as readonly string[]).includes(r.type)) continue
+    const got = actionsBy.get(r.source) ?? noActionCounts()
+    got[r.type as ActionType].count += r.count
+    got[r.type as ActionType].visitors += r.visitors
+    actionsBy.set(r.source, got)
+    siteActors[r.type as ActionType] += r.visitors
+  }
+  const actorsOf = (a: ActionCounts): Actors => Object.fromEntries(ACTION_TYPES.map((t) => [t, a[t].visitors])) as Actors
   return [...by.entries()]
     .filter(([, s]) => s.visitors > 0)
-    .map(([source, s]) => ({
-      source,
-      label: sourceLabel(source),
-      views: s.views,
-      visitors: s.visitors,
-      share: total === 0 ? 0 : s.visitors / total,
-      hosts: [...s.hosts.entries()].map(([host, visitors]) => ({ host, visitors })).sort((a, b) => b.visitors - a.visitors),
-      trend: dayDelta(prevBy.get(source), s.visitors),
-    }))
+    .map(([source, s]) => {
+      const label = sourceLabel(source)
+      const acts = actionsBy.get(source) ?? noActionCounts()
+      return {
+        source,
+        label,
+        views: s.views,
+        visitors: s.visitors,
+        share: total === 0 ? 0 : s.visitors / total,
+        hosts: [...s.hosts.entries()].map(([host, visitors]) => ({ host, visitors })).sort((a, b) => b.visitors - a.visitors),
+        trend: dayDelta(prevBy.get(source), s.visitors),
+        actions: acts,
+        story: sourceStory(label, s.visitors, actorsOf(acts), { visitors: total, actors: siteActors }),
+      }
+    })
     .sort((a, b) => b.visitors - a.visitors)
 }
 

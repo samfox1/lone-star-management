@@ -141,7 +141,7 @@ export default async function OverviewPage({
       {/* WHERE FROM. One ring per source, its share of everyone as the arc. */}
       <section>
         <KLabel>Where they came from</KLabel>
-        <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources)} />
+        <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
       </section>
 
       {/* WHERE. A ranked list rather than a chart: countries are named things of
