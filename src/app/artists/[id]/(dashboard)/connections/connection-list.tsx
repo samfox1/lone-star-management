@@ -181,7 +181,7 @@ function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row:
   return (
     <div className="group flex items-center gap-4 py-3">
       {row.linkId ? (
-        <SelectToggle selected={row.onSite} onSite={row.onSite} onToggle={toggle} label={row.label} className="rounded-full" />
+        <SelectToggle selected={row.onSite} onSite={row.onSite} onToggle={toggle} label={row.label} />
       ) : (
         <span className="h-5 w-5 flex-none" aria-hidden />
       )}

@@ -4,16 +4,20 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 
 /**
- * The on-site select control, shared by every publish-gated card/row (releases,
- * videos, merch, tour). The checkbox itself carries the state — there is no
- * separate "On site" badge, and it uses the site accents (no amber):
- *   • live         (checked + published) → solid INK check
- *   • pending add  (checked, not yet live) → solid BLUE (accent) check
- *   • pending drop (live, unchecked) → RED (accent-red) outline, empty
- *   • off          (draft, unchecked) → grey hairline outline, empty
- * So a filled check = wanted on site, and its COLOUR says whether that's already
- * live (ink) or an unpublished change (blue = adding, red = removing). Clicking
- * toggles; the click never bubbles to the card behind it.
+ * THE on-site check, everywhere (Sam, 2026-09-13: "I want the checks to be consistent
+ * across the site… mostly black maybe with a little blue"). One shape, one palette, no
+ * per-page override — the tour page used to paint its live check blue, and the first
+ * page that drew it black beside it made the two read as different controls.
+ *
+ * Round, and the check itself carries the state — there is no separate "On site" badge:
+ *   • live         (checked + published)     → solid INK check           — on the site
+ *   • pending add  (checked, not yet live)   → solid BLUE (accent) check — publish to put it on
+ *   • pending drop (live, unchecked)         → RED (accent-red) outline  — publish to take it off
+ *   • off          (draft, unchecked)        → grey hairline outline     — not on the site
+ * So a filled check = wanted on site, and its colour says whether that is already live
+ * (black) or an unpublished change (blue). Pages whose presence flips instantly (links)
+ * pass `onSite={selected}` and only ever show black or empty. Clicking toggles; the click
+ * never bubbles to the card behind it.
  */
 export function SelectToggle({
   selected,
@@ -21,7 +25,6 @@ export function SelectToggle({
   onToggle,
   label,
   className,
-  liveClassName = 'border-ink bg-ink text-white',
 }: {
   selected: boolean
   /** Whether the item is currently live on the public site. */
@@ -30,9 +33,6 @@ export function SelectToggle({
   /** Item name, for the accessible label / tooltip. */
   label: string
   className?: string
-  /** Override for the checked+live look (default INK). Tour passes the blue accent
-   *  so its check reads blue whether the date is live or a pending add. */
-  liveClassName?: string
 }) {
   const state = selected
     ? onSite
@@ -56,13 +56,14 @@ export function SelectToggle({
       aria-checked={selected}
       aria-label={title}
       title={title}
+      data-state={state}
       onClick={(e) => {
         e.stopPropagation()
         onToggle()
       }}
       className={cx(
-        'inline-flex h-5 w-5 flex-none items-center justify-center rounded-[5px] border shadow-sm transition-colors',
-        state === 'live' && liveClassName,
+        'inline-flex h-5 w-5 flex-none items-center justify-center rounded-full border shadow-sm transition-colors',
+        state === 'live' && 'border-ink bg-ink text-white',
         state === 'pending-add' && 'border-accent bg-accent text-white',
         state === 'pending-drop' && 'border-accent-red bg-paper text-accent-red',
         state === 'off' && 'border-hairline bg-paper text-transparent hover:border-ink-faint',

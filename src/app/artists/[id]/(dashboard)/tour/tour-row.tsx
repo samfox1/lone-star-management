@@ -129,7 +129,6 @@ export function TourRow({
           onSite={tour.published_on_site ?? onSite}
           onToggle={onToggleOnSite}
           label={tour.venue || 'date'}
-          liveClassName="border-accent bg-accent text-white"
         />
         <button
           type="button"
