@@ -124,7 +124,8 @@ export default async function OverviewPage({
           windowKey={windowKey}
           days={days}
           extras={{
-            views: [{ label: partial ? 'Views per visitor · since Sep 12' : 'Views per visitor', value: viewsPerVisitor }],
+            // Over the days both were counted (see viewsPerVisitor); the page note explains the cut-over.
+            views: [{ label: 'Per visitor', value: viewsPerVisitor }],
             bots: [{ label: 'Share of hits', value: totalOf('views') + totalOf('bots') ? `${((totalOf('bots') / (totalOf('views') + totalOf('bots'))) * 100).toFixed(1)}%` : '—' }],
           }}
         />

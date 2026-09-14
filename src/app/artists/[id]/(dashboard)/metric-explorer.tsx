@@ -107,52 +107,59 @@ export function MetricExplorer({
         />
       </div>
 
-      <TimelineChart points={timeline} height={380} series={series} className="mt-4" />
+      <div className="mt-4 grid gap-8 lg:grid-cols-4">
+        <TimelineChart points={timeline} height={400} series={series} className="lg:col-span-3" />
 
-      {/* The facts as one strip under the chart, not a column beside it: a column
-          sat two-thirds empty whenever only views was drawn (Sam, 2026-09-13:
-          "use the space better"). The views total leads; each toggled series adds
-          its own cells to the same row. No container — the hairline does the work. */}
-      <div role="region" aria-label="Facts" className="mt-5 flex flex-wrap items-stretch gap-y-4 border-t border-hairline pt-4">
-        <div className="flex min-w-[180px] flex-col justify-center pr-8">
-          <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Views · {windowLabel}</div>
-          <div className="mt-1 font-space text-[34px] font-bold leading-none tracking-[-0.015em] tabular-nums text-ink">{fmt(vf.total)}</div>
-          {!allTime && (
-            <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-              {vt ? (
-                <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(vt.dir))}>{vt.label}</span> vs prior {windowLabel}</>
-              ) : (
-                <>No prior {windowLabel}</>
-              )}
-            </div>
-          )}
+        {/* The facts beside the chart, sized to what they say and nothing more: no
+            box, no fill. The views total leads, large; its three facts sit in one
+            row beneath it; each toggled series repeats the shape below, smaller.
+            (Sam, 2026-09-13: on the right, the total larger, the three in their own
+            row, best day as the day alone.) */}
+        <div role="region" aria-label="Facts" className="flex flex-col gap-6 self-start">
+          <div>
+            <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Views · {windowLabel}</div>
+            <div className="mt-2 font-space text-[52px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink">{fmt(vf.total)}</div>
+            {!allTime && (
+              <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                {vt ? (
+                  <><span className={cx('text-[11px] font-bold tabular-nums', trendTextClass(vt.dir))}>{vt.label}</span> vs prior {windowLabel}</>
+                ) : (
+                  <>No prior {windowLabel}</>
+                )}
+              </div>
+            )}
+            <dl className="mt-4 grid grid-cols-3 gap-4 border-t border-hairline pt-4">
+              <Fact label="Best day" value={vf.bestDay ? dayLabel(vf.bestDay.day) : '—'} />
+              <Fact label="Per day" value={perDay(vf.perDay)} />
+              {(extras.views ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+            </dl>
+          </div>
+
+          {drawn.slice(1).map((m) => {
+            const f = factsFor(m)
+            return (
+              <div key={m.key} data-facts={m.key} className="border-t border-ink pt-4">
+                <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{m.label}</div>
+                <div className="mt-1.5 font-space text-[28px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink">{fmt(f.total)}</div>
+                <dl className="mt-3 grid grid-cols-3 gap-4">
+                  <Fact label="Best day" value={f.bestDay ? dayLabel(f.bestDay.day) : '—'} />
+                  <Fact label="Per day" value={perDay(f.perDay)} />
+                  {(extras[m.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+                </dl>
+              </div>
+            )
+          })}
         </div>
-
-        <Cell label="Best day" value={vf.bestDay ? `${dayLabel(vf.bestDay.day)} · ${fmt(vf.bestDay.value)}` : '—'} />
-        <Cell label="Per day" value={perDay(vf.perDay)} />
-        {(extras.views ?? []).map((e) => <Cell key={e.label} label={e.label} value={e.value} />)}
-
-        {drawn.slice(1).map((m) => {
-          const f = factsFor(m)
-          return (
-            <div key={m.key} data-facts={m.key} className="flex flex-wrap">
-              <Cell label={m.label} value={fmt(f.total)} accent />
-              <Cell label="Per day" value={perDay(f.perDay)} />
-              {(extras[m.key] ?? []).map((e) => <Cell key={e.label} label={e.label} value={e.value} />)}
-            </div>
-          )
-        })}
       </div>
     </div>
   )
 }
 
-/** One fact in the strip, ruled from its neighbour by a hairline on the left. */
-function Cell({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className={cx('flex min-w-[120px] flex-col justify-center border-l border-hairline px-6', accent && 'border-l-ink')}>
-      <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</div>
-      <div className="mt-1 whitespace-nowrap font-space text-[17px] font-bold tabular-nums text-ink">{value}</div>
+    <div className="min-w-0">
+      <dt className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</dt>
+      <dd className="mt-1 truncate font-space text-[15px] font-bold tabular-nums text-ink">{value}</dd>
     </div>
   )
 }

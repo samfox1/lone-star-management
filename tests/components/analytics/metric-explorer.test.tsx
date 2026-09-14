@@ -52,7 +52,8 @@ describe('MetricExplorer', () => {
     const f = facts().textContent!
     expect(f).toContain('200')
     expect(f).toContain('+100.0%')
-    expect(f).toMatch(/best daysep 13 · 80/i)
+    // The day alone — the number is the chart's to show.
+    expect(f).toMatch(/best daysep 13per day/i)
     expect(f).toMatch(/per day50/i)
   })
 
