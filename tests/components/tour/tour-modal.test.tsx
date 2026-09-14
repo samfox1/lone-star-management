@@ -44,8 +44,8 @@ const tour: TourDate = {
 
 function openModal() {
   render(<TourRow tour={tour} artistId={ARTIST} onSite onToggleOnSite={() => {}} />)
-  fireEvent.click(screen.getByRole('button', { name: /Scoot Inn options/ }))
-  fireEvent.click(screen.getByRole('menuitem', { name: /Edit/ }))
+  // The row itself opens the editor (Sam, 2026-09-13: no ⋯, click the row).
+  fireEvent.click(screen.getByText('Scoot Inn'))
   return screen.getByRole('dialog')
 }
 

@@ -207,3 +207,13 @@ export function Input({ className, ...rest }: ComponentProps<'input'>) {
 export function Textarea({ className, ...rest }: ComponentProps<'textarea'>) {
   return <textarea className={cx(fieldBase, 'min-h-24 resize-y leading-relaxed', className)} {...rest} />
 }
+
+/**
+ * A clickable LIST ROW — a tour date, a connection. The whole row opens its editor, and
+ * the hover says so: a soft surface tint and a slight grow, the "between" Sam asked for
+ * (2026-09-13: "maybe the row grows a bit or maybe the background color changes a bit.
+ * I want something else between these two"). The negative x-margin lets the tint run past
+ * the text without moving it.
+ */
+export const listRowClass =
+  '-mx-3 flex cursor-pointer items-center rounded-xl px-3 transition-[background-color,transform] duration-150 hover:scale-[1.01] hover:bg-surface'

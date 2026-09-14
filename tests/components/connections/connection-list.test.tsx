@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
-// The Connections list: one row per platform — ring, mark, name, handle, state — and its ⋯.
+// The Connections list: one row per platform — ring, mark, name, handle, state — click to edit.
 /**
  * ConnectionList (Sam, 2026-09-13). What has to hold:
  *
- *   - the handle reads as a handle (no scheme, no www), and editing it saves the link's
- *     URL alone through updateContentAction('link');
- *   - the ring flips the link on/off the site INSTANTLY — links are LIVE_TOGGLE — and a
- *     refused flip puts the ring back and says why;
+ *   - the handle reads as a handle (no scheme, no www);
+ *   - THE ROW IS THE BUTTON: a click opens the connection's modal, where the Link row
+ *     saves the URL alone through updateContentAction('link'); there is no ⋯;
+ *   - the ring flips the link on/off the site INSTANTLY — links are LIVE_TOGGLE — never
+ *     opens the modal, and a refused flip puts the ring back and says why;
  *   - the right-hand chip says what the state IS: synced, failed offers Retry, a profile
  *     whose catalog was never pulled offers Sync (never "Connect" — the check beside it
  *     already says it is), a plain social says nothing;
- *   - Remove asks first, then removes the link AND the source behind it;
- *   - Pull now pulls that connection and reports what came back.
+ *   - Remove is the modal footer's: it asks first, then removes the link AND the source;
+ *   - Sync / Pull now pull that connection and report what came back.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -52,7 +53,25 @@ const ROWS: ConnectionRow[] = [
 function mount(rows = ROWS, dirty = false) {
   render(<ConnectionList artistId="a1" rows={rows} dirty={dirty} />)
 }
-const rowOf = (label: string) => screen.getByText(label).closest('.group') as HTMLElement
+/** The row: the button named for its platform. */
+const rowOf = (label: string) => screen.getByRole('button', { name: label })
+/** Click the row, and return its modal. */
+function openRow(label: string) {
+  fireEvent.click(rowOf(label))
+  return screen.getByRole('dialog', { name: label })
+}
+/** A modal row by its label (modal-kit: the label span's row box). */
+function kvRow(dialog: HTMLElement, label: string): HTMLElement {
+  const lab = within(dialog).getAllByText(label, { selector: 'span' }).find((el) => el.closest('.group'))!
+  return lab.closest('.group') as HTMLElement
+}
+/** The editable value in a modal row: text until clicked, then an input labelled by the row. */
+function editRow(dialog: HTMLElement, label: string, next: string) {
+  fireEvent.click(within(kvRow(dialog, label)).getByRole('button'))
+  const input = within(dialog).getByLabelText(label)
+  fireEvent.change(input, { target: { value: next } })
+  fireEvent.blur(input)
+}
 
 describe('handleOf', () => {
   it('drops the scheme, www and a trailing slash — the handle, not the address', () => {
@@ -62,35 +81,11 @@ describe('handleOf', () => {
 })
 
 describe('the rows', () => {
-  it('shows the handle, not the URL, and the full URL only while editing', () => {
+  it('shows the handle, not the URL, and has no ⋯', () => {
     mount()
-    const ig = rowOf('Instagram')
-    expect(within(ig).getByRole('button', { name: 'Instagram link' })).toHaveTextContent('instagram.com/skeen')
-    fireEvent.click(within(ig).getByRole('button', { name: 'Instagram link' }))
-    expect(within(ig).getByRole('textbox', { name: 'Instagram link' })).toHaveValue('https://www.instagram.com/skeen/')
-  })
-
-  it('CRITICAL: editing the handle saves the URL alone, for the link row alone', async () => {
-    mount()
-    const ig = rowOf('Instagram')
-    fireEvent.click(within(ig).getByRole('button', { name: 'Instagram link' }))
-    const input = within(ig).getByRole('textbox', { name: 'Instagram link' })
-    fireEvent.change(input, { target: { value: 'https://instagram.com/skeen_new' } })
-    fireEvent.blur(input)
-    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
-    const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
-    expect([type, id, artistId]).toEqual(['link', 'l-ig', 'a1'])
-    expect([...(fd as FormData).keys()]).toEqual(['url'])
-    expect((fd as FormData).get('url')).toBe('https://instagram.com/skeen_new')
-  })
-
-  it('an unchanged value never writes', async () => {
-    mount()
-    const ig = rowOf('Instagram')
-    fireEvent.click(within(ig).getByRole('button', { name: 'Instagram link' }))
-    fireEvent.blur(within(ig).getByRole('textbox', { name: 'Instagram link' }))
-    await act(async () => {})
-    expect(updateContentAction).not.toHaveBeenCalled()
+    expect(rowOf('Instagram')).toHaveTextContent('instagram.com/skeen')
+    expect(rowOf('Instagram')).not.toHaveTextContent('https://')
+    expect(screen.queryByRole('button', { name: /options/ })).toBeNull()
   })
 
   it('the chip says what the state is', () => {
@@ -111,12 +106,55 @@ describe('the rows', () => {
   })
 })
 
+describe('click to edit', () => {
+  it('CRITICAL: a click on the row opens its modal, and the Link row saves the URL alone', async () => {
+    mount()
+    const dialog = openRow('Instagram')
+    expect(within(dialog).getByRole('heading', { name: 'Instagram' })).toBeInTheDocument()
+    editRow(dialog, 'Link', 'https://instagram.com/skeen_new')
+    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
+    const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
+    expect([type, id, artistId]).toEqual(['link', 'l-ig', 'a1'])
+    expect([...(fd as FormData).keys()]).toEqual(['url'])
+    expect((fd as FormData).get('url')).toBe('https://instagram.com/skeen_new')
+  })
+
+  it('an unchanged value never writes', async () => {
+    mount()
+    const dialog = openRow('Instagram')
+    fireEvent.click(within(kvRow(dialog, 'Link')).getByRole('button'))
+    fireEvent.blur(within(dialog).getByLabelText('Link'))
+    await act(async () => {})
+    expect(updateContentAction).not.toHaveBeenCalled()
+  })
+
+  it('the modal offers the link to open, and a source its ID and a Pull now', () => {
+    mount()
+    const ig = openRow('Instagram')
+    expect(within(ig).getByRole('link', { name: 'Open' })).toHaveAttribute('href', 'https://www.instagram.com/skeen/')
+    expect(within(ig).queryByText('Catalog', { selector: 'span' })).toBeNull()
+    fireEvent.click(within(ig).getByRole('button', { name: 'Save' }))
+    const sp = openRow('Spotify')
+    expect(within(kvRow(sp, 'ID')).getByRole('button')).toHaveTextContent('26K')
+    expect(within(sp).getByRole('button', { name: /Pull now/ })).toBeInTheDocument()
+  })
+
+  it('Pull now in the modal pulls THAT connection and shows what came back', async () => {
+    mount()
+    const sp = openRow('Spotify')
+    fireEvent.click(within(sp).getByRole('button', { name: /Pull now/ }))
+    await waitFor(() => expect(pullConnectionAction).toHaveBeenCalledWith('a1', 'spotify'))
+    await waitFor(() => expect(sp).toHaveTextContent('24 songs'))
+  })
+})
+
 describe('the ring', () => {
-  it('CRITICAL: flips the link off the site instantly through the LIVE toggle', async () => {
+  it('CRITICAL: flips the link off the site instantly through the LIVE toggle — and does not open the modal', async () => {
     mount()
     fireEvent.click(within(rowOf('Instagram')).getByRole('checkbox'))
     await waitFor(() => expect(setOnSiteAction).toHaveBeenCalledWith('link', 'l-ig', 'a1', false))
     expect(within(rowOf('Instagram')).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('a refused flip puts the ring back and says why', async () => {
@@ -128,50 +166,56 @@ describe('the ring', () => {
   })
 })
 
-describe('the ⋯ menu', () => {
-  it('CRITICAL: Remove asks first, and removes the link AND the source together', async () => {
+describe('Remove', () => {
+  it('CRITICAL: the footer’s Remove asks first, and removes the link AND the source together', async () => {
     mount()
-    fireEvent.click(within(rowOf('Spotify')).getByRole('button', { name: 'Spotify options' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Remove/ }))
+    const sp = openRow('Spotify')
+    fireEvent.click(within(sp).getByRole('button', { name: 'Remove' }))
     expect(disconnectConnectionAction).not.toHaveBeenCalled()
     const q = screen.getByRole('dialog', { name: /Remove Spotify/ })
     await act(async () => {
       fireEvent.click(within(q).getByRole('button', { name: 'Remove' }))
     })
     expect(disconnectConnectionAction).toHaveBeenCalledWith('a1', 'spotify', 'l-sp')
-    expect(screen.queryByText('Spotify')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Spotify' })).toBeNull()
   })
 
   it('Cancel on the question removes nothing', async () => {
     mount()
-    fireEvent.click(within(rowOf('Spotify')).getByRole('button', { name: 'Spotify options' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Remove/ }))
+    const sp = openRow('Spotify')
+    fireEvent.click(within(sp).getByRole('button', { name: 'Remove' }))
     await act(async () => {
       fireEvent.click(within(screen.getByRole('dialog', { name: /Remove Spotify/ })).getByRole('button', { name: 'Cancel' }))
     })
     expect(disconnectConnectionAction).not.toHaveBeenCalled()
-    expect(screen.getByText('Spotify')).toBeInTheDocument()
+    expect(rowOf('Spotify')).toBeInTheDocument()
   })
+})
 
-  it('Pull now pulls THAT connection and reports what came back', async () => {
+describe('the chip’s own actions', () => {
+  it('CRITICAL: Sync on a never-pulled profile pulls it from the link, nothing typed, no modal', async () => {
+    // The Apple Music link already holds the artist id; the row should not send the
+    // manager to a form to retype what is on the screen.
     mount()
-    fireEvent.click(within(rowOf('Spotify')).getByRole('button', { name: 'Spotify options' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /Pull now/ }))
-    await waitFor(() => expect(pullConnectionAction).toHaveBeenCalledWith('a1', 'spotify'))
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('24 songs'))
+    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' }))
+    await waitFor(() => expect(syncProfileAction).toHaveBeenCalledWith('a1', 'apple music'))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('12 songs found'))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('a plain social has no Pull now — nothing to pull', () => {
+  it('a link with no id in it says so, and the row stays', async () => {
+    vi.mocked(syncProfileAction).mockResolvedValueOnce({ ok: false, error: 'That Apple Music link has no artist id in it — it needs to be the artist page.' })
     mount()
-    fireEvent.click(within(rowOf('Instagram')).getByRole('button', { name: 'Instagram options' }))
-    expect(screen.queryByRole('menuitem', { name: /Pull now/ })).toBeNull()
-    expect(screen.getByRole('menuitem', { name: /Open/ })).toHaveAttribute('href', 'https://www.instagram.com/skeen/')
+    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' }))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringMatching(/no artist id/), 'error'))
+    expect(rowOf('Apple Music')).toBeInTheDocument()
   })
 
-  it('Retry on a failed row pulls it again', async () => {
+  it('Retry on a failed row pulls it again, without opening the modal', async () => {
     mount()
     fireEvent.click(within(rowOf('Bandsintown')).getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(pullConnectionAction).toHaveBeenCalledWith('a1', 'bandsintown'))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
 
@@ -183,30 +227,10 @@ describe('Connect', () => {
     expect(within(dialog).getByRole('button', { name: 'Spotify (connected)' })).toBeDisabled()
     expect(within(dialog).getByRole('button', { name: 'TikTok' })).toBeEnabled()
   })
-
-  it('CRITICAL: Sync on a never-pulled profile pulls it from the link, nothing typed', async () => {
-    // The Apple Music link already holds the artist id; the row should not send the
-    // manager to a form to retype what is on the screen.
-    mount()
-    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' }))
-    await waitFor(() => expect(syncProfileAction).toHaveBeenCalledWith('a1', 'apple music'))
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('12 songs found'))
-    expect(screen.queryByRole('dialog', { name: 'Connect' })).toBeNull()
-  })
-
-  it('a link with no id in it says so, and the row stays', async () => {
-    vi.mocked(syncProfileAction).mockResolvedValueOnce({ ok: false, error: 'That Apple Music link has no artist id in it — it needs to be the artist page.' })
-    mount()
-    fireEvent.click(within(rowOf('Apple Music')).getByRole('button', { name: 'Sync Apple Music' }))
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringMatching(/no artist id/), 'error'))
-    expect(rowOf('Apple Music')).toBeInTheDocument()
-  })
 })
 
 describe('Publish', () => {
   it('is the floating bar every content page has, and it publishes the LINK snapshot', async () => {
-    // Nothing to publish → the bar is there but off. With edits → it opens the password
-    // prompt, and the password goes to the link publish, not a generic one.
     mount(ROWS, false)
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled()
     cleanup()
