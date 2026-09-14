@@ -144,24 +144,25 @@ export default async function OverviewPage({
         <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
       </section>
 
-      {/* WHERE. A ranked list rather than a chart: countries are named things of
-          unequal length, and a reader comparing them is comparing magnitudes,
-          which a bar does plainly and a pie does not. Empty until the event door
-          has an ipinfo key. */}
-      <section>
-        <KLabel>Where they are</KLabel>
-        <BarList
-          className="mt-3"
-          bars={places}
-          empty="Location needs an ipinfo key on the event door."
-        />
-      </section>
-
-      {/* ON WHAT. Mobile, tablet, computer — which view of the site to build out. */}
-      <section>
-        <KLabel>What they used</KLabel>
-        <DeviceSplit className="mt-3" shares={summarizeDevices(traffic.devices)} />
-      </section>
+      {/* WHERE and ON WHAT share a row: neither needs the full width (Sam,
+          2026-09-13). Places is a ranked list — countries are named things of
+          unequal length, and a bar compares magnitudes plainly where a pie does
+          not; empty until the event door has an ipinfo key. Devices is the
+          waffle: mobile, tablet, computer — which view of the site to build out. */}
+      <div className="grid gap-10 md:grid-cols-2">
+        <section>
+          <KLabel>Where they are</KLabel>
+          <BarList
+            className="mt-3"
+            bars={places}
+            empty="Location needs an ipinfo key on the event door."
+          />
+        </section>
+        <section>
+          <KLabel>What they used</KLabel>
+          <DeviceSplit className="mt-3" shares={summarizeDevices(traffic.devices)} />
+        </section>
+      </div>
 
       {/* WHAT THEY ACTED ON. Songs by plays, dates by ticket clicks, merch by buy
           clicks — the three events the site attaches an entity to. No videos: the

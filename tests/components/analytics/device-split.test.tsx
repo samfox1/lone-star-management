@@ -33,15 +33,15 @@ describe('DeviceSplit', () => {
     expect(flipped.container.querySelector('[data-waffle] [data-cell="tablet"]')!.className).toMatch(/\bbg-accent-red\b/)
   })
 
-  it('the legend is one figure per kind from the registry, each a share of EVERYONE, and no browser', () => {
+  it('the legend is one share per kind from the registry, of EVERYONE — percentages only, no counts, no browser', () => {
     const { container } = render(<DeviceSplit shares={shares} />)
     expect(screen.getAllByRole('term').slice(0, 3).map((t) => t.textContent)).toEqual(DEVICE_KINDS.map((k) => k.label))
     const text = container.textContent!
-    expect(text).toMatch(/Mobile66%296 visitors/)
-    expect(text).toMatch(/Tablet3%13 visitors/)
-    expect(text).toMatch(/Computer29%130 visitors/)
+    expect(text).toMatch(/Mobile66%Tablet3%Computer29%/)
+    expect(text).not.toMatch(/\d{2,} visitors|296|130|\b13\b/)
     expect(text).not.toMatch(/chrome|safari|instagram/i)
-    expect(text).toMatch(/9 visitors on something the door could not classify/i)
+    // The unclassified are a share too: 9 of 448.
+    expect(text).toMatch(/2% on something the door could not classify/i)
   })
 
   it('every kind carries its device mark', () => {
