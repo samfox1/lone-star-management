@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, type ReactNode } from 'react'
+import { useCallback, useRef, type ReactNode } from 'react'
 
 import { useStorageUpload } from './use-storage-upload'
 import { useBudgetGate } from './budget-gate'
@@ -78,6 +78,8 @@ export function UploadField({
   const { busy, error, progress, upload: send } = useStorageUpload(upload)
   const gate = useBudgetGate(kind, budget)
   const inputRef = useRef<HTMLInputElement>(null)
+  // A callback, not a render-time read: the ref is touched only when the trigger is used.
+  const open = useCallback(() => inputRef.current?.click(), [])
   const take = async (file: File | undefined) => {
     if (!file || busy || disabled) return
     const prepared = await gate.prepare(file)
@@ -98,7 +100,7 @@ export function UploadField({
             e.target.value = ''
           }}
         />
-        {trigger(() => inputRef.current?.click(), { busy, error: error ?? null })}
+        {trigger(open, { busy, error: error ?? null })}
         {gate.modal}
       </>
     )
