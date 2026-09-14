@@ -110,14 +110,15 @@ export function MetricExplorer({
       <div className="mt-4 grid gap-8 lg:grid-cols-4">
         <TimelineChart points={timeline} height={400} series={series} className="lg:col-span-3" />
 
-        {/* The facts beside the chart, sized to what they say and nothing more: no
-            box, no fill. The views total leads, large; its three facts sit in one
-            row beneath it; each toggled series repeats the shape below, smaller.
-            (Sam, 2026-09-13: on the right, the total larger, the three in their own
-            row, best day as the day alone.) */}
-        <div role="region" aria-label="Facts" className="flex flex-col gap-6 self-start">
+        {/* The facts beside the chart, filling its height: the total on top, then
+            each fact as its own row spreading down the column, so the space beside
+            a 400px chart is used rather than left blank (Sam, 2026-09-13). No box, no
+            fill. A toggled series adds its own rows to the same column. */}
+        <div role="region" aria-label="Facts" className="flex flex-col">
           <div>
-            <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Views · {windowLabel}</div>
+            <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
+              {allTime ? 'Total · all time' : 'Total'}
+            </div>
             <div className="mt-2 font-space text-[52px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink">{fmt(vf.total)}</div>
             {!allTime && (
               <div className="mt-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
@@ -128,25 +129,23 @@ export function MetricExplorer({
                 )}
               </div>
             )}
-            <dl className="mt-4 grid grid-cols-3 gap-4 border-t border-hairline pt-4">
-              <Fact label="Best day" value={vf.bestDay ? dayLabel(vf.bestDay.day) : '—'} />
-              <Fact label="Per day" value={perDay(vf.perDay)} />
-              {(extras.views ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
-            </dl>
           </div>
+
+          <dl className="mt-4 flex flex-1 flex-col divide-y divide-hairline border-t border-hairline">
+            <Fact label="Best day" value={vf.bestDay ? dayLabel(vf.bestDay.day) : '—'} />
+            <Fact label="Per day" value={perDay(vf.perDay)} />
+            {(extras.views ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+          </dl>
 
           {drawn.slice(1).map((m) => {
             const f = factsFor(m)
             return (
-              <div key={m.key} data-facts={m.key} className="border-t border-ink pt-4">
-                <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{m.label}</div>
-                <div className="mt-1.5 font-space text-[28px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink">{fmt(f.total)}</div>
-                <dl className="mt-3 grid grid-cols-3 gap-4">
-                  <Fact label="Best day" value={f.bestDay ? dayLabel(f.bestDay.day) : '—'} />
-                  <Fact label="Per day" value={perDay(f.perDay)} />
-                  {(extras[m.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
-                </dl>
-              </div>
+              <dl key={m.key} data-facts={m.key} className="flex flex-1 flex-col divide-y divide-hairline border-t border-ink">
+                <Fact label={m.label} value={fmt(f.total)} big />
+                <Fact label="Best day" value={f.bestDay ? dayLabel(f.bestDay.day) : '—'} />
+                <Fact label="Per day" value={perDay(f.perDay)} />
+                {(extras[m.key] ?? []).map((e) => <Fact key={e.label} label={e.label} value={e.value} />)}
+              </dl>
             )
           })}
         </div>
@@ -155,11 +154,12 @@ export function MetricExplorer({
   )
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+/** One fact as a row that grows to share the column's height with its siblings. */
+function Fact({ label, value, big = false }: { label: string; value: string; big?: boolean }) {
   return (
-    <div className="min-w-0">
+    <div className="flex flex-1 flex-col justify-center py-3">
       <dt className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{label}</dt>
-      <dd className="mt-1 truncate font-space text-[15px] font-bold tabular-nums text-ink">{value}</dd>
+      <dd className={cx('mt-1 truncate font-space font-bold tabular-nums text-ink', big ? 'text-[28px] leading-none' : 'text-[22px] leading-none')}>{value}</dd>
     </div>
   )
 }
