@@ -7,10 +7,10 @@ import { SourceGlyph } from '@/components/ui/source-glyphs'
 
 /**
  * Where visitors came from: one ring per source, the platform's mark inside it,
- * the arc around it that source's share of everyone. Hover (or focus) a ring
- * and its centre flips from the mark to the share — the number lives IN the
- * ring, not under it (Sam, 2026-09-13: no detail container, no count line
- * below the name).
+ * the arc around it that source's share of everyone. The centre is a coin with
+ * the mark on one face and the share on the other; hover (or focus) turns it
+ * over — the number lives IN the ring, not under it (Sam, 2026-09-13: no detail
+ * container, no count line below the name, and "literally flip").
  *
  * The first six show; the rest sit behind one control. Six is the number a
  * person can compare by eye; past that they are reading a list, and the list is
@@ -52,28 +52,33 @@ export function SourceRings({
                 aria-label={`${s.label}: ${s.visitors} visitors, ${pct}`}
                 className="group flex w-full flex-col items-center gap-2.5 rounded-xl py-2 outline-none"
               >
-                <svg viewBox="0 0 100 100" className="block h-[104px] w-[104px]" aria-hidden="true">
-                  <circle cx={50} cy={50} r={R} fill="none" className="stroke-hairline" strokeWidth={7} />
-                  <circle
-                    data-arc
-                    cx={50} cy={50} r={R} fill="none"
-                    stroke="currentColor" className="text-accent" strokeWidth={7}
-                    strokeDasharray={`${(s.share * C).toFixed(2)} ${C.toFixed(2)}`}
-                    transform="rotate(-90 50 50)"
-                  />
-                  {/* The two faces of the centre: the mark, and the share it flips to. */}
-                  <g data-mark transform="translate(32 32) scale(1.5)" className="text-ink transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0">
-                    <SourceGlyph source={s.source} />
-                  </g>
-                  <text
-                    data-share
-                    x={50} y={50} textAnchor="middle" dominantBaseline="central"
-                    fill="currentColor" fontSize={22} fontWeight={700}
-                    className="font-space text-ink opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-                  >
-                    {pct}
-                  </text>
-                </svg>
+                <div className="relative h-[104px] w-[104px]">
+                  <svg viewBox="0 0 100 100" className="block h-full w-full" aria-hidden="true">
+                    <circle cx={50} cy={50} r={R} fill="none" className="stroke-hairline" strokeWidth={7} />
+                    <circle
+                      data-arc
+                      cx={50} cy={50} r={R} fill="none"
+                      stroke="currentColor" className="text-accent" strokeWidth={7}
+                      strokeDasharray={`${(s.share * C).toFixed(2)} ${C.toFixed(2)}`}
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  {/* The centre is a coin: the mark on one face, the share on the other.
+                      Hover or focus turns it over (Sam, 2026-09-13: "literally flip"). */}
+                  <div className="absolute inset-0 flex items-center justify-center perspective-normal">
+                    <div
+                      data-coin
+                      className="relative h-16 w-16 transform-3d transition-transform duration-500 ease-[cubic-bezier(.4,0,.2,1)] group-hover:rotate-y-180 group-focus-visible:rotate-y-180 motion-reduce:transition-none"
+                    >
+                      <div data-mark className="absolute inset-0 flex items-center justify-center rounded-full bg-surface text-ink backface-hidden">
+                        <SourceGlyph source={s.source} className="h-9 w-9" />
+                      </div>
+                      <div data-share className="absolute inset-0 flex items-center justify-center rounded-full bg-surface font-space text-[19px] font-bold tabular-nums text-ink backface-hidden rotate-y-180">
+                        {pct}
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <span className="font-space text-[11px] font-bold text-ink">{s.label}</span>
               </div>
             </li>

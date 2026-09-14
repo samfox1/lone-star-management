@@ -58,10 +58,15 @@ describe('SourceRings', () => {
     expect(ring.textContent).not.toMatch(/212|471/)
     expect(container.querySelector('section')).toBeNull()
     expect(screen.queryByText(/visitors from/i)).toBeNull()
-    // The flip is CSS on hover/focus: the share starts hidden, the mark shown.
-    expect(ring.querySelector('[data-share]')!.getAttribute('class')).toMatch(/\bopacity-0\b/)
-    expect(ring.querySelector('[data-share]')!.getAttribute('class')).toMatch(/group-hover:opacity-100/)
-    expect(ring.querySelector('[data-mark]')!.getAttribute('class')).toMatch(/group-hover:opacity-0/)
+    // The flip is a 3D turn on hover/focus: one coin, two faces, the share face
+    // pre-turned so it reads correctly once the coin is over.
+    const coin = ring.querySelector('[data-coin]')!
+    expect(coin.className).toMatch(/\btransform-3d\b/)
+    expect(coin.className).toMatch(/group-hover:rotate-y-180/)
+    expect(coin.className).toMatch(/group-focus-visible:rotate-y-180/)
+    for (const face of ['[data-mark]', '[data-share]']) expect(coin.querySelector(face)!.className).toMatch(/\bbackface-hidden\b/)
+    expect(coin.querySelector('[data-share]')!.className).toMatch(/\brotate-y-180\b/)
+    expect(coin.querySelector('[data-mark]')!.className).not.toMatch(/\brotate-y-180\b/)
     expect(ring.getAttribute('tabindex')).toBe('0')
   })
 
