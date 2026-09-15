@@ -8,7 +8,7 @@
  *
  * POINTS: each visitor city the door placed, on the flat map (Mercator, lib/map-projection.ts, the
  * latitude held inside the frame so a pole cannot become Infinity), with its real lon/lat for the globe
- * and a warmth for the heat (0..1: a square root of its visitors, with a floor so one visitor shows).
+ * and its visitors. How hot it glows is worked out by the views, at the zoom it is seen at (lib/heat.ts).
  *
  * COUNTRIES: every located country with the totals the list shows (lib/analytics-places.ts), how many
  * major cities it has, and a frame — its largest landmass from country-frames.json, or its own points
@@ -26,8 +26,6 @@ import { MAP_H, MAP_W } from './map-constants'
 import { projectFlat } from './map-projection'
 import { boxOf, fitBox, type Bounds, type Box, type View } from './map-view'
 
-/** The least a one-visitor city glows. */
-export const HEAT_FLOOR = 0.25
 /** The deepest a country frame goes. */
 export const COUNTRY_K_MAX = 6
 /** Room around a country: a little, so the country IS the frame. */
@@ -35,7 +33,7 @@ const COUNTRY_PAD = 0.12
 const BOUNDS: Bounds = { width: MAP_W, height: MAP_H, aspect: MAP_W / MAP_H }
 const FRAMES = frames as unknown as Record<string, { box: Box; centroid: [number, number] }>
 
-export type MapPoint = { key: string; country: string; visitors: number; views: number; x: number; y: number; lon: number; lat: number; heat: number }
+export type MapPoint = { key: string; country: string; visitors: number; views: number; x: number; y: number; lon: number; lat: number }
 /** A major city with an audience, placed on the flat map (`x`, `y`); the globe projects `lon` / `lat` itself. */
 export type MajorCityDot = MajorCity & { x: number; y: number }
 /** A located country: the list's totals, its major-city count, and — when it can have one — its frame and centre. */
@@ -57,12 +55,11 @@ export type WorldMapData = {
 
 export function worldMap(places: PlaceRow[]): WorldMapData {
   const placed = places.filter((p) => p.country && p.lat !== null && p.lon !== null)
-  const max = placed.reduce((m, p) => Math.max(m, p.visitors), 1)
   const points: MapPoint[] = placed.map((p) => {
     const lon = p.lon as number
     const lat = p.lat as number
     const [x, y] = projectFlat(lon, lat)
-    return { key: `${p.country}|${p.region}|${p.city}`, country: p.country, visitors: p.visitors, views: p.views, x, y, lon, lat, heat: HEAT_FLOOR + (1 - HEAT_FLOOR) * Math.sqrt(p.visitors / max) }
+    return { key: `${p.country}|${p.region}|${p.city}`, country: p.country, visitors: p.visitors, views: p.views, x, y, lon, lat }
   })
   const pointsIn = new Map<string, MapPoint[]>()
   for (const p of points) {

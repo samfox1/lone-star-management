@@ -3,15 +3,16 @@
 import { useMemo, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { HEAT_R } from '@/lib/map-constants'
+import { heatAlphas } from '@/lib/heat'
 import type { MajorCityDot, WorldMapData } from '@/lib/analytics-map'
 import type { FlatGeography } from '@/lib/map-geography'
 import { clampView, fadeIn, fitView, fitWindow, panView, worldView, zoomView, type Bounds, type View } from '@/lib/map-view'
-import { CityDots, HeatDefs, HoverMarker, HoverReadout, LandLayer, ZoomControls } from '@/components/ui/map-parts'
+import { CityDots, greyLine, HeatDefs, HoverMarker, HoverReadout, LandLayer, ZoomControls } from '@/components/ui/map-parts'
 import { useMapPointer } from '@/components/ui/use-map-pointer'
 
 const STEP = 1.6
 /** Blur under the heat, in screen px. */
-const HEAT_BLUR = 9
+const HEAT_BLUR = 5
 /** Where the US state lines fade in (zoom from → to). Country borders are always drawn. */
 const STATES_FADE: [number, number] = [3, 5]
 /** The white rim on coasts and lakes, in screen px: half of it lands inside the grey, which is the part that shows. */
@@ -59,6 +60,8 @@ export function WorldMap({ map, geography, country, onSelectCountry, aspect, ext
   const k = map.frame.width / view.w
   const selectable = useMemo(() => new Set(map.countries.map((c) => c.code)), [map.countries])
   const dots = useMemo(() => (country === null ? [] : map.majorCities.filter((m) => m.country === country)), [map.majorCities, country])
+  /** How hot each city glows: its share of the busiest spot at THIS zoom, where a glow reaches HEAT_R screen px. */
+  const alphas = useMemo(() => heatAlphas(map.points, HEAT_R / k), [map.points, k])
   /** Apply a move to the window as it is SHOWN. */
   const move = (f: (shown: View) => View) => setView((v) => f(clampView(v, bounds)))
 
@@ -90,14 +93,17 @@ export function WorldMap({ map, geography, country, onSelectCountry, aspect, ext
           <HeatDefs id="lsm-heat" blur={HEAT_BLUR / k} region={{ x: view.x - reach, y: view.y - reach, width: view.w + 2 * reach, height: view.h + 2 * reach }} />
         </defs>
         <LandLayer lands={geography.lands} country={country} selectable={selectable} rim={RIM / k} />
-        <path data-lakes d={geography.lakes} fill="var(--color-paper)" stroke="var(--color-paper)" strokeWidth={RIM / k} strokeLinejoin="round" style={{ pointerEvents: 'none' }} />
         {/* Every line sits UNDER the heat (Sam, 2026-09-14: "they shouldn't be on top of the heat maps"),
             and in GREY: white on the pale grey land could not be seen at any zoom. */}
-        <path data-borders d={geography.borders} fill="none" stroke="var(--color-ink-faint)" strokeOpacity={0.55} strokeWidth={0.75 / k} strokeLinejoin="round" opacity={1} style={{ pointerEvents: 'none' }} />
+        <path data-borders d={geography.borders} fill="none" {...greyLine(k)} opacity={1} />
         <path data-states d={geography.states} fill="none" stroke="var(--color-ink-faint)" strokeOpacity={0.4} strokeWidth={0.5 / k} strokeLinejoin="round" opacity={fadeIn(k, ...STATES_FADE)} style={{ pointerEvents: 'none' }} />
+        {/* The lakes go OVER the border and state lines: those lines run through the water (the US–Canada
+            border down Lake Erie), and drawn across a lake they read as mistakes (Sam, 2026-09-15). */}
+        <path data-lakes d={geography.lakes} fill="var(--color-paper)" {...greyLine(k)} />
+        <path data-coasts d={geography.coasts} fill="none" {...greyLine(k)} opacity={1} />
         <g filter="url(#lsm-heat)" style={{ pointerEvents: 'none' }}>
-          {map.points.map((p) => (
-            <circle key={p.key} data-heat data-key={p.key} cx={p.x} cy={p.y} r={HEAT_R / k} opacity={p.heat} fill="url(#lsm-heat-glow)" />
+          {map.points.map((p, i) => (
+            <circle key={p.key} data-heat data-key={p.key} cx={p.x} cy={p.y} r={HEAT_R / k} opacity={alphas[i]} fill="url(#lsm-heat-glow)" />
           ))}
         </g>
         <CityDots dots={dots} k={k} />

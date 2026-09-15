@@ -4,14 +4,15 @@ import { useMemo, useState } from 'react'
 import { geoPath, type GeoProjection } from 'd3-geo'
 import { cx } from '@/lib/cx'
 import { HEAT_R } from '@/lib/map-constants'
+import { heatAlphas } from '@/lib/heat'
 import type { MajorCityDot, WorldMapData } from '@/lib/analytics-map'
 import type { GlobeGeography } from '@/lib/map-geography'
 import { GLOBE_SIZE, dragRotate, faceOf, globeProjection, globeWidth, isNearSide, rotationTo, zoomScale, type Rotation } from '@/lib/globe-view'
-import { CityDots, HeatDefs, HoverMarker, HoverReadout, LandLayer, ZoomControls } from '@/components/ui/map-parts'
+import { CityDots, greyLine, HeatDefs, HoverMarker, HoverReadout, LandLayer, ZoomControls } from '@/components/ui/map-parts'
 import { useMapPointer } from '@/components/ui/use-map-pointer'
 
 const STEP = 1.6
-const HEAT_BLUR = 9
+const HEAT_BLUR = 5
 const RIM = 1
 const SPHERE = { type: 'Sphere' as const }
 
@@ -69,10 +70,14 @@ export function Globe({ map, geography, country, onSelectCountry, aspect, extra,
       sphere: path(SPHERE) ?? '',
       lands: geography.lands.map((l) => ({ code: l.code, d: path(l.geometry) ?? '' })),
       lakes: path(geography.lakes) ?? '',
+      coasts: path(geography.coasts) ?? '',
       borders: path(geography.borders) ?? '',
+      states: path(geography.states) ?? '',
     }
   }, [rotation, scale, boxAspect, geography])
   const glows = useMemo(() => onGlobe(map.points, drawn.projection, rotation), [map.points, drawn, rotation])
+  /** How hot each near-side city glows: its share of the busiest spot on the globe as it is turned now. */
+  const glowAlphas = useMemo(() => heatAlphas(glows, HEAT_R), [glows])
   const dots = useMemo(
     () => (country === null ? [] : onGlobe(map.majorCities.filter((m) => m.country === country), drawn.projection, rotation)),
     [map.majorCities, country, drawn, rotation],
@@ -112,11 +117,14 @@ export function Globe({ map, geography, country, onSelectCountry, aspect, extra,
         </defs>
         <path data-sphere d={drawn.sphere} fill="var(--color-paper)" stroke="currentColor" className="text-hairline" strokeWidth={1} />
         <LandLayer lands={drawn.lands} country={country} selectable={selectable} rim={RIM} />
-        <path data-lakes d={drawn.lakes} fill="var(--color-paper)" stroke="var(--color-paper)" strokeWidth={RIM} strokeLinejoin="round" style={{ pointerEvents: 'none' }} />
-        <path data-borders d={drawn.borders} fill="none" stroke="var(--color-ink-faint)" strokeOpacity={0.55} strokeWidth={0.75} strokeLinejoin="round" opacity={1} style={{ pointerEvents: 'none' }} />
+        <path data-borders d={drawn.borders} fill="none" {...greyLine()} opacity={1} />
+        <path data-states d={drawn.states} fill="none" {...greyLine()} strokeOpacity={0.4} strokeWidth={0.5} />
+        {/* The lakes cover the borders that run through their water. */}
+        <path data-lakes d={drawn.lakes} fill="var(--color-paper)" {...greyLine()} />
+        <path data-coasts d={drawn.coasts} fill="none" {...greyLine()} opacity={1} />
         <g filter="url(#lsg-heat)" clipPath="url(#lsg-clip)" style={{ pointerEvents: 'none' }}>
-          {glows.map((p) => (
-            <circle key={p.key} data-heat data-key={p.key} cx={p.x} cy={p.y} r={HEAT_R} opacity={p.heat} fill="url(#lsg-heat-glow)" />
+          {glows.map((p, i) => (
+            <circle key={p.key} data-heat data-key={p.key} cx={p.x} cy={p.y} r={HEAT_R} opacity={glowAlphas[i]} fill="url(#lsg-heat-glow)" />
           ))}
         </g>
         <path d={drawn.sphere} fill="url(#lsg-shade)" style={{ pointerEvents: 'none' }} />

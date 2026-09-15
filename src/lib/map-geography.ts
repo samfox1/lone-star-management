@@ -10,6 +10,8 @@ export type FlatGeography = {
   /** Each country's land, keyed by ISO alpha-2 ('' where the atlas has no code). A code can appear twice. */
   lands: { code: string; d: string }[]
   lakes: string
+  /** Every land edge no two countries share, drawn in the border grey. */
+  coasts: string
   borders: string
   /** The US state lines, faded in as the map zooms. */
   states: string
@@ -19,5 +21,8 @@ export type FlatGeography = {
 export type GlobeGeography = {
   lands: { code: string; geometry: GeoGeometryObjects }[]
   lakes: ExtendedFeatureCollection
+  coasts: GeoGeometryObjects
   borders: GeoGeometryObjects
+  /** The US state lines. */
+  states: GeoGeometryObjects
 }

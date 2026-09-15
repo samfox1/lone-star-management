@@ -4,7 +4,7 @@
 // scripts/build-map-data.ts and loaded by the browser once (map-geography-data.test.ts).
 import { describe, expect, it } from 'vitest'
 import { geoMercator } from 'd3-geo'
-import { HEAT_FLOOR, worldMap } from '@/lib/analytics-map'
+import { worldMap } from '@/lib/analytics-map'
 import { LAT_BOTTOM, LAT_TOP, MAP_H, MAP_W } from '@/lib/map-constants'
 import { MAJOR_CITY_RADIUS_MI } from '@/lib/geo-distance'
 import { countryTotals } from '@/lib/analytics-places'
@@ -53,15 +53,10 @@ describe('worldMap — where a city lands', () => {
     expect(m.points.find((p) => p.key === 'NO|X|Cap')!.y).toBeCloseTo(0, 3)
   })
 
-  it('CRITICAL: heat follows visitors on a square root — the leader glows fully, a quarter of it half way up from the floor', () => {
-    const { points } = worldMap([place('US', 'X', 'A', 100, 10, 10), place('US', 'X', 'B', 25, 20, 20), place('US', 'X', 'C', 1, 30, 30)])
-    const by = Object.fromEntries(points.map((p) => [p.key, p.heat]))
-    expect(by['US|X|A']).toBe(1)
-    expect(by['US|X|B']).toBeCloseTo(HEAT_FLOOR + (1 - HEAT_FLOOR) * 0.5, 6)
-    expect(by['US|X|C']).toBeGreaterThanOrEqual(HEAT_FLOOR)
-    expect(by['US|X|C']).toBeLessThan(by['US|X|B'])
-    expect(HEAT_FLOOR).toBeGreaterThan(0)
-    expect(HEAT_FLOOR).toBeLessThan(0.5)
+  it('CRITICAL: points carry visitors, not a heat — how hot a city glows depends on its neighbours at the zoom it is seen at, so the views work it out (lib/heat.ts)', () => {
+    const { points } = worldMap([place('US', 'X', 'A', 100, 10, 10), place('US', 'X', 'B', 25, 20, 20)])
+    expect(points.map((p) => p.visitors)).toEqual([100, 25])
+    for (const p of points) expect(p).not.toHaveProperty('heat')
   })
 
   it('CRITICAL: only a LOCATED place with a POINT is drawn — no country, or no point, or half a point, is not', () => {

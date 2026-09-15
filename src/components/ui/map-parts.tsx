@@ -13,6 +13,16 @@ import type { CityDot, Hover } from '@/components/ui/use-map-pointer'
  * dots and the marker on the one under the pointer, the readout, and the heat filter.
  */
 
+/** The one grey line for borders, coastlines and lake shores (Sam, 2026-09-15: "borders on the coastlines too"),
+ *  at `k` zoom so it keeps its width on screen. Grey, because white on the pale land could not be seen. */
+export const greyLine = (k = 1) => ({
+  stroke: 'var(--color-ink-faint)',
+  strokeOpacity: 0.55,
+  strokeWidth: 0.75 / k,
+  strokeLinejoin: 'round' as const,
+  style: { pointerEvents: 'none' as const },
+})
+
 export const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
 
 export function MapButton({ label, onClick, disabled, children }: { label: string; onClick?: () => void; disabled?: boolean; children: ReactNode }) {
@@ -125,13 +135,14 @@ export function MapReadout({ name, sub, visitors, views, style }: { name: string
   )
 }
 
-/** The heat ramp, sampled at 0, ⅓, ⅔, 1 of intensity: nothing → faint accent → accent → red.
- *  accent #2563eb = (37, 99, 235); accent-red #e5484d = (229, 72, 77). */
+/** The heat ramp, sampled at 0, ⅕ … 1 of intensity: nothing → faint accent → accent → red → dark red → deeper red.
+ *  accent #2563eb = (37, 99, 235); accent-red #e5484d = (229, 72, 77); #b91c1c = (185, 28, 28); #7f1d1d = (127, 29, 29).
+ *  Only the busiest spot reaches the top (lib/heat.ts). Sam, 2026-09-15: "it should be able to get dark red". */
 const RAMP = {
-  r: '0.145 0.145 0.145 0.898',
-  g: '0.388 0.388 0.388 0.282',
-  b: '0.922 0.922 0.922 0.302',
-  a: '0 0.3 0.62 0.85',
+  r: '0.145 0.145 0.145 0.898 0.725 0.498',
+  g: '0.388 0.388 0.388 0.282 0.110 0.114',
+  b: '0.922 0.922 0.922 0.302 0.110 0.114',
+  a: '0 0.3 0.6 0.82 0.9 0.95',
 }
 
 /**

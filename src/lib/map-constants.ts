@@ -13,6 +13,6 @@ const mercatorY = (lat: number) => R * Math.log(Math.tan(Math.PI / 4 + (lat * Ma
 /** Its height: the Mercator extent from LAT_TOP to LAT_BOTTOM at MAP_W. */
 export const MAP_H = mercatorY(LAT_TOP) - mercatorY(LAT_BOTTOM)
 /** The heat glow under a city, in screen px — and how near the pointer must be to a major city's dot to read it. */
-export const HEAT_R = 26
+export const HEAT_R = 16
 /** The dot on each major city inside a country, in screen px. */
 export const DOT_R = 2

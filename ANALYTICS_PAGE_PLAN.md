@@ -206,9 +206,15 @@ instructional copy. `dataviz` skill before drawing anything.
    - **The box** (`PlacesView`): 2:1 with a hairline border, and it sets the row's height; the list
      beside it scrolls inside that height. The flat map first; one button beside + − switches and shows
      the OTHER view's glyph. The map (`world-map.tsx`, window rules in `lib/map-view.ts`) opens on the
-     audience; drag, + − and pinch move it. One glow per city, blurred into heat through the accent → red
-     ramp; grey borders always, US state lines fading in, both under the heat; white rims on coasts and
-     lakes. The globe (`globe.tsx`, `lib/globe-view.ts`) is d3's orthographic on the client: it opens
+     audience; drag, + − and pinch move it. One glow per city (16 screen px, 5 px blur), blurred into heat through
+     the accent → red → dark red ramp. The heat is RELATIVE (`lib/heat.ts`, Sam 2026-09-15: "will the whole
+     map be red?"): each city's strength is its share of the busiest spot at the zoom it is seen at, so only
+     that spot reaches dark red and the same audience at any size looks the same; a faint neighbourhood is
+     lifted to a visible minimum as a whole, never city by city. One grey line for borders, coastlines and lake shores (Sam, 2026-09-15: "borders on the
+     coastlines too"), US state lines fading in; the lakes are drawn OVER the border and state lines, which
+     run through their water and read as mistakes there; every line sits under the heat. Coasts keep 30% of
+     the 1:50m points (15% turned Long Island into a wedge when zoomed in). The globe (`globe.tsx`, `lib/globe-view.ts`) is d3's orthographic on the client, with the same
+     coastlines, borders and US state lines: it opens
      facing the audience, turns by drag, and choosing a country turns to it without zooming (a zoomed
      sphere was cropped).
    - **Country level** (`PlacesSection` owns `country`): the list is countries, each with "N cities".

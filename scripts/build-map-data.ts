@@ -28,7 +28,7 @@ import iso from 'i18n-iso-countries'
 import { MAP_W } from '../src/lib/map-constants'
 import { flatProjection } from '../src/lib/map-projection'
 
-const KEEP_QUANTILE = 0.15
+const KEEP_QUANTILE = 0.3
 const MIN_LAKE_KM2 = 10_000
 const ANTARCTICA = '010'
 const EARTH_R_KM = 6371
@@ -76,6 +76,9 @@ function main() {
   const geoms50 = (topo50.objects.countries as unknown as { geometries: { id?: string }[] }).geometries.filter((g) => String(g.id) !== ANTARCTICA)
   const lands50 = geoms50.map((g) => ({ code: codeOf(g.id), geometry: (feature(topo50, g as never) as unknown as { geometry: Geometry }).geometry }))
   const borders50 = mesh(topo50, topo50.objects.countries as never, (a: unknown, b: unknown) => a !== b)
+  // Coastlines: every edge no two countries share, from the SAME topology so they meet the borders exactly.
+  // Antarctica is left out of the collection, so its coast is not drawn along the bottom of the map.
+  const coasts50 = mesh(topo50, { type: 'GeometryCollection', geometries: geoms50 } as never, (a: unknown, b: unknown) => a === b)
 
   const states = JSON.parse(readFileSync(statesPath, 'utf8')) as Fc
   const usStates = { type: 'FeatureCollection', features: states.features.filter((f) => (f.properties.ADM0_A3 ?? f.properties.adm0_a3) === 'USA').map((f) => ({ type: 'Feature', properties: {}, geometry: f.geometry })) }
@@ -87,7 +90,7 @@ function main() {
       .map((f) => ({ type: 'Feature' as const, properties: { name: f.properties.name }, geometry: { type: f.geometry.type, coordinates: round2(f.geometry.coordinates) } })),
   }
 
-  const flat = { lands: lands50.map((l) => ({ code: l.code, d: d(l.geometry) })), lakes: d(lakes), borders: d(borders50), states: d(usStates) }
+  const flat = { lands: lands50.map((l) => ({ code: l.code, d: d(l.geometry) })), lakes: d(lakes), coasts: d(coasts50), borders: d(borders50), states: d(usStates) }
   writeFileSync('src/data/map-flat.json', JSON.stringify(flat) + '\n')
 
   // ── the globe, 1:110m
@@ -99,7 +102,10 @@ function main() {
       return { code: codeOf(g.id), geometry: { type: f.geometry.type, coordinates: round2(f.geometry.coordinates) } }
     }),
     lakes,
+    coasts: { type: 'MultiLineString', coordinates: round2((mesh(atlas110, { type: 'GeometryCollection', geometries: geoms110 } as never, (a: unknown, b: unknown) => a === b) as unknown as Geometry).coordinates) },
     borders: { type: 'MultiLineString', coordinates: round2((mesh(atlas110, atlas110.objects.countries, (a: unknown, b: unknown) => a !== b) as unknown as Geometry).coordinates) },
+    // The US state lines, as on the flat map (Sam, 2026-09-15: "US state lines on globe view").
+    states: { type: 'MultiLineString', coordinates: round2((usStates.features as { geometry: { type: string; coordinates: unknown } }[]).flatMap((f) => (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : (f.geometry.coordinates as unknown[])))) },
   }
   writeFileSync('src/data/map-globe.json', JSON.stringify(globe) + '\n')
 

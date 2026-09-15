@@ -6,6 +6,7 @@ import flat from '@/data/map-flat.json'
 import globe from '@/data/map-globe.json'
 import frames from '@/data/country-frames.json'
 import { MAP_W } from '@/lib/map-constants'
+import { flatProjection } from '@/lib/map-projection'
 
 type Frame = { box: { minX: number; maxX: number; minY: number; maxY: number }; centroid: [number, number] }
 const allFrames = Object.entries(frames as unknown as Record<string, Frame>)
@@ -35,12 +36,26 @@ describe('map-flat.json', () => {
     expect(flat.lands.length).toBeGreaterThan(200)
     expect(flat.lands.map((l) => l.code)).not.toContain('AQ')
     expect(flat.lands.find((l) => l.code === 'US')!.d.length).toBeGreaterThan(2000)
-    for (const layer of ['lakes', 'borders', 'states'] as const) expect(flat[layer].length, layer).toBeGreaterThan(500)
-    for (const d of [flat.lakes, flat.borders, flat.states, ...flat.lands.map((l) => l.d)]) expect(d).not.toMatch(/\d\.\d\d/)
+    for (const layer of ['lakes', 'coasts', 'borders', 'states'] as const) expect(flat[layer].length, layer).toBeGreaterThan(500)
+    for (const d of [flat.lakes, flat.coasts, flat.borders, flat.states, ...flat.lands.map((l) => l.d)]) expect(d).not.toMatch(/\d\.\d\d/)
+  })
+
+  it('CRITICAL: coastlines are their own line — every land edge no neighbour shares — so a country with no land border, like Australia, has an outline; Antarctica\'s is left out', () => {
+    const pts = [...flat.coasts.matchAll(/(-?\d+(?:\.\d)?),(-?\d+(?:\.\d)?)/g)].map((m) => [Number(m[1]), Number(m[2])])
+    const au = (frames as unknown as Record<string, Frame>).AU.box
+    expect(pts.filter(([x, y]) => x >= au.minX && x <= au.maxX && y >= au.minY && y <= au.maxY).length).toBeGreaterThan(50)
+    const south = flatProjection([0, -62])![1]
+    expect(pts.reduce((m, [, y]) => Math.max(m, y), -Infinity)).toBeLessThan(south)
+  })
+
+  it('CRITICAL: coastlines keep enough detail to zoom into — 30% of the 1:50m points; at 15% Long Island was a wedge and Chesapeake Bay a spike (Sam, 2026-09-15: "still not accurate")', () => {
+    const us = flat.lands.filter((l) => l.code === 'US').map((l) => l.d).join('')
+    expect((us.match(/,/g) ?? []).length).toBeGreaterThan(1300) // 922 points at 15%, 1,631 at 30%
   })
 
   it('CRITICAL: stays inside its byte budget', () => {
-    expect(JSON.stringify(flat).length).toBeLessThan(500_000)
+    // 800 KB since 2026-09-15 (30% detail plus coastlines): ~220 KB compressed, fetched once, never in page props.
+    expect(JSON.stringify(flat).length).toBeLessThan(800_000)
   })
 })
 
@@ -52,9 +67,14 @@ describe('map-globe.json', () => {
     expect(globe.lands.map((l) => l.code)).not.toContain('AQ')
     expect(globe.lakes.type).toBe('FeatureCollection')
     expect(globe.borders.type).toBe('MultiLineString')
+    expect(globe.coasts.type).toBe('MultiLineString')
+    expect(globe.coasts.coordinates.length).toBeGreaterThan(100)
+    expect(globe.states.type).toBe('MultiLineString') // the US state lines, for the globe too
+    expect(globe.states.coordinates.length).toBeGreaterThan(50)
   })
 
   it('CRITICAL: stays inside its byte budget', () => {
-    expect(JSON.stringify(globe).length).toBeLessThan(300_000)
+    // 400 KB since 2026-09-15: coastlines (~70 KB) and the US state lines (~40 KB). Fetched only when the globe first opens.
+    expect(JSON.stringify(globe).length).toBeLessThan(400_000)
   })
 })

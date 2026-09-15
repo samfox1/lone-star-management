@@ -6,7 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { Globe } from '@/components/ui/globe'
-import { DOT_R } from '@/lib/map-constants'
+import { DOT_R, HEAT_R } from '@/lib/map-constants'
+import { heatAlphas } from '@/lib/heat'
 import type { WorldMapData } from '@/lib/analytics-map'
 import type { GlobeGeography } from '@/lib/map-geography'
 import { GLOBE_GAP, GLOBE_SIZE, faceOf, globeProjection, globeWidth, rotationTo, type Rotation } from '@/lib/globe-view'
@@ -19,16 +20,18 @@ const geo: GlobeGeography = {
     { code: 'FR', geometry: { type: 'Polygon', coordinates: [[[-2, 44], [-2, 50], [6, 50], [6, 44], [-2, 44]]] } }, // no audience
   ],
   lakes: { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-88, 42], [-88, 44], [-86, 44], [-86, 42], [-88, 42]]] } }] },
+  coasts: { type: 'MultiLineString', coordinates: [[[-100, 30], [-100, 45], [-80, 45]]] },
   borders: { type: 'MultiLineString', coordinates: [[[-100, 40], [-80, 40]]] },
+  states: { type: 'MultiLineString', coordinates: [[[-90, 31], [-90, 44]]] },
 }
 const map: WorldMapData = {
   frame: { width: 720, height: 360 },
   points: [
-    { key: 'US|Illinois|Chicago', country: 'US', visitors: 186, views: 415, x: 0, y: 0, heat: 1, lon: -87.63, lat: 41.88 },
-    { key: 'US|Illinois|Evanston', country: 'US', visitors: 4, views: 6, x: 0, y: 0, heat: 0.3, lon: -87.69, lat: 42.05 },
-    { key: 'SG||Singapore', country: 'SG', visitors: 9, views: 9, x: 0, y: 0, heat: 0.4, lon: 103.82, lat: 1.35 },
-    { key: 'MY||Kuala Lumpur', country: 'MY', visitors: 2, views: 2, x: 0, y: 0, heat: 0.3, lon: 101.69, lat: 3.14 }, // beside Singapore: on its side, not its country
-    { key: 'US||Far side', country: 'US', visitors: 1, views: 1, x: 0, y: 0, heat: 0.25, lon: -30, lat: -60 }, // the US, round the back from both faces used here
+    { key: 'US|Illinois|Chicago', country: 'US', visitors: 186, views: 415, x: 0, y: 0, lon: -87.63, lat: 41.88 },
+    { key: 'US|Illinois|Evanston', country: 'US', visitors: 4, views: 6, x: 0, y: 0, lon: -87.69, lat: 42.05 },
+    { key: 'SG||Singapore', country: 'SG', visitors: 9, views: 9, x: 0, y: 0, lon: 103.82, lat: 1.35 },
+    { key: 'MY||Kuala Lumpur', country: 'MY', visitors: 2, views: 2, x: 0, y: 0, lon: 101.69, lat: 3.14 }, // beside Singapore: on its side, not its country
+    { key: 'US||Far side', country: 'US', visitors: 1, views: 1, x: 0, y: 0, lon: -30, lat: -60 }, // the US, round the back from both faces used here
   ],
   majorCities: [
     { key: 'US|Illinois|Chicago', name: 'Chicago', region: 'Illinois', country: 'US', lat: 41.83, lon: -87.75, visitors: 190, views: 421, x: 0, y: 0 },
@@ -80,11 +83,12 @@ describe('Globe', () => {
     expect(glows(container)).toEqual(['US|Illinois|Chicago', 'US|Illinois|Evanston'])
   })
 
-  it('CRITICAL: a sphere, each country\'s land on it, lakes cut in, grey borders, then the heat over them — no dots at the country level', () => {
+  it('CRITICAL: a sphere, each country\'s land on it, grey borders, the lakes over them, coastlines, then the heat over all of it — no dots at the country level', () => {
     const { container } = render(draw())
     const sphere = container.querySelector('[data-sphere]')!
     const lands = [...container.querySelectorAll('[data-land]')]
     const lakes = container.querySelector('[data-lakes]')!
+    const coasts = container.querySelector('[data-coasts]')!
     const borders = container.querySelector('[data-borders]')!
     expect(lands.map((l) => l.getAttribute('data-country'))).toEqual(['US', 'SG', 'FR'])
     expect(landOf(container, 'US').getAttribute('d')!.length).toBeGreaterThan(10)
@@ -93,13 +97,39 @@ describe('Globe', () => {
     expect(borders.getAttribute('d')!.length).toBeGreaterThan(5)
     const after = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
     expect(after(sphere, lands[0])).toBe(true)
-    expect(after(lands[2], lakes)).toBe(true)
-    expect(after(lakes, borders)).toBe(true)
-    expect(after(borders, container.querySelector('[data-heat]')!)).toBe(true) // lines under the heat
+    expect(after(lands[2], borders)).toBe(true)
+    expect(after(borders, lakes)).toBe(true) // a lake covers the borders that run through its water
+    expect(coasts.getAttribute('d')!.length).toBeGreaterThan(5)
+    expect(after(lakes, coasts)).toBe(true)
+    expect(after(coasts, container.querySelector('[data-heat]')!)).toBe(true) // lines under the heat
     expect(dotKeys(container)).toEqual([])
     expect(borders.getAttribute('stroke')).toBe('var(--color-ink-faint)')
     expect(landOf(container, 'US').getAttribute('stroke')).toBe('var(--color-paper)')
-    expect(lakes.getAttribute('stroke')).toBe('var(--color-paper)')
+    for (const el of [coasts, lakes]) expect(el.getAttribute('stroke')).toBe('var(--color-ink-faint)') // coasts and lake shores wear the border grey
+  })
+
+  it('CRITICAL: the US state lines are on the globe too (Sam, 2026-09-15), in the lighter grey, over the borders and under the lakes that cover them', () => {
+    const { container } = render(draw())
+    const after = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    const states = container.querySelector('[data-states]')!
+    expect(states.getAttribute('d')!.length).toBeGreaterThan(5)
+    expect(states.getAttribute('stroke')).toBe('var(--color-ink-faint)')
+    expect(states.getAttribute('fill')).toBe('none')
+    expect(after(container.querySelector('[data-borders]')!, states)).toBe(true)
+    expect(after(states, container.querySelector('[data-lakes]')!)).toBe(true)
+  })
+
+  it('CRITICAL: the globe\'s heat is relative too — worked out over the cities on the near side, where the globe draws them', () => {
+    const { container } = render(draw())
+    const projection = projectionOf(container)
+    const shown = [...container.querySelectorAll('[data-heat]')]
+    const placed = shown.map((glow) => {
+      const p = map.points.find((q) => q.key === glow.getAttribute('data-key'))!
+      const [x, y] = projection([p.lon, p.lat])!
+      return { x, y, visitors: p.visitors }
+    })
+    const expected = heatAlphas(placed, HEAT_R)
+    shown.forEach((glow, i) => expect(Number(glow.getAttribute('opacity')), `glow ${i}`).toBeCloseTo(expected[i], 6))
   })
 
   it('CRITICAL: two shapes under ONE country code render cleanly — a key by code alone made React drop one', () => {

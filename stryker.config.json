@@ -64,6 +64,7 @@
     "src/lib/geo-distance.ts",
     "src/lib/analytics-map.ts",
     "src/lib/map-view.ts",
+    "src/lib/heat.ts",
     "src/lib/globe-view.ts",
     "src/lib/integrations-registry.ts",
     "src/lib/format.ts",

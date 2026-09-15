@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { WorldMap } from '@/components/ui/world-map'
 import { DOT_R, HEAT_R } from '@/lib/map-constants'
+import { HEAT_PEAK, heatAlphas } from '@/lib/heat'
 import type { WorldMapData } from '@/lib/analytics-map'
 import type { FlatGeography } from '@/lib/map-geography'
 import { fitView, worldView, type View } from '@/lib/map-view'
@@ -18,14 +19,14 @@ const geo: FlatGeography = {
     { code: 'FR', d: 'M360,120L420,120L420,160L360,160Z' }, // no audience: inert
     { code: '', d: 'M500,200L520,200L520,220Z' }, // no code in the atlas: inert
   ],
-  lakes: 'M1,1L2,1L2,2Z', borders: 'M0,0L5,5', states: 'M1,1L2,2',
+  lakes: 'M1,1L2,1L2,2Z', coasts: 'M9,9L10,10', borders: 'M0,0L5,5', states: 'M1,1L2,2',
 }
 const map: WorldMapData = {
   frame: { width: 720, height: 360 },
   points: [
-    { key: 'US|Illinois|Chicago', country: 'US', visitors: 186, views: 415, x: 200, y: 120, heat: 1, lon: -87.63, lat: 41.88 },
-    { key: 'GB|England|London', country: 'GB', visitors: 12, views: 20, x: 380, y: 90, heat: 0.4, lon: -0.13, lat: 51.51 },
-    { key: 'US|Illinois|Evanston', country: 'US', visitors: 4, views: 6, x: 203, y: 118, heat: 0.3, lon: -87.69, lat: 42.05 },
+    { key: 'US|Illinois|Chicago', country: 'US', visitors: 186, views: 415, x: 200, y: 120, lon: -87.63, lat: 41.88 },
+    { key: 'GB|England|London', country: 'GB', visitors: 12, views: 20, x: 380, y: 90, lon: -0.13, lat: 51.51 },
+    { key: 'US|Illinois|Evanston', country: 'US', visitors: 4, views: 6, x: 203, y: 118, lon: -87.69, lat: 42.05 },
   ],
   majorCities: [
     { key: 'US|Illinois|Chicago', name: 'Chicago', region: 'Illinois', country: 'US', lat: 41.83, lon: -87.75, visitors: 190, views: 421, x: 200, y: 120 },
@@ -81,19 +82,23 @@ const click = (c: HTMLElement, el: Element, at: { clientX: number; clientY: numb
 }
 
 describe('WorldMap — painting', () => {
-  it('CRITICAL: every country is its own path, then lakes, borders, state lines, and the heat OVER all of them', () => {
+  it('CRITICAL: every country is its own path, then borders and state lines, then the lakes OVER those lines, then coastlines, and the heat OVER all of it', () => {
     const { container } = render(draw())
     const lands = [...container.querySelectorAll('[data-land]')]
     expect(lands.map((l) => l.getAttribute('data-country'))).toEqual(['US', 'GB', 'FR', ''])
     expect(landOf(container, 'US').getAttribute('d')).toBe(geo.lands[0].d)
     const lakes = container.querySelector('[data-lakes]')!
+    const coasts = container.querySelector('[data-coasts]')!
     const borders = container.querySelector('[data-borders]')!
     const states = container.querySelector('[data-states]')!
-    expect([lakes.getAttribute('d'), borders.getAttribute('d'), states.getAttribute('d')]).toEqual([geo.lakes, geo.borders, geo.states])
-    expect(after(lands[3], lakes)).toBe(true)
-    expect(after(lakes, borders)).toBe(true)
+    expect([lakes.getAttribute('d'), coasts.getAttribute('d'), borders.getAttribute('d'), states.getAttribute('d')]).toEqual([geo.lakes, geo.coasts, geo.borders, geo.states])
+    expect(after(lands[3], borders)).toBe(true)
     expect(after(borders, states)).toBe(true)
-    expect(after(states, glows(container)[0])).toBe(true) // lines never sit on top of the heat (Sam, 2026-09-14)
+    // A lake covers the border and state lines that run through its water (Sam, 2026-09-15: lines across
+    // Lake Erie and Lake Michigan looked "not accurate").
+    expect(after(states, lakes)).toBe(true)
+    expect(after(lakes, coasts)).toBe(true)
+    expect(after(coasts, glows(container)[0])).toBe(true) // lines never sit on top of the heat (Sam, 2026-09-14)
   })
 
   it('CRITICAL: two shapes under ONE country code render cleanly — the 1:50m atlas has AU twice, and a key by code alone made React drop one', () => {
@@ -107,8 +112,24 @@ describe('WorldMap — painting', () => {
   it('CRITICAL: a heat glow per city, at its point, as warm as its visitors, blurred', () => {
     const { container } = render(draw())
     expect(glows(container).map((g) => [g.getAttribute('cx'), g.getAttribute('cy')])).toEqual([['200', '120'], ['380', '90'], ['203', '118']])
-    expect(glows(container).map((g) => Number(g.getAttribute('opacity')))).toEqual([1, 0.4, 0.3])
+    // As warm as its share of the busiest spot ON SCREEN (lib/heat.ts), measured at the zoom it is seen at.
+    const expected = heatAlphas(map.points, HEAT_R / (W / viewOf(container).w))
+    glows(container).forEach((g, i) => expect(Number(g.getAttribute('opacity')), `glow ${i}`).toBeCloseTo(expected[i], 6))
+    zoomIn()
+    const deeper = heatAlphas(map.points, HEAT_R / (W / viewOf(container).w))
+    glows(container).forEach((g, i) => expect(Number(g.getAttribute('opacity')), `glow ${i} deeper`).toBeCloseTo(deeper[i], 6))
     expect(glows(container)[0].parentElement!.getAttribute('filter')).toMatch(/^url\(#/)
+  })
+
+  it('CRITICAL: the colour ramp can reach DARK red at the busiest spot — Sam, 2026-09-15: "it should be able to get dark red"', () => {
+    const { container } = render(draw())
+    const table = (ch: string) => container.querySelector(`feFunc${ch}`)!.getAttribute('tableValues')!.split(' ').map(Number)
+    const [r, g, b, a] = ['R', 'G', 'B', 'A'].map(table)
+    const top = r.length - 1
+    const lightness = (i: number) => 0.2126 * r[i] + 0.7152 * g[i] + 0.0722 * b[i]
+    expect(r[top]).toBeGreaterThan(g[top] * 3) // red
+    expect(lightness(top)).toBeLessThan(lightness(top - 2) * 0.7) // clearly darker than the plain red below it
+    expect(a[top]).toBeGreaterThanOrEqual(HEAT_PEAK)
   })
 
   it('CRITICAL: the glow is a screen-size thing — zooming in on a city does not zoom in on its heat', () => {
@@ -121,18 +142,31 @@ describe('WorldMap — painting', () => {
 
   it('CRITICAL: country borders are always drawn and the US state lines fade in with zoom — both GREY, which the pale land shows (white could not be seen)', () => {
     const { container } = render(draw())
-    for (const sel of ['[data-borders]', '[data-states]']) expect(container.querySelector(sel)!.getAttribute('stroke'), sel).toBe('var(--color-ink-faint)')
+    for (const sel of ['[data-coasts]', '[data-lakes]', '[data-borders]', '[data-states]']) expect(container.querySelector(sel)!.getAttribute('stroke'), sel).toBe('var(--color-ink-faint)')
     expect(opacityOf(container, '[data-borders]')).toBe(1)
+    expect(opacityOf(container, '[data-coasts]')).toBe(1)
     expect(opacityOf(container, '[data-states]')).toBe(0)
     for (let i = 0; i < 5; i++) zoomIn() // → 10×, the cap
     expect(opacityOf(container, '[data-borders]')).toBe(1)
     expect(opacityOf(container, '[data-states]')).toBe(1)
   })
 
-  it('CRITICAL: coasts and lakes wear a white rim that keeps its width on screen', () => {
+  it('CRITICAL: coastlines and lake shores are drawn in the SAME grey line as the borders, the same width on screen — Sam, 2026-09-15: "I want the borders to be on the coastlines too"', () => {
+    const { container } = render(draw())
+    for (const sel of ['[data-coasts]', '[data-lakes]']) {
+      const el = container.querySelector(sel)!
+      const border = container.querySelector('[data-borders]')!
+      for (const attr of ['stroke', 'stroke-width', 'stroke-opacity']) expect(el.getAttribute(attr), `${sel} ${attr}`).toBe(border.getAttribute(attr))
+    }
+    expect(container.querySelector('[data-coasts]')!.getAttribute('fill')).toBe('none')
+    zoomIn()
+    expect(container.querySelector('[data-coasts]')!.getAttribute('stroke-width')).toBe(container.querySelector('[data-borders]')!.getAttribute('stroke-width'))
+  })
+
+  it('CRITICAL: the land keeps a white rim that keeps its width on screen, so neighbouring fills stay apart', () => {
     const { container } = render(draw())
     const k0 = W / viewOf(container).w
-    for (const sel of ['[data-country="US"]', '[data-lakes]']) {
+    for (const sel of ['[data-country="US"]']) {
       const el = container.querySelector(sel)!
       expect(el.getAttribute('stroke'), sel).toBe('var(--color-paper)')
       expect(Number(el.getAttribute('stroke-width')), sel).toBeCloseTo(1 / k0, 4)

@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import { HEAT_R } from '@/lib/map-constants'
 import type { CountryFocus } from '@/lib/analytics-map'
 import { nearestPoint, type Point, type View } from '@/lib/map-view'
 
 /** A drag shorter than this, in screen px, is a click. */
 export const CLICK_PX = 4
-/** How near the pointer must be to a major city's dot to read it, in screen px: the glow's own reach. */
-export const REACH_PX = HEAT_R
+/** How near the pointer must be to a major city's dot to read it, in screen px. */
+export const REACH_PX = 26
 
 /** A dot the pointer can read: a major city, where the view draws it. */
 export type CityDot = Point & { key: string; name: string; region: string; visitors: number; views: number }
