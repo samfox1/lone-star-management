@@ -116,7 +116,8 @@ export function daysSince(firstDay: string, nowMs: number = Date.now()): number 
 
 export type TimelineDay = { day: string; views: number; visitors: number; bots: number }
 export type SourceRow = { source: string; referrer_host: string; views: number; visitors: number }
-export type PlaceRow = { country: string; region: string; city: string; views: number; visitors: number }
+/** `lat` / `lon`: the place's centroid from ipinfo, null for rows written before 2026-09-14 or never placed. */
+export type PlaceRow = { country: string; region: string; city: string; views: number; visitors: number; lat: number | null; lon: number | null }
 export type DeviceRow = { device: string; browser: string; views: number; visitors: number }
 /** One non-view event type from one source: how many, and how many distinct visitors. */
 export type SourceActionRow = { source: string; type: string; count: number; visitors: number }
@@ -275,6 +276,7 @@ export async function trafficWindow(
     places: places.map((r) => ({
       country: String(r.country ?? ''), region: String(r.region ?? ''), city: String(r.city ?? ''),
       views: num(r.views), visitors: num(r.visitors),
+      lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon),
     })),
     devices: devices.map((r) => ({
       device: String(r.device ?? ''), browser: String(r.browser ?? ''),
@@ -509,21 +511,6 @@ export const CONTENT_KINDS = [
   { key: 'merch', label: 'Merch', entity: 'merch', type: 'buy_click', metric: 'buy_clicks', noun: 'buy clicks', named: 'a product' },
 ] as const
 export type ContentKind = (typeof CONTENT_KINDS)[number]
-
-/**
- * Rows summed to one bar list: a key, a label, and the number the bar is drawn from.
- * `other` collects the tail, because past about seven bars a reader is reading a
- * table and should be given one.
- */
-export type Bar = { key: string; label: string; value: number; sub?: string }
-
-export function topBars(rows: Bar[], limit = 7): Bar[] {
-  const sorted = [...rows].filter((r) => r.value > 0).sort((a, b) => b.value - a.value)
-  if (sorted.length <= limit) return sorted
-  const head = sorted.slice(0, limit - 1)
-  const tail = sorted.slice(limit - 1)
-  return [...head, { key: 'other', label: 'Other', value: tail.reduce((n, r) => n + r.value, 0) }]
-}
 
 /**
  * The day every connected site moved onto the `/event` door.

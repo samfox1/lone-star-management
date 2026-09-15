@@ -1,13 +1,11 @@
 // The window the Analytics tab reads, and the two rules that keep its blocks honest.
 /**
  * Every block on the page describes the SAME slice, so the window is computed once and
- * passed down. Two things here are worth a test of their own:
+ * passed down. One thing here is worth a test of its own:
  *
  *   - the timeline is ZERO-FILLED. The readers return only days that had traffic, so a
  *     quiet Tuesday comes back absent, not as a zero. Charted raw, a week with two busy
  *     days draws as a two-point line and the artist reads a cliff that is really a gap.
- *   - `topBars` folds the tail into "Other" rather than drawing a fifteenth bar, because
- *     past about seven a reader is reading a table.
  */
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -30,7 +28,6 @@ import {
   CONTENT_KINDS,
   DEVICE_KINDS,
   reachesBeforeContext,
-  topBars,
   trafficWindow,
   windowDays,
   WINDOWS,
@@ -511,31 +508,6 @@ describe('topContent', () => {
     expect(CONTENT_KINDS.map((k) => k.entity)).toEqual(['track', 'tour_date', 'merch'])
     // Widened on purpose: the type already forbids 'video', so the check has to be a runtime one.
     expect((CONTENT_KINDS as readonly { entity: string }[]).some((k) => k.entity === 'video')).toBe(false)
-  })
-})
-
-describe('topBars', () => {
-  const bar = (key: string, value: number) => ({ key, label: key, value })
-
-  it('orders by size and drops the empties', () => {
-    expect(topBars([bar('a', 1), bar('b', 9), bar('c', 0)]).map((b) => b.key)).toEqual(['b', 'a'])
-  })
-
-  it('CRITICAL: folds the tail into one Other rather than drawing a fifteenth bar', () => {
-    const many = Array.from({ length: 15 }, (_, i) => bar(`s${i}`, 15 - i))
-    const bars = topBars(many)
-    expect(bars).toHaveLength(7)
-    expect(bars.slice(0, 6).map((b) => b.key)).toEqual(['s0', 's1', 's2', 's3', 's4', 's5'])
-    const other = bars[6]
-    expect(other.key).toBe('other')
-    // Nothing is lost in the fold: the tail's total is the bar's value.
-    expect(other.value).toBe(many.slice(6).reduce((n, b) => n + b.value, 0))
-    expect(bars.reduce((n, b) => n + b.value, 0)).toBe(many.reduce((n, b) => n + b.value, 0))
-  })
-
-  it('leaves a list that already fits alone — no Other bar for seven', () => {
-    const seven = Array.from({ length: 7 }, (_, i) => bar(`s${i}`, 7 - i))
-    expect(topBars(seven).map((b) => b.key)).toEqual(seven.map((b) => b.key))
   })
 })
 

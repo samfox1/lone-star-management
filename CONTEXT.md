@@ -187,3 +187,11 @@ decisions behind them (esp. ADR-0002).
 - **Reach** — a video's GLOBAL YouTube view count (`youtube_views`, cached on sync).
   Shown ALONGSIDE the on-site metric to contrast total reach vs the lift this site
   drives — never conflated, since we can't prove a YouTube view came from us.
+- **Place** — where a view came from: `country` / `region` / `city` and the city's centre
+  (`lat` / `lon`), from the IP via ipinfo, recorded since 14 Sep 2026. "Not located" means no
+  country is known.
+- **Major city** — a city of at least 250,000 people (Natural Earth), the unit the Places list
+  and its dots count in, so an artist sees where to tour. Each major city is an **anchor**
+  (`src/data/major-cities.json`) that takes the visitors within 50 miles of it in its own
+  country; a smaller city that close to a bigger one is not an anchor.
+- **Other places** — a country's visitors that no major city reaches, or whose city is unknown.

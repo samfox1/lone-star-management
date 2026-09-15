@@ -141,8 +141,9 @@ Per event it derives, server-side, never trusting the client for any of it:
    fetched_at)` behind a global budget of 500 lookups an hour: one outbound call per
    visitor per two days, and a flood of fresh addresses cannot spend the quota. Service:
    ipinfo (free tier 50k lookups / month incl. city; volume today ~1.3k events / month,
-   far fewer distinct IPs). Needs `IPINFO_TOKEN` in the function env (Sam creates the
-   account; unset today, rows carry no location). Location failure is cached as "no
+   far fewer distinct IPs). Needs `IPINFO_TOKEN` in the function env (set 2026-09-14;
+   a real view from Milwaukee came back US / Wisconsin / Milwaukee. Rows before that
+   date carry no location). Location failure is cached as "no
    location" and never drops the event.
 5. `record_site_event(...)`.
 
@@ -179,7 +180,49 @@ instructional copy. `dataviz` skill before drawing anything.
    and show dates as markers from `releases.release_date` / `tour_dates.date`.
 2. **Sources** — bucket bars with counts; expand a bucket → its raw hosts; campaigns
    (UTM) as a second list. An `ai` row is the GEO signal.
-3. **Places** — countries; expand → regions → cities.
+3. **Places** — ✅ SHIPPED 2026-09-14, reviewed 2026-09-15. Where the audience is, so the artist can
+   see where to tour (Sam: "focus on major cities … a better idea of where he should tour").
+   - **Data.** The door stores ipinfo's place and the city's centre (`loc`; migration 20260914150000)
+     on analytics_events / geo_cache / daily_place, and `analytics_places` returns them. Locations
+     start 14 Sep 2026 (the ipinfo key); older rows are "Not located". A cache hit is used as it is:
+     a hit without a point used to refetch on every event (fixed and redeployed 2026-09-15).
+   - **Per artist, on the server** (`lib/analytics-map.ts`): heat points on the flat map; countries
+     with the SAME totals the list shows (`lib/analytics-places.ts#countryTotals`; the map and the list
+     disagreed for 10 of 25 countries before); each country's frame and centre from
+     `src/data/country-frames.json` (its largest landmass, antimeridian-safe for Russia), or its own
+     points where the atlas has none; and its major cities.
+   - **Major cities** (`lib/analytics-major-cities.ts`, `src/data/major-cities.json` from
+     scripts/build-major-cities.ts): Natural Earth 1:10m populated places of at least 250,000, biggest
+     first, dropping a smaller one within 50 mi of a bigger one in the same country (on the rounded
+     coordinates as written): 1,236 anchors. A visitor counts toward the nearest anchor in their own
+     country within 50 mi, but only when the door named a city (a region-level point is not a city);
+     with no point, a name + state match; otherwise the country's "Other places". Distances live in
+     `lib/geo-distance.ts`, shared with the build script.
+   - **Geography, baked once** (scripts/build-map-data.ts): the flat map as projected SVG paths
+     (Mercator 80°N..60°S, `lib/map-projection.ts`; 1:50m simplified; lands per country, lakes,
+     borders, US state lines) and the globe as rounded GeoJSON (1:110m). The browser loads each on
+     first use (`components/ui/map-geography-loader.ts`, a dynamic import; the globe's file and code
+     only when the globe opens). It used to ride in every page's props, ~860 KB a request.
+   - **The box** (`PlacesView`): 2:1 with a hairline border, and it sets the row's height; the list
+     beside it scrolls inside that height. The flat map first; one button beside + − switches and shows
+     the OTHER view's glyph. The map (`world-map.tsx`, window rules in `lib/map-view.ts`) opens on the
+     audience; drag, + − and pinch move it. One glow per city, blurred into heat through the accent → red
+     ramp; grey borders always, US state lines fading in, both under the heat; white rims on coasts and
+     lakes. The globe (`globe.tsx`, `lib/globe-view.ts`) is d3's orthographic on the client: it opens
+     facing the audience, turns by drag, and choosing a country turns to it without zooming (a zoomed
+     sphere was cropped).
+   - **Country level** (`PlacesSection` owns `country`): the list is countries, each with "N cities".
+     A row, or a click on a country's land, goes in: the map FITS the country's frame into the box's
+     live shape (`fitWindow`), the globe turns to it, the list becomes its major cities + Other places +
+     "Each city includes visitors within 50 miles.", and the views draw one small dot per major city.
+     The country's name at the top of the list goes back. The section is keyed by the window, so a
+     choice does not outlive its window. Hover reads the country at the country level and the nearest
+     major city (26 screen px) inside one.
+   - **Pointer** (`components/ui/use-map-pointer.ts`, shared by both views): a click chooses the
+     country the pointer went DOWN on. Pointer capture sends the pointer-up to the svg, so reading it
+     there chose nothing in a real browser while every jsdom test passed; the tests now deliver the
+     pointer-up to the svg the way a browser does.
+   - Known limit: the 1:110m globe cannot click 61 small countries; the list reaches them.
 4. **Top content** — the existing `entityCounts` / `ON_SITE_METRIC` reused: songs,
    dates, videos, merch, links by clicks in the window.
 
@@ -323,12 +366,24 @@ Window picker 7 / 30 / 90 in the toolbar; URL param `?days=`. Existing KPIs stay
 ## Open items
 
 - ~~Which location headers the gateway supplies~~ — RESOLVED: none; IP lookup + cache (see door §4).
-- Sam: create an ipinfo account and set `IPINFO_TOKEN` as a function secret before the page shows places (step 6).
+- ~~Sam: create an ipinfo account and set `IPINFO_TOKEN`~~ — DONE 2026-09-14, verified end to end.
+- ~~Places map / globe: store `lat, lon` per city~~ — DONE 2026-09-14 (20260914150000); the globe view is next.
 - Whether `pg_cron` can be enabled on this project (step 4 decides schedule vs opportunistic).
 - Roster-wide sources / places view — after v1 is proven with one artist.
 - Engagement (time on page, scroll depth) — deliberately out of v1.
 
 ## Status / lessons
+
+- 2026-09-14 night: Mercator + 1:50m geography; major cities (50 mi) replace screen-space dot
+  clustering; client components import sizes from `lib/map-constants.ts` — they had imported
+  `lib/analytics-map.ts` VALUES, which shipped the atlases to the browser
+  (`tests/unit/analytics/client-imports.test.ts` now holds that line). Open for the review: the
+  dashboard HTML is ~1.1 MB because the static geography rides in every request's props (drawn
+  SVG + RSC payload); it should be a cached static asset.
+
+- 2026-09-14: `IPINFO_TOKEN` set; the city table replaced the placeholder bar list. Skeen showed
+  18 located cities within hours (Singapore, Wrocław, Baton Rouge, …), 329 earlier visitors as
+  Not located. Eleven hand mutants killed across lib + component.
 
 - 2026-09-12 (later): **step 6 first pass DONE** — the Analytics tab reads the window
   RPCs: filter row, two-series timeline, and three ranked lists. Top content next.

@@ -5,8 +5,9 @@
  * Runs against the hosted project INCLUDING the deployed function
  * (`POST {SUPABASE_URL}/functions/v1/event`): the plumbing in index.ts is exercised only
  * here. derive.ts is pinned DB-free in tests/unit/analytics/event-derive.test.ts — the
- * geo lookup included, via injected stubs, because with IPINFO_TOKEN unset in the project
- * the lookup is disabled and no request from this file can reach it. Deploy before
+ * geo lookup included, via injected stubs; IPINFO_TOKEN has been set since 2026-09-14, so
+ * a real post from the runner now carries the runner's own location, which this file does
+ * not assert on (it would pin the runner's city). Deploy before
  * running: a 404 means `npm run fn:deploy:event` has not happened, not that the door is
  * broken.
  *
@@ -226,7 +227,7 @@ describe('the helper RPCs', () => {
   const HELPERS = {
     bump_event_attempt: { p_ip_hash: 'x' },
     lookup_geo_cache: { p_ip_hash: 'x' },
-    cache_geo: { p_ip_hash: 'x', p_country: 'US', p_region: null, p_city: null },
+    cache_geo: { p_ip_hash: 'x', p_country: 'US', p_region: null, p_city: null, p_lat: null, p_lon: null }, // the full signature, so the denial is of the function the door calls
   } as const
 
   it('CRITICAL: are service-only — anon and a signed-in manager are refused', async () => {
@@ -249,10 +250,11 @@ describe('the helper RPCs', () => {
   it('the geo cache round-trips and overwrites', async () => {
     const key = `t-${crypto.randomUUID().replaceAll('-', '')}`
     expect((await svc.rpc('lookup_geo_cache', { p_ip_hash: key })).data).toEqual([])
-    await svc.rpc('cache_geo', { p_ip_hash: key, p_country: 'US', p_region: 'TX', p_city: 'Austin' })
-    expect((await svc.rpc('lookup_geo_cache', { p_ip_hash: key })).data).toEqual([{ country: 'US', region: 'TX', city: 'Austin' }])
+    await svc.rpc('cache_geo', { p_ip_hash: key, p_country: 'US', p_region: 'TX', p_city: 'Austin', p_lat: 30.2672, p_lon: -97.7431 })
+    expect((await svc.rpc('lookup_geo_cache', { p_ip_hash: key })).data).toEqual([{ country: 'US', region: 'TX', city: 'Austin', lat: 30.2672, lon: -97.7431 }])
+    // The old call shape (no point) still writes, and clears the point it replaces.
     await svc.rpc('cache_geo', { p_ip_hash: key, p_country: 'GB', p_region: null, p_city: 'London' })
-    expect((await svc.rpc('lookup_geo_cache', { p_ip_hash: key })).data).toEqual([{ country: 'GB', region: null, city: 'London' }])
+    expect((await svc.rpc('lookup_geo_cache', { p_ip_hash: key })).data).toEqual([{ country: 'GB', region: null, city: 'London', lat: null, lon: null }])
   })
 })
 

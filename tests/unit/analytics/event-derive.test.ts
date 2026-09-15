@@ -16,6 +16,7 @@ import {
   UTM_BUCKETS,
   bucketForHost,
   geoFromIpinfo,
+  locFromIpinfo,
   hostOf,
   ipHash,
   isBot,
@@ -401,12 +402,24 @@ describe('hashes (_shared/hash.ts + derive.ts)', () => {
 
 describe('location', () => {
   it('geoFromIpinfo: 2-letter country upper-cased, strings trimmed and capped, junk → nulls', () => {
-    expect(geoFromIpinfo({ country: 'us', region: ' Texas ', city: 'Austin' })).toEqual({ country: 'US', region: 'Texas', city: 'Austin' })
+    expect(geoFromIpinfo({ country: 'us', region: ' Texas ', city: 'Austin' })).toEqual({ country: 'US', region: 'Texas', city: 'Austin', lat: null, lon: null })
     expect(geoFromIpinfo({ country: 'gb' }).country).toBe('GB')
     expect(geoFromIpinfo({ country: 'USA', region: 7, city: '' })).toEqual(NO_GEO)
     expect(geoFromIpinfo({ country: 12, region: '   ', city: '\t' })).toEqual(NO_GEO)
     expect(geoFromIpinfo(null)).toEqual(NO_GEO)
     expect(geoFromIpinfo({ city: 'c'.repeat(300) }).city?.length).toBe(100)
+  })
+  it('CRITICAL: the point comes from `loc` as "lat,lon" — both on the globe or neither, never one', () => {
+    // ipinfo puts a city at its centroid: Milwaukee is 43.0389,-87.9065. A half point
+    // (lat kept, lon dropped) would draw the city on the prime meridian.
+    expect(locFromIpinfo('43.0389,-87.9065')).toEqual({ lat: 43.0389, lon: -87.9065 })
+    expect(locFromIpinfo(' -33.8688 , 151.2093 ')).toEqual({ lat: -33.8688, lon: 151.2093 })
+    expect(locFromIpinfo('0,0')).toEqual({ lat: 0, lon: 0 })
+    for (const bad of ['91,0', '0,181', '-90.5,10', 'abc', '43.0389', '43.0389,', ',-87', '43.0389,-87.9065,7', '', 12, null, undefined, { lat: 1 }]) {
+      expect(locFromIpinfo(bad), String(bad)).toEqual({ lat: null, lon: null })
+    }
+    expect(geoFromIpinfo({ country: 'us', city: 'Milwaukee', loc: '43.0389,-87.9065' })).toMatchObject({ lat: 43.0389, lon: -87.9065 })
+    expect(geoFromIpinfo({ country: 'us', city: 'Milwaukee', loc: '43.0389' })).toMatchObject({ lat: null, lon: null })
   })
   it('private, loopback, link-local, carrier-NAT, mapped, zero and unknown addresses are not looked up', () => {
     for (const ip of ['unknown', '', '10.0.0.1', '127.0.0.1', '192.168.1.1', '172.16.0.1', '172.31.9.9', '169.254.1.1', '100.64.0.1', '100.127.255.1', '0.0.0.0', '::1', '::', '::ffff:1.2.3.4', 'fe80::1', 'fd00::1', 'fc00::1', '0:0:0:0::/64']) {
@@ -415,7 +428,7 @@ describe('location', () => {
     for (const ip of ['65.29.160.74', '100.128.0.1', '172.32.0.1', '2a02:1234:5678:9abc::/64', '8.8.8.8']) expect(isLookupable(ip), ip).toBe(true)
   })
 
-  const geo = { country: 'US', region: 'TX', city: 'Austin' }
+  const geo = { country: 'US', region: 'TX', city: 'Austin', lat: 30.2672, lon: -97.7431 }
   // Every dependency is counted, overridden or not, so an assertion on `calls` means
   // what it says regardless of which stub a test swapped in.
   const deps = (over: Partial<GeoDeps> = {}) => {
@@ -446,11 +459,21 @@ describe('location', () => {
     expect(await locateWith(d, '65.29.160.74', 'k', true)).toEqual(geo)
     expect(calls.budget + calls.fetchGeo).toBe(0)
   })
+  it('CRITICAL: ANY cached answer is honoured, a place with no point too — re-looking those up spent the hourly budget on every event for an address ipinfo gives a country but no loc, and wrote "no location" over a known place when the budget ran out (cache rows expire in two days anyway)', async () => {
+    const pointless = { country: 'US', region: 'TX', city: 'Austin', lat: null, lon: null }
+    const a = deps({ cacheGet: async () => pointless })
+    expect(await locateWith(a.d, '65.29.160.74', 'k', true)).toEqual(pointless)
+    expect(a.calls.fetchGeo + a.calls.budget).toBe(0)
+    expect(a.calls.cachePut).toEqual([])
+    const none = deps({ cacheGet: async () => NO_GEO })
+    expect(await locateWith(none.d, '65.29.160.74', 'k', true)).toEqual(NO_GEO)
+    expect(none.calls.fetchGeo).toBe(0)
+  })
   it('cache miss → one fetch, the shaped answer cached and returned', async () => {
     const { d, calls } = deps({ fetchGeo: async () => ({ country: 'gb', city: ' London ' }) })
-    expect(await locateWith(d, '65.29.160.74', 'k', true)).toEqual({ country: 'GB', region: null, city: 'London' })
+    expect(await locateWith(d, '65.29.160.74', 'k', true)).toEqual({ country: 'GB', region: null, city: 'London', lat: null, lon: null })
     expect(calls.fetchGeo).toBe(1)
-    expect(calls.cachePut).toEqual([{ country: 'GB', region: null, city: 'London' }])
+    expect(calls.cachePut).toEqual([{ country: 'GB', region: null, city: 'London', lat: null, lon: null }])
   })
   it('budget exhausted → nothing, no fetch, nothing cached (the next hour may succeed)', async () => {
     const { d, calls } = deps({ budget: async () => false })

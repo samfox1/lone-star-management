@@ -174,6 +174,25 @@ describe('record_site_event — the door\'s write path', () => {
     })
   })
 
+  it('CRITICAL: keeps a point on the globe and drops one off it — the row is written either way', async () => {
+    const on = `pt-${crypto.randomUUID()}`
+    await svc.rpc('record_site_event', { p_slug: slugF, p_type: view, p_target: on, p_country: 'US', p_city: 'Milwaukee', p_lat: 43.0389, p_lon: -87.9065 })
+    expect((await byTarget(on))[0]).toMatchObject({ city: 'Milwaukee', lat: 43.0389, lon: -87.9065 })
+
+    // A latitude of 91 is not a place. The city stays; the point goes, BOTH halves of it.
+    const off = `pt-${crypto.randomUUID()}`
+    await svc.rpc('record_site_event', { p_slug: slugF, p_type: view, p_target: off, p_country: 'US', p_city: 'Nowhere', p_lat: 91, p_lon: -87.9065 })
+    expect((await byTarget(off))[0]).toMatchObject({ city: 'Nowhere', lat: null, lon: null })
+
+    // The old call shape, no point at all, still writes.
+    const none = `pt-${crypto.randomUUID()}`
+    await svc.rpc('record_site_event', { p_slug: slugF, p_type: view, p_target: none, p_country: 'US' })
+    expect((await byTarget(none))[0]).toMatchObject({ country: 'US', lat: null, lon: null })
+
+    // These three are views; the bot describe below hand-counts this artist's real views.
+    await svc.from('analytics_events').delete().in('target', [on, off, none])
+  })
+
   it('drops values off the allowlists, truncates long ones, keeps the bot flag, treats a null flag as false', async () => {
     const junk = `junk-${crypto.randomUUID()}`
     await svc.rpc('record_site_event', { p_slug: slugF, p_type: view, p_target: junk, p_country: 'usa', p_device: 'fridge', p_is_bot: true })
@@ -251,7 +270,8 @@ describe('roll-up: tallies answer exactly what raw answered, then raw can go', (
 
   beforeAll(async () => {
     // ROLLED_DAY: four real views (two visitors, one with no hash), one bot view, one click.
-    const common = { referrer_host: HOST, source: 'instagram', country: 'US', region: 'TX', city: 'Austin', device: 'mobile', browser: 'instagram' }
+    // Austin's centroid on the two Austin rows: the point must come back from BOTH arms.
+    const common = { referrer_host: HOST, source: 'instagram', country: 'US', region: 'TX', city: 'Austin', lat: 30.2672, lon: -97.7431, device: 'mobile', browser: 'instagram' }
     for (const row of [
       { created_at: at(ROLLED_DAY, 9), visitor_hash: 'v1', ...common, path: '/', utm_source: 'instagram', utm_medium: 'story', utm_campaign: 'tour-sep' },
       { created_at: at(ROLLED_DAY, 10), visitor_hash: 'v1', ...common, path: '/about' },
@@ -266,7 +286,7 @@ describe('roll-up: tallies answer exactly what raw answered, then raw can go', (
   const EXPECTED = {
     analytics_timeline: [{ day: () => ROLLED_DAY, views: 4, visitors: 2, bots: 1 }],
     analytics_sources: [{ source: 'direct', referrer_host: '', views: 2, visitors: 1 }, { source: 'instagram', referrer_host: HOST, views: 2, visitors: 1 }],
-    analytics_places: [{ country: '', region: '', city: '', views: 2, visitors: 1 }, { country: 'US', region: 'TX', city: 'Austin', views: 2, visitors: 1 }],
+    analytics_places: [{ country: '', region: '', city: '', views: 2, visitors: 1, lat: null, lon: null }, { country: 'US', region: 'TX', city: 'Austin', views: 2, visitors: 1, lat: 30.2672, lon: -97.7431 }],
     analytics_devices: [{ device: 'desktop', browser: 'safari', views: 2, visitors: 1 }, { device: 'mobile', browser: 'instagram', views: 2, visitors: 1 }],
     analytics_paths: [{ path: '/', views: 3, visitors: 2 }, { path: '/about', views: 1, visitors: 1 }],
     analytics_campaigns: [{ utm_source: 'instagram', utm_medium: 'story', utm_campaign: 'tour-sep', views: 1, visitors: 1 }],

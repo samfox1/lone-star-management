@@ -1,13 +1,14 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { type SectionDiff } from '@/lib/content'
-import { BarList } from '@/components/ui/bar-list'
+import { PlacesSection } from '@/components/ui/places-section'
+import { worldMap } from '@/lib/analytics-map'
 import { MetricExplorer } from './metric-explorer'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topBars, topContent, trafficWindow, entityRows, CONTENT_KINDS, type Bar, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topContent, trafficWindow, entityRows, CONTENT_KINDS, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DIFF_SECTIONS } from './sections'
 import { analyticsScope, dashboardDiff, requireArtist } from './_data'
@@ -21,29 +22,6 @@ function summarize(d: SectionDiff): string {
   return parts.join(', ')
 }
 
-/** Sum rows to one bar per key, carrying the biggest contributor as the sub-label. */
-function rollBars<T>(
-  rows: T[],
-  key: (r: T) => string,
-  label: (r: T) => string,
-  value: (r: T) => number,
-  sub: (r: T) => string,
-): Bar[] {
-  const by = new Map<string, Bar & { subValue: number }>()
-  for (const r of rows) {
-    const k = key(r)
-    if (!k) continue
-    const got = by.get(k) ?? { key: k, label: label(r), value: 0, subValue: 0 }
-    got.value += value(r)
-    // The sub-label names the largest single contributor, not the last one seen.
-    if (value(r) > got.subValue && sub(r)) {
-      got.subValue = value(r)
-      got.sub = sub(r)
-    }
-    by.set(k, got)
-  }
-  return topBars([...by.values()])
-}
 
 /**
  * How each content kind's rows become something drawable — a title, a picture,
@@ -114,8 +92,6 @@ export default async function OverviewPage({
   const countedVisitors = counted.reduce((n, d) => n + d.visitors, 0)
   const viewsPerVisitor = countedVisitors ? (countedViews / countedVisitors).toFixed(2) : '—'
 
-  const places = rollBars(traffic.places, (r) => r.country, (r) => r.country, (r) => r.views, (r) => r.city)
-
   return (
     <div className="space-y-10">
       <section>
@@ -147,22 +123,24 @@ export default async function OverviewPage({
           <KLabel>Source</KLabel>
           <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
         </section>
-        <section className="lg:justify-self-end">
+        {/* The label sits at the top beside SOURCE; the waffle centres on the ring rows
+            (Sam, 2026-09-14), so the grid stretches the section and the flex column
+            gives the waffle the rest of the height. */}
+        <section className="lg:flex lg:flex-col lg:justify-self-end">
           <KLabel>Device</KLabel>
-          <DeviceSplit className="mt-3" shares={summarizeDevices(traffic.devices)} />
+          <DeviceSplit className="mt-3 lg:flex-1" shares={summarizeDevices(traffic.devices)} />
         </section>
       </div>
 
-      {/* WHERE. A ranked list on its own row — countries are named things of
-          unequal length, and a bar compares magnitudes plainly where a pie does
-          not. Empty until the event door has an ipinfo key. */}
+      {/* WHERE. The map / globe on the left and the list on the right, in the SAME columns as
+          Source / Device above (Sam, 2026-09-14). The list is countries, then a country's major
+          cities: where the artist has a following worth touring (lib/analytics-major-cities.ts).
+          Locations are recorded from 14 Sep 2026, when the door got its ipinfo key. Only the
+          per-artist numbers are built here (lib/analytics-map.ts); the geography is baked once
+          and loaded by the browser. Keyed by the window, so a country chosen in one window is not
+          left chosen in a window where it has no visitors. No caption (Sam: "remove Where they are"). */}
       <section>
-        <KLabel>Where they are</KLabel>
-        <BarList
-          className="mt-3"
-          bars={places}
-          empty="Location needs an ipinfo key on the event door."
-        />
+        <PlacesSection key={windowKey} map={worldMap(traffic.places)} />
       </section>
 
       {/* WHAT THEY ACTED ON. Songs by plays, dates by ticket clicks, merch by buy
@@ -177,8 +155,8 @@ export default async function OverviewPage({
           page has to say which. */}
       {partial && (
         <p className="font-space text-xs leading-relaxed text-ink-faint">
-          Source, location and visitor figures start 12 Sep, when the sites moved to the new
-          ingest. Views before that date are counted but include bot traffic, which is
+          Source and visitor figures start 12 Sep, when the sites moved to the new ingest, and
+          locations start 14 Sep. Views before that date are counted but include bot traffic, which is
           filtered from everything after.
         </p>
       )}

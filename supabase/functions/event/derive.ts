@@ -339,15 +339,26 @@ export const SALT_MIN_LENGTH = 32
 
 /* ── Location ───────────────────────────────────────────────────────────────────── */
 
-export type Geo = { country: string | null; region: string | null; city: string | null }
-export const NO_GEO: Geo = { country: null, region: null, city: null }
+export type Geo = { country: string | null; region: string | null; city: string | null; lat: number | null; lon: number | null }
+export const NO_GEO: Geo = { country: null, region: null, city: null, lat: null, lon: null }
+
+/** ipinfo's `loc` is "lat,lon" — the CITY's centroid, not the visitor. Both numbers, both
+ *  on the globe, or neither: a half point would draw a city on the wrong meridian. */
+export function locFromIpinfo(loc: unknown): { lat: number | null; lon: number | null } {
+  if (typeof loc !== 'string') return { lat: null, lon: null }
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(loc)
+  if (!m) return { lat: null, lon: null }
+  const lat = Number(m[1]), lon = Number(m[2])
+  if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) return { lat: null, lon: null }
+  return { lat, lon }
+}
 
 /** Shape an ipinfo answer into our columns; anything odd → nulls, never a throw. */
 export function geoFromIpinfo(raw: unknown): Geo {
   const r = (raw ?? {}) as Record<string, unknown>
   const country = typeof r.country === 'string' && /^[A-Za-z]{2}$/.test(r.country) ? r.country.toUpperCase() : null
   const s = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 100) : null)
-  return { country, region: s(r.region), city: s(r.city) }
+  return { country, region: s(r.region), city: s(r.city), ...locFromIpinfo(r.loc) }
 }
 
 /** Private, loopback, link-local, carrier-NAT, mapped and unknown addresses have no
@@ -382,6 +393,10 @@ export async function locateWith(deps: GeoDeps, ip: string, key: string, enabled
   if (!enabled || !isLookupable(ip)) return NO_GEO
   try {
     const cached = await deps.cacheGet(key)
+    // ANY cached answer is honoured, a place with no point included. Re-looking those up looped
+    // for an address ipinfo gives a country but no loc (every event spent the hourly budget) and
+    // wrote "no location" over a known place when the budget ran out. Cache rows expire in two
+    // days, so a place cached before points were stored gains one soon enough.
     if (cached) return cached
     if (!(await deps.budget())) return NO_GEO
     const raw = await deps.fetchGeo(ip)

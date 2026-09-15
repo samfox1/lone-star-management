@@ -5,12 +5,12 @@ ADR 0012 data). Code: `supabase/functions/event/` (`index.ts` is plumbing, `deri
 decides everything and is unit + mutation tested). The site side is
 `@samfox1/site-bridge/analytics`, documented in CONNECTING §12.
 
-## Secrets (state as of 2026-09-11)
+## Secrets (state as of 2026-09-14)
 
 | secret | state | what |
 |---|---|---|
 | `ANALYTICS_SALT` | **set** | Salts the per-IP key and the daily visitor hash. The door REFUSES TO START below 32 chars: unsalted, the geo cache is a 2^32 brute force from an IP → city table. `supabase secrets set ANALYTICS_SALT="$(openssl rand -hex 32)"`. Rotating it starts a fresh visitor-count day and clears the burst window; harmless once. |
-| `IPINFO_TOKEN` | unset | Optional. Without it events are recorded with no location. `supabase secrets set IPINFO_TOKEN=…` (ipinfo.io, free tier 50k lookups/month). |
+| `IPINFO_TOKEN` | **set** (2026-09-14) | Optional. Without it events are recorded with no location. `supabase secrets set IPINFO_TOKEN=…` (ipinfo.io, free tier 50k lookups/month). |
 | `EVENT_ALLOWED_ORIGINS` | unset (empty) | Optional allowlist. Empty on purpose: every artist site posts here and CORS is not the control. |
 
 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are platform-injected. Never set them.
@@ -39,10 +39,11 @@ curl -si -X OPTIONS "$URL" -H "Origin: $SITE" -H "Access-Control-Request-Method:
 curl -si "$URL" -H "Authorization: Bearer $ANON" -H "apikey: $ANON" -H "Origin: $SITE" \
   -H "Content-Type: application/json" -H "User-Agent: Mozilla/5.0 (iPhone) Instagram 300.0" \
   -d "{\"slug\":\"<slug>\",\"type\":\"view\",\"url\":\"$SITE/?utm_source=ig\",\"referrer\":\"https://l.instagram.com/\"}"
-#    select path, referrer_host, source, device, browser, visitor_hash, is_bot, country
+#    select path, referrer_host, source, device, browser, visitor_hash, is_bot, country, lat, lon
 #    from analytics_events where artist_id = (select id from artists where slug = '<slug>')
 #    order by created_at desc limit 1;
-#    → / | l.instagram.com | instagram | mobile | instagram | <32 hex> | false | NULL (no token)
+#    → / | l.instagram.com | instagram | mobile | instagram | <32 hex> | false | US | 43.0389 | -87.9065
+#      (country and the point are NULL with no token; the point is the CITY's centroid, migration 20260914150000)
 
 # 3. Wrong type → 400 {"ok":false,"error":"bad_type"}
 # 4. No Authorization → 401. Page host ≠ Origin host → 403 origin_mismatch. GET → 405.

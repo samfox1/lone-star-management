@@ -6,6 +6,8 @@ import type { SVGProps } from 'react'
  * text-* utility on the icon or its parent.
  */
 export type IconName =
+  | 'globe'
+  | 'map'
   | 'roster'
   | 'analytics'
   | 'tracks'
@@ -234,6 +236,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   minus: <path d="M5 12h14" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </>
+  ),
+  map: <path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5zM9 4v13.5M15 6.5V20" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
   play: <path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor" stroke="none" />,
   pause: (
@@ -285,6 +294,7 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      data-icon={name}
       className={className}
       {...rest}
     >

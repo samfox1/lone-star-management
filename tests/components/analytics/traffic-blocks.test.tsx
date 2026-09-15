@@ -1,20 +1,15 @@
 // @vitest-environment jsdom
-// The timeline chart and the bar list, and the ways each one can lie.
+// The timeline chart, and the ways it can lie.
 /**
  *   TimelineChart draws up to three series. They must share ONE scale that starts
  *   at ZERO, or the comparison a reader makes by eye ("visitors are about a third
  *   of views") is one the chart invented. A series first counted mid-window starts
  *   there, not at a row of zeros; the hover readout says what a day is and how far
  *   it sits from the average.
- *
- *   BarList draws its label ON the row rather than inside the bar. A label inside a
- *   short bar is the commonest way these lists break, and it breaks worst for the
- *   smallest row, which is the one a person is squinting at.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { TimelineChart } from '@/components/ui/timeline-chart'
-import { BarList } from '@/components/ui/bar-list'
 
 const points = [
   { day: '2026-09-10', views: 100, visitors: 25 },
@@ -239,49 +234,5 @@ describe('TimelineChart', () => {
       fireEvent.pointerLeave(plot(container))
       expect(screen.queryByRole('status')).toBeNull()
     })
-  })
-})
-
-describe('BarList', () => {
-  const bars = [
-    { key: 'instagram', label: 'Instagram', value: 80, sub: 'l.instagram.com' },
-    { key: 'direct', label: 'Direct', value: 20 },
-    { key: 'tiny', label: 'A very long source name indeed', value: 1 },
-  ]
-
-  it('CRITICAL: the smallest row is as readable as the largest — the label is never inside the bar', () => {
-    const { container } = render(<BarList bars={bars} />)
-    const rows = container.querySelectorAll('li')
-    // Every label is in the row's own text, whatever its bar measures.
-    expect(within(rows[2] as HTMLElement).getByText('A very long source name indeed')).toBeTruthy()
-    // And the smallest bar still has a visible width rather than collapsing to nothing.
-    const width = (rows[2].querySelector('span[aria-hidden]') as HTMLElement).style.width
-    expect(parseFloat(width)).toBeGreaterThan(0)
-  })
-
-  it('scales the bars against the largest value, not the total', () => {
-    const { container } = render(<BarList bars={bars} />)
-    const widths = [...container.querySelectorAll('li span[aria-hidden]')].map(
-      (el) => parseFloat((el as HTMLElement).style.width),
-    )
-    expect(widths[0]).toBe(100) // the largest fills the row
-    expect(widths[1]).toBeCloseTo(25, 5) // 20 of 80
-  })
-
-  it('every bar carries the same weight — length says the size, shading would say it twice', () => {
-    const { container } = render(<BarList bars={bars} />)
-    const classes = [...container.querySelectorAll('li span[aria-hidden]')].map((el) => el.className)
-    expect(new Set(classes).size).toBe(1)
-  })
-
-  it('prints the value beside the label, so the list is its own table', () => {
-    render(<BarList bars={bars} />)
-    expect(screen.getByText('80')).toBeTruthy()
-    expect(screen.getByText('20')).toBeTruthy()
-  })
-
-  it('says what is missing rather than drawing an empty frame', () => {
-    render(<BarList bars={[]} empty="Location needs an ipinfo key." />)
-    expect(screen.getByText('Location needs an ipinfo key.')).toBeTruthy()
   })
 })

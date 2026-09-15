@@ -57,6 +57,7 @@ import {
   validateEvent,
   visitorHash,
   type Geo,
+  NO_GEO,
 } from './derive.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -111,7 +112,7 @@ const geoDeps = {
     return rows && rows.length > 0 ? rows[0] : null
   },
   cachePut: async (key: string, geo: Geo) => {
-    await rpc('cache_geo', { p_ip_hash: key, p_country: geo.country, p_region: geo.region, p_city: geo.city })
+    await rpc('cache_geo', { p_ip_hash: key, p_country: geo.country, p_region: geo.region, p_city: geo.city, p_lat: geo.lat, p_lon: geo.lon })
   },
   budget: async () => (await rpc<boolean>('bump_event_attempt', { p_ip_hash: `ipinfo:${utcHour()}`, p_limit: LOOKUPS_PER_HOUR })) === true,
   fetchGeo,
@@ -165,7 +166,7 @@ Deno.serve(async (req: Request) => {
     const { device, browser } = parseUa(ua)
     const refHost = referrerHost(body.referrer, body.url)
     const utm = utmOf(body.url)
-    const geo = bot ? { country: null, region: null, city: null } : await locateWith(geoDeps, ip, await ipHash(SALT, ip), IPINFO_TOKEN !== '')
+    const geo = bot ? NO_GEO : await locateWith(geoDeps, ip, await ipHash(SALT, ip), IPINFO_TOKEN !== '')
 
     await rpc('record_site_event', {
       p_slug: body.slug,
@@ -182,6 +183,8 @@ Deno.serve(async (req: Request) => {
       p_country: geo.country,
       p_region: geo.region,
       p_city: geo.city,
+      p_lat: geo.lat,
+      p_lon: geo.lon,
       p_device: device,
       p_browser: browser,
       p_visitor_hash: await visitorHash(SALT, utcDate(), ip, ua),
