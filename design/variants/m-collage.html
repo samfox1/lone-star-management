@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — M / The collage, in their colours</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* M — THE COLLAGE, IN THEIR COLOURS.
+   Two changes from L. First, the work is no longer screenshots of pages: it is the ACTUAL
+   material — song covers, release art, video stills, photographs, and the components the
+   editor builds — at real sizes, so the wall reads as a collage rather than a wall of the
+   same page nine times. Second, the page is not branded blue and red. Every accent is
+   --brand-1 / --brand-2, and those are an ARTIST'S two colours: pick an artist and the
+   whole experience re-skins to their brand. The blue and red are simply Lone Star's own
+   entry in that list. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#111;--paper:#fff;--surface:#f4f4f5;--hair:#ececec;--faint:#9aa0a6;
+  --brand-1:#2563eb;--brand-2:#e5484d;              /* Lone Star's own, and the default */
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--paper);display:grid;place-items:center}
+.window{position:absolute;left:50%;top:50%;width:380px;height:380px;z-index:3;transform:translate(-50%,-50%);
+  -webkit-clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  background:var(--ink);will-change:transform}
+.wall{position:absolute;left:50%;top:50%;width:210vw;height:210vh;transform:translate(-50%,-50%);
+  display:grid;grid-template-columns:repeat(14,1fr);gap:9px;z-index:1;will-change:transform}
+.col{display:flex;flex-direction:column;gap:9px;will-change:transform}
+.card{position:relative;border-radius:8px;overflow:hidden;background:var(--surface);box-shadow:0 10px 26px rgba(17,17,17,.14);flex:0 0 auto}
+.card img{display:block;width:100%;height:100%;object-fit:cover}
+.card .tag{position:absolute;left:5px;bottom:5px;font-family:var(--mono);font-size:6.5px;letter-spacing:.14em;text-transform:uppercase;
+  background:rgba(255,255,255,.92);color:var(--ink);padding:3px 6px;border-radius:3px}
+  .card.play::after{content:'';position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);border-radius:50%;
+  background:var(--brand-2);opacity:.92;transition:background .6s}
+.card.play::before{content:'';position:absolute;left:calc(50% + 2px);top:50%;transform:translate(-50%,-50%);z-index:2;
+  border-left:8px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent}
+/* Components from the product, in the artist's colours, mixed into the collage. */
+.ui{border-radius:8px;background:var(--paper);border:1px solid var(--hair);padding:10px;box-shadow:0 10px 26px rgba(17,17,17,.10);flex:0 0 auto}
+.ui .k{font-family:var(--mono);font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+.ui .h{font-size:12.5px;font-weight:700;letter-spacing:-.02em;margin-top:5px}
+.ui .btn{margin-top:10px;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--brand-1);padding:6px 9px;border-radius:5px;display:inline-block;transition:background .6s}
+  .ui.stat .n{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--brand-1);transition:color .6s}
+.ui.date{display:flex;gap:10px;align-items:baseline}
+  .ui.date .d{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--brand-2);transition:color .6s}
+.ui.date .v{font-size:10.5px;font-weight:600;line-height:1.15}
+.ui .bar{height:4px;border-radius:3px;background:var(--hair);margin-top:8px}
+.ui .bar i{display:block;height:100%;border-radius:3px;background:var(--brand-1);transition:background .6s}
+.edge{position:absolute;left:50%;top:50%;width:380px;height:380px;transform:translate(-50%,-50%);z-index:4;pointer-events:none;
+  filter:drop-shadow(0 22px 60px rgba(17,17,17,.25));will-change:transform,opacity}
+.edge svg{width:100%;height:100%;display:block}
+/* The brand switcher: the page wearing somebody's colours. */
+.brands{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:20;display:flex;gap:8px;align-items:center;
+  background:rgba(255,255,255,.92);border:1px solid var(--hair);border-radius:999px;padding:7px 12px;backdrop-filter:blur(8px)}
+.brands .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+.brands button{width:38px;height:22px;border-radius:999px;border:1px solid rgba(17,17,17,.12);cursor:pointer;padding:0;position:relative;overflow:hidden}
+.brands button span{position:absolute;inset:0;width:50%}
+.brands button span+span{left:50%}
+.brands button.on{outline:2px solid var(--ink);outline-offset:2px}
+.topbar{position:fixed;inset:0 0 auto 0;z-index:19;display:flex;justify-content:space-between;padding:22px 28px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#fff;text-shadow:0 1px 14px rgba(0,0,0,.6);opacity:0;will-change:opacity}
+.scroller{height:380vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(34px,4.6vw,64px);line-height:.98;letter-spacing:-.035em;font-weight:700;max-width:17ch}
+.band h2 .b{color:var(--brand-1);transition:color .6s}.band h2 .r{color:var(--brand-2);transition:color .6s}
+.band p{margin-top:20px;max-width:52ch;font-size:17px;line-height:1.6;color:#5c6168}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
+.stat2{background:var(--paper);padding:34px}
+.stat2 .n{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.03em;color:var(--brand-1);transition:color .6s}
+.stat2 .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(6,1fr)}.window,.edge{width:240px;height:240px}}
+</style></head><body>
+
+<div class="stage">
+  <div class="window" id="window"><div class="wall" id="wall"></div></div>
+  <div class="edge" id="edge"><svg viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="none" stroke="#111" stroke-width=".8" stroke-linejoin="round"/></svg></div>
+</div>
+<div class="topbar" id="topbar"><span>Lone Star</span><span>Work · What we do · Contact</span></div>
+<div class="brands" id="brands"><span class="l">In their colours</span></div>
+
+<div class="scroller"></div>
+
+<div class="after">
+  <div class="band">
+    <h2>One system. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+    <p>The site, the poster, the cover, the press kit — rendered from the same brand, kept current by the artist rather than a developer.</p>
+  </div>
+  <div class="stats">
+    <div class="stat2"><div class="n">12,480</div><div class="l">Views generated</div></div>
+    <div class="stat2"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+    <div class="stat2"><div class="n">53</div><div class="l">Countries</div></div>
+    <div class="stat2"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+  </div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* ── Whose colours the page is wearing. In the product these come from the artist's own
+   site styles; here they are hand-set per artist for the mock. ── */
+const BRANDS = [
+  { name: 'Lone Star',   a: '#2563eb', b: '#e5484d' },
+  { name: 'Skeen',       a: '#ff2e63', b: '#2ee6e6' },
+  { name: 'FTBK',        a: '#0f766e', b: '#f5d90a' },
+  { name: 'Gulf Static', a: '#7c3aed', b: '#f97316' },
+  { name: 'Lone Pine',   a: '#166534', b: '#b91c1c' },
+];
+const root = document.documentElement, bar = document.getElementById('brands');
+BRANDS.forEach((br, i) => {
+  const b = document.createElement('button');
+  b.title = br.name;
+  b.innerHTML = `<span style="background:${br.a}"></span><span style="background:${br.b}"></span>`;
+  b.onclick = () => {
+    root.style.setProperty('--brand-1', br.a);
+    root.style.setProperty('--brand-2', br.b);
+    [...bar.querySelectorAll('button')].forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  };
+  if (i === 0) b.classList.add('on');
+  bar.appendChild(b);
+});
+
+/* ── The collage: real material, at its own sizes. ── */
+const UI = [
+  () => `<div class="ui"><div class="k">new single</div><div class="h">Rushing Back</div><div class="btn">Listen</div></div>`,
+  () => `<div class="ui stat"><div class="k">this week</div><div class="n">1,204</div><div class="bar"><i style="width:62%"></i></div></div>`,
+  () => `<div class="ui date"><div class="d">26<br>SEP</div><div class="v">Concord Music Hall<br><span style="font-weight:400;color:#9aa0a6">Chicago, IL</span></div></div>`,
+  () => `<div class="ui"><div class="k">merch</div><div class="h">Tour tee</div><div class="btn">Buy · $35</div></div>`,
+  () => `<div class="ui stat"><div class="k">countries</div><div class="n">53</div><div class="bar"><i style="width:38%"></i></div></div>`,
+  () => `<div class="ui"><div class="k">press kit</div><div class="h">One sheet</div><div class="btn">Download</div></div>`,
+];
+const wall = document.getElementById('wall'), cols = [];
+/* The asset list is INLINE on purpose: a page opened from disk cannot fetch() a file
+   beside it (its origin is "null"), and the collage came up empty. Regenerate with
+   assets/manifest.json when the roster grows. */
+const ITEMS = [{"f": "song-00.jpg", "k": "song", "l": "You Were There"}, {"f": "song-01.jpg", "k": "song", "l": "Rushing Back [Skeen Re"}, {"f": "song-02.jpg", "k": "song", "l": "Small Talk (Briston Ma"}, {"f": "song-03.jpg", "k": "song", "l": "Summer Sun"}, {"f": "song-04.jpg", "k": "song", "l": "What I Want"}, {"f": "song-05.jpg", "k": "song", "l": "#lola!"}, {"f": "song-06.jpg", "k": "song", "l": "Skeen LIVE @ Navy Pier"}, {"f": "song-07.jpg", "k": "song", "l": "The reason why"}, {"f": "song-08.jpg", "k": "song", "l": "Sunshine State of Mind"}, {"f": "song-09.jpg", "k": "song", "l": "Home Again"}, {"f": "song-10.jpg", "k": "song", "l": "Summer Sun"}, {"f": "release-11.jpg", "k": "release", "l": "Heatwaves & Horizons"}, {"f": "release-12.jpg", "k": "release", "l": "You Were There"}, {"f": "release-13.jpg", "k": "release", "l": "What I Want"}, {"f": "release-14.jpg", "k": "release", "l": "Sunshine State of Mind"}, {"f": "release-15.jpg", "k": "release", "l": "Home Again"}, {"f": "release-16.jpg", "k": "release", "l": "Summer Sun"}, {"f": "release-17.jpg", "k": "release", "l": "#lola! [skeen remix]"}, {"f": "release-18.jpg", "k": "release", "l": "OutWest"}, {"f": "video-19.jpg", "k": "video", "l": "DAY 285: First Festiva"}, {"f": "video-20.jpg", "k": "video", "l": "DAY 240: Bunt Tour"}, {"f": "video-21.jpg", "k": "video", "l": "Opening for Jigitz in "}, {"f": "video-22.jpg", "k": "video", "l": "DAY 245: Opening for B"}, {"f": "video-23.jpg", "k": "video", "l": "DAY 250 of trying to b"}, {"f": "video-24.jpg", "k": "video", "l": "DAY 284: K Bridge Intr"}, {"f": "video-25.jpg", "k": "video", "l": "DAY 283: DJ Internship"}, {"f": "video-26.jpg", "k": "video", "l": "DAY 247: Hitting the r"}, {"f": "video-27.jpg", "k": "video", "l": "DAY 246: Never satisfi"}, {"f": "video-28.jpg", "k": "video", "l": "DAY 232: The Final Str"}, {"f": "video-29.jpg", "k": "video", "l": "DAY 223 of trying to b"}, {"f": "video-30.jpg", "k": "video", "l": "DAY 213: Remixing \u2018MOT"}, {"f": "video-31.jpg", "k": "video", "l": "DAY 215: Revisiting my"}, {"f": "video-32.jpg", "k": "video", "l": "DAY 217: Playing tour "}, {"f": "video-33.jpg", "k": "video", "l": "DAY 220: Playing Conco"}, {"f": "video-34.jpg", "k": "video", "l": "DAY 221: How one remix"}, {"f": "video-35.jpg", "k": "video", "l": "Remixing \u2018Rushing Back"}, {"f": "video-36.jpg", "k": "video", "l": "Every DJ should be doi"}, {"f": "video-37.jpg", "k": "video", "l": "My two cents on when t"}, {"f": "video-38.jpg", "k": "video", "l": "Let\u2019s hope @itsmurph i"}, {"f": "video-39.jpg", "k": "video", "l": "More underrated tunes\ud83d\udcbf"}, {"f": "video-40.jpg", "k": "video", "l": "Most Underrated House "}, {"f": "video-41.jpg", "k": "video", "l": "DAY 209: Remixing \u2018Sir"}, {"f": "video-42.jpg", "k": "video", "l": "Day 210 of Giving myse"}, {"f": "video-43.jpg", "k": "video", "l": "Out of my Mind (Skeen "}, {"f": "video-44.jpg", "k": "video", "l": "Summer \u201891 but make it"}, {"f": "video-45.jpg", "k": "video", "l": "DAY 208: Hustling for "}, {"f": "video-46.jpg", "k": "video", "l": "DAY 207: What song sho"}, {"f": "video-47.jpg", "k": "video", "l": "New Musica"}, {"f": "video-48.jpg", "k": "video", "l": "Building and filming m"}, {"f": "video-49.jpg", "k": "video", "l": "DAY 205: Remixing Summ"}, {"f": "video-50.jpg", "k": "video", "l": "Clubs? Content? Or bot"}, {"f": "video-51.jpg", "k": "video", "l": "Day 200 of trying to b"}, {"f": "video-52.jpg", "k": "video", "l": "DAY 192: Turn that shi"}, {"f": "video-53.jpg", "k": "video", "l": "DAY 199: Unexpected tu"}, {"f": "video-54.jpg", "k": "video", "l": "Public Failure."}, {"f": "video-55.jpg", "k": "video", "l": "DAY 183: 6 Month Updat"}, {"f": "video-56.jpg", "k": "video", "l": "new year new Skeen"}, {"f": "photo-57.png", "k": "photo", "l": ""}, {"f": "photo-58.png", "k": "photo", "l": ""}, {"f": "photo-59.jpg", "k": "photo", "l": ""}, {"f": "photo-60.jpg", "k": "photo", "l": ""}, {"f": "photo-61.jpg", "k": "photo", "l": ""}, {"f": "photo-62.jpg", "k": "photo", "l": ""}, {"f": "photo-63.jpg", "k": "photo", "l": ""}, {"f": "photo-64.jpg", "k": "photo", "l": ""}, {"f": "photo-65.jpg", "k": "photo", "l": ""}, {"f": "photo-66.jpg", "k": "photo", "l": ""}, {"f": "photo-67.jpg", "k": "photo", "l": ""}, {"f": "photo-68.jpg", "k": "photo", "l": ""}, {"f": "photo-69.jpg", "k": "photo", "l": ""}, {"f": "photo-70.jpg", "k": "photo", "l": ""}, {"f": "photo-71.jpg", "k": "photo", "l": ""}, {"f": "photo-72.jpg", "k": "photo", "l": ""}, {"f": "photo-73.jpg", "k": "photo", "l": ""}];
+(function build(){
+  const COLS = innerWidth < 900 ? 6 : 14;
+  const pool = ITEMS.slice();
+  for (let i = pool.length - 1; i > 0; i--){ const j = (i * 7919 + 13) % (i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  for (let c = 0; c < COLS; c++){
+    const col = document.createElement('div'); col.className = 'col';
+    // Two passes so the column can loop, and enough of them that a tall screen is covered.
+    for (let pass = 0; pass < 2; pass++){
+      for (let i = 0; i < 9; i++){
+        const n = c * 9 + i;
+        if (n % 8 === 3){ col.insertAdjacentHTML('beforeend', UI[n % UI.length]()); continue; }
+        const it = pool[n % pool.length];
+        const el = document.createElement('div');
+        el.className = 'card' + (it.k === 'video' ? ' play' : '');
+        if (it.k === 'video') el.style.aspectRatio = '16/9';
+        else if (it.k !== 'photo') el.style.aspectRatio = '1/1';
+        el.innerHTML = `<img src="assets/${it.f}" alt="">` + (it.l ? `<span class="tag">${it.l}</span>` : '');
+        col.appendChild(el);
+      }
+    }
+    wall.appendChild(col);
+    cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 8 + (c % 4) * 4, y: -Math.random() * 300 });
+  }
+})();
+
+/* ── The flight: the star and the collage grow together, landing at 1:1. ── */
+const win = document.getElementById('window'), edge = document.getElementById('edge'), topbar = document.getElementById('topbar');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => t * t * (3 - 2 * t);
+const BASE = () => (innerWidth < 900 ? 240 : 380);
+const FAR = 0.30;
+
+(function loop(){
+  const p = clamp(scrollY / (innerHeight * 2.8), 0, 1);
+  const fly = ease(p);
+  const need = (Math.hypot(innerWidth, innerHeight) / BASE()) * 2.35;
+  const s = 1 + (need - 1) * Math.pow(fly, 1.75);
+  const apparent = FAR + (1 - FAR) * fly;
+  wall.style.transform = `translate(-50%,-50%) scale(${apparent / s})`;
+  const breathe = 1 + Math.sin(performance.now() / 1400) * .01 * (1 - fly);
+  win.style.transform = `translate(-50%,-50%) scale(${s * breathe})`;
+  edge.style.transform = `translate(-50%,-50%) scale(${s * breathe})`;
+  edge.style.opacity = String(clamp(1 - fly * 2.4, 0, 1));
+  topbar.style.opacity = String(clamp((fly - .72) / .28, 0, 1));
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const h = c.el.scrollHeight / 2;
+    if (c.y <= -h) c.y += h; if (c.y >= 0) c.y -= h;
+    c.el.style.transform = `translate3d(0,${c.y}px,0)`;
+  });
+  requestAnimationFrame(loop);
+})();
+</script></body></html>

@@ -194,3 +194,49 @@ Lone Star's own idea points at a third thing that neither reference does: **one 
 system rendering onto many surfaces**. A hero where a poster, a site, a cover and an EPK
 share one palette, and the palette changes, is a motion idea that is *about the product*
 rather than decoration on top of it. That is the one worth prototyping first.
+
+---
+
+# The brand-colour idea (Sam, 2026-09-17)
+
+> "Instead of branding my site with the blue and red… have the artist choose two colours, a
+> primary and secondary of their own brand, then the blue and red turn to that artist's
+> colours, so the experience is aligned with their branding."
+
+**This is the strongest idea in the whole page, because it is the product's own argument
+performed on the homepage.** Lone Star is the brand system of record; a site that can wear
+any artist's brand is that sentence, demonstrated, before a word is read.
+
+Built in `design/variants/m-collage.html`: every accent is `--brand-1` / `--brand-2`, and a
+switcher at the foot re-skins the page. Blue and red are simply Lone Star's own entry in
+that list, not the site's identity.
+
+**Where the colours come from, for real.** Not hand-set. Each connected site already
+declares its palette (`styleOptions`, `CONNECTING.md` §4), and `get_public_site` returns it,
+so the landing page can read every artist's real two colours at build time. The mock hard-
+codes them; the real one should not, or it drifts the day an artist restyles.
+
+**Three ways to drive it, worth deciding before it is built:**
+1. **The visitor picks**, from a row of artists. Playful, and it makes the roster the
+   control. What the mock does.
+2. **It follows the work on screen** — as the collage brings a Skeen cover past, the page
+   is in Skeen's colours. Strongest idea, hardest to make legible.
+3. **One artist per visit**, chosen at random. Quietest, and every visitor sees a coherent
+   page rather than a toy.
+
+**The trap:** an artist's palette can be low-contrast against white, or two colours that
+fight. The page needs a floor — check contrast against the paper and fall back to ink for
+text, using the colour only for accents. Skeen's cyan on white is already the case that
+breaks naive use.
+
+## The collage (same file)
+
+The wall is no longer screenshots of pages. It is the real material, pulled from the
+database and cached in `design/variants/assets/` (74 items: 11 song covers, 8 release
+covers, 38 video stills, 17 photographs), mixed with the product's own components — a stat
+card, a tour date, a merch tile, a press-kit button — so Lone Star's work sits inside the
+artists'. Video stills carry a play badge in the artist's secondary colour.
+
+Two things learned building it: a page opened from disk cannot `fetch()` a file beside it
+(its origin is `null`), so the asset list is inlined; and at 1:1 the tiles must be small —
+fourteen columns, not nine — or you only ever see five of them.
