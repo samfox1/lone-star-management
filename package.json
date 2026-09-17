@@ -29,7 +29,8 @@
     "audit:regions": "tsx scripts/audit-regions.ts",
     "audit:grants": "tsx scripts/audit-grants.ts",
     "rebase:styles": "tsx scripts/rebase-styles.ts",
-    "compare:posthog": "tsx scripts/compare-posthog.ts"
+    "compare:posthog": "tsx scripts/compare-posthog.ts",
+    "posthog:watch": "bash scripts/posthog-watch.sh skeen"
   },
   "dependencies": {
     "@lone-star/music-rules": "*",
