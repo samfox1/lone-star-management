@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — N / The scatter</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* N — THE SCATTER. Three acts, no words until the last one.
+   1. A star on white. Inside it, a collage seen from far away.
+   2. Scroll: you go through the star. The collage is covers, merch, logos, photographs and
+      plain graphic shapes, scattered — not columns — drifting, covering the screen.
+   3. Keep scrolling and the pieces pop off one by one, uncovering Lone Star underneath.
+   Black and white throughout: the only colour on the page is the artists' own work. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--faint:#9aa0a6;--hair:#ececec;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--paper);display:grid;place-items:center}
+/* What is underneath the collage, waiting to be uncovered. */
+.beneath{position:absolute;left:50%;top:50%;width:100vw;height:100vh;transform:translate(-50%,-50%);z-index:1;
+  display:grid;place-items:center;text-align:center;padding:0 8vw;background:var(--paper);opacity:0;will-change:transform,opacity}
+.beneath .mark{width:60px;height:60px;margin:0 auto 22px}
+.beneath h1{font-size:clamp(34px,5vw,72px);line-height:.96;letter-spacing:-.04em;font-weight:700}
+.beneath .s{font-family:var(--mono);font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--faint);margin-top:16px}
+.beneath p{margin:22px auto 0;max-width:48ch;font-size:17px;line-height:1.6;color:#4d5259}
+.beneath .row{display:flex;gap:40px;justify-content:center;margin-top:34px}
+.beneath .n{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-.02em}
+.beneath .l{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:7px}
+/* The window. */
+.window{position:absolute;left:50%;top:50%;width:380px;height:380px;z-index:3;transform:translate(-50%,-50%);
+  -webkit-clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  background:var(--paper);will-change:transform}
+/* The collage lives inside the window and carries its own scale. */
+.field{position:absolute;left:50%;top:50%;width:170vw;height:170vh;transform:translate(-50%,-50%);will-change:transform}
+.piece{position:absolute;will-change:transform,opacity}
+.piece img{display:block;width:100%;height:100%;object-fit:cover;border-radius:4px;box-shadow:0 10px 30px rgba(17,17,17,.18)}
+/* Plain graphics, drawn not loaded, so the collage is not only photographs. */
+.g{width:100%;height:100%;border-radius:4px}
+.g.star{background:#111;-webkit-clip-path:polygon(50% 0,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 100%,50% 71%,19.5% 100%,31.1% 57%,2% 35.5%,38.2% 35.5%);clip-path:polygon(50% 0,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 100%,50% 71%,19.5% 100%,31.1% 57%,2% 35.5%,38.2% 35.5%)}
+.g.ring{border:10px solid #111;border-radius:50%;background:transparent}
+.g.dot{background:#111;border-radius:50%}
+.g.bars{background:repeating-linear-gradient(90deg,#111 0 8px,#fff 8px 16px)}
+.g.halftone{background:radial-gradient(#111 32%,transparent 33%) 0 0/14px 14px;background-color:#fff}
+.g.word{background:#111;color:#fff;display:grid;place-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;border-radius:4px}
+.g.outline{border:2px solid #111;background:#fff;display:grid;place-items:center;font-family:var(--sans);font-weight:700;letter-spacing:-.03em;color:#111}
+.g.slab{background:#111}
+.edge{position:absolute;left:50%;top:50%;width:380px;height:380px;transform:translate(-50%,-50%);z-index:4;pointer-events:none;
+  filter:drop-shadow(0 22px 60px rgba(17,17,17,.22));will-change:transform,opacity}
+.edge svg{width:100%;height:100%;display:block}
+.topbar{position:fixed;inset:0 0 auto 0;z-index:19;display:flex;justify-content:space-between;padding:22px 28px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);opacity:0;will-change:opacity}
+.cue{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:19;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);will-change:opacity}
+.scroller{height:520vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(30px,4vw,56px);line-height:1;letter-spacing:-.035em;font-weight:700}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+</style></head><body>
+
+<div class="stage">
+  <div class="window" id="window">
+    <div class="beneath" id="beneath">
+    <div>
+      <svg class="mark" viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="#111"/></svg>
+      <h1>Lone Star Management</h1>
+      <div class="s">Brand system of record</div>
+      <p>Every song, show, product and photograph an artist has — in one place, rendered onto every surface it needs to show up on, kept current without a developer.</p>
+      <div class="row">
+        <div><div class="n">12,480</div><div class="l">Views</div></div>
+        <div><div class="n">4,102</div><div class="l">Clicks out</div></div>
+        <div><div class="n">53</div><div class="l">Countries</div></div>
+      </div>
+    </div>
+  </div>
+    <div class="field" id="field"></div>
+  </div>
+  <div class="edge" id="edge"><svg viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="none" stroke="#111" stroke-width=".8" stroke-linejoin="round"/></svg></div>
+</div>
+<div class="topbar" id="topbar"><span>Lone Star</span><span>Work · What we do · Contact</span></div>
+<div class="cue" id="cue">Scroll</div>
+
+<div class="scroller"></div>
+<div class="after"><div class="band"><h2>The work.</h2></div></div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script src="_assets.js"></script>
+<script>
+/* ── The collage. Scattered on a jittered grid rather than columns: a grid keeps the page
+   covered with no holes, the jitter and rotation keep it from reading as a grid. ── */
+const GRAPHICS = [
+  () => '<div class="g star"></div>',
+  () => '<div class="g ring"></div>',
+  () => '<div class="g dot"></div>',
+  () => '<div class="g bars"></div>',
+  () => '<div class="g halftone"></div>',
+  () => '<div class="g word">Lone Star</div>',
+  () => '<div class="g word">Est. 2026</div>',
+  () => '<div class="g outline" style="font-size:34px">★</div>',
+  () => '<div class="g slab"></div>',
+  () => '<div class="g outline" style="font-size:20px">Tour</div>',
+];
+const field = document.getElementById('field');
+const pieces = [];
+// A deterministic shuffle, so the layout is the same every load.
+let seed = 7;
+const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+
+const COLS = 14, ROWS = 11;
+for (let r = 0; r < ROWS; r++){
+  for (let c = 0; c < COLS; c++){
+    const i = r * COLS + c;
+    const el = document.createElement('div');
+    el.className = 'piece';
+    const isGraphic = i % 5 === 2;                    // one in five is a drawn shape
+    const it = ITEMS[i % ITEMS.length];
+    // Sizes vary a lot, which is what makes it a collage and not a contact sheet.
+    const base = 9 + rnd() * 13;                       // in vw; they overlap, which is the point
+    const w = isGraphic ? base * .7 : base;
+    const ratio = isGraphic ? 1 : (it.k === 'video' ? 0.56 : (it.k === 'photo' ? (0.7 + rnd() * 0.8) : 1));
+    el.style.width = w + 'vw';
+    el.style.height = (w * ratio) + 'vw';
+    // Jittered grid: every cell filled, nothing in rows.
+    el.style.left = ((c + .5) / COLS * 100 + (rnd() - .5) * 9) + '%';
+    el.style.top  = ((r + .5) / ROWS * 100 + (rnd() - .5) * 10) + '%';
+    el.innerHTML = isGraphic ? GRAPHICS[i % GRAPHICS.length]() : `<img src="assets/${it.f}" alt="">`;
+    field.appendChild(el);
+    pieces.push({
+      el,
+      rot: (rnd() - .5) * 18,
+      depth: .6 + rnd() * .8,                          // parallax, and pop-off order
+      dx: (rnd() - .5) * 2, dy: (rnd() - .5) * 2,      // the direction it leaves in
+      delay: rnd(),                                    // stagger
+      drift: rnd() * Math.PI * 2,
+    });
+  }
+}
+
+const win = document.getElementById('window'), edge = document.getElementById('edge'), beneath = document.getElementById('beneath'),
+      topbar = document.getElementById('topbar'), cue = document.getElementById('cue');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => t * t * (3 - 2 * t);
+const BASE = () => (innerWidth < 900 ? 240 : 380);
+const FAR = 0.30;
+
+(function loop(){
+  const t = performance.now() / 1000;
+  const total = innerHeight * 4.4;
+  const p = clamp(scrollY / total, 0, 1);
+
+  const fly  = ease(clamp(p / .42, 0, 1));             // act 1→2: through the star
+  const hold = clamp((p - .42) / .14, 0, 1);           // act 2: the collage, whole
+  const pop  = clamp((p - .56) / .44, 0, 1);           // act 3: the pieces leave
+
+  const need = (Math.hypot(innerWidth, innerHeight) / BASE()) * 2.35;
+  const s = 1 + (need - 1) * Math.pow(fly, 1.75);
+  const apparent = FAR + (1 - FAR) * fly;
+  field.style.transform = `translate(-50%,-50%) scale(${apparent / s})`;
+  // What is underneath keeps true size while the star grows around it, so the uncovering
+  // reads as the collage leaving rather than the page zooming.
+  beneath.style.transform = `translate(-50%,-50%) scale(${1 / s})`;
+
+  const breathe = 1 + Math.sin(t * .7) * .01 * (1 - fly);
+  win.style.transform  = `translate(-50%,-50%) scale(${s * breathe})`;
+  edge.style.transform = `translate(-50%,-50%) scale(${s * breathe})`;
+  edge.style.opacity = String(clamp(1 - fly * 2.4, 0, 1));
+  cue.style.opacity = String(clamp(1 - p * 8, 0, 1));
+  topbar.style.opacity = String(clamp((pop - .55) / .45, 0, 1));
+  beneath.style.opacity = String(clamp((pop - .12) / .45, 0, 1));
+
+  for (const q of pieces){
+    // Each piece leaves on its own beat: staggered, outward, shrinking as it goes.
+    const go = clamp((pop - q.delay * .55) / .45, 0, 1);
+    const e = ease(go);
+    const fx = Math.sin(t * .28 + q.drift) * 10 * q.depth * (1 - e);
+    const fy = Math.cos(t * .23 + q.drift) * 10 * q.depth * (1 - e);
+    const x = fx + q.dx * e * 120;
+    const y = fy + q.dy * e * 120;
+    q.el.style.transform = `translate(-50%,-50%) translate3d(${x}px,${y}px,0) rotate(${q.rot * (1 - e * .4)}deg) scale(${1 - e * .82})`;
+    q.el.style.opacity = String(1 - e);
+  }
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
