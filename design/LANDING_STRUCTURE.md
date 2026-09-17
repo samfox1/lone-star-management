@@ -147,3 +147,50 @@ themselves), and whatever shows the editor being used. Everything else can be st
 
 Write each as a sentence when you hand it over — what moves, how far, how long, in what
 order. That is what turns into code.
+
+---
+
+# References Sam sent (2026-09-17), and how each one is actually made
+
+I opened all three and read what they load. They are three different techniques, not three
+versions of the same one, and that matters for what we copy.
+
+## internetartclub.com — art direction, cheap technology
+Next.js. **No WebGL, no canvas, no animation library at all.** Five SVGs and a pile of
+images. Every bit of its personality is *taste*: a scanned gilt picture frame around the
+whole viewport, cut-out collage (a nun with an iPod, pixel clouds, a Windows error dialog,
+Kirby), one serif wordmark, one bordered Enter button on black.
+
+The lesson: the most distinctive of the three is the one with the least technology. What it
+costs is not engineering, it is a collection of images and the nerve to place them.
+
+## leoburnett.com — one full-screen WebGL scene
+Next.js with a single `<canvas>` at viewport size running WebGL: a drifting starfield, the
+script-lettering logo and a lion mark floating in it, pill-shaped nav on black, one acid
+green accent.
+
+The lesson: one idea, done at full bleed, carrying the whole page. Everything else is
+restrained to the point of plainness so the scene reads.
+
+## theheavybear.com — a shader tool, embedded
+WordPress, and the motion comes from **`unicornStudio.umd.js`**: Unicorn Studio, a visual
+tool for building shader scenes that you embed. (It did not render in my headless browser —
+worth opening yourself to see what it does.)
+
+The lesson, and it is the useful one for Sam: that class of motion is now a *tool you design
+in*, not code someone writes by hand. Same category as Rive.
+
+## What this means for Lone Star
+
+Two routes, and they can be mixed:
+
+1. **Art direction** (Internet Art Club). Collage, texture, a frame, deliberate ugliness.
+   Costs image-making, not engineering. Suits a company whose product is other people's
+   brands — but it competes with the artist work on the page for attention.
+2. **One scene** (Leo Burnett, Heavy Bear). A single WebGL or shader idea behind
+   near-plain type, built in Rive or Unicorn Studio and embedded, or written by hand.
+
+Lone Star's own idea points at a third thing that neither reference does: **one brand
+system rendering onto many surfaces**. A hero where a poster, a site, a cover and an EPK
+share one palette, and the palette changes, is a motion idea that is *about the product*
+rather than decoration on top of it. That is the one worth prototyping first.
