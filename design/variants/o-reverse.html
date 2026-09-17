@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — O / The reverse</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* O — THE REVERSE. The other direction from every version before it.
+   You LAND inside the work: the sites, full bleed, columns running up and down, with the
+   name across the middle. Scroll and the whole screen becomes the star's contents — the star
+   closes in around it and both shrink together, until what is left is a white page with one
+   star on it, still running the sites inside. Cut-outs, transparent and never rectangular,
+   arrive on the paper as the star pulls in. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--faint:#9aa0a6;--hair:#ececec;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--paper);display:grid;place-items:center}
+/* The star is the viewport at first: a clip so large its edges are off-screen. */
+.window{position:absolute;left:50%;top:50%;width:360px;height:360px;z-index:3;transform:translate(-50%,-50%);
+  -webkit-clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  background:#0f0f11;will-change:transform}
+.wall{position:absolute;left:50%;top:50%;width:100vw;height:100vh;transform:translate(-50%,-50%);
+  display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 6px;will-change:transform}
+.col{display:flex;flex-direction:column;gap:10px;will-change:transform}
+.col img{display:block;width:100%;height:auto;border-radius:6px}
+/* The name, across the middle of the work at the start. */
+.name{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;text-align:center;pointer-events:none;will-change:opacity,transform}
+.name h1{font-size:clamp(34px,6vw,86px);line-height:.94;letter-spacing:-.04em;font-weight:700;color:#fff;text-shadow:0 4px 40px rgba(0,0,0,.7)}
+.name .s{font-family:var(--mono);font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:rgba(255,255,255,.85);margin-top:14px;text-shadow:0 2px 22px rgba(0,0,0,.8)}
+/* The name again, small, under the star at the end. */
+.name2{position:absolute;left:50%;top:calc(50% + 232px);transform:translate(-50%,0);z-index:5;text-align:center;opacity:0;will-change:opacity}
+.name2 h2{font-size:26px;letter-spacing:-.03em;font-weight:700}
+.name2 .s{font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+/* Cut-outs on the paper: transparent, never rectangular, arriving as the star pulls in. */
+.cut{position:absolute;z-index:4;will-change:transform,opacity;opacity:0;filter:drop-shadow(0 10px 22px rgba(17,17,17,.2))}
+.cut img{display:block;width:100%;height:100%;object-fit:contain}
+.edge{position:absolute;left:50%;top:50%;width:360px;height:360px;transform:translate(-50%,-50%);z-index:4;pointer-events:none;will-change:transform,opacity;opacity:0}
+.edge svg{width:100%;height:100%;display:block}
+.cue{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#fff;mix-blend-mode:difference;will-change:opacity}
+.scroller{height:300vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(34px,4.6vw,64px);line-height:.98;letter-spacing:-.035em;font-weight:700;max-width:17ch}
+.band p{margin-top:20px;max-width:52ch;font-size:17px;line-height:1.6;color:#5c6168}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}.window,.edge{width:240px;height:240px}.name2{top:calc(50% + 160px)}}
+</style></head><body>
+
+<div class="stage">
+  <div class="window" id="window"><div class="wall" id="wall"></div></div>
+  <div class="edge" id="edge"><svg viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="none" stroke="#111" stroke-width=".9" stroke-linejoin="round"/></svg></div>
+  <div class="name" id="name"><h1>Lone Star<br>Management</h1><div class="s">Brand system of record</div></div>
+  <div class="name2" id="name2"><h2>Lone Star Management</h2><div class="s">Brand system of record</div></div>
+  <div class="cue" id="cue">Scroll</div>
+</div>
+
+<div class="scroller"></div>
+<div class="after"><div class="band">
+  <h2>Everything an artist is, on every surface it has to show up on.</h2>
+  <p>The site, the poster, the cover, the press kit — rendered from one system the artist keeps current, without a developer.</p>
+</div></div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script src="_demo.js"></script>
+<script>
+/* The sites, running up and down behind the name. */
+const wall = document.getElementById('wall'), cols = [];
+const COLS = innerWidth < 900 ? 3 : 5;
+for (let c = 0; c < COLS; c++){
+  const col = document.createElement('div'); col.className = 'col';
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = 0; i < 4; i++){
+      const img = new Image();
+      img.src = 'shots/' + SHOTS[(c * 4 + i + pass * 3) % SHOTS.length];
+      col.appendChild(img);
+    }
+  wall.appendChild(col);
+  cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 11 + (c % 3) * 5, y: -Math.random() * 600 });
+}
+
+/* Cut-outs on the paper. Transparent PNGs and drawn shapes only — nothing rectangular,
+   because a rectangle on white reads as a missing image rather than a cut-out. */
+const CUTS = [...CUT_PNG.map(f => 'cuts-real/' + f), ...CUT_SVG.map(f => 'cuts/' + f)];
+let seed = 5;
+const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+const cutEls = [];
+/* Positions are found by rejection, not typed by hand: keep out of the box the star ends up
+   in, and out of the band the name sits in underneath it. A hand-written list drifts the
+   moment the star's resting size changes. */
+const RING = [];
+{
+  const clearOfStar = (x, y) => Math.abs(x - 50) > 27 || Math.abs(y - 50) > 33;
+  const clearOfName = (x, y) => !(y > 74 && x > 24 && x < 76);
+  let guard = 0;
+  while (RING.length < 20 && guard++ < 4000){
+    const x = 4 + rnd() * 92, y = 6 + rnd() * 88;
+    if (!clearOfStar(x, y) || !clearOfName(x, y)) continue;
+    // Not on top of each other either.
+    if (RING.some(([px, py]) => Math.hypot(px - x, py - y) < 13)) continue;
+    RING.push([x, y]);
+  }
+}
+// Unique: shuffled once and dealt, so no cut-out appears twice on the page.
+const BAG = [...CUTS];
+for (let i = BAG.length - 1; i > 0; i--){ const j = Math.floor(rnd() * (i + 1)); [BAG[i], BAG[j]] = [BAG[j], BAG[i]]; }
+RING.forEach((pos, i) => {
+  const el = document.createElement('div');
+  el.className = 'cut';
+  const w = 8 + rnd() * 10;
+  el.style.width = w + 'vw';
+  el.style.height = (w * (0.7 + rnd() * 0.7)) + 'vw';
+  el.style.left = pos[0] + '%';
+  el.style.top = pos[1] + '%';
+  el.innerHTML = `<img src="${BAG[i % BAG.length]}" alt="">`;
+  document.querySelector('.stage').appendChild(el);
+  cutEls.push({ el, rot: (rnd() - .5) * 30, when: rnd() * .5, driftX: (rnd() - .5) * 60, driftY: (rnd() - .5) * 60 });
+});
+
+const win = document.getElementById('window'), edge = document.getElementById('edge'),
+      name = document.getElementById('name'), name2 = document.getElementById('name2'),
+      cue = document.getElementById('cue');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => t * t * (3 - 2 * t);
+const BASE = () => (innerWidth < 900 ? 240 : 360);
+
+(function loop(){
+  const p = clamp(scrollY / (innerHeight * 2.2), 0, 1);
+  const pull = ease(p);
+
+  // THE REVERSE: the star starts bigger than the screen and closes in to a mark, and the
+  // work inside shrinks with it. `apparent` is what the eye sees of the wall, so the wall's
+  // own scale divides the star's out — the same arithmetic as the zoom, run backwards.
+  const big = (Math.hypot(innerWidth, innerHeight) / BASE()) * 2.35;
+  const s = big + (1 - big) * Math.pow(pull, 1.45);
+  const apparent = 1 + (0.34 - 1) * pull;
+  win.style.transform = `translate(-50%,-50%) scale(${s})`;
+  edge.style.transform = `translate(-50%,-50%) scale(${s})`;
+  edge.style.opacity = String(clamp((pull - .74) / .26, 0, 1));
+  wall.style.transform = `translate(-50%,-50%) scale(${apparent / s})`;
+
+  name.style.opacity = String(clamp(1 - pull * 2.4, 0, 1));
+  name.style.transform = `translate(-50%,-50%) scale(${1 - pull * .3})`;
+  name2.style.opacity = String(clamp((pull - .8) / .2, 0, 1));
+  cue.style.opacity = String(clamp(1 - pull * 4, 0, 1));
+
+  for (const q of cutEls){
+    const e = ease(clamp((pull - .3 - q.when * .3) / .3, 0, 1));
+    q.el.style.opacity = String(e);
+    q.el.style.transform = `translate(-50%,-50%) translate3d(${q.driftX * (1 - e)}px,${q.driftY * (1 - e)}px,0) rotate(${q.rot}deg) scale(${.7 + e * .3})`;
+  }
+
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const h = c.el.scrollHeight / 2;
+    if (c.y <= -h) c.y += h; if (c.y >= 0) c.y -= h;
+    c.el.style.transform = `translate3d(0,${c.y}px,0)`;
+  });
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
