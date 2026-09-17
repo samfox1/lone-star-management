@@ -43,16 +43,51 @@ still look right with two, and with nine.
 (that guard exists on purpose). It needs a real deploy before it can be linked or filmed.
 
 ## 3. The numbers — Sam's ask
-Total analytics across every site, as few figures as possible: total views, total fans
-reached, countries, shows and songs clicked through to. The map is the picture.
+Roster-wide totals only. No per-artist figures on the live page (Sam, 2026-09-17), and
+**nothing before 12 Sep 2026**: rows before the cut-over were written without bot filtering,
+so they are not a number to stand behind.
 
-- **Aggregate only.** Roster totals are Lone Star's own record and fine to publish.
-  Per-artist numbers are the artist's business; ask before naming one.
-- **They must be true on the day someone reads them.** Either pull them live from the same
-  readers the dashboard uses, or write the date beside them ("as of September 2026"). A
-  stale hardcoded number is the kind of thing a prospective client checks.
-- Worth knowing: source and visitor figures only start 12 Sep 2026, and locations 14 Sep, so
-  a lifetime "unique fans" figure cannot be honestly claimed yet. Views can.
+### What is actually there, 12-17 Sep 2026 (six days, four artists)
+Read on 2026-09-17. Six days is a short window; these grow.
+
+| | |
+| --- | --- |
+| Views | **1,162** |
+| Visits | **904** (visitor-days: one fan on three days counts three. Never call it "unique fans".) |
+| Clicks out to platforms, socials, links | **394** |
+| Songs played | **82** |
+| Countries | **53** |
+| Cities | **355** |
+| Bots filtered out | 13 |
+
+All-time, not from this window, and worth checking for test rows before they go on a page:
+**10** booking enquiries, **8** newsletter signups.
+
+### The metrics that make the case
+Pick four or five. A wall of numbers reads as padding.
+
+1. **Views.** The plain one everybody understands.
+2. **Clicks out.** 394 against 1,162 views is about **one visit in three ending in a click**
+   to a song, a social or a link. That RATE is the strongest number on the page, and it
+   stays strong while the totals are small — which they are, for now.
+3. **Reach.** 53 countries and 355 cities for a roster of four is a genuinely good line.
+4. **Songs played** — the thing an artist cares about.
+5. **Booking enquiries.** The only metric here that is money. Check the row count is real
+   first.
+
+Not yet: ticket and merch clicks are **zero** in this window, so leave them off rather than
+show a nought. "Unique fans" cannot be said honestly at all — the visitor hash rotates
+daily, by design, so nobody can be counted twice across days.
+
+### Mock numbers while designing
+Sam, 2026-09-17: mock data is fine for now. Two rules so it never ships.
+
+- **Label it in the frame**, e.g. `MOCK` beside the block, or a magenta text style used
+  nowhere else. Whatever is obvious at a glance in a screenshot.
+- **Use plausible shapes, not fantasies.** 50k views under a four-artist roster reads as a
+  lie to anyone who looks. Multiply what is above by three or four.
+- Before launch these get swapped for live figures pulled from the same readers the
+  dashboard uses, or for written ones with a date beside them.
 
 ## 4. What Lone Star offers — Sam's ask
 The base subscription, then the three named add-ons: **Words**, **Identity**, **Assets**.
