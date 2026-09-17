@@ -28,7 +28,8 @@
     "mutation:changed": "tsx scripts/mutation-changed.ts",
     "audit:regions": "tsx scripts/audit-regions.ts",
     "audit:grants": "tsx scripts/audit-grants.ts",
-    "rebase:styles": "tsx scripts/rebase-styles.ts"
+    "rebase:styles": "tsx scripts/rebase-styles.ts",
+    "compare:posthog": "tsx scripts/compare-posthog.ts"
   },
   "dependencies": {
     "@lone-star/music-rules": "*",

@@ -515,9 +515,21 @@ const analytics = createAnalytics({
   anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   slug: process.env.NEXT_PUBLIC_ARTIST_SLUG,
 })
-analytics.pageview()                 // on mount
 return analytics.listen(document)    // one delegated listener, returns its own cleanup
 ```
+
+**A view is a LANDING: call `landing()` once, on mount, from the root layout.** Arriving
+from another site, an app, a bookmark or a typed URL is one view. Moving around inside the
+site is not: a client-side link never calls it again, and a plain link that reloads the page
+arrives with your own site as its referrer, which the bridge ignores (`www.` or not). A
+reload keeps the original referrer, so a landed fan who reloads counts again. It counts
+once per page load however often it is called, so StrictMode is safe. (Sam's definition,
+2026-09-17: "landing on the site should be the view.")
+
+**Pass `environment`** (Vercel: `process.env.NEXT_PUBLIC_VERCEL_ENV`). Only `production`
+reports; any other declared value is a preview. Absent is trusted, so CHECK that your host
+actually exposes it: on Vercel that is "Automatically expose System Environment Variables".
+Local development, LAN addresses and `/edit` never report, whatever you pass.
 
 Then report each action, either by handler or by attribute:
 
@@ -552,6 +564,67 @@ fan and never blocks navigation.
 report, so a song grid that reports nothing looks exactly like a song grid nobody clicked.
 Until it can, the rule is: every element a fan can click to reach music, a video, a ticket, a
 product, or another platform reports something.
+
+## 13. The cross-check mirror (0.38.0) — temporary, opt-in
+
+A 2026-09-15 audit found our tallies arithmetically correct but could not say whether a
+recorded view is a real fan. Nothing inside a pipeline can. So a site can run a SECOND one
+beside it for a while, and we compare.
+
+```ts
+const environment = process.env.NEXT_PUBLIC_VERCEL_ENV   // the SAME value to both, always
+const mirror = createMirror({          // '@samfox1/site-bridge/mirror'
+  key: process.env.NEXT_PUBLIC_POSTHOG_KEY,     // absent -> inert, no script, no request
+  host: process.env.NEXT_PUBLIC_POSTHOG_HOST,   // '/lsx' behind a same-origin proxy; see below
+  slug: process.env.NEXT_PUBLIC_ARTIST_SLUG,
+  environment,
+})
+const analytics = createAnalytics({ /* …, */ environment }, { mirror })
+// on unmount: remove the click listener first, then mirror.shutdown()
+```
+
+**Proxy it through your own domain.** Ad blockers block `*.i.posthog.com` by name and our
+door by nothing, so an unproxied PostHog reads low for a reason unrelated to accuracy.
+Route one prefix (skeen uses `/lsx`, avoiding words like analytics or posthog): `/lsx/static/*`
+and `/lsx/array/*` to `us-assets.i.posthog.com`, everything else to `us.i.posthog.com`, with
+the `Host` header set to the destination. Order matters: the API host ALSO answers
+`/static/array.js`, with a different build on a 60-second cache, so a wrong route fails
+silently. Scope it (Next 16: `proxy.ts` with a matcher) rather than setting
+`skipTrailingSlashRedirect`, which changes every URL on the site. The cost of scoping is a
+308 on each capture from `/e/` to `/e`, which PostHog accepts.
+
+**Every PostHog event carries `site`**, its own `$pageview`s included: the mirror
+`register`s it as a super-property before anything is captured. Filter on that, not on host.
+
+**Single-artist sites only.** Once started, PostHog keeps capturing every later route
+with the first slug registered. An app that serves many artists at `/[slug]` (the lone-star
+template) would tag one artist's traffic with another's slug, so it runs no mirror.
+
+**One PostHog per page.** Mirrors on one page share a single loader. A second mirror naming
+a different key, host or slug is refused, not merged into the first one's project.
+
+**Page views are PostHog's own, never mirrored.** It captures one per page load from its
+own script (`capture_pageview: true`) and knows nothing of the landing rule: the comparison
+drops PostHog page views whose own `$referring_domain` is the site's host. A mirrored
+view would be a COPY of our number and would agree with us at exactly the moment it should
+be disagreeing — which is the flaw in the original plan this replaces. Clicks ARE mirrored,
+because only your markup knows which song a click was about; that comparison tests the
+door instead, and an event PostHog kept while our tables lack it was dropped by a rate cap
+or refused by validation.
+
+**What is comparable, and what is not.** Views, sources, countries and the click kinds
+compare, as RATIOS, not as equal numbers: ad blockers and DNS filters still reach PostHog
+behind a proxy, and never reach the door. Clicks can be compared tightly in one direction
+only: a click PostHog kept and our tables lack can only be a door-side drop. The other
+direction is expected, because a click queued before PostHog loaded dies if it navigates
+away, while the door's `keepalive` fetch survives. Countries need a real-deploy check
+first: PostHog Cloud may geolocate by the proxy's connection IP, putting every event in
+one country. **Visitors do not**: ours is a daily rotating hash of IP + user-agent, so
+it counts visitor-days, while PostHog's cookieless mode issues an id per page load. Two
+different questions, two different answers, neither wrong. Do not read that gap as an error.
+
+Cookieless on both sides (`persistence: 'memory'`), no autocapture, no session recording,
+no surveys. Delete the env var when the comparison passes and the module goes inert again.
 
 ## Known rough edges
 

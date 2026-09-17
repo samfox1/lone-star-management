@@ -216,6 +216,41 @@ describe('the delegated listener', () => {
   })
 })
 
+describe('the cross-check mirror, when a site is running one', () => {
+  it('CRITICAL: every reported event is offered to the mirror, with the same options', () => {
+    // The fan-out lives in `send`, not in each site, for the reason the bridge exists at
+    // all: skeen hand-rolled its own reporting and silently missed songs, videos and
+    // social links for months. A mirror wired per-site would drift the same way.
+    const mirror = { capture: vi.fn() }
+    const { a } = wired({ mirror })
+    a.track('ticket_click', { entity: { kind: 'tour_date', id: 'td-1' } })
+    expect(mirror.capture).toHaveBeenCalledWith('ticket_click', { entity: { kind: 'tour_date', id: 'td-1' } })
+  })
+
+  it('CRITICAL: a mirror that throws does not stop the report to our own door', () => {
+    const mirror = { capture: vi.fn(() => { throw new Error('CSP') }) }
+    const { a, sent } = wired({ mirror })
+    expect(() => a.track('buy_click')).not.toThrow()
+    expect(sent()).toHaveLength(1)
+  })
+
+  it('an event the door itself drops is never mirrored', () => {
+    // The edit shell. Both halves must agree on what is not a visit, or the comparison
+    // reports a gap it created itself.
+    const mirror = { capture: vi.fn() }
+    const { a, sent } = wired({ mirror, location: { href: 'https://skeenmusic.com/edit', pathname: '/edit' } })
+    a.pageview()
+    expect(sent()).toHaveLength(0)
+    expect(mirror.capture).not.toHaveBeenCalled()
+  })
+
+  it('no mirror is the normal case and changes nothing', () => {
+    const { a, sent } = wired()
+    a.track('play', { entity: { kind: 'track', id: 't-1' } })
+    expect(sent()).toHaveLength(1)
+  })
+})
+
 describe('helpers', () => {
   it('isEditShell', () => {
     expect(isEditShell('/edit')).toBe(true)

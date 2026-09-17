@@ -1,5 +1,22 @@
 # TODO
 
+## PostHog error tracking + fix agents — AFTER the 30-day comparison (added 2026-09-17)
+
+PostHog offers error tracking plus agents that watch for bugs and open fixes on GitHub
+"while you sleep". Deferred, not rejected. Revisit only when the PostHog accuracy
+cross-check (`npm run compare:posthog`) has finished its 30 days.
+
+- **Why wait:** adding a new script and GitHub access to Skeen mid-comparison changes what
+  is being measured.
+- **Scope if adopted:** error tracking ONLY, on skeen-website ONLY. Keep it cookieless, like
+  the mirror (`persistence: 'memory'`). Do NOT use `npx @posthog/wizard`, which also turns
+  on session replay, autocapture and cookies.
+- **GitHub agents:** may open pull requests, NEVER merge or deploy. A push to skeen's main
+  deploys to production, and deploys need Sam's yes. Every PR gets reviewed against
+  AGENTS.md's rule that a fix comes with a test that can fail.
+- **Check first:** read PostHog's current docs on what "ship fixes" actually does, what
+  repo permissions it asks for, and what it costs. None of it has been verified yet.
+
 ## Open items from the cross-repo briefs (2026-08-05, briefs since deleted)
 
 The BRIEF-*.md files in skeen-website were removed once implemented; these are the

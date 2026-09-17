@@ -76,6 +76,70 @@ Nothing since 0.36.0.
 
 ---
 
+## 0.38.0 — a second opinion on our own numbers
+
+**Site action: report views with `landing()`, pass `environment`.** Neither is required to
+keep building, but a site that skips them keeps counting its own internal page loads and
+its preview deploys as views.
+
+**Behaviour changes a site will SEE on its numbers.**
+- Local development (`localhost`, `*.local`, LAN addresses) and any declared
+  `environment` other than `production` no longer report. Charts drop by exactly the test
+  traffic that was in them.
+- With `landing()`, a page load reached from the site itself is not a view. A site whose
+  own nav uses plain links that reload the page will see views FALL by those page switches.
+
+**What a view is.** Sam, 2026-09-17: "landing on the site should be the view. I don't think
+switching pages should add to the view total." `landing()` sends one `view` per page load,
+per slug, unless the referrer is the site's own host (`isInternalReferrer`, `www.` ignored,
+whole-host match). Two drafts on the way counted every client-side path change instead; the
+first patched `history.pushState` and a review found its cleanup broke Next's router. Both
+are gone. Nothing in the bridge patches `history`.
+
+**`isReportableContext` and `hostnameOf`** are exported, and both pipelines call the one
+rule. Only `production` counts when an environment is declared: an allowlist of preview
+names had already missed Netlify's.
+
+The rest of this entry describes the mirror.
+
+**What it adds.** `createMirror({ key, slug, host? })` loads PostHog from its CDN — no npm
+dependency, the package still has zero — and returns `{ capture, shutdown }`. Pass it to
+`createAnalytics(config, { mirror })` and every reported event is offered to it, so a site
+cannot wire half of its clicks to one pipeline and half to the other. No key, no script, no
+request, no cost.
+
+**Why.** The 2026-09-15 accuracy audit found the tallies arithmetically exact — nightly
+rollups match the raw rows for every day checked — and still could not answer whether a
+recorded view is a real fan. Bot detection reads only the user-agent, preview deploys and
+localhost report into production, and anyone who can write a `curl` can post events. None of
+that is visible from inside. A second pipeline counting the same traffic by different rules
+is the only instrument that shows it.
+
+**The one design detail this hangs on.** `ANALYTICS_PAGE_PLAN.md` originally had PostHog
+init with `capture_pageview: false` and the page view MIRRORED from our own `track()`. That
+is not a cross-check, it is a copy: send a view twice and PostHog records it twice, and the
+two agree precisely when they should be disagreeing. So the mirror REFUSES a `view` —
+PostHog captures those itself, one per page load (`capture_pageview: true`), and the
+comparison applies the landing rule to them from PostHog's own `$referring_domain`. Clicks are mirrored, because no independent source knows which song an
+`entity_id` was; that half tests the door rather than the browser, and catches events lost
+to the 60/min per-IP and 120/min per-artist caps.
+
+**Visitors are not comparable, by construction.** Ours is a daily rotating hash of IP +
+user-agent, which counts visitor-days; PostHog cookieless issues an id per page load. Views,
+sources, countries and the four click kinds are the numbers to compare.
+
+**One loader per page.** Every mirror on a page shares one PostHog: `init` runs once,
+`register({ site })` tags every later event (PostHog's own `$pageview`s included) before
+anything is captured, an `init` that throws is dead for every mirror rather than half-ready
+for the second one, and a mirror naming a different key, host or slug is refused. A draft
+kept this state per mirror and had all three of those bugs.
+
+**Single-artist sites only.** PostHog keeps capturing after its page's component
+unmounts, with the first slug frozen in, so a multi-artist app must not run a mirror.
+
+**It is meant to be deleted.** Not exported from the package root, so removing it is one
+subpath and one env var. Delete `NEXT_PUBLIC_POSTHOG_KEY` and it is inert again.
+
 ## 0.37.0 — one way to report what a fan did
 
 **What it adds.** `@samfox1/site-bridge/analytics`: `createAnalytics({ supabaseUrl, anonKey,
