@@ -1,1 +1,2 @@
-const CUTS = ["arrow", "bolt", "boombox", "burst", "cassette", "checker", "crown", "eye", "film", "flower", "hand", "note", "shades", "smiley", "spray", "star", "ticket", "vinyl"];
+const CUT_PNG = ["c00.png", "c01.png", "c02.png", "c03.png", "c04.png", "c06.png", "c10.png", "c11.png", "c12.png", "c13.png", "c14.png", "c15.png", "c18.png", "c19.png", "c20.png", "c21.png", "c22.png", "c25.png", "c26.png", "c27.png", "c28.png", "c29.png", "c30.png"];
+const CUT_SVG = ["arrow.svg", "bolt.svg", "boombox.svg", "burst.svg", "cassette.svg", "checker.svg", "crown.svg", "eye.svg", "film.svg", "flower.svg", "hand.svg", "note.svg", "shades.svg", "smiley.svg", "spray.svg", "star.svg", "ticket.svg", "vinyl.svg"];
