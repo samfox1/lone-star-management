@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — L / The star opens</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* L — THE STAR OPENS. One star on an empty page. Inside it, the whole wall of work, seen
+   from far away: tiny tiles, still moving. Scroll and TWO things grow at once — the star,
+   and the work inside it — until the star has swallowed the screen and the wall is at its
+   true size, full bleed. You do not arrive at a different view; you arrive at the same one,
+   close up. No words until you are there. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--surface:#f4f4f5;--hair:#ececec;--faint:#9aa0a6;--blue:#2563eb;--red:#e5484d;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--paper);display:grid;place-items:center}
+/* The window. Its size never changes in CSS — only its scale, which is the whole trick. */
+.window{position:absolute;left:50%;top:50%;width:380px;height:380px;z-index:3;transform:translate(-50%,-50%);
+  -webkit-clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  background:var(--surface);will-change:transform}
+/* The wall lives inside the window, and carries its own scale. */
+.wall{position:absolute;left:50%;top:50%;width:150vw;height:150vh;transform:translate(-50%,-50%);
+  display:grid;grid-template-columns:repeat(5,1fr);z-index:1;will-change:transform}
+.col{display:flex;flex-direction:column;will-change:transform}
+.col img{display:block;width:100%;height:auto}
+.edge{position:absolute;left:50%;top:50%;width:380px;height:380px;transform:translate(-50%,-50%);z-index:4;pointer-events:none;
+  filter:drop-shadow(0 22px 60px rgba(17,17,17,.22));will-change:transform,opacity}
+.edge svg{width:100%;height:100%;display:block}
+.cue{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);animation:bob 2.4s ease-in-out infinite;will-change:opacity}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+/* Only once you have arrived. */
+.topbar{position:fixed;inset:0 0 auto 0;z-index:7;display:flex;justify-content:space-between;padding:22px 28px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#fff;text-shadow:0 1px 14px rgba(0,0,0,.55);opacity:0;will-change:opacity}
+.scroller{height:380vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(34px,4.6vw,64px);line-height:.98;letter-spacing:-.035em;font-weight:700;max-width:17ch}
+.band h2 .b{color:var(--blue)}.band h2 .r{color:var(--red)}
+.band p{margin-top:20px;max-width:52ch;font-size:17px;line-height:1.6;color:#5c6168}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
+.stat{background:var(--paper);padding:34px}
+.stat .n{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.03em}
+.stat .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}.window,.edge{width:240px;height:240px}}
+</style></head><body>
+
+<div class="stage">
+  <div class="window" id="window">
+    <div class="wall" id="wall"></div>
+  </div>
+  <div class="edge" id="edge"><svg viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="none" stroke="#111" stroke-width=".8" stroke-linejoin="round"/></svg></div>
+  <div class="cue" id="cue">Scroll</div>
+</div>
+<div class="topbar" id="topbar"><span>Lone Star</span><span>Work · What we do · Contact</span></div>
+
+<div class="scroller"></div>
+
+<div class="after">
+  <div class="band">
+    <h2>One system. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+    <p>The site, the poster, the cover, the press kit — rendered from the same brand, kept current by the artist rather than a developer.</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">12,480</div><div class="l">Views generated</div></div>
+    <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+    <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+    <div class="stat"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+  </div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+const SHOTS = ['shots/skeen-home.png','shots/skeen-1900.png','shots/skeen-2800.png','shots/skeen-1000.png',
+               'shots/skeen-3700.png','shots/skeen-4600.png','shots/skeen-about.png'];
+const wall = document.getElementById('wall'), cols = [];
+for (let c = 0; c < 5; c++){
+  const col = document.createElement('div'); col.className = 'col';
+  for (let pass = 0; pass < 3; pass++)          // three passes: at 0.35 scale a column is short
+    for (let i = 0; i < 4; i++){
+      const img = new Image(); img.src = SHOTS[(c * 4 + i + pass * 2) % SHOTS.length]; img.alt = '';
+      col.appendChild(img);
+    }
+  wall.appendChild(col);
+  cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 9 + (c % 3) * 5, y: -Math.random() * 700 });
+}
+
+const win = document.getElementById('window'), edge = document.getElementById('edge'),
+      cue = document.getElementById('cue'), topbar = document.getElementById('topbar');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => t * t * (3 - 2 * t);
+const BASE = () => (innerWidth < 900 ? 240 : 380);
+const FAR = 0.34;   // how far away the wall starts
+
+(function loop(){
+  const p = clamp(scrollY / (innerHeight * 2.8), 0, 1);
+  const fly = ease(p);
+
+  // The star: from a mark to bigger than the screen. A star's points must clear the
+  // corners, so it needs to be far larger than the diagonal.
+  const need = (Math.hypot(innerWidth, innerHeight) / BASE()) * 2.35;
+  const s = 1 + (need - 1) * Math.pow(fly, 1.75);
+
+  // The work: from far away to true size. `apparent` is what the EYE sees, so the wall's
+  // own scale has to divide out the star's — that is what lets both grow at once and still
+  // land at exactly 1:1 when the flight ends.
+  const apparent = FAR + (1 - FAR) * fly;
+  wall.style.transform = `translate(-50%,-50%) scale(${apparent / s})`;
+
+  const breathe = 1 + Math.sin(performance.now() / 1400) * .01 * (1 - fly);
+  win.style.transform  = `translate(-50%,-50%) scale(${s * breathe})`;
+  edge.style.transform = `translate(-50%,-50%) scale(${s * breathe})`;
+  edge.style.opacity = String(clamp(1 - fly * 2.4, 0, 1));
+  cue.style.opacity = String(clamp(1 - fly * 3.2, 0, 1));
+  topbar.style.opacity = String(clamp((fly - .72) / .28, 0, 1));
+
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const h = c.el.scrollHeight / 3;
+    if (c.y <= -h) c.y += h; if (c.y >= 0) c.y -= h;
+    c.el.style.transform = `translate3d(0,${c.y}px,0)`;
+  });
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
