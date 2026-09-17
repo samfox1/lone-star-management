@@ -1,0 +1,60 @@
+{
+  "$description": "Lone Star design tokens, read out of the code on 2026-09-17 (src/app/globals.css, src/app/layout.tsx, src/components/ui/ui.tsx). Import into Figma with a free variables-import plugin, or type them in by hand — there are only a few. Keep this file and the CSS in step: the CSS is the source of truth, this is its mirror.",
+  "color": {
+    "$description": "The manager surface: black and white, with blue and red used sparingly.",
+    "ink": { "$type": "color", "$value": "#111111", "$description": "Text, and anything solid and black." },
+    "ink-muted": { "$type": "color", "$value": "#6b7280", "$description": "Secondary text." },
+    "ink-faint": { "$type": "color", "$value": "#9aa0a6", "$description": "Labels, captions, the quietest text." },
+    "paper": { "$type": "color", "$value": "#ffffff", "$description": "The page." },
+    "surface": { "$type": "color", "$value": "#fafafa", "$description": "Cards and panels on the page." },
+    "surface-hover": { "$type": "color", "$value": "#f6f7f8" },
+    "hairline": { "$type": "color", "$value": "#ececec", "$description": "Borders. One pixel, never heavier." },
+    "hairline-soft": { "$type": "color", "$value": "#f1f1f3" },
+    "accent": { "$type": "color", "$value": "#2563eb", "$description": "The only blue. Links, primary action, pending state." },
+    "accent-hover": { "$type": "color", "$value": "#1d4fd8" },
+    "accent-soft": { "$type": "color", "$value": "#eef4ff" },
+    "accent-red": { "$type": "color", "$value": "#e5484d", "$description": "Destructive only." },
+    "status-pending": { "$type": "color", "$value": "#d99a2b" },
+    "track": { "$type": "color", "$value": "#f4f4f5", "$description": "Chart and progress backgrounds." },
+    "avatar": { "$type": "color", "$value": "#ececef" },
+    "avatar-ink": { "$type": "color", "$value": "#3f3f46" }
+  },
+  "cinematic": {
+    "$description": "The dark palette the artist-site template ships with (.theme-cinematic). A separate collection in Figma: artist sites, not Lone Star's own.",
+    "background": { "$type": "color", "$value": "#0a0a0a" },
+    "foreground": { "$type": "color", "$value": "#ededed" },
+    "muted": { "$type": "color", "$value": "#8a8a8a" },
+    "border": { "$type": "color", "$value": "#1e1e1e" },
+    "flash-1": { "$type": "color", "$value": "#ff2e63" },
+    "flash-2": { "$type": "color", "$value": "#2ee6e6" },
+    "flash-3": { "$type": "color", "$value": "#b14aed" },
+    "flash-4": { "$type": "color", "$value": "#f5d90a" }
+  },
+  "font": {
+    "body": { "$type": "fontFamily", "$value": "Instrument Sans", "$description": "Names, titles, body. Weights 400-700, all from one variable font." },
+    "mono": { "$type": "fontFamily", "$value": "Space Mono", "$description": "Labels, numbers, stats. Weights 400 and 700 ONLY — Space Mono has no others." },
+    "display": { "$type": "fontFamily", "$value": "Archivo", "$description": "The artist-site template's display face. Weights 700, 800, 900." }
+  },
+  "type": {
+    "$description": "The sizes actually used on the manager surface, in px. Labels are mono, uppercase, letter-spaced; body is Instrument Sans at its natural spacing.",
+    "label": { "$type": "dimension", "$value": "10px", "$description": "Space Mono 700, uppercase, tracking 0.12em. The KLabel above every block." },
+    "button": { "$type": "dimension", "$value": "11px", "$description": "Space Mono 700, uppercase, tracking 0.06em." },
+    "xs": { "$type": "dimension", "$value": "12px" },
+    "sm": { "$type": "dimension", "$value": "14px", "$description": "Body default." },
+    "stat": { "$type": "dimension", "$value": "25px", "$description": "Space Mono 700, tracking -0.02em. The big numbers." }
+  },
+  "radius": {
+    "control": { "$type": "dimension", "$value": "8px", "$description": "Buttons, inputs (rounded-lg)." },
+    "panel": { "$type": "dimension", "$value": "12px", "$description": "Cards and panels (rounded-xl)." }
+  },
+  "space": {
+    "$description": "A 4px grid. Set Figma's nudge to 4 and these become the only gaps you need.",
+    "1": { "$type": "dimension", "$value": "4px" },
+    "2": { "$type": "dimension", "$value": "8px" },
+    "3": { "$type": "dimension", "$value": "12px" },
+    "4": { "$type": "dimension", "$value": "16px" },
+    "5": { "$type": "dimension", "$value": "20px" },
+    "6": { "$type": "dimension", "$value": "24px" },
+    "10": { "$type": "dimension", "$value": "40px", "$description": "The gap between top-level sections (space-y-10)." }
+  }
+}
