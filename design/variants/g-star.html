@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — G / Into the star</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* G — INTO THE STAR. Screen one: white, a lone star, the name. Scroll and the star opens —
+   you fly INTO it — and inside is the wall: real screenshots of the real sites, six columns
+   sliding in opposite directions, forever. Screen three: the page starts talking.
+   White, #111 ink, the blue and the red only where the work itself carries them. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--surface:#fafafa;--hair:#ececec;--faint:#9aa0a6;--blue:#2563eb;--red:#e5484d;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+html{scroll-behavior:auto}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--paper)}
+/* THE WALL — behind everything, running from the first frame so the reveal has life in it. */
+.wall{position:absolute;inset:-12% -2%;display:grid;grid-template-columns:repeat(6,1fr);gap:14px;z-index:1;will-change:transform}
+.col{display:flex;flex-direction:column;gap:14px;will-change:transform}
+.tile{border-radius:10px;overflow:hidden;background:var(--paper);border:1px solid var(--hair);box-shadow:0 12px 30px rgba(17,17,17,.06);flex:0 0 auto}
+.tile img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
+.tile .cap{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);border-top:1px solid var(--hair);background:var(--paper)}
+.tile .cap b{color:var(--ink);font-weight:700}
+/* THE MASK — a white sheet with a star punched out of it. Scroll scales the star up until
+   the sheet is gone; that is the flight. */
+.sheet{position:absolute;inset:0;z-index:3;pointer-events:none}
+.sheet svg{width:100%;height:100%;display:block}
+.mark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;text-align:center;pointer-events:none;will-change:transform,opacity}
+.mark h1{font-size:clamp(34px,4.4vw,64px);line-height:.94;letter-spacing:-.04em;font-weight:700}
+.mark .s{font-family:var(--mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--faint);margin-top:14px}
+.topbar{position:absolute;inset:0 0 auto 0;z-index:6;display:flex;justify-content:space-between;padding:24px 30px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);will-change:opacity}
+.cue{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+/* The label that arrives once you are inside. */
+.inside{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);z-index:5;text-align:center;opacity:0;will-change:opacity}
+.inside .t{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--faint)}
+.inside .h{font-size:clamp(22px,2.6vw,34px);font-weight:700;letter-spacing:-.03em;margin-top:8px}
+.scroller{height:420vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(34px,4.6vw,64px);line-height:.98;letter-spacing:-.035em;font-weight:700;max-width:17ch}
+.band h2 .b{color:var(--blue)}.band h2 .r{color:var(--red)}
+.band p{margin-top:20px;max-width:52ch;font-size:17px;line-height:1.6;color:#5c6168}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
+.stat{background:var(--paper);padding:34px}
+.stat .n{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.03em}
+.stat .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}}
+</style></head><body>
+
+<div class="stage">
+  <div class="wall" id="wall"></div>
+
+  <div class="sheet">
+    <svg id="sheet" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice">
+      <defs><mask id="hole" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="1000">
+        <rect width="1000" height="1000" fill="#fff"/>
+        <!-- A five-point star, drawn around 500,500. This is the hole. -->
+        <path id="star" fill="#000"
+          d="M500 358 L536.6 469.6 L654 469.6 L559.2 538.8 L595.8 650.4 L500 581.2 L404.2 650.4 L440.8 538.8 L346 469.6 L463.4 469.6 Z"/>
+      </mask></defs>
+      <rect width="1000" height="1000" fill="#fff" mask="url(#hole)"/>
+      <!-- The star's own outline, which fades as the hole opens. -->
+      <path id="ring" d="M500 358 L536.6 469.6 L654 469.6 L559.2 538.8 L595.8 650.4 L500 581.2 L404.2 650.4 L440.8 538.8 L346 469.6 L463.4 469.6 Z"
+        fill="none" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <div class="topbar" id="topbar"><span>Lone Star Management</span><span>Work · What we do · Contact</span></div>
+  <div class="mark" id="mark"><h1>LONE STAR</h1><div class="s">Management</div></div>
+  <div class="inside" id="inside"><div class="t">Inside the star</div><div class="h">Every site we've built, still running.</div></div>
+  <div class="cue" id="cue">Scroll</div>
+</div>
+
+<div class="scroller"></div>
+
+<div class="after">
+  <div class="band">
+    <h2>One system. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+    <p>The site, the poster, the cover, the press kit — rendered from the same brand, kept current by the artist rather than a developer.</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">12,480</div><div class="l">Views generated</div></div>
+    <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+    <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+    <div class="stat"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+  </div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* Real screenshots, taken from the live sites. Swap this list as the roster grows. */
+const SHOTS = [
+  ['shots/skeen-home.png','Skeen','home'], ['shots/skeen-1900.png','Skeen','music'],
+  ['shots/skeen-2800.png','Skeen','shows'], ['shots/skeen-about.png','Skeen','about'],
+  ['shots/skeen-1000.png','Skeen','tour'], ['shots/skeen-3700.png','Skeen','videos'],
+  ['shots/wren-home.png','Wren','home'],   ['shots/skeen-4600.png','Skeen','merch'],
+  ['shots/gulf-static.png','Gulf Static','home'], ['shots/lone-pine.png','Lone Pine','home'],
+];
+const wall = document.getElementById('wall');
+const COLS = 6, cols = [];
+for (let c = 0; c < COLS; c++){
+  const col = document.createElement('div'); col.className = 'col';
+  for (let pass = 0; pass < 2; pass++){          // twice, so the loop has somewhere to go
+    for (let i = 0; i < 4; i++){
+      const [src, who, what] = SHOTS[(c * 4 + i + pass * 3) % SHOTS.length];
+      const t = document.createElement('div'); t.className = 'tile';
+      t.innerHTML = '<img src="' + src + '" alt="" loading="eager"><div class="cap"><b>' + who + '</b><span>' + what + '</span></div>';
+      col.appendChild(t);
+    }
+  }
+  wall.appendChild(col);
+  cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 13 + (c % 3) * 6, y: -Math.random() * 500 });
+}
+
+const sheet = document.getElementById('sheet'), star = document.getElementById('star'),
+      ring = document.getElementById('ring'), mark = document.getElementById('mark'),
+      inside = document.getElementById('inside'), cue = document.getElementById('cue'),
+      topbar = document.getElementById('topbar'), wallEl = document.getElementById('wall');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => t * t * (3 - 2 * t);
+
+(function loop(){
+  const total = innerHeight * 3.2;                 // the whole flight
+  const p = clamp(scrollY / total, 0, 1);
+  const fly = ease(clamp(p / .55, 0, 1));          // 0 → 1: the star opens and swallows the sheet
+  const drift = clamp((p - .5) / .5, 0, 1);        // after the flight: the wall alone
+
+  // The star grows from a lone mark to bigger than the viewport. Exponential, because a
+  // linear scale reads as a shape growing rather than a camera moving.
+  const s = Math.pow(1 + fly * 9.2, 2.05);
+  star.setAttribute('transform', `translate(500 500) scale(${s}) translate(-500 -500)`);
+  ring.setAttribute('transform', `translate(500 500) scale(${s}) translate(-500 -500)`);
+  ring.setAttribute('stroke-opacity', String(clamp(1 - fly * 2.2, 0, 1)));
+  ring.setAttribute('stroke-width', String(1.4 / Math.max(1, s * .6)));
+
+  // The wall pushes toward you as you fall in, then settles.
+  wallEl.style.transform = `scale(${1.22 - fly * .22 + drift * .04})`;
+
+  mark.style.transform = `translate(-50%,-50%) scale(${1 + fly * .55})`;
+  mark.style.opacity = String(clamp(1 - fly * 1.9, 0, 1));
+  cue.style.opacity = String(clamp(1 - fly * 2.4, 0, 1));
+  topbar.style.opacity = String(clamp(1 - fly * 1.6, 0, 1) + drift);
+  inside.style.opacity = String(clamp((fly - .72) / .28, 0, 1) * clamp(1 - drift * 1.6, 0, 1));
+
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const h = c.el.scrollHeight / 2;
+    if (c.y <= -h) c.y += h; if (c.y >= 0) c.y -= h;
+    c.el.style.transform = `translate3d(0, ${c.y}px, 0)`;
+  });
+  requestAnimationFrame(loop);
+})();
+</script></body></html>

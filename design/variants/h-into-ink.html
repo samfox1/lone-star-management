@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — H / Into the ink</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* H — THE WALL, THEN INTO THE INK. Screen one: the work, moving, behind one white card
+   holding the logo and the name. Scroll and you fly INTO that card — it grows until it is
+   the page, and what is inside it is the ink: blue and red pigment folding through paper.
+   The words start there. White, #111 ink, blue and red only where the work carries them. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--surface:#fafafa;--hair:#ececec;--faint:#9aa0a6;--blue:#2563eb;--red:#e5484d;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--surface)}
+/* The wall of real work, always moving. */
+.wall{position:absolute;inset:-12% -2%;display:grid;grid-template-columns:repeat(6,1fr);gap:14px;z-index:1;will-change:transform}
+.col{display:flex;flex-direction:column;gap:14px;will-change:transform}
+.tile{border-radius:10px;overflow:hidden;background:var(--paper);border:1px solid var(--hair);box-shadow:0 12px 30px rgba(17,17,17,.06);flex:0 0 auto}
+.tile img{display:block;width:100%;height:auto}
+.tile .cap{display:flex;justify-content:space-between;padding:7px 9px;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);border-top:1px solid var(--hair)}
+.tile .cap b{color:var(--ink)}
+.dim{position:absolute;inset:0;z-index:2;background:rgba(250,250,250,.55);will-change:opacity}
+/* THE CARD — the thing you fly into. Everything inside counter-scales, so the contents keep
+   their true size while the frame grows: that is what makes it read as a camera move. */
+.card{position:absolute;left:50%;top:50%;z-index:4;width:min(660px,86vw);height:440px;transform:translate(-50%,-50%);
+  background:var(--paper);border:1px solid var(--hair);border-radius:20px;overflow:hidden;
+  box-shadow:0 44px 120px rgba(17,17,17,.16);will-change:transform,border-radius}
+.face{position:absolute;inset:0;display:grid;place-items:center;text-align:center;z-index:3;background:var(--paper);will-change:opacity}
+.logo{width:74px;height:74px;margin:0 auto 22px}
+.face h1{font-size:clamp(30px,3.4vw,46px);line-height:.98;letter-spacing:-.04em;font-weight:700}
+.face .s{font-family:var(--mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--faint);margin-top:14px}
+/* Inside the card: the ink, at viewport size, counter-scaled. */
+.inner{position:absolute;left:50%;top:50%;width:100vw;height:100vh;transform:translate(-50%,-50%);z-index:2;will-change:transform;background:var(--paper)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+.inner .copy{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);padding:0 8vw;z-index:2;will-change:opacity}
+.inner h2{font-size:clamp(34px,5vw,74px);line-height:.95;letter-spacing:-.04em;font-weight:700;max-width:16ch}
+.inner h2 .b{color:var(--blue)}.inner h2 .r{color:var(--red)}
+.inner p{margin-top:22px;max-width:46ch;font-size:17px;line-height:1.6;color:#4d5259}
+.cue{position:absolute;left:50%;bottom:22px;z-index:6;transform:translateX(-50%);font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);animation:bob 2.4s ease-in-out infinite;will-change:opacity}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+.topbar{position:absolute;inset:0 0 auto 0;z-index:7;display:flex;justify-content:space-between;padding:24px 30px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);mix-blend-mode:multiply}
+.scroller{height:340vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
+.stat{background:var(--paper);padding:34px}
+.stat .n{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.03em}
+.stat .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+.band{padding:96px 40px}
+.band h2{font-size:clamp(30px,4vw,56px);line-height:1;letter-spacing:-.035em;font-weight:700}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}.card{height:380px}}
+</style></head><body>
+
+<div class="stage">
+  <div class="wall" id="wall"></div>
+  <div class="dim" id="dim"></div>
+  <div class="topbar" id="topbar"><span>Lone Star</span><span>Work · What we do · Contact</span></div>
+
+  <div class="card" id="card">
+    <div class="inner" id="inner">
+      <canvas id="gl"></canvas>
+      <div class="copy" id="copy">
+        <h2>One brand. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+        <p>The site, the poster, the cover, the press kit — rendered from one system the artist keeps current, without a developer.</p>
+      </div>
+    </div>
+    <div class="face" id="face">
+      <div>
+        <svg class="logo" viewBox="0 0 100 100" fill="none">
+          <path d="M50 6 L61.8 38.2 L96 38.2 L68.4 58.6 L79.4 92 L50 71.4 L20.6 92 L31.6 58.6 L4 38.2 L38.2 38.2 Z" fill="#111"/>
+        </svg>
+        <h1>Lone Star</h1>
+        <div class="s">Web Design</div>
+      </div>
+    </div>
+  </div>
+  <div class="cue" id="cue">Scroll</div>
+</div>
+
+<div class="scroller"></div>
+
+<div class="after">
+  <div class="stats">
+    <div class="stat"><div class="n">12,480</div><div class="l">Views generated</div></div>
+    <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+    <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+    <div class="stat"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+  </div>
+  <div class="band"><h2>The work.</h2></div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* ── The wall: real screenshots of the real sites. Swap this list as the roster grows. ── */
+const SHOTS = [
+  ['shots/skeen-home.png','Skeen','home'],  ['shots/skeen-1900.png','Skeen','music'],
+  ['shots/skeen-2800.png','Skeen','shows'], ['shots/skeen-1000.png','Skeen','tour'],
+  ['shots/skeen-3700.png','Skeen','videos'],['shots/skeen-4600.png','Skeen','footer'],
+  ['shots/skeen-about.png','Skeen','about'],['shots/gulf-static.png','Gulf Static','home'],
+  ['shots/lone-pine.png','Lone Pine','home'],
+];
+const wall = document.getElementById('wall'), cols = [];
+for (let c = 0; c < 6; c++){
+  const col = document.createElement('div'); col.className = 'col';
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = 0; i < 4; i++){
+      const [src, who, what] = SHOTS[(c * 4 + i + pass * 3) % SHOTS.length];
+      const t = document.createElement('div'); t.className = 'tile';
+      t.innerHTML = '<img src="'+src+'" alt=""><div class="cap"><b>'+who+'</b><span>'+what+'</span></div>';
+      col.appendChild(t);
+    }
+  wall.appendChild(col);
+  cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 12 + (c % 3) * 6, y: -Math.random() * 500 });
+}
+
+/* ── The ink, inside the card. Domain-warped noise, two pigments, on paper. ── */
+const cv = document.getElementById('gl'), gl = cv.getContext('webgl');
+const FS = `precision highp float;uniform vec2 u_res;uniform float u_t;uniform vec2 u_m;uniform float u_in;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
+ return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p*=2.02;a*=.5;}return v;}
+void main(){
+ vec2 uv=(gl_FragCoord.xy-.5*u_res)/min(u_res.x,u_res.y);
+ vec2 q=vec2(fbm(uv*1.6+u_t*.05),fbm(uv*1.6+vec2(3.2,1.7)-u_t*.04));
+ vec2 r=vec2(fbm(uv*2.1+3.*q+u_m*.5+u_t*.07),fbm(uv*2.1+3.*q-u_m*.5+vec2(8.3,2.8)-u_t*.06));
+ float f=fbm(uv*1.9+2.6*r);
+ float ink=smoothstep(.44,.80,f)*u_in;
+ float mixer=smoothstep(.35,.68,fbm(uv*1.3-r*1.4+u_t*.03));
+ vec3 pig=mix(vec3(.145,.388,.922),vec3(.898,.282,.302),mixer);
+ float grain=(hash(gl_FragCoord.xy+u_t)-.5)*.04;
+ gl_FragColor=vec4(mix(vec3(1.),pig,clamp(ink,0.,1.)*.9)+grain,1.);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));return o;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}'));
+gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);gl.useProgram(prog);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const la=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(la);gl.vertexAttribPointer(la,2,gl.FLOAT,false,0,0);
+const U=n=>gl.getUniformLocation(prog,n);
+function size(){const d=Math.min(devicePixelRatio||1,2);cv.width=innerWidth*d;cv.height=innerHeight*d;gl.viewport(0,0,cv.width,cv.height);}
+size();addEventListener('resize',size);
+
+/* ── The flight ── */
+const card=document.getElementById('card'), inner=document.getElementById('inner'), face=document.getElementById('face'),
+      copy=document.getElementById('copy'), cue=document.getElementById('cue'), dim=document.getElementById('dim'),
+      wallEl=document.getElementById('wall'), topbar=document.getElementById('topbar');
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), ease=t=>t*t*(3-2*t);
+let mx=0,my=0,tx=0,ty=0,t=0;
+addEventListener('mousemove',e=>{tx=e.clientX/innerWidth-.5;ty=.5-e.clientY/innerHeight;});
+
+(function loop(){
+  t+=.016; mx+=(tx-mx)*.05; my+=(ty-my)*.05;
+  const p = clamp(scrollY / (innerHeight * 2.4), 0, 1);
+  const fly = ease(clamp(p / .62, 0, 1));        // the card becomes the page
+  const after = clamp((p - .62) / .38, 0, 1);    // once inside, the words settle
+
+  // How much scale the card needs to cover the viewport, from its real size.
+  const r = card.getBoundingClientRect(), w = r.width / (card._s || 1), h = r.height / (card._s || 1);
+  const need = Math.max(innerWidth / w, innerHeight / h) * 1.04;
+  const s = 1 + (need - 1) * fly;
+  card._s = s;
+  card.style.transform = `translate(-50%,-50%) scale(${s})`;
+  card.style.borderRadius = (20 / s) + 'px';
+  card.style.boxShadow = `0 ${44/s}px ${120/s}px rgba(17,17,17,${.16*(1-fly)})`;
+  inner.style.transform = `translate(-50%,-50%) scale(${1/s})`;   // contents keep true size
+
+  face.style.opacity = String(clamp(1 - fly * 1.7, 0, 1));
+  copy.style.opacity = String(clamp((fly - .55) / .45, 0, 1));
+  cue.style.opacity = String(clamp(1 - fly * 2.6, 0, 1));
+  dim.style.opacity = String(.25 + fly * .7);
+  topbar.style.opacity = String(clamp(1 - fly * 1.4, 0, 1) + after * .9);
+  wallEl.style.transform = `scale(${1 + fly * .16})`;
+
+  gl.uniform2f(U('u_res'), cv.width, cv.height);
+  gl.uniform1f(U('u_t'), t);
+  gl.uniform2f(U('u_m'), mx, my);
+  gl.uniform1f(U('u_in'), .35 + fly * .65);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const hh = c.el.scrollHeight / 2;
+    if (c.y <= -hh) c.y += hh; if (c.y >= 0) c.y -= hh;
+    c.el.style.transform = `translate3d(0,${c.y}px,0)`;
+  });
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
