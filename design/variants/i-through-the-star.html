@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — I / Through the star</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* I — THROUGH THE STAR. Screen one: the work, edge to edge, no frames and no captions —
+   one connected surface of everything we've built, drifting. On top, nothing but the star,
+   and inside the star you can already see the next screen. Scroll: the star opens until it
+   IS the screen, and you are in the ink. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--hair:#ececec;--faint:#9aa0a6;--blue:#2563eb;--red:#e5484d;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:#101012}
+/* THE MOSAIC — no gaps, no borders, no captions. One connected plane of work. */
+.wall{position:absolute;inset:-16% -4%;display:grid;grid-template-columns:repeat(5,1fr);z-index:1;will-change:transform}
+.col{display:flex;flex-direction:column;will-change:transform}
+.col img{display:block;width:100%;height:auto;filter:saturate(.62) contrast(.92)}
+.dim{position:absolute;inset:0;z-index:2;background:radial-gradient(circle at 50% 50%,rgba(15,15,17,.78) 0%,rgba(15,15,17,.52) 42%,rgba(15,15,17,.42) 100%);opacity:1;will-change:opacity}
+/* THE STAR — a window, not a logo: the next screen is already inside it. */
+.window{position:absolute;left:50%;top:50%;width:300px;height:300px;z-index:4;transform:translate(-50%,-50%);
+  -webkit-clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  will-change:transform}
+.window .inner{position:absolute;left:50%;top:50%;width:100vw;height:100vh;transform:translate(-50%,-50%);will-change:transform;background:var(--paper)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+.copy{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);padding:0 8vw;z-index:3;will-change:opacity}
+.copy h2{font-size:clamp(34px,5vw,74px);line-height:.95;letter-spacing:-.04em;font-weight:700;max-width:16ch}
+.copy h2 .b{color:var(--blue)}.copy h2 .r{color:var(--red)}
+.copy p{margin-top:22px;max-width:46ch;font-size:17px;line-height:1.6;color:#4d5259}
+/* A faint outline so the star reads against a busy mosaic. */
+.halo{position:absolute;left:50%;top:50%;width:300px;height:300px;z-index:3;transform:translate(-50%,-50%);
+  filter:drop-shadow(0 18px 50px rgba(0,0,0,.55));will-change:transform,opacity}
+.halo svg{width:100%;height:100%;display:block}
+.name{position:absolute;left:50%;top:calc(50% + 208px);transform:translate(-50%,0);z-index:5;text-align:center;will-change:opacity,transform}
+.name h1{font-size:34px;letter-spacing:-.03em;font-weight:700;color:#fff;text-shadow:0 2px 28px rgba(0,0,0,.65)}
+.name .s{font-family:var(--mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:rgba(255,255,255,.8);margin-top:10px;text-shadow:0 2px 20px rgba(0,0,0,.7)}
+.topbar{position:absolute;inset:0 0 auto 0;z-index:6;display:flex;justify-content:space-between;padding:24px 30px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#fff;text-shadow:0 1px 16px rgba(0,0,0,.6);will-change:opacity,color}
+.cue{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.85);text-shadow:0 1px 16px rgba(0,0,0,.6);animation:bob 2.4s ease-in-out infinite;will-change:opacity}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+.scroller{height:340vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
+.stat{background:var(--paper);padding:34px}
+.stat .n{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.03em}
+.stat .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+.band{padding:96px 40px}
+.band h2{font-size:clamp(30px,4vw,56px);line-height:1;letter-spacing:-.035em;font-weight:700}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}.window,.halo{width:210px;height:210px}.name{top:calc(50% + 150px)}}
+</style></head><body>
+
+<div class="stage">
+  <div class="wall" id="wall"></div>
+  <div class="dim" id="dim"></div>
+
+  <div class="halo" id="halo"><svg viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.1" stroke-linejoin="round"/></svg></div>
+
+  <div class="window" id="window">
+    <div class="inner" id="inner">
+      <canvas id="gl"></canvas>
+      <div class="copy" id="copy">
+        <h2>One brand. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+        <p>The site, the poster, the cover, the press kit — rendered from one system the artist keeps current, without a developer.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="name" id="name"><h1>Lone Star</h1><div class="s">Web Design</div></div>
+  <div class="topbar" id="topbar"><span>Lone Star</span><span>Work · What we do · Contact</span></div>
+  <div class="cue" id="cue">Scroll</div>
+</div>
+
+<div class="scroller"></div>
+
+<div class="after">
+  <div class="stats">
+    <div class="stat"><div class="n">12,480</div><div class="l">Views generated</div></div>
+    <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+    <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+    <div class="stat"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+  </div>
+  <div class="band"><h2>The work.</h2></div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* The mosaic: real screenshots, butted edge to edge. Swap the list as the roster grows. */
+const SHOTS = ['shots/skeen-home.png','shots/skeen-1900.png','shots/skeen-2800.png','shots/skeen-1000.png',
+               'shots/skeen-3700.png','shots/skeen-4600.png','shots/skeen-about.png'];
+const wall = document.getElementById('wall'), cols = [];
+for (let c = 0; c < 5; c++){
+  const col = document.createElement('div'); col.className = 'col';
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = 0; i < 4; i++){
+      const img = document.createElement('img');
+      img.src = SHOTS[(c * 4 + i + pass * 3) % SHOTS.length]; img.alt = '';
+      col.appendChild(img);
+    }
+  wall.appendChild(col);
+  cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 10 + (c % 3) * 5, y: -Math.random() * 600 });
+}
+
+/* The ink, living inside the star from the first frame. */
+const cv = document.getElementById('gl'), gl = cv.getContext('webgl');
+const FS = `precision highp float;uniform vec2 u_res;uniform float u_t;uniform vec2 u_m;uniform float u_in;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
+ return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p*=2.02;a*=.5;}return v;}
+void main(){
+ vec2 uv=(gl_FragCoord.xy-.5*u_res)/min(u_res.x,u_res.y);
+ vec2 q=vec2(fbm(uv*1.6+u_t*.05),fbm(uv*1.6+vec2(3.2,1.7)-u_t*.04));
+ vec2 r=vec2(fbm(uv*2.1+3.*q+u_m*.5+u_t*.07),fbm(uv*2.1+3.*q-u_m*.5+vec2(8.3,2.8)-u_t*.06));
+ float f=fbm(uv*1.9+2.6*r);
+ float ink=smoothstep(.44,.80,f)*u_in;
+ float mixer=smoothstep(.35,.68,fbm(uv*1.3-r*1.4+u_t*.03));
+ vec3 pig=mix(vec3(.145,.388,.922),vec3(.898,.282,.302),mixer);
+ float grain=(hash(gl_FragCoord.xy+u_t)-.5)*.04;
+ gl_FragColor=vec4(mix(vec3(1.),pig,clamp(ink,0.,1.)*.9)+grain,1.);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));return o;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}'));
+gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);gl.useProgram(prog);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const la=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(la);gl.vertexAttribPointer(la,2,gl.FLOAT,false,0,0);
+const U=n=>gl.getUniformLocation(prog,n);
+function size(){const d=Math.min(devicePixelRatio||1,2);cv.width=innerWidth*d;cv.height=innerHeight*d;gl.viewport(0,0,cv.width,cv.height);}
+size();addEventListener('resize',size);
+
+/* The flight: the star opens until it is the screen. */
+const win=document.getElementById('window'), inner=document.getElementById('inner'), halo=document.getElementById('halo'),
+      name=document.getElementById('name'), copy=document.getElementById('copy'), cue=document.getElementById('cue'),
+      dim=document.getElementById('dim'), wallEl=document.getElementById('wall'), topbar=document.getElementById('topbar');
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), ease=t=>t*t*(3-2*t);
+const BASE = () => (innerWidth < 900 ? 210 : 300);
+let mx=0,my=0,tx=0,ty=0,t=0;
+addEventListener('mousemove',e=>{tx=e.clientX/innerWidth-.5;ty=.5-e.clientY/innerHeight;});
+
+(function loop(){
+  t+=.016; mx+=(tx-mx)*.05; my+=(ty-my)*.05;
+  const p = clamp(scrollY / (innerHeight * 2.3), 0, 1);
+  const fly = ease(clamp(p / .60, 0, 1));
+  const after = clamp((p - .60) / .40, 0, 1);
+
+  // A star must be far bigger than the viewport before its points clear the corners.
+  const need = (Math.hypot(innerWidth, innerHeight) / BASE()) * 2.35;
+  const s = 1 + (need - 1) * Math.pow(fly, 1.7);   // slow at first, then it swallows the screen
+  const breathe = 1 + Math.sin(t * .9) * .012 * (1 - fly);
+  win.style.transform  = `translate(-50%,-50%) scale(${s * breathe}) rotate(${(1 - fly) * 0}deg)`;
+  halo.style.transform = `translate(-50%,-50%) scale(${s * breathe})`;
+  halo.style.opacity = String(clamp(1 - fly * 2.6, 0, 1));
+  // Zoomed in at rest, settling to true size as you arrive: the difference between a
+  // window onto somewhere and a thumbnail of it.
+  const zoom = 1 + (1 - fly) * 0.85;
+  inner.style.transform = `translate(-50%,-50%) scale(${zoom / (s * breathe)})`;
+
+  name.style.opacity = String(clamp(1 - fly * 2.2, 0, 1));
+  name.style.transform = `translate(-50%, ${fly * 40}px)`;
+  copy.style.opacity = String(clamp((fly - .84) / .16, 0, 1));
+  cue.style.opacity = String(clamp(1 - fly * 3, 0, 1));
+  dim.style.opacity = String(1 - fly * .35);
+  wallEl.style.transform = `scale(${1 + fly * .22})`;
+  topbar.style.color = after > .5 ? 'var(--ink)' : '#fff';
+  topbar.style.opacity = String(clamp(1 - fly * 1.5, 0, 1) + after);
+
+  gl.uniform2f(U('u_res'), cv.width, cv.height);
+  gl.uniform1f(U('u_t'), t);
+  gl.uniform2f(U('u_m'), mx, my);
+  gl.uniform1f(U('u_in'), .78 + fly * .22);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const hh = c.el.scrollHeight / 2;
+    if (c.y <= -hh) c.y += hh; if (c.y >= 0) c.y -= hh;
+    c.el.style.transform = `translate3d(0,${c.y}px,0)`;
+  });
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
