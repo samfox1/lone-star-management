@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — A / Collage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* VARIANT A — ART DIRECTION. The internetartclub route: almost no technology, all taste.
+   Everything here is CSS and SVG: no images, no libraries, so it is a shape to react to. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#111; --paper:#fff; --accent:#2563eb; --red:#e5484d; --yellow:#f5d90a;
+  --mono:'Space Mono',ui-monospace,monospace; --sans:'Instrument Sans',system-ui,sans-serif;
+}
+body{background:#0b0b0b;font-family:var(--sans);color:#fff;overflow-x:hidden}
+/* The frame: a hairline double border with corner ticks, doing the job the gilt frame does. */
+.frame{position:fixed;inset:14px;border:1px solid #2a2a2a;pointer-events:none;z-index:50}
+.frame::before,.frame::after{content:'';position:absolute;inset:7px;border:1px solid #1b1b1b}
+.tick{position:fixed;width:26px;height:26px;border:2px solid var(--yellow);z-index:51}
+.tick.tl{top:8px;left:8px;border-right:0;border-bottom:0}
+.tick.tr{top:8px;right:8px;border-left:0;border-bottom:0}
+.tick.bl{bottom:8px;left:8px;border-right:0;border-top:0}
+.tick.br{bottom:8px;right:8px;border-left:0;border-top:0}
+/* Paper grain, drawn not loaded. */
+.grain{position:fixed;inset:0;z-index:40;pointer-events:none;opacity:.16;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='.6'/></svg>")}
+header{position:relative;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:40px 52px;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+header .dot{width:7px;height:7px;background:var(--yellow);border-radius:50%;display:inline-block;margin-right:9px;vertical-align:1px}
+.hero{position:relative;min-height:720px;padding:34px 52px 120px;z-index:20}
+h1{font-size:clamp(44px,5.6vw,86px);line-height:.88;letter-spacing:-.04em;font-weight:700;max-width:13ch;position:relative;z-index:22}
+h1 em{font-style:normal;display:inline-block;background:var(--yellow);color:#0b0b0b;padding:0 .12em;transform:rotate(-1.6deg)}
+h1 .out{-webkit-text-stroke:1.5px #fff;color:transparent}
+.sub{margin-top:34px;max-width:46ch;font-size:17px;line-height:1.5;color:#c9c9c9;position:relative;z-index:22}
+.cta{margin-top:40px;display:inline-flex;align-items:center;gap:14px;border:1.5px solid #fff;padding:15px 26px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;color:#fff;position:relative;z-index:22;transition:.18s}
+.cta:hover{background:#fff;color:#0b0b0b}
+/* The collage: cut-outs pinned around the type, each one a real product surface. */
+.cut{position:absolute;z-index:21;box-shadow:0 22px 50px rgba(0,0,0,.55)}
+.tape{position:absolute;width:74px;height:22px;background:rgba(245,217,10,.82);left:50%;top:-11px;transform:translateX(-50%) rotate(-3deg);mix-blend-mode:screen}
+.poster{right:64px;top:78px;width:250px;height:334px;background:var(--red);transform:rotate(3.4deg);padding:20px;color:#0b0b0b}
+.poster .big{font-size:46px;line-height:.88;font-weight:700;letter-spacing:-.03em;text-transform:uppercase}
+.poster .dates{font-family:var(--mono);font-size:9.5px;line-height:2;margin-top:18px;border-top:1.5px solid #0b0b0b;padding-top:10px}
+.cover{right:352px;top:416px;width:186px;height:186px;background:linear-gradient(135deg,var(--accent),#7c3aed);transform:rotate(-5deg);display:grid;place-items:center}
+.cover span{font-family:var(--mono);font-size:10px;letter-spacing:.24em;color:#fff;text-transform:uppercase}
+.win{right:120px;bottom:118px;width:262px;background:#dcdcdc;color:#111;transform:rotate(1.6deg);border:1px solid #111}
+.win .bar{display:flex;justify-content:space-between;align-items:center;background:var(--accent);color:#fff;font-family:var(--mono);font-size:10px;padding:4px 7px}
+.win .body{padding:16px;font-family:var(--mono);font-size:11px;line-height:1.7}
+.win .row{display:flex;justify-content:space-between;border-bottom:1px dashed #9a9a9a;padding:3px 0}
+.stickers{position:absolute;left:52px;bottom:52px;display:flex;gap:12px;z-index:21}
+.sticker{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;border:1.5px solid #fff;border-radius:999px;padding:8px 15px;background:#0b0b0b}
+.sticker.fill{background:var(--yellow);color:#0b0b0b;border-color:var(--yellow)}
+/* The marquee: the one moving thing, and it never stops. */
+.marq{position:relative;z-index:30;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;overflow:hidden;background:#0b0b0b}
+.marq .run{display:flex;gap:40px;padding:15px 0;white-space:nowrap;font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;animation:run 26s linear infinite;will-change:transform}
+.marq .run b{color:var(--yellow);font-weight:400}
+@keyframes run{to{transform:translateX(-50%)}}
+.stats{position:relative;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a2a2a;border-bottom:1px solid #2a2a2a}
+.stat{background:#0b0b0b;padding:34px 30px}
+.stat .n{font-family:var(--mono);font-weight:700;font-size:40px;letter-spacing:-.02em}
+.stat .l{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#8a8a8a;margin-top:9px}
+.mock{position:fixed;right:18px;bottom:18px;z-index:60;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:10px;letter-spacing:.14em;padding:6px 10px}
+@media(max-width:900px){.cut,.stickers{display:none}.stats{grid-template-columns:repeat(2,1fr)}.hero{padding:20px 24px 70px}header{padding:26px 24px}}
+</style></head><body>
+<div class="frame"></div><i class="tick tl"></i><i class="tick tr"></i><i class="tick bl"></i><i class="tick br"></i><div class="grain"></div>
+
+<header>
+  <div><span class="dot"></span>Lone Star Management</div>
+  <div>Est. 2026 · Austin TX</div>
+  <div>Get in touch →</div>
+</header>
+
+<section class="hero">
+  <h1>Everything an artist is, <em>in one place</em>, <span class="out">rendered everywhere</span>.</h1>
+  <p class="sub">Your site, your songs, your shows, your brand — one system, kept current without a developer. We build it, we write it, we keep it alive.</p>
+  <a class="cta" href="#">See the work <span>→</span></a>
+
+  <div class="cut poster"><div class="tape"></div>
+    <div class="big">Skeen<br>Live</div>
+    <div class="dates">09.26 · Chicago<br>10.02 · Nashville<br>10.11 · Austin<br>10.19 · Brooklyn</div>
+  </div>
+  <div class="cut cover"><span>Single · 2026</span></div>
+  <div class="cut win">
+    <div class="bar"><span>analytics.exe</span><span>×</span></div>
+    <div class="body">
+      <div class="row"><span>views</span><b>12,480</b></div>
+      <div class="row"><span>clicks out</span><b>4,102</b></div>
+      <div class="row"><span>countries</span><b>53</b></div>
+      <div class="row" style="border:0"><span>enquiries</span><b>31</b></div>
+    </div>
+  </div>
+  <div class="stickers">
+    <span class="sticker fill">Sites</span><span class="sticker">Words</span><span class="sticker">Identity</span><span class="sticker">Assets</span>
+  </div>
+</section>
+
+<div class="marq"><div class="run">
+  <span>Skeen</span><b>◆</b><span>FTBK</span><b>◆</b><span>Gulf Static</span><b>◆</b><span>Lone Pine</span><b>◆</b>
+  <span>Skeen</span><b>◆</b><span>FTBK</span><b>◆</b><span>Gulf Static</span><b>◆</b><span>Lone Pine</span><b>◆</b>
+  <span>Skeen</span><b>◆</b><span>FTBK</span><b>◆</b><span>Gulf Static</span><b>◆</b><span>Lone Pine</span><b>◆</b>
+</div></div>
+
+<div class="stats">
+  <div class="stat"><div class="n">12,480</div><div class="l">Views generated</div></div>
+  <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+  <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+  <div class="stat"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+</body></html>

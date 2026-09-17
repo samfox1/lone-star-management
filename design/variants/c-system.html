@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — C / The system, rendering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Archivo:wght@800;900&display=swap" rel="stylesheet">
+<style>
+/* VARIANT C — THE PRODUCT'S OWN ARGUMENT. Four real surfaces, side by side, all reading
+   from ONE set of CSS variables. The variables change every few seconds and every surface
+   re-renders at once. Nothing is a picture of a thing: the poster, the cover, the site and
+   the press sheet are live DOM, restyled by the same tokens the editor writes.
+   That is literally what Lone Star does, so the hero IS the demo. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brand:#e5484d; --brand-2:#2563eb; --paper:#0f0f10; --ink:#fff; --mute:#9a9a9a;
+  --display:'Archivo',system-ui,sans-serif; --sans:'Instrument Sans',system-ui,sans-serif; --mono:'Space Mono',monospace;
+  --radius:14px; --shift:0deg;
+}
+body{background:#08080a;color:#fff;font-family:var(--sans);overflow-x:hidden}
+header{display:flex;align-items:center;gap:14px;padding:30px 46px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase}
+header .sq{width:12px;height:12px;background:var(--brand);transition:background .9s}
+header .sp{margin-left:auto;color:#6f6f6f}
+.hero{display:grid;grid-template-columns:minmax(330px,.85fr) 1.15fr;gap:60px;align-items:center;padding:36px 46px 80px}
+h1{font-size:clamp(42px,4.6vw,70px);line-height:.95;letter-spacing:-.035em;font-weight:700}
+h1 b{color:var(--brand);transition:color .9s}
+.sub{margin-top:24px;font-size:16.5px;line-height:1.6;color:#b3b3b3;max-width:44ch}
+.row{margin-top:34px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.cta{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;background:#fff;color:#000;padding:15px 26px;text-decoration:none}
+.ghost{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#fff;text-decoration:none;border-bottom:1px solid #444;padding-bottom:3px}
+.palette{margin-top:40px;display:flex;gap:9px;align-items:center}
+.palette .sw{width:26px;height:26px;border-radius:7px;cursor:pointer;border:1.5px solid #2a2a2a;transition:transform .2s}
+.palette .sw:hover{transform:translateY(-3px)}
+.palette .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6f6f6f;margin-right:6px}
+/* The four surfaces. */
+.stage{position:relative;height:600px}
+.surface{position:absolute;border-radius:var(--radius);box-shadow:0 30px 70px rgba(0,0,0,.6);transition:background .9s,color .9s,border-color .9s,transform .7s cubic-bezier(.2,.7,.2,1)}
+.label{position:absolute;bottom:-22px;left:3px;font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#5f5f5f}
+/* 1 — the site */
+.site{left:0;top:34px;width:392px;height:292px;background:var(--paper);border:1px solid #232323;transform:rotate(-2deg);overflow:hidden}
+.site .chrome{height:26px;background:#161618;display:flex;align-items:center;gap:5px;padding:0 10px}
+.site .chrome i{width:7px;height:7px;border-radius:50%;background:#2e2e31;display:block}
+.site .body{padding:22px}
+.site .kicker{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--brand);transition:color .9s}
+.site .big{font-family:var(--display);font-size:40px;line-height:.9;letter-spacing:-.03em;margin-top:8px;text-transform:uppercase}
+.site .bar{height:6px;background:var(--brand);width:62%;margin-top:16px;transition:background .9s}
+.site .lines i{display:block;height:5px;background:#26262a;margin-top:7px;border-radius:3px}
+/* 2 — the poster */
+.poster{right:16px;top:0;width:206px;height:286px;background:var(--brand);color:#0b0b0b;transform:rotate(3.5deg);padding:18px;transition:background .9s}
+.poster .t{font-family:var(--display);font-size:38px;line-height:.86;text-transform:uppercase;letter-spacing:-.02em}
+.poster .d{font-family:var(--mono);font-size:8.5px;line-height:2.1;margin-top:auto;border-top:1.5px solid rgba(0,0,0,.45);padding-top:8px}
+.poster .in{display:flex;flex-direction:column;height:100%}
+/* 3 — the cover */
+.cover{left:236px;bottom:14px;width:184px;height:184px;overflow:hidden;background:linear-gradient(135deg,var(--brand),var(--brand-2));transform:rotate(-4deg);display:grid;place-items:center;transition:background .9s}
+.cover .c{font-family:var(--mono);font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:#fff;mix-blend-mode:difference}
+/* 4 — the press sheet */
+.epk{right:24px;bottom:18px;width:232px;height:286px;background:#f4f4f2;color:#111;transform:rotate(2deg);padding:20px}
+.epk .h{font-family:var(--display);font-size:20px;text-transform:uppercase;letter-spacing:-.01em}
+.epk .rule{height:3px;background:var(--brand);margin:9px 0 12px;transition:background .9s}
+.epk p{font-size:8.5px;line-height:1.75;color:#3a3a3a}
+.epk .meta{font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:#7a7a7a;margin-top:14px;border-top:1px solid #d9d9d5;padding-top:8px}
+/* Section under the fold */
+.strip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #1b1b1d;border-bottom:1px solid #1b1b1d}
+.strip div{padding:30px 34px;border-right:1px solid #1b1b1d}
+.strip div:last-child{border-right:0}
+.strip .n{font-family:var(--mono);font-size:34px;font-weight:700;letter-spacing:-.02em}
+.strip .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6e6e6e;margin-top:8px}
+.mock{position:fixed;right:18px;bottom:18px;background:#ff00a8;font-family:var(--mono);font-size:10px;letter-spacing:.14em;padding:6px 10px;z-index:9}
+@media(max-width:1100px){.hero{grid-template-columns:1fr;gap:30px}.stage{height:480px;transform:scale(.82);transform-origin:top left}}
+@media(max-width:900px){.strip{grid-template-columns:repeat(2,1fr)}}
+</style></head><body>
+<header><i class="sq"></i><span>Lone Star Management</span><span class="sp">Brand system of record</span></header>
+
+<section class="hero">
+  <div>
+    <h1>One system.<br><b>Every surface.</b></h1>
+    <p class="sub">The site, the poster, the cover, the press kit — all rendered from the same brand. Change it once and everything downstream is already right.</p>
+    <div class="row"><a class="cta" href="#">See the work</a><a class="ghost" href="#">What we do →</a></div>
+    <div class="palette"><span class="lbl">Try a brand</span>
+      <i class="sw" data-b="#e5484d" data-c="#2563eb" style="background:#e5484d"></i>
+      <i class="sw" data-b="#d7ff3e" data-c="#0aa06e" style="background:#d7ff3e"></i>
+      <i class="sw" data-b="#ff7a1a" data-c="#b14aed" style="background:#ff7a1a"></i>
+      <i class="sw" data-b="#2ee6e6" data-c="#2563eb" style="background:#2ee6e6"></i>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="surface site">
+      <div class="chrome"><i></i><i></i><i></i></div>
+      <div class="body"><div class="kicker">New single · out now</div>
+        <div class="big">Rushing<br>Back</div><div class="bar"></div>
+        <div class="lines"><i style="width:88%"></i><i style="width:74%"></i><i style="width:52%"></i></div>
+      </div><span class="label">the site</span>
+    </div>
+    <div class="surface poster"><div class="in"><div class="t">Skeen<br>Live</div>
+      <div class="d">26.09 Chicago<br>02.10 Nashville<br>11.10 Austin<br>19.10 Brooklyn</div></div><span class="label">a poster</span></div>
+    <div class="surface cover"><span class="c">Single · 2026</span><span class="label">the cover</span></div>
+    <div class="surface epk"><div class="h">Skeen</div><div class="rule"></div>
+      <p>Alt-pop from Chicago. Two EPs, a remix run that crossed a million streams, and a live show built for rooms twice the size.</p>
+      <p style="margin-top:8px">Press, booking and assets in one place, always current.</p>
+      <div class="meta">Press kit · updated today</div><span class="label">the press kit</span></div>
+  </div>
+</section>
+
+<div class="strip">
+  <div><div class="n">12,480</div><div class="l">Views generated</div></div>
+  <div><div class="n">4,102</div><div class="l">Clicks out</div></div>
+  <div><div class="n">53</div><div class="l">Countries</div></div>
+  <div><div class="n">31</div><div class="l">Booking enquiries</div></div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* One set of variables, four surfaces. Changing the variables IS the demo. */
+const R = document.documentElement;
+const BRANDS = [['#e5484d','#2563eb'],['#d7ff3e','#0aa06e'],['#ff7a1a','#b14aed'],['#2ee6e6','#2563eb']];
+let i = 0, auto = setInterval(next, 3600);
+function apply(b, c){ R.style.setProperty('--brand', b); R.style.setProperty('--brand-2', c); }
+function next(){ i = (i + 1) % BRANDS.length; apply(...BRANDS[i]); }
+document.querySelectorAll('.sw').forEach(sw => sw.addEventListener('click', () => {
+  clearInterval(auto); apply(sw.dataset.b, sw.dataset.c);
+}));
+</script></body></html>
