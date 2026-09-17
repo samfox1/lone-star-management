@@ -23,43 +23,63 @@ current without a developer.
 
 - **Motion:** the one place worth spending it. Something that suggests one system rendering
   onto many surfaces. A poster, a site, a cover, sharing the same colours as they change.
-- **Action:** one button. See a real site, or get in touch. Not both.
+- **Action:** one button. See the work, or get in touch. Not both.
 
-## 2. Proof, immediately
-Skeen's site, live, above the fold's edge. Before any claim.
+## 2. The work — Sam's ask
+The sites, as images or video. Today that is **Skeen** and **FTBK**; the section has to
+still look right with two, and with nine.
 
-A real artist you already run beats any explanation. Screenshot the actual site, or embed
-it. If it is a screenshot, it must be the current one.
+- **Video beats a screenshot** for a site with motion. A 6-10s silent loop, scrolling the
+  real page, is the strongest thing on this page. Autoplay muted, `playsinline`, poster
+  frame for the first paint.
+- **A laptop or phone frame** around each keeps two very different designs from fighting.
+- **Name the artist and link to the live site.** The link is the proof; without it these are
+  just pictures.
+- **Two is thin, and that is fine** if each is big. Do not pad with mockups of sites that do
+  not exist.
 
-## 3. The reframe
-The system-of-record idea, shown rather than written: one set of brand values in the middle,
-the surfaces around it — the site, a poster, a cover, an EPK.
+**Blocker to clear first:** FTBK has no live URL. Its `custom_site_url` is
+`http://localhost:3004`, which in production means the artist falls back to a template site
+(that guard exists on purpose). It needs a real deploy before it can be linked or filmed.
 
-This is the section a competitor cannot copy, because their product really is a website
-builder. Give it the room.
+## 3. The numbers — Sam's ask
+Total analytics across every site, as few figures as possible: total views, total fans
+reached, countries, shows and songs clicked through to. The map is the picture.
 
-## 4. What the artist actually does
-Three or four moments, each one screen of the real dashboard:
+- **Aggregate only.** Roster totals are Lone Star's own record and fine to publish.
+  Per-artist numbers are the artist's business; ask before naming one.
+- **They must be true on the day someone reads them.** Either pull them live from the same
+  readers the dashboard uses, or write the date beside them ("as of September 2026"). A
+  stale hardcoded number is the kind of thing a prospective client checks.
+- Worth knowing: source and visitor figures only start 12 Sep 2026, and locations 14 Sep, so
+  a lifetime "unique fans" figure cannot be honestly claimed yet. Views can.
 
-- **Edit the site by clicking on it.** The visual editor is the demo. Show it mid-edit.
-- **Add a show, a song, a product.** One modal, one list, published when they say so.
-- **See where people actually are.** The analytics map is the most photogenic thing in the
-  product. Use it.
-- **Publish.** Draft, then live, on their word.
+## 4. What Lone Star offers — Sam's ask
+The base subscription, then the three named add-ons: **Words**, **Identity**, **Assets**.
 
-Real screenshots, not invented UI. If a screen is ugly, that is worth knowing before a
-stranger sees it.
+- **The base is everything already built**: the site, the visual editor, publishing and
+  version history, media, music, tour, EPK, enquiries, analytics. One line each at most,
+  and a screenshot carrying the weight.
+- **The add-ons get one line each**, plus the rule that makes them different from an agency:
+  the work lands inside the system as something reusable, not as a file emailed over. A bio
+  goes into the bio field; a logo goes into the brand library and renders a poster next
+  March without anyone being paid again.
+- **Show, don't list.** The click-to-edit editor mid-edit is worth more than any bullet.
 
-## 5. The human layer
-The add-ons, named: **Words**, **Identity**, **Assets**. One line each.
+## 5. Reviews — Sam's ask
+What the artists say, in their words.
 
-The rule that makes them different, said plainly: the work lands inside the system as
-something reusable, not as a file emailed over. A bio goes into the bio field. A logo goes
-into the brand library and renders a poster next March.
+- **Real quotes only, attributed, with a photo.** Two honest sentences from Skeen and FTBK
+  beat six invented ones, and invented ones are not an option.
+- **You do not have these yet.** Ask both, today, in a message: what was annoying before,
+  what changed, one sentence each. That is the whole section.
+- **Design it to hold two.** A three-column grid with one empty cell looks like someone left.
+- Until the quotes arrive, design the block with the real question in it as placeholder
+  text, so nobody mistakes it for finished.
 
-## 6. Who it is for, and who it is not
-Honest, and short. A working artist with releases and shows, or their manager. Not a
-label's roster of two hundred. Saying who it is not for is what makes the rest believable.
+## 6. Who it is for
+Short and honest. A working artist with releases and shows, or their manager. Not a label's
+roster of two hundred. Saying who it is not for is what makes the rest believable.
 
 ## 7. Price
 Say something, even before it is settled: what the base covers, that add-ons are named
@@ -79,15 +99,16 @@ self-serve product behind it yet, and a fake "Start free" is a broken promise.
   work you show, not from the page.
 - **4px grid, 8px corners on controls, 12px on panels.** Same as the product, so the page
   and the app look like one company.
-- **Phone first.** Design the 390px frame before the 1440px one. Most of this traffic is a
-  link sent in a DM.
+- **Desktop first** (Sam, 2026-09-17), then check 390px before it is built. Most of this
+  traffic arrives as a link in a DM, so the phone frame decides whether it survives — but
+  the wide frame is the easier one to think in, and the work section needs the room.
 - **Every screenshot is real.** A mockup of a screen that does not exist is the one thing
   that makes the rest of the page suspect.
 
 ## Motion, where it earns its place
 
-Three moments, not twelve: the hero's one idea, the reframe diagram assembling, and
-whatever shows the editor being used. Everything else can be still.
+Three moments, not twelve: the hero's one idea, the site videos in section 2 (which move by
+themselves), and whatever shows the editor being used. Everything else can be still.
 
 Write each as a sentence when you hand it over — what moves, how far, how long, in what
 order. That is what turns into code.
