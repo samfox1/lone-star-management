@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — F / The wall</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* F — THE WALL. Six columns of surfaces sliding in opposite directions, forever, behind a
+   white card that holds the only words above the fold. Scroll: the wall keeps moving, the
+   card grows into the page, and the content arrives inside it. White, ink, and the blue and
+   the red used as accents on the work itself — no other colour. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--surface:#fafafa;--hair:#ececec;--faint:#9aa0a6;--blue:#2563eb;--red:#e5484d;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--surface)}
+.wall{position:absolute;inset:-14% -2%;display:grid;grid-template-columns:repeat(6,1fr);gap:16px;z-index:1}
+.col{display:flex;flex-direction:column;gap:16px;will-change:transform}
+.tile{border-radius:12px;background:var(--paper);border:1px solid var(--hair);padding:14px;box-shadow:0 10px 26px rgba(17,17,17,.05);flex:0 0 auto}
+.tile .k{font-family:var(--mono);font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
+.tile .h{font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.05;margin-top:7px}
+.tile .l{height:5px;background:var(--hair);border-radius:3px;margin-top:8px}
+.tile.blue{background:var(--blue);border-color:var(--blue)}
+.tile.red{background:var(--red);border-color:var(--red)}
+.tile.ink{background:var(--ink);border-color:var(--ink)}
+.tile.blue .h,.tile.red .h,.tile.ink .h{color:#fff}
+.tile.blue .k,.tile.red .k{color:rgba(255,255,255,.75)}.tile.ink .k{color:#8a8a8a}
+.tile.blue .l,.tile.red .l{background:rgba(255,255,255,.4)}.tile.ink .l{background:#2e2e2e}
+.tile.sq{aspect-ratio:1;display:grid;place-items:center}
+.tile.sq .h{font-size:20px;text-align:center}
+.tile.tall .h{font-size:26px}
+/* The card: the only words above the fold, and the thing the page grows out of. */
+.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(680px,84vw);
+  background:var(--paper);border:1px solid var(--hair);border-radius:18px;padding:64px 56px;text-align:center;
+  box-shadow:0 40px 120px rgba(17,17,17,.14);will-change:transform}
+.card h1{font-size:clamp(40px,5.6vw,78px);line-height:.92;letter-spacing:-.045em;font-weight:700}
+.card .s{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--faint);margin-top:18px}
+.card .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px;vertical-align:2px}
+.cue{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
+.spacer{height:160vh}
+.after{position:relative;z-index:7;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(34px,4.6vw,64px);line-height:.98;letter-spacing:-.035em;font-weight:700;max-width:17ch}
+.band h2 .b{color:var(--blue)}.band h2 .r{color:var(--red)}
+.band p{margin-top:20px;max-width:52ch;font-size:17px;line-height:1.6;color:#5c6168}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
+.stat{background:var(--paper);padding:34px}
+.stat .n{font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:-.03em}
+.stat .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:9px}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+@media(max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}.card{padding:44px 26px}}
+</style></head><body>
+<div class="stage">
+  <div class="wall" id="wall"></div>
+  <div class="card" id="card">
+    <h1>Everything an artist is,<br>on every surface.</h1>
+    <div class="s">Sites<span class="dot" style="background:var(--blue)"></span>Words<span class="dot" style="background:var(--red)"></span>Identity<span class="dot" style="background:var(--ink)"></span>Assets</div>
+  </div>
+  <div class="cue">Scroll</div>
+</div>
+<div class="spacer"></div>
+<div class="after">
+  <div class="band">
+    <h2>One system. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+    <p>The site, the poster, the cover, the press kit — rendered from the same brand, kept current by the artist rather than a developer.</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">12,480</div><div class="l">Views generated</div></div>
+    <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+    <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+    <div class="stat"><div class="n">31</div><div class="l">Booking enquiries</div></div>
+  </div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* Six columns, alternating direction, each looped by duplicating its tiles. */
+const TILES = [
+  ['site','Rushing Back',''], ['poster','Skeen Live','red'], ['cover','Small Talk','blue'],
+  ['press','One sheet',''],   ['site','FTBK','ink'],         ['tour','Autumn dates',''],
+  ['cover','You Were There','blue'], ['merch','Tour tee',''], ['site','Gulf Static',''],
+  ['poster','Navy Pier','ink'], ['press','Bio · long',''],    ['cover','Heatwaves','red'],
+  ['tour','Brooklyn','' ], ['merch','Vinyl · 12"','red'],     ['site','Lone Pine',''],
+];
+const wall = document.getElementById('wall'), card = document.getElementById('card');
+const COLS = 6, cols = [];
+for (let c = 0; c < COLS; c++){
+  const col = document.createElement('div'); col.className = 'col';
+  // Twice through, so the loop has something to run into.
+  for (let pass = 0; pass < 2; pass++){
+    for (let i = 0; i < 5; i++){
+      const [k, h, cl] = TILES[(c * 5 + i + pass) % TILES.length];
+      const t = document.createElement('div');
+      const shape = (i % 3 === 0) ? ' sq' : (i % 4 === 1 ? ' tall' : '');
+      t.className = 'tile ' + cl + shape;
+      if (shape === ' tall') t.style.height = '250px';
+      t.innerHTML = '<div class="k">'+k+'</div><div class="h">'+h+'</div>' +
+        (shape === ' sq' ? '' : '<div class="l" style="width:'+(50+Math.random()*40)+'%"></div><div class="l" style="width:'+(30+Math.random()*40)+'%"></div>');
+      col.appendChild(t);
+    }
+  }
+  wall.appendChild(col);
+  cols.push({ el: col, dir: c % 2 ? 1 : -1, speed: 14 + (c % 3) * 7, y: Math.random() * -400 });
+}
+let t = 0;
+(function loop(){
+  t += 1/60;
+  const p = Math.max(0, Math.min(1, scrollY / (innerHeight * .9)));
+  cols.forEach(c => {
+    c.y += c.dir * c.speed / 60;
+    const h = c.el.scrollHeight / 2;
+    if (c.y <= -h) c.y += h; if (c.y >= 0) c.y -= h;
+    c.el.style.transform = `translate3d(0, ${c.y}px, 0)`;
+  });
+  // The card grows toward the page as you scroll, then hands over.
+  card.style.transform = `translate(-50%,-50%) scale(${1 + p * .22}) translateY(${-p * 40}px)`;
+  card.style.opacity = String(1 - p * 1.15);
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
