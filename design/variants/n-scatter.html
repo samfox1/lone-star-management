@@ -31,7 +31,10 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
 /* The collage lives inside the window and carries its own scale. */
 .field{position:absolute;left:50%;top:50%;width:170vw;height:170vh;transform:translate(-50%,-50%);will-change:transform}
 .piece{position:absolute;will-change:transform,opacity}
-.piece img{display:block;width:100%;height:100%;object-fit:cover;border-radius:4px;box-shadow:0 10px 30px rgba(17,17,17,.18)}
+.piece img.art{display:block;width:100%;height:100%;object-fit:cover;border-radius:3px;box-shadow:0 10px 30px rgba(17,17,17,.16)}
+/* Logos and cut-outs are transparent PNG/SVG: no box, no shadow, no crop — they sit on the
+   paper as cut-outs, which is the whole point of them. */
+.piece img.logo,.piece img.cut{display:block;width:100%;height:100%;object-fit:contain}
 /* Plain graphics, drawn not loaded, so the collage is not only photographs. */
 .g{width:100%;height:100%;border-radius:4px}
 .g.star{background:#111;-webkit-clip-path:polygon(50% 0,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 100%,50% 71%,19.5% 100%,31.1% 57%,2% 35.5%,38.2% 35.5%);clip-path:polygon(50% 0,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 100%,50% 71%,19.5% 100%,31.1% 57%,2% 35.5%,38.2% 35.5%)}
@@ -81,53 +84,48 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
 <div class="mock">MOCK NUMBERS</div>
 
 <script src="_assets.js"></script>
+<script src="_cuts.js"></script>
 <script>
-/* ── The collage. Scattered on a jittered grid rather than columns: a grid keeps the page
-   covered with no holes, the jitter and rotation keep it from reading as a grid. ── */
-const GRAPHICS = [
-  () => '<div class="g star"></div>',
-  () => '<div class="g ring"></div>',
-  () => '<div class="g dot"></div>',
-  () => '<div class="g bars"></div>',
-  () => '<div class="g halftone"></div>',
-  () => '<div class="g word">Lone Star</div>',
-  () => '<div class="g word">Est. 2026</div>',
-  () => '<div class="g outline" style="font-size:34px">★</div>',
-  () => '<div class="g slab"></div>',
-  () => '<div class="g outline" style="font-size:20px">Tour</div>',
-];
+/* ── The collage. Album covers, logos, and cut-out graphics, scattered on a jittered grid:
+   a grid keeps the screen covered with no holes, the jitter and the rotation stop it reading
+   as one. Nothing drifts — the collage is STILL until it starts coming apart (Sam,
+   2026-09-17). Photographs and video stills are deliberately absent; the sites and the
+   footage get their own section further down the page. ── */
 const field = document.getElementById('field');
 const pieces = [];
-// A deterministic shuffle, so the layout is the same every load.
-let seed = 7;
+let seed = 7;                                     // a fixed seed: the same layout every load
 const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 
-const COLS = 14, ROWS = 11;
+const COLS = 13, ROWS = 10;
 for (let r = 0; r < ROWS; r++){
   for (let c = 0; c < COLS; c++){
     const i = r * COLS + c;
     const el = document.createElement('div');
     el.className = 'piece';
-    const isGraphic = i % 5 === 2;                    // one in five is a drawn shape
-    const it = ITEMS[i % ITEMS.length];
-    // Sizes vary a lot, which is what makes it a collage and not a contact sheet.
-    const base = 9 + rnd() * 13;                       // in vw; they overlap, which is the point
-    const w = isGraphic ? base * .7 : base;
-    const ratio = isGraphic ? 1 : (it.k === 'video' ? 0.56 : (it.k === 'photo' ? (0.7 + rnd() * 0.8) : 1));
-    el.style.width = w + 'vw';
-    el.style.height = (w * ratio) + 'vw';
-    // Jittered grid: every cell filled, nothing in rows.
+    // Two in five are cut-outs, so the drawn graphics carry the collage as much as the work.
+    const isCut = (i * 3 + r) % 5 < 2;
+    const it = ITEMS[(i * 7) % ITEMS.length];
+    const base = isCut ? 5 + rnd() * 7 : 8 + rnd() * 11;      // vw
+    el.style.width = base + 'vw';
+    el.style.height = (base * (it.k === 'logo' && !isCut ? 0.7 : 1)) + 'vw';
     el.style.left = ((c + .5) / COLS * 100 + (rnd() - .5) * 9) + '%';
     el.style.top  = ((r + .5) / ROWS * 100 + (rnd() - .5) * 10) + '%';
-    el.innerHTML = isGraphic ? GRAPHICS[i % GRAPHICS.length]() : `<img src="assets/${it.f}" alt="">`;
+    if (isCut){
+      const name = CUTS[Math.floor(rnd() * CUTS.length)];
+      el.innerHTML = `<img class="cut" src="cuts/${name}.svg" alt="">`;
+    } else {
+      el.innerHTML = `<img class="${it.k === 'logo' ? 'logo' : 'art'}" src="assets/${it.f}" alt="">`;
+    }
     field.appendChild(el);
     pieces.push({
       el,
-      rot: (rnd() - .5) * 18,
-      depth: .6 + rnd() * .8,                          // parallax, and pop-off order
-      dx: (rnd() - .5) * 2, dy: (rnd() - .5) * 2,      // the direction it leaves in
-      delay: rnd(),                                    // stagger
-      drift: rnd() * Math.PI * 2,
+      rot: (rnd() - .5) * 22,
+      // Each piece leaves at its own random moment and in its own direction: no order to it,
+      // no wave, nothing radiating from the middle.
+      when: rnd(),
+      dirX: (rnd() - .5) * 2,
+      dirY: (rnd() - .5) * 2,
+      spin: (rnd() - .5) * 40,
     });
   }
 }
@@ -140,7 +138,7 @@ const BASE = () => (innerWidth < 900 ? 240 : 380);
 const FAR = 0.30;
 
 (function loop(){
-  const t = performance.now() / 1000;
+  const t = performance.now() / 1000;   // used only by the star's idle breathing
   const total = innerHeight * 4.4;
   const p = clamp(scrollY / total, 0, 1);
 
@@ -165,14 +163,12 @@ const FAR = 0.30;
   beneath.style.opacity = String(clamp((pop - .12) / .45, 0, 1));
 
   for (const q of pieces){
-    // Each piece leaves on its own beat: staggered, outward, shrinking as it goes.
-    const go = clamp((pop - q.delay * .55) / .45, 0, 1);
-    const e = ease(go);
-    const fx = Math.sin(t * .28 + q.drift) * 10 * q.depth * (1 - e);
-    const fy = Math.cos(t * .23 + q.drift) * 10 * q.depth * (1 - e);
-    const x = fx + q.dx * e * 120;
-    const y = fy + q.dy * e * 120;
-    q.el.style.transform = `translate(-50%,-50%) translate3d(${x}px,${y}px,0) rotate(${q.rot * (1 - e * .4)}deg) scale(${1 - e * .82})`;
+    // Random, not sequenced: each piece has its own moment inside the third act and a
+    // direction of its own, so the collage comes apart rather than wiping away.
+    const e = ease(clamp((pop - q.when * .72) / .28, 0, 1));
+    q.el.style.transform =
+      `translate(-50%,-50%) translate3d(${q.dirX * e * 150}px,${q.dirY * e * 150}px,0) ` +
+      `rotate(${q.rot + q.spin * e}deg) scale(${1 - e * .86})`;
     q.el.style.opacity = String(1 - e);
   }
   requestAnimationFrame(loop);
