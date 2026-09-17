@@ -2,6 +2,9 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { type SectionDiff } from '@/lib/content'
 import { PlacesSection } from '@/components/ui/places-section'
+// TEMPORARY (2026-09-17): the PostHog cross-check panel. Delete this import, the component
+// file, src/lib/posthog-check.ts and the <PostHogCheck /> below when the 30 days are over.
+import { PostHogCheck } from '@/components/ui/posthog-check'
 import { worldMap } from '@/lib/analytics-map'
 import { MetricExplorer } from './metric-explorer'
 import { SourceRings } from '@/components/ui/source-rings'
@@ -66,7 +69,7 @@ export default async function OverviewPage({
   // the chart. The old call took a timestamp `p_since` while the rest of the page
   // counted whole UTC days, so on most days the KPI row and the chart beside it were
   // describing slightly different slices and nothing on screen said so.
-  const [, diff, traffic, byEntity] = await Promise.all([
+  const [artist, diff, traffic, byEntity] = await Promise.all([
     requireArtist(id),
     dashboardDiff(id),
     trafficWindow(supabase, id, days, now),
@@ -201,7 +204,12 @@ export default async function OverviewPage({
             last-30-day site events above.
           </div>
         </section>
+
       </div>
+
+      {/* TEMPORARY — full width, below everything: it is a wide monospace table, and it
+          renders nothing for any artist but the one being compared. */}
+      <PostHogCheck supabase={supabase} artistId={id} slug={artist.slug} now={now} />
     </div>
   )
 }
