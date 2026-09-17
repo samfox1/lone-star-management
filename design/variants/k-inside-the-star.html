@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Lone Star — K / Inside the star</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* K — INSIDE THE STAR. One star on an empty page, and every site we have built is inside
+   it. Scroll and the sites run THROUGH the star, so the star is the window and the work is
+   what passes behind it. Scroll further and the work parts — one rail down, one rail up —
+   and what was behind it all along is Lone Star itself. No words until then. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#111;--paper:#fff;--surface:#fafafa;--hair:#ececec;--faint:#9aa0a6;--blue:#2563eb;--red:#e5484d;
+  --sans:'Instrument Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;background:var(--paper);display:grid;place-items:center}
+/* THE STAR — the only thing on the page. Everything else happens inside it. */
+.star{position:relative;width:min(78vmin,760px);aspect-ratio:1;
+  -webkit-clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  clip-path:polygon(50% 1%,61.8% 35.5%,98% 35.5%,68.9% 57%,80.5% 91.5%,50% 70.2%,19.5% 91.5%,31.1% 57%,2% 35.5%,38.2% 35.5%);
+  background:var(--surface);will-change:transform}
+/* Behind the work: Lone Star itself, waiting. */
+.behind{position:absolute;inset:0;display:grid;place-items:center;text-align:center;z-index:1;background:var(--paper);padding:0 30%}
+.behind .mark{width:52px;height:52px;margin:0 auto 20px}
+.behind h1{font-size:clamp(20px,2.7vw,34px);line-height:1;letter-spacing:-.035em;font-weight:700}
+.behind .s{font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--faint);margin-top:12px}
+.behind .line{margin-top:16px;font-size:13px;line-height:1.5;color:#4d5259;max-width:22ch;margin-inline:auto}
+.behind .stats{display:flex;gap:18px;justify-content:center;margin-top:22px}
+.behind .stat .n{font-family:var(--mono);font-size:17px;font-weight:700;letter-spacing:-.02em}
+.behind .stat .l{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:5px}
+/* The work: two rails running through the window. */
+.rails{position:absolute;inset:0;z-index:2;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 4px}
+.rail{display:flex;flex-direction:column;gap:10px;will-change:transform}
+.rail img{display:block;width:100%;height:auto;border-radius:6px;box-shadow:0 8px 24px rgba(17,17,17,.10)}
+/* The star's own edge, so it reads as a shape on white. */
+.edge{position:absolute;inset:0;z-index:3;pointer-events:none}
+.edge svg{width:100%;height:100%;display:block}
+.cue{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);animation:bob 2.4s ease-in-out infinite;will-change:opacity}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+.scroller{height:460vh}
+.after{position:relative;z-index:8;background:var(--paper)}
+.band{padding:100px 40px;border-top:1px solid var(--hair)}
+.band h2{font-size:clamp(34px,4.6vw,64px);line-height:.98;letter-spacing:-.035em;font-weight:700;max-width:17ch}
+.band h2 .b{color:var(--blue)}.band h2 .r{color:var(--red)}
+.band p{margin-top:20px;max-width:52ch;font-size:17px;line-height:1.6;color:#5c6168}
+.mock{position:fixed;right:16px;bottom:16px;z-index:90;background:#ff00a8;color:#fff;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:5px 9px}
+</style></head><body>
+
+<div class="stage">
+  <div class="star" id="star">
+    <div class="behind" id="behind">
+      <div>
+        <svg class="mark" viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="#111"/></svg>
+        <h1>Lone Star</h1>
+        <div class="s">Management</div>
+        <p class="line">One system behind every site, poster, cover and press kit — kept current by the artist, not a developer.</p>
+        <div class="stats">
+          <div class="stat"><div class="n">12,480</div><div class="l">Views</div></div>
+          <div class="stat"><div class="n">4,102</div><div class="l">Clicks out</div></div>
+          <div class="stat"><div class="n">53</div><div class="l">Countries</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="rails">
+      <div class="rail" id="railA"></div>
+      <div class="rail" id="railB"></div>
+    </div>
+    <div class="edge"><svg viewBox="0 0 100 100"><path d="M50 1 L61.8 35.5 L98 35.5 L68.9 57 L80.5 91.5 L50 70.2 L19.5 91.5 L31.1 57 L2 35.5 L38.2 35.5 Z" fill="none" stroke="#111" stroke-width=".7" stroke-linejoin="round"/></svg></div>
+  </div>
+  <div class="cue" id="cue">Scroll</div>
+</div>
+
+<div class="scroller"></div>
+
+<div class="after">
+  <div class="band">
+    <h2>One system. <span class="b">Every surface</span> it has to <span class="r">show up on</span>.</h2>
+    <p>The site, the poster, the cover, the press kit — rendered from the same brand, kept current by the artist rather than a developer.</p>
+  </div>
+</div>
+<div class="mock">MOCK NUMBERS</div>
+
+<script>
+/* Every site, inside the star. Two rails so the work can part like curtains later. */
+const SHOTS = ['shots/skeen-home.png','shots/skeen-1900.png','shots/skeen-2800.png','shots/skeen-1000.png',
+               'shots/skeen-3700.png','shots/skeen-4600.png','shots/skeen-about.png'];
+const railA = document.getElementById('railA'), railB = document.getElementById('railB');
+function fill(rail, offset){
+  for (let pass = 0; pass < 2; pass++)
+    SHOTS.forEach((src, i) => {
+      const img = new Image(); img.src = SHOTS[(i + offset) % SHOTS.length]; img.alt = '';
+      rail.appendChild(img);
+    });
+}
+fill(railA, 0); fill(railB, 3);
+
+const star = document.getElementById('star'), behind = document.getElementById('behind'),
+      cue = document.getElementById('cue');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => t * t * (3 - 2 * t);
+
+(function loop(){
+  const p = clamp(scrollY / (innerHeight * 3.6), 0, 1);
+  // Act one: the work runs through the window. Act two: it parts. Act three: the star grows.
+  const run  = clamp(p / .58, 0, 1);
+  const part = ease(clamp((p - .58) / .30, 0, 1));
+  const grow = ease(clamp((p - .88) / .12, 0, 1));
+
+  const hA = railA.scrollHeight / 2, hB = railB.scrollHeight / 2;
+  // One rail climbs, the other falls, so the two never move as one sheet. The parting
+  // travel is measured against the RAIL, not the viewport: a rail is two passes tall, so a
+  // viewport's worth of movement leaves half of it still sitting in the window.
+  railA.style.transform = `translate3d(0, ${-run * hA - part * (hA + innerHeight)}px, 0)`;
+  railB.style.transform = `translate3d(0, ${-hB + run * hB + part * (hB + innerHeight)}px, 0)`;
+
+  // Lone Star arrives once the work has genuinely cleared, not while it is still passing.
+  behind.style.opacity = String(clamp((part - .55) / .4, 0, 1));
+  star.style.transform = `scale(${1 + grow * .22})`;
+  cue.style.opacity = String(clamp(1 - p * 6, 0, 1));
+  requestAnimationFrame(loop);
+})();
+</script></body></html>
