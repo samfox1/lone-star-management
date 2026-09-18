@@ -3,28 +3,41 @@
  * PHASE 0 — preview parity: after a full publish, the manager preview
  * (getWorkingSite) matches the public site (getPublishedSite) for the profile +
  * media. Canary for the versioning refactor.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). The row bookkeeping here was already
+ * careful — ids captured per table, a `site_content` heading read and written BACK rather
+ * than deleted. All of that was scaffolding around a problem it could not solve: this file
+ * calls `publishAll` FOUR times, and `publishAll` publishes every type plus the profile.
+ * Against the shared seed artist that is not a fixture, it is the artist's live site, and
+ * every run committed whatever they had pending — songs, photos, tour dates, styling — as a
+ * side effect of a parity check. The bio was overwritten and restored from a hard-coded
+ * `SEED_BIO` literal for the same reason, which is the tell: a teardown reconstructing state
+ * from a constant is one that does not own the state.
+ *
+ * With an owned artist the save-and-restore machinery is simply deleted, not rewritten.
+ * There is no prior heading to preserve, `publishAll` reaches nothing but this file's rows,
+ * and teardown is one cascading delete.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishAll, publishContent, publishProfile } from '@/lib/content'
+import { publishAll, publishContent } from '@/lib/content'
 import { getPublishedSite, getWorkingSite, getWorkingSitePayload } from '@/lib/site'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
-const SEED_BIO = 'Dusty alt-country out of West Texas.'
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Preview parity', asA)
+  artistA = tenantA.id
 })
 
-/** Rows this file created, per table. Teardown removes ONLY these.
- *
- *  This file publishes EVERYTHING for the artist, so a teardown by artist_id was deleting
- *  every photo, song, date, merch item, link and video on the shared live project — a
- *  human's uploads between runs, and every fixture the suites after it read. */
+/** Rows this file created, per table — still tracked, because the comparisons below are
+ *  scoped to them (see `myMedia`). Teardown no longer needs the list. */
 const created: { table: string; id: string; path?: string }[] = []
 
 /** Insert + remember the ids. `.select('id')` is what makes scoped teardown possible. */
@@ -44,51 +57,25 @@ async function insertRows(
 
 /** The rows this file created, on either side of the comparison.
  *
- *  Parity is a property of a row, not of the artist: the site is shared, and a PUBLISHED row
- *  whose working row another suite deleted is legitimately present on one side only (a
- *  snapshot outlives its working row until a tombstone — see content.on-site.test.ts). The
- *  fixtures below populate every snapshot field, so drift still shows up here. */
+ *  Parity is a property of a row, not of the artist: a PUBLISHED row whose working row was
+ *  deleted is legitimately present on one side only (a snapshot outlives its working row
+ *  until a tombstone — see content.on-site.test.ts), and the second test below deliberately
+ *  creates that asymmetry. The fixtures populate every snapshot field, so drift still shows
+ *  up here. */
 const myPaths = () => created.filter((r) => r.path).map((r) => r.path!)
 const myMedia = (rows: { url: string }[] | undefined) =>
   (rows ?? []).filter((m) => myPaths().some((p) => m.url.includes(p)))
 
-/** site_content is keyed (artist_id, key), so this heading may already exist for real.
- *  Overwrite it and remember the old value instead of inserting a duplicate — and put the
- *  value back in teardown rather than deleting a row this file did not create. */
-let priorHeading: { id: string; value: string } | null = null
-
+/** site_content is keyed (artist_id, key). On an artist this file created there is no
+ *  prior row to preserve, so this is a plain insert — the read-old-value-and-put-it-back
+ *  dance only existed because the heading belonged to somebody else. */
 async function setHeading(value: string) {
-  const { data: prior } = await svc
-    .from('site_content')
-    .select('id, value')
-    .eq('artist_id', artistA)
-    .eq('key', 'tracks_heading')
-    .maybeSingle()
-  if (prior) {
-    priorHeading = { id: prior.id as string, value: prior.value as string }
-    const { error } = await asA.from('site_content').update({ value }).eq('id', prior.id)
-    if (error) throw new Error(error.message)
-    return
-  }
   await insertRows(asA, 'site_content', { artist_id: artistA, key: 'tracks_heading', value })
 }
 
 afterAll(async () => {
-  if (priorHeading) {
-    await svc.from('site_content').update({ value: priorHeading.value }).eq('id', priorHeading.id)
-    await publishContent(svc, 'site_content', artistA) // the snapshot must follow it back
-  }
-  if (created.length) {
-    await svc.from('revisions').delete().in('entity_id', created.map((r) => r.id))
-    for (const table of new Set(created.map((r) => r.table))) {
-      await svc.from(table).delete().in('id', created.filter((r) => r.table === table).map((r) => r.id))
-    }
-    created.length = 0
-  }
-  // The profile is a singleton snapshot: restore the seed bio and republish, so the artist
-  // is left LIVE rather than with its publish history deleted.
-  await svc.from('artists').update({ bio: SEED_BIO }).eq('id', artistA)
-  await publishProfile(svc, artistA)
+  // Cascades every row above and every revision published off them.
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 const byId = (arr: { id: string }[] | undefined) =>
@@ -106,7 +93,7 @@ describe('preview == live after a full publish', () => {
 
     await publishAll(asA, artistA)
 
-    const published = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const published = await getPublishedSite(anonClient(), tenantA.slug)
     const working = await getWorkingSite(asA, artistA)
     expect(published).not.toBeNull()
 
@@ -127,7 +114,7 @@ describe('preview == live after a full publish', () => {
     ])
     await publishAll(asA, artistA)
 
-    const published = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const published = await getPublishedSite(anonClient(), tenantA.slug)
     const working = await getWorkingSite(asA, artistA)
 
     const shows = (site: { media: { url: string }[] } | null, name: string) =>
@@ -188,7 +175,7 @@ describe('preview == live after a full publish', () => {
     const ids = oldestFirst.map((r) => r.id as string)
 
     await publishContent(svc, 'merch', artistA)
-    const published = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const published = await getPublishedSite(anonClient(), tenantA.slug)
     const working = await getWorkingSite(asA, artistA)
 
     const mineInOrder = (rows: { id: string }[] | undefined) =>
@@ -235,7 +222,7 @@ describe('preview == live after a full publish', () => {
     })
 
     await publishAll(asA, artistA)
-    const published = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const published = await getPublishedSite(anonClient(), tenantA.slug)
     const working = await getWorkingSite(asA, artistA)
 
     // Keyed by id (order-insensitive): isolates field drift from ordering ties.

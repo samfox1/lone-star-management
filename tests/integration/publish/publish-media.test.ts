@@ -2,32 +2,33 @@
 /**
  * PHASE 0 — media is draft → publish (and tombstones on delete + republish).
  * Media is read by the public site from published revisions, not the live table.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). The four rows were already deleted by
+ * id — the right shape for rows, and it is not the problem. `publishContent(asA, 'media',
+ * artistA)` is CATALOG-WIDE: run against the shared seed artist, each of the four publishes
+ * here pushed every pending photo that artist had onto their live site, and the teardown
+ * then published a FIFTH time trying to tombstone this file's own rows back off — each
+ * attempt at tidiness committing more of somebody else's draft. On an owned artist the
+ * publish has nothing to reach but this file's fixtures, and the teardown is one delete.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishContent } from '@/lib/content'
+import { publishContent, publishProfile } from '@/lib/content'
 import { getWorkingSitePayload } from '@/lib/site'
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 const PATH = '%ARTIST%/profile/phase0-media-test.jpg'
-/** The media row this file created. Teardown removes ONLY it: the project is shared and
- *  live, so deleting every media row for the artist erases photos nothing here uploaded
- *  and leaves the media-dependent suites after it asserting over an empty gallery. */
-let mediaId: string | null = null
-/** The collection-tagged row the second test plants — deleted by id, same rule. */
-let taggedId: string | null = null
-/** The alt/kind row the third test plants — deleted by id, same rule. */
-let namedId: string | null = null
-let defaultId: string | null = null
 
 type WireMediaRow = { path: string; collection?: string | null; label?: string | null; alt?: string | null; kind?: string | null }
 
 async function publicMedia(): Promise<WireMediaRow[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   return (data as { media?: WireMediaRow[] } | null)?.media ?? []
 }
 
@@ -36,19 +37,20 @@ async function publicMediaPaths(): Promise<string[]> {
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Publish media', asA)
+  artistA = tenantA.id
+  // The door returns NULL for an artist with no published `artist` revision, and every
+  // "not on the public site yet" assertion below is true of a NULL payload.
+  await publishProfile(svc, artistA)
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterAll(async () => {
-  for (const id of [mediaId, taggedId, namedId, defaultId]) {
-    if (!id) continue
-    await svc.from('media').delete().eq('id', id)
-    await svc.from('revisions').delete().eq('entity_id', id)
-  }
-  // The tagged row was published, so it lives in the media snapshot until the next
-  // publish tombstones it — otherwise it lingers on the seed artist's public site.
-  if (taggedId || namedId) await publishContent(asA, 'media', artistA)
+  // Cascades the media rows and every revision published off them. Nothing to tombstone:
+  // the site this file published to is going away with the artist.
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('media is draft until published', () => {
@@ -62,7 +64,6 @@ describe('media is draft until published', () => {
       .select('id')
       .single()
     expect(error).toBeNull()
-    mediaId = row!.id as string
 
     // Draft: not referenced by the public site yet.
     expect(await publicMediaPaths()).not.toContain(fullPath)
@@ -85,13 +86,12 @@ describe('media is draft until published', () => {
     // door's cherry-pick (20260821130000). A miss in any one of them leaves the manager
     // sorting photos into a pool the site can't see, with nothing failing anywhere.
     const fullPath = `${artistA}/gallery/phase0-collection-test.jpg`
-    const { data: row, error } = await asA
+    const { error } = await asA
       .from('media')
       .insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: fullPath, on_site: true, collection: 'photos' })
       .select('id')
       .single()
     expect(error).toBeNull()
-    taggedId = row!.id as string
 
     await publishContent(asA, 'media', artistA)
     const wire = (await publicMedia()).find((m) => m.path === fullPath)
@@ -111,13 +111,12 @@ describe('media is draft until published', () => {
     // and custom-site draft read — `collection` was missing there and nothing failed.
     const fullPath = `${artistA}/gallery/phase0-alt-kind-test.jpg`
     const kind = MEDIA_KINDS[1] // 'artwork' — from the registry, not a literal
-    const { data: row, error } = await asA
+    const { error } = await asA
       .from('media')
       .insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: fullPath, on_site: true, collection: 'photos', alt: 'Skeen at Smartbar, 2024', kind })
       .select('id')
       .single()
     expect(error).toBeNull()
-    namedId = row!.id as string
 
     await publishContent(asA, 'media', artistA)
     const wire = (await publicMedia()).find((m) => m.path === fullPath)
@@ -139,7 +138,6 @@ describe('media is draft until published', () => {
     const wire = (await publicMedia()).find((m) => m.path.endsWith('phase0-alt-kind-test.jpg'))
     expect(wire).toBeTruthy()
     const { data } = await asA.from('media').insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: `${artistA}/gallery/phase0-default-kind.jpg` }).select('id, kind').single()
-    defaultId = (data?.id as string) ?? null
     expect(data?.kind).toBe(MEDIA_KINDS[0])
   })
 

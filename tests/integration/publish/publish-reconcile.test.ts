@@ -5,40 +5,48 @@
  * Publishing makes the live site match the working table. Deleting a working
  * row and re-publishing must pull it off the public site (a tombstone hides the
  * stale snapshot). And published order must match the dashboard/preview order.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). The track ids were already tracked and
+ * deleted individually, which is the right shape for rows. It does nothing about the real
+ * hazard: `publishContent(asA, 'track', artistA)` snapshots the artist's ENTIRE catalog, so
+ * run against the shared seed artist this file published every unfinished song sitting in
+ * that dashboard to the live site, three times, as a side effect. The ordering test is the
+ * clearer case — it needs to control what is published and in what order, which is not
+ * something you can do on a catalog other suites and a human are also writing to.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { type ContentRow, createContent, deleteContent, publicSnapshot, publishContent } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { type ContentRow, createContent, deleteContent, publicSnapshot, publishContent, publishProfile } from '@/lib/content'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
-/** Track ids this file created — teardown removes ONLY these. */
-const createdTracks: string[] = []
-
 async function publicTracks(): Promise<{ title: string }[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   return ((data as { tracks?: { title: string }[] })?.tracks ?? [])
 }
 
 async function seedTrack(input: Record<string, unknown>): Promise<ContentRow> {
-  const row = await createContent(asA, 'track', artistA, input)
-  createdTracks.push(row.id)
-  return row
+  return createContent(asA, 'track', artistA, input)
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Publish reconcile', asA)
+  artistA = tenantA.id
+  // Without a published `artist` revision the door returns NULL, `publicTracks()` is `[]`,
+  // and every `not.toContain(...)` below passes with reconcile deleted.
+  await publishProfile(svc, artistA)
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterAll(async () => {
-  if (!createdTracks.length) return
-  await svc.from('revisions').delete().in('entity_id', createdTracks)
-  await svc.from('tracks').delete().in('id', createdTracks)
-  createdTracks.length = 0
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('publish reconcile (tombstone)', () => {

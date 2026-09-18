@@ -4,43 +4,45 @@
  * per section. Powers the Overview "unpublished" summary and the per-section
  * dirty badges. The critical property is NO FALSE POSITIVES: a freshly published
  * artist shows nothing pending.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). Two defects, and the second is the
+ * interesting one.
+ *
+ * The first is the ordinary kind: this file overwrote the artist's `bio` four times and put
+ * back a hard-coded `SEED_BIO` copied from the seed script, then republished the profile —
+ * on the shared live project, over whatever a human had actually written there.
+ *
+ * The second is that the HEADLINE assertion was never true of a shared artist and could
+ * only ever have passed by luck. "Reports nothing pending right after a full publish"
+ * requires that NOTHING on that artist is dirty — but `publishAll` is catalog-wide, so on
+ * the seed artist it was simultaneously (a) committing every other suite's and every
+ * human's pending draft to the live site, and (b) depending on there being none left over,
+ * which a concurrently-running suite can break at any moment. On an artist this file owns,
+ * "nothing pending" is a statement about a catalog whose entire contents this file wrote.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, deleteContent, diffUnpublished, publishAll, publishProfile } from '@/lib/content'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createContent, deleteContent, diffUnpublished, publishAll } from '@/lib/content'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
-const SEED_BIO = 'Dusty alt-country out of West Texas.'
-
-/** Track ids this file created. Teardown removes ONLY these: deleting every track for the
- *  artist on the shared live project erases whatever else is there and leaves the later
- *  music suites asserting over an empty catalog. */
-const createdTracks: string[] = []
 
 async function seedTrack(input: Record<string, unknown>) {
-  const row = await createContent(asA, 'track', artistA, input)
-  createdTracks.push(row.id)
-  return row
+  return createContent(asA, 'track', artistA, input)
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Diff unpublished', asA)
+  artistA = tenantA.id
 })
 
 afterAll(async () => {
-  if (createdTracks.length) {
-    await svc.from('tracks').delete().in('id', createdTracks)
-    await svc.from('revisions').delete().in('entity_id', createdTracks)
-    createdTracks.length = 0
-  }
-  // The profile is a singleton snapshot: restore the seed bio and republish so the artist
-  // is left LIVE with the content that was there before.
-  await svc.from('artists').update({ bio: SEED_BIO }).eq('id', artistA)
-  await publishProfile(svc, artistA)
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('diffUnpublished', () => {

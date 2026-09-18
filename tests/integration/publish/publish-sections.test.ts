@@ -2,40 +2,40 @@
 /**
  * PHASE 0 — per-section publish isolation: publishing one section does not
  * publish another section's pending edit.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). This file overwrites the artist's `bio`
+ * twice and PUBLISHES the profile — on the shared seed artist that is a live site change,
+ * and the teardown's answer was to write back a hard-coded string, `SEED_BIO`, copied from
+ * the seed script. A teardown that has to GUESS the previous state is a teardown operating
+ * on data the test does not own; if a human had edited that bio the run silently replaced
+ * it with a months-old literal. `publishContent('track')` is catalog-wide on top of that,
+ * so a run also published every unfinished song on the artist. Owned artist, no guessing:
+ * the bio is whatever this file set, and nothing needs restoring because the artist goes.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createContent, deleteContent, publishContent, publishProfile } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
-const SEED_BIO = 'Dusty alt-country out of West Texas.'
-/** The track this file created. Teardown removes ONLY it: deleting every track for the
- *  artist on the shared live project erases whatever else is there and leaves the later
- *  music suites asserting over an empty catalog. */
-let trackId: string | null = null
 
 async function publicSite(): Promise<{ artist?: { bio?: string }; tracks?: { title: string }[] } | null> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   return data as never
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Publish sections', asA)
+  artistA = tenantA.id
 })
 
 afterAll(async () => {
-  if (trackId) {
-    await svc.from('tracks').delete().eq('id', trackId)
-    await svc.from('revisions').delete().eq('entity_id', trackId)
-  }
-  // The profile is a singleton snapshot: restore the seed bio and republish so the artist
-  // is left LIVE with the content that was there before.
-  await svc.from('artists').update({ bio: SEED_BIO }).eq('id', artistA)
-  await publishProfile(svc, artistA)
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('per-section publish isolation', () => {
@@ -48,7 +48,6 @@ describe('per-section publish isolation', () => {
     await asA.from('artists').update({ bio: 'SECTIONS draft bio' }).eq('id', artistA)
     // stream_url = platform presence, so the track is Released (shown by the public door).
     const track = await createContent(asA, 'track', artistA, { title: 'SECTIONS track', stream_url: 'https://open.spotify.com/track/sec' })
-    trackId = track.id
 
     // Publish ONLY tracks.
     await publishContent(asA, 'track', artistA)

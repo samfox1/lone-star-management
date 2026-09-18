@@ -13,17 +13,26 @@
  * own entity type (20260805180000). That property is why there is no second publish step
  * to get wrong.
  *
- * Runs as manager A against the live hosted project; every row this file creates is
- * deleted by id in afterAll.
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). The header used to claim "every row
+ * this file creates is deleted by id in afterAll", and the font rows were. The teardown's
+ * last statement was not: `delete().eq('artist_id', A).eq('entity_type', 'artist_font')`
+ * erased the artist's ENTIRE font publish history, every revision, including the ones that
+ * were serving their live site's typefaces. `publishContent('artist_font')` is catalog-wide
+ * besides, so each of the six publishes below committed whatever fonts that artist had
+ * uploaded but not yet published. Neither is scopable to "rows this file made" — the rows
+ * are precisely the ones it did not make. An owned artist needs no such cleanup: it starts
+ * with no fonts, and it ends by ceasing to exist.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishContent } from '@/lib/content'
+import { publishContent, publishProfile } from '@/lib/content'
 import { setFontSlot } from '@/lib/fonts'
 import { getWorkingSitePayload } from '@/lib/site'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
 const svc = serviceClient()
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 let fontId: string | null = null
@@ -36,29 +45,30 @@ type Door = {
 }
 
 async function door(): Promise<Door> {
-  const { data } = await svc.rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await svc.rpc('get_public_site', { p_slug: tenantA.slug })
   return (data ?? {}) as Door
 }
 
-/** Only the fonts this file planted — the seed artist has other rows and other suites. */
+/** Kept filtering by family even on an owned artist: the parity test below plants a second
+ *  face, and `toHaveLength(1)` has to mean "this one", not "however many are around". */
 async function doorFonts(): Promise<NonNullable<Door['fonts']>> {
   return ((await door()).fonts ?? []).filter((f) => f.family === FAMILY)
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Fonts publish', asA)
+  artistA = tenantA.id
+  // `door()` coerces a NULL payload to `{}`, whose `fonts` is undefined and whose
+  // `font_slots?.primary` is undefined — i.e. every draft-side assertion below passes for
+  // free on an artist that has never published a profile. Publish one, and prove it.
+  await publishProfile(svc, artistA)
+  const { data } = await svc.rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterAll(async () => {
-  if (fontId) await svc.from('artist_fonts').delete().eq('id', fontId)
-  // Republish so no revision for this fixture survives the run.
-  await publishContent(svc, 'artist_font', artistA)
-  await svc
-    .from('revisions')
-    .delete()
-    .eq('artist_id', artistA)
-    .eq('entity_type', 'artist_font')
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('fonts publish gate (live door)', () => {

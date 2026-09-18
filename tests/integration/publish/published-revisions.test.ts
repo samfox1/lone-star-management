@@ -4,12 +4,22 @@
  * LIVE published view — the latest revision per entity with TOMBSTONES EXCLUDED.
  * The single home for the rule every public door projects over (CONTEXT.md). It's
  * an internal DEFINER helper (not anon-callable); tests use the service role.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). The row bookkeeping here was already
+ * tidy — every track and link is deleted by the id it was created with. The defect was the
+ * other one: `publishContent` is CATALOG-WIDE. Called against the shared seed artist it
+ * snapshots every pending draft that artist has, so a run committed a human's half-finished
+ * song to their live site as a side effect of testing a read helper, and did it four times.
+ * No id list can scope that, because the rows it publishes are the ones this file never
+ * touched. An artist this file owns has nothing pending but its own fixtures.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createContent, deleteContent, publishContent } from '@/lib/content'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
@@ -21,29 +31,19 @@ async function rows(entity_type: string | null): Promise<Row[]> {
   return (data ?? []) as Row[]
 }
 
-/** Rows this file created, per table — teardown removes ONLY these. The project is shared
- *  and live: deleting every track and link for the artist erases whatever else is in
- *  there and leaves later suites asserting over an empty site. */
-const created: { table: string; id: string }[] = []
-
 async function seed(type: 'track' | 'link', input: Record<string, unknown>) {
-  const row = await createContent(asA, type, artistA, input)
-  created.push({ table: type === 'track' ? 'tracks' : 'links', id: row.id })
-  return row
+  return createContent(asA, type, artistA, input)
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Published revisions', asA)
+  artistA = tenantA.id
 })
 
 afterAll(async () => {
-  if (!created.length) return
-  await svc.from('revisions').delete().in('entity_id', created.map((r) => r.id))
-  for (const table of new Set(created.map((r) => r.table))) {
-    await svc.from(table).delete().in('id', created.filter((r) => r.table === table).map((r) => r.id))
-  }
-  created.length = 0
+  // One cascading delete: the tracks, the links and every revision published off them.
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('published_revisions', () => {

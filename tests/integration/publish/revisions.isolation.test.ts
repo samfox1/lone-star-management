@@ -14,14 +14,34 @@
  *
  * Both are enforced only by RLS (is_manager_of), so both can only be checked against the
  * real database.
+ *
+ * WHY THE VICTIM TENANT IS A THROWAWAY (AGENTS.md rule 6). The attacker stays real —
+ * manager A, a genuine manager of a genuine artist, which is the whole point: the denials
+ * must be about B's ownership and not about A being a stranger. The VICTIM was the shared
+ * seed artist `gulf-static`, and that was wrong in both directions.
+ *
+ * Outbound: the fixtures are not inert. A revision IS the published site, so planting
+ * `entity_type='track'` under that artist put a fabricated song called "ISO-REV B published
+ * title" on their real public site for the length of the run, and the `site_styles` row put
+ * `iso_probe_region` alongside it. Testing a defacement guard by defacing a live site is a
+ * strange bargain.
+ *
+ * Inbound: the beforeAll opened with `delete().eq('artist_id', B).eq('region_key', …)`,
+ * clearing the slot before claiming it. The fixtures are now created and dropped with the
+ * artist, so nothing is cleared and nothing is left behind.
+ *
+ * B's manager link is deliberately absent: nothing here ever acts AS B, only against B.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { publishProfile } from '@/lib/content'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectRlsDenied } from '@tests/helpers/rls'
 
 const svc = serviceClient()
 
+let tenantB: ThrowawayArtist
 let artistB: string
 let asA: SupabaseClient
 
@@ -35,8 +55,15 @@ let styleB: string
 const strayRevisionIds: string[] = []
 
 beforeAll(async () => {
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
+  tenantB = await createThrowawayArtist(svc, 'Revisions isolation B')
+  artistB = tenantB.id
+  // The door returns NULL without a published `artist` revision, and `JSON.stringify(null)`
+  // contains no forged link either — so the "nothing reached the public door" check below
+  // would pass on a site that does not exist.
+  await publishProfile(svc, artistB)
+  const { data: door } = await anonClient().rpc('get_public_site', { p_slug: tenantB.slug })
+  expect(door, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 
   const rev = await svc
     .from('revisions')
@@ -51,7 +78,6 @@ beforeAll(async () => {
   if (rev.error || !rev.data) throw rev.error ?? new Error('seed B revision failed')
   revisionB = rev.data.id
 
-  await svc.from('site_styles').delete().eq('artist_id', artistB).eq('region_key', B_REGION)
   const style = await svc
     .from('site_styles')
     .insert({ artist_id: artistB, region_key: B_REGION, class_names: B_CLASSES })
@@ -62,9 +88,10 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  if (revisionB) await svc.from('revisions').delete().eq('id', revisionB)
+  // Strays first: a revision A managed to forge would be under B and cascade anyway, but
+  // deleting it by the id we captured is what makes the failure visible if it ever happens.
   if (strayRevisionIds.length) await svc.from('revisions').delete().in('id', strayRevisionIds)
-  if (styleB) await svc.from('site_styles').delete().eq('id', styleB)
+  await deleteThrowawayArtist(svc, tenantB)
 })
 
 describe('revisions — publishing into another tenant', () => {
@@ -94,7 +121,7 @@ describe('revisions — publishing into another tenant', () => {
     if (data?.length) strayRevisionIds.push(...data.map((r) => r.id))
 
     // And confirm nothing reached the public door.
-    const { data: site } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistBSlug })
+    const { data: site } = await anonClient().rpc('get_public_site', { p_slug: tenantB.slug })
     expect(JSON.stringify(site)).not.toContain('ISO-REV forged link')
   })
 
