@@ -28,6 +28,29 @@ const svc = serviceClient()
 
 let aPath: string
 let bPath: string
+/**
+ * The paths the two ATTACK cases write to — per-run, and cleaned up, for the same reason
+ * the fixtures are.
+ *
+ * THE BUG THIS FIXES. Both attacks used to post to a fixed path (`…/intruder.pdf`,
+ * `…/evil.html`) that nothing removed, and asserted only `expect(error).not.toBeNull()`.
+ * Follow the first run after the door breaks: the object LANDS, the test fails once, and
+ * it stays on the bucket. Every run after that gets `409 Duplicate` — an error, so the
+ * assertion passes — and the suite is green forever with the door standing open and a
+ * stored HTML file sitting in a bucket that refuses HTML. The file was already taking
+ * this precaution for its fixtures twenty lines above.
+ */
+const RUN = crypto.randomUUID()
+let intruderPath: string
+let evilPath: string
+
+/** A denial that is not merely "something went wrong": a 409 means the path was taken,
+ *  which is the failure mode above wearing a passing test's clothes. */
+function expectStorageDenied(error: unknown, what: string): void {
+  expect(error, what).not.toBeNull()
+  const code = (error as { statusCode?: string } | null)?.statusCode
+  expect(String(code ?? ''), `${what}: refused as a duplicate, not as a denial`).not.toBe('409')
+}
 
 beforeAll(async () => {
   artistA = await artistIdBySlug(SEED.artistASlug)
@@ -39,9 +62,10 @@ beforeAll(async () => {
   // this file's anon assertion depend on what a previous run's policies allowed. (That
   // is not hypothetical: it is exactly how this test started failing after a policy
   // mutation check on 2026-08-04.)
-  const run = crypto.randomUUID()
-  aPath = `${artistA}/documents/isolation-a-${run}.pdf`
-  bPath = `${artistB}/documents/isolation-b-${run}.pdf`
+  aPath = `${artistA}/documents/isolation-a-${RUN}.pdf`
+  bPath = `${artistB}/documents/isolation-b-${RUN}.pdf`
+  intruderPath = `${artistB}/documents/intruder-${RUN}.pdf`
+  evilPath = `${artistA}/documents/evil-${RUN}.html`
 
   for (const path of [aPath, bPath]) {
     const { error } = await svc.storage.from(BUCKET).upload(path, PDF, {
@@ -53,8 +77,16 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.storage.from(BUCKET).remove([aPath, bPath])
+  // The attack paths too: if a door IS open, the object that landed is this file's to
+  // clean up, and leaving it there is what turned the next run green.
+  await svc.storage.from(BUCKET).remove([aPath, bPath, intruderPath, evilPath])
 })
+
+/** Object names directly under a folder, as the service role sees them. */
+async function namesIn(folder: string): Promise<string[]> {
+  const { data } = await svc.storage.from(BUCKET).list(folder)
+  return (data ?? []).map((o) => o.name)
+}
 
 describe('documents bucket — tenant isolation', () => {
   it('a manager CAN read their own artist’s document', async () => {
@@ -84,10 +116,16 @@ describe('documents bucket — tenant isolation', () => {
   })
 
   it("CRITICAL: A cannot UPLOAD into B's folder", async () => {
+    // The path is free before the attempt — without that, "it did not land" is a claim
+    // about a path that was already taken (AGENTS.md rule 2, in its negative form).
+    const name = intruderPath.split('/').pop()
+    expect(await namesIn(`${artistB}/documents`)).not.toContain(name)
     const { error } = await asA.storage
       .from(BUCKET)
-      .upload(`${artistB}/documents/intruder.pdf`, PDF, { contentType: 'application/pdf' })
-    expect(error).not.toBeNull()
+      .upload(intruderPath, PDF, { contentType: 'application/pdf' })
+    expectStorageDenied(error, "A uploading into B's folder")
+    // And the STATE, not just the answer: the object is the thing that matters.
+    expect(await namesIn(`${artistB}/documents`)).not.toContain(name)
   })
 
   it('CRITICAL: an anonymous visitor cannot download ANY document', async () => {
@@ -108,11 +146,14 @@ describe('documents bucket — tenant isolation', () => {
     // The bucket's allowed_mime_types is the unbypassable guard; DOCUMENT_UPLOAD_RULES is
     // only the client-side half. An HTML file here would be stored XSS on the Supabase
     // origin if the bucket were ever flipped public.
+    const name = evilPath.split('/').pop()
+    expect(await namesIn(`${artistA}/documents`)).not.toContain(name)
     const { error } = await svc.storage
       .from(BUCKET)
-      .upload(`${artistA}/documents/evil.html`, new Blob(['<script>alert(1)</script>'], { type: 'text/html' }), {
+      .upload(evilPath, new Blob(['<script>alert(1)</script>'], { type: 'text/html' }), {
         contentType: 'text/html',
       })
-    expect(error).not.toBeNull()
+    expectStorageDenied(error, 'the service role storing text/html')
+    expect(await namesIn(`${artistA}/documents`)).not.toContain(name)
   })
 })

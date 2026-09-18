@@ -53,15 +53,46 @@ export function serviceClient(): SupabaseClient {
   return bareClient(serviceKey!)
 }
 
+/**
+ * One signed-in client per seeded user, per test FILE.
+ *
+ * Vitest gives each file a fresh module registry, so this never leaks a session between
+ * files; inside a file it turns "sign in as A" from a network round-trip into a lookup.
+ * Safe because nothing in `tests/` ever mutates auth state on a returned client — no
+ * `signOut`, no `updateUser`, no `refreshSession` (checked 2026-09-18). If a suite ever
+ * needs a session it can destroy, it should build its own client rather than reach for
+ * this one.
+ */
+const signedIn = new Map<string, Promise<SupabaseClient>>()
+
 /** Sign in as a seeded user and return a client carrying their JWT. */
-export async function signInAs(email: string): Promise<SupabaseClient> {
-  const client = bareClient(anonKey!)
-  const { error } = await client.auth.signInWithPassword({
-    email,
-    password: SEED_PASSWORD,
-  })
-  if (error) throw new Error(`sign-in failed for ${email}: ${error.message}`)
-  return client
+export function signInAs(email: string): Promise<SupabaseClient> {
+  const cached = signedIn.get(email)
+  if (cached) return cached
+  const pending = doSignIn(email)
+  signedIn.set(email, pending)
+  // A failed sign-in must not be cached as a permanent failure for the file.
+  pending.catch(() => signedIn.delete(email))
+  return pending
+}
+
+async function doSignIn(email: string): Promise<SupabaseClient> {
+  // GoTrue's token endpoint is rate-limited PER IP, not per project, and the throwaway
+  // -artist pattern doubled this suite's sign-ins. A burst (several vitest processes, or
+  // a file opening three sessions at once) gets "Request rate limit reached" — which is
+  // a 429, not a credential problem, and is over in a second or two. Three tries with a
+  // widening pause turns a red suite into a slightly slower one; anything else throws
+  // immediately, so a genuinely wrong password still fails fast.
+  let last = ''
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const client = bareClient(anonKey!)
+    const { error } = await client.auth.signInWithPassword({ email, password: SEED_PASSWORD })
+    if (!error) return client
+    last = error.message
+    if (!/rate limit/i.test(last)) break
+    await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)))
+  }
+  throw new Error(`sign-in failed for ${email}: ${last}`)
 }
 
 /** Look up a seeded artist's id by slug (via service role, bypassing RLS). */
