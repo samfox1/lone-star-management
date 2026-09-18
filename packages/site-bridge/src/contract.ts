@@ -1,5 +1,8 @@
 /**
- * The five tests of CONNECTING.md §7, as code a site runs against ITSELF.
+ * The tests of CONNECTING.md §7, as code a site runs against ITSELF — every rule there
+ * except the SEO audit, which needs the BUILT html rather than a DOM and lives in ./seo.
+ * (It said "the five tests" until 2026-09-18, by which point there were seven; the count
+ * is left out now, because a number in a docblock is a fact nothing checks.)
  *
  * They were prose, so every site hand-wrote its own versions — and skeen, which had five
  * separate "the public site carries no markers" tests, still shipped `data-lse-field` and
@@ -19,6 +22,10 @@
  *         editableDom: render(<SiteBody site={site} editable />).container,
  *         emptyDom: render(<SiteBody site={null} />).container,
  *         publishedValues: [site.config.instagram, site.bio[0]],
+ *         // Optional, and skipped silently when absent — so pass it. Without the
+ *         // tokens.css import it names, every non-colour control no-ops on the live
+ *         // site and nothing says why.
+ *         mainCss: readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8'),
  *       })).toEqual([])
  *     })
  *

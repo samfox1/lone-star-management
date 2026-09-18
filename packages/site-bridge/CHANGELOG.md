@@ -2,14 +2,15 @@
 
 **Sites sit on DIFFERENT versions on purpose.** Sam, 2026-09-04: that is fine "as long as we
 are aware with how they differ and we can replicate a site to fit a certain bridge." Today
-skeen is on `^0.35.2` and ftbk on `^0.32.0`, and neither is drift — each site is on the
-version its own features need.
+(re-read from both `package.json` files, 2026-09-18) skeen is on `^0.38.0` and ftbk on
+`^0.32.0`, and neither is drift — each site is on the version its own features need.
 
 That policy needs two things written down, and neither existed before this file:
 
-1. **What adopting a version COSTS a site.** ftbk moving 0.32.0 → 0.35.2 crosses the seo
-   module, the pages protocol, `FrameHandle`, and a music-ordering law. The only record was
-   git history.
+1. **What adopting a version COSTS a site.** ftbk moving 0.32.0 → 0.38.0 crosses the seo
+   module, the pages protocol, `FrameHandle`, a music-ordering law and the analytics module.
+   The only record was git history. The range is inventoried below as far as 0.35.2; 0.36.0
+   through 0.38.0 have their own entries.
 2. **What a site pinned to an OLDER version must implement.** `CONNECTING.md` documents the
    LATEST contract only. A builder targeting 0.32.0 has no sheet — §10 and §11 describe
    rules that did not exist there. See [Building against an older bridge](#building-a-new-site-against-an-older-bridge).
@@ -27,10 +28,10 @@ this directory; where history cannot prove something, it says so rather than gue
 below 1.0**. So `^0.32.0` means `>=0.32.0 <0.33.0` — not `<1.0.0`.
 
 That is the mechanism that makes the policy safe rather than merely tolerated: ftbk's
-`^0.32.0` **cannot** resolve to skeen's 0.35.2 on any `npm install`, and skeen's `^0.35.2`
+`^0.32.0` **cannot** resolve to skeen's 0.38.0 on any `npm install`, and skeen's `^0.38.0`
 cannot slide back. A version move is a deliberate edit to a `package.json`, never a
-side-effect of a lockfile refresh. Verified 2026-09-04: ftbk's lockfile resolves 0.32.0 and
-its `node_modules` holds 0.32.0; skeen's resolves and holds 0.35.2.
+side-effect of a lockfile refresh. Verified 2026-09-04 and re-checked 2026-09-18: ftbk's
+`node_modules` holds 0.32.0; skeen's holds 0.38.0.
 
 ## The two version numbers, and which one you care about
 
@@ -43,7 +44,7 @@ its `node_modules` holds 0.32.0; skeen's resolves and holds 0.35.2.
 has been additive, and an older peer ignores an unknown `type` — moving it would start
 dropping *every* message from the other side, `ready` included (`protocol.ts:240`).
 `check-version.mjs` runs on `prepublishOnly` and refuses to publish when `PACKAGE_VERSION`
-and `package.json` disagree; `tests/site-bridge-version.test.ts` catches the same drift, but
+and `package.json` disagree; `tests/unit/site-editor/site-bridge-version.test.ts` catches the same drift, but
 only on the next test run, which is after a wrong number could already be on the registry.
 
 **The editor's per-version behaviour is exactly seven gates** (`src/lib/site-editor/manifest.ts`),
@@ -66,13 +67,40 @@ old and never gets value tokens.
 
 `bridgeOutdated` (dotted numeric compare; absent or malformed reads as NOT outdated, because
 a false alarm is worse than a missed one) drives one banner. **ftbk shows it today**: it
-announces `bridgeVersion: '0.32.0'` and the editor is on 0.35.2.
+announces `bridgeVersion: '0.32.0'` and the editor is on 0.38.0.
 
 ---
 
 ## Unreleased
 
-Nothing since 0.36.0.
+**Site action: none.** Four fixes from the 2026-09-18 review, all internal. Two of them
+change what a site's own `checkContract` test can say, so they are listed rather than
+folded into "internals".
+
+- **`auditRegions` sees every palette colour.** The `text-*` colour test was an unanchored
+  regex listing the sizes and alignments, so any colour whose NAME merely begins with one
+  of those words — `text-smoke`, `text-xlarge`, `text-started`, `text-clipped` — read as a
+  size and left the audit entirely. `checkContract` runs this audit, so **a site can see
+  new findings on upgrade**: an undeclared colour of that shape was always a finding and
+  was always silently dropped. Checked 2026-09-18: neither skeen nor ftbk uses a token of
+  that shape, so neither gains a finding. The icon-group rule was blind through the same
+  path and is fixed with it.
+- **The protocol guards check the payload, not just the `type`.** `isFrameMessage` and
+  `isEditorMessage` asserted the full union on the strength of source, version and
+  `typeof type === 'string'` — so a `select` with no `target` crashed the editor's message
+  listener and a `field-change` with no `value` saved `undefined` over a declared field.
+  Each type now validates what its consumers read. **An unknown type still passes
+  `isEditorMessage`**, so the frame's catch-all and the additive protocol are unchanged; an
+  unknown type is refused by `isFrameMessage`, which has no catch-all behind it. A site
+  feels this only in a TEST DOUBLE that posts a half-built editor message — the 0.35.0
+  lesson in a new place, and the reason it is written down here.
+- **`CLAIMABLE_PROPS` is exported from `styles.ts`** and derived from `TEXT_VARS`.
+  `contract.ts` restated the same eight rows by hand under a comment claiming a test kept
+  them in step; nothing did, and a seventh text family would have been reported as a claim
+  nothing supplies.
+- **`mergeManifests` cannot silently drop a new manifest key.** A `Record<keyof
+  TemplateManifest, true>` ledger sits beside the hand-named merge, so the next key added
+  to the type is a compile error here instead of a list the panels never show.
 
 ---
 
@@ -480,9 +508,9 @@ callers never feel.
 
 | version | site | why it is there | what moving forward takes |
 | --- | --- | --- | --- |
-| **0.35.2** | **skeen** (`^0.35.2`, resolved 0.35.2) | It needs everything: the seo module is live on it (Phases 1–3, 2026-08-26), and it is the site the pages work was built for — `/about` and `/merch` exist. `app/edit/page.tsx` imports `FrameHandle`, handles `onSetPage`, calls `pageChanged`, and `lib/sitePages.tsx` renders the switchable pages. Its test double is typed `FrameHandle`, which is the 0.35.1 lesson applied. | Already current. The next handle member is free — the double is typed, so a growth shows up as an error naming the member instead of a mystery. |
+| **0.38.0** | **skeen** (`^0.38.0`, resolved 0.38.0 — moved up from 0.35.2 with the analytics module) | It needs everything: the seo module is live on it (Phases 1–3, 2026-08-26), and it is the site the pages work was built for — `/about` and `/merch` exist. `app/edit/page.tsx` imports `FrameHandle`, handles `onSetPage`, calls `pageChanged`, and `lib/sitePages.tsx` renders the switchable pages. Its test double is typed `FrameHandle`, which is the 0.35.1 lesson applied. | Already current. The next handle member is free — the double is typed, so a growth shows up as an error naming the member instead of a mystery. |
 | **0.32.0** | **ftbk** (`^0.32.0`, resolved 0.32.0, branch `lone-star-connect`, clean, last commit 2026-08-21) | It is a single-page desktop-metaphor site with no music catalog and no SEO surface, so the entire 0.33 → 0.35 range is features it does not use. 0.32.0 is also the version that gave it `controls` (its dock is one Size slider) and `mainCss` in `checkContract` — ftbk was the fourth site to hit the uncompiled-tokens bug, and the guard against it is at its floor, not above it. | See below. Two required edits (`package.json`, the lockfile) and one that is optional today but is the pattern that broke skeen (`app/edit/page.tsx:34`). Everything else is opt-in. |
-| **workspace `*`** | **lone-star** (this repo, `packages/*`) | The editor consumes the package **from source**, so it is always on the working tree — 0.35.2 plus whatever is uncommitted. That is deliberate: the editor is the newest peer by construction and must handle every older site, which the seven gates above are how it does. | Nothing to move. The risk runs the other way: a change here is live in the editor immediately and reaches a site only when the package is published AND the site redeploys **without build cache** (Vercel will otherwise serve a cached build with the old package inside, and new tokens silently no-op). |
+| **workspace `*`** | **lone-star** (this repo, `packages/*`) | The editor consumes the package **from source**, so it is always on the working tree — 0.38.0 plus whatever is uncommitted. That is deliberate: the editor is the newest peer by construction and must handle every older site, which the seven gates above are how it does. | Nothing to move. The risk runs the other way: a change here is live in the editor immediately and reaches a site only when the package is published AND the site redeploys **without build cache** (Vercel will otherwise serve a cached build with the old package inside, and new tokens silently no-op). |
 
 Only skeen and ftbk have a `custom_site_url`; juniper-hale and glass-atlas were deleted from
 the live DB on 2026-09-04. Any earlier note about "three live sites" predates that.
@@ -500,6 +528,11 @@ number in this repo's history and nothing more.
 ---
 
 ## ftbk upgrade path, 0.32.0 → 0.35.2
+
+Inventoried read-only on 2026-09-04, and left at that target deliberately: this is what the
+range was actually diffed against. skeen has since moved to 0.38.0, so an ftbk upgrade today
+crosses 0.36.0-0.38.0 as well — their own entries above say what each one costs, and neither
+adds a required member to anything ftbk constructs.
 
 Inventoried read-only on 2026-09-04. ftbk imports nine of the twenty subpaths — `payload`,
 `markers`, `manifest`, `protocol`, `bind`, `public-site`, `styles`, `contract`, `tokens.css`

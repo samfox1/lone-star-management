@@ -312,6 +312,9 @@ it('passes the connection contract', () => {
     editableDom,
     emptyDom: snap(render(<SiteBody site={emptyPayload()} />).container),
     publishedValues: [full.config.instagram, full.bio[0]],
+    // Your real stylesheet, read from disk — see rule 8. Omitting it skips that check
+    // silently, which is how a site ships with none of the editor's classes compiled.
+    mainCss: readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8'),
   })).toEqual([])
 })
 ```
@@ -360,6 +363,15 @@ What it checks, and what each one is about:
    every content image, no `/_next/image` src, JSON-LD that parses, `/edit` noindex.
    Run it in the build-output test, not a unit test: the alt and the headings come from
    real data. See §10.
+8. **The editor's vocabulary is COMPILED** — pass `mainCss`, your real stylesheet read
+   from disk, and the check confirms it imports `@samfox1/site-bridge/tokens.css` (§1).
+   It is check 0 in the code because it is the cheapest one and the biggest recurring
+   failure: without that import every class the editor applies arrives at runtime with no
+   CSS behind it, so every control except colour silently does nothing and nothing
+   anywhere says why. Four sites have hit it.
+
+   **`mainCss` is OPTIONAL on the input type, and a missing one skips the check without a
+   finding** — a green suite proving nothing. Read the file; do not paste a string.
 
 Write this one test rather than one per component. skeen had five per-component versions
 of rule 1, all passing, while every heading on its live site carried `data-lse-field` —
@@ -457,7 +469,7 @@ import { fetchPublicReleases } from '@samfox1/site-bridge'
   A site that declares nothing shows none, and the editor offers only Hidden.
 - **`/edit`** — `robots: { index: false, follow: false }` from a server layout.
 
-Then rule 6 of §7 proves all of it on the built html, every build.
+Then rule 7 of §7 proves all of it on the built html, every build.
 
 ## 11. More than one page (0.35.0)
 
