@@ -284,6 +284,18 @@ explain it. Two of the first three sites shipped in exactly that state.
 A fallback the editor cannot edit is indistinguishable, from the manager's side, from a
 broken binding: they click the thing the site is plainly showing and nothing happens.
 
+**Do not re-sort what the package has a law for.** Two lists arrive in an order the
+published door cannot get right on its own, and both laws ship here so every site shows
+what the manager arranged:
+
+| list | call | what you lose by sorting it yourself |
+| --- | --- | --- |
+| `tour_dates` | `orderShows(rows, todayIso)` — `@samfox1/site-bridge/shows` (0.39.0) | the door orders by date and IGNORES `sort_order`, so every drag in the Tour panel silently does not reach the page. It also decides past/upcoming, which a dateless old show gets wrong without the `is_past` flag. |
+| music projects | `orderMusicProjects(projects)` — `@samfox1/site-bridge/music` (0.32.0) | a category re-sort of your own flings a dragged single across the grid (2026-08-21). |
+
+`todayIso` is a `YYYY-MM-DD` string YOU compute once per render, never a clock read inside
+the call: a server-rendered page caches, so "now" has to be the render's now.
+
 Your `/edit` route must trust the editor's origin (`NEXT_PUBLIC_EDITOR_ORIGIN`, defaulting
 to `http://localhost:3000`) or the bridge ignores every message and the preview looks
 fine while doing nothing.

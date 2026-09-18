@@ -73,9 +73,55 @@ announces `bridgeVersion: '0.32.0'` and the editor is on 0.38.0.
 
 ## Unreleased
 
-**Site action: none.** Four fixes from the 2026-09-18 review, all internal. Two of them
-change what a site's own `checkContract` test can say, so they are listed rather than
-folded into "internals".
+Nothing since 0.39.0.
+
+---
+
+## 0.39.0 — the shows order law
+
+**Site action: order your tour dates with `orderShows`, and pass `mainCss` to
+`checkContract`.** Neither is required to keep building. Skipping the first means the
+manager's dragged order silently does not reach the page.
+
+**`orderShows(rows, todayIso)`** from `@samfox1/site-bridge/shows` returns
+`{ upcoming, past }` from `payload.tour_dates` — your own row objects back, nothing
+mapped. `isPastShow(row, todayIso)` is exported beside it.
+
+**Why a site cannot skip this.** `get_public_site` orders `tour_dates` by date and
+`published_at` and **ignores `sort_order` entirely**. A site that renders the payload in
+the order it arrives therefore drops every drag the manager makes in the Tour panel: the
+drag works, it publishes, and the page does not change. Nothing reports it. The rule
+existed only in skeen's `lib/mapSite.ts`, so it was correct on exactly one site.
+
+**The law, in full.**
+- A show is PAST if `is_past` is true, **or** it has a date that has passed. The flag is
+  what lets a DATELESS old show land in Past — there is nothing to compare, so the toggle
+  decides. A dateless, unflagged show is a TBA upcoming date. (Sam's real case,
+  2026-09-18: skeen listing old shows that never had a date.)
+- A show dated TODAY has not happened yet.
+- MANUAL MODE (Sam, 2026-08-17): once any row has BOTH a date and a `sort_order`, the
+  manager's drag IS the order for that whole bucket, and date only breaks ties for rows
+  the drag never numbered. Decided per bucket, so dragging Past does not renumber
+  Upcoming.
+- Otherwise: dated first (upcoming ascending, past descending), then undated by
+  `sort_order`.
+
+Ported from skeen with its comments, and checked against the original on 20,000 random
+lists: identical on every one. One asymmetry came with it — in manual mode an unnumbered
+dateless show sorts to the FRONT (it tie-breaks on `''`), while the chronological branch
+puts undated rows last. It reaches only a partial drag, it is skeen's live behaviour, and
+it is pinned by a test named KNOWN ASYMMETRY rather than quietly changed.
+
+**A site on an older pin** keeps whatever ordering it wrote. Nothing about the wire
+changed, no field was added, and `BRIDGE_VERSION` did not move — this is a rule the
+package now states, not a new thing to announce. To adopt it: bump the pin, call
+`orderShows` where you currently sort `tour_dates`, and delete your own block. A site with
+no tour surface needs nothing.
+
+### Also in 0.39.0 — four fixes from the 2026-09-18 review
+
+Two of them change what a site's own `checkContract` test can say, so they are listed
+rather than folded into "internals".
 
 - **`auditRegions` sees every palette colour.** The `text-*` colour test was an unanchored
   regex listing the sizes and alignments, so any colour whose NAME merely begins with one

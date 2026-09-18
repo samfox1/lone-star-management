@@ -4,7 +4,7 @@
  * `PACKAGE_VERSION` (src/manifest.ts) is what a site stamps into its manifest and what
  * the editor compares to decide whether to flag "republish to apply"; package.json's
  * `version` is what npm ships. Two hand-maintained copies of one fact, in a package
- * published by hand — `tests/site-bridge-version.test.ts` catches a drift on the next
+ * published by hand — `tests/unit/site-editor/site-bridge-version.test.ts` catches a drift on the next
  * test run, which is AFTER a wrong number could already be on the registry. This runs at
  * the only moment that is too late to be wrong.
  *
