@@ -1,55 +1,20 @@
-// Cleaning typed class text, then writing or clearing the style row for a region.
+// Writing or clearing the style row for a region, against the real database.
 /**
- * cleanClassText (pure) + saveEditorStyle (live). The style write path resolves a
- * region key + cleans the typed class text, then upserts/clears a `site_styles`
- * row (blank clears → base classes). RLS scopes every write to the caller's tenant.
- * The live half runs against the seeded DB as the manager, restoring what it touches.
+ * saveEditorStyle (live). The style write path resolves a region key + cleans the typed
+ * class text, then upserts/clears a `site_styles` row (blank clears → base classes). RLS
+ * scopes every write to the caller's tenant. Runs against the seeded DB as the manager,
+ * restoring what it touches.
+ *
+ * The PURE half — `cleanClassText`, the XSS refusal — moved to
+ * `tests/unit/site-editor/clean-class-text.test.ts`. It bit here too, but
+ * `tests/integration/**` is excluded from `vitest.mutation.config.ts`, so from here it
+ * could never be seen by Stryker; the refusal would have read as an unwatched survivor
+ * for as long as it sat in this file.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { cleanClassText, saveEditorStyle } from '@/lib/site-editor/save'
+import { saveEditorStyle } from '@/lib/site-editor/save'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
-
-describe('cleanClassText', () => {
-  it('accepts Tailwind utilities, arbitrary values, and variants', () => {
-    expect(cleanClassText('font-momo uppercase')).toBe('font-momo uppercase')
-    expect(cleanClassText('  text-[clamp(3rem,12vw,11rem)]  ')).toBe('text-[clamp(3rem,12vw,11rem)]')
-    expect(cleanClassText('hover:text-flash-1 sm:text-2xl !font-black')).toBe('hover:text-flash-1 sm:text-2xl !font-black')
-  })
-
-  it('CRITICAL: accepts `+` — a calc() in a real site\'s base classes', () => {
-    // Sam, 2026-08-15: styling skeen's social icons answered "that setting produced
-    // something the site can't use". The editor writes the region's WHOLE class string,
-    // and skeen's hero rows carry `bottom-[calc(0.75rem+env(safe-area-inset-bottom))]` —
-    // the `+` was not in the allowlist, so every save of those regions was refused. The
-    // region could be styled in the panel and never once saved.
-    expect(cleanClassText('bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)]'))
-      .toBe('bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)]')
-    // The real string, verbatim, so this test fails if the allowlist ever narrows again.
-    const heroSocials =
-      'absolute inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom)+100lvh-100svh)] z-20 ' +
-      'flex flex-wrap items-center justify-center gap-6 iconsize-[24px] px-6 ' +
-      'sm:bottom-[calc(1rem+env(safe-area-inset-bottom)+100lvh-100svh)]'
-    expect(cleanClassText(heroSocials)).toBe(heroSocials)
-  })
-
-  it('treats blank/whitespace as a valid clear ("" — fall back to base)', () => {
-    expect(cleanClassText('')).toBe('')
-    expect(cleanClassText('   ')).toBe('')
-  })
-
-  it('REJECTS (null) characters that could break out of a class attribute', () => {
-    expect(cleanClassText('a"><script>')).toBeNull()
-    expect(cleanClassText("x' onclick=y")).toBeNull()
-    expect(cleanClassText('a{b}')).toBeNull()
-    expect(cleanClassText('`x`')).toBeNull()
-  })
-
-  it('REJECTS (null) an over-long string', () => {
-    expect(cleanClassText('x'.repeat(501))).toBeNull()
-    expect(cleanClassText('x'.repeat(500))).toBe('x'.repeat(500))
-  })
-})
 
 describe('saveEditorStyle (live)', () => {
   const REGION = 'test_hero_wordmark'

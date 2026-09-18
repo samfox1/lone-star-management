@@ -33,7 +33,6 @@ const ALLOWED: Record<string, string> = {
   is_manager_of: 'RLS helper',
   // Trigger functions: not callable through PostgREST regardless of grant.
   set_updated_at: 'trigger',
-  rls_auto_enable: 'event trigger',
 }
 
 const SQL = `

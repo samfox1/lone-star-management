@@ -6,12 +6,24 @@
  * matches an existing track (from another platform) by normalized title + duration
  * is STAMPED onto that row (apple_id + apple_url) instead of duplicated. Apple's
  * link lives in `apple_url`, never the legacy shared `provider_url`. RLS-scoped.
+ *
+ * TENANCY, AND WHY THE ARTISTS ARE THROWAWAYS. This file used to run on the shared seed
+ * artists and wipe BOTH of their `tracks` after every test. That is the teardown
+ * AGENTS.md rule 6 forbids, and here it did the precise damage the rule describes: the
+ * tenancy test below asserted "artist B has 0 tracks" as proof that a cross-tenant sync
+ * was refused, and a teardown two files away (sync.bandsintown.test.ts, same shape) had
+ * already guaranteed that zero. The denial had no witness and could not fail. Both
+ * artists are now created by this file and dropped by it, so "delete every track for
+ * this artist" IS "delete exactly what I created", the absolute counts below are true
+ * about an empty table rather than true by accident, and B carries a PLANTED row so the
+ * refusal has something to refuse.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { syncAppleTracks } from '@/lib/sync'
 import type { AppleTrackInput } from '@/lib/apple'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist } from '@tests/helpers/artist'
 
 let artistA: string
 let artistB: string
@@ -19,12 +31,22 @@ let asA: SupabaseClient
 const svc = serviceClient()
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
+  const asB = await signInAs(SEED.managerB)
+  artistA = (await createThrowawayArtist(svc, 'Apple sync A', asA)).id
+  artistB = (await createThrowawayArtist(svc, 'Apple sync B', asB)).id
+})
+
+afterAll(async () => {
+  // Cascades every track either artist ever held.
+  await deleteThrowawayArtist(svc, artistA)
+  await deleteThrowawayArtist(svc, artistB)
 })
 
 afterEach(async () => {
+  // Safe as a blanket wipe ONLY because both artists were created by this file: no other
+  // suite, and no human, has a row under them. Each test below asserts absolute counts,
+  // so it needs the table genuinely empty rather than merely emptied-of-our-rows.
   await svc.from('tracks').delete().eq('artist_id', artistA)
   await svc.from('tracks').delete().eq('artist_id', artistB)
 })
@@ -237,13 +259,24 @@ describe('syncAppleTracks — cross-platform merge', () => {
 
 describe('syncAppleTracks — tenancy', () => {
   it("CRITICAL: cannot sync into another tenant's artist", async () => {
+    // A PLANTED WITNESS (AGENTS.md rule 2). The old version of this test asserted that B
+    // held 0 tracks afterwards — which the afterEach teardown guaranteed before the sync
+    // was ever attempted, so the assertion passed whether RLS refused the write or waved
+    // it through. Plant a row first: now "B's catalog is untouched" is a statement about
+    // a table that HAS something in it, and an insert that landed would show up.
+    const { data: witness, error: plantErr } = await svc
+      .from('tracks')
+      .insert({ artist_id: artistB, title: "B's own song", source: 'manual' })
+      .select('id')
+      .single()
+    expect(plantErr, 'the witness must exist before the denial means anything').toBeNull()
+
     // Postgres must be the thing refusing — a bare .toThrow() would also pass on a
     // sync that crashed before ever reaching the insert, proving nothing.
     await expect(syncAppleTracks(asA, artistB, [ap('ap-evil', 'evil')])).rejects.toThrow(/row-level security/i)
-    const { count } = await svc
-      .from('tracks')
-      .select('id', { count: 'exact', head: true })
-      .eq('artist_id', artistB)
-    expect(count).toBe(0)
+
+    const { data } = await svc.from('tracks').select('id, title').eq('artist_id', artistB)
+    expect(data).toHaveLength(1) // the witness, and nothing the sync tried to add
+    expect(data![0]).toMatchObject({ id: witness!.id, title: "B's own song" })
   })
 })

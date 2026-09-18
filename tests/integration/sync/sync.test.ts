@@ -6,12 +6,21 @@
  * (source='spotify'), but NEVER overwrites a manager's hand edit (source flips
  * to 'manual' the moment a human touches it). Writes are RLS-scoped to the
  * caller's artist.
+ *
+ * WHY THE ARTISTS ARE THROWAWAYS (AGENTS.md rule 6). This file used to run on the shared
+ * seed artists and wipe their `tracks` after every test — a teardown that destroys rows the
+ * file never created, on the live hosted project. It also left the tenancy test below
+ * asserting "artist B holds 0 rows" as proof that a cross-tenant write was refused, which
+ * the teardown itself guaranteed. Both artists are created here and dropped here, so the
+ * blanket wipe IS "exactly what I created", the absolute counts are true about a genuinely
+ * empty table, and B now carries a PLANTED row so the refusal has something to refuse.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { syncAppleTracks, syncSpotifyTracks } from '@/lib/sync'
 import type { SpotifyTrackInput } from '@/lib/spotify'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist } from '@tests/helpers/artist'
 
 let artistA: string
 let artistB: string
@@ -19,12 +28,20 @@ let asA: SupabaseClient
 const svc = serviceClient()
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
+  const asB = await signInAs(SEED.managerB)
+  artistA = (await createThrowawayArtist(svc, 'Spotify sync A', asA)).id
+  artistB = (await createThrowawayArtist(svc, 'Spotify sync B', asB)).id
+})
+
+afterAll(async () => {
+  // One statement, and the cascade takes every child row either artist ever held.
+  await deleteThrowawayArtist(svc, artistA)
+  await deleteThrowawayArtist(svc, artistB)
 })
 
 afterEach(async () => {
+  // Safe as a blanket wipe ONLY because both artists were created by this file.
   await svc.from('tracks').delete().eq('artist_id', artistA)
   await svc.from('tracks').delete().eq('artist_id', artistB)
 })
@@ -136,11 +153,18 @@ describe('syncSpotifyTracks', () => {
     // Assert it is POSTGRES refusing, not any incidental throw — a bug in the sync
     // that threw before reaching the insert would pass a bare .toThrow() while
     // proving nothing about isolation.
+    // A PLANTED WITNESS (AGENTS.md rule 2). This used to assert that B held ZERO rows
+    // afterwards — a fact the teardown established before the sync was ever attempted, so
+    // it read as protection while passing whether or not RLS refused anything. With a row
+    // already there, "B's data is untouched" is a claim about a table that HAS content,
+    // and a write that landed would show up as a second row.
+    const { error: plantErr } = await svc.from('tracks').insert({ artist_id: artistB, title: "B's own song", source: 'manual' })
+    expect(plantErr, 'the witness must exist before the denial means anything').toBeNull()
+
     await expect(syncSpotifyTracks(asA, artistB, incoming)).rejects.toThrow(/row-level security/i)
-    const { count } = await svc
-      .from('tracks')
-      .select('id', { count: 'exact', head: true })
-      .eq('artist_id', artistB)
-    expect(count).toBe(0) // nothing written into B
+
+    const { data: after } = await svc.from('tracks').select('title').eq('artist_id', artistB)
+    expect(after).toHaveLength(1) // the witness, and nothing the sync tried to add
+    expect(after![0].title).toBe("B's own song")
   })
 })
