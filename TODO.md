@@ -1,5 +1,33 @@
 # TODO
 
+## Delete the PostHog cross-check — ON OR AFTER 2026-10-15 (added 2026-09-18)
+
+The whole apparatus is **scheduled for deletion**, and `stryker.config.json` says so twice.
+The 30-day window opened 2026-09-15, so the decision point is **2026-10-15**. Written down
+with a date because an unwatched scheduled deletion becomes permanent furniture, and this
+one is 2,398 lines — more than half of it test.
+
+What goes, once the comparison has run its course and the ratios held:
+
+| file | lines |
+| --- | --- |
+| `src/lib/compare-posthog.ts` | 522 |
+| `packages/site-bridge/src/mirror.ts` | 332 |
+| `scripts/compare-posthog.ts` | 176 |
+| `scripts/posthog-watch.sh` | — |
+| `tests/unit/analytics/compare-posthog.test.ts` | 823 |
+| `tests/…/site-bridge-mirror.test.ts` | 489 |
+| `tests/…/posthog-check-panel.test.ts` | 32 |
+
+Also then: the mirror's `mutate` entries, the `NEXT_PUBLIC_POSTHOG_*` env vars on Skeen,
+the `/lsx` proxy in skeen-website, and the `compare:posthog` / `posthog:watch` scripts.
+
+**Do not delete it early, and do not delete it on a schedule alone.** The question it
+answers is "are our numbers right", and the answer is only earned once. Run
+`npm run posthog:watch` first and read the verdict; if the comparison never reached a
+judged window, the right move is to extend it, not to bin it unread. If the ratios did NOT
+hold, none of this comes out — it becomes the thing that found the bug.
+
 ## PostHog error tracking + fix agents — AFTER the 30-day comparison (added 2026-09-17)
 
 PostHog offers error tracking plus agents that watch for bugs and open fixes on GitHub
