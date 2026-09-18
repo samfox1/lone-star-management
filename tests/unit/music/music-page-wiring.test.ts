@@ -88,7 +88,6 @@ function track(over: Row = {}): Row {
     stream_url: null,
     audio_path: null,
     release_id: null,
-    parent_release_id: null,
     on_site: false,
     spotify_id: null,
     apple_id: null,
@@ -234,6 +233,9 @@ describe('songsByRelease — by HOME release only', () => {
       release({ id: 'single', slug: 'single', spotify_id: 'sp1' }),
       release({ id: 'album', slug: 'album', spotify_id: 'sp2' }),
     ]
+    // `parent_release_id` is a REAL column still (nulled by 20260911213000, kept for the
+    // history) and deliberately not in the base fixture: the page must file by
+    // `release_id` alone even when a row still carries the old link.
     trackRows = [track({ id: 't1', release_id: 'single', parent_release_id: 'album' })]
     const props = await musicProps()
     const byId = Object.fromEntries(props.releases.map((r) => [r.id as string, r.songs as ReleaseSong[]]))

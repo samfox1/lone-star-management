@@ -62,7 +62,7 @@ afterEach(() => {
 
 const song = (id: string, title: string, over: Partial<ReleaseSong> = {}): ReleaseSong => ({
   id, title, featured_artists: [], stream_url: null, audio_path: null, cover_url: null, source: 'spotify',
-  release_id: 'r1', parent_release_id: null, release_date: null, release_type: 'ep', on_site: true,
+  release_id: 'r1', release_date: null, release_type: 'ep', on_site: true,
   spotify_id: null, apple_id: null, deezer_id: null,
   apple_url: null, soundcloud_url: null, deezer_url: null, ...over,
 })

@@ -41,7 +41,6 @@ const song = (o: Partial<MergeableSong> = {}): MergeableSong => ({
   released: false,
   release_type: 'single',
   release_id: null,
-  parent_release_id: null,
   audio_path: null,
   ...o,
 })
@@ -186,9 +185,8 @@ describe('curated fields — A is the row the manager chose to keep', () => {
   )
 
   it('release membership follows A, so the merged song does not jump projects', () => {
-    const patch = patchOf(song({ release_id: 'relA' }), song({ release_id: 'relB', parent_release_id: 'relC' }))
+    const patch = patchOf(song({ release_id: 'relA' }), song({ release_id: 'relB' }))
     expect(patch).not.toHaveProperty('release_id')
-    expect(patch.parent_release_id).toBe('relC') // A had none — fillable
   })
 })
 

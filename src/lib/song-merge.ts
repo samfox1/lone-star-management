@@ -50,7 +50,6 @@ export const CURATED_FILLABLE_FIELDS = [
   'title',
   'release_type',
   'release_id',
-  'parent_release_id',
   'audio_path',
 ] as const
 
@@ -84,7 +83,6 @@ export type MergeableSong = {
   released: boolean | null
   release_type: string | null
   release_id: string | null
-  parent_release_id: string | null
   audio_path: string | null
 }
 

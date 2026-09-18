@@ -29,10 +29,6 @@ export type Track = TrackPlatformIds & {
   source: string | null
   audio_path: string | null
   release_id: string | null
-  /** Legacy "also appears on" link — no longer read or written (2026-09-11): a song that is
-   *  a single AND an album track is two rows, one per release. Nulled by migration
-   *  20260911213000; the column stays until the rest of the row types drop it. */
-  parent_release_id: string | null
   /** Optional own release date (orphan singles); album songs show the album's year instead. */
   release_date: string | null
   /** The song's own category (single/remix/…), shown as a tile badge like the release cards. */
@@ -91,8 +87,6 @@ export function SongModal({
 }) {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [type, setType] = useState<ReleaseType>(track.release_type)
-  // `parent_release_id` ("also appears on") is no longer read or written (2026-09-11): a
-  // song that is a single AND an album track is two rows, one per release.
   const [releaseId, setReleaseId] = useState(track.release_id ?? '')
   const platforms = trackPlatforms(track)
   // The Unreleased pill is offered ONLY where the flag can decide anything: a manual
