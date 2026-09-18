@@ -17,12 +17,37 @@
  * off-site release kept serving its smart-link page while correctly vanishing
  * from the discography list. This header claimed "+ visible" the whole time —
  * nothing tested it. Restored in 20260714130000; the assertion is the guard.
+ *
+ * TENANCY, AND WHY THE ARTIST IS A THROWAWAY. This file used to run on the shared seed
+ * artist `lone-pine` and tear down with
+ *
+ *     svc.from('tracks').delete().eq('artist_id', artistA)
+ *     svc.from('releases').delete().eq('artist_id', artistA)
+ *     svc.from('revisions').delete().eq('artist_id', artistA).in('entity_type', ['track','release'])
+ *
+ * — on the LIVE hosted project, the artist's ENTIRE catalogue and its entire publish
+ * history, every run. It was also the most damaging kind of lie in this repo, because
+ * almost every assertion below is a `not.toContain` over a whole-artist door payload:
+ * "the pulled album is absent", "the draft release is absent", "the album_name fallback
+ * did not pull Fallback Song in". A teardown that empties the artist's catalogue makes
+ * every one of those true for free. `lone-pine` currently reads EMPTY for several tables
+ * precisely because teardowns of this shape have been running for months — so an absolute
+ * count or an absence over the seed artist passes today for the wrong reason, and only a
+ * throwaway makes it mean something again.
+ *
+ * The artist is created and dropped by this file, so the catalogue genuinely starts empty,
+ * "absent from the door" is a fact about a populated site rather than an empty one, and
+ * Publish commits nothing but our own fixtures. Every door resolves by SLUG; only
+ * get_public_site additionally requires a published `artist` revision, so beforeAll
+ * publishes the profile first.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createContent, publishContent, publishProfile } from '@/lib/content'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let artist: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
@@ -32,7 +57,7 @@ const id: Record<string, string> = {}
 
 async function audioPath(trackId: string): Promise<string | null> {
   const { data } = await anonClient().rpc('audio_path_for_play', {
-    p_slug: SEED.artistASlug,
+    p_slug: artist.slug,
     p_track_id: trackId,
   })
   return (data as string | null) ?? null
@@ -56,23 +81,27 @@ async function makeRelease(title: string, slug: string, patch: Record<string, un
 }
 
 async function publicSiteTracks(): Promise<{ title: string; release_type?: string | null }[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
   return (data?.tracks as { title: string; release_type?: string | null }[] | null) ?? []
 }
 
 async function releasePage(slug: string): Promise<{ title: string; tracks: { title: string }[] } | null> {
-  const { data } = await anonClient().rpc('get_release', { p_artist_slug: SEED.artistASlug, p_release_slug: slug })
+  const { data } = await anonClient().rpc('get_release', { p_artist_slug: artist.slug, p_release_slug: slug })
   return data as { title: string; tracks: { title: string }[] } | null
 }
 
 async function publicReleases(): Promise<{ title: string }[]> {
-  const { data } = await anonClient().rpc('get_public_releases', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_releases', { p_slug: artist.slug })
   return (data as { title: string }[] | null) ?? []
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  artist = await createThrowawayArtist(svc, 'music doors', asA)
+  artistA = artist.id
+  // get_public_site answers null until the profile singleton has been published once;
+  // get_release and get_public_releases do not need it.
+  await publishProfile(asA, artistA)
 
   // ---- track fixtures: site presence is now the per-track `on_site` flag ----
 
@@ -141,9 +170,9 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('tracks').delete().eq('artist_id', artistA)
-  await svc.from('releases').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).in('entity_type', ['track', 'release'])
+  // Cascades tracks, releases and revisions alike — one statement that cannot miss a
+  // table someone adds later.
+  await deleteThrowawayArtist(svc, artist)
 })
 
 describe('get_public_site — tracks gate on on_site, not Released', () => {
