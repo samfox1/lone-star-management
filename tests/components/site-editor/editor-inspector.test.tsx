@@ -41,6 +41,7 @@ import {
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { buildStyleControls, withStyleVars, type SiteStyleOptions,
 } from '@/lib/site-editor/style-controls'
+import { SOCIAL_PLATFORMS } from '@samfox1/site-bridge/social'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import type {
@@ -266,9 +267,14 @@ describe('EditorInspector — browse state', () => {
   })
 
   it('does not show editing tools until a component is opened', () => {
+    // The second line used to read `queryByLabelText('Collection size')` — a label that
+    // exists in no component, so it was null in browse state, null in open state, and
+    // null on a panel that had been deleted outright. Both strings here are ones the
+    // open Images panel PROVABLY renders (see the test below, which gets them), so
+    // rendering the panel too early now fails this.
     renderInspector()
     expect(screen.queryByText('Gallery')).toBeNull()
-    expect(screen.queryByLabelText('Collection size')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
   })
 })
 
@@ -649,19 +655,41 @@ describe('EditorInspector — Links component', () => {
     // picker exists to make the recognizable spelling the easy path.
     openLinks()
     fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
+    const dialog = within(screen.getByRole('dialog', { name: /Add a social link/i }))
     // Addable platforms are plain tiles; Instagram is already on the fixture, so its
     // tile is the disabled "(already added)" form. (Before version A this line matched
     // the collapsed ROW button named "Instagram" by accident — the row is plain text now.)
-    for (const label of ['TikTok', 'Substack']) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
-    }
-    expect(screen.getByRole('button', { name: /Instagram \(already added\)/i })).toBeTruthy()
-    // …and NOTHING else. The vocabulary is closed (Sam, 2026-08-10): a free-text escape
-    // hatch produced a label no site can map to a mark, which rendered as raw text in a
-    // row of glyphs. `createContent` refuses one on the write side too, so this is the
-    // affordance rather than the enforcement.
-    expect(screen.queryByRole('button', { name: /Something else/i })).toBeNull()
-    expect(screen.queryByLabelText('Link name')).toBeNull()
+    // DERIVED from the registry, not a two-name sample: a platform added to
+    // SOCIAL_PLATFORMS with no tile — or a tile for something not in it — fails here
+    // (AGENTS.md rule 4).
+    // The modal matches a platform by SLUG against the artist's existing labels, so the
+    // expectation is built the same way rather than by eye.
+    const taken = new Set(LINKS.map((l) => l.label.trim().toLowerCase()))
+    const tiles = dialog
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '')
+      .filter((n) => n !== 'Close')
+    expect(new Set(tiles)).toEqual(
+      new Set(SOCIAL_PLATFORMS.map((p) => (taken.has(p.slug) ? `${p.label} (already added)` : p.label))),
+    )
+    expect(dialog.getByRole('button', { name: /Instagram \(already added\)/i })).toBeTruthy()
+    /**
+     * …and NOTHING else. The vocabulary is closed (Sam, 2026-08-10): a free-text escape
+     * hatch produced a label no site can map to a mark, which rendered as raw text in a
+     * row of glyphs. `createContent` refuses one on the write side too, so this is the
+     * affordance rather than the enforcement.
+     *
+     * THE TWO LINES THIS REPLACES named strings that exist nowhere in `src`: a button
+     * matching /Something else/ (the phrase survives only in two bridge COMMENTS, which
+     * still describe a picker that has one) and a field labelled "Link name". Nothing
+     * could be deleted, renamed or re-added that turned either of them red — an
+     * escape hatch called anything else would have walked straight past both. The set
+     * equality above is the assertion that actually closes the vocabulary; what remains
+     * here is the other half of "no free text": no input at all before a platform is
+     * picked.
+     */
+    expect(dialog.queryAllByRole('textbox')).toHaveLength(0)
+    expect(dialog.queryAllByRole('combobox')).toHaveLength(0)
   })
 
   it('a platform already on the site cannot be added twice', () => {
