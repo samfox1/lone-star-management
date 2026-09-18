@@ -8,28 +8,42 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishContent } from '@/lib/content'
+import { publishContent, publishProfile } from '@/lib/content'
 import { saveEditorStyle } from '@/lib/site-editor/save'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+/**
+ * WHY THE ARTIST IS A THROWAWAY (2026-09-18). Two writes here are not this file's to
+ * make on a shared artist. `publishContent(…, 'site_styles')` commits every style draft
+ * the artist has pending — a manager mid-edit finds their work published by a test run —
+ * and the teardown deleted EVERY `site_styles` revision the artist owns, which is the
+ * styling publish history the version picker reads. Neither can be narrowed to "rows
+ * this test created", because the publish is by definition catalog-wide.
+ */
+let artist: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 const KEY = 'style_gate_probe'
 
 async function publicStyles(): Promise<Record<string, string>> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
   return ((data as { styles?: Record<string, string> } | null)?.styles ?? {}) as Record<string, string>
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  artist = await createThrowawayArtist(svc, 'Style publish gate', asA)
+  artistA = artist.id
+  // `get_public_site` answers NULL until an `artist` revision exists, and `publicStyles`
+  // reads `{}` out of null — which would make the two "not live yet" assertions below
+  // pass on a site that does not exist. The profile publish is what makes the door real.
+  await publishProfile(asA, artistA)
 })
 
 afterAll(async () => {
-  await svc.from('site_styles').delete().eq('artist_id', artistA).eq('region_key', KEY)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'site_styles')
+  await deleteThrowawayArtist(svc, artist)
 })
 
 describe('site_styles ride the publish window', () => {

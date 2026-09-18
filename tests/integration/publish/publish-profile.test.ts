@@ -14,41 +14,48 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publishProfile } from '@/lib/content'
 import { getWorkingSite } from '@/lib/site'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+/**
+ * WHY THE ARTIST IS A THROWAWAY (2026-09-18). This file used to run on the shared seed
+ * artist, and it is not a reader: it overwrites `bio`, `template` and
+ * `spotify_artist_id` on the live row, deletes EVERY `entity_type='artist'` revision the
+ * artist has ever had — its whole profile publish history — and republishes one snapshot
+ * of its own. It even does that mid-suite, to prove an unpublished profile is not live.
+ *
+ * None of that can be scoped to "rows this test created", because the rows it destroys
+ * are precisely the ones it did not create. The restore-what-was-there scaffolding it
+ * carried (snapshot `template`/`spotify_artist_id`, put back a hard-coded seed bio) is
+ * the tell: a teardown that has to GUESS the previous state is a teardown operating on
+ * someone else's data. An artist this file owns needs none of it, and the deletions
+ * below say exactly what they mean.
+ */
+let artist: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
-const SEED_BIO = 'Dusty alt-country out of West Texas.' // Lone Pine's seed bio
 const BASE_BIO = 'PUBLISH-PROFILE baseline (published)'
 const DRAFT_BIO = 'PUBLISH-PROFILE draft (not yet published)'
 
 async function publicArtist(): Promise<Record<string, unknown> | null> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
   return (data as { artist?: Record<string, unknown> } | null)?.artist ?? null
 }
 
-/** Lone Pine's profile as this file found it — the tests overwrite versioned columns on
- *  the shared live project, so teardown puts back what was there rather than a guess. */
-let original: Record<string, unknown> = {}
-
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
-  const { data } = await svc.from('artists').select('template, spotify_artist_id').eq('id', artistA).single()
-  original = (data ?? {}) as Record<string, unknown>
+  artist = await createThrowawayArtist(svc, 'Publish profile', asA)
+  artistA = artist.id
   // Establish a known PUBLISHED baseline.
   await asA.from('artists').update({ bio: BASE_BIO }).eq('id', artistA)
   await publishProfile(asA, artistA)
 })
 
 afterAll(async () => {
-  // Restore Lone Pine to its seed profile and leave exactly ONE clean published
-  // snapshot, so later tests still find a live site.
-  await svc.from('artists').update({ bio: SEED_BIO, ...original }).eq('id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'artist')
-  await publishProfile(svc, artistA)
+  // Cascades the artist's rows and every revision hung off it.
+  await deleteThrowawayArtist(svc, artist)
 })
 
 describe('profile is draft until published', () => {
@@ -70,7 +77,7 @@ describe('profile is draft until published', () => {
 
   it('CRITICAL: an artist with no published profile is not live (get_public_site null)', async () => {
     await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'artist')
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
     expect(data).toBeNull()
     // re-establish a published profile for the remaining tests.
     await publishProfile(asA, artistA)
@@ -111,8 +118,5 @@ describe('profile is draft until published', () => {
     expect(live?.template).toBe('cinematic')
     expect(live?.spotify_artist_id).toBe('PROFILE-draft-id')
 
-    // restore + republish so we don't leave Lone Pine on another template or a fake id
-    await asA.from('artists').update(original).eq('id', artistA)
-    await publishProfile(asA, artistA)
   })
 })

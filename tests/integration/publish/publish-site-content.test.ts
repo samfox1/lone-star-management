@@ -12,37 +12,45 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { publishContent } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { publishContent, publishProfile } from '@/lib/content'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+/**
+ * WHY THE ARTIST IS A THROWAWAY (2026-09-18). The row bookkeeping here was already
+ * careful — one planted row, deleted by its own id — but the ACT under test is
+ * `publishContent(…, 'site_content')`, which snapshots every site_content row the artist
+ * has. On a shared artist that commits a manager's pending text the moment a test run
+ * starts, and the teardown then had to publish a SECOND time to tombstone the probe,
+ * committing anything else that had arrived in between. The self-heal delete (a row
+ * orphaned by a killed run breaking the unique key for every later run) also stops being
+ * necessary: a fresh artist has no leftovers.
+ */
+let artist: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
-/** The one row this file plants. Teardown removes exactly it: the project is shared and
- *  live, and deleting every site_content row for the artist would erase the editor copy
- *  of a real site (the lesson of the 2026-08-20 isolation suite). */
-let rowId: string | null = null
 const KEY = 'phase0_publish_probe'
+/** The planted row, kept for the edit-then-republish half of the test below. */
+let rowId: string | null = null
 
 async function publicValue(): Promise<string | undefined> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
   return (data as { site_content?: Record<string, string> } | null)?.site_content?.[KEY]
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
-  // Self-heal a row orphaned by a killed run — the unique (artist_id, key) would
-  // otherwise fail every later insert and skip this whole file (2026-08-20).
-  await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', KEY)
+  artist = await createThrowawayArtist(svc, 'Publish site content', asA)
+  artistA = artist.id
+  // The door answers NULL with no `artist` revision, and `publicValue` reads `undefined`
+  // out of null — which is exactly what the "not live yet" assertion expects, so without
+  // this the first half of the test would pass against a site that does not exist.
+  await publishProfile(asA, artistA)
 })
 
 afterAll(async () => {
-  if (!rowId) return
-  await svc.from('site_content').delete().eq('id', rowId)
-  // It was published, so it lives in the snapshot until the next publish tombstones it.
-  await publishContent(asA, 'site_content', artistA)
-  await svc.from('revisions').delete().eq('entity_id', rowId)
+  await deleteThrowawayArtist(svc, artist)
 })
 
 describe('site text is draft until published', () => {

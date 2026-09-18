@@ -9,10 +9,23 @@
  *  - the password gate, exercised THROUGH publishReleasesAction: a wrong password
  *    leaves the on-site flags and the snapshots exactly as they were.
  */
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEED, SEED_PASSWORD, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, SEED_PASSWORD, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist } from '@tests/helpers/artist'
 
+/**
+ * WHY BOTH ARTISTS ARE THROWAWAYS (2026-09-18). `publishMusicAction` snapshots the
+ * artist's WHOLE music catalog, so running it on a shared seed artist committed whatever
+ * a manager (or another suite) had pending, and wrote revisions for rows this file never
+ * created. The cleanup that grew around that says it plainly: releases were tracked by
+ * id, but track revisions had "no fixture id of ours to key off" and were deleted by
+ * artist + type + a timestamp floor — a teardown that reaches for the clock is a teardown
+ * deleting other people's rows and hoping the window is narrow enough.
+ *
+ * On an artist this file owns there is no window to get wrong: the catalog IS the
+ * fixtures, and dropping the artist cascades every release, track and revision.
+ */
 let artistA: string
 let artistB: string
 let asA: SupabaseClient
@@ -26,14 +39,18 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => asA }))
 /** Rows this file created, so teardown removes ONLY those — the project is shared and
  *  live, and a blanket delete by artist erases whatever else is in there. */
 const createdReleases: string[] = []
-/** Set before a publish that snapshots tracks, so its revisions can be removed by time
- *  (they have no fixture id of ours to key off). */
-let trackRevisionFloor: string | null = null
-
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
+  const asB = await signInAs(SEED.managerB)
+  artistA = (await createThrowawayArtist(svc, 'Release publish A', asA)).id
+  // B is a REAL tenant with its own manager, so the cross-tenant no-op below is refused
+  // by RLS rather than by the artist not existing.
+  artistB = (await createThrowawayArtist(svc, 'Release publish B', asB)).id
+})
+
+afterAll(async () => {
+  await deleteThrowawayArtist(svc, artistA)
+  await deleteThrowawayArtist(svc, artistB)
 })
 
 afterEach(async () => {
@@ -41,11 +58,6 @@ afterEach(async () => {
     await svc.from('revisions').delete().in('entity_id', createdReleases)
     await svc.from('releases').delete().in('id', createdReleases)
     createdReleases.length = 0
-  }
-  if (trackRevisionFloor) {
-    await svc.from('revisions').delete().eq('artist_id', artistA)
-      .eq('entity_type', 'track').gte('published_at', trackRevisionFloor)
-    trackRevisionFloor = null
   }
 })
 
@@ -172,7 +184,6 @@ describe('publish password gate', () => {
   it('the same publish goes through with the right password', async () => {
     const rel = await seedRelease({ slug: 'gate-ok', on_site: false })
 
-    trackRevisionFloor = new Date().toISOString()
     const res = await publish(SEED_PASSWORD)
     expect(res).toEqual({ ok: true })
 
