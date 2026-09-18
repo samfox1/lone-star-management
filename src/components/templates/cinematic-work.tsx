@@ -1,18 +1,32 @@
 'use client'
 
 import { useState } from 'react'
+import { fieldRegion } from '@/lib/site-editor/markers'
 
 export type WorkTab = { key: string; label: string; embedUrl: string; platform: string; link?: string }
 
 /** Tabbed player embeds (Releases / Sets …), derived from the artist's backend
  *  data (Spotify catalog from spotify_artist_id, SoundCloud from a link). */
-export function CinematicWork({ tabs, heading }: { tabs: WorkTab[]; heading: string }) {
+export function CinematicWork({
+  tabs,
+  heading,
+  editable = false,
+}: {
+  tabs: WorkTab[]
+  heading: string
+  editable?: boolean
+}) {
   const [active, setActive] = useState(tabs[0]?.key)
   const current = tabs.find((t) => t.key === active)
 
   return (
     <section id="work" className="mx-auto w-full max-w-4xl px-6 py-24">
-      <h2 className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl">{heading}</h2>
+      <h2
+        {...fieldRegion(editable, 'work_heading')}
+        className="font-display text-4xl font-black uppercase tracking-tight md:text-5xl"
+      >
+        {heading}
+      </h2>
 
       {tabs.length === 0 ? (
         <p className="mt-8 text-muted">Coming soon.</p>

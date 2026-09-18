@@ -12,7 +12,10 @@ import type { SiteData } from '@/lib/site'
 import { CinematicTemplate } from '@/components/templates/cinematic'
 
 vi.mock('@/components/templates/cinematic-hero', () => ({ CinematicHero: () => <div data-testid="hero" /> }))
-vi.mock('@/components/templates/cinematic-work', () => ({ CinematicWork: () => <div data-testid="work" /> }))
+// CinematicWork is real here (not mocked): its heading is a declared, manager-editable
+// field (`work_heading`, site-content-schema.ts) and this suite is the one place that
+// would have caught it missing a marker — mocking it out is exactly how it stayed
+// missing (CODE_AUDIT 2026-09-18).
 vi.mock('@/components/video-embed', () => ({ VideoEmbed: () => <div data-testid="embed" /> }))
 vi.mock('@/components/subscribe-form', () => ({ SubscribeForm: () => <div data-testid="subscribe" /> }))
 
@@ -66,6 +69,11 @@ describe('cinematic template — edit-mode markers', () => {
     // About profile photo (image field) + Footer booking heading (text field).
     expect(container.querySelector('[data-lse-field="profile_photo"]')).not.toBeNull()
     expect(container.querySelector('[data-lse-field="bookings_heading"]')).not.toBeNull()
+
+    // Work heading: declared + manager-editable (site-content-schema.ts) but had no
+    // marker at all, unlike its four sibling headings — a manager could edit it in the
+    // panel but never click it on the page.
+    expect(container.querySelector('[data-lse-field="work_heading"]')).not.toBeNull()
   })
 
   it('emits NO markers when not editable (the public site)', () => {

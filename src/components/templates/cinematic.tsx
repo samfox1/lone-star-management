@@ -343,7 +343,7 @@ export function CinematicTemplate({ data, editable = false }: { data: SiteData; 
           editable={editable}
         />
         <Shows upcoming={upcoming} past={past} heading={text('shows_heading')} editable={editable} />
-        <CinematicWork tabs={tabs} heading={text('work_heading')} />
+        <CinematicWork tabs={tabs} heading={text('work_heading')} editable={editable} />
         <Videos videos={videos} heading={text('videos_heading')} editable={editable} />
         <About bio={artist.bio} photo={profilePhoto} name={artist.name} heading={text('about_heading')} editable={editable} />
       </main>
