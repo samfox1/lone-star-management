@@ -86,7 +86,11 @@ export type SiteTourDate = {
   support_urls?: Record<string, string> | null
   /** The manager's "already played" flag, distinct from date math. */
   is_past?: boolean | null
-  /** Tie-break for UNDATED shows only (20260723120000) — dated shows sort by date. */
+  /** The manager's dragged position (20260723120000). It started as a tie-break for
+   *  UNDATED shows only, and stopped being one in MANUAL MODE (Sam, 2026-08-17): once any
+   *  DATED row carries a number, the drag is the order for that whole bucket and date only
+   *  breaks ties. `orderShows` in ./shows is the law — the published door cannot apply it,
+   *  because `get_public_site` orders by date and ignores this column. */
   sort_order?: number | null
 }
 
