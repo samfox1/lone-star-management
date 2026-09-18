@@ -10,7 +10,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { EditorInspector, type GalleryPhoto } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
+import {
+  EditorInspector,
+  type FullPanelEditorKind,
+  type GalleryPhoto,
+} from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
   addContentAction,
   deleteContentAction,
@@ -3007,4 +3011,91 @@ describe('EditorInspector — the outdated-bridge flag', () => {
     renderInspector(PHOTOS, { bridgeOutdated: false })
     expect(screen.queryByText(/older version/i)).toBeNull()
   })
+})
+
+/**
+ * CRITICAL: every full-panel editor is dismissed by an unrelated routed frame click.
+ *
+ * `closeEditors` (editor-inspector.tsx) exists so ONE dismissal covers every editor
+ * that takes over the whole inspector — it has already missed one twice: the tour
+ * editor (2026-08-09) and the STYLE channel (2026-08-18), both caught only because a
+ * test opened THAT SPECIFIC editor and fired an unrelated select at it. The SEO/GEO
+ * editor (`editingSite`, added 2026-09-09) was missed the same way and had NO test at
+ * all — `closeEditors` cleared four states and never learned about the fifth.
+ *
+ * This is driven from `FullPanelEditorKind`, the union `editingPanel` is built from
+ * (AGENTS.md rule 4: derive from the registry, never hand-list) — CASES is typed as
+ * `Record<FullPanelEditorKind, …>`, so a sixth full-panel editor is a COMPILE ERROR
+ * here until it gets its own case, rather than a silent gap the way editingSite was.
+ */
+describe('EditorInspector — CRITICAL: a routed frame click dismisses whichever full-panel editor is open', () => {
+  const OPEN_OPTS: Parameters<typeof renderInspector>[1] = {
+    textFields: TEXT_FIELDS,
+    tours: TOURS,
+    supportLinks: SUPPORT,
+    merch: MERCH,
+    videos: VIDEOS,
+  }
+
+  // An UNRELATED select — a video item — that opens no editor of its own (it routes to
+  // the Videos panel, not any of the five full-panel editors), so nothing it opens can
+  // mask a still-open panel the way a text select would (the 2026-08-09 lesson: routing
+  // to the TEXT editor rendered over a stale tour editor and hid the bug).
+  const dismissBySelect = (rerender: (ui: React.ReactElement) => void) =>
+    rerender(
+      inspector(PHOTOS, {
+        ...OPEN_OPTS,
+        selectedRegion: { target: { kind: 'item', assetType: 'video', id: 'v1' }, nonce: 999 },
+      }),
+    )
+
+  const CASES: Record<FullPanelEditorKind, { open: () => void; signature: () => HTMLElement | null }> = {
+    item: {
+      open: () => {
+        fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit photo 1' }))
+      },
+      signature: () => screen.queryByRole('heading', { name: 'Edit Photo 1' }),
+    },
+    text: {
+      open: () => {
+        fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+        fireEvent.click(screen.getByLabelText('Edit Hero tagline'))
+      },
+      signature: () => screen.queryByRole('heading', { name: 'Edit Hero tagline' }),
+    },
+    site: {
+      open: () => {
+        fireEvent.click(screen.getByRole('button', { name: /Site/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Title' }))
+      },
+      signature: () => screen.queryByRole('heading', { name: 'Edit Title' }),
+    },
+    tour: {
+      open: () => {
+        fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+        fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+      },
+      signature: () => screen.queryByText('Supporting acts'),
+    },
+    merch: {
+      open: () => {
+        fireEvent.click(screen.getByRole('button', { name: /Merch/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+      },
+      signature: () => screen.queryByRole('heading', { name: 'Edit Tour Tee' }),
+    },
+  }
+
+  for (const kind of Object.keys(CASES) as FullPanelEditorKind[]) {
+    const { open, signature } = CASES[kind]
+    it(`CRITICAL: the ${kind} editor is dismissed by an unrelated select, not left stuck on top`, () => {
+      const { rerender } = renderInspector(PHOTOS, OPEN_OPTS)
+      open()
+      expect(signature()).toBeTruthy() // it actually opened — a vacuous case proves nothing
+
+      dismissBySelect(rerender)
+      expect(signature()).toBeNull()
+    })
+  }
 })

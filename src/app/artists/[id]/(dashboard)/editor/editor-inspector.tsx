@@ -115,6 +115,21 @@ export type {
 type Kind = 'images' | 'text' | 'links' | 'videos' | 'music' | 'tour' | 'merch' | 'style' | 'site'
 type Component = { kind: Kind; icon: IconName; label: string }
 
+/** The five FULL-PANEL editors (the item/video/photo editor, a text field, the SEO/GEO
+ *  field, a tour date, a merch item) — each takes over the whole inspector in place of
+ *  `active`, so exactly one may be open at a time, held as one discriminated union
+ *  rather than five independent pieces of state. See `editingPanel` below for why: a
+ *  routed frame select must dismiss whichever of these is open, and a state per editor
+ *  meant `closeEditors` could (and did, twice) forget one. Exported so the test suite
+ *  can drive every case from this union instead of hand-listing them. */
+type FullPanelEditor =
+  | { kind: 'item'; item: ItemEdit }
+  | { kind: 'text'; field: EditorTextField }
+  | { kind: 'site'; field: SiteTextField }
+  | { kind: 'tour'; tour: EditorTour; label: string }
+  | { kind: 'merch'; id: string }
+export type FullPanelEditorKind = FullPanelEditor['kind']
+
 const COMPONENTS: Component[] = [
   { kind: 'images', icon: 'photo', label: 'Images' },
   { kind: 'text', icon: 'text', label: 'Text' },
@@ -383,39 +398,65 @@ export function EditorInspector({
   // The full-panel editors, declared ABOVE every select branch because each branch must
   // be able to dismiss them: they render over `active`, so a routed select that leaves
   // one open changes a panel the manager never sees (the 2026-08-09 editingTour lesson —
-  // repeated on 2026-08-18 by the STYLE channel, which predated closeEditors).
+  // repeated on 2026-08-18 by the STYLE channel, and again on 2026-09-09 by `editingSite`,
+  // which `closeEditors` never learned about because it was four separate setters).
   //
+  // ONE state now, discriminated by `kind`, so there is nothing left to forget: adding a
+  // sixth full-panel editor means adding a case to this union, and `closeEditors` (below)
+  // needs no new line to dismiss it. The five derived `editingXxx` values and their
+  // `setEditingXxx` wrappers below exist only so the rest of this file (and its panels'
+  // props) can keep reading/writing them exactly as before.
+  const [editingPanel, setEditingPanel] = useState<FullPanelEditor | null>(null)
+
   // The one image/video handed the whole panel for editing (Replace / Remove / styling).
-  const [editingItem, setEditingItem] = useState<ItemEdit | null>(null)
+  const editingItem = editingPanel?.kind === 'item' ? editingPanel.item : null
+  const setEditingItem = useCallback(
+    (item: ItemEdit | null) => setEditingPanel(item ? { kind: 'item', item } : null),
+    [],
+  )
   // The one TEXT field handed the whole panel (the words + their type controls). Held
   // separately from editingItem because it carries no media and shares none of that
   // editor's Replace/Remove machinery.
-  const [editingText, setEditingText] = useState<EditorTextField | null>(null)
-  /** The SEO/GEO text field open full-panel, and what has been typed into these rows this
-   *  session. The overrides exist because the Site panel is UNMOUNTED while the editor is
-   *  open — without them, backing out would redraw the snippet from the draft the page was
-   *  rendered with, and the edit would look like it did nothing until a refresh. */
-  const [editingSite, setEditingSite] = useState<SiteTextField | null>(null)
-  /** Keyed by STORE, then key — the descriptor says where a field lives, and nothing here
-   *  re-derives that from the key's spelling (the review, 2026-09-09, found the first
-   *  version guessing `seo_` prefixes, which is exactly what `store` exists to end). */
+  const editingText = editingPanel?.kind === 'text' ? editingPanel.field : null
+  const setEditingText = useCallback(
+    (field: EditorTextField | null) => setEditingPanel(field ? { kind: 'text', field } : null),
+    [],
+  )
+  /** The SEO/GEO text field open full-panel. */
+  const editingSite = editingPanel?.kind === 'site' ? editingPanel.field : null
+  const setEditingSite = useCallback(
+    (field: SiteTextField | null) => setEditingPanel(field ? { kind: 'site', field } : null),
+    [],
+  )
+  /** What has been typed into the SEO/GEO rows this session. The overrides exist because
+   *  the Site panel is UNMOUNTED while the editor is open — without them, backing out
+   *  would redraw the snippet from the draft the page was rendered with, and the edit
+   *  would look like it did nothing until a refresh. Keyed by STORE, then key — the
+   *  descriptor says where a field lives, and nothing here re-derives that from the key's
+   *  spelling (the review, 2026-09-09, found the first version guessing `seo_` prefixes,
+   *  which is exactly what `store` exists to end). */
   const [siteEdits, setSiteEdits] = useState<Record<SiteTextField['store'], Record<string, string>>>({ seo: {}, fact: {} })
-  // The one TOUR DATE handed the whole panel (its supporting acts and their links). A
-  // third state rather than a branch of ItemEdit: that union is media-shaped —
-  // preview, Replace, Remove — and a show has none of those.
-  const [editingTour, setEditingTour] = useState<{ tour: EditorTour; label: string } | null>(null)
+  // The one TOUR DATE handed the whole panel (its supporting acts and their links). Not a
+  // branch of ItemEdit: that union is media-shaped — preview, Replace, Remove — and a
+  // show has none of those.
+  const editingTour = editingPanel?.kind === 'tour' ? { tour: editingPanel.tour, label: editingPanel.label } : null
+  const setEditingTour = useCallback(
+    (v: { tour: EditorTour; label: string } | null) =>
+      setEditingPanel(v ? { kind: 'tour', tour: v.tour, label: v.label } : null),
+    [],
+  )
   // The one MERCH ITEM handed the whole panel (name / price / link / stock) — the grid's
   // Edit button opens it (Sam, 2026-08-18). Held by ID, not row: the row snapshot would
   // go stale the moment a debounced save refreshes the list under it.
-  const [editingMerchId, setEditingMerchId] = useState<string | null>(null)
-  // ONE dismissal for every routed select, so the next editor added here cannot be
-  // missed by one of the branches.
-  const closeEditors = () => {
-    setEditingItem(null)
-    setEditingText(null)
-    setEditingTour(null)
-    setEditingMerchId(null)
-  }
+  const editingMerchId = editingPanel?.kind === 'merch' ? editingPanel.id : null
+  const setEditingMerchId = useCallback(
+    (id: string | null) => setEditingPanel(id ? { kind: 'merch', id } : null),
+    [],
+  )
+  // ONE dismissal for every routed select. Nothing to enumerate: whichever editor above
+  // is open, this closes it — a new editor joins by being added to FullPanelEditor, not
+  // by earning a new line here.
+  const closeEditors = () => setEditingPanel(null)
 
   // The CLICK FOCUS: while set, the Style panel shows only this region's controls.
   // Cleared by any manual tab click (selectComponent) — visiting the Style tab by
