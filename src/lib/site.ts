@@ -107,7 +107,7 @@ async function workingSection<T>(
   // sends.
   return kept.map((r) => {
     const snap = publicSnapshot(type, r) as Record<string, unknown>
-    if ((DRAFT_PRESENCE as readonly string[]).includes(type)) delete snap.on_site
+    if (type in DRAFT_PRESENCE) delete snap.on_site
     return snap
   }) as T[]
 }
