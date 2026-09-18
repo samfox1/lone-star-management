@@ -10,11 +10,24 @@
  * `tests/integration/**` is excluded from `vitest.mutation.config.ts`, so from here it
  * could never be seen by Stryker; the refusal would have read as an unwatched survivor
  * for as long as it sat in this file.
+ *
+ * TENANCY, AND WHY THE ARTISTS ARE THROWAWAYS. This file used to run on the shared seed
+ * artists and tear down with `delete().eq('artist_id', artistA).in('region_key', […])`.
+ * Two of those keys are invented here, but `slot:polaroid_1_photo` is the REAL shape a
+ * component slot uses — it is in this file precisely because a real one once failed —
+ * so on the LIVE hosted project the teardown could delete a styling the artist actually
+ * set, and the test's own pre-delete would have overwritten it first. Nothing scoped the
+ * tenant-B row the denial test may create either, so a broken denial left its evidence
+ * in the database indefinitely.
+ *
+ * Both artists are created and dropped by this file now: teardown is the artist row and
+ * cascades every site_styles row, whatever key it carries.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { saveEditorStyle } from '@/lib/site-editor/save'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
 describe('saveEditorStyle (live)', () => {
   const REGION = 'test_hero_wordmark'
@@ -22,17 +35,25 @@ describe('saveEditorStyle (live)', () => {
   // A component-slot per-item key carries UNDERSCORES after the colon — this was rejected,
   // so the per-item editor reported "save failed" on every polaroid slot.
   const SLOT_REGION = 'slot:polaroid_1_photo'
+  let a: ThrowawayArtist
+  let b: ThrowawayArtist
   let artistA: string
+  let artistB: string
   let asA: SupabaseClient
   const svc = serviceClient()
 
   beforeAll(async () => {
-    artistA = await artistIdBySlug(SEED.artistASlug)
     asA = await signInAs(SEED.managerA)
+    const asB = await signInAs(SEED.managerB)
+    a = await createThrowawayArtist(svc, 'editor style A', asA)
+    b = await createThrowawayArtist(svc, 'editor style B', asB)
+    artistA = a.id
+    artistB = b.id
   })
 
   afterAll(async () => {
-    await svc.from('site_styles').delete().eq('artist_id', artistA).in('region_key', [REGION, ITEM_REGION, SLOT_REGION])
+    await deleteThrowawayArtist(svc, a)
+    await deleteThrowawayArtist(svc, b)
   })
 
   it('rejects an unknown region key shape', async () => {
@@ -91,7 +112,6 @@ describe('saveEditorStyle (live)', () => {
   })
 
   it("CRITICAL: RLS blocks writing another tenant's style", async () => {
-    const artistB = await artistIdBySlug(SEED.artistBSlug)
     await saveEditorStyle(asA, artistB, REGION, 'HACKED')
     const { data: after } = await svc
       .from('site_styles')
@@ -99,6 +119,33 @@ describe('saveEditorStyle (live)', () => {
       .eq('artist_id', artistB)
       .eq('region_key', REGION)
       .maybeSingle()
-    expect(after).toBeNull() // nothing written for tenant B
+    expect(after).toBeNull() // nothing INSERTED for tenant B
+
+    // …and the UPDATE half of the upsert, with a PLANTED witness (AGENTS.md rule 2).
+    // Absence alone only proves the insert was refused; the row B really has is the one
+    // worth defacing, and a denied update returns error:null with zero rows matched, so
+    // the row's STATE is the only honest evidence (rule 3).
+    const { error: plantErr } = await svc
+      .from('site_styles')
+      .insert({ artist_id: artistB, region_key: REGION, class_names: 'font-bteal' })
+    expect(plantErr, 'the witness must exist before the denial means anything').toBeNull()
+
+    await saveEditorStyle(asA, artistB, REGION, 'HACKED')
+    const { data: still } = await svc
+      .from('site_styles')
+      .select('class_names')
+      .eq('artist_id', artistB)
+      .eq('region_key', REGION)
+      .single<{ class_names: string }>()
+    expect(still!.class_names).toBe('font-bteal')
+
+    // The clear path cannot delete it either — saveEditorStyle treats blank as "remove".
+    await saveEditorStyle(asA, artistB, REGION, '   ')
+    const { count } = await svc
+      .from('site_styles')
+      .select('id', { count: 'exact', head: true })
+      .eq('artist_id', artistB)
+      .eq('region_key', REGION)
+    expect(count).toBe(1)
   })
 })

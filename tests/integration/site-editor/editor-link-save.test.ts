@@ -9,7 +9,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { saveEditorLink } from '@/lib/site-editor/save'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
 // A client that throws if any property is read — proves the guards return before a write.
 const noDb = new Proxy(
@@ -37,33 +38,43 @@ describe('saveEditorLink — guards (no DB)', () => {
   })
 })
 
-// Live: `links.role` + its partial unique index (20260721120000).
+/**
+ * Live: `links.role` + its partial unique index (20260721120000).
+ *
+ * TENANCY, AND WHY THE ARTISTS ARE THROWAWAYS. This block used to run on the shared seed
+ * artists and tear down with `delete().eq('artist_id', …).eq('role', 'usb')` for BOTH of
+ * them. `role = 'usb'` is a real product surface (the USB button a manager binds in the
+ * editor), so on the LIVE hosted project that deleted the artist's actual USB link —
+ * and the round-trip above had already overwritten it on the way, since saveEditorLink is
+ * a read-modify-write on exactly that row. The publish here also committed whatever
+ * unrelated link draft the shared artist had pending.
+ *
+ * Both artists are created and dropped by this file now, so the teardown is the artist
+ * row itself and cascades everything (links AND the revisions the publish wrote). The
+ * public door resolves by SLUG and returns null until an `artist` revision exists, so
+ * beforeAll publishes A's profile once.
+ */
 describe('saveEditorLink — live round-trip', () => {
   const svc = serviceClient()
+  let a: ThrowawayArtist
+  let b: ThrowawayArtist
   let artistA: string
   let artistB: string
   let asA: SupabaseClient
 
   beforeAll(async () => {
-    artistA = await artistIdBySlug(SEED.artistASlug)
-    artistB = await artistIdBySlug(SEED.artistBSlug)
+    const { publishProfile } = await import('@/lib/content')
     asA = await signInAs(SEED.managerA)
+    const asB = await signInAs(SEED.managerB)
+    a = await createThrowawayArtist(svc, 'editor link A', asA)
+    b = await createThrowawayArtist(svc, 'editor link B', asB)
+    artistA = a.id
+    artistB = b.id
+    await publishProfile(asA, artistA)
   })
   afterAll(async () => {
-    // The publish below snapshots this fixture into `revisions` on a database every
-    // other suite shares. Dropping only the `links` row leaves a PUBLISHED snapshot of a
-    // row that no longer exists, so the next publish of this artist writes a tombstone —
-    // and this file's fixture surfaces in another file's unpublished diff. Clear the
-    // revisions first, the way tour-support.test.ts does.
-    const { data } = await svc
-      .from('links')
-      .select('id')
-      .eq('artist_id', artistA)
-      .eq('role', 'usb')
-      .maybeSingle<{ id: string }>()
-    if (data) await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', data.id)
-    await svc.from('links').delete().eq('artist_id', artistA).eq('role', 'usb')
-    await svc.from('links').delete().eq('artist_id', artistB).eq('role', 'usb')
+    await deleteThrowawayArtist(svc, a)
+    await deleteThrowawayArtist(svc, b)
   })
 
   async function roleRow() {
@@ -88,7 +99,7 @@ describe('saveEditorLink — live round-trip', () => {
     await saveEditorLink(asA, artistA, 'usb', 'https://open.spotify.com/playlist/c', 'USB button')
     const { publishContent } = await import('@/lib/content')
     await publishContent(asA, 'link', artistA)
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: a.slug })
     const links = (data as { links?: { role?: string | null; url: string }[] }).links ?? []
     expect(links.some((l) => l.role === 'usb')).toBe(true)
   })
@@ -104,6 +115,25 @@ describe('saveEditorLink — live round-trip', () => {
       .eq('artist_id', artistB)
       .eq('role', 'usb')
       .maybeSingle()
-    expect(after).toBeNull() // nothing written for tenant B
+    expect(after).toBeNull() // nothing INSERTED for tenant B
+
+    // …and the same for the UPDATE half of the read-modify-write, with a PLANTED witness
+    // (AGENTS.md rule 2). Absence alone only proves the insert was refused; B's real case
+    // is a usb link that already exists, and RLS makes a denied update return error:null
+    // with zero rows matched, so the row's STATE is the only honest evidence (rule 3).
+    const { data: witness, error: plantErr } = await svc
+      .from('links')
+      .insert({ artist_id: artistB, role: 'usb', url: 'https://b.example/real', label: 'B USB', on_site: true })
+      .select('id')
+      .single<{ id: string }>()
+    expect(plantErr, 'the witness must exist before the denial means anything').toBeNull()
+
+    await saveEditorLink(asA, artistB, 'usb', 'https://evil.example/drop', 'HACKED')
+    const { data: still } = await svc
+      .from('links')
+      .select('url, label')
+      .eq('id', witness!.id)
+      .single<{ url: string; label: string }>()
+    expect(still).toMatchObject({ url: 'https://b.example/real', label: 'B USB' })
   })
 })

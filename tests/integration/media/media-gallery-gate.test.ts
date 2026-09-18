@@ -18,10 +18,27 @@
  *
  * The gate applies to gallery_image ONLY: hero_video / profile_photo are not
  * curated per-item and must never be filtered.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). This file publishes hand-built
+ * revisions straight into the `revisions` table and then reads them back through the
+ * public door. It used to do that to the shared seed artist `lone-pine` and tear down with
+ * `delete().eq('artist_id', A).eq('entity_type','media')` — which is not "remove my
+ * fixtures", it is "delete this artist's entire published gallery", state no test here
+ * created. For the minute or so a run lasts, `g/ancient.jpg` and friends were also LIVE on
+ * that artist's real site. The artist below is created and dropped by this file, so the
+ * fabricated snapshots never touch a real site and the afterEach deletes exactly the rows
+ * it inserted.
+ *
+ * The door returns NULL for an artist with no published `artist` revision, so
+ * `publishProfile` runs once in beforeAll — otherwise every `not.toContain(...)` here
+ * would pass against an empty payload without the gate ever running.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { SEED, anonClient, artistIdBySlug, serviceClient } from '@tests/helpers/supabase'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { publishProfile } from '@/lib/content'
+import { anonClient, serviceClient } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 const svc = serviceClient()
 
@@ -39,22 +56,35 @@ async function publishMedia(data: Record<string, unknown>) {
 }
 
 async function galleryPaths(): Promise<string[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   const media = (data as { media?: { purpose: string; path: string }[] } | null)?.media ?? []
   return media.filter((m) => m.purpose === 'gallery_image').map((m) => m.path)
 }
 
 async function allMediaPaths(): Promise<string[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   return ((data as { media?: { path: string }[] } | null)?.media ?? []).map((m) => m.path)
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
+  tenantA = await createThrowawayArtist(svc, 'Gallery gate')
+  artistA = tenantA.id
+  await publishProfile(svc, artistA)
+  // Prove the door answers for this artist BEFORE any hiding assertion runs: a NULL
+  // payload hides everything, and would make the whole "hides…" half of this file green
+  // with the gate expression deleted.
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterEach(async () => {
+  // Safe as a blanket wipe ONLY because this file created the artist: every media
+  // revision under it was inserted by the test that just ran.
   await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'media')
+})
+
+afterAll(async () => {
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('get_public_site — gallery gate reads the published on-site flag', () => {
@@ -96,7 +126,7 @@ describe('get_public_site — gallery gate honours PRE-RENAME snapshots', () => 
 
 describe('get_public_site — gallery photos carry their orientation', () => {
   async function galleryMedia(): Promise<{ path: string; orientation: string | null }[]> {
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
     const media = (data as { media?: { purpose: string; path: string; orientation: string | null }[] } | null)?.media ?? []
     return media.filter((m) => m.purpose === 'gallery_image').map((m) => ({ path: m.path, orientation: m.orientation }))
   }
@@ -117,7 +147,7 @@ describe('get_public_site — gallery photos carry their orientation', () => {
 
 describe('get_public_site — photos carry their component slot (site_role)', () => {
   async function mediaBySiteRole(): Promise<Record<string, string>> {
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
     const media = (data as { media?: { path: string; site_role: string | null }[] } | null)?.media ?? []
     return Object.fromEntries(media.filter((m) => m.site_role).map((m) => [m.site_role as string, m.path]))
   }
@@ -133,7 +163,7 @@ describe('get_public_site — photos carry their component slot (site_role)', ()
 
   it('emits null site_role for an ordinary gallery photo', async () => {
     await publishMedia({ purpose: 'gallery_image', storage_path: 'g/plain.jpg', on_site: true, sort_order: 1 })
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
     const media = (data as { media?: { path: string; site_role: string | null }[] } | null)?.media ?? []
     expect(media.find((m) => m.path === 'g/plain.jpg')?.site_role).toBeNull()
   })

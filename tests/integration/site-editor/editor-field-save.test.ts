@@ -3,7 +3,22 @@
  * saveEditorField — the visual editor's draft write path. Resolves a field to its
  * manifest target and writes it: an artist column or a site_content key (blank
  * clears). RLS scopes every write to the caller's tenant. Runs against the live DB
- * as the seeded manager, restoring what it touches.
+ * as the seeded manager.
+ *
+ * TENANCY, AND WHY THE ARTISTS ARE THROWAWAYS. This file used to run on the shared seed
+ * artists, and it wrote all over them: `bio` (snapshotted and restored — that part was
+ * fine), a template site_content key, `booking_email`, and every CURSOR_KEY. Teardown was
+ * `delete().eq('artist_id', …).eq('key', …)` per key, and for the cursor keys
+ * `.in('artist_id', [A, B]).in('key', CURSOR_KEYS)`. On the LIVE hosted project a
+ * delete-by-key destroys the artist's REAL value for that key even though this file only
+ * ever overwrote it — the cursor block therefore wiped a manager's actual cursor image,
+ * trail and trail colour on both seed artists, every run. Two more deletes existed purely
+ * to self-heal a previous crashed run's leftovers, which is the tell that the fixtures
+ * were sharing a namespace with live data.
+ *
+ * Both artists are created and dropped by this file now. Nothing needs snapshotting,
+ * because nothing this file touches belongs to anyone else, and the "is the row absent?"
+ * assertions are about a table that only this file ever wrote to.
  */
 import { SEO_FIELDS } from '@/lib/site-content-schema'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -12,32 +27,47 @@ import { saveCursorField, saveEditorField } from '@/lib/site-editor/save'
 import { manifestFor } from '@/lib/site-editor/manifest'
 import { CURSOR_KEYS } from '@/lib/site-content-schema'
 import { CURSOR_CONTENT_KEYS } from '@samfox1/site-bridge/cursor'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let a: ThrowawayArtist
+let bArtist: ThrowawayArtist
 let artistA: string
+let artistB: string
 let asA: SupabaseClient
 let template: string
-let originalBio: string | null
+/** B's bio as planted below — the witness the cross-tenant denial is measured against. */
+const B_BIO = "B's own bio"
 const svc = serviceClient()
 
-/** A site_content field of the artist's template, avoiding tracks_heading (used by
- *  preview-parity) so concurrent files don't collide. */
+/** A site_content field of the artist's template, derived from the manifest rather than
+ *  hand-named (AGENTS.md rule 4). tracks_heading is skipped because preview-parity uses
+ *  it — a habit from when this file ran on the shared seed artist, kept because it costs
+ *  nothing and the manifest still has to offer a second one. */
 function siteContentField() {
   const f = manifestFor(template)!.fields.find((x) => x.target.store === 'site_content' && x.key !== 'tracks_heading')!
   return { fieldKey: f.key, contentKey: (f.target as { key: string }).key }
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
-  const { data } = await svc.from('artists').select('template, bio').eq('id', artistA).single<{ template: string; bio: string | null }>()
+  const asB = await signInAs(SEED.managerB)
+  a = await createThrowawayArtist(svc, 'editor field A', asA)
+  bArtist = await createThrowawayArtist(svc, 'editor field B', asB)
+  artistA = a.id
+  artistB = bArtist.id
+  // A PLANTED WITNESS (AGENTS.md rule 2) for the cross-tenant bio test: a fresh artist's
+  // bio is null, and "null is still null" would pass whether or not RLS refused anything
+  // that also happened to write null.
+  await svc.from('artists').update({ bio: B_BIO }).eq('id', artistB)
+  const { data } = await svc.from('artists').select('template').eq('id', artistA).single<{ template: string }>()
   template = data!.template
-  originalBio = data!.bio
 })
 
 afterAll(async () => {
-  await svc.from('artists').update({ bio: originalBio }).eq('id', artistA)
-  await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', siteContentField().contentKey)
+  // Cascades every site_content row either artist ever held, whatever key it carried.
+  await deleteThrowawayArtist(svc, a)
+  await deleteThrowawayArtist(svc, bArtist)
 })
 
 describe('saveEditorField', () => {
@@ -78,11 +108,13 @@ describe('saveEditorField', () => {
   })
 
   it("CRITICAL: RLS blocks writing another tenant's field", async () => {
-    const artistB = await artistIdBySlug(SEED.artistBSlug)
     const { data: b } = await svc.from('artists').select('template, bio').eq('id', artistB).single<{ template: string; bio: string | null }>()
+    expect(b!.bio, 'the witness must exist before the denial means anything').toBe(B_BIO)
+    // A denied UPDATE returns error:null with zero rows matched, so the ROW is the only
+    // honest evidence (AGENTS.md rule 3).
     await saveEditorField(asA, artistB, b!.template, 'artist_bio', 'HACKED')
     const { data: after } = await svc.from('artists').select('bio').eq('id', artistB).single<{ bio: string | null }>()
-    expect(after!.bio).toBe(b!.bio) // untouched
+    expect(after!.bio).toBe(B_BIO) // untouched
   })
 })
 
@@ -102,38 +134,11 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
    *  nothing" is a state that never occurs — see the PREMISE test below. */
   const CUSTOM = null
   const KEY = 'test_custom_caption'
-  /** Keys the shape check must refuse. Shared by the assertion and the cleanup, so a run
-   *  that WROTE one (a broken guard, or a deliberate mutation check) cannot leave it
-   *  behind to make the next run's "no row was written" pass or fail for the wrong
-   *  reason. `''` is refused too but can never appear as a row key. */
+  /** Keys the shape check must refuse. `''` is refused too but can never appear as a row
+   *  key. No pre-clean and no teardown any more: the artist is this file's own, so a
+   *  previous run's leftovers cannot exist and "no row was written" is a fact about a
+   *  table nobody else has touched. */
   const BAD_KEYS = ['Hero Caption', 'hero-caption', 'hero.caption', '../booking_email', 'x'.repeat(65)]
-  let artistB: string
-  /** booking_email as the artist really has it, so the reserved-key witness restores. */
-  let originalBooking: string | null = null
-
-  /** Every key this block may create, for a teardown scoped to exactly our own rows. */
-  const written = () => [KEY, 'booking_email', ...BAD_KEYS]
-
-  beforeAll(async () => {
-    artistB = await artistIdBySlug(SEED.artistBSlug)
-    const { data } = await svc
-      .from('site_content')
-      .select('value')
-      .eq('artist_id', artistA)
-      .eq('key', 'booking_email')
-      .maybeSingle<{ value: string | null }>()
-    originalBooking = data?.value ?? null
-    // Pre-clean: a previous crashed run's leftovers would otherwise be read as this
-    // run's result.
-    await svc.from('site_content').delete().eq('artist_id', artistA).in('key', BAD_KEYS)
-  })
-
-  afterAll(async () => {
-    await svc.from('site_content').delete().eq('artist_id', artistA).in('key', written())
-    await svc.from('site_content').delete().eq('artist_id', artistB).eq('key', KEY)
-    if (originalBooking !== null)
-      await svc.from('site_content').insert({ artist_id: artistA, key: 'booking_email', value: originalBooking })
-  })
 
   it('PREMISE: a real custom-site artist still resolves a BUILT-IN manifest', async () => {
     // The reason this path is selected by null rather than by a missing manifest. If this
@@ -266,11 +271,9 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
   })
 
   describe('saveCursorField — the one path that CAN write a cursor key', () => {
-    afterAll(async () => {
-      // BOTH artists: if the non-owner denial below ever breaks, its write to artistB
-      // succeeds — the teardown must not leave that evidence rotting in the live DB.
-      await svc.from('site_content').delete().in('artist_id', [artistA, artistB]).in('key', [...CURSOR_KEYS])
-    })
+    // No teardown: both artists are dropped by this file's afterAll, which cascades every
+    // cursor key with them. The old one deleted CURSOR_KEYS for both SEED artists, i.e.
+    // a real manager's cursor image, trail and trail colour, on every run.
 
     it('CRITICAL: stores a valid https cursor image and deletes it on blank', async () => {
       const key = CURSOR_CONTENT_KEYS.image
@@ -311,7 +314,18 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
       const { data } = await svc
         .from('site_content').select('value').eq('artist_id', artistB).eq('key', CURSOR_CONTENT_KEYS.image)
         .maybeSingle()
-      expect(data).toBeNull()
+      expect(data).toBeNull() // nothing INSERTED for tenant B
+
+      // …and the UPDATE half, with a PLANTED witness (rule 2): B's real case is a cursor
+      // it already set, and defacing that is the attack absence alone cannot rule out.
+      await svc.from('site_content').insert({
+        artist_id: artistB, key: CURSOR_CONTENT_KEYS.image, value: 'https://b.test/own-cursor.png',
+      })
+      await saveCursorField(asA, artistB, CURSOR_CONTENT_KEYS.image, 'https://x.test/hacked.png')
+      const { data: still } = await svc
+        .from('site_content').select('value').eq('artist_id', artistB).eq('key', CURSOR_CONTENT_KEYS.image)
+        .single<{ value: string }>()
+      expect(still!.value).toBe('https://b.test/own-cursor.png')
     })
   })
 

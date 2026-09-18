@@ -7,13 +7,31 @@
  * GC and the public payload all work without a new mechanism. What this file pins is the
  * part that is genuinely new: three purposes the CHECK constraint has to accept, single
  * occupancy actually holding, and the FRAMING staying out of published content.
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). This ran on the shared seed artist
+ * `lone-pine` and tore down by deleting every logo_primary / logo_secondary / favicon row,
+ * every media revision, and the stored favicon framing — then republishing the profile to
+ * cover its tracks. On the live hosted project that is the artist's real brand set, their
+ * real published gallery snapshot, and framing a human had adjusted by hand; none of it
+ * was created here. The tests are worse than destructive, they are also SELF-CONFIRMING:
+ * `expect(rows).toHaveLength(1)` for single occupancy, and "defaults to the whole logo when
+ * nothing is stored", are only true of a tenant that starts empty, and the thing making it
+ * empty was the previous run's teardown. The artist below is created and dropped by this
+ * file, so the table genuinely starts empty and those assertions mean what they say.
+ *
+ * The public-door reads go through this artist's own slug, which means `publishProfile`
+ * has to run once first: `get_public_site` returns NULL for an artist with no published
+ * `artist` revision, and a NULL payload would make every "not public yet" assertion below
+ * pass for the wrong reason.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DEFAULT_FRAMING, loadFraming, saveFraming, setBrandAsset } from '@/lib/brand'
 import { publishContent, publishProfile } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
@@ -29,22 +47,25 @@ async function mediaRows(purpose: string) {
 }
 
 async function publicMedia(): Promise<{ purpose: string; path: string }[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   return ((data as { media?: { purpose: string; path: string }[] } | null)?.media ?? [])
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Brand media', asA)
+  artistA = tenantA.id
+  // The door needs a published `artist` revision before it will return a payload at all.
+  await publishProfile(svc, artistA)
+  // And the door has to be answering for this artist before any "not public yet" claim
+  // below means anything — a NULL payload would satisfy every one of them.
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterAll(async () => {
-  for (const p of ['logo_primary', 'logo_secondary', 'favicon']) {
-    await svc.from('media').delete().eq('artist_id', artistA).eq('purpose', p)
-  }
-  await svc.from('artists').update({ favicon_zoom: null, favicon_offset_y: null }).eq('id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'media')
-  await publishProfile(svc, artistA)
+  // Cascades every media row, revision and framing value this file wrote.
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('brand assets are media rows', () => {
@@ -107,8 +128,10 @@ describe('favicon framing is CONFIG, not published content', () => {
     // payload for something no visitor can use.
     await saveFraming(asA, artistA, { zoom: 2, offsetY: 0.1 })
     await publishProfile(asA, artistA)
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
     const artist = (data as { artist?: Record<string, unknown> } | null)?.artist ?? {}
+    // The payload has to actually be there, or "no favicon_zoom key" is true of {}.
+    expect(Object.keys(artist).length, 'the artist payload must be non-empty').toBeGreaterThan(0)
     expect(Object.keys(artist)).not.toContain('favicon_zoom')
     expect(Object.keys(artist)).not.toContain('favicon_offset_y')
   })

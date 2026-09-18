@@ -12,12 +12,27 @@
  * so if RLS ever stopped scoping it, one manager could wipe another artist's logo and
  * repoint their favicon. A row-filtered DELETE returns no error, so these assert the row
  * STATE with the service client rather than trusting a return value.
+ *
+ * WHY THE TENANT IS A THROWAWAY (AGENTS.md rule 6). This file used to run on the shared
+ * seed artist `lone-pine` and tear down by deleting EVERY logo_primary / logo_secondary /
+ * favicon row it owned and nulling `favicon_zoom` / `favicon_offset_y`. None of that was
+ * created here: on the live hosted project that is the artist's real brand set and the
+ * real favicon framing a human had adjusted by hand, destroyed on every run. Worse, the
+ * tests overwrite `logo_primary` on their way past, so the row the teardown deleted was
+ * whatever had replaced the real one. The artist below is created by this file and dropped
+ * by it, so "delete everything for this tenant" is literally "delete what I created" — and
+ * it happens by cascade, in one statement that cannot miss a column someone adds later.
+ *
+ * B stays a real manager (of the seed artist `gulf-static`) on purpose: the denials have
+ * to be about A's ownership, not about B being a stranger with no artist at all.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DEFAULT_FRAMING, loadFraming, saveFraming, setBrandAsset } from '@/lib/brand'
-import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 let asB: SupabaseClient
@@ -38,18 +53,18 @@ async function logoPath(): Promise<string | undefined> {
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
   asB = await signInAs(SEED.managerB)
+  tenantA = await createThrowawayArtist(svc, 'Brand isolation A', asA)
+  artistA = tenantA.id
   MINE = `${artistA}/brand/aaaaaaaa-0000-4000-8000-000000000000.png`
   THEIRS = `${artistA}/brand/bbbbbbbb-0000-4000-8000-000000000000.png`
 })
 
 afterAll(async () => {
-  for (const p of ['logo_primary', 'logo_secondary', 'favicon']) {
-    await svc.from('media').delete().eq('artist_id', artistA).eq('purpose', p)
-  }
-  await svc.from('artists').update({ favicon_zoom: null, favicon_offset_y: null }).eq('id', artistA)
+  // One statement, and it cascades to every media row and every framing value this file
+  // ever wrote — because it owns the artist they hang off.
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 describe('brand writes are tenant-scoped', () => {

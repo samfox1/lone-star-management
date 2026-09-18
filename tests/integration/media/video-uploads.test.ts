@@ -9,14 +9,31 @@
  *   - an uploaded row's storage_path flows through the publish snapshot → get_public_site
  *     (without leaking the server-only columns) and is gated by `on_site`;
  *   - performUpload removes the object when the row write fails (no orphan), end-to-end.
+ *
+ * WHY BOTH ARTISTS ARE THROWAWAYS (AGENTS.md rule 6). This file used the two shared seed
+ * artists and tore down by deleting EVERY video either of them owned plus every one of A's
+ * video revisions — rows no test here created, on the live hosted project. That was not
+ * even the sharpest edge: `gcVideoObjects(asA, artistA, 0)` below runs the real garbage
+ * collector with a ZERO-second age gate, so against a real artist it deletes every uploaded
+ * video object not referenced by a working row — including a file a human uploaded a minute
+ * earlier. And `publishContent` publishes the whole type, so a run pushed that artist's
+ * draft videos onto their live site. Both artists are created and dropped here now, so the
+ * GC can only ever reach this file's own objects.
+ *
+ * `publishProfile` runs first: `get_public_site` returns NULL for an artist with no
+ * published `artist` revision, and the "still hidden (on_site=false)" assertion below would
+ * then be true of a payload that does not exist.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent } from '@/lib/content'
+import { createContent, publishContent, publishProfile } from '@/lib/content'
 import { performUpload, buildStoragePath } from '@/lib/upload'
 import { gcVideoObjects, gcDeletedVideoObject } from '@/lib/storage-gc'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
+let tenantB: ThrowawayArtist
 let artistA: string
 let artistB: string
 let asA: SupabaseClient
@@ -30,16 +47,24 @@ async function put(client: SupabaseClient, path: string) {
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Video uploads A', asA)
+  // B deliberately has NO manager link: nothing here acts as B, only against B, and the
+  // hosted project rate-limits sign-ins hard enough that an unused session is a real cost.
+  tenantB = await createThrowawayArtist(svc, 'Video uploads B')
+  artistA = tenantA.id
+  artistB = tenantB.id
+  await publishProfile(svc, artistA)
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterAll(async () => {
+  // Storage objects do not cascade with the artist row, so they go by the exact paths
+  // this file uploaded; the rows and revisions go with the artists that own them.
   if (objects.length) await svc.storage.from('videos').remove(objects)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'video')
-  await svc.from('videos').delete().eq('artist_id', artistA)
-  await svc.from('videos').delete().eq('artist_id', artistB)
+  await deleteThrowawayArtist(svc, tenantA)
+  await deleteThrowawayArtist(svc, tenantB)
 })
 
 describe('videos CHECK constraints (service role isolates the constraint)', () => {
@@ -70,6 +95,14 @@ describe('videos CHECK constraints (service role isolates the constraint)', () =
 
 describe('videos bucket security', () => {
   it('CRITICAL: anon cannot enumerate the videos bucket', async () => {
+    // A PLANTED WITNESS (AGENTS.md rule 2). This is the first test to touch the folder, so
+    // without a file in it "anon sees nothing" is a fact about an empty prefix and would
+    // stay green with the listing policy dropped.
+    const witness = buildStoragePath(artistA, 'videos', 'mp4')
+    expect((await put(svc, witness)).error).toBeNull()
+    const { data: seenByService } = await svc.storage.from('videos').list(`${artistA}/videos`)
+    expect((seenByService ?? []).some((o) => witness.endsWith(o.name))).toBe(true)
+
     const { data } = await anonClient().storage.from('videos').list(`${artistA}/videos`)
     expect(data ?? []).toHaveLength(0)
   })
@@ -136,7 +169,7 @@ describe('publish → public site', () => {
     expect(snap).not.toHaveProperty('source')
 
     const videos = async () =>
-      (((await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })).data as Record<string, Record<string, unknown>[]> | null)?.videos ?? [])
+      (((await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })).data as Record<string, Record<string, unknown>[]> | null)?.videos ?? [])
     const mine = (arr: Record<string, unknown>[]) => arr.find((v) => v.storage_path === path)
 
     expect(mine(await videos())).toBeUndefined() // still hidden (on_site=false)

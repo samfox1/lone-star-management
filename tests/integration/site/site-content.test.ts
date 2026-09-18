@@ -2,31 +2,57 @@
 /**
  * SITE EDITOR — site_content override behavior + draft→publish + XSS guard.
  * (Isolation is covered separately in site-content.isolation.test.ts.)
+ *
+ * TENANCY, AND WHY THE ARTIST IS A THROWAWAY. This file used to run on the shared seed
+ * artist `lone-pine` and tear down with
+ *
+ *     svc.from('site_content').delete().eq('artist_id', artistA)
+ *     svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'site_content')
+ *
+ * — i.e. on the LIVE hosted project it deleted the ENTIRE editor copy of that artist's
+ * site, plus every site_content snapshot ever published for it, every run. Not one of
+ * those rows was created here: the suite writes four keys and the teardown removed all of
+ * them plus the artist's real copy. It also meant every later suite read an artist whose
+ * site text was blank, which is the shape AGENTS.md rule 6 is about.
+ *
+ * The suite also PUBLISHES site_content, so on a shared artist it committed whatever
+ * unrelated draft happened to be pending — an edit going live because a test ran.
+ *
+ * The artist is created by this file and dropped by it, so "every site_content row for
+ * this artist" IS "exactly what I wrote", the tombstone test's `toBeUndefined()` is true
+ * about a key nobody else owns, and Publish commits nothing but our own fixture. The
+ * public door resolves by SLUG and returns null until an `artist` revision exists, so
+ * beforeAll publishes the profile once.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { diffUnpublished, publishContent } from '@/lib/content'
+import { diffUnpublished, publishContent, publishProfile } from '@/lib/content'
 import { getWorkingSite } from '@/lib/site'
 import { acceptsValue, fieldHref, fieldValue, type SiteContentField } from '@/lib/site-content-schema'
 import { saveEditorField } from '@/lib/site-editor/save'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let artist: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  artist = await createThrowawayArtist(svc, 'site content', asA)
+  artistA = artist.id
+  // get_public_site answers null until the profile singleton has been published once.
+  await publishProfile(asA, artistA)
 })
 
 afterAll(async () => {
-  await svc.from('site_content').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'site_content')
+  // Cascades site_content and revisions alike — one statement that cannot miss a table.
+  await deleteThrowawayArtist(svc, artist)
 })
 
 async function publicContent(): Promise<Record<string, string>> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
   return (data as { site_content?: Record<string, string> } | null)?.site_content ?? {}
 }
 

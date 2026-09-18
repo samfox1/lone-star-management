@@ -16,12 +16,34 @@
  *      Supabase origin. The client-side rules are only advice; this is the guard a
  *      direct writer cannot route around, which is why it is tested with the SERVICE
  *      ROLE: if the god key is refused, no session can do better.
+ *
+ * WHY BOTH ARTISTS ARE THROWAWAYS (AGENTS.md rule 6). This file had fourteen deletes keyed
+ * to `artist_id`, against the two SHARED seed artists, on the live hosted project. The
+ * beforeAll opened by deleting every font artist A owned — a real uploaded typeface and the
+ * slots pointing at it, gone before the first assertion ran — and the afterAll did it again
+ * for both artists. The `artist_font_slots` wipes scattered through the tests were the same
+ * shape.
+ *
+ * It was not merely destructive; the assertions DEPENDED on it. `expect(await slotsOfA())
+ * .toEqual([])`, `expect(slots.sort()).toEqual([...FONT_SLOTS].sort())`, and `const [font] =
+ * await listArtistFonts(asA, artistA)` are all statements about a tenant that owns nothing
+ * else — true only because the previous line, or the previous run, had just emptied it.
+ * Scoping the teardown without moving off the seed artist would only have moved the lie.
+ *
+ * Both artists are created by this file and dropped by it. "Delete every font for this
+ * artist" now IS "delete exactly what I created", the empty-set assertions are true about a
+ * table that genuinely starts empty, and nothing a human owns is in reach. Storage objects
+ * do NOT cascade with the artist row, so the bucket suite still removes its own uploads by
+ * path.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { FONT_SLOTS, FONTS_BUCKET, listArtistFonts, removeArtistFont, setArtistFont, setFontSlot } from '@/lib/fonts'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
+let tenantB: ThrowawayArtist
 let artistA: string
 let artistB: string
 let asA: SupabaseClient
@@ -49,12 +71,15 @@ const ownedPath = (artistId: string, ext = 'woff2') =>
   `${artistId}/fonts/${crypto.randomUUID()}.${ext}`
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
-  artistB = await artistIdBySlug(SEED.artistBSlug)
   asA = await signInAs(SEED.managerA)
   asB = await signInAs(SEED.managerB)
+  tenantA = await createThrowawayArtist(svc, 'Fonts isolation A', asA)
+  tenantB = await createThrowawayArtist(svc, 'Fonts isolation B', asB)
+  artistA = tenantA.id
+  artistB = tenantB.id
 
-  await svc.from('artist_fonts').delete().eq('artist_id', artistA)
+  // No "empty the table first" needed any more: this artist was born a moment ago and has
+  // never had a font. That is the whole point of the change.
   markerPath = ownedPath(artistA)
   const planted = await setArtistFont(asA, artistA, {
     label: 'Isolation Marker',
@@ -66,8 +91,9 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await svc.from('artist_fonts').delete().eq('artist_id', artistA)
-  await svc.from('artist_fonts').delete().eq('artist_id', artistB)
+  // Cascades every font and every slot either artist ever held.
+  await deleteThrowawayArtist(svc, tenantA)
+  await deleteThrowawayArtist(svc, tenantB)
 })
 
 describe('artist_fonts is tenant-scoped', () => {
@@ -117,6 +143,9 @@ describe('artist_fonts is tenant-scoped', () => {
     expect(res.ok).toBe(false)
     expect((await slotsOfA()).map((s) => s.slot)).toContain('secondary')
 
+    // Safe as a blanket wipe — and only because this file created artist A. Every test
+    // below asserts the slot set ABSOLUTELY (`toEqual([])`, `toEqual(FONT_SLOTS)`), which
+    // needs the table genuinely empty rather than merely emptied of our rows.
     await svc.from('artist_font_slots').delete().eq('artist_id', artistA)
   })
 
@@ -336,10 +365,34 @@ describe('the database holds the shape lib/fonts.ts promises', () => {
   })
 
   it('a font row dies with its artist — no orphan pointing into a deleted tenant', async () => {
-    // The FK is `on delete cascade`. Asserted because the alternative (a row surviving)
-    // would keep a public font URL alive with nothing left to manage it.
-    const { data } = await svc.from('artist_fonts').select('artist_id').eq('artist_id', artistA).limit(1)
-    expect(data).not.toBeNull()
+    // The FK is `on delete cascade`. A row surviving would keep a public font URL alive
+    // with nothing left to manage it.
+    //
+    // THIS TEST WAS VACUOUS. It used to read one of A's fonts and assert
+    // `expect(data).not.toBeNull()` — PostgREST returns `[]`, never null, so it passed for
+    // any tenant including an empty one, and it never deleted an artist at all. A third
+    // throwaway makes the claim actually testable, and it is the same cascade every
+    // teardown in this file now leans on.
+    const doomed = await createThrowawayArtist(svc, 'Fonts cascade')
+    const { data: font, error } = await svc
+      .from('artist_fonts')
+      .insert({
+        artist_id: doomed.id,
+        label: 'Cascade',
+        family: `cascade-probe-${crypto.randomUUID().slice(0, 8)}`,
+        storage_path: ownedPath(doomed.id),
+        format: 'woff2',
+      })
+      .select('id')
+      .single()
+    expect(error).toBeNull()
+    // The witness has to exist before its disappearance means anything.
+    expect((await svc.from('artist_fonts').select('id').eq('id', font!.id)).data ?? []).toHaveLength(1)
+
+    await deleteThrowawayArtist(svc, doomed)
+
+    const { data: after } = await svc.from('artist_fonts').select('id').eq('id', font!.id)
+    expect(after ?? []).toHaveLength(0)
   })
 })
 

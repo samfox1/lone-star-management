@@ -3,28 +3,48 @@
  * PHASE 4 (Videos) — the new `video` content type: CRUD, draft → publish, public
  * read under the right key, tombstone on delete, dirty-tracking, and the PUBLIC
  * ALLOWLIST (only title/provider/embed_url reach fans — never youtube_id/source).
+ *
+ * WHY THE ARTIST IS A THROWAWAY (AGENTS.md rule 6). This ran on the shared seed artist
+ * `lone-pine` and tore down with `delete().eq('artist_id', A)` over `videos` AND over
+ * every one of that artist's video revisions — rows this file never created, on the live
+ * hosted project. It was destructive in the other direction too: `publishContent` publishes
+ * the WHOLE type, so a run pushed whatever draft videos that artist had sitting in the
+ * dashboard onto their real public site, and `diffUnpublished(...).video.dirty` toggling
+ * false depended on nothing else on that artist being dirty. The artist below is created
+ * and dropped by this file, so the publish touches only fixtures and the teardown is one
+ * cascading delete.
+ *
+ * `publishProfile` runs first because `get_public_site` returns NULL for an artist with no
+ * published `artist` revision — and against a NULL payload every `.some(...) === false`
+ * below would pass with the gate torn out.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, deleteContent, diffUnpublished, publishContent } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createContent, deleteContent, diffUnpublished, publishContent, publishProfile } from '@/lib/content'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let tenantA: ThrowawayArtist
 let artistA: string
 let asA: SupabaseClient
 const svc = serviceClient()
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
+  tenantA = await createThrowawayArtist(svc, 'Videos', asA)
+  artistA = tenantA.id
+  await publishProfile(svc, artistA)
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
+  expect(data, 'get_public_site must answer for the throwaway artist').not.toBeNull()
 })
 
 afterAll(async () => {
-  await svc.from('videos').delete().eq('artist_id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'video')
+  // Cascades every video and every revision this file published.
+  await deleteThrowawayArtist(svc, tenantA)
 })
 
 async function publicVideos(): Promise<Record<string, unknown>[]> {
-  const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+  const { data } = await anonClient().rpc('get_public_site', { p_slug: tenantA.slug })
   return ((data as { videos?: Record<string, unknown>[] } | null)?.videos ?? [])
 }
 
