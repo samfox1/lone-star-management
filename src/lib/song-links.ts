@@ -41,7 +41,7 @@ export function parseStreamingLinks(urls: StreamingUrls): Record<string, string>
   const deezer = urls.deezer?.trim()
   if (deezer) {
     out.provider_url = deezer
-    const id = deezer.match(/deezer\.com\/(?:[a-z]{2}\/)?track\/(\d+)/)?.[1]
+    const id = deezerTrackId(deezer)
     if (id) out.deezer_id = id
   }
   return out
@@ -52,6 +52,11 @@ export type ResolvedSong = { title: string; cover_url: string | null; contributo
 /** Apple track id from a music.apple.com URL: album deep-link `?i=<id>` or a /song/ path. */
 function appleTrackId(url: string): string | null {
   return url.match(/[?&]i=(\d+)/)?.[1] ?? url.match(/\/song\/[^/]*\/(\d+)/)?.[1] ?? null
+}
+
+/** Deezer track id from a deezer.com URL, with or without the locale segment. */
+function deezerTrackId(url: string): string | null {
+  return url.match(/deezer\.com\/(?:[a-z]{2}\/)?track\/(\d+)/)?.[1] ?? null
 }
 
 async function getJson<T>(fetchImpl: typeof fetch, url: string): Promise<T | null> {
@@ -74,7 +79,7 @@ export async function resolveStreamingSong(
   fetchImpl: typeof fetch = fetch,
 ): Promise<ResolvedSong> {
   // Deezer — richest: title, contributor list (first entry = the main artist), cover.
-  const deezerId = urls.deezer?.match(/deezer\.com\/(?:[a-z]{2}\/)?track\/(\d+)/)?.[1]
+  const deezerId = urls.deezer ? deezerTrackId(urls.deezer) : null
   if (deezerId) {
     const t = await getJson<{
       title?: string
