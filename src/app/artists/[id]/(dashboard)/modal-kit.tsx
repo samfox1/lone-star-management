@@ -61,6 +61,19 @@ export function MetaDot() {
   return <i aria-hidden className="inline-block h-[3px] w-[3px] rounded-full bg-ink-faint" />
 }
 
+/**
+ * The mono uppercase label cell every dashboard row starts with — 100px, the width
+ * KvRow already used everywhere (song modal, tour, connections, merch, releases,
+ * videos). Brand and Settings drifted to 120px (Brand plain, Settings with an extra
+ * `pt-[7px]`) before converging back on this one (2026-09-18): rather than widen every
+ * modal to match two outliers, the two outliers moved. Exported so a page-level row
+ * that can't be a full KvRow (Settings' whole-row click, stacked label+value) still
+ * wears the same label.
+ */
+export function KvLabel({ children, top = false }: { children: ReactNode; top?: boolean }) {
+  return <span className={cx('w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint', top && 'pt-2')}>{children}</span>
+}
+
 /** The row shell: a mono label on the left, whatever the row holds on the right. */
 export function KvRow({
   label,
@@ -93,9 +106,7 @@ export function KvRow({
           <span className="sr-only">{label}</span>
         </span>
       ) : (
-        <span className={cx('w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint', align === 'start' && 'pt-2')}>
-          {label}
-        </span>
+        <KvLabel top={align === 'start'}>{label}</KvLabel>
       )}
       <div className={cx('relative flex min-w-0 flex-1 gap-3', align === 'start' ? 'items-start' : 'items-center')}>{children}</div>
     </div>

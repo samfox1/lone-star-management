@@ -5,6 +5,7 @@ import { cx } from '@/lib/cx'
 import { rowHoverClass } from '@/components/ui/ui'
 import { recipientLine, type SettingsRow } from '@/lib/settings'
 import { toast } from '../toast'
+import { KvLabel } from '../modal-kit'
 import { saveArtistNameAction, saveBookingEmailAction } from './actions'
 
 /**
@@ -48,8 +49,6 @@ export function SettingsView({ artistId, rows: initial }: { artistId: string; ro
     </div>
   )
 }
-
-const KEY = 'w-[120px] flex-none pt-[7px] font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint'
 
 /** One row: key, then value. An editable row is a button — the whole row — and wears the
  *  shared hover; a read-only row is text and wears nothing. */
@@ -118,7 +117,7 @@ function Row({ row, onSave }: { row: SettingsRow; onSave: (v: string) => Promise
       }}
       className={cx('inline-flex items-start gap-6 py-3', row.editable && rowHoverClass)}
     >
-      <span className={KEY}>{row.label}</span>
+      <KvLabel top>{row.label}</KvLabel>
       <div className="min-w-0">
         {value}
         {row.sub && <div className="mt-1 font-space text-[10.5px] text-ink-faint">{row.sub}</div>}

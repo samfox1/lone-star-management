@@ -3,6 +3,7 @@ import { listArtistFonts } from '@/lib/fonts'
 import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
 import { createClient } from '@/lib/supabase/server'
 import { dashboardDiff, requireArtist } from '../_data'
+import { KvRow } from '../modal-kit'
 import { BrandPublish } from './brand-publish'
 import { FaviconEditor } from './favicon-editor'
 import { FontManager } from './font-manager'
@@ -40,32 +41,22 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="pb-24">
       <div className="mt-2 flex flex-col items-start gap-0.5">
-        <Row label="Primary logo">
+        <KvRow label="Primary logo">
           <LogoRow artistId={id} purpose="logo_primary" label="Primary logo" currentUrl={thumbOf('logo_primary')} fullUrl={primaryPath ? mediaUrl(primaryPath) : null} />
-        </Row>
-        <Row label="Secondary logo">
+        </KvRow>
+        <KvRow label="Secondary logo">
           <LogoRow artistId={id} purpose="logo_secondary" label="Secondary logo" currentUrl={thumbOf('logo_secondary')} fullUrl={pathOf('logo_secondary') ? mediaUrl(pathOf('logo_secondary')!) : null} />
-        </Row>
-        <Row label="Tab icon">
+        </KvRow>
+        <KvRow label="Tab icon">
           <FaviconEditor artistId={id} logoUrl={primaryPath ? mediaUrl(primaryPath) : null} initialFraming={framing} />
-        </Row>
-        <Row label="Fonts" top>
+        </KvRow>
+        <KvRow label="Fonts" align="start">
           <FontManager artistId={id} fonts={fonts} />
-        </Row>
+        </KvRow>
       </div>
       {/* Logos and the tab icon are media rows; fonts are their own section. Either
           unpublished lights the bar. */}
       <BrandPublish artistId={id} dirty={diff.media.dirty || diff.artist_font.dirty} />
-    </div>
-  )
-}
-
-/** A key, then the thing — the same row the Settings page uses. */
-function Row({ label, top = false, children }: { label: string; top?: boolean; children: React.ReactNode }) {
-  return (
-    <div className={top ? 'inline-flex items-start gap-6 py-3' : 'inline-flex items-center gap-6 py-3'}>
-      <span className={`w-[120px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint ${top ? 'pt-2' : ''}`}>{label}</span>
-      <div className="min-w-0">{children}</div>
     </div>
   )
 }
