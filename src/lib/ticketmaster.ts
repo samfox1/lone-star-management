@@ -9,6 +9,7 @@
  */
 
 import { canonicalCountry } from '@/lib/country'
+import { coord } from '@/lib/geo'
 import { httpGetJson } from '@/lib/http'
 
 const API_BASE = 'https://app.ticketmaster.com/discovery/v2'
@@ -34,13 +35,6 @@ type TmVenue = {
   location?: { latitude?: string | number; longitude?: string | number }
 }
 
-/** Parse a coordinate (the API sends lat/lng as strings); blank/non-numeric → null.
- *  Guards the `Number('') === 0` footgun so a missing coord never becomes 0,0. */
-function coord(v: string | number | undefined): number | null {
-  if (v == null || (typeof v === 'string' && v.trim() === '')) return null
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
-}
 type TmEvent = {
   id: string
   url?: string
