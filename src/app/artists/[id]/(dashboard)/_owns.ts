@@ -21,3 +21,36 @@ export async function callerOwns(
   const { data } = await supabase.from('artists').select('id').eq('id', artistId).maybeSingle()
   return !!data
 }
+
+export type OwnedArtist<T extends Record<string, unknown> = { id: string }> =
+  | { ok: true; artist: T }
+  | { ok: false; error: string }
+
+/**
+ * Auth + ownership in ONE call, for every server action that writes to one artist's
+ * rows (Sam, 2026-09-18: add the explicit check everywhere, don't lean on RLS alone).
+ * Six actions used to hand-roll `auth.getUser()` → `if (!user) …` → refetch the artist
+ * → `if (!artist) …`, and four more skipped the check entirely — this replaces all of
+ * them with one call whose result is a discriminated union, so a caller can't reach
+ * `.artist` without first narrowing on `.ok` (TypeScript refuses it), which means the
+ * failure case can't be silently ignored the way an unchecked RLS no-op is.
+ *
+ * `columns` lets a caller fetch the same row it needs anyway (template / site_kind /
+ * …) in this one request instead of a second read after the check passes.
+ */
+export async function requireOwnedArtist<T extends Record<string, unknown> = { id: string }>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  artistId: string,
+  columns = 'id',
+): Promise<OwnedArtist<T>> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not signed in.' }
+
+  const { data: artist } = await supabase.from('artists').select(columns).eq('id', artistId).single()
+  if (!artist) return { ok: false, error: 'Artist not found.' }
+  // `.select(columns)` with a runtime string widens supabase-js's row type to
+  // GenericStringError, which overlaps nothing — the double cast is the only way through.
+  return { ok: true, artist: artist as unknown as T }
+}

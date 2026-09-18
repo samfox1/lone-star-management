@@ -15,10 +15,9 @@ import { publicSiteOrigin } from '@/lib/custom-site'
  * leading args from the page.
  */
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
-import { callerOwns } from './_owns'
+import { callerOwns, requireOwnedArtist } from './_owns'
 import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject, gcDeletedAudioObject, gcFontObjects } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
 import { placeInSlot } from '@/lib/site-editor/slots'
@@ -26,7 +25,7 @@ import {
   type CrudEntity,
   type GenericEntity,
   type ToggleKind,
-  type LiveTogglePublishable,
+  type PagePublishable,
   type PublishableEntity,
   type SupportAct,
   type UnpublishedDiff,
@@ -46,7 +45,7 @@ import {
   setSupportUrl,
   updateContent,
 } from '@/lib/content'
-import { acceptsValue, fieldsFor, SEO_FIELDS, type SiteContentField } from '@/lib/site-content-schema'
+import { acceptsValue, fieldsFor, type SiteContentField } from '@/lib/site-content-schema'
 import { saveCursorField, saveEditorField, saveEditorLink, saveEditorStyle, saveSeoField, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
 import { linkAddError } from '@/lib/site-editor/link-vocabulary'
 import { isCustom } from '@/lib/custom-site'
@@ -139,7 +138,11 @@ export async function renameVideoAction(id: string, artistId: string, title: str
   const t = title.trim()
   if (!t) return { error: 'Give the video a title.' }
   const supabase = await createClient()
-  const { error } = await supabase.from('videos').update({ title: t.slice(0, 120) }).eq('id', id)
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
+  // `.eq('id', id)` alone would rename ANY video by id, regardless of who owns it — the
+  // artistId param must actually scope the write, not just name the path to revalidate.
+  const { error } = await supabase.from('videos').update({ title: t.slice(0, 120) }).eq('id', id).eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -151,6 +154,15 @@ export async function deleteContentAction(
   artistId: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
+  // NOTE: unlike the rest of this file's writes, `deleteContent` (lib/content.ts, off
+  // limits here) scopes its DELETE by id alone with no artist_id filter — the same
+  // rule-3 shape as the old deleteMediaAction, and it lacks the `.select().single()`
+  // trick `updateContent` uses, so a row-filtered delete here still answers `{}`. No
+  // `requireOwnedArtist` call added here on purpose: it broke
+  // tests/integration/music/track-delete-gc.test.ts's fake-client case (no `.auth`
+  // mocked), a file under tests/integration/** this pass isn't allowed to touch.
+  // Flagged for whoever owns content.ts next.
+  //
   // Grab an uploaded object's path BEFORE the row is gone — the row is the only thing
   // that knows it, and after the delete the object would be unfindable forever.
   let videoPath: string | null = null
@@ -206,18 +218,17 @@ export async function publishAllGatedAction(
   artistId: string,
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const gate = await verifyPasswordGate(supabase, password)
-  if ('error' in gate) return { ok: false, error: gate.error }
-  try {
-    await publishAll(supabase, artistId, gate.userId)
-    await gcVideoObjects(supabase, artistId)
-    await gcMediaObjects(supabase, artistId)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return publishGated(
+    artistId,
+    password,
+    async (supabase, userId) => {
+      await publishAll(supabase, artistId, userId)
+    },
+    async (supabase) => {
+      await gcVideoObjects(supabase, artistId)
+      await gcMediaObjects(supabase, artistId)
+    },
+  )
 }
 
 /** Publish ONE content/media section (per-section Publish button). Returns an
@@ -272,23 +283,6 @@ export async function saveSiteContentAction(artistId: string, formData: FormData
 }
 
 /**
- * Save the artist's SEO overrides (custom title / description / OG image) — stored
- * as ordinary site_content keys, so they're draft until the Site section is
- * published and then reach the public <head> via siteMetadata. A blank value
- * clears the override → the page falls back to its artist-derived default.
- */
-export async function saveSeoAction(artistId: string, formData: FormData) {
-  const supabase = await createClient()
-  // Through the SEO gate, key by key — the same rules the Site tab enforces (caps, https
-  // social image, the about placement enum). This page bypassed them on day one.
-  for (const field of SEO_FIELDS) {
-    if (!formData.has(field.key)) continue
-    await saveSeoField(supabase, artistId, field.key, String(formData.get(field.key) ?? ''))
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-}
-
-/**
  * Upsert a set of site_content fields from a form: a present-and-nonblank value
  * is validated then upserted; a blank value deletes the override (the render
  * falls back to the default). Shared by the Site-text and SEO editors.
@@ -336,19 +330,14 @@ export async function saveEditorFieldAction(
   target?: { store: 'artist'; column: 'name' | 'bio' },
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
+  const owned = await requireOwnedArtist<{ template: string | null; site_kind: string | null; custom_site_url: string | null }>(
+    supabase,
+    artistId,
+    'template, site_kind, custom_site_url',
+  )
+  if (!owned.ok) return { ok: false, error: owned.error }
 
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('template, site_kind, custom_site_url')
-    .eq('id', artistId)
-    .single()
-  if (!artist) return { ok: false, error: 'Artist not found.' }
-
-  const template = isCustom(artist) ? null : (artist.template as string)
+  const template = isCustom(owned.artist) ? null : (owned.artist.template as string)
   const res = await saveEditorField(supabase, artistId, template, fieldKey, value, target)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
@@ -367,13 +356,8 @@ export async function saveCursorFieldAction(
   value: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
-
-  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
-  if (!artist) return { ok: false, error: 'Artist not found.' }
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { ok: false, error: owned.error }
 
   const res = await saveCursorField(supabase, artistId, key, value)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
@@ -395,21 +379,16 @@ export async function setImageFieldAction(
   declaredTarget?: ImageFieldTarget,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
-
-  const { data: artist } = await supabase
-    .from('artists')
-    .select('template, site_kind, custom_site_url')
-    .eq('id', artistId)
-    .single()
-  if (!artist) return { ok: false, error: 'Artist not found.' }
+  const owned = await requireOwnedArtist<{ template: string | null; site_kind: string | null; custom_site_url: string | null }>(
+    supabase,
+    artistId,
+    'template, site_kind, custom_site_url',
+  )
+  if (!owned.ok) return { ok: false, error: owned.error }
 
   // The same discriminator saveEditorFieldAction uses: a custom artist keeps whatever
   // `template` column it had, so the column alone would resolve the WRONG manifest.
-  const template = isCustom(artist) ? null : (artist.template as string)
+  const template = isCustom(owned.artist) ? null : (owned.artist.template as string)
   const res = await setImageField(supabase, artistId, template, fieldKey, storagePath, declaredTarget)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
   return res
@@ -428,13 +407,8 @@ export async function saveEditorLinkAction(
   label: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
-
-  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
-  if (!artist) return { ok: false, error: 'Artist not found.' }
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { ok: false, error: owned.error }
 
   const res = await saveEditorLink(supabase, artistId, key, url, label)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
@@ -449,13 +423,8 @@ export async function saveEditorStyleAction(
   className: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
-
-  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
-  if (!artist) return { ok: false, error: 'Artist not found.' }
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { ok: false, error: owned.error }
 
   const res = await saveEditorStyle(supabase, artistId, regionKey, className)
   if (res.ok) revalidatePath(`/artists/${artistId}`, 'layout')
@@ -492,13 +461,8 @@ export async function restorePublishedAction(
   at?: string,
 ): Promise<{ ok: boolean; error?: string; changed?: number; hasPublished?: boolean }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
-
-  const { data: artist } = await supabase.from('artists').select('id').eq('id', artistId).single()
-  if (!artist) return { ok: false, error: 'Artist not found.' }
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { ok: false, error: owned.error }
 
   try {
     const { restored, removed, readded, hasPublished } = await restoreToPublished(supabase, artistId, at)
@@ -523,7 +487,11 @@ export async function deleteMediaAction(
   artistId: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const { error } = await supabase.from('media').delete().eq('id', mediaId)
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
+  // Scoped by BOTH id and artist_id: id alone would let any manager delete any other
+  // artist's media row by id, RLS notwithstanding — see requireOwnedArtist / AGENTS rule 3.
+  const { error } = await supabase.from('media').delete().eq('id', mediaId).eq('artist_id', artistId)
   if (error) return { error: error.message }
   await gcDeletedMediaObject(supabase, mediaId, storagePath)
   revalidatePath(`/artists/${artistId}`, 'layout')
@@ -589,18 +557,11 @@ export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
  *  changes (media, site text, then the profile LAST — the live-gate invariant), behind
  *  the same password gate as every other publish. */
 export async function publishSiteWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const gate = await verifyPasswordGate(supabase, password)
-  if ('error' in gate) return { ok: false, error: gate.error }
-  try {
-    await publishContent(supabase, 'media', artistId, gate.userId)
-    await publishContent(supabase, 'site_content', artistId, gate.userId)
-    await publishProfile(supabase, artistId, gate.userId)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return publishGated(artistId, password, async (supabase, userId) => {
+    await publishContent(supabase, 'media', artistId, userId)
+    await publishContent(supabase, 'site_content', artistId, userId)
+    await publishProfile(supabase, artistId, userId)
+  })
 }
 
 /**
@@ -609,17 +570,10 @@ export async function publishSiteWithPasswordAction(artistId: string, password: 
  * font should not have to find two buttons.
  */
 export async function publishBrandWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const gate = await verifyPasswordGate(supabase, password)
-  if ('error' in gate) return { ok: false, error: gate.error }
-  try {
-    await publishContent(supabase, 'media', artistId, gate.userId)
-    await publishContent(supabase, 'artist_font', artistId, gate.userId)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return publishGated(artistId, password, async (supabase, userId) => {
+    await publishContent(supabase, 'media', artistId, userId)
+    await publishContent(supabase, 'artist_font', artistId, userId)
+  })
 }
 
 /** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
@@ -646,10 +600,8 @@ export async function saveArtistFactAction(
   value: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { ok: false, error: owned.error }
   const upd = artistFactUpdate(column, value)
   if ('error' in upd) return { ok: false, error: upd.error }
   const { error } = await supabase.from('artists').update({ [upd.column]: upd.value }).eq('id', artistId)
@@ -675,62 +627,60 @@ export async function renameMediaAction(
   return r
 }
 
-/** Alt text for one image (SEO_GEO_PLAN B6b). Blank clears it: the site then derives
- *  one from the title or caption rather than shipping an empty description. Capped so a
- *  pasted paragraph cannot become an alt attribute. */
-export async function setMediaAltAction(
-  artistId: string,
-  mediaId: string,
-  alt: string,
-): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const trimmed = alt.trim().slice(0, 300)
-  const { error } = await supabase
-    .from('media')
-    .update({ alt: trimmed || null })
-    .eq('id', mediaId)
-    .eq('artist_id', artistId)
-  if (error) return { error: error.message }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
-}
-
-/** The image's JSON-LD kind (SEO_GEO_PLAN B4b). Checked against the registry here so
- *  the manager gets a message, not the column CHECK's raw constraint error. */
-export async function setMediaKindAction(
-  artistId: string,
-  mediaId: string,
-  kind: string,
-): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  if (!(MEDIA_KINDS as readonly string[]).includes(kind)) return { error: 'Unknown image type.' }
-  const { error } = await supabase
-    .from('media')
-    .update({ kind })
-    .eq('id', mediaId)
-    .eq('artist_id', artistId)
-  if (error) return { error: error.message }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
-}
-
-export async function setMediaLabelAction(
-  artistId: string,
-  mediaId: string,
-  label: string,
-): Promise<{ error?: string }> {
-  const supabase = await createClient()
+/**
+ * One media-row field write — alt text, JSON-LD kind, and caption label were three
+ * copies of the same shape (create client → validate → update one column, scoped by
+ * id AND artist_id → revalidate). `field` is typed to this map's keys, so a typo'd or
+ * unknown field name is a compile error rather than a raw column name reaching
+ * Postgres. `setMediaAltAction` / `setMediaKindAction` / `setMediaLabelAction` stay as
+ * thin wrappers — call sites outside this territory (the editor inspector) still name
+ * the field they mean rather than a string literal.
+ */
+const MEDIA_FIELD_VALIDATORS = {
+  /** Blank clears it: the site then derives one from the title or caption rather than
+   *  shipping an empty description. Capped so a pasted paragraph can't become an alt
+   *  attribute (SEO_GEO_PLAN B6b). */
+  alt: (value: string): { patch: { alt: string | null } } => ({ patch: { alt: value.trim().slice(0, 300) || null } }),
+  /** Checked against the registry so the manager gets a message, not the column
+   *  CHECK's raw constraint error (SEO_GEO_PLAN B4b). */
+  kind: (value: string): { patch: { kind: string } } | { error: string } => {
+    if (!(MEDIA_KINDS as readonly string[]).includes(value)) return { error: 'Unknown image type.' }
+    return { patch: { kind: value } }
+  },
   // Blank CLEARS it (the site falls back to its own default name) rather than storing
   // an empty string that renders as a caption-shaped hole.
-  const trimmed = label.trim()
-  const { error } = await supabase
-    .from('media')
-    .update({ label: trimmed || null })
-    .eq('id', mediaId)
-    .eq('artist_id', artistId)
+  label: (value: string): { patch: { label: string | null } } => ({ patch: { label: value.trim() || null } }),
+} as const satisfies Record<string, (value: string) => { patch: Record<string, unknown> } | { error: string }>
+
+export type MediaField = keyof typeof MEDIA_FIELD_VALIDATORS
+
+export async function updateMediaFieldAction(
+  artistId: string,
+  mediaId: string,
+  field: MediaField,
+  value: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
+  const validated = MEDIA_FIELD_VALIDATORS[field](value)
+  if ('error' in validated) return { error: validated.error }
+  const { error } = await supabase.from('media').update(validated.patch).eq('id', mediaId).eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
+}
+
+export async function setMediaAltAction(artistId: string, mediaId: string, alt: string): Promise<{ error?: string }> {
+  return updateMediaFieldAction(artistId, mediaId, 'alt', alt)
+}
+
+export async function setMediaKindAction(artistId: string, mediaId: string, kind: string): Promise<{ error?: string }> {
+  return updateMediaFieldAction(artistId, mediaId, 'kind', kind)
+}
+
+export async function setMediaLabelAction(artistId: string, mediaId: string, label: string): Promise<{ error?: string }> {
+  return updateMediaFieldAction(artistId, mediaId, 'label', label)
 }
 
 /**
@@ -1103,12 +1053,6 @@ export async function syncYouTubeAction(artistId: string): Promise<{ ok: boolean
   return pullYouTube(artistId)
 }
 
-/** Videos-page "Refresh" button: same import, but returns status so the button can
- *  show a spinner and surface any error inline. */
-export async function refreshYouTubeAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
-  return pullYouTube(artistId)
-}
-
 /** Create a release (draft). DSP links are added separately. */
 export async function addReleaseAction(artistId: string, formData: FormData) {
   const title = String(formData.get('title') ?? '').trim()
@@ -1150,12 +1094,16 @@ export async function setReleaseTypeAction(
 ): Promise<{ error?: string }> {
   const release_type = toReleaseType(String(formData.get('release_type') ?? ''))
   const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
   // Lock it so a later Spotify Sync (which re-derives type and has no EP/remix) can't revert
-  // this deliberate choice.
+  // this deliberate choice. Scoped by artist_id too — a release id alone isn't proof of
+  // ownership (see requireOwnedArtist / AGENTS rule 3).
   const { error } = await supabase
     .from('releases')
     .update({ release_type, release_type_locked: true })
     .eq('id', releaseId)
+    .eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -1187,6 +1135,32 @@ async function verifyPasswordGate(
 }
 
 /**
+ * The shape every password-gated publish shares: verify the gate, run the snapshot(s),
+ * best-effort GC, revalidate, and turn a thrown error into `{ ok: false }` instead of
+ * blowing up the request. `publish` gets the throwaway client and the verified user id;
+ * `gc` (optional) runs only after `publish` succeeds, same as before this was factored
+ * out — a storage sweep must never run against content that never actually published.
+ */
+async function publishGated(
+  artistId: string,
+  password: string,
+  publish: (supabase: Awaited<ReturnType<typeof createClient>>, userId: string) => Promise<void>,
+  gc?: (supabase: Awaited<ReturnType<typeof createClient>>) => Promise<void>,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const gate = await verifyPasswordGate(supabase, password)
+  if ('error' in gate) return { ok: false, error: gate.error }
+  try {
+    await publish(supabase, gate.userId)
+    if (gc) await gc(supabase)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
+  }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return { ok: true }
+}
+
+/**
  * PUBLISH MUSIC (PRESENCE_PLAN.md S1). Password-gated. Snapshots releases and songs —
  * including their `on_site`, which is what makes a tick on the Music page reach fans.
  *
@@ -1201,17 +1175,10 @@ export async function publishMusicAction(
   artistId: string,
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const gate = await verifyPasswordGate(supabase, password)
-  if ('error' in gate) return { ok: false, error: gate.error }
-  try {
-    await publishContent(supabase, 'release', artistId, gate.userId)
-    await publishContent(supabase, 'track', artistId, gate.userId)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return publishGated(artistId, password, async (supabase, userId) => {
+    await publishContent(supabase, 'release', artistId, userId)
+    await publishContent(supabase, 'track', artistId, userId)
+  })
 }
 
 /**
@@ -1226,6 +1193,8 @@ export async function setReleaseOnSiteAction(
   onSite: boolean,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
   const { error } = await supabase.from('releases').update({ on_site: onSite }).eq('id', releaseId).eq('artist_id', artistId)
   if (error) return { error: error.message }
   const { error: trackErr } = await supabase
@@ -1248,26 +1217,24 @@ export async function setReleaseOnSiteAction(
  * guards content reaching the site, not the arrangement of what's already published.
  */
 export async function publishEntityAction(
-  type: LiveTogglePublishable,
+  type: PagePublishable,
   artistId: string,
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient()
-  const gate = await verifyPasswordGate(supabase, password)
-  if ('error' in gate) return { ok: false, error: gate.error }
-
-  try {
-    await publishContent(supabase, type, artistId, gate.userId)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-
-  // GC after publish (best-effort): the working rows are now the complete set of
-  // still-needed uploaded objects, so drop any orphaned files (deleted/replaced videos).
-  if (type === 'video') await gcVideoObjects(supabase, artistId)
-
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return publishGated(
+    artistId,
+    password,
+    async (supabase, userId) => {
+      await publishContent(supabase, type, artistId, userId)
+    },
+    // GC after publish (best-effort): the working rows are now the complete set of
+    // still-needed uploaded objects, so drop any orphaned files (deleted/replaced videos).
+    type === 'video'
+      ? async (supabase) => {
+          await gcVideoObjects(supabase, artistId)
+        }
+      : undefined,
+  )
 }
 
 /** Assign a track to a release (empty = unassign). RLS scopes the update. */
@@ -1278,7 +1245,9 @@ export async function setTrackReleaseAction(
 ): Promise<{ error?: string }> {
   const release_id = String(formData.get('release_id') ?? '').trim() || null
   const supabase = await createClient()
-  const { error } = await supabase.from('tracks').update({ release_id }).eq('id', trackId)
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
+  const { error } = await supabase.from('tracks').update({ release_id }).eq('id', trackId).eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -1300,10 +1269,13 @@ export async function setTrackReleasedAction(
   released: boolean,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
   const { error } = await supabase
     .from('tracks')
     .update(released ? { released: true } : { released: false, on_site: false })
     .eq('id', trackId)
+    .eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -1322,7 +1294,9 @@ export async function setTrackOnSiteAction(
   onSite: boolean,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const { error } = await supabase.from('tracks').update({ on_site: onSite }).eq('id', trackId)
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
+  const { error } = await supabase.from('tracks').update({ on_site: onSite }).eq('id', trackId).eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -1348,10 +1322,13 @@ export async function setTrackTypeAction(
 ): Promise<{ error?: string }> {
   const release_type = toReleaseType(String(formData.get('release_type') ?? ''))
   const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
   const { error } = await supabase
     .from('tracks')
     .update({ release_type })
     .eq('id', trackId)
+    .eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -1380,8 +1357,12 @@ export async function setReleaseLinkAction(
     url = safe
   }
   const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
   // Atomic filter-and-append in one UPDATE (the DB function reads the row's CURRENT links),
   // so two quick blurs on different slots can't clobber each other. An empty url clears it.
+  // The RPC itself only takes a release id (no artist arg) — RLS is its only scope — so
+  // the ownership check above is the one thing standing between this and a foreign release.
   const { error } = await supabase.rpc('set_release_link', {
     p_release_id: releaseId,
     p_label: trimmedLabel,
@@ -1406,10 +1387,13 @@ export async function updateReleaseDetailsAction(
   if (!title) return { error: 'Give the release a title.' }
   const rawDate = String(formData.get('release_date') ?? '').trim()
   const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { error: owned.error }
   const { error } = await supabase
     .from('releases')
     .update({ title: title.slice(0, 200), release_date: rawDate || null })
     .eq('id', releaseId)
+    .eq('artist_id', artistId)
   if (error) return { error: error.message }
   revalidatePath(`/artists/${artistId}`, 'layout')
   return {}
@@ -1422,22 +1406,6 @@ export async function saveTemplateAction(artistId: string, formData: FormData) {
   const { error } = await supabase.from('artists').update({ template }).eq('id', artistId)
   if (error) throw new Error(error.message)
   revalidatePath(`/artists/${artistId}`, 'layout')
-}
-
-/**
- * Rename the artist (the one identity field not editable elsewhere). The handle
- * (slug) is intentionally not editable here — changing it would break the public
- * site URL and every release smart-link. Redirects back to the artist on success.
- */
-export async function updateArtistAction(artistId: string, formData: FormData) {
-  const name = String(formData.get('name') ?? '').trim()
-  if (!name) throw new Error('Artist name is required.')
-  if (name.length > 200) throw new Error('Artist name is too long (max 200 characters).')
-  const supabase = await createClient()
-  const { error } = await supabase.from('artists').update({ name }).eq('id', artistId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  redirect(`/artists/${artistId}`)
 }
 
 /** Save (or clear) the artist's Spotify artist id used to pull the discography. */
@@ -1490,13 +1458,6 @@ async function pullSpotify(artistId: string): Promise<SyncOutcome | { ok: false;
 export async function syncSpotifyAction(artistId: string): Promise<SyncOutcome | { ok: false; error: string }> {
   return pullSpotify(artistId)
 }
-
-/** Music-page "Refresh" button: same pull, but returns status so the button can
- *  show a spinner and surface any error inline. */
-export async function refreshSpotifyAction(artistId: string): Promise<SyncOutcome | { ok: false; error: string }> {
-  return pullSpotify(artistId)
-}
-
 
 /** Save (or clear) the artist's Deezer artist id used to pull their catalog. */
 export async function saveDeezerIdAction(artistId: string, formData: FormData) {

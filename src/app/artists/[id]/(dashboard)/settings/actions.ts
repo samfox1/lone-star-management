@@ -19,7 +19,8 @@ export async function saveBookingEmailAction(artistId: string, email: string): P
   return { value: (data as string | null) ?? null }
 }
 
-/** The artist's name — the same rules `updateArtistAction` applies, without its redirect. */
+/** The artist's name — the only place left that edits it, now that the `/edit` page
+ *  and its `updateArtistAction` (which this duplicated) are gone. */
 export async function saveArtistNameAction(artistId: string, name: string): Promise<{ error?: string }> {
   const trimmed = name.trim()
   if (!trimmed) return { error: 'Give the artist a name.' }
