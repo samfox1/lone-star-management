@@ -39,6 +39,34 @@ export function collectablePaths(
 }
 
 /**
+ * Remove one entity's object at DELETE time — but ONLY if it was never published (no
+ * revision references it). A published entity's object must survive until its tombstone
+ * is published (the LEFT-JOIN visibility gate keeps serving it until then), so those are
+ * left to the next publish's bucket-wide GC. This makes the common case — upload a
+ * draft, then delete it — clean up storage immediately. Best-effort: never fails the
+ * operation that triggered it; a leaked object costs storage, a thrown error costs more.
+ */
+async function gcDeletedObject(
+  client: SupabaseClient,
+  entityType: 'video' | 'media' | 'track',
+  bucket: 'videos' | 'media' | 'audio',
+  entityId: string,
+  path: string | null,
+): Promise<void> {
+  if (!path) return
+  try {
+    const { count } = await client
+      .from('revisions')
+      .select('id', { count: 'exact', head: true })
+      .eq('entity_type', entityType)
+      .eq('entity_id', entityId)
+    if (!count) await client.storage.from(bucket).remove([path])
+  } catch {
+    // best-effort; the next publish's bucket-wide GC is the backstop
+  }
+}
+
+/**
  * Remove an uploaded video's object at DELETE time — but ONLY if the video was never
  * published (no revision references it). A published video's object must survive until
  * its tombstone is published (the LEFT-JOIN gate keeps serving it), so those are left to
@@ -50,17 +78,7 @@ export async function gcDeletedVideoObject(
   videoId: string,
   storagePath: string | null,
 ): Promise<void> {
-  if (!storagePath) return
-  try {
-    const { count } = await client
-      .from('revisions')
-      .select('id', { count: 'exact', head: true })
-      .eq('entity_type', 'video')
-      .eq('entity_id', videoId)
-    if (!count) await client.storage.from('videos').remove([storagePath])
-  } catch {
-    // best-effort; the next publish's gcVideoObjects is the backstop
-  }
+  await gcDeletedObject(client, 'video', 'videos', videoId, storagePath)
 }
 
 /**
@@ -76,17 +94,7 @@ export async function gcDeletedMediaObject(
   mediaId: string,
   storagePath: string | null,
 ): Promise<void> {
-  if (!storagePath) return
-  try {
-    const { count } = await client
-      .from('revisions')
-      .select('id', { count: 'exact', head: true })
-      .eq('entity_type', 'media')
-      .eq('entity_id', mediaId)
-    if (!count) await client.storage.from('media').remove([storagePath])
-  } catch {
-    // best-effort; the next publish's gcMediaObjects is the backstop
-  }
+  await gcDeletedObject(client, 'media', 'media', mediaId, storagePath)
 }
 
 /**
@@ -99,25 +107,14 @@ export async function gcDeletedMediaObject(
  * Called by BOTH row-deleting paths: the song MERGE (whichever master the merged song
  * does not adopt is referenced by nothing afterwards) and plain song deletion
  * (deleteContentAction('track')). The audio bucket is paid storage, so an unreferenced
- * master must not outlive its row. Best-effort: never fails the operation that
- * triggered it.
+ * master must not outlive its row.
  */
 export async function gcDeletedAudioObject(
   client: SupabaseClient,
   trackId: string,
   audioPath: string | null,
 ): Promise<void> {
-  if (!audioPath) return
-  try {
-    const { count } = await client
-      .from('revisions')
-      .select('id', { count: 'exact', head: true })
-      .eq('entity_type', 'track')
-      .eq('entity_id', trackId)
-    if (!count) await client.storage.from('audio').remove([audioPath])
-  } catch {
-    // best-effort cleanup; a leaked object costs storage, a thrown error costs the merge
-  }
+  await gcDeletedObject(client, 'track', 'audio', trackId, audioPath)
 }
 
 /** Every folder the `media` bucket stores an artist's objects under — one per
