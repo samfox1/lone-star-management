@@ -101,10 +101,10 @@ export function OgImagePicker({
     }
   }
 
+  // Leads with the absence, not the errand: this is the empty state, and a reader who has
+  // no image needs to know that first. The pointer rides along after it.
   if (sources.length === 0) {
     return (
-      {/* Leads with the absence, not the errand: this is the empty state, and a reader
-          who has no image needs to know that first. The pointer rides along after it. */}
       <p className="font-space text-[11px] leading-relaxed text-ink-faint">
         No logo or hero image yet — add one on the{' '}
         <span className="font-bold text-ink">Brand</span> or Site page.
