@@ -433,6 +433,25 @@ export function textFieldKeys(editList: unknown): Set<string> {
  * MERGING PER-PAGE ANNOUNCES (SITE_PAGES_PLAN.md D4)
  * ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The manifest lists the fold actually MERGES — every array-valued key on
+ * `TemplateManifest` except `pages`, which is a site-wide declaration carried whole (a
+ * page list is the same fact on every announce, not a set of regions to union).
+ *
+ * DERIVED rather than hand-listed, so a new list on the manifest widens this on its own
+ * and `FOLDS` below goes red until someone has decided whether it folds. The hand-listed
+ * version was the same shape of hazard as `merged`'s hand-named keys: correct on the day
+ * it was written and silent every day after.
+ */
+type FoldedList = Exclude<
+  {
+    [K in keyof TemplateManifest]-?: NonNullable<TemplateManifest[K]> extends readonly unknown[]
+      ? K
+      : never
+  }[keyof TemplateManifest],
+  'pages'
+>
+
 /** A region the fold refused, because its key was already taken.
  *
  *  Reported rather than swallowed: the DB has `unique (artist_id, region_key)`, so two
@@ -440,7 +459,7 @@ export function textFieldKeys(editList: unknown): Set<string> {
  *  error anywhere. Nothing else in the system catches this today (A6). */
 export type DroppedRegion = {
   /** Which manifest list it came from. */
-  kind: 'fields' | 'slots' | 'styles' | 'links' | 'components' | 'videoSlots'
+  kind: FoldedList
   key: string
   /** The page whose entry was refused. */
   page?: string
@@ -525,6 +544,52 @@ export function mergeManifests(
     // Stable, so regions within one page keep the order the site declared them in.
     return [...kept.values()].map((e) => e.item).sort((a, b) => rank(a.page) - rank(b.page))
   }
+
+  /**
+   * ONE ROW PER `TemplateManifest` KEY — the ledger that makes `merged` below honest.
+   *
+   * TypeScript accepts an object literal that OMITS an optional key, so `merged` naming
+   * its keys one by one compiled perfectly while dropping any key added to the type
+   * afterwards — on every multi-page site, silently, with the panels simply not showing
+   * whatever the new key declared. This module's own comment records nearly making that
+   * mistake with `components` and `videoSlots`; nothing would have caught the next one.
+   *
+   * A new key on `TemplateManifest` is now a compile error HERE, which is a line of
+   * output pointing at the exact place the decision has to be made.
+   *
+   * `page` is the one key deliberately NOT carried: it says which page a single announce
+   * described, and the merged manifest is the union of all of them. Carrying it would tag
+   * the union with whichever page happened to fold last.
+   */
+  const CARRIED: Record<keyof TemplateManifest, true> = {
+    template: true,
+    page: true, // deliberately dropped — see above
+    pages: true,
+    about: true,
+    bridgeVersion: true,
+    styleOptions: true,
+    assetBudgets: true,
+    itemStyling: true,
+    fields: true,
+    slots: true,
+    styles: true,
+    links: true,
+    components: true,
+    videoSlots: true,
+  }
+  void CARRIED
+
+  /** The same guard for the FOLD: every merged list needs a `DroppedRegion['kind']`, or a
+   *  collision in it would be swallowed rather than reported. */
+  const FOLDS: Record<FoldedList, true> = {
+    fields: true,
+    slots: true,
+    styles: true,
+    links: true,
+    components: true,
+    videoSlots: true,
+  }
+  void FOLDS
 
   const merged: TemplateManifest = {
     // Site-WIDE declarations are facts about the site, not the page, so a page that omits
