@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  MERGE_COLUMNS,
   planSongMerge,
   CURATED_ABSOLUTE_FIELDS,
   CURATED_FILLABLE_FIELDS,
@@ -278,5 +279,46 @@ describe('the plan as a whole', () => {
       ...CURATED_ABSOLUTE_FIELDS,
     ]
     expect(new Set(all).size).toBe(all.length)
+  })
+
+  /**
+   * ...and TOTAL, which is the failure MERGE_COLUMNS' own docblock names and nothing
+   * checked: "A column missing here reads as null, which silently makes the kept row
+   * look empty and lets the duplicate overwrite it."
+   *
+   * The non-overlap test above cannot see that. A field added to `MergeableSong` and to
+   * the resolution code but to NO list is resolved by no rule, selected by no query, and
+   * arrives as undefined — the kept row's real value never reaches `planSongMerge`, so
+   * the duplicate's wins by default. Silent, one-way data loss, on a feature whose whole
+   * premise (see this file's header) is that a wrong winner has no undo.
+   *
+   * Derived from the TYPE, not hand-listed: `Record<keyof MergeableSong, true>` is a
+   * compile error the moment a column joins the row type without joining a list.
+   */
+  it('MERGE_COLUMNS selects exactly the columns MergeableSong names', () => {
+    const everyColumn: Record<keyof MergeableSong, true> = {
+      id: true,
+      title: true,
+      spotify_id: true,
+      apple_id: true,
+      deezer_id: true,
+      apple_url: true,
+      deezer_url: true,
+      soundcloud_url: true,
+      stream_url: true,
+      provider_url: true,
+      album_name: true,
+      cover_url: true,
+      duration_ms: true,
+      release_date: true,
+      on_site: true,
+      released: true,
+      release_type: true,
+      release_id: true,
+      audio_path: true,
+    }
+    // Both directions: a column the type names but the select omits arrives as null, and
+    // a column the select fetches but no rule resolves is dead weight nobody will notice.
+    expect(MERGE_COLUMNS.split(', ').sort()).toEqual(Object.keys(everyColumn).sort())
   })
 })
