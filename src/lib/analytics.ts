@@ -88,6 +88,46 @@ export function analyticsWindow(days: number, nowMs: number = Date.now()): Windo
   return { since: utcDay(nowMs - (days - 1) * 86_400_000), until: utcDay(nowMs), days }
 }
 
+/**
+ * The `days` UTC-day strings (YYYY-MM-DD), oldest first, ending today (`nowMs`).
+ *
+ * The one home for a window's day list — `roster-data.ts` (`rosterDailyViews`,
+ * `artistDailyViews`) and `entity-sparkline.tsx` each built their own before this: one
+ * floored "now" to midnight and walked an ms-epoch INDEX, the other rebuilt a day string
+ * from a separate `Date.now()` call per iteration. Both drift from `analyticsWindow`'s own
+ * zero-fill above, and from each other, which is exactly how an edge day goes missing.
+ */
+export function dayList(days: number, nowMs: number = Date.now()): string[] {
+  return Array.from({ length: days }, (_, i) => utcDay(nowMs - (days - 1 - i) * 86_400_000))
+}
+
+/**
+ * Zero-filled per-day series over `days`: sums `value(row)` into the bucket its
+ * `dayOf(row)` names, one entry per day in `days`, in the same order.
+ *
+ * Matches a row to a bucket by UTC-day STRING (the first 10 chars of `dayOf(row)`)
+ * against `days` — never by ms-epoch index arithmetic. The index version this replaced
+ * (`windowStartMs` + `Date.parse` + `Math.round`, roster-data.ts) computed its "day zero"
+ * from a midnight floor of `Date.now()` taken at a different moment than the list of days
+ * being filled, so a row exactly on the window's first or last day could round into the
+ * wrong bucket or fall outside the array entirely. A row whose day isn't in `days` is
+ * dropped, matching the zero-fill everywhere else on the page: a window shows its own days
+ * and nothing outside them.
+ */
+export function sumByDay<T>(
+  rows: readonly T[],
+  days: readonly string[],
+  dayOf: (row: T) => string,
+  value: (row: T) => number,
+): number[] {
+  const byDay = new Map<string, number>()
+  for (const r of rows) {
+    const d = dayOf(r).slice(0, 10)
+    byDay.set(d, (byDay.get(d) ?? 0) + value(r))
+  }
+  return days.map((d) => byDay.get(d) ?? 0)
+}
+
 /** The windows the page offers. A filter row, never a per-block control. */
 export const WINDOWS = [7, 30, 90, 180, 365] as const
 export type WindowDays = (typeof WINDOWS)[number]

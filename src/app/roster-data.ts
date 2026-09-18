@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { listContent, type ContentRow, type CrudEntity } from '@/lib/content'
+import { dayList, sumByDay } from '@/lib/analytics'
 
 /**
  * Server helpers for the roster-wide (all-artists) section pages and the roster
@@ -40,27 +41,38 @@ export type RosterAnalytics = {
   leaderboard: (RosterArtist & { views: number })[]
 }
 
-/** Last-30-day event counts per owned artist + roster totals + a views leaderboard. */
+/**
+ * Last-30-day event counts per owned artist + roster totals + a views leaderboard.
+ *
+ * ONE call: `analytics_summary(p_since, p_artist_id)` grew an optional `p_artist_id`
+ * (20260918120000_analytics_summary_optional_artist.sql, CODE_AUDIT.md item J) so a
+ * roster page can ask for every owned artist's summary at once instead of firing it once
+ * per artist inside `artists.map(async …)` — RLS still scopes a null-artist call to the
+ * artists the caller manages, same as `ownedArtists()` and `rosterDailyViews` below.
+ */
 export async function rosterAnalytics(
   supabase: SupabaseClient,
   artists: RosterArtist[],
 ): Promise<RosterAnalytics> {
   const since = thirtyDaysAgoIso()
+  const { data } = await supabase.rpc('analytics_summary', { p_since: since })
+  const counts = new Map<string, Record<string, number>>()
+  for (const r of (data ?? []) as { artist_id: string; type: string; count: number }[]) {
+    const c = counts.get(r.artist_id) ?? {}
+    c[r.type] = Number(r.count)
+    counts.set(r.artist_id, c)
+  }
   const byArtist: Record<string, ArtistEvents> = {}
-  await Promise.all(
-    artists.map(async (a) => {
-      const { data } = await supabase.rpc('analytics_summary', { p_artist_id: a.id, p_since: since })
-      const c: Record<string, number> = {}
-      for (const r of (data ?? []) as { type: string; count: number }[]) c[r.type] = Number(r.count)
-      byArtist[a.id] = {
-        views: c.view ?? 0,
-        plays: c.play ?? 0,
-        linkClicks: c.link_click ?? 0,
-        ticketClicks: c.ticket_click ?? 0,
-        buyClicks: c.buy_click ?? 0,
-      }
-    }),
-  )
+  for (const a of artists) {
+    const c = counts.get(a.id) ?? {}
+    byArtist[a.id] = {
+      views: c.view ?? 0,
+      plays: c.play ?? 0,
+      linkClicks: c.link_click ?? 0,
+      ticketClicks: c.ticket_click ?? 0,
+      buyClicks: c.buy_click ?? 0,
+    }
+  }
   const sum = (k: keyof ArtistEvents) => artists.reduce((n, a) => n + (byArtist[a.id]?.[k] ?? 0), 0)
   return {
     byArtist,
@@ -77,45 +89,33 @@ export async function rosterAnalytics(
   }
 }
 
-const DAY_MS = 86_400_000
-
-/** UTC-midnight ms of the first day in an N-day window ending today. */
-function windowStartMs(days: number): number {
-  const todayMidnight = Math.floor(Date.now() / DAY_MS) * DAY_MS
-  return todayMidnight - (days - 1) * DAY_MS
-}
-
 type DailyRow = { artist_id: string; day: string; views: number }
 
-/** Bucket daily-view rows into a fixed-length per-day array (0-filled). */
-function fillInto(target: number[], rows: DailyRow[], startMs: number, days: number): void {
-  for (const r of rows) {
-    const idx = Math.round((Date.parse(r.day) - startMs) / DAY_MS)
-    if (idx >= 0 && idx < days) target[idx] += Number(r.views)
-  }
-}
-
-/** Per-artist daily VIEW series + the roster total series over the last `days`. */
+/** Per-artist daily VIEW series + the roster total series over the last `days`.
+ *
+ * Zero-filled and bucketed by `sumByDay` (lib/analytics) against `dayList`'s day
+ * strings — not the ms-epoch index math this used to do independently of
+ * `artistDailyViews` below, which is exactly the kind of drift that misplaces a row
+ * on a window's edge. See CODE_AUDIT.md item I. */
 export async function rosterDailyViews(
   supabase: SupabaseClient,
   artists: RosterArtist[],
   days = 30,
 ): Promise<{ byArtist: Record<string, number[]>; total: number[] }> {
-  const startMs = windowStartMs(days)
-  const { data } = await supabase.rpc('analytics_daily', {
-    p_since: new Date(startMs).toISOString(),
-  })
+  const list = dayList(days)
+  const { data } = await supabase.rpc('analytics_daily', { p_since: `${list[0]}T00:00:00Z` })
   const rows = (data ?? []) as DailyRow[]
-  const byArtist: Record<string, number[]> = {}
-  for (const a of artists) byArtist[a.id] = new Array(days).fill(0)
-  const total = new Array(days).fill(0)
+  const byArtistRows = new Map<string, DailyRow[]>()
   for (const r of rows) {
-    const idx = Math.round((Date.parse(r.day) - startMs) / DAY_MS)
-    if (idx < 0 || idx >= days) continue
-    const v = Number(r.views)
-    if (byArtist[r.artist_id]) byArtist[r.artist_id][idx] += v
-    total[idx] += v
+    const arr = byArtistRows.get(r.artist_id) ?? []
+    arr.push(r)
+    byArtistRows.set(r.artist_id, arr)
   }
+  const byArtist: Record<string, number[]> = {}
+  for (const a of artists) {
+    byArtist[a.id] = sumByDay(byArtistRows.get(a.id) ?? [], list, (r) => r.day, (r) => r.views)
+  }
+  const total = sumByDay(rows, list, (r) => r.day, (r) => r.views)
   return { byArtist, total }
 }
 
@@ -125,14 +125,12 @@ export async function artistDailyViews(
   artistId: string,
   days = 30,
 ): Promise<number[]> {
-  const startMs = windowStartMs(days)
+  const list = dayList(days)
   const { data } = await supabase.rpc('analytics_daily', {
-    p_since: new Date(startMs).toISOString(),
+    p_since: `${list[0]}T00:00:00Z`,
     p_artist_id: artistId,
   })
-  const series = new Array(days).fill(0)
-  fillInto(series, (data ?? []) as DailyRow[], startMs, days)
-  return series
+  return sumByDay((data ?? []) as DailyRow[], list, (r) => r.day, (r) => r.views)
 }
 
 export type RosterRow = { row: ContentRow; artist: RosterArtist }

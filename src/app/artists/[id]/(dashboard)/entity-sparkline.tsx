@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Sparkline } from '@/components/ui/charts'
 import { KLabel } from '@/components/ui/ui'
+import { dayList, sumByDay } from '@/lib/analytics'
 
 /**
  * A 30-day activity sparkline for one item, shown inside its edit modal. Fetches
@@ -11,6 +12,11 @@ import { KLabel } from '@/components/ui/ui'
  * via the owner-read analytics_entity_daily RPC, on open. Renders the shared
  * Sparkline (flat baseline until traffic accrues) + the window total. Client fetch,
  * so it only runs when a manager actually opens the item.
+ *
+ * Day bucketing goes through `dayList`/`sumByDay` (lib/analytics) — the same helpers
+ * `roster-data.ts` uses — instead of building its own `Date.now()`-per-iteration day
+ * list and Map (CODE_AUDIT.md item I): three independent copies of this math is how an
+ * edge day quietly drifts between them.
  */
 export function EntitySparkline({
   artistId,
@@ -27,29 +33,20 @@ export function EntitySparkline({
 
   useEffect(() => {
     let alive = true
-    const since = new Date(Date.now() - 30 * 86_400_000)
+    const list = dayList(30)
     createClient()
       .rpc('analytics_entity_daily', {
         p_artist_id: artistId,
         p_entity_ids: entityIds,
-        p_since: since.toISOString(),
+        p_since: `${list[0]}T00:00:00Z`,
       })
       .then(
         ({ data }) => {
           if (!alive) return
-          const byDay = new Map(
-            ((data ?? []) as { day: string; count: number }[]).map((r) => [r.day, Number(r.count)]),
-          )
-          const days: number[] = []
-          let sum = 0
-          for (let i = 29; i >= 0; i--) {
-            const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10)
-            const c = byDay.get(d) ?? 0
-            days.push(c)
-            sum += c
-          }
+          const rows = (data ?? []) as { day: string; count: number }[]
+          const days = sumByDay(rows, list, (r) => r.day, (r) => Number(r.count))
           setSeries(days)
-          setTotal(sum)
+          setTotal(days.reduce((n, v) => n + v, 0))
         },
         () => {},
       )
