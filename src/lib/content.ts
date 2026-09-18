@@ -425,19 +425,48 @@ export function publicSnapshot(type: PublishableEntity, row: ContentRow) {
   return out
 }
 
+/**
+ * EVERY working row of one type for one artist, in the configured order.
+ *
+ * `count: 'exact'` is not for the caller — nobody reads the count. It is the only way to
+ * know this read was COMPLETE. PostgREST caps an unranged select at `db-max-rows` (1,000
+ * on Supabase) and serves the truncated page with a 200: no error, no flag, just fewer
+ * rows. `publishContent` documents that cap and works around it on the OTHER side of its
+ * comparison (the `latest_revisions` RPC, 2026-08-11) while reading the draft side
+ * through here — and it tombstones every published entity whose id is NOT in this list.
+ * So a truncated read does not render a short list; it publishes a tombstone for every
+ * real row past the cap, and content the manager never touched leaves the live site.
+ * `restoreToPublished` deletes by the same reasoning.
+ *
+ * Throwing is the point. The alternative is paging until the rows run out, which would
+ * hide the fact that a single artist's catalogue has outgrown the assumption every
+ * caller here makes — that one read is the whole set — and would interleave pages with
+ * concurrent writes. The largest set on the project today is ~83 rows, so this is a
+ * tripwire, not a limit anyone is near: it fires once, loudly, with room to fix it
+ * properly rather than discovering it as missing merch on a live site.
+ */
 export async function listContent(
   supabase: SupabaseClient,
   type: PublishableEntity,
   artistId: string,
 ): Promise<ContentRow[]> {
-  let query = supabase.from(PUBLISHABLE[type].table).select('*').eq('artist_id', artistId)
+  const table = PUBLISHABLE[type].table
+  let query = supabase.from(table).select('*', { count: 'exact' }).eq('artist_id', artistId)
   for (const key of PUBLISHABLE[type].orderBy) {
     const { col, asc } = typeof key === 'string' ? { col: key, asc: true } : key
     query = query.order(col, { ascending: asc })
   }
-  const { data, error } = await query
+  const { data, count, error } = await query
   if (error) throw new Error(error.message)
-  return (data ?? []) as ContentRow[]
+  const rows = (data ?? []) as ContentRow[]
+  if (count != null && rows.length < count) {
+    throw new Error(
+      `listContent(${type}): the server returned ${rows.length} of ${count} ${table} rows for artist ` +
+        `${artistId} — PostgREST truncated the read. Publishing from a truncated list would ` +
+        `tombstone every row past it, so this read is refused. Page the query before continuing.`,
+    )
+  }
+  return rows
 }
 
 
