@@ -202,13 +202,49 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   },
 }
 
+/** One ordering key: a bare column name (ASCENDING), or a column with an explicit
+ *  direction. The object form exists because `created_at` runs BACKWARDS for merch and
+ *  a bare string cannot say so — which is how the drift below went unnoticed. */
+type OrderKey = string | { col: string; asc: boolean }
+
 /** Table + public-safe snapshot + ordering for every versioned/published entity. */
 type PublishConfig = {
   table: string
   /** Public-safe columns copied into a published revision. */
   snapshot: string[]
-  /** Ordering for list/snapshot (also the published order, kept in sync). */
-  orderBy: string[]
+  /**
+   * Ordering for the WORKING list — `listContent`, and therefore the dashboard lists,
+   * the snapshot's row order, and the preview (`getWorkingSitePayload`).
+   *
+   * It is NOT automatically "the published order". The public door
+   * (`get_public_site`) writes its own `order by` per section in SQL, and this line
+   * used to claim the two were "kept in sync" when they were not:
+   *
+   *   merch      PINNED to the door as of 2026-09-18, and a test now holds them
+   *              together. `20260910160000_merch_newest_first.sql` made the door
+   *              `sort_order nulls last, created_at DESC` (newest on top) and nothing
+   *              changed the TS, so preview listed merch oldest-first for eight days.
+   *              The parity test in tests/integration/publish/preview-parity.test.ts
+   *              compares ID ORDER, not just fields, so the next such change fails here.
+   *
+   *   tour_date  NOT pinned, and deliberately not touched. Its order is decided in
+   *              THREE places that do not agree, and no two of them are wrong on their
+   *              own:
+   *                1. here — `date, sort_order, created_at`
+   *                2. `get_public_site`'s tour_dates branch — `date, published_at`.
+   *                   `sort_order` is not in it at all.
+   *                3. skeen-website `lib/mapSite.ts` (~line 573) — re-sorts the payload
+   *                   client-side: MANUAL MODE (Sam, 2026-08-17) says that once ANY row
+   *                   has a `sort_order` the editor's drag order wins outright, dates
+   *                   only breaking ties.
+   *              (2) never had to sort it because (3) does, and (3) is the rule Sam
+   *              actually asked for. Picking one of the three changes what a live site
+   *              renders, so it is Sam's call, not a cleanup. Left as-is on purpose.
+   *
+   * Every other section's door order matches its entry below; none has a second sort
+   * downstream.
+   */
+  orderBy: readonly OrderKey[]
 }
 
 export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
@@ -284,7 +320,12 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
     // credential. Chosen over `handle`, which changes when an artist renames a product
     // and would silently break the join until the next publish.
     snapshot: ['id', 'title', 'image_url', 'price', 'url', 'in_stock', 'sort_order', 'created_at', 'handle', 'description', 'images', 'variants', 'shopify_product_id', 'shipping_estimate', 'preorder_note', 'record_label', 'shipping_days', 'on_site'], // on_site: presence from the snapshot (20260911120000)
-    orderBy: ['sort_order', 'created_at'],
+    // NEWEST FIRST on created_at — the one descending key in this table, pinned to the
+    // door's merch branch (`sort_order nulls last, created_at desc`, 20260910160000).
+    // A dragged order still wins; created_at only sequences the rows no drag numbered,
+    // and those go on top, because "merch should just get added to the front of the
+    // list" (Sam, PRESENCE_PLAN S2). preview-parity.test.ts compares the ID ORDER.
+    orderBy: ['sort_order', { col: 'created_at', asc: false }],
   },
   link: {
     table: 'links',
@@ -390,7 +431,10 @@ export async function listContent(
   artistId: string,
 ): Promise<ContentRow[]> {
   let query = supabase.from(PUBLISHABLE[type].table).select('*').eq('artist_id', artistId)
-  for (const col of PUBLISHABLE[type].orderBy) query = query.order(col)
+  for (const key of PUBLISHABLE[type].orderBy) {
+    const { col, asc } = typeof key === 'string' ? { col: key, asc: true } : key
+    query = query.order(col, { ascending: asc })
+  }
   const { data, error } = await query
   if (error) throw new Error(error.message)
   return (data ?? []) as ContentRow[]

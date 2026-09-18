@@ -48,7 +48,6 @@ async function insertRows(
  *  whose working row another suite deleted is legitimately present on one side only (a
  *  snapshot outlives its working row until a tombstone — see content.on-site.test.ts). The
  *  fixtures below populate every snapshot field, so drift still shows up here. */
-const mine = (table: string) => new Set(created.filter((r) => r.table === table).map((r) => r.id))
 const myPaths = () => created.filter((r) => r.path).map((r) => r.path!)
 const myMedia = (rows: { url: string }[] | undefined) =>
   (rows ?? []).filter((m) => myPaths().some((p) => m.url.includes(p)))
@@ -163,25 +162,74 @@ describe('preview == live after a full publish', () => {
     }
   })
 
+  it('GUARDRAIL: merch ID ORDER matches working↔published (the door is newest-first)', async () => {
+    // The section guardrail below is keyed by id ON PURPOSE, so ordering drift is
+    // invisible to it — and merch drifted for eight days because of exactly that:
+    // 20260910160000 made the door `sort_order nulls last, created_at DESC` and nothing
+    // changed PUBLISHABLE.merch.orderBy, so /preview listed products oldest-first while
+    // the live site listed them newest-first.
+    //
+    // Three products, no sort_order (an UNDRAGGED list — the case where created_at is
+    // the only key), with created_at set explicitly and a day apart so the two possible
+    // orders are exact reverses rather than a tie the DB may break either way.
+    const day = 86_400_000
+    const base = Date.parse('2026-03-01T00:00:00Z')
+    const oldestFirst = await insertRows(
+      svc,
+      'merch',
+      ['ORD merch A', 'ORD merch B', 'ORD merch C'].map((title, i) => ({
+        artist_id: artistA,
+        title,
+        price: 10 + i,
+        source: 'manual',
+        created_at: new Date(base + i * day).toISOString(),
+      })),
+    )
+    const ids = oldestFirst.map((r) => r.id as string)
+
+    await publishContent(svc, 'merch', artistA)
+    const published = await getPublishedSite(anonClient(), SEED.artistASlug)
+    const working = await getWorkingSite(asA, artistA)
+
+    const mineInOrder = (rows: { id: string }[] | undefined) =>
+      (rows ?? []).filter((m) => ids.includes(m.id)).map((m) => m.id)
+
+    // Planted witness: all three really are on the public payload, so neither
+    // comparison below can pass over an empty list.
+    expect(mineInOrder(published!.merch)).toHaveLength(3)
+    // Pin the DIRECTION, not just the agreement — otherwise both sides being wrong the
+    // same way would read as parity.
+    expect(mineInOrder(published!.merch)).toEqual([...ids].reverse())
+    expect(mineInOrder(working!.merch)).toEqual(mineInOrder(published!.merch))
+  })
+
   it('GUARDRAIL: every content section matches working↔published (snapshot ↔ door drift)', async () => {
     // Insert rows with EVERY snapshot field populated — including ones only sync/
     // upload set (provider_url, audio_path) — so a field the SQL door drops or the
     // TS getWorkingSite mapping forgets surfaces as a parity mismatch.
-    await insertRows(svc, 'tracks', {
+    //
+    // Scoped to THIS test's rows, not every row the FILE created: that set also holds the
+    // three merch rows the ordering test above planted, and the exact `toHaveLength(1)`
+    // below is what makes this non-vacuous — it must count one row, not "at least one".
+    const par: Record<string, string[]> = {}
+    const insertPar = async (table: string, row: Record<string, unknown>) => {
+      par[table] = (await insertRows(svc, table, row)).map((r) => r.id as string)
+    }
+    await insertPar('tracks', {
       artist_id: artistA, title: 'PAR track', cover_url: 'https://img/c.jpg', stream_url: 'https://x/s',
       provider_url: 'https://deezer.com/p', audio_path: `${artistA}/audio/par.mp3`, sort_order: 1, source: 'manual',
     })
-    await insertRows(svc, 'tour_dates', {
+    await insertPar('tour_dates', {
       artist_id: artistA, date: '2026-08-01', venue: 'PAR venue', city: 'Austin', country: 'US',
       ticket_url: 'https://x/t', source: 'manual',
     })
-    await insertRows(svc, 'merch', {
+    await insertPar('merch', {
       artist_id: artistA, title: 'PAR merch', image_url: 'https://img/m.jpg', price: 25, url: 'https://x/b', source: 'manual',
     })
-    await insertRows(svc, 'links', {
+    await insertPar('links', {
       artist_id: artistA, label: 'PAR link', url: 'https://x/l', sort_order: 1, source: 'manual',
     })
-    await insertRows(svc, 'videos', {
+    await insertPar('videos', {
       artist_id: artistA, title: 'PAR video', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/par',
       youtube_id: 'par', source: 'manual',
     })
@@ -195,7 +243,7 @@ describe('preview == live after a full publish', () => {
       ['tracks', 'tracks'], ['tour_dates', 'tour_dates'], ['merch', 'merch'],
       ['links', 'links'], ['videos', 'videos'],
     ] as const) {
-      const ids = mine(table)
+      const ids = new Set(par[table])
       const only = (rows: { id: string }[] | undefined) => (rows ?? []).filter((r) => ids.has(r.id))
       expect(Object.keys(byId(only(published![key])))).toHaveLength(1) // non-vacuous
       expect(byId(only(working![key]))).toEqual(byId(only(published![key])))
