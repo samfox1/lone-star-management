@@ -240,6 +240,37 @@ const TEXT_VARS: {
 ];
 
 /**
+ * EVERY PROPERTY A REGION CAN CLAIM — the variable that must reach the element, and the
+ * CSS property that must not be inlined over it. `checkContract` reads this to judge an
+ * `lse-owns-[…]` token, and `variableToken` above is what makes each row true.
+ *
+ * DERIVED, because the hand-written copy was not coupled to anything. `contract.ts` used
+ * to carry its own literal of these eight rows with a comment saying the contract-check
+ * test kept the two in step — and the test's fixture was a literal string, so a seventh
+ * text family would have been silently unclaimable: `claimedProps` would collect the
+ * claim, `variableToken` would honour it, and the checker would report the region as
+ * claiming something "nothing supplies". One list now, and the extra row arrives in both
+ * places the moment it is added to `TEXT_VARS`.
+ *
+ * `size` and `font` are stated here because `variableToken` handles them beside the
+ * table rather than in it — their payloads need `sizeLength` and `fontFamilyValue`.
+ */
+export const CLAIMABLE_PROPS: Record<string, { variable: string; property: string }> =
+  Object.fromEntries(
+    [
+      { claim: "size", variable: "--lse-size", camel: "fontSize" },
+      { claim: "font", variable: "--lse-font", camel: "fontFamily" },
+      ...TEXT_VARS.map((fam) => ({ claim: fam.claim, variable: fam.variable, camel: fam.camel })),
+    ].map(({ claim, variable, camel }) => [
+      claim,
+      // `variableToken` writes the camelCase key into a style object, where the DOM does
+      // the conversion; a stylesheet-shaped reader (el.style.getPropertyValue) needs the
+      // kebab form, so it is derived rather than restated.
+      { variable, property: camel.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`) },
+    ]),
+  );
+
+/**
  * MOBILE OVERRIDES (0.19.0): a second, phone-only value set from the editor's phone
  * view. Inline styles cannot express @media, so the token sets a variable and the
  * element gains a MARKER CLASS that tokens.css reads inside its media query (with

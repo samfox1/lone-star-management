@@ -36,6 +36,7 @@ import {
   TEXT_ATTR,
   WINDOW_ATTR,
 } from "./markers";
+import { CLAIMABLE_PROPS } from "./styles";
 import type { AuditRegion } from "./audit";
 
 /**
@@ -130,20 +131,15 @@ const CLAIM_TOKEN = /^lse-owns-\[([a-z,]+)\]$/;
 
 /** A claimed property → the variable that must be set, and the property that must NOT be
  *  inlined over it. Inline beats every media query the site wrote, so an inlined value on
- *  a claimed region silently kills the site's own responsiveness. */
-const CLAIMABLE: Record<string, { variable: string; property: string }> = {
-  size: { variable: "--lse-size", property: "font-size" },
-  font: { variable: "--lse-font", property: "font-family" },
-  // The second wave (2026-08-17) — one row per TEXT_VARS family in styles.ts. The
-  // contract-check test couples the two lists: a claim the checker does not know is
-  // reported as unsatisfiable, which is how the coupling stays honest.
-  weight: { variable: "--lse-weight", property: "font-weight" },
-  align: { variable: "--lse-align", property: "text-align" },
-  leading: { variable: "--lse-leading", property: "line-height" },
-  tracking: { variable: "--lse-tracking", property: "letter-spacing" },
-  case: { variable: "--lse-case", property: "text-transform" },
-  italic: { variable: "--lse-fontstyle", property: "font-style" },
-};
+ *  a claimed region silently kills the site's own responsiveness.
+ *
+ *  IMPORTED, not restated. This was a hand-copied literal of the same eight rows, under a
+ *  comment claiming the contract-check test coupled it to `TEXT_VARS` in styles.ts — the
+ *  test's fixture was a literal string and `TEXT_VARS` is module-private, so nothing
+ *  coupled anything. `CLAIMABLE_PROPS` is derived from `TEXT_VARS` itself, so a seventh
+ *  text family is claimable here the moment it exists rather than being reported as a
+ *  claim nothing supplies. */
+const CLAIMABLE = CLAIMABLE_PROPS;
 
 const attrSelector = (attr: string) => `[${attr}]`;
 
