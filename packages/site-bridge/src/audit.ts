@@ -18,6 +18,7 @@
  * (no shadow, no glow) is not a finding, and a first pass that flagged those buried the
  * four real answers in 250 lines of noise.
  */
+import { familyOf } from "./styles";
 
 /** A region as the manifest declares it. */
 export type AuditRegion = {
@@ -33,27 +34,30 @@ export type AuditRegion = {
 
 export type AuditFinding = { key: string; problem: string };
 
-/**
- * Is this `text-*` token a COLOUR? Everything else sharing the prefix — sizes, alignment,
- * wrapping — belongs to other controls, which DO show it.
- */
-const NON_COLOR_TEXT =
-  /^text-(xs|sm|base|lg|xl|[2-9]xl|left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip)/;
 const ARBITRARY_HEX = /^(text|bg|border)-\[#[0-9a-fA-F]{3,8}\]$/;
 
 /**
- * BORDER COLOURS are deliberately out of scope. The section panel has no border-colour
- * control — it is offered on per-ITEM regions only — so a hairline like `border-ink/15`
- * is not something any picker was ever going to show, and flagging it put a finding on
- * every divider in every registry (2026-08-15). The rule reports what a control could
- * display and stay silent about, which is text and background.
+ * Which colour control could show this token, or null for a token no colour control owns.
+ *
+ * DELEGATED TO `familyOf`, deliberately. This used to answer the `text-*` half itself,
+ * with a regex — `/^text-(xs|sm|base|lg|xl|…)/` — and no `$` on it. Unanchored, it read
+ * every palette colour whose name merely BEGINS with a size or an alignment word as a
+ * size: `text-smoke`, `text-xlarge`, `text-start`, `text-clipped`, `text-basalt` all
+ * vanished from the audit that exists to catch exactly them. `familyOf` does the same job
+ * by SET MEMBERSHIP on the suffix, which cannot make that mistake, and it is already the
+ * one place in the package that says which control owns a token — so the audit and the
+ * delta engine can no longer disagree about what a colour is.
+ *
+ * BORDER COLOURS stay out of scope. The section panel has no border-colour control — it
+ * is offered on per-ITEM regions only — so a hairline like `border-ink/15` is not
+ * something any picker was ever going to show, and flagging it put a finding on every
+ * divider in every registry (2026-08-15). `familyOf` names it `borderColor`, which is
+ * neither of the two families below, so it stays silent for free.
  */
 function colorChannel(token: string): "text" | "bg" | null {
-  const bare = token.replace(/^!/, "");
-  if (bare.startsWith("border-")) return null;
-  if (ARBITRARY_HEX.test(bare)) return bare.startsWith("bg-") ? "bg" : "text";
-  if (bare.startsWith("bg-") && !bare.startsWith("bg-[")) return "bg";
-  if (bare.startsWith("text-") && !bare.startsWith("text-[") && !NON_COLOR_TEXT.test(bare)) return "text";
+  const family = familyOf(token);
+  if (family === "textColor") return "text";
+  if (family === "bgColor") return "bg";
   return null;
 }
 
