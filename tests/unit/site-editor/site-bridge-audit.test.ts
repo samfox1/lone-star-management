@@ -30,6 +30,47 @@ describe('auditRegions', () => {
     expect(auditRegions([{ key: 'x', base }], PALETTE)).toEqual([])
   })
 
+  /**
+   * THE REGEX THIS FILE COULD NOT SEE. `colorChannel` used to answer the `text-*` half
+   * with `/^text-(xs|sm|base|lg|xl|…|left|center|…)/` — no `$`. Unanchored, it read every
+   * palette colour whose NAME MERELY BEGINS with a size or an alignment word as a size,
+   * and a size is not a colour, so the token vanished from the audit that exists to catch
+   * exactly it. `text-smoke` (sm), `text-xlarge` (xl), `text-basalt` (base),
+   * `text-ender` (end) — a site is free to name its greys anything, and the ones it
+   * cannot name were invisible.
+   *
+   * The two cases below are the two DIRECTIONS that bug ran in, and both go red if the
+   * regex comes back in place of `familyOf`'s suffix-set membership.
+   */
+  it('CRITICAL: a palette colour whose NAME starts with a size word is still a colour', () => {
+    const found = auditRegions(
+      [{ key: 'hero', base: 'text-smoke text-xlarge text-basalt text-ender' }],
+      [], // declares nothing, so every one of them is a finding
+    )
+    expect(found.map((f) => f.problem)).toEqual([
+      'wears text-smoke, which the palette never declares',
+      'wears text-xlarge, which the palette never declares',
+      'wears text-basalt, which the palette never declares',
+      'wears text-ender, which the palette never declares',
+    ])
+    // …and the same names, once declared, are silent — otherwise "flags everything"
+    // would pass the half above.
+    expect(
+      auditRegions([{ key: 'hero', base: 'text-smoke text-xlarge' }], ['text-smoke', 'text-xlarge']),
+    ).toEqual([])
+  })
+
+  it('CRITICAL: an icon group coloured with such a name is NOT accused of declaring no colour', () => {
+    // The other direction, and the worse one: read as a size, `text-smoke` stopped
+    // counting as the group's icon colour, so the audit demanded a colour that was
+    // already there — a finding a site cannot fix except by renaming its palette.
+    const found = auditRegions(
+      [{ key: 'socials', base: 'flex iconsize-[18px] hovercolor-[#9c4221] text-smoke', scope: 'icons' }],
+      ['text-smoke'],
+    )
+    expect(found).toEqual([])
+  })
+
   it('CRITICAL: an icon group must declare its size, colour and hover colour', () => {
     // Its controls write CSS vars the icons read, so with nothing declared every one of
     // them opens blank on a row that is plainly sized and coloured.
