@@ -79,32 +79,56 @@ const rel = (name: string, over: Partial<ReleaseRow> = {}): ReleaseFixture => ({
   row: { ...RELEASE_BASE, ...over },
 })
 
-// One fixture per column the rule reads. A column missing from this list is a column
-// whose disagreement this test cannot see — that is exactly how deezer_url slipped.
+/**
+ * ONE FIXTURE PER PROVENANCE COLUMN — KEYED BY THE TYPE, not by hand.
+ *
+ * The list below used to be written out, under a comment reading "a column missing from
+ * this list is a column whose disagreement this test cannot see — that is exactly how
+ * deezer_url slipped". It was itself a hand list, and it had already slipped twice:
+ * `release_id` and `audio_path` are provenance columns the rule's signature names, sat in
+ * TRACK_BASE, and had no fixture at all. A comment naming the failure mode does not
+ * prevent it.
+ *
+ * `Record<keyof TrackRow, …>` does. A column added to `TrackProvenance` with no entry
+ * here is a COMPILE error (AGENTS.md rule 4), so the mirror gains its fixture in the same
+ * commit that gains the column — before anyone can wonder whether SQL was updated too.
+ */
+const TRACK_SET: Record<keyof TrackRow, Partial<TrackRow>> = {
+  release_id: { release_id: 'rel-1' },
+  source: { source: 'spotify' },
+  audio_path: { audio_path: 'artist-1/audio/demo.mp3' },
+  spotify_id: { spotify_id: 'sp1' },
+  apple_id: { apple_id: 'ap1' },
+  deezer_id: { deezer_id: 'dz1' },
+  provider_url: { provider_url: 'https://x/y' },
+  stream_url: { stream_url: 'https://x/y' },
+  apple_url: { apple_url: 'https://music.apple.com/x' },
+  soundcloud_url: { soundcloud_url: 'https://soundcloud.com/x/y' },
+  deezer_url: { deezer_url: 'https://www.deezer.com/track/1' },
+  released: { released: true },
+}
+
+const RELEASE_SET: Record<keyof ReleaseRow, Partial<ReleaseRow>> = {
+  source: { source: 'spotify' },
+  spotify_id: { spotify_id: 'sp1' },
+  links: { links: [{ label: 'Spotify', url: 'https://open.spotify.com/album/x' }] },
+  released: { released: true },
+}
+
 const TRACKS: TrackFixture[] = [
   trk('bare manual (nothing set)'),
-  trk('a platform source', { source: 'spotify' }),
+  // The EMPTY spellings, which no per-column entry can express: a column's absence is
+  // not the same claim as its presence, and `source: null` is a distinct third state.
   trk('a null source (never a manual add)', { source: null }),
-  trk('spotify_id', { spotify_id: 'sp1' }),
-  trk('apple_id', { apple_id: 'ap1' }),
-  trk('deezer_id', { deezer_id: 'dz1' }),
-  trk('provider_url', { provider_url: 'https://x/y' }),
-  trk('stream_url', { stream_url: 'https://x/y' }),
-  trk('apple_url', { apple_url: 'https://music.apple.com/x' }),
-  trk('soundcloud_url', { soundcloud_url: 'https://soundcloud.com/x/y' }),
-  trk('deezer_url', { deezer_url: 'https://www.deezer.com/track/1' }),
-  trk('the manual released flag', { released: true }),
   trk('released explicitly false', { released: false }),
+  ...Object.entries(TRACK_SET).map(([column, over]) => trk(`${column} set`, over)),
 ]
 
 const RELEASES: ReleaseFixture[] = [
   rel('manual, no links'),
-  rel('a platform source', { source: 'spotify' }),
   rel('a null source', { source: null }),
-  rel('spotify_id', { spotify_id: 'sp1' }),
-  rel('non-empty DSP links', { links: [{ label: 'Spotify', url: 'https://open.spotify.com/album/x' }] }),
   rel('empty links array', { links: [] }),
-  rel('the manual released flag', { released: true }),
+  ...Object.entries(RELEASE_SET).map(([column, over]) => rel(`${column} set`, over)),
 ]
 
 async function sqlTrack(row: unknown): Promise<boolean> {
