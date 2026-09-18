@@ -10,12 +10,37 @@
  * poison every rerun for 24 hours — the suite would pass once and then fail all day
  * for reasons nobody would connect back to here. Every test therefore mints a FRESH
  * random ip_hash via freshIp() and afterAll sweeps them.
+ *
+ * TENANCY, AND WHY THE ARTIST IS A THROWAWAY. This file used to run on the shared seed
+ * artist `lone-pine`, and its `clearRungs()` — called at the top of more than twenty
+ * tests — deleted that artist's booking link, its `site_content.booking_email` row and
+ * its WHOLE `artist_mail_settings` row. None of those were created here. The mail-settings
+ * row is the very one `booking-email-door.test.ts` snapshots and restores, so this file
+ * was quietly destroying another suite's premise (and any real booking address a human
+ * had set) twenty times a run. A second teardown, `resetArtistWindow()`, deleted every
+ * enquiry filed for lone-pine in the last hour — again including rows it never wrote.
+ *
+ * Those deletes also made assertions true for the wrong reason: "five invalid attempts
+ * created no enquiries" counts rows for the artist and expects 0, which is a statement
+ * about an EMPTY table, and the table was empty only because the teardown kept emptying
+ * it. The per-artist flood cap has the same shape from the other side — it counts up to
+ * 30 rows in an hour, so a second run inside the hour would have measured leftovers from
+ * the first.
+ *
+ * The artist is now created by this file and dropped by it. "Delete every rung / every
+ * enquiry for this artist" IS "delete exactly what I created", the counts below are true
+ * about a genuinely empty table, and the random slug is what lets the flood-cap test run
+ * twice in a row. The global `mail_settings` singleton is NOT per-artist, so it keeps its
+ * save-then-restore treatment.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { SEED, artistIdBySlug, serviceClient } from '@tests/helpers/supabase'
+import { serviceClient } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
 const svc = serviceClient()
 
+let artist: ThrowawayArtist
+/** Shorthand for the many `.eq('artist_id', …)` calls below. */
 let artistA: string
 
 /** Every ip_hash this file has used, so cleanup is exact. */
@@ -57,7 +82,7 @@ type DoorRow = {
 
 async function submit(over: Partial<Record<string, string>> = {}): Promise<DoorRow> {
   const { data, error } = await svc.rpc('submit_enquiry', {
-    p_slug: SEED.artistASlug,
+    p_slug: artist.slug,
     p_purpose: 'booking',
     p_name: 'Jane Promoter',
     p_email: 'jane@venue.example',
@@ -69,7 +94,13 @@ async function submit(over: Partial<Record<string, string>> = {}): Promise<DoorR
   return (data as DoorRow[])[0]
 }
 
-/** Strip every rung so each precedence test starts from a known floor. */
+/**
+ * Strip every rung so each precedence test starts from a known floor.
+ *
+ * A blanket per-artist delete, which is safe ONLY because this file created the artist:
+ * no other suite and no human has a row under it. On the seed artist this same code was
+ * destroying the booking address `booking-email-door.test.ts` had snapshotted.
+ */
 async function clearRungs() {
   await svc.from('artist_mail_settings').delete().eq('artist_id', artistA)
   await svc.from('links').delete().eq('artist_id', artistA).eq('role', 'booking')
@@ -77,7 +108,8 @@ async function clearRungs() {
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
+  artist = await createThrowawayArtist(svc, 'Enquiry door')
+  artistA = artist.id
 
   // Take ownership of the singleton for the duration of this file, remembering what
   // was there so afterAll restores it. Upserting unconditionally (rather than "seed
@@ -103,30 +135,28 @@ beforeAll(async () => {
 /**
  * Reset the PER-ARTIST rate-limit window before every test.
  *
- * The per-IP counter is neutralised by freshIp(), but the per-artist cap (30/hour) is
- * a counter over `enquiries` that this suite shares with anything else that recently
- * submitted for lone-pine — an earlier run of this same file within the hour, a manual
- * curl against the endpoint, the isolation suite. That residue made this file flake:
- * the rate-limit tests would trip the ARTIST cap early and report `rate_limited` from a
- * test that was asserting `ok`.
+ * The per-IP counter is neutralised by freshIp(), but the per-artist cap (30/hour) is a
+ * counter over `enquiries`, and this file files well over thirty of them — so without a
+ * reset the later tests would trip the ARTIST cap and report `rate_limited` from a test
+ * asserting `ok`.
  *
- * Deleting by artist within the last hour is safe here because lone-pine is a seeded
- * fixture on a dev project, and enquiries for it are by definition test traffic.
+ * On the seed artist this was a delete of rows the file had not written (the last hour's
+ * traffic for lone-pine, whoever filed it). On a throwaway artist every enquiry under it
+ * is ours by construction, so no time filter is needed and nothing else can be caught.
  */
 async function resetArtistWindow() {
-  await svc
-    .from('enquiries')
-    .delete()
-    .eq('artist_id', artistA)
-    .gt('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+  await svc.from('enquiries').delete().eq('artist_id', artistA)
 }
 
 beforeEach(resetArtistWindow)
 afterEach(resetArtistWindow)
 
 afterAll(async () => {
-  await clearRungs()
-  await resetArtistWindow()
+  // Dropping the artist cascades its enquiries, links, site_content and mail settings —
+  // one statement that cannot miss a table someone adds later. `contact_attempts` is the
+  // exception: its artist_id is `on delete set null`, so the ledger rows survive and are
+  // swept by the ip_hashes this file minted.
+  await deleteThrowawayArtist(svc, artist)
   if (usedIps.length) await svc.from('contact_attempts').delete().in('ip_hash', usedIps)
   if (priorMailSettings) {
     await svc.from('mail_settings').upsert({ id: true, ...priorMailSettings })
@@ -321,7 +351,9 @@ describe('submit_enquiry — rate limiting', () => {
     await clearRungs()
     const ip = freshIp()
 
-    // Five INVALID attempts create no enquiries at all...
+    // Five INVALID attempts create no enquiries at all. The count below is an ABSOLUTE
+    // zero over this artist's inbox — on the shared seed artist it read zero because the
+    // teardown had just emptied the table, which is the same number for the wrong reason.
     for (let i = 0; i < 5; i++) {
       expect((await submit({ p_ip_hash: ip, p_email: 'nope' })).status).toBe('invalid')
     }
@@ -341,7 +373,7 @@ describe('submit_enquiry — rate limiting', () => {
     const ip = freshIp()
     for (let i = 0; i < 5; i++) {
       const { error } = await svc.rpc('log_contact_attempt', {
-        p_slug: SEED.artistASlug,
+        p_slug: artist.slug,
         p_purpose: 'booking',
         p_ip_hash: ip,
         p_outcome: 'honeypot',

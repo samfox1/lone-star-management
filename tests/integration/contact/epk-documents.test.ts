@@ -10,13 +10,32 @@
  * to record where), so it is validated the same way brand assets are. The extra rule here
  * is the FOLDER: a document must live in `documents`, never in the public `media` bucket's
  * layout, or a rider could be recorded at a path that is world-readable.
+ *
+ * TENANCY, AND WHY THE ARTIST IS A THROWAWAY. This file used to run on the shared seed
+ * artist `lone-pine`, and its teardown was
+ *
+ *     svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'artist')
+ *
+ * — i.e. it deleted that artist's ENTIRE profile publish history, every artist revision
+ * ever made, and republished one fresh snapshot on top. That is not cleanup: `revisions`
+ * IS the version history the editor's version picker reads, and a run of this file threw
+ * all of it away — along with whatever tech_rider_path and stage_plot_path a human had
+ * actually set, both nulled by the line above it. It also left every other suite's
+ * published-content assertions standing on a profile snapshot this file had written.
+ *
+ * The artist is now created here and dropped here, and dropping it cascades its revisions
+ * away, so the teardown deletes exactly what this file created. The publish-window test
+ * needs a slug for get_public_site, which is why it uses the throwaway's own.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publishProfile } from '@/lib/content'
 import { setPressDocument } from '@/lib/epk'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
+let artist: ThrowawayArtist
+/** Shorthand for the id, which every call below needs. */
 let artistA: string
 let asA: SupabaseClient
 let asB: SupabaseClient
@@ -37,15 +56,18 @@ async function stored(): Promise<{ tech_rider_path: string | null; stage_plot_pa
 }
 
 beforeAll(async () => {
-  artistA = await artistIdBySlug(SEED.artistASlug)
   asA = await signInAs(SEED.managerA)
   asB = await signInAs(SEED.managerB)
+  // A is the manager, so setPressDocument's update passes RLS. B is deliberately NOT,
+  // which is what the cross-tenant write test below rests on.
+  artist = await createThrowawayArtist(svc, 'EPK documents', asA)
+  artistA = artist.id
 })
 
 afterAll(async () => {
-  await svc.from('artists').update({ tech_rider_path: null, stage_plot_path: null }).eq('id', artistA)
-  await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_type', 'artist')
-  await publishProfile(svc, artistA)
+  // One statement: the artist row cascades its revisions (and anything else a future
+  // migration hangs off an artist) away. Nothing here touches the seed artists.
+  await deleteThrowawayArtist(svc, artist)
 })
 
 describe('setPressDocument', () => {
@@ -98,13 +120,13 @@ describe('press documents ride the publish window', () => {
     await publishProfile(asA, artistA)
 
     await setPressDocument(asA, artistA, 'tech_rider', docPath('draft'))
-    const before = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const before = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
     expect(
       ((before.data as { artist?: Record<string, unknown> } | null)?.artist ?? {}).tech_rider_path,
     ).toBeNull()
 
     await publishProfile(asA, artistA)
-    const after = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    const after = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
     expect(
       ((after.data as { artist?: Record<string, unknown> } | null)?.artist ?? {}).tech_rider_path,
     ).toBe(docPath('draft'))

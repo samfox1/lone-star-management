@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { expectDeniedByMissingPolicy } from '@tests/helpers/rls'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
 /** Used by the door tests only — `subscribe` must be the thing that creates it. */
 const DOOR_EMAIL = 'iso-sub@example.test'
@@ -70,12 +71,20 @@ describe('subscribe (public door)', () => {
     expect((data ?? []).length).toBe(1)
   })
 
+  // THE THREE REFUSALS ARE INDISTINGUISHABLE BY CODE. `subscribe` raises all of them with
+  // plpgsql's default SQLSTATE, P0001, so `expect(error).not.toBeNull()` — which is what
+  // both tests below used to say — is satisfied by ANY of the three, and by PGRST202
+  // "function does not exist" on top. Delete the email regex and the "invalid email" test
+  // still passes, because an unknown-artist or flood-cap raise (or a renamed parameter)
+  // fills the same hole. Each is pinned by its MESSAGE now, which is the only thing that
+  // tells them apart.
   it('rejects an invalid email', async () => {
     const { error } = await anonClient().rpc('subscribe', {
       p_slug: SEED.artistASlug,
       p_email: 'not-an-email',
     })
-    expect(error).not.toBeNull()
+    expect(error?.code).toBe('P0001')
+    expect(error?.message ?? '').toContain('Enter a valid email address.')
   })
 
   it('rejects an unknown artist slug', async () => {
@@ -83,7 +92,88 @@ describe('subscribe (public door)', () => {
       p_slug: 'no-such-artist',
       p_email: DOOR_EMAIL,
     })
-    expect(error).not.toBeNull()
+    expect(error?.code).toBe('P0001')
+    expect(error?.message ?? '').toContain('Unknown artist.')
+  })
+
+  it('validates the email BEFORE resolving the artist, so a bad slug cannot mask it', async () => {
+    // Both arguments are wrong at once. The message says which guard fired, and pinning it
+    // is what stops the two tests above from silently collapsing into one.
+    const { error } = await anonClient().rpc('subscribe', {
+      p_slug: 'no-such-artist',
+      p_email: 'not-an-email',
+    })
+    expect(error?.message ?? '').toContain('Enter a valid email address.')
+  })
+})
+
+/**
+ * THE PER-ARTIST FLOOD CAP (20260706150000): 15 new signups per artist per minute.
+ *
+ * It had NO test anywhere — the exact shape AGENTS.md names ("how the per-artist flood cap
+ * vanished for a day"), and for a findable reason: on a shared seed artist the test is not
+ * re-runnable. It has to fill a one-minute window to the brim, and a second run inside that
+ * minute would start already capped, so the only honest version needs an artist nobody else
+ * has touched. A throwaway with a random slug is that artist.
+ *
+ * Each test takes its OWN throwaway, because the first one deliberately leaves its artist
+ * at the cap for the rest of the minute.
+ */
+describe('subscribe — the per-artist flood cap', () => {
+  const flooded: ThrowawayArtist[] = []
+
+  afterAll(async () => {
+    // Dropping each artist cascades its subscribers away: exactly the rows these tests
+    // created, and not one belonging to anybody else.
+    for (const a of flooded) await deleteThrowawayArtist(svc, a)
+  })
+
+  async function freshArtist(label: string): Promise<ThrowawayArtist> {
+    const a = await createThrowawayArtist(svc, label)
+    flooded.push(a)
+    return a
+  }
+
+  it('CRITICAL: the 16th distinct signup in a minute is refused, and is not stored', async () => {
+    const artist = await freshArtist('Subscribe flood')
+    const anon = anonClient()
+
+    for (let i = 0; i < 15; i++) {
+      const { error } = await anon.rpc('subscribe', { p_slug: artist.slug, p_email: `flood-${i}@example.test` })
+      expect(error, `signup ${i + 1} of 15 was refused below the cap`).toBeNull()
+    }
+
+    const { error } = await anon.rpc('subscribe', { p_slug: artist.slug, p_email: 'flood-16@example.test' })
+    expect(error?.code).toBe('P0001')
+    expect(error?.message ?? '').toContain('Too many signups right now')
+
+    // The return value is void, so the table is the only evidence either way: the 16th
+    // address must not be in it, and the 15 that were accepted must be.
+    const { data } = await svc.from('subscribers').select('email').eq('artist_id', artist.id)
+    expect(data ?? []).toHaveLength(15)
+    expect((data ?? []).map((r) => r.email)).not.toContain('flood-16@example.test')
+  })
+
+  it('a repeated address is a no-op and does NOT burn the window', async () => {
+    // The cap counts ROWS created in the last minute, not calls, and the unique index makes
+    // a repeat `on conflict do nothing`. So one fan double-clicking Subscribe twenty times
+    // must not lock out the next nineteen people. If the dedup ever went away, these twenty
+    // calls would write twenty rows, the last distinct signup would be refused, and the
+    // count below would be 21 rather than 2.
+    const artist = await freshArtist('Subscribe dedup')
+    const anon = anonClient()
+    const same = 'eager-fan@example.test'
+
+    for (let i = 0; i < 20; i++) {
+      const { error } = await anon.rpc('subscribe', { p_slug: artist.slug, p_email: same })
+      expect(error, `repeat ${i + 1} was refused`).toBeNull()
+    }
+
+    const { error } = await anon.rpc('subscribe', { p_slug: artist.slug, p_email: 'someone-else@example.test' })
+    expect(error, 'repeats burned the flood window').toBeNull()
+
+    const { data } = await svc.from('subscribers').select('email').eq('artist_id', artist.id)
+    expect((data ?? []).map((r) => r.email).sort()).toEqual([same, 'someone-else@example.test'].sort())
   })
 })
 

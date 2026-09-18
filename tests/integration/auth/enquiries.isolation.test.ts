@@ -16,6 +16,14 @@
  *  3. A manager mutates their own inbox beyond marking it read. RLS has no column
  *     granularity, so this is enforced by a column GRANT, not a policy, and column
  *     grants are exactly the kind of thing a later migration silently undoes.
+ *
+ * TEARDOWN. This file's own teardown was always scoped — it deletes the enquiry by id,
+ * the ledger row by the ip_hash it invented, and the two mail-settings rows ONLY if it
+ * was the one that created them. What it could not defend against was a NEIGHBOUR:
+ * enquiry-door.test.ts ran `delete from artist_mail_settings where artist_id = lone-pine`
+ * at the top of twenty-odd tests, and deleted lone-pine's last hour of enquiries after
+ * each one — i.e. it deleted this file's witnesses. That file now owns a throwaway artist
+ * (2026-09-18), so every fixture below survives the run that plants it.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -155,11 +163,34 @@ describe('enquiries — the anon caller cannot reach the door', () => {
   })
 
   it('anon cannot select any of the four new tables', async () => {
+    // THIS TEST USED TO READ:
+    //   expect(error !== null || (data ?? []).length === 0).toBe(true)
+    // which is two escape hatches in one line. The left arm passes on ANY error, PGRST202
+    // ("relation does not exist") and a column rename included — so a typo'd table name
+    // would have "proved" the table was locked. The right arm passes on an empty result
+    // even if anon had been re-granted the read, because `.limit(1)` asked the whole table
+    // rather than a row known to be there. Both arms are now closed: each probe names a row
+    // this file PLANTED (asserted present via the service client first), and an error, if
+    // any, must be 42501 — the only code that means "Postgres refused you".
     const anon = anonClient()
-    for (const table of ['enquiries', 'contact_attempts', 'mail_settings', 'artist_mail_settings']) {
-      const { data, error } = await anon.from(table).select('*').limit(1)
-      // Either a hard RLS/permission error, or an empty set — never a row.
-      expect(error !== null || (data ?? []).length === 0).toBe(true)
+    const probes: Array<{ table: string; match: Record<string, unknown> }> = [
+      { table: 'enquiries', match: { id: enquiryA } },
+      { table: 'contact_attempts', match: { ip_hash: PROBE_IP } },
+      { table: 'mail_settings', match: { id: true } },
+      { table: 'artist_mail_settings', match: { artist_id: artistA } },
+    ]
+    for (const { table, match } of probes) {
+      const { data: planted } = await svc.from(table).select('*').match(match)
+      expect(
+        (planted ?? []).length,
+        `${table} holds no row matching the probe — the denial below would be vacuous`,
+      ).toBeGreaterThan(0)
+
+      const { data, error } = await anon.from(table).select('*').match(match)
+      // Two legitimate shapes, and only two: the GRANT is missing (42501), or the grant
+      // exists and RLS filtered every row out (no error, no rows).
+      if (error) expectRlsDenied(error, `anon selecting ${table}`)
+      else expect(data ?? [], `anon read a row out of ${table}`).toEqual([])
     }
   })
 
@@ -378,10 +409,19 @@ describe('enquiries — a manager may mark read, and nothing else', () => {
 })
 
 describe('booking_recipient_preview — owner-only', () => {
-  it('a manager sees their own resolved recipient', async () => {
+  // THE WITNESS FOR THE TWO DENIALS BELOW. The owner test used to assert only
+  // `Array.isArray(data)`, which is true of `[]` — so a preview that resolved NOTHING for
+  // anybody would have passed all three tests, and "a non-owner gets []" would have been a
+  // statement about a function that returns [] to everyone. beforeAll guarantees a
+  // resolvable rung exists (a booking_email on artist_mail_settings, or at minimum the
+  // mail_settings default), so the owner MUST get exactly one row carrying an address.
+  it('a manager sees their own resolved recipient — an actual address', async () => {
     const { data, error } = await asA.rpc('booking_recipient_preview', { p_artist_id: artistA })
     expect(error).toBeNull()
-    expect(Array.isArray(data)).toBe(true)
+    const rows = (data ?? []) as Array<{ to_email: string | null; recipient_source: string | null }>
+    expect(rows, 'the preview resolved nothing, so the denials below prove nothing').toHaveLength(1)
+    expect(rows[0].to_email).toMatch(/@/)
+    expect(rows[0].recipient_source).toBeTruthy()
   })
 
   it("a non-owner gets nothing back for someone else's artist", async () => {
@@ -390,8 +430,13 @@ describe('booking_recipient_preview — owner-only', () => {
     expect(data ?? []).toEqual([])
   })
 
-  it('anon gets nothing back', async () => {
-    const { data } = await anonClient().rpc('booking_recipient_preview', { p_artist_id: artistA })
+  it('anon cannot execute it at all', async () => {
+    // `revoke all … from public, anon` (20260722130000). Asserting only `data ?? [] === []`
+    // could not tell "the door refused me" from "the function no longer exists": a null
+    // data is what PostgREST returns for BOTH, so that assertion stayed green through a
+    // renamed parameter. 42501 naming the function is the only proof the grant is gone.
+    const { data, error } = await anonClient().rpc('booking_recipient_preview', { p_artist_id: artistA })
+    expectExecuteDenied(error, 'booking_recipient_preview')
     expect(data ?? []).toEqual([])
   })
 })
