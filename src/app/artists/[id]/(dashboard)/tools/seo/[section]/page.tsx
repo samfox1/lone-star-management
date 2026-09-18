@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { FAQ_EXTRA, FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import { mediaUrl } from '@/lib/storage-url'
-import { publicSiteOrigin } from '@/lib/custom-site'
+import { isCustom, publicSiteOrigin } from '@/lib/custom-site'
 import { requireArtist } from '../../../_data'
 import { isSeoSection } from '../sections'
 import { autoFaqAnswer } from '@samfox1/site-bridge/seo'
@@ -61,7 +61,7 @@ export default async function SeoSectionPage({ params }: { params: Promise<{ id:
     const initial = Object.fromEntries([...FAQ_KEYS, ...FAQ_EXTRA.flatMap((e) => [e.q, e.a])].map((k) => [k, content[k] ?? '']))
     return <AiSection artistId={id} name={artist.name} schemaType={schemaType} initial={initial} auto={auto} />
   }
-  if (section === 'test') return <TestSection artistId={id} siteUrl={siteUrl} />
+  if (section === 'test') return <TestSection artistId={id} siteUrl={siteUrl} custom={isCustom(artist)} />
   if (section === 'logo') {
     const LABEL: Record<string, string> = { logo_primary: 'Primary logo', logo_secondary: 'Secondary logo', profile_photo: 'Profile photo' }
     const ORDER = ['logo_primary', 'logo_secondary', 'profile_photo']

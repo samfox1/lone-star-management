@@ -22,12 +22,17 @@ const GRAPH_LABEL: Record<string, string> = {
   VisualArtwork: 'artworks',
 }
 
-export function AuditPanel({ artistId, siteUrl }: { artistId: string; siteUrl: string | null }) {
+export function AuditPanel({ artistId, siteUrl, custom }: { artistId: string; siteUrl: string | null; custom: boolean }) {
   const [result, setResult] = useState<LiveAudit | null>(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
+  // A template-hosted artist has no sitemap, no robots.txt and no JSON-LD to find —
+  // the built-in templates were never instrumented for it (won't-fix, Sam 2026-09-18:
+  // every artist gets a custom site going forward). Running the check there can only
+  // ever come back red with no path to green, so it never runs.
+  const canRun = custom && !!siteUrl
   const run = async () => {
-    if (busyRef.current) return
+    if (busyRef.current || !canRun) return
     busyRef.current = true
     setBusy(true)
     try {
@@ -40,10 +45,12 @@ export function AuditPanel({ artistId, siteUrl }: { artistId: string; siteUrl: s
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={run} disabled={busy || !siteUrl}>
+        <Button type="button" onClick={run} disabled={busy || !canRun}>
           {busy ? 'Checking…' : 'Run check'}
         </Button>
-        {siteUrl ? (
+        {!custom ? (
+          <span className="font-space text-xs text-ink-faint">Live check applies to a connected custom site.</span>
+        ) : siteUrl ? (
           <span className="font-space text-xs text-ink-faint">{siteUrl}</span>
         ) : (
           <span className="font-space text-xs text-status-pending">No public site URL yet.</span>
