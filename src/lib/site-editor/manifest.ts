@@ -193,7 +193,6 @@ export const MANIFESTS: Record<string, TemplateManifest> = {
     ],
     slots: [
       { key: 'shows', label: 'Shows', accepts: 'tour_date' },
-      { key: 'work', label: 'Work', accepts: 'track' },
       { key: 'videos', label: 'Videos', accepts: 'video' },
     ],
     styles: [],
