@@ -33,6 +33,16 @@ const ALLOWED: Record<string, string> = {
   is_manager_of: 'RLS helper',
   // Trigger functions: not callable through PostgREST regardless of grant.
   set_updated_at: 'trigger',
+  // Event trigger, and NOT one of ours — it is created by the Supabase platform, which is
+  // why `grep -rn rls_auto_enable supabase/migrations` finds nothing. The 2026-09-18 audit
+  // read only the migrations, concluded it did not exist, and removed this line as a
+  // "phantom allowlist entry"; `npm run audit:grants` then flagged it and introspecting
+  // pg_proc found it very much alive. It returns `event_trigger`, so PostgREST cannot
+  // invoke it whatever the grant says, and its body only runs on CREATE TABLE in `public`,
+  // where it does `alter table … enable row level security` — a safety net UNDER our own
+  // explicit enables, not a door. Do not remove this line again without querying the live
+  // database first.
+  rls_auto_enable: 'platform event trigger — enables RLS on every new public table',
 }
 
 const SQL = `
