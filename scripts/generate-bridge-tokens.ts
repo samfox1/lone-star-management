@@ -9,11 +9,13 @@
  * "keep this list in sync" comment, and it had already drifted: the weight slider
  * offers nine weights, skeen compiled six, and the three light ones silently no-opped.
  *
- * HOW IT DERIVES THE LIST — nothing here is hand-written (post-deepening, the tables
- * live in the package's vocabulary module; the editor's controls BUILD from them):
- *   1. Ask the editor's own control builders for every option/step/toggle they emit
- *      (with no site styleOptions, so site-declared fonts/colours — the SITE's own
- *      vocabulary, its own safelisting duty — are excluded).
+ * HOW IT DERIVES THE LIST — nothing here is hand-written. The tables live in the
+ * package's vocabulary module and the editor's controls BUILD from them, so asking the
+ * module is asking the controls:
+ *   1. Ask `classVocabulary()` in @samfox1/site-bridge/vocabulary for every
+ *      option/step/toggle a control can emit (with no site styleOptions, so
+ *      site-declared fonts/colours — the SITE's own vocabulary, its own safelisting
+ *      duty — are excluded).
  *   2. Filter each token through the package's OWN resolveStyle: a token that lifts to
  *      inline style (colours, scale, opacity, px borders/corners, shadows, speed)
  *      needs no CSS and is dropped; a token that stays a class must compile.
@@ -21,9 +23,11 @@
  *      at resolve time so they should never reach a DOM class list anymore — they stay
  *      as a belt against any path that skips resolution, at zero real cost.
  *
- * Run: `npm run tokens` (tsx). tests/site-bridge-tokens.test.ts regenerates in memory
- * and diffs the committed file, so a vocabulary change that forgets to regenerate is a
- * red build, not a manager staring at a slider that does nothing.
+ * Run: `npm run tokens` (tsx). tests/unit/site-editor/site-bridge-tokens.test.ts
+ * regenerates in memory and diffs the committed file, so a vocabulary change that forgets
+ * to regenerate is a red build, not a manager staring at a slider that does nothing. It
+ * also pins the append-only ratchet below, and the two families with drift history: the
+ * full size ladder and all nine weights.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'

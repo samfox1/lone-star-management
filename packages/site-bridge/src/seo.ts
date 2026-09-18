@@ -461,7 +461,7 @@ export function aboutPlacement(payload: Pick<PublicSitePayload, 'site_content'>,
 }
 
 /* ----------------------------------------------------------------------------------
- * audit — does the BUILT html carry what a crawler needs? (CONNECTING §7 rule 6)
+ * audit — does the BUILT html carry what a crawler needs? (CONNECTING §7 rule 7)
  * -------------------------------------------------------------------------------- */
 
 export type SeoFinding = { rule: string; problem: string }

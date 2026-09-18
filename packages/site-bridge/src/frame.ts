@@ -533,22 +533,10 @@ export function mountFrameBridge(options: {
   /**
    * Handed the bridge's controls once it is mounted.
    *
-   * `announce` re-posts `ready` with a FRESHLY BUILT manifest. The caller needs it
-   * because this frame renders nothing until the editor sends init-data: the first
-   * announce necessarily scans an empty document, finds no <Text> elements, and ships a
-   * manifest with no DOM-derived fields in it. The editor then replies, announcing stops,
-   * the content finally renders — and without this nothing ever tells the editor that the
-   * page it is now looking at declares thirty strings it has never heard of.
-   *
-   * Deliberately NOT automatic on init-data: only the caller knows when its content has
-   * actually painted, and announcing a beat too early would re-ship the same empty list
-   * with more confidence.
-   *
-   * `writeField` saves a DECLARED field the manager changed by acting on the page —
-   * dropping an icon where they want it (0.27.0). The editor treats it exactly like a
-   * typed value, and ignores any key the manifest does not declare, so a site cannot
-   * write outside what it asked for. Call it on the gesture's END, not during: every call
-   * is a save.
+   * Each control is documented on `FrameHandle` itself, deliberately in ONE place: this
+   * option used to restate `announce` and `writeField` here in full, and by 0.35.0 the
+   * copy had already fallen behind — it never learned about `pageChanged`, so a shell
+   * reading the option it actually calls was told about two of the three members.
    */
   onMounted?: (handle: FrameHandle) => void;
   /** The site's region registry lookup (its `regionBase`). Bound synchronously before
@@ -591,8 +579,6 @@ export function mountFrameBridge(options: {
     (typeof options.editList === "function"
       ? (options.editList as () => unknown)()
       : options.editList) as TemplateManifest | undefined;
-  // Read once: the manifest is a module constant, and this decides how every inbound
-  // `apply-field` is written to the DOM.
   // Recomputed per message rather than captured: the DOM-derived text fields are not
   // known at mount, and a set captured then would treat every wrapped string as an image
   // field — which is exactly the value-shape guessing this replaced.
