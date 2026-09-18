@@ -21,6 +21,16 @@ export type HttpGetOptions = {
   onBody?: (body: unknown) => 'retry' | undefined
 }
 
+/**
+ * Retry-After is allowed to be an HTTP-date, not seconds. `Number()` on a date string
+ * gives NaN, and `sleep(NaN)` returns immediately — turning the backoff into a hot
+ * retry loop that burns every attempt in milliseconds. Blank/missing → the 1s default.
+ */
+export function parseRetryAfterSeconds(header: string | null): number {
+  const parsed = Number(header ?? '1')
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+}
+
 export async function httpGetJson<T>(url: string, opts: HttpGetOptions = {}): Promise<T> {
   const doFetch = opts.fetchImpl ?? fetch
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
@@ -32,8 +42,7 @@ export async function httpGetJson<T>(url: string, opts: HttpGetOptions = {}): Pr
     const res = await doFetch(url, headers ? { headers } : undefined)
 
     if (res.status === 429) {
-      const parsed = Number(res.headers.get('retry-after') ?? '1')
-      const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 1 // date-form header → NaN
+      const retryAfter = parseRetryAfterSeconds(res.headers.get('retry-after'))
       await sleep(retryAfter * 1000)
       continue
     }

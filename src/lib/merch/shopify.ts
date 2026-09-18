@@ -9,6 +9,8 @@
  * A factory with injectable fetch/sleep for deterministic tests.
  */
 
+import { parseRetryAfterSeconds } from '@/lib/http'
+
 const API_VERSION = '2024-01'
 
 /**
@@ -151,15 +153,10 @@ function isThrottled(body: GraphQLResponse): boolean {
 /** Cost-bucket refill wait for an in-body throttle: a 200 carries no Retry-After. */
 const THROTTLE_BACKOFF_MS = 1000
 
-/**
- * Retry-After is allowed to be an HTTP-date, not seconds. Number() then gives NaN
- * and sleep(NaN) returns immediately, turning the backoff into a hot retry loop
- * that burns every attempt in milliseconds. Same guard as lib/http.ts, replicated
- * because Shopify is a GraphQL POST and keeps its own request path.
- */
+/** The NaN-guarded Retry-After parse from lib/http.ts, in ms: Shopify is a GraphQL
+ *  POST and keeps its own request path, so only the guard itself is shared. */
 function retryAfterMs(header: string | null): number {
-  const parsed = Number(header ?? '1')
-  return (Number.isFinite(parsed) && parsed > 0 ? parsed : 1) * 1000
+  return parseRetryAfterSeconds(header) * 1000
 }
 
 /**
