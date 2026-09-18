@@ -26,6 +26,19 @@ export type PublicSiteConfig = {
   slug: string;
 };
 
+/**
+ * An INJECTED fetch, the way `createAnalytics` already takes one (0.39.0).
+ *
+ * Without it a site whose backend client is built around an injectable `fetch` cannot
+ * adopt these readers at all — its unit tests would have to stub the global instead, which
+ * is a worse test and a rewrite of the seam it already had. That is not hypothetical:
+ * skeen passes `fetchImpl` through its whole backend module and went on hand-rolling this
+ * call for months, which is the duplication this module exists to end.
+ *
+ * Defaults to the global `fetch`, so every existing caller is untouched.
+ */
+export type FetchDeps = { fetch?: typeof fetch };
+
 /** True when every piece needed to make the call is present. A site missing its env
  *  vars should render EMPTY rather than throw on a fan's page — the same choice the
  *  region registry makes for an unknown key. */
@@ -48,9 +61,11 @@ export function isConfigured(config: Partial<PublicSiteConfig> | undefined): con
 export async function fetchPublicSite(
   config: Partial<PublicSiteConfig> | undefined,
   fetchOptions?: RequestInit,
+  deps: FetchDeps = {},
 ): Promise<PublicSitePayload | null> {
   if (!isConfigured(config)) return null;
-  const res = await fetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_site`, {
+  const doFetch = deps.fetch ?? fetch;
+  const res = await doFetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_site`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -74,9 +89,11 @@ export async function fetchPublicSite(
 export async function fetchPublicReleases(
   config: Partial<PublicSiteConfig> | undefined,
   fetchOptions?: RequestInit,
+  deps: FetchDeps = {},
 ): Promise<SiteRelease[]> {
   if (!isConfigured(config)) return [];
-  const res = await fetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_releases`, {
+  const doFetch = deps.fetch ?? fetch;
+  const res = await doFetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_releases`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

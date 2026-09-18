@@ -67,6 +67,18 @@ describe('fetchPublicSite', () => {
     expect(init.next).toEqual({ revalidate: 60 })
   })
 
+  it('CRITICAL: an INJECTED fetch is used instead of the global one (0.39.0)', async () => {
+    // Without this a site whose backend is built around an injectable fetch — skeen's is,
+    // all the way through — cannot adopt this reader without rewriting its tests to stub
+    // a global. The global stays stubbed here and must NOT be the one that gets called.
+    const globalSpy = stubFetch('{"artist":{"slug":"wrong"}}')
+    const injected = vi.fn(async () => ({ ok: true, status: 200, text: async () => '{"artist":{"slug":"skeen"}}' }))
+    const site = await fetchPublicSite(CONFIG, undefined, { fetch: injected as unknown as typeof fetch })
+    expect(injected).toHaveBeenCalledTimes(1)
+    expect(globalSpy).not.toHaveBeenCalled()
+    expect(site?.artist?.slug).toBe('skeen')
+  })
+
   it('returns the payload the site renders', async () => {
     stubFetch('{"artist":{"slug":"skeen","name":"Skeen"},"tracks":[{"id":"t1"}]}')
     const site = await fetchPublicSite(CONFIG)

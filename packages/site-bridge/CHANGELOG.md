@@ -118,6 +118,13 @@ package now states, not a new thing to announce. To adopt it: bump the pin, call
 `orderShows` where you currently sort `tour_dates`, and delete your own block. A site with
 no tour surface needs nothing.
 
+**`fetchPublicSite` / `fetchPublicReleases` take an injected `fetch`** — a third optional
+argument, `{ fetch }`, the way `createAnalytics` already does. Every existing call is
+untouched (it defaults to the global). Without it a site whose backend client is built
+around an injectable fetch could not adopt these readers without rewriting its tests to
+stub a global — which is why skeen was still hand-rolling `get_public_site` three minors
+after the module landed.
+
 ### Also in 0.39.0 — four fixes from the 2026-09-18 review
 
 Two of them change what a site's own `checkContract` test can say, so they are listed
