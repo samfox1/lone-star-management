@@ -103,10 +103,11 @@ export function OgImagePicker({
 
   if (sources.length === 0) {
     return (
+      {/* Leads with the absence, not the errand: this is the empty state, and a reader
+          who has no image needs to know that first. The pointer rides along after it. */}
       <p className="font-space text-[11px] leading-relaxed text-ink-faint">
-        Upload a logo on the{' '}
-        <span className="font-bold text-ink">Brand</span> page, or a hero image on the Site page, and
-        it can be used here.
+        No logo or hero image yet — add one on the{' '}
+        <span className="font-bold text-ink">Brand</span> or Site page.
       </p>
     )
   }
@@ -163,11 +164,9 @@ export function OgImagePicker({
           style={{ backgroundColor: ogBackgroundHex(background) }}
         />
       </div>
-
-      <p className="font-space text-[11px] leading-relaxed text-ink-faint">
-        A transparent logo turns invisible in dark-mode social clients, so the background is
-        baked into the saved image. 1200&times;630, the size the platforms crop to.
-      </p>
+      <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
+        {OG_CARD_WIDTH}&times;{OG_CARD_HEIGHT}
+      </span>
 
       <div className="flex items-center gap-3">
         <button type="button" onClick={save} disabled={busy} className={buttonClass('accent')}>

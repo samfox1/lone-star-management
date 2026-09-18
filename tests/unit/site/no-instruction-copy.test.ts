@@ -17,18 +17,18 @@
  * sentence, or built entirely from `{expr}`), a validation/error message (marked
  * `role="alert"` or styled `accent-red` — it reports what went wrong, not how to avoid
  * it next time), a decision prompt in a confirm dialog (ends in `?` — the user must
- * answer it, it is not decoration), or a sanctioned empty state ("Nothing here yet",
- * "No X yet", "There is nothing ... yet").
+ * answer it, it is not decoration), or one of four sanctioned shapes defined below: an
+ * empty state, a blocked state, a destructive consequence, or a provenance note.
  *
- * PROVING IT CAN FAIL (AGENTS.md rule 1): run this file against the tree as it stood
- * before the allowlist below existed — every entry in KNOWN_VIOLATIONS turned this test
- * red. That's how the list was built, not guessed.
+ * PROVING IT CAN FAIL (AGENTS.md rule 1): the `detector itself` block plants samples
+ * both ways — three that teach, which must be caught, and eight sanctioned shapes, which
+ * must not be. A sweep that finds nothing proves nothing unless it is also shown to find
+ * something, so both halves are CRITICAL, and so is the walker's own precondition test.
  *
- * THE ALLOWLIST BELOW IS DOCUMENTED, DATED, KNOWN DEBT — never license for a new one.
- * It must only ever SHRINK: deleting the instructional copy at a listed location and
- * removing its entry is the only way it changes size. Adding an entry for a NEW
- * violation is not what this list is for — a new one should never ship in the first
- * place, because this test fails on it the day it lands.
+ * NO ALLOWLIST. One existed for a single afternoon while other agents held the offending
+ * files open; it is gone, and the note above the planted samples records how each of the
+ * nine original violations was resolved. Do not reintroduce it — a list of known
+ * violations rots as lines move, and becomes the place a rule goes to die.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -74,9 +74,41 @@ function looksLikeErrorReport(attrs: string): boolean {
   return /role\s*=\s*"alert"/.test(attrs) || /accent-red/.test(attrs)
 }
 
-/** A sanctioned empty state: "Nothing here yet", "No photos yet", "There is nothing…". */
+/** A sanctioned empty state: "Nothing here yet", "No photos yet", "There is nothing…".
+ *  Also the capability-absent form — "This site hasn't declared any styleable sections",
+ *  "This site hasn't made Heading styleable" — which is the same thing said about a
+ *  connected site's declaration rather than about a list. Both lead with the absence,
+ *  which is the test: an empty state reports what is not there, it does not set homework. */
 function looksLikeEmptyState(text: string): boolean {
-  return /^(nothing\b|no\s|there('|’)?s?\s+is\s+no|there\s+is\s+nothing)/i.test(text)
+  if (/^(nothing\b|no\s|there('|’)?s?\s+is\s+no|there\s+is\s+nothing)/i.test(text)) return true
+  return /^this site (has\s?n'?o?t|hasn('|’)?t)\s+(declared|made|sent)\b/i.test(text)
+}
+
+/** A BLOCKED STATE: the option is chosen, a precondition is missing, and this says which.
+ *  Narrow on purpose — it must wear `text-status-pending`, the codebase's own marker for
+ *  "chosen but not yet in effect", the same way looksLikeErrorReport keys on accent-red.
+ *  That styling only appears on copy that is conditionally rendered, so the category
+ *  cannot be borrowed by a caption that is always on screen. */
+function looksLikeBlockedState(attrs: string): boolean {
+  return /text-status-pending/.test(attrs)
+}
+
+/** A DESTRUCTIVE CONSEQUENCE: one clause naming what an irreversible action will take
+ *  away. "Anything changed since then will be lost." is not instruction — it is the cost,
+ *  and a commit surface that hides the cost is worse than one that states it. Capped
+ *  short so it cannot grow an explanation: the moment it needs a second sentence it is
+ *  teaching again, and this test says so. */
+const DESTRUCTIVE = /\bwill be lost\b|\bcan(?:'|’)?not be undone\b|\bcan(?:'|’)?t be undone\b|\bpermanently (?:deleted|removed|gone)\b/i
+
+function looksLikeDestructiveConsequence(text: string, words: string[]): boolean {
+  return DESTRUCTIVE.test(text) && words.length <= 12
+}
+
+/** PROVENANCE: where a read-only value came from. The fields beside it are disabled, so
+ *  naming the source is what makes them legible rather than broken. "Synced from Shopify.
+ *  Price updates live." Kept to the source and the consequence — no errand. */
+function looksLikeProvenance(text: string, words: string[]): boolean {
+  return /^(synced|imported|pulled|read) from\b/i.test(text) && words.length <= 10
 }
 
 /** A short status word/phrase reporting the CURRENT state ("Saved", "Checking for
@@ -87,8 +119,7 @@ const MIN_GUIDANCE_WORDS = 6
 /** Every `<p>` element in a file, classified. Deliberately simple (regex, not a real
  *  JSX parser): this codebase's `<p>` elements do not nest another `<p>`, so a
  *  non-greedy match to the next `</p>` is exact for every file this sweep covers. */
-function findInstructionalParagraphs(file: string): Hit[] {
-  const src = readFileSync(file, 'utf8')
+export function instructionalParagraphsIn(src: string, file: string): Hit[] {
   const hits: Hit[] = []
   const re = /<p([^>]*)>([\s\S]*?)<\/p>/g
   let m: RegExpExecArray | null
@@ -97,17 +128,24 @@ function findInstructionalParagraphs(file: string): Hit[] {
     const text = decode(stripTags(stripExpressions(inner))).replace(/\s+/g, ' ').trim()
     if (!text) continue // pure interpolation ({error}, {children}) — a value, not prose
     if (looksLikeErrorReport(attrs)) continue
+    if (looksLikeBlockedState(attrs)) continue
     if (text.endsWith('?')) continue // a decision the user must answer, not a caption
     if (looksLikeEmptyState(text)) continue
     const words = text.split(' ').filter(Boolean)
     if (words.length < MIN_GUIDANCE_WORDS) continue
+    if (looksLikeDestructiveConsequence(text, words)) continue
+    if (looksLikeProvenance(text, words)) continue
     // "…nothing to publish", "…nothing else to do" — a short status wrapped around the
     // word "nothing" reads as state, not instruction, as long as it stays short.
     if (/\bnothing\b/i.test(text) && words.length <= 10) continue
     const line = src.slice(0, m.index).split('\n').length
-    hits.push({ file: relative(process.cwd(), file), line, text })
+    hits.push({ file, line, text })
   }
   return hits
+}
+
+function findInstructionalParagraphs(file: string): Hit[] {
+  return instructionalParagraphsIn(readFileSync(file, 'utf8'), relative(process.cwd(), file))
 }
 
 function sweep(): Hit[] {
@@ -117,78 +155,70 @@ function sweep(): Hit[] {
 }
 
 /**
- * KNOWN VIOLATIONS — recorded 2026-09-18 by the CODE_AUDIT sweep, owned by other
- * agents mid-edit at the time (site-tools.tsx, style-tools.tsx, merch-editor.tsx,
- * text-field-editor.tsx, editor-publish.tsx, restore-version.tsx, og-image-picker.tsx).
- * Each line is `file:line` exactly as this sweep reports it; the match is on file+line,
- * so fixing one (deleting the copy, or rewording it into a control's own label) makes
- * this list stale in one place and the entry must be deleted, not edited around.
+ * THE ALLOWLIST IS GONE, and that is the point.
  *
- * This list SHRINKS ONLY. Confirm a removal by re-running the sweep; never add a line
- * here for copy written after 2026-09-18 — that copy should not have shipped, and this
- * test failing on it is the point.
+ * It existed for one afternoon (2026-09-18) because the nine violations this sweep found
+ * sat in files other agents held open. Every one has since been resolved, and each was
+ * resolved in exactly one of three ways — never by parking it on a list:
+ *
+ *   DELETED — copy that taught. "Small PNGs with a transparent background work best…",
+ *     "A transparent logo turns invisible in dark-mode social clients…".
+ *   TRIMMED — one useful clause welded to one instructional clause; the clause that
+ *     carried a value or a cost stayed, the errand went. The publish bar keeps its count
+ *     and drops "Enter your password to make them live"; the restore modal keeps
+ *     "Anything changed since then will be lost" and drops the sentence its own button
+ *     already says.
+ *   SANCTIONED — not instruction at all, and now recognised STRUCTURALLY by the
+ *     classifiers above rather than by file:line. An empty state, a blocked state, a
+ *     destructive consequence, a provenance note.
+ *
+ * A list of known violations rots: the lines move, the entries go stale, and the list
+ * quietly becomes the place a rule goes to die. A classifier does not. If a future case
+ * genuinely does not fit one of the three, widen a category deliberately and write down
+ * why — do not reintroduce this list.
  */
-const KNOWN_VIOLATIONS = new Set<string>([
-  // "Small PNGs with a transparent background work best — the site scales anything
-  // bigger down to 32px." — a cursor-image upload hint.
-  'src/app/artists/[id]/(dashboard)/editor/panels/site-tools.tsx:226',
-  // "The image trail follows your cursor image — set one above first."
-  'src/app/artists/[id]/(dashboard)/editor/panels/site-tools.tsx:258',
-  // "This site hasn't declared any styleable sections. A custom site sends its own
-  // edit-list when the preview loads; the built-in templates don't tag sections yet."
-  'src/app/artists/[id]/(dashboard)/editor/panels/style-tools.tsx:355',
-  // "Synced from Shopify. Change the name, price or link in Shopify — the site reads
-  // the price live, so it updates without republishing."
-  'src/app/artists/[id]/(dashboard)/editor/merch-editor.tsx:116',
-  // "This site hasn't made {field} styleable, so there's no font, size or thickness to
-  // set here. Its appearance comes from the site's own design."
-  'src/app/artists/[id]/(dashboard)/editor/text-field-editor.tsx:165',
-  // Publish bar: "{n} change(s) since your last publish. Enter your password to make
-  // them live." — the count is a status; "Enter your password…" is an instruction the
-  // input's own placeholder ("Your password") already carries.
-  'src/app/artists/[id]/(dashboard)/editor/editor-publish.tsx:142',
-  // Restore-version modal: "Put the site back to how it looked at an earlier publish.
-  // Anything changed since then will be lost."
-  'src/app/artists/[id]/(dashboard)/editor/restore-version.tsx:161',
-  // Social-preview image picker: "Upload a logo on the Brand page, or a hero image on
-  // the Site page, and it can be used here."
-  'src/app/artists/[id]/(dashboard)/tools/seo/og-image-picker.tsx:106',
-  // Social-preview image picker: "A transparent logo turns invisible in dark-mode
-  // social clients, so the background is baked into the saved image. 1200×630, the
-  // size the platforms crop to."
-  'src/app/artists/[id]/(dashboard)/tools/seo/og-image-picker.tsx:167',
-])
+
+/** Planted samples. The detector has to be shown to bite AND shown not to over-bite;
+ *  a sweep that finds nothing is worthless if it also finds nothing when something is
+ *  wrong. These are inline so they cannot drift with the tree. */
+const TEACHES = [
+  '<p className="text-xs">Small PNGs with a transparent background work best — the site scales anything bigger down to 32px.</p>',
+  '<p className="text-xs">Upload a logo on the Brand page, or a hero image on the Site page, and it can be used here.</p>',
+  '<p className="text-xs">Enter your password below to make these changes live on the site.</p>',
+]
+
+const SANCTIONED = [
+  ['empty state', '<p className="text-sm">Nothing here yet, so there is nothing to publish today.</p>'],
+  ['capability-absent empty state', "<p className=\"text-sm\">This site hasn&apos;t declared any styleable sections, so there is nothing to set.</p>"],
+  ['blocked state', '<p className="text-[10px] text-status-pending">The image trail follows your cursor image — set one above first.</p>'],
+  ['destructive consequence', '<p className="text-sm">Anything changed since then will be lost.</p>'],
+  ['provenance', '<p className="text-[10px]">Synced from Shopify. Price updates live.</p>'],
+  ['error report', '<p role="alert" className="accent-red">That file is bigger than the 30 MB this bucket accepts.</p>'],
+  ['a question', '<p className="text-sm">Delete this show and everything attached to it?</p>'],
+  ['a bare value', '<p className="text-sm">{count}</p>'],
+] as const
+
+describe('the detector itself', () => {
+  it.each(TEACHES)('CRITICAL: catches copy that teaches — %s', (sample) => {
+    expect(instructionalParagraphsIn(sample, 'planted.tsx')).toHaveLength(1)
+  })
+
+  it.each(SANCTIONED)('CRITICAL: leaves a %s alone', (_kind, sample) => {
+    expect(instructionalParagraphsIn(sample, 'planted.tsx')).toEqual([])
+  })
+
+  it('CRITICAL: the walker actually descends — a sweep over nothing would pass forever', () => {
+    // Without this, every assertion below is vacuous the day the walk breaks.
+    const files = SWEPT_DIRS.flatMap((d) => allTsxFiles(join(ROOT, d)))
+    expect(files.length).toBeGreaterThan(40)
+    expect(files.some((f) => f.endsWith('site-tools.tsx'))).toBe(true)
+  })
+})
 
 describe('no instructional copy in editor UI or dashboard tool pages', () => {
-  it('CRITICAL: the sweep still fires — deleting the allowlist must turn this red (mutation check)', () => {
-    // This is the proof the detector is not vacuous: with NO allowlist, the sweep must
-    // still find every one of today's known violations. If this ever finds fewer than
-    // KNOWN_VIOLATIONS.size, the detector regressed and would silently wave through
-    // new copy that happens to resemble one it used to catch.
+  it('CRITICAL: the swept trees are clean', () => {
     const hits = sweep()
-    const found = new Set(hits.map((h) => `${h.file}:${h.line}`))
-    for (const loc of KNOWN_VIOLATIONS) expect(found.has(loc), `expected the sweep to still catch ${loc}`).toBe(true)
-  })
-
-  it('every instructional <p> found today is on the dated, shrinking allowlist', () => {
-    const hits = sweep()
-    const unlisted = hits.filter((h) => !KNOWN_VIOLATIONS.has(`${h.file}:${h.line}`))
-    if (unlisted.length) {
-      const report = unlisted.map((h) => `  ${h.file}:${h.line} — "${h.text}"`).join('\n')
-      throw new Error(`New instructional copy found outside the allowlist:\n${report}`)
-    }
-    expect(unlisted).toEqual([])
-  })
-
-  it('reports the known-violation list so a fix is visible when one lands (informational, cannot fail)', () => {
-    console.info(`no-instruction-copy: ${KNOWN_VIOLATIONS.size} known violation(s), to be removed:\n${[...KNOWN_VIOLATIONS].map((l) => `  ${l}`).join('\n')}`)
-    expect(true).toBe(true)
-  })
-
-  it('the allowlist names only locations the sweep can still find (catches stale entries)', () => {
-    const hits = sweep()
-    const found = new Set(hits.map((h) => `${h.file}:${h.line}`))
-    const stale = [...KNOWN_VIOLATIONS].filter((loc) => !found.has(loc))
-    expect(stale, `stale allowlist entries (already fixed — delete these lines): ${stale.join(', ')}`).toEqual([])
+    const report = hits.map((h) => `  ${h.file}:${h.line} — "${h.text}"`).join('\n')
+    expect(hits, hits.length ? `Instructional copy found:\n${report}` : '').toEqual([])
   })
 })

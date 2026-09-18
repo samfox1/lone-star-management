@@ -158,10 +158,7 @@ function RestoreDialog({
           </p>
         ) : (
           <>
-            <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
-              Put the site back to how it looked at an earlier publish. Anything changed
-              since then will be lost.
-            </p>
+            <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">Anything changed since then will be lost.</p>
             <div role="radiogroup" aria-label="Version" className="mt-3 max-h-52 space-y-1 overflow-y-auto">
               {(moments ?? []).map((m, i) => (
                 <button

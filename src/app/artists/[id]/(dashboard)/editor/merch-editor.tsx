@@ -111,12 +111,9 @@ export function MerchEditor({
             <FieldRow label="Link">
               <span className="block truncate py-1.5 text-[13px] text-ink-muted">{item.url || 'Not set'}</span>
             </FieldRow>
-            {/* WHY, and where to go instead — a control that refuses without saying so
-                reads as broken. */}
-            <p className="pt-1 font-space text-[10px] leading-relaxed text-ink-faint">
-              Synced from Shopify. Change the name, price or link in Shopify — the site
-              reads the price live, so it updates without republishing.
-            </p>
+            {/* WHY these fields don't take input — a control that refuses without saying
+                so reads as broken. Not where to go instead: that's instruction. */}
+            <p className="pt-1 font-space text-[10px] leading-relaxed text-ink-faint">Synced from Shopify. Price updates live.</p>
           </>
         ) : (
           <>

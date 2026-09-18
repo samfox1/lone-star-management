@@ -223,10 +223,6 @@ export function SiteTools({
           budget={budget}
           onChange={(url) => save(CURSOR_CONTENT_KEYS.click, url)}
         />
-        <p className="pt-1 text-[10px] leading-snug text-ink-faint">
-          Small PNGs with a transparent background work best — the site scales anything
-          bigger down to 32px.
-        </p>
       </div>
 
       <GroupLabel>Cursor trail</GroupLabel>

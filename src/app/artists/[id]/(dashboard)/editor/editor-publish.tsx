@@ -140,8 +140,7 @@ export function EditorPublish({ artistId }: { artistId: string }) {
             ) : (
               <>
                 <p className="mt-1 font-space text-xs text-ink-muted">
-                  {total} change{total === 1 ? '' : 's'} since your last publish. Enter your password to make
-                  them live.
+                  {total} change{total === 1 ? '' : 's'} since your last publish.
                 </p>
 
                 <ul className="mt-4 divide-y divide-hairline-soft rounded-lg border border-hairline">
