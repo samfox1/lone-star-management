@@ -28,23 +28,40 @@ import {
   resolveRegionStyle,
   sizeLength,
 } from "@samfox1/site-bridge";
+import { clampMaxRem } from "@tests/helpers/clamp";
 
-/** The ladder's own clamp for a desktop px, DERIVED from TEXT_SIZES rather than
- *  hand-listed — a future step added to the ladder must be covered here automatically
- *  (AGENTS.md rule 4). */
-const ladder = new Map(
-  TEXT_SIZES.map((o) => [
-    Number(o.label.replace("px", "")),
-    o.value.replace(/^text-\[/, "").replace(/\]$/, ""),
-  ]),
-);
 
 describe("size-[Npx] → --lse-size", () => {
-  it("lifts a ladder size to the ladder's own clamp, unchanged", () => {
+  /**
+   * WHAT THIS USED TO SAY, AND WHY IT SAID NOTHING. The old version rebuilt `styles.ts`'s
+   * private SIZE_BY_PX map here — same source (TEXT_SIZES), same two `.replace()` calls —
+   * and then asserted `sizeLength(px)` equalled it. Both sides were the same expression
+   * over the same data, so the map was being compared to itself: mutate either `.replace()`
+   * in styles.ts and the test's copy mutates with it. It could not fail.
+   *
+   * The INDEPENDENT fact is the one thing TEXT_SIZES states twice: the label is the
+   * desktop size, and the clamp's own maximum is the desktop size. Nothing derives one
+   * from the other, so a ladder row whose label and clamp disagree — a new step typed in
+   * wrong, an existing clamp nudged — fails here. `clampMaxRem` reads the clamp rather
+   * than the string, so the ladder can be respelled without this going stale.
+   */
+  it("CRITICAL: every ladder step's LABEL is the desktop size its clamp actually reaches", () => {
+    for (const o of TEXT_SIZES) {
+      const labelledPx = Number(o.label.replace("px", ""));
+      expect(labelledPx, `${o.label} is not a number`).not.toBeNaN();
+      expect(clampMaxRem(o.value) * 16, `${o.label} → ${o.value}`).toBeCloseTo(labelledPx, 5);
+    }
+  });
+
+  it("a ladder size resolves to a clamp that maxes at exactly that size", () => {
     // Pixel-identical to what `text-[clamp(…)]` renders today: the migration must not
-    // move a single already-styled headline.
-    for (const [px, clamp] of ladder) {
-      expect(sizeLength(px)).toBe(clamp);
+    // move a single already-styled headline. Measured through the clamp, not through a
+    // rebuilt copy of the lookup table.
+    for (const o of TEXT_SIZES) {
+      const px = Number(o.label.replace("px", ""));
+      expect(clampMaxRem(sizeLength(px)) * 16, `${px}px`).toBeCloseTo(px, 5);
+      // …and it is FLUID: a bare length would satisfy the line above and be the bug.
+      expect(sizeLength(px), `${px}px`).toMatch(/^clamp\(/);
     }
   });
 
@@ -57,7 +74,7 @@ describe("size-[Npx] → --lse-size", () => {
 
   it("sets the variable AND the property on an unclaimed region", () => {
     const { style, className } = resolveRegionStyle("hero", "grid", "size-[48px]");
-    expect(style["--lse-size"]).toBe(ladder.get(48));
+    expect(style["--lse-size"]).toBe(sizeLength(48));
     expect(style.fontSize).toBe("var(--lse-size)");
     // The token is editor vocabulary; no site compiles it, so it must never survive as
     // a class.
@@ -66,7 +83,7 @@ describe("size-[Npx] → --lse-size", () => {
 
   it("sets ONLY the variable when the region's base claims size", () => {
     const { style } = resolveRegionStyle("hero", "grid lse-owns-[size]", "size-[48px]");
-    expect(style["--lse-size"]).toBe(ladder.get(48));
+    expect(style["--lse-size"]).toBe(sizeLength(48));
     expect(style.fontSize).toBeUndefined();
   });
 
@@ -79,7 +96,7 @@ describe("size-[Npx] → --lse-size", () => {
       "text-white size-[36px]",
     );
     expect(style.fontSize).toBeUndefined();
-    expect(style["--lse-size"]).toBe(ladder.get(36));
+    expect(style["--lse-size"]).toBe(sizeLength(36));
   });
 
   it("keeps the claim marker out of the rendered class list", () => {
@@ -182,7 +199,7 @@ describe("the live re-apply path", () => {
       regionBase: () => "grid lse-owns-[size]",
     });
     apply(document.body, "hero", "size-[48px]");
-    expect(el.style.getPropertyValue("--lse-size")).toBe(ladder.get(48));
+    expect(el.style.getPropertyValue("--lse-size")).toBe(sizeLength(48));
     expect(el.style.getPropertyValue("font-size")).toBe("");
     expect(el.getAttribute("class")).not.toContain("lse-owns");
   });
