@@ -233,10 +233,11 @@ type PublishConfig = {
    *                1. here — `date, sort_order, created_at`
    *                2. `get_public_site`'s tour_dates branch — `date, published_at`.
    *                   `sort_order` is not in it at all.
-   *                3. skeen-website `lib/mapSite.ts` (~line 573) — re-sorts the payload
-   *                   client-side: MANUAL MODE (Sam, 2026-08-17) says that once ANY row
-   *                   has a `sort_order` the editor's drag order wins outright, dates
-   *                   only breaking ties.
+   *                3. `orderShows` in @samfox1/site-bridge (src/shows.ts, 0.39.0) —
+   *                   re-sorts the payload at the site. MANUAL MODE (Sam, 2026-08-17):
+   *                   once a DATED row carries a `sort_order` the editor's drag order
+   *                   wins outright for that bucket and date only breaks ties. It lived
+   *                   in skeen's `lib/mapSite.ts` alone until 2026-09-18.
    *              (2) never had to sort it because (3) does, and (3) is the rule Sam
    *              actually asked for. Picking one of the three changes what a live site
    *              renders, so it is Sam's call, not a cleanup. Left as-is on purpose.
