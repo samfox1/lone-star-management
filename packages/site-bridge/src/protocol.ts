@@ -257,15 +257,113 @@ function isVersionedFrom(x: unknown, source: string): x is { v: number; source: 
   )
 }
 
-/** True iff `x` is a bridge message from the frame at the current version. Callers
- *  must still validate `event.origin` before trusting the payload. */
-export function isFrameMessage(x: unknown): x is FrameMessage {
-  return isVersionedFrom(x, FRAME_SOURCE)
+/**
+ * PER-TYPE SHAPE CHECKS — because `type` alone guarantees nothing about payload.
+ *
+ * `isFrameMessage` used to assert `x is FrameMessage` on the strength of source, version
+ * and `typeof type === 'string'`, and the editor believed it: a `select` with no `target`
+ * reached `msg.target.kind` and threw out of the message listener, killing the handler for
+ * THAT message with nothing but a console error — and a `field-change` with a missing
+ * `value` saved `undefined` over a declared field, which is worse than throwing. The two
+ * sides are separate deploys on separate origins; a half-built message is not a
+ * hypothetical, it is the normal consequence of a version skew or a site's own bug.
+ *
+ * ONE ROW PER MESSAGE TYPE, keyed by the union's own `type`, so a new variant is a
+ * compile error here rather than a variant that silently validates nothing.
+ *
+ * What each row checks is what its CONSUMERS actually read — no more. Over-validating
+ * would refuse messages a newer sender legitimately extends, which is the additive
+ * protocol these comments keep insisting on; extra fields always pass.
+ */
+type Shape = (m: Record<string, unknown>) => boolean
+
+const str = (v: unknown) => typeof v === 'string'
+const obj = (v: unknown) => typeof v === 'object' && v !== null
+const optObj = (v: unknown) => v === undefined || obj(v)
+
+/**
+ * A SelectTarget as its readers use it: every consumer branches on `kind` first, so an
+ * unrecognized kind is already handled (it matches no branch) and must keep passing — a
+ * newer frame may select something this side has no panel for. Only the known kinds have
+ * their own fields checked, which is exactly the crash this guard exists to stop.
+ */
+function isSelectTarget(v: unknown): boolean {
+  if (!obj(v)) return false
+  const t = v as Record<string, unknown>
+  if (!str(t.kind)) return false
+  if (t.kind === 'item') return str(t.assetType) && str(t.id)
+  if (t.kind === 'field' || t.kind === 'slot' || t.kind === 'style' || t.kind === 'link')
+    return str(t.key)
+  return true
 }
 
-/** True iff `x` is a bridge message from the editor at the current version. */
+const FRAME_SHAPES: Record<FrameMessage['type'], Shape> = {
+  ready: (m) => optObj(m.manifest),
+  /**
+   * `target` is the whole check. `rect` is declared on the wire and sent by every frame,
+   * and READ BY NOTHING on the editor side (the geometry variant that would have used it
+   * was deleted years ago) — so a malformed one cannot crash anything, while insisting on
+   * four numbers would drop a manager's real click over a field no code consults. A
+   * loose object is the most this owes.
+   */
+  select: (m) => isSelectTarget(m.target) && optObj(m.rect) && optObj(m.measured),
+  deselect: () => true,
+  // `measured` is read field by field with numeric fallbacks; an object is the guarantee
+  // the reader needs, and pinning all fourteen keys would refuse a frame that adds one.
+  measured: (m) => str(m.key) && obj(m.measured),
+  // Both strings or the editor saves `undefined` into site_content under a real key.
+  'field-change': (m) => str(m.key) && str(m.value),
+  'page-change': (m) => str(m.page),
+}
+
+const EDITOR_SHAPES: Record<EditorMessage['type'], Shape> = {
+  'apply-field': (m) => str(m.key) && str(m.value),
+  'apply-image': (m) => str(m.key) && str(m.url),
+  'apply-style': (m) => str(m.key) && str(m.className),
+  'apply-link': (m) => str(m.key) && str(m.url),
+  'replay-entrances': () => true,
+  'set-playback': (m) => typeof m.playing === 'boolean',
+  measure: (m) => str(m.key),
+  // Normalized on receipt (normalizeCursorSettings), so the object is all this owes.
+  'apply-cursor': (m) => obj(m.settings),
+  'init-data': (m) => obj(m.site),
+  highlight: (m) => isSelectTarget(m.target),
+  'clear-highlight': () => true,
+  'set-mode': (m) => m.mode === 'edit' || m.mode === 'browse',
+  hello: () => true,
+  'set-page': (m) => str(m.page),
+}
+
+/** True iff `x` is a bridge message from the frame at the current version, carrying the
+ *  payload its type promises. Callers must still validate `event.origin` before trusting
+ *  it — this is a shape check, not an origin check.
+ *
+ *  An UNKNOWN type is refused here, unlike the editor guard below. Nothing on the editor
+ *  side consumes a message it does not recognize — the listener is a chain of `type ===`
+ *  branches with no catch-all — so accepting one would buy no additivity and cost the
+ *  predicate its honesty. */
+export function isFrameMessage(x: unknown): x is FrameMessage {
+  if (!isVersionedFrom(x, FRAME_SOURCE)) return false
+  const shape = FRAME_SHAPES[x.type as FrameMessage['type']]
+  return shape !== undefined && shape(x as unknown as Record<string, unknown>)
+}
+
+/**
+ * True iff `x` is a bridge message from the editor at the current version — with, for a
+ * type this side KNOWS, the payload that type promises.
+ *
+ * AN UNKNOWN TYPE STILL PASSES, deliberately, and that is why `frame.ts` widens the
+ * result into `InboundEditorMessage`. The frame hands every message it does not handle to
+ * the site's own `onEditorMessage`, which is a documented extension point (skeen's
+ * catch-all routes them): refusing unknown types here would quietly end the additive
+ * protocol — a newer editor's messages would stop reaching a deployed frame at all, and
+ * the whole design rests on "an older frame ignores what it does not know", not "an older
+ * frame never hears it".
+ */
 export function isEditorMessage(x: unknown): x is EditorMessage {
-  return isVersionedFrom(x, EDITOR_SOURCE)
+  if (!isVersionedFrom(x, EDITOR_SOURCE)) return false
+  const shape = EDITOR_SHAPES[x.type as EditorMessage['type']]
+  return shape === undefined || shape(x as unknown as Record<string, unknown>)
 }
 
 // Distributive Omit — `Omit<Union, K>` collapses a union to its shared keys, which
