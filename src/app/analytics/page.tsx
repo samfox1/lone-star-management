@@ -7,6 +7,7 @@ import {
   trendLineClass,
   trendTextClass,
 } from '@/lib/format'
+import { MONTHS } from '@/lib/chart'
 import { cx } from '@/lib/cx'
 import { Avatar, KLabel, initials } from '@/components/ui/ui'
 import { AreaChart, Sparkline } from '@/components/ui/charts'
@@ -23,7 +24,6 @@ const KPIS: { key: keyof ArtistEvents; label: string }[] = [
   { key: 'buyClicks', label: 'Buy clicks' },
 ]
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const DAY_MS = 86_400_000
 /** ~5 evenly-spaced date labels across the N-day window, out of render. */
 function axisLabels(days: number): string[] {
