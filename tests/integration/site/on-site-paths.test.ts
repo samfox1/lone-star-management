@@ -17,11 +17,11 @@
  * without failing anything.
  */
 import { describe, expect, it } from 'vitest'
-import { DRAFT_PRESENCE, LIVE_TOGGLE, PUBLISHABLE } from '@/lib/content'
+import { DRAFT_PRESENCE, LIVE_TOGGLE, PUBLISHABLE, type DraftPresenceEntity } from '@/lib/content'
 import type { SlotTable } from '@/lib/site-editor/slots'
 
 const liveEntities = Object.values(LIVE_TOGGLE)
-const draftEntities = [...DRAFT_PRESENCE]
+const draftEntities = Object.keys(DRAFT_PRESENCE) as DraftPresenceEntity[]
 
 /** Every member of `SlotTable`, derived EXHAUSTIVELY from the type — a new member missing
  *  here is a COMPILE error. */

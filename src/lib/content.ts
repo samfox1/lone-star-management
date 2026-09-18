@@ -12,7 +12,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { frontSortOrder, slotByDate } from './insert-position'
 import { safeHref } from '@/lib/url'
 
-/** The columns reconcileOnSite reads (superset: provenance only for releases). */
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
 
@@ -22,22 +21,25 @@ export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'r
  *  are excluded from the generic form. */
 export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
 
-/* ── The two ON-SITE write paths (ADR 0009) ───────────────────────────────────────
+/* ── The two ON-SITE write paths (ADR 0009, amended by ADR 0010) ──────────────────
  *
- * A row is on the public site when it is PUBLISHED and its working row has
- * `on_site = true` — every door gates on the working row, so the flag takes effect
- * without a publish. Two paths write that flag, and a type belongs to EXACTLY ONE:
+ * A row is on the public site when it is PUBLISHED and its presence flag says so. Two
+ * registries write that flag, and a type belongs to EXACTLY ONE:
  *
- *   LIVE_TOGGLE       flipped directly (the editor, and the library pages) → instant
- *   ON_SITE_ENTITIES  reconciled from a password-gated selection at publish
+ *   LIVE_TOGGLE     the working row's `on_site` IS the site. The door joins the live
+ *                   row, so the flip takes effect with no publish. photo, link, video.
+ *   DRAFT_PRESENCE  `on_site` rides the SNAPSHOT. The tick is a draft; Publish is what
+ *                   fans see. track, release, tour_date, merch.
  *
- * A type on both paths is the failure mode: `reconcileOnSite` sets `on_site = false`
- * for everything absent from the selection, so it silently reverts the live toggle at
- * the next publish. That is not a hypothetical — `video` and `merch` sat in the live map
- * with no caller for weeks, unnoticed because the two are keyed in DIFFERENT
- * vocabularies (editor kind vs entity), so an overlap doesn't read as a duplicate. They
- * are declared adjacently here for that reason, and `tests/on-site-paths.test.ts`
- * asserts they stay disjoint.
+ * A type on BOTH is the failure mode, and it is not hypothetical: the third path that
+ * used to exist reconciled `on_site` from a password-gated selection at publish, setting
+ * it false for everything absent from that selection — which silently reverted the live
+ * toggle at the next publish. `video` and `merch` sat in the live map with no caller for
+ * weeks, unnoticed because the two registries are keyed in DIFFERENT vocabularies
+ * (editor kind vs entity), so an overlap does not read as a duplicate by eye. That path
+ * is gone; nothing reconciles from a selection any more. The two below are declared
+ * adjacently for that reason, and `tests/integration/site/on-site-paths.test.ts` asserts
+ * they stay disjoint and together cover every gated type.
  */
 
 /** Editor kinds whose `on_site` is written LIVE, mapped to the entity each one writes.
@@ -78,15 +80,31 @@ export const TOGGLE_KIND: Record<ToggleKind, PublishableEntity> = {
  * DRAFT_PRESENCE / LIVE_TOGGLE (tests/on-site-paths.test.ts).
  */
 export type DraftPresenceEntity = 'track' | 'release' | 'tour_date' | 'merch'
-export const DRAFT_PRESENCE: readonly DraftPresenceEntity[] = ['track', 'release', 'tour_date', 'merch']
+/** A RECORD, like LIVE_TOGGLE above, not an array: the array is what every consumer
+ *  reads, and widening the union while leaving a stale array compiles perfectly — the
+ *  new type then keeps its `on_site` on the wire and the door starts gating on a key the
+ *  preview also sends. A missing key here is a compile error. */
+export const DRAFT_PRESENCE: Record<DraftPresenceEntity, true> = {
+  track: true,
+  release: true,
+  tour_date: true,
+  merch: true,
+}
 
-/** LIVE-TOGGLE types that publish their OWN content from their own page — snapshot
- *  only, NEVER reconciled (presence is already live). `publishEntityAction` takes this,
- *  so a reconcile type (release / merch) is a COMPILE error there and can't silently
- *  skip `reconcileOnSite` (ADR 0009). The other live-toggle types publish elsewhere:
- *  photo(media) via the Site publish, track with releases. Link joined 2026-09-13: the
- *  Connections page publishes it from the same floating, password-gated bar. */
-export type LiveTogglePublishable = 'video' | 'tour_date' | 'merch' | 'link'
+/** The types a DASHBOARD PAGE publishes on its own, from its own password-gated bar:
+ *  Videos, Tour, Merch and Connections each publish just their own entity. It is what
+ *  `publishEntityAction` accepts, so a type with no page of its own — media, track,
+ *  release, site_content, site_styles, artist_font — is a compile error there and cannot
+ *  be published by a route that has no bar to publish it from. Those go out with the
+ *  Site publish, or with releases, or from the editor's publish window.
+ *
+ *  It is NOT a subset of LIVE_TOGGLE and never was, whatever the old name said: tour_date
+ *  and merch are DRAFT_PRESENCE types. Presence and publishing are different questions —
+ *  this answers "which page owns the Publish button", not "when does a tick go live". */
+export type PagePublishable = 'video' | 'tour_date' | 'merch' | 'link'
+/** @deprecated The old name for PagePublishable, kept so actions.ts keeps compiling
+ *  while it is renamed there. Delete once nothing imports it. */
+export type LiveTogglePublishable = PagePublishable
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
