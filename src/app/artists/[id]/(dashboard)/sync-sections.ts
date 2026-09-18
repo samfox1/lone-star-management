@@ -1,4 +1,5 @@
 import type { SyncNote } from '@/lib/sync'
+import { SHOPIFY_KEY } from '@/lib/connections'
 import { INTEGRATIONS, isConnected, type IntegrationArtist } from './integrations'
 
 /**
@@ -36,8 +37,9 @@ export type SyncRunResult = {
 export const SYNC_SECTIONS = ['music', 'videos', 'tour', 'files', 'merch'] as const
 export type SyncSection = (typeof SYNC_SECTIONS)[number]
 
-/** Shopify's key. Not from the registry, so it is a constant both halves read. */
-export const SHOPIFY_KEY = 'shopify'
+/** Shopify's key. Not from the registry — imported from lib/connections, the constant
+ *  both halves read (re-exported so this file's existing callers are unaffected). */
+export { SHOPIFY_KEY }
 
 /**
  * What KIND of service each section pulls from, for the dialog's empty state (Sam,
