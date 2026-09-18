@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { ArtistSite } from '@/components/artist-site'
 import { getPublishedSite, getWorkingSite } from '@/lib/site'
-import { createTrack } from '@/lib/tracks'
+import { createContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 let artistA: string
@@ -34,7 +34,7 @@ beforeAll(async () => {
   // A draft track (default on_site=true). It's hidden from the PUBLIC site only
   // because it's unpublished (no revision) — the site now gates tracks on the
   // `on_site` flag, not on Released (see 20260710170000).
-  const track = await createTrack(asA, artistA, { title: DRAFT_TITLE, stream_url: 'https://open.spotify.com/track/m4' })
+  const track = await createContent(asA, 'track', artistA, { title: DRAFT_TITLE, stream_url: 'https://open.spotify.com/track/m4' })
   createdTrackIds.push(track.id)
 })
 
