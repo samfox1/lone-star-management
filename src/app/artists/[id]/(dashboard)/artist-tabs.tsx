@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
+import type { DiffSeg } from './sections'
 
 type Tab = {
   label: string
@@ -12,8 +13,11 @@ type Tab = {
   icon: IconName
   /** First route segments that mark this tab active (its own + folded-in pages). */
   match: string[]
-  /** dirtyBySeg keys this tab owns — any dirty ⇒ the tab shows a pending dot. */
-  dirtySegs: string[]
+  /** dirtyBySeg keys this tab owns — any dirty ⇒ the tab shows a pending dot. Typed
+   *  against the section registry, so a seg no section emits is a COMPILE error: this
+   *  list said `links` for the three months after the Connections rename, and
+   *  `dirty['links']` is simply `undefined` — the dot never lit. */
+  dirtySegs: DiffSeg[]
 }
 
 // Consolidated artist nav: 5 tabs. Assets folds Music (tracks + releases),
@@ -21,7 +25,7 @@ type Tab = {
 // three kinds. Manager tools folds Site, Links, Press kit, Subscribers,
 // Integrations, Settings and the publish/edit actions. A filled dot marks a
 // tab with unpublished edits in any segment it owns (see dirtyBySeg).
-const TABS: Tab[] = [
+export const TABS: Tab[] = [
   { label: 'Analytics', seg: '', icon: 'analytics', match: [''], dirtySegs: [] },
   {
     label: 'Assets',
@@ -37,8 +41,8 @@ const TABS: Tab[] = [
     label: 'Manager tools',
     seg: 'tools',
     icon: 'tools',
-    match: ['tools', 'site', 'brand', 'links', 'epk', 'subscribers', 'enquiries', 'settings', 'edit'],
-    dirtySegs: ['site', 'links'],
+    match: ['tools', 'site', 'brand', 'connections', 'links', 'epk', 'subscribers', 'enquiries', 'settings', 'edit'],
+    dirtySegs: ['site', 'connections', 'brand'],
   },
 ]
 
@@ -54,7 +58,7 @@ export function ArtistNav({
   layout,
 }: {
   artistId: string
-  dirty: Record<string, boolean>
+  dirty: Record<DiffSeg, boolean>
   layout: 'bar' | 'strip'
 }) {
   const pathname = usePathname()

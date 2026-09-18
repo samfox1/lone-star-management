@@ -4,7 +4,7 @@ import { Button, Card, buttonClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/server'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../_data'
 import { connectedCount } from '../integrations'
-import { dirtyBySeg } from '../sections'
+import { dirtyBySeg, isSegDirty } from '../sections'
 import { publishAction } from '../actions'
 import { TOOLS } from '../tools-registry'
 
@@ -72,7 +72,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-bold">
                   {t.label}
-                  {dirty[t.seg] && <span className="h-[6px] w-[6px] rounded-full bg-accent" aria-label="Unpublished changes" />}
+                  {isSegDirty(dirty, t.seg) && <span className="h-[6px] w-[6px] rounded-full bg-accent" aria-label="Unpublished changes" />}
                 </div>
                 <div className="mt-0.5 truncate font-space text-[11px] text-ink-faint">{t.desc}</div>
               </div>
