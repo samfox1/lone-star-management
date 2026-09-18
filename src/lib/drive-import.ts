@@ -8,7 +8,7 @@
  * `{artistId}/`, same as browser-direct uploads.
  */
 
-import { buildStoragePath, contentTypeFor, performUpload, sizeLabel, type UploadRules } from '@/lib/upload'
+import { AUDIO_UPLOAD_RULES, buildStoragePath, contentTypeFor, performUpload, sizeLabel, type UploadRules } from '@/lib/upload'
 import { driveKind, type DriveClient, type DriveKind } from '@/lib/drive'
 
 // The minimal structural client slice (storage per performUpload + table inserts),
@@ -33,8 +33,9 @@ type ImportConfig = {
 const MB = 1024 * 1024
 
 export const DRIVE_IMPORT: Record<DriveKind, ImportConfig> = {
-  // Mirrors TrackAudioUploader's rules.
-  audio: { bucket: 'audio', category: 'audio', rules: { allowedExt: ['mp3', 'm4a'], maxBytes: 30 * MB }, maxBytes: 30 * MB, noun: 'song' },
+  // The same rules TrackAudioUploader enforces (lib/upload.ts), imported instead of
+  // copied so the two can't drift.
+  audio: { bucket: 'audio', category: 'audio', rules: AUDIO_UPLOAD_RULES, maxBytes: 30 * MB, noun: 'song' },
   // Mirrors MediaUploader's image rules.
   image: { bucket: 'media', category: 'gallery', rules: { allowedExt: ['jpg', 'jpeg', 'png', 'webp', 'gif'], maxBytes: 25 * MB }, maxBytes: 25 * MB, noun: 'image' },
   // Bucket allows 500 MB, but a server action buffers the whole file — cap at 100.
