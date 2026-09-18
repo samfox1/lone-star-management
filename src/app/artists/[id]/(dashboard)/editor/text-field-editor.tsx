@@ -101,14 +101,6 @@ export function TextFieldEditor({
 
   return (
     <EditorPanel label={field.label} onBack={onBack}>
-      {/* A style-only entry is a text AREA of the site — the words are written into the
-          design, so there is nothing to type. It still gets the type controls below. */}
-      {field.styleOnly ? (
-        <p className="px-5 pt-3 font-space text-[11px] leading-snug text-ink-faint">
-          This text is part of the site&apos;s design, so it can&apos;t be retyped here — but you
-          can change how it looks.
-        </p>
-      ) : (
       <div className="px-5 pt-3">
         {/* SEEDED with the site's own words, not merely hinted at by a placeholder.
             A placeholder looked right and could not be edited: changing one word of a
@@ -136,7 +128,6 @@ export function TextFieldEditor({
           />
         )}
       </div>
-      )}
 
       <div className="mt-3 border-t border-hairline-soft px-5 pt-3">
         {region ? (

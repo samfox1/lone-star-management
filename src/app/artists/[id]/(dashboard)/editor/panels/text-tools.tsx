@@ -43,12 +43,10 @@ export function TextTools({
     // Under a heading, drop the heading word — "Hero" › "Name", not "Hero name".
     // The full label stays the aria name (EditRow builds "Edit <label>").
     const rowLabel = sectionRowLabel(heading, f.label) || f.label
-    // A style-only row is an AREA of the site (its words are the design's), so
-    // its value is a note, not copy. An unset field falls back to the site's own
-    // words when the manifest supplies them — "Empty" is useless to someone
-    // looking at a page of words.
-    const shown = f.styleOnly ? 'Set by the site — restyle only' : value || f.defaultValue || 'Not set'
-    const empty = f.styleOnly || !(value || f.defaultValue)
+    // An unset field falls back to the site's own words when the manifest supplies
+    // them — "Empty" is useless to someone looking at a page of words.
+    const shown = value || f.defaultValue || 'Not set'
+    const empty = !(value || f.defaultValue)
     return <EditRow key={f.key} label={rowLabel} value={shown} empty={empty} onEdit={() => onEditField?.(f)} />
   }
 

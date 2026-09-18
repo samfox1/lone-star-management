@@ -24,7 +24,7 @@
  *    scale.
  */
 import { describe, expect, it } from 'vitest'
-import { isTextRegion, textPanelEntries } from '@/lib/site-editor/text-panel'
+import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { buildTextItemStyleControls, sliderIndex, sliderSteps } from '@/lib/site-editor/style-controls'
 import type { ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { clampMaxRem, clampMinRem, stepCss } from '@tests/helpers/clamp'
@@ -47,55 +47,18 @@ const SKEEN: Record<string, string> = {
 }
 const region = (key: string): ManifestStyleRegion => ({ key, label: key, base: SKEEN[key] })
 
-describe('isTextRegion — a wrapper is not the words', () => {
-  it('CRITICAL: a section container that only CENTRES text is not text', () => {
-    // The one Sam styled. Sizing it grew the whole section.
-    expect(isTextRegion(region('shows_section'))).toBe(false)
-  })
-
-  it('CRITICAL: a section container that only COLOURS text is not text', () => {
-    expect(isTextRegion(region('work_section'))).toBe(false)
-    expect(isTextRegion(region('about_section'))).toBe(false)
-  })
-
-  it('the footer wrapper is not text either', () => {
-    expect(isTextRegion(region('footer'))).toBe(false)
-  })
-
-  it('CRITICAL: the wordmark and the captions still ARE text', () => {
-    // The other half of the rule. Tightening the detector must not empty the panel.
-    expect(isTextRegion(region('hero_wordmark'))).toBe(true)
-    expect(isTextRegion(region('polaroid_1_caption'))).toBe(true)
-  })
-
-  it('layout and media regions stay out, as before', () => {
-    for (const key of ['hero_video', 'hero_nav', 'polaroid_wall', 'videos_section', 'footer_socials'])
-      expect(isTextRegion(region(key)), key).toBe(false)
-  })
-
-  it('a size behind a responsive variant still counts as type', () => {
-    // `sm:text-[14px]` is the only type utility on a region that sets its base size
-    // elsewhere. Reading tokens without stripping the variant would miss it.
-    expect(isTextRegion({ key: 'x', label: 'x', base: 'block sm:text-[14px]' })).toBe(true)
-  })
-
-  it('an arbitrary text COLOUR is not a size, however it is written', () => {
-    // `text-[#fff]` shares the arbitrary-value shape with `text-[12px]`. Counting it would
-    // put the section wrappers straight back in the panel via a different door.
-    expect(isTextRegion({ key: 'x', label: 'x', base: 'block text-[#ffffff]' })).toBe(false)
-  })
-
+describe('textPanelEntries — the Text panel is fields, regions only ever PAIR', () => {
   it('CRITICAL: regions ALONE list nothing — the Text panel is fields', () => {
-    // `isTextRegion` still decides which region can PAIR with a field (and so carry that
-    // row's type controls), but a region no field speaks for is no longer a row of its
-    // own: it filled the panel with "Set by the site — restyle only" lines that are not
-    // text to type (Sam, 2026-08-15). Those elements stay reachable by clicking them.
+    // A region no field speaks for is not a row of its own: it used to fill the panel
+    // with "Set by the site — restyle only" lines that are not text to type (Sam,
+    // 2026-08-15). Those elements stay reachable by clicking them.
     expect(textPanelEntries([], Object.keys(SKEEN).map(region))).toEqual([])
   })
 
   it('CRITICAL: a field still PAIRS with its text region, so the row keeps its type controls', () => {
     // The positive half. Without it, a function that returned [] for everything would
-    // pass the rule above and empty the Text panel completely.
+    // pass the rule above and empty the Text panel completely. Pairing is a pure key
+    // match (styleRegionForField) — it no longer asks whether the region "is text".
     const regions = Object.keys(SKEEN).map(region)
     const field = { key: 'hero_wordmark', label: 'Hero wordmark', type: 'text' as const, target: { store: 'site_content' as const, key: 'hero_wordmark' } }
     const [entry] = textPanelEntries([field], regions)

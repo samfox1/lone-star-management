@@ -74,14 +74,14 @@ export function runtimeTextFields(
   return textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
     key: e.key,
     label: e.label,
-    page: pageOf(e.field?.page),
-    pageLabel: labelOf(pageOf(e.field?.page)),
-    type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
+    page: pageOf(e.field.page),
+    pageLabel: labelOf(pageOf(e.field.page)),
+    type: (e.field.type === 'email' ? 'email' : 'text') as 'text' | 'email',
     target: artistTarget(e.field),
     value: (() => {
       const t = artistTarget(e.field)
       if (t) return (draft?.artist?.[t.column] as string | null) ?? ''
-      return e.field ? (values[e.field.key] ?? '') : ''
+      return values[e.field.key] ?? ''
     })(),
     // Same multiline rule the built-in path uses, so a body-copy field gets a textarea
     // on a custom site too.
@@ -89,12 +89,10 @@ export function runtimeTextFields(
     styleRegion: e.styleRegion
       ? { key: e.styleRegion.key, label: e.styleRegion.label, base: e.styleRegion.base }
       : null,
-    // A region with no field behind it: restyleable, not retypeable.
-    styleOnly: !e.field,
     // What the SITE renders when the row is unset. A custom site keeps its fallbacks in
     // code, so its manifest is the only place we can learn them — without this the panel
     // lists a page full of words as "Empty".
-    defaultValue: e.field?.defaultValue,
+    defaultValue: e.field.defaultValue,
   }))
 }
 

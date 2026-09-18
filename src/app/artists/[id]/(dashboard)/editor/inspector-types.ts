@@ -40,11 +40,6 @@ export type EditorTextField = {
   type: 'text' | 'email'
   value: string
   multiline: boolean
-  /** True for a text AREA of the site the manager can restyle but not retype — a heading
-   *  or a section written into the design rather than declared as editable copy. Most of a
-   *  site's text is this kind, and leaving it out of the panel made the Text panel show
-   *  five captions on an eleven-region site. */
-  styleOnly?: boolean
   /** What the SITE renders when this field is unset, as declared in its manifest.
    *
    *  A field with no row is genuinely empty in the database, and the panel used to say so —

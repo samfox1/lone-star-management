@@ -110,13 +110,12 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const textFields: EditorTextField[] = textPanelEntries(manifest?.fields, manifest?.styles).map((e) => ({
     key: e.key,
     label: e.label,
-    type: (e.field?.type === 'email' ? 'email' : 'text') as 'text' | 'email',
-    value: e.field ? fieldCurrentValue(e.field, ctx) : '',
+    type: (e.field.type === 'email' ? 'email' : 'text') as 'text' | 'email',
+    value: fieldCurrentValue(e.field, ctx),
     multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
     styleRegion: e.styleRegion
       ? { key: e.styleRegion.key, label: e.styleRegion.label, base: e.styleRegion.base }
       : null,
-    styleOnly: !e.field,
   }))
 
   // The site's single-occupancy image fields (hero image, profile photo) — declared by
