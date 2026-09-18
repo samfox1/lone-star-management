@@ -25,6 +25,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isOwnedStoragePath } from '@/lib/upload'
+import { publicObjectUrl } from '@/lib/storage-url'
 
 /** The bucket font objects live in. PUBLIC-READ, unlike `documents`: a fan's browser
  *  fetches the file itself, so there is no server in the middle to sign a URL. */
@@ -258,7 +259,7 @@ const SAFE_URL = /^https?:\/\/[a-z0-9.\-:]+(\/[a-zA-Z0-9._~\-]+)+$/i
 /** Public URL for a font object. The bucket is public-read, so this is the URL a fan's
  *  browser fetches directly — no signing, no server hop. */
 export function fontUrl(path: string, origin: string = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''): string {
-  return `${origin.replace(/\/+$/, '')}/storage/v1/object/public/${FONTS_BUCKET}/${path}`
+  return publicObjectUrl(FONTS_BUCKET, path, origin)
 }
 
 /** What `fontFaceCss` needs about a font: `path` (a storage path) or a ready `url`. */

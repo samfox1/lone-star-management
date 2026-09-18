@@ -7,6 +7,7 @@
  */
 
 import { isSafeEmbedSrc } from './embed'
+import { publicObjectUrl } from './storage-url'
 
 export type VideoLike = {
   provider: string
@@ -38,8 +39,8 @@ export function embedOrStorageValid(v: VideoLike): boolean {
 
 /** The playable src, or null if unresolvable. Uploaded → the videos-bucket public URL
  *  (built only from a shape-checked path); otherwise the embed URL. */
-export function publicVideoSrc(v: VideoLike): string | null {
+export function publicVideoSrc(v: VideoLike, origin?: string): string | null {
   if (v.provider !== 'uploaded') return v.embed_url
   if (!v.storage_path || v.storage_path.includes('..') || !SAFE_VIDEO_PATH.test(v.storage_path)) return null
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/videos/${v.storage_path}`
+  return publicObjectUrl('videos', v.storage_path, origin)
 }

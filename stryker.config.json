@@ -48,6 +48,7 @@
     "src/lib/site-editor/viewport.ts",
     "src/lib/song-merge.ts",
     "src/lib/storage-gc.ts",
+    "src/lib/storage-url.ts",
     "src/lib/upload.ts",
     "src/lib/url.ts",
     "supabase/functions/contact/validate.ts",

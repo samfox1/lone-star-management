@@ -1,14 +1,32 @@
 /**
- * Public URLs for objects in the `media` storage bucket.
+ * Public URLs for objects in Supabase storage buckets.
  *
  * A tiny leaf module so BOTH the server-heavy site builder (lib/site) and modules that
  * must stay light (site-editor/save) can build the same string without one importing
- * the other — the URL shape has one home instead of per-file copies.
+ * the other — the URL shape has one home instead of per-file copies (`mediaUrl` here,
+ * `publicVideoSrc` in lib/video-render, `fontUrl` in lib/fonts all built the identical
+ * `{origin}/storage/v1/object/public/{bucket}/{path}` independently).
  */
+
+/**
+ * Public URL for an object in a public storage bucket, on a given origin.
+ *
+ * `origin` defaults to `NEXT_PUBLIC_SUPABASE_URL`, but is never read when a caller
+ * already holds one (a full object URL to rebuild on its own origin, or an injected
+ * test origin) — see `mediaRenderPath`'s header for why that matters: a helper that
+ * reads the env directly returned `undefined/storage/…` in CI's mutation job, which
+ * runs the DB-free slice with no env at all. Falling back to `''` here instead keeps
+ * that failure mode a plain, path-shaped string instead of a literal `"undefined"`
+ * baked into the URL, so a DB-free test can assert on it without needing the env set.
+ */
+export function publicObjectUrl(bucket: string, path: string, origin?: string): string {
+  const base = (origin ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/+$/, '')
+  return `${base}/storage/v1/object/public/${bucket}/${path}`
+}
 
 /** Public URL for an object in the `media` storage bucket. */
 export function mediaUrl(path: string): string {
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${path}`
+  return publicObjectUrl('media', path)
 }
 
 /**
