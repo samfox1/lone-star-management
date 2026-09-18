@@ -19,7 +19,7 @@ import { bridgeSupportsDeltas, bridgeSupportsItemDeltas, bridgeSupportsMobileIte
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
-export type { StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
+export type { SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import type { ManifestStyleRegion, StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import { DELTA_SENTINEL, TEXT_SIZES, familyOf } from '@samfox1/site-bridge/styles'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
@@ -275,6 +275,13 @@ const phoneTextScope = (opts?: SiteStyleOptions) =>
   usesTextVars(opts) // class-era vocabularies have no sm shape to rewrite
 const phoneItemScope = (opts?: SiteStyleOptions) =>
   phoneScope(opts) && (opts as EditorStyleOptions | undefined)?.mobileItemVars !== false
+/** 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
+ *  becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).
+ *  Shared by buildStyleControls and buildTextItemStyleControls so the twinned set can
+ *  never drift between the two text surfaces. */
+const TWINNED_TEXT_CONTROLS = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
+const twinTextControls = (controls: StyleControl[]): StyleControl[] =>
+  controls.map((c) => (TWINNED_TEXT_CONTROLS.has(c.id) ? phoneTwin(c) : c))
 /** A desktop step → its phone twin, same label. Sizes measure via textSizeRank so a
  *  class-era ladder (a site that declares textSizes) converts too; an unmeasurable step
  *  is dropped rather than emitting a token the bridge would refuse. */
@@ -808,12 +815,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     owns: (t) => t === ITALIC_TOGGLE_CLASS || t === 'fstyle-[italic]',
   })
   controls.push(...motionControls())
-  // 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
-  // becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).
-  if (phoneTextScope(opts)) {
-    const TWIN = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
-    return controls.map((c) => (TWIN.has(c.id) ? phoneTwin(c) : c))
-  }
+  if (phoneTextScope(opts)) return twinTextControls(controls)
   return controls
 }
 
@@ -966,16 +968,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, defaultOffScale: true, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
   controls.push(...motionControls())
-  // 0.22, Sam: "all the styles" — in phone scope, every token-emitting text control
-  // becomes its phone twin. Colours/effects pass through phoneTwin untouched (global).
-  if (phoneTextScope(opts)) {
-    const TWIN = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
-    return controls.map((c) => (TWIN.has(c.id) ? phoneTwin(c) : c))
-  }
-  if (phoneTextScope(opts)) {
-    const TWIN = new Set(['weight', 'align', 'leading', 'tracking', 'uppercase', 'italic'])
-    return controls.map((c) => (TWIN.has(c.id) ? phoneTwin(c) : c))
-  }
+  if (phoneTextScope(opts)) return twinTextControls(controls)
   return controls
 }
 

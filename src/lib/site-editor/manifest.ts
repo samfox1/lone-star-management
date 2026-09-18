@@ -22,11 +22,8 @@ import type { SiteContent } from '@/lib/site'
 // module keeps what is LONE-STAR's — the built-in template MANIFESTS and the role/key
 // helpers — and re-exports the schema from its historical home.
 export type {
-  FieldValueType,
-  FieldTarget,
   ManifestField,
   LibraryAsset,
-  ManifestSlot,
   ManifestStyleRegion,
   ManifestLinkRegion,
   ManifestComponent,
@@ -35,7 +32,6 @@ export type {
   TemplateManifest,
   ManifestPage,
   DroppedRegion,
-  MergedManifest,
 } from '@samfox1/site-bridge/manifest'
 // The per-page FOLD (SITE_PAGES_PLAN.md D4). A value, not a type, so it is re-exported
 // separately — the editor's frame bridge is its only caller.

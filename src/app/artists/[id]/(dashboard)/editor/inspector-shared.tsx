@@ -20,10 +20,6 @@ export function plural(n: number, noun: string): string {
 export const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
 // Red ring for a field whose value the server would reject (a blank required field, a
 // bad price) — gating the save so the panel can't claim "Saved" on a dropped write.
-export const INVALID_RING = 'border-accent-red focus:border-accent-red'
-// The same signal for a BORDERLESS field (the restyled Style/Links/Text panels): those
-// have no border to redden, so the invalid state is a ring instead. Kept separate from
-// INVALID_RING so the still-bordered panels (Merch, Music, Tour) are untouched.
 export const INVALID_FIELD = 'ring-1 ring-accent-red focus:ring-accent-red'
 
 /* ── Panel layout primitives (the "grid sheet" inspector) ────────────────────────────

@@ -18,17 +18,11 @@ export {
   MANAGED_STYLE_PROPS,
   colorToken,
   colorClass,
-  speedToken,
   isItemKey,
   mergeStyle,
   resolveStyle,
   resolveRegionStyle,
-  type ManagedColorProp,
-  type ResolvedStyle,
 } from '@samfox1/site-bridge/styles'
-
-/** Historical alias: this module named the colour-prop union ManagedStyleProp. */
-export type { ManagedColorProp as ManagedStyleProp } from '@samfox1/site-bridge/styles'
 
 /**
  * The site's OWN declared colours, as hexes.

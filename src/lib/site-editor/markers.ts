@@ -15,10 +15,6 @@ export {
   LINK_ATTR,
   HIGHLIGHT_ATTR,
   HIGHLIGHT_CSS,
-  WINDOW_ATTR,
-  TEXT_ATTR,
-  IMG_CLASS_ATTR,
-  SHIELD_ATTR,
   MARKED,
 } from '@samfox1/site-bridge'
 import { FIELD_ATTR, SLOT_ATTR } from '@samfox1/site-bridge'
