@@ -125,11 +125,27 @@ describe('sliderIndex — a value that is not a step', () => {
     expect(steps[sliderIndex(tracking, 'tracking-[-0.055em]').idx].label).toBe('-0.06')
   })
 
-  it('thickness measures nothing off-scale because it owns only the nine named weights', () => {
-    // Pinning the reasoning, not adding a rank: `owns` cannot match anything but a
-    // WEIGHTS name, so an off-scale weight is unreachable. If that changes, this fails.
+  it('thickness needs no rank because it is a SELECT — and it owns every weight spelling', () => {
+    /**
+     * WHAT THIS USED TO SAY. `expect(weight.kind === 'slider' && weight.owns('font-[550]'))
+     * .toBe(false)`, under a comment ending "If that changes, this fails." Thickness is a
+     * select, so `&&` short-circuited on the kind and `owns` was NEVER CALLED — the line
+     * asserted `false === false`. Delete the whole `owns` function and it stayed green.
+     *
+     * Both halves are now asserted on their own, and the second half is stated correctly:
+     * ownership is not "the nine names". It is the nine names PLUS the `weight-[NNN]`
+     * token twin, which is how a stored 550 gets REPLACED by a pick instead of fought.
+     * Off-scale never arises because a select has no scale — only `sliderIndex` measures.
+     */
     const weight = textControl('weight')
-    expect(weight.kind === 'slider' && weight.owns('font-[550]')).toBe(false)
+    expect(weight.kind).toBe('select')
+    expect(weight.owns('font-bold')).toBe(true)
+    expect(weight.owns('weight-[550]')).toBe(true)
+    // Not a weight spelling at all — `font-[…]` is the FAMILY control's arbitrary form.
+    expect(weight.owns('font-[550]')).toBe(false)
+    // The consequence of owning it: an off-segment weight reads back as itself, so the
+    // next pick swaps that token rather than stacking a second weight beside it.
+    expect(readStyleValue(weight, 'uppercase weight-[550]')).toBe('weight-[550]')
   })
 
   it('an item slider measures an odd px value between its stops', () => {

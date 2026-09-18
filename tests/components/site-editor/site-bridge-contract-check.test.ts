@@ -20,7 +20,20 @@
  */
 import { describe, expect, it } from "vitest";
 import { checkContract } from "@samfox1/site-bridge/contract";
+import { CLAIMABLE_PROPS } from "@samfox1/site-bridge/styles";
 import type { TemplateManifest } from "@samfox1/site-bridge/manifest";
+
+/** Every property a region may claim, READ from the bridge rather than spelled here.
+ *  `CLAIMABLE_PROPS` is itself derived from `{size, font}` + `TEXT_VARS`, so a seventh
+ *  text family becomes claimable and arrives in the fixtures below in the same commit. */
+const CLAIMS = Object.keys(CLAIMABLE_PROPS);
+/** The element's inline style with every claimed variable present. The VALUES are
+ *  irrelevant to rule 5 — it asks only whether the variable reached the element — so they
+ *  are a placeholder rather than six invented plausible ones. */
+const allVars = (except?: string) =>
+  CLAIMS.filter((c) => c !== except)
+    .map((c) => `${CLAIMABLE_PROPS[c]!.variable}: 1`)
+    .join("; ");
 
 const MANIFEST: TemplateManifest = {
   template: "starter",
@@ -44,6 +57,13 @@ const dom = (html: string): Element => {
   host.innerHTML = html;
   return host;
 };
+
+/** The same markup, handed over as the ELEMENT ITSELF rather than wrapped in a bare host.
+ *  A site that renders one section, or that passes the region it is checking, gives
+ *  `checkContract` a root that carries a marker — the branch `withAttr` exists for. Every
+ *  other fixture in this file wraps its markup in an unmarked `<div>`, so that branch was
+ *  unreachable in all 437 lines of it and could be deleted with the suite staying green. */
+const asRoot = (html: string): Element => dom(html).firstElementChild!;
 
 /** A site that does everything right: markers only in edit mode, every declared key
  *  present, the claimed region setting its variable and NOT the property. */
@@ -218,33 +238,66 @@ describe("5. a claimed property is a variable, never an inline value", () => {
     expect(checkContract({ ...base, editableDom: noVar }).map((f) => f.check)).toContain("claim-ignored");
   });
 
-  it("covers the second-wave claims too, not just size and font", () => {
-    // A claim the checker does not know is reported as unsatisfiable — so this list and
-    // the bridge's CLAIMABLE map must grow together, and this test is the coupling.
-    const claims: TemplateManifest = {
+  /** The manifest whose title region claims EVERY claimable property. */
+  const claimsEverything: TemplateManifest = {
+    ...MANIFEST,
+    styles: [
+      { key: "page", label: "Page", base: "bg-paper text-ink", scope: "site" },
+      { key: "title", label: "Title", base: `block lse-owns-[${CLAIMS.join(",")}]` },
+    ],
+  };
+  const titlePage = (style: string) =>
+    dom(`
+      <main data-lse-style="page">
+        <h1 data-lse-style="title" data-lse-field="site_title" data-lse-text="" style="${style}">Title</h1>
+        <ul data-lse-slot="shows"></ul><a data-lse-link="tickets"></a>
+      </main>`);
+
+  it("covers EVERY claimable property, read from the bridge's own map", () => {
+    /**
+     * WHAT THIS USED TO BE. `lse-owns-[weight,align,leading,tracking,case,italic]`, typed
+     * out, under a comment calling itself "the coupling" between this file and the
+     * bridge's CLAIMABLE map. A literal string couples nothing: the seventh text family
+     * would be claimable on every site and covered here by no fixture at all — the
+     * hand-listed-set failure AGENTS.md rule 4 is written about.
+     *
+     * Both halves are derived now, so a new claimable property is exercised the moment it
+     * exists, and a property REMOVED from the map stops being demanded here.
+     */
+    expect(CLAIMS.length).toBeGreaterThan(2); // the list is real, not an empty sweep
+    expect(checkContract({ ...base, manifest: claimsEverything, editableDom: titlePage(allVars()) })).toEqual([]);
+  });
+
+  it("names EACH claim whose variable never arrived, one property at a time", () => {
+    // A sweep rather than one spot check: the old version dropped every variable at once
+    // and asserted the detail mentioned `--lse-weight`, which stays true even if five of
+    // the six checks stopped reporting.
+    for (const claim of CLAIMS) {
+      const found = checkContract({
+        ...base,
+        manifest: claimsEverything,
+        editableDom: titlePage(allVars(claim)),
+      });
+      const accused = found.filter((f) => f.check === "claim-ignored");
+      // EXACTLY one, counted rather than searched: the other variables did arrive, and a
+      // substring search would be fooled anyway (`--lse-font` is a prefix of
+      // `--lse-fontstyle`).
+      expect(accused.length, claim).toBe(1);
+      expect(accused[0]!.detail, claim).toContain(CLAIMABLE_PROPS[claim]!.variable);
+    }
+  });
+
+  it("reports a claim the bridge does not know as unsatisfiable", () => {
+    const unknown: TemplateManifest = {
       ...MANIFEST,
       styles: [
         { key: "page", label: "Page", base: "bg-paper text-ink", scope: "site" },
-        { key: "title", label: "Title", base: "block weight-[900] lse-owns-[weight,align,leading,tracking,case,italic] align-[center] lead-[1.1] track-[-0.04em] case-[uppercase] fstyle-[italic]" },
+        { key: "title", label: "Title", base: "block lse-owns-[levitation]" },
       ],
     };
-    const ok = dom(`
-      <main data-lse-style="page">
-        <h1 data-lse-style="title" data-lse-field="site_title" data-lse-text=""
-            style="--lse-weight:900; --lse-align:center; --lse-leading:1.1; --lse-tracking:-0.04em; --lse-case:uppercase; --lse-fontstyle:italic">Title</h1>
-        <ul data-lse-slot="shows"></ul><a data-lse-link="tickets"></a>
-      </main>`);
-    expect(checkContract({ ...base, manifest: claims, editableDom: ok })).toEqual([]);
-
-    // …and a claimed weight whose variable never arrived is a finding.
-    const missing = dom(`
-      <main data-lse-style="page">
-        <h1 data-lse-style="title" data-lse-field="site_title" data-lse-text="">Title</h1>
-        <ul data-lse-slot="shows"></ul><a data-lse-link="tickets"></a>
-      </main>`);
-    const found = checkContract({ ...base, manifest: claims, editableDom: missing });
+    const found = checkContract({ ...base, manifest: unknown, editableDom: titlePage("") });
     expect(found.map((f) => f.check)).toContain("claim-ignored");
-    expect(found.map((f) => f.detail).join(" ")).toContain("--lse-weight");
+    expect(found.map((f) => f.detail).join(" ")).toContain("levitation");
   });
 
   it("says nothing about a region that claims nothing", () => {
@@ -264,6 +317,44 @@ describe("5. a claimed property is a variable, never an inline value", () => {
   });
 });
 
+
+describe("a site whose ROOT element is itself a marked region", () => {
+  /**
+   * `withAttr` reads `root.hasAttribute?.(attr) ? [root, ...found] : found` — the root
+   * counts as one of its own results, because a site whose whole page IS the region, or
+   * one that hands the checker the section it is checking, marks the element it passes.
+   * No fixture ever did that, so the `[root, ...]` half was dead in tests: deleting it
+   * left every one of them green while a root-marked leak walked past rule 1, a
+   * root-marked editable page read as "no markers at all", and a key marked only on the
+   * root was reported as unmarked.
+   */
+  const COMPLIANT = `
+    <main data-lse-style="page" style="--x:1">
+      <h1 data-lse-style="title" data-lse-field="site_title" data-lse-text=""
+          style="--lse-size: clamp(1.75rem,6.5vw,3rem)">Title</h1>
+      <ul data-lse-slot="shows"><li data-lse-item="tour_date:1">A show</li></ul>
+      <a data-lse-link="tickets" href="#">Tickets</a>
+    </main>`;
+
+  it("CRITICAL: a marker on the public page's own root is still a leak", () => {
+    const leaky = asRoot(`<main data-lse-style="page"><h1>Title</h1></main>`);
+    const found = checkContract({ ...base, publicDom: leaky });
+    expect(found.map((f) => f.check)).toContain("public-markers");
+    expect(found.find((f) => f.check === "public-markers")!.detail).toContain("data-lse-style");
+  });
+
+  it("counts a root-marked editable page as the witness", () => {
+    // Its only marker is on the root. Read descendants alone and this page looks
+    // unmarked — at which point the checker declares nothing was proved and every later
+    // rule is skipped, on a site that is in fact marked correctly.
+    const rooted = asRoot(`<main data-lse-style="page"></main>`);
+    expect(checkContract({ ...base, editableDom: rooted }).map((f) => f.check)).not.toContain("no-witness");
+  });
+
+  it("accepts every declared key when one of them is marked on the root itself", () => {
+    expect(checkContract({ ...base, editableDom: asRoot(COMPLIANT) })).toEqual([]);
+  });
+});
 
 describe('the tokens.css check — the cheapest rule, and the most repeated failure', () => {
   it('CRITICAL: a site whose CSS never imports tokens.css is flagged', () => {
