@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>skeen · tap feedback</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ------------------------------------------------------------------
+   skeen tap-feedback bench — 4 effects x 4 element kinds + 1 control.
+   Dark ground, skeen tokens only. No :hover rules anywhere in this
+   file on purpose: a hover state on a touch device sticks after the
+   tap and would contaminate the thing being judged.
+   ------------------------------------------------------------------ */
+
+:root{
+  /* skeen tokens */
+  --cream:#f4f1ea;
+  --charcoal:#17191c;
+  --background:#0a0a0a;
+  --foreground:#f4f1ea;
+  --muted:#a8a39b;
+  --red:#c63a2a;        /* --flash-1 */
+  --sky:#8dbfd5;
+
+  --font-display:'Archivo',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+  --font-accent:'Bebas Neue',Impact,sans-serif;
+
+  /* Timing is ASYMMETRIC and that is the whole point.
+     IN  = 80ms   the press must be fully arrived almost instantly.
+     OUT = 200ms  the release lingers so the eye catches it.
+     Walk a 100ms tap: finger down at 0ms, the press transition
+     completes at 80ms, so 20ms of the tap is spent held at the
+     full pressed state -> the effect is unambiguously seen. Release
+     at 100ms then takes 200ms to unwind, giving ~220ms of visible
+     feedback from a 100ms contact. Symmetric 200/200 would abort
+     the press at ~50% travel and read as a smudge. */
+  --in:80ms;
+  --out:200ms;
+  --ease-in:cubic-bezier(.4,0,1,1);      /* press: accelerates, snaps home */
+  --ease-out:cubic-bezier(.22,1,.36,1);  /* release: decelerates, springs  */
+}
+
+*{box-sizing:border-box}
+
+html{background:var(--background)}
+
+body{
+  margin:0;
+  background:var(--background);
+  color:var(--foreground);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  /* Safari does a delayed double-tap-zoom dance without this. */
+  touch-action:manipulation;
+}
+
+.wrap{max-width:390px;margin:0 auto;padding:0 16px 72px}
+
+/* ---- chrome ---------------------------------------------------- */
+
+header{
+  position:sticky;top:0;z-index:20;
+  background:rgba(10,10,10,.92);
+  -webkit-backdrop-filter:saturate(1.4) blur(12px);
+  backdrop-filter:saturate(1.4) blur(12px);
+  border-bottom:1px solid rgba(244,241,234,.10);
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+}
+header .mark{
+  font-family:var(--font-display);font-weight:900;
+  font-size:15px;letter-spacing:-.02em;margin:0;
+}
+header .mark span{color:var(--muted);font-weight:700}
+
+.sec{padding:30px 0 6px;border-top:1px solid rgba(244,241,234,.09)}
+.sec:first-of-type{border-top:0}
+.sec > h2{
+  font-family:var(--font-accent);font-weight:400;
+  font-size:30px;line-height:1;letter-spacing:.035em;
+  margin:0 0 16px;color:var(--cream);
+}
+.sec.fx-none > h2{color:var(--muted)}
+
+/* ---- the four element kinds (shared shell, effect-free) -------- */
+
+.tap{
+  position:relative;
+  display:block;width:100%;
+  margin:0;padding:0;
+  border:0;background:none;color:inherit;
+  font:inherit;text-align:left;
+  min-height:44px;                 /* 44px floor on every target */
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;      /* no long-press "Save Image" sheet */
+  touch-action:manipulation;
+  appearance:none;-webkit-appearance:none;
+  cursor:default;
+}
+
+/* music tile — 2-up grid of square cover art */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.tile{border-radius:3px;overflow:hidden;background:var(--charcoal);padding-bottom:9px}
+.tile .cover{display:block;aspect-ratio:1/1;background:#121417}
+.tile img{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.tile .t-title{
+  display:block;padding:8px 9px 0;
+  font-size:11.5px;font-weight:500;line-height:1.25;
+  letter-spacing:-.005em;color:var(--cream);
+}
+
+/* show row — city / venue / Tickets */
+.shows{margin-bottom:18px;border-top:1px solid rgba(244,241,234,.09)}
+.show{
+  display:grid;grid-template-columns:1fr auto;align-items:center;
+  gap:1px 12px;min-height:58px;padding:10px 10px;
+  border-bottom:1px solid rgba(244,241,234,.09);
+}
+.show .city{
+  grid-column:1;grid-row:1;
+  font-family:var(--font-display);font-weight:800;
+  font-size:15px;letter-spacing:-.015em;
+}
+.show .venue{grid-column:1;grid-row:2;font-size:12.5px;color:var(--muted)}
+.show .tix{
+  grid-column:2;grid-row:1/span 2;
+  font-family:var(--font-accent);font-size:17px;
+  letter-spacing:.07em;color:var(--sky);
+}
+
+/* button — solid pill */
+.pill{
+  width:auto;min-width:100%;
+  display:flex;align-items:center;justify-content:center;
+  min-height:50px;padding:0 22px;margin-bottom:18px;
+  border-radius:999px;overflow:hidden;
+  background:var(--red);color:var(--cream);
+  font-family:var(--font-display);font-weight:800;
+  font-size:14px;letter-spacing:.01em;text-align:center;
+}
+
+/* icon row — 4 round glyphs */
+.icons{display:flex;gap:12px;padding-bottom:6px}
+.icon{
+  width:44px;height:44px;flex:0 0 44px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;overflow:hidden;
+  border:1px solid rgba(244,241,234,.20);
+  color:var(--cream);
+}
+.glyph{width:21px;height:21px;display:block;pointer-events:none}
+
+/* ==================================================================
+   EFFECT 1 — PRESS-DOWN
+   Transform only. Nothing paints, nothing tints; the element just
+   gets smaller under the thumb and springs back on a different curve
+   than it went down on.
+   ================================================================== */
+.fx-press{-webkit-tap-highlight-color:transparent}
+.fx-press .tap{
+  transition:transform var(--out) var(--ease-out);
+  will-change:transform;
+}
+.fx-press .tap:active{
+  transform:scale(.96);
+  transition-duration:var(--in);
+  transition-timing-function:var(--ease-in);
+}
+/* a 44px circle needs more travel than a 180px tile to read at all */
+.fx-press .icon:active{transform:scale(.86)}
+
+/* ==================================================================
+   EFFECT 2 — TINT FILL
+   No geometry change at all. A cream scrim layer sits on top of the
+   element and fades its OPACITY in/out (never background-color, which
+   cannot be composited on the GPU). Geometry is untouched, so it is
+   the treatment that survives inside a scrolling list.
+   ================================================================== */
+.fx-tint{-webkit-tap-highlight-color:transparent}
+.fx-tint .tap::after{
+  content:"";position:absolute;inset:0;
+  background:var(--cream);
+  border-radius:inherit;
+  opacity:0;pointer-events:none;
+  transition:opacity var(--out) var(--ease-out);
+}
+.fx-tint .tap:active::after{
+  opacity:.14;
+  transition-duration:var(--in);
+  transition-timing-function:var(--ease-in);
+}
+/* the pill is already cream-on-red; darken it instead so it registers */
+.fx-tint .pill::after{background:var(--charcoal)}
+.fx-tint .pill:active::after{opacity:.30}
+
+/* ==================================================================
+   EFFECT 3 — RIPPLE
+   The only section with JS. A circle is placed at the exact touch
+   coordinates and scaled up while fading out. Its diameter is written
+   once at birth (a static size, not an animated one); the animation
+   itself is transform + opacity. It is the only effect that knows
+   WHERE you touched.
+   ================================================================== */
+.fx-ripple{-webkit-tap-highlight-color:transparent}
+.fx-ripple .tap{overflow:hidden}
+.fx-ripple .show{overflow:hidden}
+.ripple{
+  position:absolute;z-index:3;
+  border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle closest-side,
+              rgba(244,241,234,.50),rgba(244,241,234,.16) 62%,rgba(244,241,234,0) 100%);
+  transform:translate(-50%,-50%) scale(0);
+  animation:ripple 520ms var(--ease-out) forwards;
+}
+@keyframes ripple{
+  from{transform:translate(-50%,-50%) scale(0);opacity:.95}
+  60% {opacity:.55}
+  to  {transform:translate(-50%,-50%) scale(1);opacity:0}
+}
+
+/* ==================================================================
+   EFFECT 4 — STYLED TAP HIGHLIGHT
+   One declaration, zero JS, zero transitions, zero extra DOM. Safari
+   paints its own flash over the element's painted area using this
+   colour instead of its default grey. Timing is not ours to set.
+   ================================================================== */
+.fx-highlight{-webkit-tap-highlight-color:rgba(198,58,42,.55)} /* --red @ 55% */
+
+/* ==================================================================
+   CONTROL — nothing. No transition, no scrim, no JS, and deliberately
+   NO -webkit-tap-highlight-color override, so this section shows the
+   browser's own default grey flash: skeen's site as it ships today.
+   ================================================================== */
+
+/* ---- reduced motion -------------------------------------------- */
+/* No scale, no ripple. Both fall back to the tint, which is a pure
+   opacity cross-fade and carries no implied movement. */
+@media (prefers-reduced-motion: reduce){
+  .fx-press .tap{transition:none}
+  .fx-press .tap:active,
+  .fx-press .icon:active{transform:none}
+
+  .fx-press .tap::after,
+  .fx-ripple .tap::after{
+    content:"";position:absolute;inset:0;
+    background:var(--cream);border-radius:inherit;
+    opacity:0;pointer-events:none;
+    transition:opacity var(--out) linear;
+  }
+  .fx-press .tap:active::after,
+  .fx-ripple .tap:active::after{opacity:.14;transition-duration:var(--in)}
+  .fx-press .pill::after,
+  .fx-ripple .pill::after{background:var(--charcoal)}
+  .fx-press .pill:active::after,
+  .fx-ripple .pill:active::after{opacity:.30}
+
+  .ripple{display:none;animation:none}
+}
+</style>
+</head>
+
+<!--
+  ontouchstart="" is load-bearing, not leftover debris.
+
+  iOS Safari only delivers the :active state to an element that sits
+  inside a subtree with a touch listener attached; without one, every
+  :active rule on this page works on a laptop and does absolutely
+  nothing on the phone.
+
+  Two remedies exist. The other one is `cursor:pointer` on each
+  tappable element, which also persuades Safari to treat it as
+  clickable. This one is chosen because (a) it is a single inherited
+  declaration that covers every element on the page including ones JS
+  adds later, and (b) it is parsed before any script runs, so the very
+  first tap works even if the stylesheet or script is still in flight.
+  The cursor trick has to be repeated per element and quietly stops
+  applying the moment a rule resets the cursor.
+-->
+<body ontouchstart="">
+
+<header>
+  <p class="mark">skeen — tap feedback <span>· 22 Sep 2026</span></p>
+</header>
+
+<!-- glyph defs: monochrome marks, no brand colours, no remote logos -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <symbol id="ic-ig" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5"></rect>
+      <circle cx="12" cy="12" r="4.1"></circle>
+    </g>
+    <circle cx="17.1" cy="6.9" r="1.15" fill="currentColor"></circle>
+  </symbol>
+  <symbol id="ic-sp" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="12" cy="12" r="8.9"></circle>
+      <path d="M6.9 8.6c3.6-1.1 7.7-.7 10.5 1.2"></path>
+      <path d="M7.5 11.9c2.9-.9 6.3-.6 8.7 1.1"></path>
+      <path d="M8.1 15.2c2.3-.7 4.9-.5 6.8.9"></path>
+    </g>
+  </symbol>
+  <symbol id="ic-sc" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.2 14.2v3"></path>
+      <path d="M5.9 12.3v4.9"></path>
+      <path d="M8.6 10.6v6.6"></path>
+      <path d="M11.3 17.2V8.1a4.7 4.7 0 0 1 4.6 3.6"></path>
+      <path d="M11.3 17.2h6a2.9 2.9 0 0 0 0-5.8c-.5 0-1 .1-1.4.3"></path>
+    </g>
+  </symbol>
+  <symbol id="ic-yt" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+      <rect x="2.6" y="5.4" width="18.8" height="13.2" rx="4"></rect>
+    </g>
+    <path d="M10.3 9.1 15.6 12l-5.3 2.9z" fill="currentColor"></path>
+  </symbol>
+</svg>
+
+<main class="wrap">
+
+  <!-- ============ 1 · PRESS-DOWN ============ -->
+  <section class="sec fx-press">
+    <h2>Press-down</h2>
+
+    <div class="tiles">
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t300x300.jpg" alt=""></span>
+        <span class="t-title">Rushing Back [Skeen Remix]</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e02d338d47f8f8964cc04f794e2" alt=""></span>
+        <span class="t-title">What I Want</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t300x300.jpg" alt=""></span>
+        <span class="t-title">Small Talk (Briston Maroney)</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e0202e3919b9f17620c0e5a12ab" alt=""></span>
+        <span class="t-title">You Were There</span>
+      </button>
+    </div>
+
+    <div class="shows">
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Lakeshore Music Festival</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Madison</span><span class="venue">The Majestic Theatre</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Concord Music Hall</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Columbia</span><span class="venue">The Blue Note</span><span class="tix">Tickets</span></button>
+    </div>
+
+    <button type="button" class="tap pill">add to cart · $32</button>
+
+    <div class="icons">
+      <button type="button" class="tap icon" aria-label="Instagram"><svg class="glyph"><use href="#ic-ig"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="Spotify"><svg class="glyph"><use href="#ic-sp"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="SoundCloud"><svg class="glyph"><use href="#ic-sc"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="YouTube"><svg class="glyph"><use href="#ic-yt"></use></svg></button>
+    </div>
+  </section>
+
+  <!-- ============ 2 · TINT FILL ============ -->
+  <section class="sec fx-tint">
+    <h2>Tint fill</h2>
+
+    <div class="tiles">
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t300x300.jpg" alt=""></span>
+        <span class="t-title">Rushing Back [Skeen Remix]</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e02d338d47f8f8964cc04f794e2" alt=""></span>
+        <span class="t-title">What I Want</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t300x300.jpg" alt=""></span>
+        <span class="t-title">Small Talk (Briston Maroney)</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e0202e3919b9f17620c0e5a12ab" alt=""></span>
+        <span class="t-title">You Were There</span>
+      </button>
+    </div>
+
+    <div class="shows">
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Lakeshore Music Festival</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Madison</span><span class="venue">The Majestic Theatre</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Concord Music Hall</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Columbia</span><span class="venue">The Blue Note</span><span class="tix">Tickets</span></button>
+    </div>
+
+    <button type="button" class="tap pill">add to cart · $32</button>
+
+    <div class="icons">
+      <button type="button" class="tap icon" aria-label="Instagram"><svg class="glyph"><use href="#ic-ig"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="Spotify"><svg class="glyph"><use href="#ic-sp"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="SoundCloud"><svg class="glyph"><use href="#ic-sc"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="YouTube"><svg class="glyph"><use href="#ic-yt"></use></svg></button>
+    </div>
+  </section>
+
+  <!-- ============ 3 · RIPPLE ============ -->
+  <section class="sec fx-ripple">
+    <h2>Ripple</h2>
+
+    <div class="tiles">
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t300x300.jpg" alt=""></span>
+        <span class="t-title">Rushing Back [Skeen Remix]</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e02d338d47f8f8964cc04f794e2" alt=""></span>
+        <span class="t-title">What I Want</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t300x300.jpg" alt=""></span>
+        <span class="t-title">Small Talk (Briston Maroney)</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e0202e3919b9f17620c0e5a12ab" alt=""></span>
+        <span class="t-title">You Were There</span>
+      </button>
+    </div>
+
+    <div class="shows">
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Lakeshore Music Festival</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Madison</span><span class="venue">The Majestic Theatre</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Concord Music Hall</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Columbia</span><span class="venue">The Blue Note</span><span class="tix">Tickets</span></button>
+    </div>
+
+    <button type="button" class="tap pill">add to cart · $32</button>
+
+    <div class="icons">
+      <button type="button" class="tap icon" aria-label="Instagram"><svg class="glyph"><use href="#ic-ig"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="Spotify"><svg class="glyph"><use href="#ic-sp"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="SoundCloud"><svg class="glyph"><use href="#ic-sc"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="YouTube"><svg class="glyph"><use href="#ic-yt"></use></svg></button>
+    </div>
+  </section>
+
+  <!-- ============ 4 · STYLED TAP HIGHLIGHT ============ -->
+  <section class="sec fx-highlight">
+    <h2>Styled tap highlight</h2>
+
+    <div class="tiles">
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t300x300.jpg" alt=""></span>
+        <span class="t-title">Rushing Back [Skeen Remix]</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e02d338d47f8f8964cc04f794e2" alt=""></span>
+        <span class="t-title">What I Want</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t300x300.jpg" alt=""></span>
+        <span class="t-title">Small Talk (Briston Maroney)</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e0202e3919b9f17620c0e5a12ab" alt=""></span>
+        <span class="t-title">You Were There</span>
+      </button>
+    </div>
+
+    <div class="shows">
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Lakeshore Music Festival</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Madison</span><span class="venue">The Majestic Theatre</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Concord Music Hall</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Columbia</span><span class="venue">The Blue Note</span><span class="tix">Tickets</span></button>
+    </div>
+
+    <button type="button" class="tap pill">add to cart · $32</button>
+
+    <div class="icons">
+      <button type="button" class="tap icon" aria-label="Instagram"><svg class="glyph"><use href="#ic-ig"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="Spotify"><svg class="glyph"><use href="#ic-sp"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="SoundCloud"><svg class="glyph"><use href="#ic-sc"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="YouTube"><svg class="glyph"><use href="#ic-yt"></use></svg></button>
+    </div>
+  </section>
+
+  <!-- ============ 5 · CONTROL, NO EFFECT ============ -->
+  <section class="sec fx-none">
+    <h2>No effect</h2>
+
+    <div class="tiles">
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t300x300.jpg" alt=""></span>
+        <span class="t-title">Rushing Back [Skeen Remix]</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e02d338d47f8f8964cc04f794e2" alt=""></span>
+        <span class="t-title">What I Want</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t300x300.jpg" alt=""></span>
+        <span class="t-title">Small Talk (Briston Maroney)</span>
+      </button>
+      <button type="button" class="tap tile">
+        <span class="cover"><img src="https://i.scdn.co/image/ab67616d00001e0202e3919b9f17620c0e5a12ab" alt=""></span>
+        <span class="t-title">You Were There</span>
+      </button>
+    </div>
+
+    <div class="shows">
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Lakeshore Music Festival</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Madison</span><span class="venue">The Majestic Theatre</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Chicago</span><span class="venue">Concord Music Hall</span><span class="tix">Tickets</span></button>
+      <button type="button" class="tap show"><span class="city">Columbia</span><span class="venue">The Blue Note</span><span class="tix">Tickets</span></button>
+    </div>
+
+    <button type="button" class="tap pill">add to cart · $32</button>
+
+    <div class="icons">
+      <button type="button" class="tap icon" aria-label="Instagram"><svg class="glyph"><use href="#ic-ig"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="Spotify"><svg class="glyph"><use href="#ic-sp"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="SoundCloud"><svg class="glyph"><use href="#ic-sc"></use></svg></button>
+      <button type="button" class="tap icon" aria-label="YouTube"><svg class="glyph"><use href="#ic-yt"></use></svg></button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* The only JS on the page: the ripple needs the touch coordinates,
+   which CSS cannot see. Everything else is :active. */
+(function () {
+  'use strict';
+
+  var host = document.querySelector('.fx-ripple');
+  if (!host) return;
+
+  var RIPPLE_MS   = 520;   // must match the animation duration in CSS
+  var MAX_PER_EL  = 5;     // hard cap so hammering cannot pile up nodes
+  var reduce      = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function spawn(el, clientX, clientY) {
+    if (reduce.matches) return;           // reduced motion: tint only
+
+    var r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+
+    var x = clientX - r.left;
+    var y = clientY - r.top;
+
+    // Diameter that reaches the furthest corner from the touch point.
+    // Written once, as a static size — it is never animated.
+    var d = 2 * Math.max(
+      Math.hypot(x, y),
+      Math.hypot(r.width - x, y),
+      Math.hypot(x, r.height - y),
+      Math.hypot(r.width - x, r.height - y)
+    );
+
+    // Evict the oldest if a rapid tapper outruns the animation.
+    var live = el.getElementsByClassName('ripple');
+    while (live.length >= MAX_PER_EL) live[0].parentNode.removeChild(live[0]);
+
+    var s = document.createElement('span');
+    s.className = 'ripple';
+    s.style.width  = d + 'px';
+    s.style.height = d + 'px';
+    s.style.left   = x + 'px';
+    s.style.top    = y + 'px';
+
+    // Cleanup, three ways, idempotent: animationend is the normal path,
+    // animationcancel covers a node torn out mid-flight, and the timer
+    // covers a backgrounded tab where neither event ever arrives.
+    var dead = false;
+    function kill() {
+      if (dead) return;
+      dead = true;
+      clearTimeout(timer);
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+    var timer = setTimeout(kill, RIPPLE_MS + 400);
+    s.addEventListener('animationend', kill);
+    s.addEventListener('animationcancel', kill);
+
+    el.appendChild(s);
+  }
+
+  // One delegated listener on the section, so no per-element bookkeeping.
+  function onDown(e) {
+    var t = e.target;
+    var el = t && t.closest ? t.closest('.tap') : null;
+    if (!el || !host.contains(el)) return;
+    var p = e.touches ? e.touches[0] : e;
+    if (!p) return;
+    spawn(el, p.clientX, p.clientY);
+  }
+
+  if (window.PointerEvent) {
+    // Covers finger, pencil and desktop mouse in one event, and fires
+    // immediately on contact rather than waiting for the click.
+    host.addEventListener('pointerdown', onDown, { passive: true });
+  } else {
+    // Fallback for anything without Pointer Events: guard the synthetic
+    // mousedown Safari emits after a touch so one tap is not two ripples.
+    var lastTouch = 0;
+    host.addEventListener('touchstart', function (e) {
+      lastTouch = Date.now();
+      onDown(e);
+    }, { passive: true });
+    host.addEventListener('mousedown', function (e) {
+      if (Date.now() - lastTouch < 800) return;
+      onDown(e);
+    });
+  }
+})();
+</script>
+</body>
+</html>
