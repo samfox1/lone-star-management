@@ -109,7 +109,14 @@ const EXPECTED = {
   entityDaily: [{ count: 2 }],
 }
 const expectedAll = () => ({
-  summary: [...EXPECTED.summary].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  // `artist_id` on every summary row since 20260918120000, which gave analytics_summary the
+  // same optional-artist shape analytics_daily already had — a caller passing no artist has
+  // to be able to tell whose `(type, count)` pair is whose. Added HERE rather than in
+  // EXPECTED so the fixture keeps stating only what the events were, exactly as `daily`
+  // below already does.
+  summary: EXPECTED.summary
+    .map((r) => ({ artist_id: artistF, ...r }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   daily: [{ artist_id: artistF, day: DAY, views: 3 }],
   byEntity: [...EXPECTED.byEntity].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   entityDaily: [{ day: DAY, count: 2 }],
