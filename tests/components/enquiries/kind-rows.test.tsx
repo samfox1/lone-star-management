@@ -26,6 +26,11 @@ import {
   setEnquiryRecipientsAction,
 } from '@/app/artists/[id]/(dashboard)/enquiries/actions'
 import { LABEL_MAX, type EnquiryKindRow } from '@/lib/enquiries/kinds'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
+
+// Seen live 2026-09-23: every refusal here wore the green success tick, because
+// `toast()` defaults to 'success'. Mocked so the KIND of each toast can be asserted.
+vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
 vi.mock('@/app/artists/[id]/(dashboard)/enquiries/actions', () => ({
   addEnquiryKindAction: vi.fn(async () => ({ kind: null })),
@@ -269,6 +274,8 @@ describe('the chips — guards added after the 2026-09-22 review', () => {
 
     expect(setRecipients).not.toHaveBeenCalled()
     expect(within(screen.getByRole('dialog')).getByText('Skeen')).toBeTruthy()
+    // A refusal is an ERROR toast, not a green tick with a complaint in it.
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.stringMatching(/email address/i), 'error')
   })
 
   it('refuses a duplicate address in another case, without a round trip', async () => {

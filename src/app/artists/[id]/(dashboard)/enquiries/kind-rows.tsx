@@ -60,7 +60,7 @@ export function KindRows({
     try {
       const res = await addEnquiryKindAction(artistId, label)
       const kind = res.kind
-      if (res.error || !kind) return toast(res.error ?? 'Could not add that kind.')
+      if (res.error || !kind) return toast(res.error ?? 'Could not add that kind.', 'error')
       setKinds((ks) => [...ks, kind])
       setAdding(false)
     } finally {
@@ -234,7 +234,7 @@ function KindModal({
               // The save is atomic now, so on a refusal the database still holds `before`
               // and putting it back is TRUE, not cosmetic.
               onPatch({ recipients: before })
-              toast(res.error ?? 'Could not save the list.')
+              toast(res.error ?? 'Could not save the list.', 'error')
               return
             }
             // Server ids and server order replace the optimistic `new-…` ones.
@@ -279,7 +279,7 @@ function Chips({
   /** False when a save is already in flight and this one never started. */
   function busy() {
     if (!busyRef.current) return false
-    toast('Still saving — try that again in a moment.')
+    toast('Still saving — try that again in a moment.', 'error')
     return true
   }
 
@@ -298,7 +298,9 @@ function Chips({
     if (!clean) return
     const problem = recipientProblem(recipients.map((r) => r.email), clean)
     if (problem) {
-      toast(problem)
+      // 'error', always: every toast in this file is a refusal (live check 2026-09-23
+      // found them all wearing the success tick).
+      toast(problem, 'error')
       return
     }
     // Checked HERE, before the inputs clear: a refused send used to wipe what was typed
