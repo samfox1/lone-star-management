@@ -309,10 +309,14 @@ describe('enquiry_kinds — every artist starts with the three the sites send', 
     // artist could ever be removed. Every other test in this file tears down that way, so
     // this pins the reason they can.
     const a = await createThrowawayArtist(svc, 'artist cascade past guard')
-    await deleteThrowawayArtist(svc, a)
-
-    const { data } = await svc.from('enquiry_kinds').select('id').eq('artist_id', a.id)
-    expect(data).toEqual([])
+    try {
+      await deleteThrowawayArtist(svc, a)
+      const { data } = await svc.from('enquiry_kinds').select('id').eq('artist_id', a.id)
+      expect(data).toEqual([])
+    } finally {
+      // The delete IS the assertion here, so a failure before it would leak the artist.
+      await deleteThrowawayArtist(svc, a)
+    }
   })
 
   it('refuses the same slug twice for one artist', async () => {
@@ -628,11 +632,14 @@ describe('enquiry_recipients — the table itself', () => {
 
   it('goes with the artist', async () => {
     const a = await createThrowawayArtist(svc, 'artist cascade')
-    const id = await addRecipient(a.id, 'booking', MANAGER_TO)
-    await deleteThrowawayArtist(svc, a)
-
-    const { data } = await svc.from('enquiry_recipients').select('id').eq('id', id)
-    expect(data).toEqual([])
+    try {
+      const id = await addRecipient(a.id, 'booking', MANAGER_TO)
+      await deleteThrowawayArtist(svc, a)
+      const { data } = await svc.from('enquiry_recipients').select('id').eq('id', id)
+      expect(data).toEqual([])
+    } finally {
+      await deleteThrowawayArtist(svc, a)
+    }
   })
 })
 

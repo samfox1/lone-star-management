@@ -83,5 +83,9 @@ export async function deleteThrowawayArtist(
 ): Promise<void> {
   const id = typeof artist === 'string' ? artist : artist?.id
   if (!id) return
-  await svc.from('artists').delete().eq('id', id)
+  // Loud, not silent: a refused delete used to return quietly and leave the row in the
+  // production table (two 'cascade throwaway' artists from 2026-09-21 were found on
+  // 2026-09-23). A zero-row match is fine — the test may have deleted it itself.
+  const { error } = await svc.from('artists').delete().eq('id', id)
+  if (error) throw new Error(`deleteThrowawayArtist(${id}): ${error.message}`)
 }
