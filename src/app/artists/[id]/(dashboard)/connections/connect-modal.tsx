@@ -13,7 +13,7 @@ import {
   type ConnectInput,
   type ConnectionDef,
 } from '@/lib/connections'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { ConnectionMark } from './connection-mark'
 import { connectOneAction, type ConnectResult } from './actions'
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { buttonClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 
 /**
  * Videos-page "Refresh" (import): a toolbar icon that first asks to confirm, then

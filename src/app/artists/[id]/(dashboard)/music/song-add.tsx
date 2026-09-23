@@ -12,7 +12,7 @@ import { acceptFor, AUDIO_UPLOAD_RULES, buildStoragePath, contentTypeFor, friend
 import { STREAMING_SERVICES, parseStreamingLinks, type StreamingUrls } from '@/lib/song-links'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { resolveStreamingSongAction } from '../actions'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from '../toast'
 
 /** "A, B feat. C" → ['A', 'B feat. C'] — comma-separated collaborators. */

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { MediaUploader } from '../media-uploader'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 
 /**
  * The Photos page's "+ Add" — same collapsed-label toolbar trigger as the other

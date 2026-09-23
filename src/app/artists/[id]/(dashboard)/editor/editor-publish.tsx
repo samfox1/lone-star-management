@@ -5,7 +5,7 @@ import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import type { SectionDiff, UnpublishedDiff } from '@/lib/content'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { getUnpublishedDiffAction, publishAllGatedAction } from '../actions'
 
 /**

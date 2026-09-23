@@ -4,7 +4,7 @@ import { cx } from '@/lib/cx'
 import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { Icon } from '@/components/ui/icons'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { EYEBROW } from './inspector-shared'
 
 /**

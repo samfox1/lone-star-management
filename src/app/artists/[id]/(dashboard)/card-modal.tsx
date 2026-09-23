@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
 import { useConfirm } from './confirm-dialog'
-import { useLockBodyScroll } from './use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from './toast'
 
 /** The footer pair is one control read twice: same pill, same width, so neither reads as

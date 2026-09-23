@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
 import { addVideoAction, resolveVideoUrlAction } from '../actions'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from '../toast'
 
 type Step = 'choose' | 'manual' | 'streaming'

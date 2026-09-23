@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
-import { useLockBodyScroll } from './use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { SECTION_SERVICE_NOUN, type SyncRunResult, type SyncSection, type SyncSource } from './sync-sections'
 
 // The types and the section vocabulary live in sync-sections, and the arrow points ONE

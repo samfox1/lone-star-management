@@ -7,7 +7,7 @@ import { SOCIAL_PLATFORMS, type SocialPlatform } from '@samfox1/site-bridge/soci
 import { socialIcon } from '@samfox1/site-bridge/social-icons'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { EYEBROW, FIELD } from './inspector-shared'
-import { useLockBodyScroll } from '../use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 
 /**
  * ADD A SOCIAL, without leaving the editor.

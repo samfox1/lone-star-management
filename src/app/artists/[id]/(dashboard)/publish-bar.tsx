@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
-import { useLockBodyScroll } from './use-lock-body-scroll'
+import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 
 /**
  * The publish control shared by every on-site content list (releases, videos, merch,
