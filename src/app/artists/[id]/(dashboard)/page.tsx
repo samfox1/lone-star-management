@@ -11,7 +11,7 @@ import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topContent, trafficWindow, entityRows, CONTENT_KINDS, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topContent, trafficWindow, entityRows, entityTargetRows, entityFacts, CONTENT_KINDS, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DIFF_SECTIONS } from './sections'
 import { analyticsScope, dashboardDiff, requireArtist } from './_data'
@@ -36,11 +36,6 @@ const REFS: Record<ContentKind['key'], (supabase: SupabaseClient, ids: string[])
     const rows = (await supabase.from('tracks').select('id,title,cover_url,album_name').in('id', ids)).data ?? []
     return (rows as { id: string; title: string; cover_url: string | null; album_name: string | null }[])
       .map((t) => ({ id: t.id, title: t.title, image: t.cover_url, sub: t.album_name }))
-  },
-  tour: async (supabase, ids) => {
-    const rows = (await supabase.from('tour_dates').select('id,venue,city,date,image_url').in('id', ids)).data ?? []
-    return (rows as { id: string; venue: string | null; city: string | null; date: string | null; image_url: string | null }[])
-      .map((d) => ({ id: d.id, title: d.venue ?? d.city ?? 'Show', image: d.image_url, sub: [d.city, d.date].filter(Boolean).join(' · ') || null }))
   },
   merch: async (supabase, ids) => {
     const rows = (await supabase.from('merch').select('id,title,image_url,price').in('id', ids)).data ?? []
@@ -69,11 +64,12 @@ export default async function OverviewPage({
   // the chart. The old call took a timestamp `p_since` while the rest of the page
   // counted whole UTC days, so on most days the KPI row and the chart beside it were
   // describing slightly different slices and nothing on screen said so.
-  const [artist, diff, traffic, byEntity] = await Promise.all([
+  const [artist, diff, traffic, byEntity, byTarget] = await Promise.all([
     requireArtist(id),
     dashboardDiff(id),
     trafficWindow(supabase, id, days, now),
     entityRows(supabase, id, window.since),
+    entityTargetRows(supabase, id, window.since),
   ])
   // The content lists. The ids come from the entity reader, the titles from the
   // tables: a second, dependent wave, one query per kind, in parallel. The kinds
@@ -146,12 +142,11 @@ export default async function OverviewPage({
         <PlacesSection key={windowKey} map={worldMap(traffic.places)} />
       </section>
 
-      {/* WHAT THEY ACTED ON. Songs by plays, dates by ticket clicks, merch by buy
-          clicks — the three events the site attaches an entity to. No videos: the
-          site never sends a video event. */}
+      {/* Songs by plays, products by buy clicks. Each column heads itself, so there
+          is no label here. Ticket clicks are recorded and counted in the metric row
+          above, but dates are not ranked against each other — see CONTENT_KINDS. */}
       <section>
-        <KLabel>What they acted on</KLabel>
-        <TopContent className="mt-3" lists={lists} />
+        <TopContent lists={lists} facts={entityFacts(byTarget)} />
       </section>
 
       {/* The numbers above do not all reach as far back as the window does, and the

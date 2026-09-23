@@ -337,6 +337,21 @@ export async function entityRows(supabase: SupabaseClient, artistId: string, sin
 }
 
 /**
+ * The same window, broken down by TARGET — which service a play named, and whether a
+ * merch click was an add-to-cart. Reads raw rows only (the rolled tally has no target
+ * column), so it answers for the last 90 days and no further; see the migration.
+ */
+export async function entityTargetRows(supabase: SupabaseClient, artistId: string, sinceDay: string): Promise<TargetRow[]> {
+  const rows = must<Rows>('analytics_entity_targets', await supabase.rpc('analytics_entity_targets', {
+    p_artist_id: artistId, p_since: `${sinceDay}T00:00:00Z`,
+  })) ?? []
+  return rows.map((r) => ({
+    entity_type: String(r.entity_type ?? ''), entity_id: String(r.entity_id ?? ''),
+    type: String(r.type ?? ''), target: String(r.target ?? ''), count: num(r.count),
+  }))
+}
+
+/**
  * The first UTC day this artist had a view, or null before any — where "All
  * time" starts.
  *
@@ -496,14 +511,31 @@ export type WaffleCell = DeviceKind | 'other'
  * earns — 3% of visitors is three red squares, never rounded away to none
  * while a bigger kind rounds up.
  */
+/**
+ * Split `budget` across `weights` as whole numbers that still add up to `budget`.
+ *
+ * Flooring alone loses the fractions: three equal shares of 100 floor to 33 each and
+ * the last unit vanishes — a waffle with a hole in it, or a service split reading
+ * 33/33/33 that looks like a play went missing. The spare units go to the largest
+ * remainders, which is the standard apportionment rule and the one both callers need.
+ *
+ * Order is preserved so a caller can zip the result back onto its own keys.
+ */
+export function largestRemainder(weights: number[], total: number, budget: number): number[] {
+  if (weights.length === 0) return []
+  if (!(total > 0)) return weights.map(() => 0)
+  const exact = weights.map((w) => (w / total) * budget)
+  const out = exact.map(Math.floor)
+  let left = budget - out.reduce((n, c) => n + c, 0)
+  const byRemainder = out.map((_, i) => i).sort((a, b) => (exact[b] - out[b]) - (exact[a] - out[a]))
+  for (const i of byRemainder) { if (left <= 0) break; out[i]++; left-- }
+  return out
+}
+
 export function waffleCells(shares: DeviceShares, cells = 100): WaffleCell[] {
   if (shares.total <= 0) return []
   const kinds: WaffleCell[] = [...DEVICE_KINDS.map((k) => k.key), 'other']
-  const exact = kinds.map((k) => (shares[k] / shares.total) * cells)
-  const counts = exact.map(Math.floor)
-  let left = cells - counts.reduce((n, c) => n + c, 0)
-  const byRemainder = kinds.map((_, i) => i).sort((a, b) => (exact[b] - counts[b]) - (exact[a] - counts[a]))
-  for (const i of byRemainder) { if (left <= 0) break; counts[i]++; left-- }
+  const counts = largestRemainder(kinds.map((k) => shares[k]), shares.total, cells)
   return kinds.flatMap((k, i) => Array.from({ length: counts[i] }, () => k))
 }
 
@@ -544,11 +576,92 @@ export function topContent(
   return { items, attributed, unattributed: Math.max(0, total - attributed) }
 }
 
-/** The three lists the toggle switches between, in the order they are offered. */
+/** A row of `analytics_entity_targets`: one entity, one event type, one target. */
+export type TargetRow = { entity_type: string; entity_id: string; type: string; target: string; count: number }
+
+/**
+ * The streaming services the site can link a song to, and the only prefixes a play's
+ * target may carry. `MusicGrid` writes `<key>:<title>` when a listener picks a button
+ * in the platform sheet — that click IS the play event, so this is literally what they
+ * chose, not where the song happens to live.
+ */
+export const SERVICES = ['spotify', 'soundcloud', 'apple'] as const
+export type Service = (typeof SERVICES)[number]
+
+/**
+ * What the hover shows for one row — a UNION, because a song and a product have
+ * nothing in common to show. An earlier shape gave every song a dead `opened: 0,
+ * cart: 0` and the tooltip guessed which kind it had by testing whether those were
+ * above zero. That guess is exactly the sort that holds until the day it does not.
+ */
+export type EntityFacts =
+  | { kind: 'song'; services: { key: Service; pct: number }[] }
+  | { kind: 'merch'; opened: number; cart: number }
+
+/** Percent per service, biggest first, always totalling 100 (see largestRemainder). */
+function sharesOf(counts: [Service, number][]): { key: Service; pct: number }[] {
+  const total = counts.reduce((n, [, c]) => n + c, 0)
+  if (total <= 0) return []
+  const pcts = largestRemainder(counts.map(([, c]) => c), total, 100)
+  return counts.map(([key], i) => ({ key, pct: pcts[i] })).sort((a, b) => b.pct - a.pct)
+}
+
+/**
+ * The per-row facts behind the hover, keyed by entity id.
+ *
+ * A play's target is `<service>:<title>`; one that names no known service is dropped
+ * rather than bucketed as "other", because an unprefixed target is the OLD shape from
+ * before the picker reported which button was pressed, and counting it would dilute a
+ * percentage that claims to be a choice.
+ *
+ * A merch target is either the literal `add_to_cart` or something else — the product's
+ * own title from a grid tile, or `buy_on_store`. Everything that is not a cart add is
+ * an OPEN, because that is the step it represents.
+ */
+export function entityFacts(rows: TargetRow[]): Record<string, EntityFacts> {
+  const plays = new Map<string, Map<Service, number>>()
+  const merch = new Map<string, { opened: number; cart: number }>()
+
+  for (const r of rows) {
+    const n = Number(r.count)
+    if (!Number.isFinite(n) || n <= 0) continue
+    if (r.type === 'play') {
+      const key = SERVICES.find((s) => r.target.startsWith(`${s}:`))
+      if (!key) continue
+      const m = plays.get(r.entity_id) ?? new Map<Service, number>()
+      m.set(key, (m.get(key) ?? 0) + n)
+      plays.set(r.entity_id, m)
+    } else if (r.type === 'buy_click') {
+      const m = merch.get(r.entity_id) ?? { opened: 0, cart: 0 }
+      if (r.target === 'add_to_cart') m.cart += n
+      else m.opened += n
+      merch.set(r.entity_id, m)
+    }
+  }
+
+  const out: Record<string, EntityFacts> = {}
+  for (const [id, m] of plays) out[id] = { kind: 'song', services: sharesOf([...m.entries()]) }
+  for (const [id, m] of merch) out[id] = { kind: 'merch', ...m }
+  return out
+}
+
+/**
+ * The ranked lists, in the order they are shown — one column each.
+ *
+ * TOUR IS DELIBERATELY ABSENT (Sam, 2026-09-21). Songs and products are catalogue
+ * items: they sit there competing over the same window, every day, so "most played"
+ * and "most clicked" are real findings. A tour date is not. It is announced once,
+ * sells or does not, and then expires — so a ranked list of dates mostly reports
+ * announcement timing and city size, mixes live rows with dead ones, and puts the
+ * only actionable row (an UPCOMING date nobody is clicking) at the bottom, where a
+ * top-five truncates it away. Ticket clicks are still recorded and still counted in
+ * the metric row; they just are not ranked against each other.
+ *
+ * `heading` is the column's own title, so the block needs no label above it.
+ */
 export const CONTENT_KINDS = [
-  { key: 'songs', label: 'Songs', entity: 'track', type: 'play', metric: 'plays', noun: 'plays', named: 'a song' },
-  { key: 'tour', label: 'Tour', entity: 'tour_date', type: 'ticket_click', metric: 'ticket_clicks', noun: 'ticket clicks', named: 'a date' },
-  { key: 'merch', label: 'Merch', entity: 'merch', type: 'buy_click', metric: 'buy_clicks', noun: 'buy clicks', named: 'a product' },
+  { key: 'songs', heading: 'Most Played Songs', entity: 'track', type: 'play', metric: 'plays', noun: 'plays' },
+  { key: 'merch', heading: 'Most Clicked Merch', entity: 'merch', type: 'buy_click', metric: 'buy_clicks', noun: 'buy clicks' },
 ] as const
 export type ContentKind = (typeof CONTENT_KINDS)[number]
 

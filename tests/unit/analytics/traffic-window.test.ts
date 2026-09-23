@@ -25,6 +25,7 @@ import {
   summarizeSources,
   waffleCells,
   topContent,
+  largestRemainder,
   CONTENT_KINDS,
   DEVICE_KINDS,
   reachesBeforeContext,
@@ -427,6 +428,36 @@ describe('summarizeDevices', () => {
   })
 })
 
+describe('largestRemainder', () => {
+  it('hands out the whole budget, never one short', () => {
+    // Three equal thirds floor to 33 each and leave 1 over. Whoever takes it, the
+    // total must be the budget — a waffle with 99 cells has a hole in it, and a split
+    // reading 33/33/33 says a play went missing.
+    expect(largestRemainder([1, 1, 1], 3, 100).reduce((a, b) => a + b, 0)).toBe(100)
+    expect(largestRemainder([1, 1, 1], 3, 100)).toEqual([34, 33, 33])
+  })
+
+  it('gives the spare to the biggest remainder, not to whoever is first', () => {
+    // 10/60 -> 16.67 (rem .67), 50/60 -> 83.33 (rem .33). The spare belongs to the first.
+    expect(largestRemainder([10, 50], 60, 100)).toEqual([17, 83])
+    // Reversed input, same answer for the same share.
+    expect(largestRemainder([50, 10], 60, 100)).toEqual([83, 17])
+  })
+
+  it('an exact split needs no remainder at all', () => {
+    expect(largestRemainder([1, 1, 2], 4, 100)).toEqual([25, 25, 50])
+  })
+
+  it('nothing to share out is an empty answer, not a divide by zero', () => {
+    expect(largestRemainder([], 0, 100)).toEqual([])
+    expect(largestRemainder([0, 0], 0, 100)).toEqual([0, 0])
+  })
+
+  it('keeps the input order, so the caller can zip it back to its own keys', () => {
+    expect(largestRemainder([5, 3, 2], 10, 10)).toEqual([5, 3, 2])
+  })
+})
+
 describe('waffleCells', () => {
   const count = (cells: string[]) => cells.reduce<Record<string, number>>((m, c) => ({ ...m, [c]: (m[c] ?? 0) + 1 }), {})
 
@@ -504,8 +535,11 @@ describe('topContent', () => {
     expect(topContent([ev('track', 'a', 'play', 9)], SONG, refs, 5).unattributed).toBe(0)
   })
 
-  it('offers exactly the kinds the site attaches an entity to — and never video', () => {
-    expect(CONTENT_KINDS.map((k) => k.entity)).toEqual(['track', 'tour_date', 'merch'])
+  it('ranks exactly the kinds that are comparable to each other — never video, and no longer tour', () => {
+    // Tour was cut (Sam, 2026-09-21): a date is announced once and expires, so ranking
+    // dates against each other reports announcement timing, not demand.
+    expect(CONTENT_KINDS.map((k) => k.entity)).toEqual(['track', 'merch'])
+    expect((CONTENT_KINDS as readonly { entity: string }[]).some((k) => k.entity === 'tour_date')).toBe(false)
     // Widened on purpose: the type already forbids 'video', so the check has to be a runtime one.
     expect((CONTENT_KINDS as readonly { entity: string }[]).some((k) => k.entity === 'video')).toBe(false)
   })
