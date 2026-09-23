@@ -6,9 +6,20 @@ import type { IconName } from '@/components/ui/icons'
  * stub, not the array ("TOOLS.filter is not a function", 2026-08-28). Anything that is
  * data, not a component, lives here.
  */
+/** A tool's sub-tab: a route under the tool, shown in the second panel. Text only — the
+ *  rail beside it already carries the icon for the whole tool (Sam, 2026-09-22). */
+export type ToolTab = { seg: string; label: string }
+
+export type Tool = { seg: string; icon: IconName; label: string; short?: string; desc: string; tabs?: readonly ToolTab[] }
+
 /** The registry: what the panel lists, in order. `seg` is the route segment under
- *  /artists/[id]/. Derive from this — never hand-list tools elsewhere. */
-export const TOOLS: readonly { seg: string; icon: IconName; label: string; short?: string; desc: string }[] = [
+ *  /artists/[id]/. Derive from this — never hand-list tools elsewhere.
+ *
+ *  A tool with `tabs` (Sam, 2026-09-22: "when the user clicks on settings, the furthest
+ *  left panel turns to just the icons, and then a new side panel is to the right with the
+ *  settings sub tabs") collapses the tools rail to icons and opens a second panel listing
+ *  the tabs. The first tab's seg is the tool's own route. */
+export const TOOLS: readonly Tool[] = [
   { seg: 'tools', icon: 'grid', label: 'Overview', desc: 'Status, publish, quick links' },
   { seg: 'site', icon: 'site', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video' },
   { seg: 'brand', icon: 'photo', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
@@ -17,12 +28,23 @@ export const TOOLS: readonly { seg: string; icon: IconName; label: string; short
   { seg: 'epk', icon: 'epk', label: 'Press kit', desc: 'Shareable EPK one-pager' },
   { seg: 'subscribers', icon: 'list', label: 'Subscribers', desc: 'Emails from the site popup' },
   { seg: 'enquiries', icon: 'note', label: 'Enquiries', desc: 'Booking & contact messages' },
-  { seg: 'settings', icon: 'settings', label: 'Settings', desc: 'Artist settings' },
+  {
+    seg: 'settings',
+    icon: 'settings',
+    label: 'Settings',
+    desc: 'Artist settings',
+    tabs: [
+      { seg: 'settings', label: 'General' },
+      // Who receives each kind of enquiry. Moved off the Enquiries page (Sam, 2026-09-22:
+      // "I want the enquiries to take up the whole space") to sit beside the booking address.
+      { seg: 'settings/email', label: 'Email' },
+    ],
+  },
 ]
 
 /** The tool a pathname is on, or null when the pathname is not a tool route. Longest
  *  segment wins so `tools/seo` beats `tools`. */
-export function toolFor(pathname: string, artistId: string): (typeof TOOLS)[number] | null {
+export function toolFor(pathname: string, artistId: string): Tool | null {
   const base = `/artists/${artistId}/`
   if (!pathname.startsWith(base)) return null
   const rest = pathname.slice(base.length).replace(/\/+$/, '')
@@ -30,3 +52,13 @@ export function toolFor(pathname: string, artistId: string): (typeof TOOLS)[numb
   return hits.sort((a, b) => b.seg.length - a.seg.length)[0] ?? null
 }
 
+/** The tab a pathname is on within `tool`, longest segment first; the first tab when the
+ *  path is the tool's own route. null when the tool has no tabs. */
+export function tabFor(tool: Tool, pathname: string, artistId: string): ToolTab | null {
+  if (!tool.tabs?.length) return null
+  const base = `/artists/${artistId}/`
+  if (!pathname.startsWith(base)) return tool.tabs[0]
+  const rest = pathname.slice(base.length).replace(/\/+$/, '')
+  const hits = tool.tabs.filter((t) => rest === t.seg || rest.startsWith(`${t.seg}/`))
+  return hits.sort((a, b) => b.seg.length - a.seg.length)[0] ?? tool.tabs[0]
+}
