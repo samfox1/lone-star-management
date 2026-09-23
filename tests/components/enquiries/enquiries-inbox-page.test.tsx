@@ -8,8 +8,9 @@
  * a name cannot be resolved.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import EnquiriesInboxPage from '@/app/artists/page'
+import { setEnquiryReadAction } from '@/app/artists/[id]/(dashboard)/enquiries/actions'
 import { ownedArtists } from '@/app/roster-data'
 
 vi.mock('@/app/roster-data', () => ({ ownedArtists: vi.fn() }))
@@ -18,12 +19,12 @@ vi.mock('@/app/roster-chrome', () => ({
   SectionToolbar: ({ title }: { title: string }) => <h1>{title}</h1>,
   EmptyState: ({ title }: { title: string }) => <div>{title}</div>,
 }))
+// ONE action for read and unread. This mock used to name two functions that do not exist
+// (a Read and an Unread action) and stayed green because no test here ever opened a row.
+// A mock that names a function nobody calls guards nothing.
 vi.mock('@/app/artists/[id]/(dashboard)/enquiries/actions', () => ({
-  markEnquiryUnreadAction: vi.fn(async () => ({ ok: true })),
+  setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
   signEnquiryAttachmentsAction: vi.fn(async () => []),
-}))
-vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
-  markEnquiryReadAction: vi.fn(async () => ({ ok: true })),
 }))
 
 let enquiries: unknown[] = []
@@ -119,5 +120,22 @@ describe('/artists — the roster-wide inbox', () => {
     await renderPage()
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByText(/1 enquiry/)).toBeInTheDocument()
+  })
+})
+
+describe('/artists — opening a message', () => {
+  it('marks it read through the ONE read action', async () => {
+    // The click this file never made. Its mocks named `markEnquiryReadAction` and
+    // `markEnquiryUnreadAction` — neither exists — and stayed green for weeks because no
+    // test opened a row. Opening one is what proves the mock names the real thing.
+    // UNREAD, or opening it has nothing to mark.
+    enquiries = [enquiry({ id: 'e1', artist_id: 'a1', name: 'Jamie Rowe', read_at: null })]
+    await renderPage()
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Jamie Rowe'))
+    })
+
+    expect(vi.mocked(setEnquiryReadAction)).toHaveBeenCalledWith('a1', 'e1', true)
   })
 })

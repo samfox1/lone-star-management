@@ -15,7 +15,7 @@ import {
   setEnquiryReadAction,
   signEnquiryAttachmentsAction,
 } from '@/app/artists/[id]/(dashboard)/enquiries/actions'
-import type { InboxRow } from '@/lib/enquiry-inbox'
+import type { InboxRow } from '@/lib/enquiries/inbox'
 
 vi.mock('@/app/artists/[id]/(dashboard)/enquiries/actions', () => ({
   setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
@@ -28,6 +28,7 @@ const sign = vi.mocked(signEnquiryAttachmentsAction)
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
   purpose: 'booking',
+  purposeLabel: 'Booking',
   name: 'Jamie Rowe',
   email: 'jamie@example.com',
   message: 'Can you play the Aug 14 show at Mohawk?',
@@ -237,5 +238,17 @@ describe('EnquiryTable — the artist selector', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Demos' }))
     })
     expect(screen.getByText('Nothing here for Lone Pine.')).toBeInTheDocument()
+  })
+})
+
+describe('the Type column reads the kind\'s label from the row', () => {
+  it('shows an artist-invented kind by its label, not its slug', () => {
+    // The table used to hold a three-entry map and fall back to the raw slug. Labels are
+    // resolved server-side from enquiry_kinds now, so a custom kind and a renamed one both
+    // read as the manager named them.
+    render(<EnquiryTable rows={[row({ purpose: 'sync-licensing', purposeLabel: 'Sync licensing' })]} />)
+
+    expect(screen.getByText('Sync licensing')).toBeTruthy()
+    expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 })

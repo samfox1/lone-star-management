@@ -8,8 +8,10 @@
  * Resend. See the header of 20260722120000_contact_enquiries.sql and ADR 0010.
  *
  * It is deliberately THIN. Everything that decides an outcome lives either in
- * ./validate.ts (pure, unit-tested by vitest in tests/contact-validate.test.ts) or in
- * the submit_enquiry RPC (unit-tested against the real DB in tests/enquiry-door.test.ts).
+ * ./validate.ts (pure, unit-tested in tests/unit/enquiries/contact-validate.test.ts) or in
+ * the submit_enquiry RPC (tested against the real DB in tests/integration/enquiries/
+ * enquiry-door.test.ts). The dashboard half lives in src/lib/enquiries and
+ * src/app/artists/[id]/(dashboard)/enquiries.
  * What is left here is plumbing, and plumbing is what cannot be covered by `npm test`.
  * Keep it that way: logic added here is logic nobody can test.
  *
@@ -29,22 +31,24 @@
  *   5xx   { ok: false, error: "send_failed" }
  */
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { clientIp, normalizeIp } from '../_shared/request.ts'
 import {
   buildSubject,
   composeExtras,
+  composeText,
   decideDoor,
-  firstForwardedIp,
   formatFrom,
   hashIp,
   parseAllowedOrigins,
   pickOrigin,
+  pickRecipients,
   retentionCutoffIso,
   sanitiseFilename,
   shouldSweep,
   validateBody,
 } from './validate.ts'
 
-// PINNED to the copy in src/lib/enquiry-attachments.ts — this file cannot import from
+// PINNED to the copy in src/lib/enquiries/attachments.ts — this file cannot import from
 // src/. If either changes alone, uploads and playback silently split into two buckets.
 const ATTACHMENT_BUCKET = 'enquiry-attachments'
 
@@ -60,6 +64,20 @@ const DRY_RUN = Deno.env.get('CONTACT_DRY_RUN') === 'true'
  *  Lone Star" instead of linking, which is worse but never broken. A wrong link in an
  *  email cannot be corrected after sending, so this is not guessed from a header. */
 const APP_URL = (Deno.env.get('LONE_STAR_APP_URL') ?? '').replace(/\/+$/, '')
+
+/**
+ * A failed PostgREST response as a line safe to log: status, `code`, `message`. NEVER the
+ * body. On a constraint violation PostgREST's `details` is Postgres's DETAIL, which reads
+ * "Failing row contains (…)" — the visitor's name, address and message, into a log line.
+ */
+async function errorSummary(res: Response): Promise<string> {
+  try {
+    const j = (await res.json()) as { code?: string; message?: string }
+    return [j.code, j.message].filter(Boolean).join(' ').slice(0, 200)
+  } catch {
+    return ''
+  }
+}
 
 /**
  * Call a Postgres function as service_role over PostgREST.
@@ -79,7 +97,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     body: JSON.stringify(args),
     signal: AbortSignal.timeout(10_000),
   })
-  if (!res.ok) throw new Error(`rpc ${fn} failed: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw new Error(`rpc ${fn} failed: ${res.status} ${await errorSummary(res)}`)
   // A void-returning function answers 204 with NO BODY, and res.json() throws on empty
   // input. `log_contact_attempt` is exactly that, so every path that logs an attempt —
   // honeypot, invalid input, send failure, attachment tickets — threw into the catch-all
@@ -106,7 +124,7 @@ async function rest<T>(
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     signal: AbortSignal.timeout(10_000),
   })
-  if (!res.ok) throw new Error(`rest ${init.method} ${path} failed: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw new Error(`rest ${init.method} ${path} failed: ${res.status} ${await errorSummary(res)}`)
   const text = await res.text()
   return (text ? JSON.parse(text) : null) as T
 }
@@ -271,51 +289,16 @@ type DoorRow = {
   status: 'ok' | 'rate_limited' | 'invalid' | 'unknown_artist' | 'no_recipient'
   enquiry_id: string | null
   to_email: string | null
+  /** Everyone addressed: the primary first, then the manager's configured list. Absent
+   *  when an older submit_enquiry is still deployed — see pickRecipients. */
+  to_emails: string[] | null
   from_name: string | null
   from_email: string | null
   artist_name: string | null
   recipient_source: string | null
-}
-
-/**
- * Plain-text only, on purpose. A contact form has no formatting to preserve, and an
- * HTML body would mean escaping attacker-controlled text into markup that lands in
- * someone's mail client. Text has no such surface.
- */
-function composeText(b: {
-  name: string
-  email: string
-  purpose: string
-  message: string
-  demoUrl: string | null
-  attachmentCount: number
-  dashboardUrl: string | null
-}): string {
-  const lines = [
-    `From:    ${b.name} <${b.email}>`,
-    `Purpose: ${b.purpose}`,
-  ]
-  if (b.demoUrl) lines.push(`Demo:    ${b.demoUrl}`)
-  lines.push('', b.message, '')
-
-  // The audio is NEVER attached. A large attachment gets rejected by the receiving side
-  // and damages the sending domain's reputation for every other enquiry, so the email
-  // links to the file instead — and says when it goes, because nobody checks an inbox
-  // knowing there is a 90-day clock on it.
-  if (b.attachmentCount > 0) {
-    const n = b.attachmentCount
-    lines.push(
-      `${n} audio file${n === 1 ? '' : 's'} attached to this enquiry.`,
-      b.dashboardUrl
-        ? `Listen or download: ${b.dashboardUrl}`
-        : 'Open the enquiry in Lone Star to listen or download.',
-      'Files are deleted after 90 days — save anything worth keeping. The message itself is kept.',
-      '',
-    )
-  }
-
-  lines.push('— Sent from your Lone Star site contact form. Reply to this email to answer directly.')
-  return lines.join('\n')
+  /** The artist's own label for this kind ("Booking", "Sync licensing"), already
+   *  defaulted by submit_enquiry when the kind no longer exists. */
+  purpose_label: string | null
 }
 
 Deno.serve(async (req: Request) => {
@@ -359,7 +342,11 @@ Deno.serve(async (req: Request) => {
     let demoUrl: string | null = null
     let attachments: { filename: string; mime_type: string; bytes: number }[] = []
     let skipped: { item: string; reason: string }[] = []
-    const ip = firstForwardedIp(req.headers)
+    // The GATEWAY's view of the client, never a header the client could write. The old
+    // `firstForwardedIp` took the first `x-forwarded-for` hop, which Cloudflare APPENDS to
+    // rather than replaces — so every request could pick itself a fresh rate-limit
+    // bucket. This changes which bucket a request lands in, hence its own deploy.
+    const ip = normalizeIp(clientIp(req.headers))
     const ipHash = await hashIp(IP_SALT, ip)
 
     // A bot gets 200 and silence. Telling it that the honeypot caught it only teaches
@@ -486,7 +473,16 @@ Deno.serve(async (req: Request) => {
 
     const dashboardUrl = APP_URL && artistId ? `${APP_URL}/artists/${artistId}/enquiries` : null
 
-    if (DRY_RUN) {
+    // Resolved BEFORE the dry-run branch so a smoke test exercises the same recipient
+    // logic the real send uses. An empty list cannot reach Resend: `to: []` is a 4xx that
+    // would be filed as a send failure, hiding a configuration problem behind a transport
+    // one. submit_enquiry already refuses to return 'ok' without a primary, so this is a
+    // belt-and-braces branch that should never fire — and says so if it ever does.
+    const recipients = pickRecipients(row)
+
+    if (recipients.length === 0) {
+      sendError = 'no usable recipient resolved from submit_enquiry'
+    } else if (DRY_RUN) {
       providerId = 'dry-run'
     } else {
       try {
@@ -498,15 +494,18 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             from: formatFrom(row.from_name ?? '', row.from_email!),
-            to: [row.to_email],
+            to: recipients,
             // THE LOAD-BEARING HEADER. The manager hits reply and it goes to the
             // visitor. Putting the visitor in `from` instead would fail DMARC (we do
             // not control their domain) and land the whole thing in spam.
             reply_to: body.email,
-            subject: buildSubject(body.purpose, row.artist_name ?? '', body.name),
+            // The LABEL comes back from the door, not from a map here: kinds are the
+            // artist's to invent, so this function cannot know what 'sync-licensing' is
+            // called. Falls back inside buildSubject if the row carries nothing.
+            subject: buildSubject(row.purpose_label ?? '', row.artist_name ?? '', body.name),
             text: composeText({
               ...body,
-              purpose: body.purpose,
+              purposeLabel: row.purpose_label ?? '',
               demoUrl,
               attachmentCount: attachments.length,
               dashboardUrl,
@@ -517,7 +516,16 @@ Deno.serve(async (req: Request) => {
         if (res.ok) {
           providerId = ((await res.json()) as { id?: string }).id ?? null
         } else {
-          sendError = `resend ${res.status}: ${(await res.text()).slice(0, 500)}`
+          // Status and Resend's error NAME only. The message can echo an address — with the
+          // shared test sender every non-owner recipient is a 403 that names the account
+          // owner's inbox — and `send_error` is readable by every manager of the artist.
+          let name = ''
+          try {
+            name = ((await res.json()) as { name?: string }).name ?? ''
+          } catch {
+            name = ''
+          }
+          sendError = `resend ${res.status}${name ? ` ${name}` : ''}`
         }
       } catch (e) {
         sendError = `resend request failed: ${e instanceof Error ? e.message : String(e)}`

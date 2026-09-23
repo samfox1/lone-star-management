@@ -1,14 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
-import type { InboxRow } from '@/lib/enquiry-inbox'
-import { attachmentCounts } from '@/lib/enquiry-inbox-server'
-import { Icon } from '@/components/ui/icons'
+import type { InboxRow } from '@/lib/enquiries/inbox'
+import { attachmentCounts } from '@/lib/enquiries/inbox-server'
 import { SectionShell } from '../section-shell'
 import { requireArtist } from '../_data'
 import { EnquiryTable } from './enquiry-table'
+import { kindLabeller } from '@/lib/enquiries/kinds'
 
 export const metadata = { title: 'Enquiries — Lone Star Management' }
 
-/** Where the manager can change the address that resolved, in plain language. */
+/** The Enquiries tool: the inbox, the whole page (Sam, 2026-09-22). Who receives each kind
+ *  is edited under Settings → Email. */
 export default async function EnquiriesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -22,37 +23,25 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     .order('created_at', { ascending: false })
   const enquiries = (data ?? []) as Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'>[]
 
+  // The kinds, for their LABELS only. The table used to carry its own three-entry map,
+  // which went stale the moment a manager renamed a kind; RLS scopes this to the artist.
+  const { data: kindRows } = await supabase.from('enquiry_kinds').select('slug, label').eq('artist_id', id)
+  const labelFor = kindLabeller((kindRows ?? []) as { slug: string; label: string }[])
+
   const counts = await attachmentCounts(supabase, enquiries.map((r) => r.id))
   // Artist identity rides on every row even here, where the label is hidden: the
   // read/unread writes need it, and it keeps this page's data identical to the
   // roster-wide inbox so one component serves both.
   const rows: InboxRow[] = enquiries.map((r) => ({
     ...r,
+    purposeLabel: labelFor(r.purpose),
     attachmentCount: counts.get(r.id) ?? 0,
     artistId: id,
     artistName: artist.name as string,
   }))
 
-  // The live resolved recipient, which may differ from any single row's frozen to_email if
-  // the address has since changed. SECURITY DEFINER with an internal owner guard — the
-  // only path by which a resolved address reaches a client.
-  const { data: preview } = await supabase.rpc('booking_recipient_preview', { p_artist_id: id })
-  const current = (preview ?? [])[0] as { to_email: string; recipient_source: string } | undefined
-
   return (
     <SectionShell title="Enquiries" artistId={id}>
-      {/* Only the broken state speaks (Sam, 2026-08-28: no explanatory copy on tool pages).
-          A working recipient says nothing; a missing one is a warning the manager must act on. */}
-      <div className="space-y-1">
-        {current ? null : (
-          <p className="flex items-center gap-1.5 text-sm text-ink-muted">
-            <Icon name="alert" size={15} />
-            No booking address is set, so enquiries cannot be delivered. Add one in Site text
-            or as a booking link.
-          </p>
-        )}
-      </div>
-
       <EnquiryTable rows={rows} />
     </SectionShell>
   )

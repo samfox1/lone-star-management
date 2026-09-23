@@ -74,10 +74,14 @@ type DoorRow = {
   status: string
   enquiry_id: string | null
   to_email: string | null
+  /** Everyone addressed: the primary first, then enquiry_recipients. */
+  to_emails: string[] | null
   from_name: string | null
   from_email: string | null
   artist_name: string | null
   recipient_source: string | null
+  /** The artist's own label for this kind, for the email subject's `[Booking]` prefix. */
+  purpose_label: string | null
 }
 
 async function submit(over: Partial<Record<string, string>> = {}): Promise<DoorRow> {
@@ -105,6 +109,11 @@ async function clearRungs() {
   await svc.from('artist_mail_settings').delete().eq('artist_id', artistA)
   await svc.from('links').delete().eq('artist_id', artistA).eq('role', 'booking')
   await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', 'booking_email')
+  // The lists are not rungs, but they change `to_emails`, so the precedence assertions
+  // above are only about rungs if these start empty. The KINDS are left alone: they were
+  // seeded by the trigger when this file created the artist, and every test below looks
+  // one up by slug.
+  await svc.from('enquiry_recipients').delete().eq('artist_id', artistA)
 }
 
 beforeAll(async () => {
@@ -271,12 +280,84 @@ describe('submit_enquiry — validation', () => {
     expect((await submit({ p_name: '   ' })).status).toBe('invalid')
   })
 
-  it('an unrecognized purpose is COERCED to other, never rejected', async () => {
+  it('a well-formed purpose that names one of the ARTIST\'S kinds is kept, with its label', async () => {
+    // Kinds are the artist's to invent, and the kinds table is the registry: adding one is
+    // a row, not a deploy, so the door keeps any slug the artist actually has.
     await clearRungs()
-    const row = await submit({ p_purpose: 'wedding-gig' })
+    await svc.from('enquiry_kinds').insert({ artist_id: artistA, slug: 'wedding-gig', label: 'Weddings' })
+    try {
+      const row = await submit({ p_purpose: 'wedding-gig' })
+
+      expect(row.status).toBe('ok')
+      expect(row.purpose_label).toBe('Weddings')
+      const { data } = await svc.from('enquiries').select('purpose').eq('id', row.enquiry_id!).single()
+      expect(data?.purpose).toBe('wedding-gig')
+    } finally {
+      await svc.from('enquiry_kinds').delete().eq('artist_id', artistA).eq('slug', 'wedding-gig')
+    }
+  })
+
+  it('a well-formed purpose that names NO kind is filed under other, wearing its label', async () => {
+    // CHANGED 2026-09-22 (security review). The 21st's version kept any well-formed slug
+    // and fell back to initcap(slug) for the subject — so a VISITOR could put
+    // `[Urgent Invoice Overdue]` on mail the manager trusts. Unknown means `other`.
+    await clearRungs()
+    const row = await submit({ p_purpose: 'urgent-invoice-overdue' })
+
     expect(row.status).toBe('ok')
+    expect(row.purpose_label).toBe('Contact')
     const { data } = await svc.from('enquiries').select('purpose').eq('id', row.enquiry_id!).single()
     expect(data?.purpose).toBe('other')
+  })
+
+  it('purpose_label follows a RENAMED kind', async () => {
+    // The one new value every manager reads, in every subject line. Nothing pinned it.
+    await clearRungs()
+    await svc.from('enquiry_kinds').update({ label: 'Bookings & shows' }).eq('artist_id', artistA).eq('slug', 'booking')
+    try {
+      const row = await submit({ p_purpose: 'booking' })
+      expect(row.purpose_label).toBe('Bookings & shows')
+    } finally {
+      await svc.from('enquiry_kinds').update({ label: 'Booking' }).eq('artist_id', artistA).eq('slug', 'booking')
+    }
+  })
+
+  it('purpose_label is returned on the UNROUTABLE path too', async () => {
+    await clearRungs()
+    const { data: prior } = await svc.from('mail_settings').select('default_to_email, sending_domain, from_local_part').maybeSingle()
+    await svc.from('mail_settings').delete().eq('id', true)
+    try {
+      const row = await submit({ p_purpose: 'demo' })
+      expect(row.status).toBe('no_recipient')
+      expect(row.purpose_label).toBe('Demo')
+    } finally {
+      if (prior) await svc.from('mail_settings').upsert({ id: true, ...(prior as MailSettings) })
+    }
+  })
+
+  it('a MALFORMED purpose is still coerced to other, never rejected', async () => {
+    // Still coerces rather than rejects: a site shipping something odd must still deliver.
+    // These are the shapes enquiries_purpose_check would refuse at the table, so without
+    // the coercion submit_enquiry would RAISE — and it has a hard never-raise invariant,
+    // because a raise rolls back its own contact_attempts ledger insert.
+    for (const bad of ['Has Caps', 'has space', '-leading', 'x'.repeat(41)]) {
+      await clearRungs()
+      const row = await submit({ p_purpose: bad })
+
+      expect(row.status, `purpose ${JSON.stringify(bad)}`).toBe('ok')
+      const { data } = await svc.from('enquiries').select('purpose').eq('id', row.enquiry_id!).single()
+      expect(data?.purpose, `purpose ${JSON.stringify(bad)}`).toBe('other')
+    }
+  })
+
+  it('a purpose differing only in case routes to the SAME kind', async () => {
+    // enquiry_kinds.slug is lowercase by its own CHECK, and routing compares by equality.
+    // 'Booking' from a site would otherwise match no kind and silently skip its list.
+    await clearRungs()
+    const row = await submit({ p_purpose: '  BOOKING  ' })
+
+    const { data } = await svc.from('enquiries').select('purpose').eq('id', row.enquiry_id!).single()
+    expect(data?.purpose).toBe('booking')
   })
 
   it('an empty message is ACCEPTED — a demo can be a link and some audio', async () => {
@@ -462,5 +543,165 @@ describe('mark_enquiry_sent', () => {
       .eq('id', row.enquiry_id!)
       .single()
     expect(data).toMatchObject({ status: 'failed', send_error: 'resend 429 rate limited', sent_at: null })
+  })
+})
+
+describe('submit_enquiry — forwarding to more than one person', () => {
+  /** The list for ONE KIND, on top of whichever rung resolved the primary. */
+  async function addRecipient(slug: string, email: string, label?: string) {
+    const { data: kind, error: e1 } = await svc
+      .from('enquiry_kinds')
+      .select('id')
+      .eq('artist_id', artistA)
+      .eq('slug', slug)
+      .single()
+    if (e1) throw new Error(`kind ${slug}: ${e1.message}`)
+    const { error } = await svc.from('enquiry_recipients').insert({
+      artist_id: artistA,
+      kind_id: (kind as { id: string }).id,
+      email,
+      label: label ?? null,
+    })
+    if (error) throw new Error(`addRecipient(${slug}, ${email}): ${error.message}`)
+  }
+
+  async function storedRow(id: string) {
+    const { data, error } = await svc
+      .from('enquiries')
+      .select('to_email, to_emails, recipient_source, status')
+      .eq('id', id)
+      .single()
+    if (error) throw new Error(`read enquiry: ${error.message}`)
+    return data as {
+      to_email: string | null
+      to_emails: string[] | null
+      recipient_source: string | null
+      status: string
+    }
+  }
+
+  it('addresses the primary alone when no list is configured', async () => {
+    await clearRungs()
+    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+
+    const row = await submit()
+
+    expect(row).toMatchObject({ status: 'ok', to_email: LINK_TO })
+    expect(row.to_emails).toEqual([LINK_TO])
+  })
+
+  it('addresses the primary AND the configured list, primary first', async () => {
+    await clearRungs()
+    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+    await addRecipient('booking', 'skeen@example.com', 'Skeen')
+    await addRecipient('booking', 'manager@example.com', 'Manager')
+
+    const row = await submit()
+
+    // to_email is UNCHANGED in meaning — still the primary, still what recipient_source
+    // describes. Widening it would have broken every consumer that reads "where did this
+    // one go?" as a single address.
+    expect(row).toMatchObject({ status: 'ok', to_email: LINK_TO, recipient_source: 'link' })
+    expect(row.to_emails).toEqual([LINK_TO, 'skeen@example.com', 'manager@example.com'])
+  })
+
+  it('freezes the whole addressed set on the enquiry row', async () => {
+    // Same reason to_email was frozen in the first place: recipient resolution reads
+    // WORKING rows, so after the manager edits the list, the row is the only record of
+    // who actually received a given message.
+    await clearRungs()
+    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+    await addRecipient('booking', 'frozen@example.com')
+
+    const row = await submit()
+    expect(row.enquiry_id).not.toBeNull()
+
+    // Change the list AFTER the submission. The stored row must not follow it.
+    await svc.from('enquiry_recipients').delete().eq('artist_id', artistA)
+
+    const stored = await storedRow(row.enquiry_id!)
+    expect(stored.to_emails).toEqual([LINK_TO, 'frozen@example.com'])
+    expect(stored.to_email).toBe(LINK_TO)
+  })
+
+  it('does not address one inbox twice when the list repeats the rung', async () => {
+    await clearRungs()
+    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+    await addRecipient('booking', LINK_TO.toUpperCase())
+
+    const row = await submit()
+
+    expect(row.to_emails).toEqual([LINK_TO])
+  })
+
+  it('records the list on an UNROUTABLE enquiry too', async () => {
+    // Storing before sending is the whole point of this table (20260804230000). An
+    // unroutable enquiry that forgot who it was FOR would lose that on the day mail is
+    // finally configured and someone goes back through the backlog.
+    await clearRungs()
+    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+    await addRecipient('booking', 'waiting@example.com')
+
+    // Remove the SENDER, not the recipient: no verified domain means unroutable while the
+    // recipients are perfectly well known.
+    const { data: prior } = await svc
+      .from('mail_settings')
+      .select('default_to_email, sending_domain, from_local_part')
+      .maybeSingle()
+    await svc.from('mail_settings').delete().eq('id', true)
+    try {
+      const row = await submit()
+
+      expect(row.status).toBe('no_recipient')
+      expect(row.enquiry_id).not.toBeNull()
+
+      const stored = await storedRow(row.enquiry_id!)
+      expect(stored.status).toBe('unroutable')
+      // The booking LINK above is rung 2 and still resolves — removing the singleton took
+      // away the SENDER and rung 4, not the recipients. That is the whole point of this
+      // test: an enquiry nobody can send still records exactly who it was for, so the
+      // backlog is answerable on the day mail is finally configured.
+      expect(stored.to_emails).toEqual([LINK_TO, 'waiting@example.com'])
+    } finally {
+      if (prior) await svc.from('mail_settings').upsert({ id: true, ...(prior as MailSettings) })
+    }
+  })
+})
+
+describe('log_contact_attempt — the ledger writer for paths that never reach the door', () => {
+  it("records an 'attachment' outcome (it silently recorded nothing for a month)", async () => {
+    // 20260804200000 widened the table CHECK to allow 'attachment' but the FUNCTION's own
+    // `where p_outcome in (…)` was never redefined, so "each upload ticket burns a
+    // rate-limit slot" inserted zero rows and raised nothing. RED against that version.
+    const ip = freshIp()
+    const { error } = await svc.rpc('log_contact_attempt', {
+      p_slug: artist.slug, p_purpose: 'demo', p_ip_hash: ip, p_outcome: 'attachment',
+    })
+    expect(error).toBeNull()
+
+    const { data } = await svc.from('contact_attempts').select('outcome, purpose').eq('ip_hash', ip)
+    expect(data).toEqual([{ outcome: 'attachment', purpose: 'demo' }])
+  })
+
+  it('keeps a well-formed custom purpose instead of folding it into other', async () => {
+    // The third hand-listed copy of the retired three-value enum.
+    const ip = freshIp()
+    await svc.rpc('log_contact_attempt', { p_slug: artist.slug, p_purpose: 'Press ', p_ip_hash: ip, p_outcome: 'honeypot' })
+
+    const { data } = await svc.from('contact_attempts').select('purpose').eq('ip_hash', ip).single()
+    expect((data as { purpose: string }).purpose).toBe('press')
+  })
+})
+
+describe('submit_enquiry — what a rejected request may store', () => {
+  it('bounds the slug it logs for an unknown artist', async () => {
+    // Stored on every REJECTED attempt; unbounded, it was free storage for anyone probing
+    // the endpoint. contact_attempts_slug_len (80) is the database half of the rule.
+    const ip = freshIp()
+    const row = await submit({ p_slug: 'x'.repeat(300), p_ip_hash: ip })
+    expect(row.status).toBe('unknown_artist')
+
+    const { data } = await svc.from('contact_attempts').select('slug').eq('ip_hash', ip).single()
+    expect((data as { slug: string }).slug).toHaveLength(80)
   })
 })

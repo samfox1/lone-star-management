@@ -9,17 +9,21 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  EMAIL_MAX,
+  DEMO_URL_MAX,
   MESSAGE_MAX,
   buildSubject,
   coercePurpose,
   composeExtras,
+  composeText,
+  SLUG_STORE_MAX,
   decideDoor,
-  firstForwardedIp,
   formatFrom,
   hasContent,
   hashIp,
   parseAllowedOrigins,
   pickOrigin,
+  pickRecipients,
   retentionCutoffIso,
   sanitiseFilename,
   shouldSweep,
@@ -124,44 +128,33 @@ describe('validateBody', () => {
 })
 
 describe('coercePurpose', () => {
-  it('passes the three known values through', () => {
+  it('passes the three the live sites send through', () => {
     for (const p of ['booking', 'demo', 'other']) expect(coercePurpose(p)).toBe(p)
   })
 
-  it('coerces anything else to other instead of failing', () => {
-    // A site shipping a new purpose before the backend knows it must still deliver.
-    for (const p of ['wedding', '', null, undefined, 7, {}]) expect(coercePurpose(p)).toBe('other')
-  })
-})
-
-describe('firstForwardedIp', () => {
-  const h = (values: Record<string, string>) => new Headers(values)
-
-  it('takes the FIRST entry of x-forwarded-for, never the last', () => {
-    // The last entries are proxy-appended and forgeable — trusting them would let a
-    // caller choose their own rate-limit bucket on every request.
-    expect(firstForwardedIp(h({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1, 10.0.0.2' }))).toBe(
-      '203.0.113.7',
-    )
+  it('passes an artist-invented kind through', () => {
+    // THE RULE THAT CHANGED (2026-09-21). Kinds live in enquiry_kinds and are the artist's
+    // to define, so this function cannot hold the list — it would need redeploying every
+    // time somebody added one. It enforces the SHAPE and nothing more. The old version
+    // folded every unknown slug into 'other', which would have quietly routed every press
+    // enquiry to the general pile.
+    for (const p of ['press', 'sync-licensing', 'a', 'x1-2-3']) expect(coercePurpose(p)).toBe(p)
   })
 
-  it('handles a single entry and stray whitespace', () => {
-    expect(firstForwardedIp(h({ 'x-forwarded-for': '  203.0.113.7  ' }))).toBe('203.0.113.7')
+  it('normalises case and surrounding space', () => {
+    // The slug is compared by equality against enquiry_kinds.slug, which is lowercase by
+    // its own CHECK. 'Booking' arriving from a site would otherwise match no kind at all
+    // and silently lose that kind's recipient list.
+    expect(coercePurpose('  Booking ')).toBe('booking')
+    expect(coercePurpose('PRESS')).toBe('press')
   })
 
-  it('falls back to x-real-ip', () => {
-    expect(firstForwardedIp(h({ 'x-real-ip': '198.51.100.4' }))).toBe('198.51.100.4')
-  })
-
-  it('prefers x-forwarded-for over x-real-ip', () => {
-    expect(
-      firstForwardedIp(h({ 'x-forwarded-for': '203.0.113.7', 'x-real-ip': '198.51.100.4' })),
-    ).toBe('203.0.113.7')
-  })
-
-  it('buckets a header-stripping caller into "unknown" rather than exempting them', () => {
-    expect(firstForwardedIp(h({}))).toBe('unknown')
-    expect(firstForwardedIp(h({ 'x-forwarded-for': '   ' }))).toBe('unknown')
+  it('coerces a MALFORMED value to other instead of failing', () => {
+    // Still coerces rather than rejects: a site shipping something odd must still deliver.
+    // These are all shapes enquiries_purpose_check would refuse at the table.
+    for (const p of ['', '  ', '-leading', 'has space', 'UPPER_SCORE', 'x'.repeat(41), 'é', null, undefined, 7, {}]) {
+      expect(coercePurpose(p), `${JSON.stringify(p)} should coerce`).toBe('other')
+    }
   })
 })
 
@@ -219,12 +212,46 @@ describe('stripHeader / formatFrom / buildSubject — SMTP header injection', ()
     expect(formatFrom('\r\n', 'noreply@mail.example.com')).toBe('noreply@mail.example.com')
   })
 
-  it('builds the documented subject line', () => {
-    expect(buildSubject('booking', 'Skeen', 'Jane Promoter')).toBe(
+  it('builds the documented subject line from the kind\'s LABEL', () => {
+    // Takes the label, not the slug. The old three-entry map here could not name a kind
+    // the artist invented; submit_enquiry now returns `purpose_label` instead.
+    expect(buildSubject('Booking', 'Skeen', 'Jane Promoter')).toBe(
       '[Booking] Skeen — enquiry from Jane Promoter',
     )
-    expect(buildSubject('demo', 'Skeen', 'Jane')).toMatch(/^\[Demo\]/)
-    expect(buildSubject('other', 'Skeen', 'Jane')).toMatch(/^\[Contact\]/)
+    expect(buildSubject('Sync licensing', 'Skeen', 'Jane')).toMatch(/^\[Sync licensing\]/)
+  })
+
+  it('falls back to Contact when the row carries no label', () => {
+    // A kind deleted between submit and send, or an older door still deployed. An empty
+    // bracket in someone's inbox is worse than a generic word.
+    expect(buildSubject('', 'Skeen', 'Jane')).toMatch(/^\[Contact\]/)
+    expect(buildSubject('   ', 'Skeen', 'Jane')).toMatch(/^\[Contact\]/)
+  })
+
+  it('falls back for a label that is ONLY control characters', () => {
+    // This is the case that makes the stripHeader INSIDE buildSubject load-bearing rather
+    // than a duplicate of the one wrapping the whole line. String.trim() does not remove
+    // \u0001, so without the inner call the label survives as a non-empty string, skips
+    // the fallback, and the outer strip turns it into a space — putting `[ ]` in someone's
+    // inbox instead of `[Contact]`. Found by deleting the inner call and watching every
+    // test stay green.
+    expect(buildSubject('\u0001\u0002', 'Skeen', 'Jane')).toMatch(/^\[Contact\]/)
+  })
+
+  it('a kind LABEL carrying a newline cannot escape the Subject header', () => {
+    // The label is manager-supplied text landing in a mail header. ek_label_clean refuses
+    // CR/LF at the storage layer; this is the other half of the same belt and braces, and
+    // it is the half that still holds if a label ever arrives from somewhere else.
+    const subject = buildSubject('Booking\r\nBcc: attacker@evil.com', 'Skeen', 'Jane')
+
+    // The property is that NO CR/LF survives — that is what would end the Subject header
+    // and start a new one. The words "Bcc:" remain, harmlessly, as text inside the
+    // subject, because stripHeader turns control characters into spaces rather than
+    // deleting the line. Asserting their absence would be pinning the wrong rule: it
+    // would pass today and fail the day stripHeader is correctly changed to keep more of
+    // the label, while saying nothing about injection either way.
+    expect(subject).not.toMatch(/[\r\n]/)
+    expect(subject).toBe('[Booking Bcc: attacker@evil.com] Skeen — enquiry from Jane')
   })
 
   it('a visitor name carrying a newline cannot escape the Subject header', () => {
@@ -553,5 +580,328 @@ describe('decideDoor — the RPC status → HTTP outcome map', () => {
       kind: 'reject',
       httpStatus: 500,
     })
+  })
+})
+
+describe('pickRecipients — everyone the enquiry is addressed to', () => {
+  it('uses the full to_emails list, in the order the resolver gave it', () => {
+    // Order is load-bearing: resolve_enquiry_recipients puts the PRIMARY first (the
+    // booking rung), and the primary is what `enquiries.to_email` freezes for the audit
+    // trail. A helper that sorted or reversed this would silently disagree with the row.
+    expect(
+      pickRecipients({ to_email: 'booking@x.com', to_emails: ['booking@x.com', 'mgr@y.com'] }),
+    ).toEqual(['booking@x.com', 'mgr@y.com'])
+  })
+
+  it('falls back to the single to_email when to_emails is absent', () => {
+    // The real case: the Edge Function and the database deploy separately, so an older
+    // submit_enquiry (no to_emails column in its return) is live for the length of a
+    // deploy. Dropping to zero recipients there would make every enquiry unroutable.
+    expect(pickRecipients({ to_email: 'solo@x.com', to_emails: null })).toEqual(['solo@x.com'])
+    expect(pickRecipients({ to_email: 'solo@x.com' })).toEqual(['solo@x.com'])
+  })
+
+  it('falls back when to_emails is present but EMPTY', () => {
+    // `[]` is not "use the empty list", it is array_agg over no rows. Treating it as
+    // authoritative would send to nobody while a perfectly good primary sat right there.
+    expect(pickRecipients({ to_email: 'solo@x.com', to_emails: [] })).toEqual(['solo@x.com'])
+  })
+
+  it('de-duplicates case-insensitively', () => {
+    // enquiry_recipients' unique index is on lower(email), but this helper must be right
+    // on its own — the same reason submit_enquiry re-validates what the endpoint checked.
+    expect(
+      pickRecipients({ to_email: 'A@x.com', to_emails: ['A@x.com', 'a@X.com', 'mgr@y.com'] }),
+    ).toEqual(['A@x.com', 'mgr@y.com'])
+  })
+
+  it('drops entries that are not addresses rather than failing the whole send', () => {
+    // Resend rejects the ENTIRE request over one malformed recipient, which would take
+    // the good addresses down with the bad one.
+    expect(
+      pickRecipients({ to_email: null, to_emails: ['good@x.com', 'not-an-email', '', '  '] }),
+    ).toEqual(['good@x.com'])
+  })
+
+  it('trims surrounding whitespace', () => {
+    expect(pickRecipients({ to_email: null, to_emails: ['  good@x.com \n'] })).toEqual([
+      'good@x.com',
+    ])
+  })
+
+  it('returns [] when there is nobody to send to', () => {
+    // The caller must not hand Resend `to: []` — that is a 4xx recorded as a send
+    // failure, which would disguise a configuration problem as a transport one.
+    expect(pickRecipients(null)).toEqual([])
+    expect(pickRecipients(undefined)).toEqual([])
+    expect(pickRecipients({ to_email: null, to_emails: null })).toEqual([])
+    expect(pickRecipients({ to_email: 'nope', to_emails: [] })).toEqual([])
+  })
+
+  it('ignores non-string entries without throwing', () => {
+    // to_emails arrives as parsed JSON from PostgREST, so its element type is a promise
+    // the wire does not actually keep.
+    const row = { to_email: null, to_emails: [null, 42, { a: 1 }, 'good@x.com'] as never }
+    expect(pickRecipients(row)).toEqual(['good@x.com'])
+  })
+})
+
+describe('composeText — the body a stranger reads', () => {
+  const base = {
+    name: 'Jane Promoter',
+    email: 'jane@venue.example',
+    purposeLabel: 'Booking',
+    message: 'Can you play?',
+    demoUrl: null,
+    attachmentCount: 0,
+    dashboardUrl: null,
+  }
+
+  it('prints the kind\'s LABEL, matching the subject', () => {
+    // It used to print the slug here while the subject showed the label — two names for
+    // one thing in one email. Moved out of index.ts so it can be pinned.
+    expect(composeText({ ...base, purposeLabel: 'Sync licensing' })).toContain('Purpose: Sync licensing')
+  })
+
+  it('falls back to Contact for an empty label', () => {
+    expect(composeText({ ...base, purposeLabel: '' })).toContain('Purpose: Contact')
+  })
+
+  it('never lets a label carry a line break into the body', () => {
+    // The property is that the label cannot START A NEW LINE — a body is plain text, but
+    // the same value reaches a header elsewhere. stripHeader collapses the break to a
+    // space, so the injected words stay INSIDE the Purpose line, harmlessly. (An earlier
+    // draft asserted the words were absent, which is the wrong rule — see the buildSubject
+    // test above for the same lesson.)
+    const out = composeText({ ...base, purposeLabel: 'Booking\r\nX-Injected: yes' })
+    const lines = out.split('\n')
+    expect(lines.find((l) => l.startsWith('Purpose:'))).toBe('Purpose: Booking X-Injected: yes')
+    expect(lines.some((l) => l.startsWith('X-Injected'))).toBe(false)
+  })
+
+  it('links the dashboard for attachments when it has an address, and says so in prose when it does not', () => {
+    expect(composeText({ ...base, attachmentCount: 2, dashboardUrl: 'https://app.example/artists/a/enquiries' }))
+      .toContain('Listen or download: https://app.example/artists/a/enquiries')
+    expect(composeText({ ...base, attachmentCount: 1 })).toContain('Open the enquiry in Lone Star to listen')
+    expect(composeText({ ...base, attachmentCount: 1 })).toContain('1 audio file attached')
+    expect(composeText({ ...base, attachmentCount: 2 })).toContain('2 audio files attached')
+  })
+
+  it('omits the attachment block entirely when there are none', () => {
+    expect(composeText(base)).not.toMatch(/audio file/)
+  })
+
+  // WHAT THE MANAGER ACTUALLY READS. Mutation testing (2026-09-22) found every line below
+  // unwatched: the tests above pinned the Purpose line and the attachment block and nothing
+  // else, so deleting the visitor's MESSAGE, or the From line, or the demo link left the
+  // suite green. An email that arrives with the message missing is the worst outcome this
+  // whole feature has, and nothing would have failed.
+
+  it('carries the visitor\'s message, verbatim', () => {
+    expect(composeText({ ...base, message: 'Aug 14 at Mohawk, 45 min set?' }))
+      .toContain('Aug 14 at Mohawk, 45 min set?')
+  })
+
+  it('opens with who it is from, name and address', () => {
+    expect(composeText(base).split('\n')[0]).toBe('From:    Jane Promoter <jane@venue.example>')
+  })
+
+  it('includes the demo link when there is one, and no Demo line when there is not', () => {
+    // On a demo, the link IS most of the payload.
+    const out = composeText({ ...base, demoUrl: 'https://sound.example/track' })
+    expect(out.split('\n').find((l) => l.startsWith('Demo:'))).toBe('Demo:    https://sound.example/track')
+    expect(composeText(base)).not.toMatch(/^Demo:/m)
+  })
+
+  it('says when the audio expires, so nobody sits on it', () => {
+    expect(composeText({ ...base, attachmentCount: 1 })).toContain('deleted after 90 days')
+  })
+
+  it('signs off with how to reply', () => {
+    expect(composeText(base).split('\n').at(-1)).toBe(
+      '— Sent from your Lone Star site contact form. Reply to this email to answer directly.',
+    )
+  })
+
+  it('separates the header lines from the message with a blank line', () => {
+    // `lines.push('', b.message, '')` — the blanks are what stop the message running into
+    // the Purpose line and the sign-off.
+    const out = composeText({ ...base, message: 'Hello' }).split('\n')
+    const i = out.indexOf('Hello')
+    expect(out[i - 1]).toBe('')
+    expect(out[i + 1]).toBe('')
+  })
+})
+
+describe('validateBody — the slug is bounded', () => {
+  it('stores at most SLUG_STORE_MAX characters of a slug', () => {
+    // The slug is logged on every REJECTED attempt too; unbounded, it is free storage for
+    // anyone probing the endpoint. contact_attempts_slug_len mirrors this in the database.
+    const r = validateBody({
+      slug: 'x'.repeat(500), purpose: 'booking', name: 'Jane', email: 'jane@venue.example', message: 'hi', website: '',
+    })
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') expect(r.value.slug).toHaveLength(SLUG_STORE_MAX)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// Gaps mutation testing found (2026-09-22). Every `it` below was written because the line
+// it names could be deleted with the whole suite still green. The existing tests around
+// them assert loosely — `not.toContain('..')`, `toMatch(/^[A-Za-z0-9._-]+$/)` — which is
+// true of a great many wrong answers, so the exact value is what bites here.
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+describe('validateAttachments — the shape of what a stranger sent', () => {
+  const mp3 = { filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: 1000 }
+
+  it('trims the filename and the mime type, and lowercases the mime', () => {
+    // Both arrive from a public JSON body. An untrimmed mime misses the allowlist and the
+    // file is silently dropped as "unsupported"; an untrimmed filename becomes a storage
+    // path with a space on the end.
+    const res = validateAttachments([{ filename: '  demo.mp3  ', mime_type: '  AUDIO/MPEG  ', bytes: 1 }])
+    expect(res.value).toEqual([{ filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: 1 }])
+  })
+
+  it('coerces a byte count that is not a usable number to 0', () => {
+    // `bytes` reaches the database. A string, NaN or Infinity in that column is a broken
+    // row; a negative is a nonsense one.
+    for (const bad of ['1000', null, undefined, NaN, Infinity, -Infinity, {}]) {
+      expect(validateAttachments([{ ...mp3, bytes: bad }]).value[0].bytes, String(bad)).toBe(0)
+    }
+  })
+
+  it('floors a fractional size and clamps a negative one', () => {
+    expect(validateAttachments([{ ...mp3, bytes: 1000.9 }]).value[0].bytes).toBe(1000)
+    expect(validateAttachments([{ ...mp3, bytes: -5 }]).value[0].bytes).toBe(0)
+  })
+})
+
+describe('sanitiseFilename — exact output, not just a shape', () => {
+  it('collapses a RUN of bad characters into ONE dash', () => {
+    // `+` on the character class. Without it "my  song" becomes "my--song": still matches
+    // the allowlist the old test asserted, still wrong.
+    expect(sanitiseFilename('my  song (final?).mp3')).toBe('my-song-final-.mp3')
+  })
+
+  it('collapses a run of dots to one, which is what kills traversal', () => {
+    // `..` is the reason this function exists. The old test only asserted the result did
+    // not CONTAIN '..', which is also true of a function that deletes the dots entirely.
+    expect(sanitiseFilename('a..b.mp3')).toBe('a.b.mp3')
+    expect(sanitiseFilename('../../etc/passwd')).toBe('etc-passwd')
+  })
+
+  it('strips every leading dot and dash, not just the first', () => {
+    expect(sanitiseFilename('..hidden.mp3')).toBe('hidden.mp3')
+    expect(sanitiseFilename('--x.mp3')).toBe('x.mp3')
+  })
+
+  it('falls back for a name that is absent, not only for one that is junk', () => {
+    expect(sanitiseFilename(undefined as unknown as string)).toBe('audio')
+    expect(sanitiseFilename('....')).toBe('audio')
+  })
+})
+
+describe('validateDemoUrl — the boundaries', () => {
+  const pad = (n: number) => `https://x.example/${'a'.repeat(n - 'https://x.example/'.length)}`
+
+  it('accepts a link of exactly the maximum length and rejects one character more', () => {
+    expect(validateDemoUrl(pad(DEMO_URL_MAX)).value).toHaveLength(DEMO_URL_MAX)
+    expect(validateDemoUrl(pad(DEMO_URL_MAX + 1))).toEqual({
+      value: null,
+      skipped: [{ item: 'demo link', reason: 'invalid_demo_url' }],
+    })
+  })
+
+  it('refuses a link carrying a control character or a raw space', () => {
+    // It used to ACCEPT these: the collapsed copy was only used for the prefix test, and
+    // the raw string — carriage return and all — was what got returned, stored and printed
+    // into the email body.
+    for (const bad of ['https://x.example/a\rb', 'https://x.example/a b', '\u0001https://x.example']) {
+      expect(validateDemoUrl(bad), JSON.stringify(bad)).toEqual({
+        value: null,
+        skipped: [{ item: 'demo link', reason: 'invalid_demo_url' }],
+      })
+    }
+  })
+
+  it('rejects a link that passes the prefix but cannot be parsed', () => {
+    // "https://" with no host reaches `new URL` and throws. Nothing exercised that catch,
+    // so an empty block there would have looked fine.
+    expect(validateDemoUrl('https://').value).toBeNull()
+    expect(validateDemoUrl('https://').skipped).toEqual([{ item: 'demo link', reason: 'invalid_demo_url' }])
+  })
+})
+
+describe('validateBody — the checks below the obvious ones', () => {
+  const ok = { slug: 'skeen', purpose: 'booking', name: 'Jane', email: 'jane@venue.example', website: '' }
+
+  it('trims the message before storing it', () => {
+    const r = validateBody({ ...ok, message: '   hello   ' })
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') expect(r.value.message).toBe('hello')
+  })
+
+  it('names message_too_long exactly, not merely "an error"', () => {
+    const r = validateBody({ ...ok, message: 'x'.repeat(MESSAGE_MAX + 1) })
+    expect(r).toMatchObject({ kind: 'error', error: 'message_too_long' })
+  })
+
+  it('rejects an address that is WELL FORMED but too long', () => {
+    // The syntax half of that condition passes it; only the length half refuses. Without
+    // the length check a 2KB address goes to the database and then to the mail provider.
+    const long = `${'a'.repeat(EMAIL_MAX)}@venue.example`
+    expect(validateBody({ ...ok, email: long, message: 'hi' })).toMatchObject({
+      kind: 'error',
+      error: 'invalid_email',
+    })
+  })
+
+  it('accepts an address of exactly the maximum length', () => {
+    // The boundary `>` vs `>=`. Without this the rule could tighten by one character and
+    // quietly start refusing addresses that are within the limit.
+    const exact = `${'a'.repeat(EMAIL_MAX - '@venue.example'.length)}@venue.example`
+    expect(exact).toHaveLength(EMAIL_MAX)
+    expect(validateBody({ ...ok, email: exact, message: 'hi' }).kind).toBe('ok')
+  })
+
+  it('rejects an address with anything trailing it', () => {
+    // EMAIL_RE's `$`. Without the anchor "jane@venue.example rm -rf" matches its prefix
+    // and is accepted as an address.
+    expect(validateBody({ ...ok, email: 'jane@venue.example extra', message: 'hi' })).toMatchObject({
+      kind: 'error',
+      error: 'invalid_email',
+    })
+  })
+})
+
+describe('decideDoor — the error CODE, not just the status', () => {
+  it('says send_failed on both 500 paths', () => {
+    // The visitor sees this string. A test that only checks the number passes while the
+    // body reads `{"ok":false,"error":""}`.
+    expect(decideDoor(null)).toEqual({ kind: 'reject', httpStatus: 500, error: 'send_failed' })
+    expect(decideDoor({ status: 'something-new', enquiry_id: null })).toEqual({
+      kind: 'reject',
+      httpStatus: 500,
+      error: 'send_failed',
+    })
+  })
+})
+
+describe('buildSubject / composeText — the last two unwatched lines', () => {
+  it('tolerates a missing label rather than printing "null"', () => {
+    expect(buildSubject(null as unknown as string, 'Skeen', 'Jane')).toBe(
+      '[Contact] Skeen — enquiry from Jane',
+    )
+  })
+
+  it('leaves a blank line after the attachment block', () => {
+    // Without it the retention sentence runs straight into the sign-off.
+    const out = composeText({
+      name: 'Jane', email: 'jane@venue.example', purposeLabel: 'Demo', message: 'hi',
+      demoUrl: null, attachmentCount: 1, dashboardUrl: null,
+    }).split('\n')
+    const i = out.findIndex((l) => l.startsWith('Files are deleted'))
+    expect(out[i + 1]).toBe('')
   })
 })

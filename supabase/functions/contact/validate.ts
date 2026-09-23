@@ -26,7 +26,23 @@ export const EMAIL_MAX = 320
  */
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
-export type Purpose = 'booking' | 'demo' | 'other'
+/** Mirrors `contact_attempts_slug_len`. Artist slugs are ≤ 15 characters today. */
+export const SLUG_STORE_MAX = 80
+
+/**
+ * An artist-defined enquiry kind, as a slug: 'booking', 'demo', 'press', 'sync'.
+ *
+ * No longer a union of three. Kinds live in `enquiry_kinds` and are the artist's to
+ * invent, so this endpoint cannot hold the list — it would need redeploying every time
+ * somebody added one. What it CAN enforce is the shape, which is what PURPOSE_RE does.
+ */
+export type Purpose = string
+
+/** Mirrors ek_slug_fmt on enquiry_kinds and the purpose CHECK on enquiries. */
+export const PURPOSE_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
+
+/** The kind every artist has and the one anything unrecognisable becomes. */
+export const PURPOSE_FALLBACK = 'other'
 
 export type ContactBody = {
   slug: string
@@ -58,12 +74,16 @@ function str(v: unknown): string {
  * purpose value before the backend knows about it should still deliver its enquiries.
  */
 export function coercePurpose(v: unknown): Purpose {
-  return v === 'booking' || v === 'demo' || v === 'other' ? v : 'other'
+  if (typeof v !== 'string') return PURPOSE_FALLBACK
+  const slug = v.trim().toLowerCase()
+  return PURPOSE_RE.test(slug) ? slug : PURPOSE_FALLBACK
 }
 
 export function validateBody(raw: unknown): ValidationResult {
   const body = (raw ?? {}) as Record<string, unknown>
-  const slug = str(body.slug).trim()
+  // Bounded: it is stored on every REJECTED attempt too, and an unbounded value there is
+  // free storage for anyone probing the endpoint (contact_attempts_slug_len mirrors it).
+  const slug = str(body.slug).trim().slice(0, SLUG_STORE_MAX)
   const purpose = coercePurpose(body.purpose)
 
   // Honeypot is checked FIRST, before any other rejection, so a bot that also sends a
@@ -97,26 +117,6 @@ export function validateBody(raw: unknown): ValidationResult {
 }
 
 /**
- * The client IP for /contact's rate limit: first `x-forwarded-for` hop, then `x-real-ip`.
- *
- * NOTE (2026-09-11): the first XFF hop is the CLIENT-WRITABLE one — Cloudflare appends
- * to whatever the client sent. The /event door therefore trusts only the gateway's
- * `cf-connecting-ip` (see _shared/request.ts clientIp). Moving /contact onto that changes
- * which bucket a request lands in on a deployed door, so it is a deliberate change with
- * its own redeploy, not a silent refactor. Until then this stays as shipped.
- */
-export function firstForwardedIp(headers: { get(name: string): string | null }): string {
-  const fwd = headers.get('x-forwarded-for')
-  if (fwd) {
-    const first = fwd.split(',')[0]?.trim()
-    if (first) return first
-  }
-  const real = headers.get('x-real-ip')?.trim()
-  if (real) return real
-  return 'unknown'
-}
-
-/**
  * SHA-256(salt : ip), hex, truncated to 32 chars (128 bits — far past collision
  * concerns at this volume).
  *
@@ -146,17 +146,23 @@ export function formatFrom(name: string, address: string): string {
   return clean ? `"${clean}" <${address}>` : address
 }
 
-const PURPOSE_LABEL: Record<Purpose, string> = {
-  booking: 'Booking',
-  demo: 'Demo',
-  other: 'Contact',
-}
-
-/** e.g. `[Booking] Skeen — enquiry from Jane Promoter` */
-export function buildSubject(purpose: Purpose, artistName: string, visitorName: string): string {
-  return stripHeader(
-    `[${PURPOSE_LABEL[purpose]}] ${artistName} — enquiry from ${visitorName}`,
-  ).slice(0, 200)
+/**
+ * e.g. `[Booking] Skeen — enquiry from Jane Promoter`
+ *
+ * Takes the KIND'S LABEL, not its slug. This used to be a three-entry map right here,
+ * which stopped being possible the moment kinds became the artist's to define — the label
+ * for 'sync-licensing' is whatever they typed, and only the database knows it. It arrives
+ * as `purpose_label` on the submit_enquiry row, already defaulted there.
+ *
+ * `stripHeader` still runs over the whole line: the label is manager-supplied text landing
+ * in a mail header, and ek_label_clean rejecting CR/LF at the storage layer is the other
+ * half of the same belt-and-braces, not a reason to skip this one.
+ */
+export function buildSubject(purposeLabel: string, artistName: string, visitorName: string): string {
+  // No `.trim()` after stripHeader — that function already ends in one, so a second call
+  // could never change the result (it survived mutation for exactly that reason).
+  const label = stripHeader(purposeLabel ?? '') || 'Contact'
+  return stripHeader(`[${label}] ${artistName} — enquiry from ${visitorName}`).slice(0, 200)
 }
 
 /**
@@ -235,7 +241,16 @@ export function validateDemoUrl(raw: unknown): DemoUrlResult {
   const reject: DemoUrlResult = { value: null, skipped: [{ item: 'demo link', reason: 'invalid_demo_url' }] }
   if (trimmed.length > DEMO_URL_MAX) return reject
 
+  // A link carrying a control character or a raw space is REFUSED, not quietly stored.
+  // `collapsed` used to feed the prefix test only, while the value RETURNED was the raw
+  // `trimmed` — so "https://x.example/a\rb" was accepted and its carriage return went on
+  // into the email body and the database. Nothing in a real URL needs those bytes, and a
+  // dropped link is named in `skipped` rather than lost.
   const collapsed = trimmed.replace(/[\u0000-\u0020\u007f]/g, '')
+  if (collapsed !== trimmed) return reject
+  // THESE TWO CHECKS ARE DELIBERATELY REDUNDANT, and each therefore survives mutation:
+  // disable either and the other still rejects every non-https input, so no test can tell
+  // them apart. That is the point — see the header. Do not "simplify" one away.
   if (!/^https:\/\//i.test(collapsed)) return reject
 
   try {
@@ -287,12 +302,19 @@ export function hasContent(input: {
 }
 
 export function validateAttachments(raw: unknown): AttachmentsResult {
-  if (raw === undefined || raw === null || !Array.isArray(raw)) return { value: [], skipped: [] }
+  // `!Array.isArray` alone: it is already false for undefined and null, so the two
+  // equality checks that used to sit in front of it could never change the outcome —
+  // five mutants survived on that line because nothing could tell they were there.
+  if (!Array.isArray(raw)) return { value: [], skipped: [] }
 
   const value: AttachmentRequest[] = []
   const skipped: SkippedItem[] = []
 
   for (const item of raw) {
+    // The `typeof` half survives mutation and cannot be killed: this list comes from
+    // JSON.parse, so a non-object item is a string, number or boolean, and every one of
+    // those yields an empty filename and is skipped by the next check anyway. It stays
+    // because the function must be correct for any caller, not only for JSON.
     if (typeof item !== 'object' || item === null) continue
     const r = item as Record<string, unknown>
     const filename = str(r.filename).trim()
@@ -307,7 +329,9 @@ export function validateAttachments(raw: unknown): AttachmentsResult {
       skipped.push({ item: filename, reason: 'too_many_attachments' })
       continue
     }
-    const bytes = typeof r.bytes === 'number' && Number.isFinite(r.bytes) ? Math.max(0, Math.floor(r.bytes)) : 0
+    // `Number.isFinite` alone — it returns false for every non-number, so the
+    // `typeof === 'number'` test that used to precede it could never change the outcome.
+    const bytes = Number.isFinite(r.bytes) ? Math.max(0, Math.floor(r.bytes as number)) : 0
     value.push({ filename, mime_type: mime, bytes })
   }
   return { value, skipped }
@@ -424,4 +448,98 @@ export function decideDoor(
     default:
       return { kind: 'reject', httpStatus: 500, error: 'send_failed' }
   }
+}
+
+/**
+ * Everyone this enquiry is addressed to, ready for Resend's `to`.
+ *
+ * `to_emails` is what `resolve_enquiry_recipients` produced (primary first, then the
+ * manager's configured list). `to_email` is the primary alone, and it is the fallback for
+ * exactly one situation that WILL happen: the Edge Function deploys independently of the
+ * database, so between `supabase db push` and `supabase functions deploy` — in either
+ * order — one side is newer than the other. An older `submit_enquiry` returns no
+ * `to_emails` at all, and dropping to zero recipients there would turn every enquiry
+ * unroutable for the length of the deploy.
+ *
+ * Re-does the de-duplication that `enquiry_recipients`' unique index already does, on
+ * purpose: this function has to be correct on its own, the same reason `submit_enquiry`
+ * re-validates input the Edge Function has already checked. Two copies of one address in
+ * `to` is a duplicate send to a human and, to some providers, a malformed request.
+ *
+ * Returns [] when there is nothing to send to. The caller must treat that as unroutable
+ * rather than calling Resend with an empty `to`, which is a 4xx and would be recorded as
+ * a send failure rather than the configuration problem it actually is.
+ */
+export function pickRecipients(
+  row: { to_email?: string | null; to_emails?: string[] | null } | null | undefined,
+): string[] {
+  if (!row) return []
+  const candidates = Array.isArray(row.to_emails) && row.to_emails.length > 0
+    ? row.to_emails
+    : [row.to_email]
+
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of candidates) {
+    if (typeof raw !== 'string') continue
+    const email = raw.trim()
+    // The same shape the CHECK constraints and submit_enquiry use. A value that cannot be
+    // an address would be rejected by Resend for the WHOLE send, taking the good
+    // recipients down with it.
+    if (!EMAIL_RE.test(email)) continue
+    // Either case would do — the key is only ever compared with itself, so `toUpperCase`
+    // is an equivalent mutant. Lower matches the SQL side (`lower(email)`), which is the
+    // reason to prefer it.
+    const key = email.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(email)
+  }
+  return out
+}
+
+/**
+ * The email body. Moved here from index.ts (review, 2026-09-22): it is a pure function
+ * deciding what a stranger reads, and index.ts is for plumbing nobody can test.
+ *
+ * Plain-text only, on purpose. A contact form has no formatting to preserve, and an
+ * HTML body would mean escaping attacker-controlled text into markup that lands in
+ * someone's mail client. Text has no such surface.
+ */
+export function composeText(b: {
+  name: string
+  email: string
+  /** The kind's LABEL, not its slug — the subject already shows the label, and the body
+   *  used to print the slug beside it. */
+  purposeLabel: string
+  message: string
+  demoUrl: string | null
+  attachmentCount: number
+  dashboardUrl: string | null
+}): string {
+  const lines = [
+    `From:    ${b.name} <${b.email}>`,
+    `Purpose: ${stripHeader(b.purposeLabel) || 'Contact'}`,
+  ]
+  if (b.demoUrl) lines.push(`Demo:    ${b.demoUrl}`)
+  lines.push('', b.message, '')
+
+  // The audio is NEVER attached. A large attachment gets rejected by the receiving side
+  // and damages the sending domain's reputation for every other enquiry, so the email
+  // links to the file instead — and says when it goes, because nobody checks an inbox
+  // knowing there is a 90-day clock on it.
+  if (b.attachmentCount > 0) {
+    const n = b.attachmentCount
+    lines.push(
+      `${n} audio file${n === 1 ? '' : 's'} attached to this enquiry.`,
+      b.dashboardUrl
+        ? `Listen or download: ${b.dashboardUrl}`
+        : 'Open the enquiry in Lone Star to listen or download.',
+      'Files are deleted after 90 days — save anything worth keeping. The message itself is kept.',
+      '',
+    )
+  }
+
+  lines.push('— Sent from your Lone Star site contact form. Reply to this email to answer directly.')
+  return lines.join('\n')
 }

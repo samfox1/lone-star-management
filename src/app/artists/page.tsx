@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import type { InboxRow } from '@/lib/enquiry-inbox'
-import { attachmentCounts } from '@/lib/enquiry-inbox-server'
+import type { InboxRow } from '@/lib/enquiries/inbox'
+import { attachmentCounts } from '@/lib/enquiries/inbox-server'
+import { labelFromSlug } from '@/lib/enquiries/kinds'
 import { EnquiryTable } from './[id]/(dashboard)/enquiries/enquiry-table'
 import { EmptyState, RosterShell } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
@@ -47,8 +48,17 @@ export default async function EnquiriesInboxPage() {
 
   const counts = await attachmentCounts(supabase, enquiries.map((r) => r.id))
 
+  // Each artist names their own kinds, so the label is per (artist, slug). One RLS-scoped
+  // read across the roster; a slug with no kind (deleted since) reads as the slug made
+  // readable, the same fallback the email subject uses.
+  const { data: kindRows } = await supabase.from('enquiry_kinds').select('artist_id, slug, label')
+  const labels = new Map(
+    ((kindRows ?? []) as { artist_id: string; slug: string; label: string }[]).map((k) => [`${k.artist_id}:${k.slug}`, k.label]),
+  )
+
   const rows: InboxRow[] = enquiries.map((r) => ({
     ...r,
+    purposeLabel: labels.get(`${r.artist_id}:${r.purpose}`) ?? labelFromSlug(r.purpose),
     attachmentCount: counts.get(r.id) ?? 0,
     artistId: r.artist_id,
     // An artist RLS hides would be a bug, not a normal state — but rendering "Unknown"

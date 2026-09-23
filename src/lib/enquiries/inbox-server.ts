@@ -1,6 +1,6 @@
 /**
  * Server-side inbox reads. Its own module rather than more surface on
- * `lib/enquiry-inbox.ts`, because that file is imported by the client-side table — a
+ * `lib/enquiries/inbox.ts`, because that file is imported by the client-side table — a
  * Supabase server query has no business in a 'use client' bundle.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'

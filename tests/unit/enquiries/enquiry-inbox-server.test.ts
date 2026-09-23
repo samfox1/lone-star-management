@@ -6,7 +6,7 @@
  * copy-pasted into both inbox pages and would drift the first time one was edited.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { attachmentCounts } from '@/lib/enquiry-inbox-server'
+import { attachmentCounts } from '@/lib/enquiries/inbox-server'
 
 const client = (rows: { enquiry_id: string }[]) => {
   const from = vi.fn(() => ({ select: () => ({ in: async () => ({ data: rows }) }) }))

@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { fileSize, type PlayableAttachment } from '@/lib/enquiry-attachments'
-import { artistsIn, filterByArtist, filterRows, snippet, type InboxFilter, type InboxRow } from '@/lib/enquiry-inbox'
+import { fileSize, type PlayableAttachment } from '@/lib/enquiries/attachments'
+import { artistsIn, filterByArtist, filterRows, snippet, type InboxFilter, type InboxRow } from '@/lib/enquiries/inbox'
 import { safeHref } from '@/lib/url'
 import { Icon } from '@/components/ui/icons'
 import { setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
-
-const PURPOSE_LABEL: Record<string, string> = { booking: 'Booking', demo: 'Demo', other: 'Contact' }
 
 const FILTERS: { key: InboxFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -250,7 +248,7 @@ function FragmentRow({
           </span>
         </td>
         <td className="px-4 py-2.5 font-space text-[11px] uppercase tracking-[0.06em] text-ink-faint">
-          {PURPOSE_LABEL[row.purpose] ?? row.purpose}
+          {row.purposeLabel}
         </td>
         <td className="max-w-0 px-4 py-2.5">
           <span className="block truncate font-space text-xs text-ink-muted">{snippet(row.message)}</span>
@@ -324,7 +322,6 @@ function FragmentRow({
                         </p>
                       ) : (
                         <>
-                          { }
                           <audio controls preload="none" src={a.url ?? undefined} className="mt-1.5 w-full" />
                           <a
                             href={a.url ?? undefined}

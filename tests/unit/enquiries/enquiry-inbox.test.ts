@@ -7,11 +7,12 @@
  * scannable archive with no row open by default.
  */
 import { describe, expect, it } from 'vitest'
-import { artistsIn, filterByArtist, filterRows, snippet, type InboxRow } from '@/lib/enquiry-inbox'
+import { artistsIn, filterByArtist, filterRows, snippet, type InboxRow } from '@/lib/enquiries/inbox'
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
   purpose: 'booking',
+  purposeLabel: 'Booking',
   name: 'Jamie Rowe',
   email: 'jamie@example.com',
   message: 'Can you play the Aug 14 show at Mohawk?',

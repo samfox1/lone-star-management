@@ -9,7 +9,7 @@
  * state, and the page has to say so rather than break or show a dead player.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { fileSize, toPlayable, type AttachmentRow } from '@/lib/enquiry-attachments'
+import { fileSize, toPlayable, type AttachmentRow } from '@/lib/enquiries/attachments'
 import { createClient } from '@/lib/supabase/server'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))

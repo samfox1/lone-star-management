@@ -13,6 +13,10 @@
 export type InboxRow = {
   id: string
   purpose: string
+  /** The kind's label as the artist has it NOW, resolved server-side from enquiry_kinds
+   *  (fallback: the slug made readable). The table used to carry a three-entry map;
+   *  kinds are renameable and inventable, so only the table can be right. */
+  purposeLabel: string
   name: string
   email: string
   message: string

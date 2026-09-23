@@ -14,8 +14,9 @@ of the two migrations (`20260722120000`, `20260722130000`). This file is the run
 - Both migrations are applied.
 - `supabase/functions/contact/` is written, and `[functions.contact] verify_jwt = true`
   is in `config.toml`.
-- Tests are green: `tests/contact-validate.test.ts` (pure), `tests/enquiry-door.test.ts`
-  (the RPC, against the real DB), `tests/enquiries.isolation.test.ts` (the boundary).
+- Tests are green: `tests/unit/enquiries/contact-validate.test.ts` (pure),
+  `tests/integration/enquiries/enquiry-door.test.ts` (the RPC, against the real DB),
+  `tests/integration/enquiries/enquiries.isolation.test.ts` (the boundary).
 
 ## What is still blocked on a human
 
@@ -179,3 +180,26 @@ so the manager can set the booking address from the editor — that is rung 2 ab
 
 An unrecognized `purpose` is coerced to `"other"` rather than rejected, so skeen can ship
 a new purpose value before this side knows about it.
+
+---
+
+## Kinds and recipient lists (2026-09-21/22)
+
+`purpose` is no longer one of three values. Each artist has their own **kinds**
+(`enquiry_kinds`: `booking`, `demo`, `other` seeded on every artist, plus any the manager
+adds), and each kind has a **recipient list** (`enquiry_recipients`, at most 10) that is
+ADDED to the booking address the four rungs above resolve. One message goes out with all
+of them in `to`. A `purpose` that matches none of the artist's kinds is filed under `other`.
+
+Where the code lives:
+
+- `supabase/functions/contact/` — the public door (cannot move; it cannot import `src/`).
+- `src/lib/enquiries/` — pure logic: `kinds.ts` (slug derivation, labels, list checks),
+  `inbox.ts`, `inbox-server.ts`, `attachments.ts`.
+- `src/app/artists/[id]/(dashboard)/enquiries/` — the tool: page, kind rows + modal,
+  inbox table, and every server action (`set_enquiry_recipients` is the atomic list write).
+- `tests/{unit,components,integration}/enquiries/`.
+
+Migrations: `20260921120000_enquiry_recipients.sql` (the model), `20260922120000_enquiry_hardening.sql`
+(atomic list write, rate-limit locks restored, `log_contact_attempt` fixed, unknown purpose
+→ `other`, slug bound).
