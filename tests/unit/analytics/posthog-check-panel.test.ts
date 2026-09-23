@@ -93,6 +93,23 @@ describe('PostHogCheck — the panel itself', () => {
     expect(JSON.stringify(el)).toMatch(/could not run/)
   })
 
+  it('gives up on a PostHog whose BODY never finishes, without aborting the stream', async () => {
+    // Seen live 2026-09-23: aborting a fetch after the headers arrived tripped Node 20's
+    // undici ("controller[kState].transformAlgorithm is not a function"), which escaped
+    // the panel's try/catch and failed the Suspense boundary. So the body is raced
+    // against a timer instead, and the signal must NOT be aborted once headers are in.
+    vi.useFakeTimers()
+    let signal: AbortSignal | undefined
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined
+      return { ok: true, status: 200, json: () => new Promise(() => {}) }
+    }))
+    const out = PostHogCheck({ supabase: supabase as never, artistId: 'a1', slug: CHECK_SLUG, now: NOW })
+    await vi.advanceTimersByTimeAsync(POSTHOG_TIMEOUT_MS + 1)
+    expect(JSON.stringify(await out)).toMatch(/could not run/)
+    expect(signal?.aborted).toBe(false)
+  })
+
   it('streams in behind the page: the slot is a Suspense boundary with no fallback', () => {
     const el = PostHogCheckSlot({ supabase: supabase as never, artistId: 'a1', slug: CHECK_SLUG, now: 0 }) as { type: unknown; props: { fallback: unknown } }
     expect(el.type).toBe(Suspense)

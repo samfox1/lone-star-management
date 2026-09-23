@@ -39,8 +39,13 @@ type Props = {
   now: number
 }
 
-/** How long one PostHog query may take before the panel gives up and says so. */
-export const POSTHOG_TIMEOUT_MS = 8_000
+/**
+ * How long one PostHog query may take, headers and body each, before the panel gives up
+ * and says so. Generous, because the panel streams in behind the page and a cold HogQL
+ * query was clocked at 6s on 2026-09-23; the cost of waiting is only the panel's own
+ * arrival, never the page's.
+ */
+export const POSTHOG_TIMEOUT_MS = 30_000
 
 /**
  * What the page renders. A Suspense boundary with no fallback, so the dashboard streams
@@ -109,22 +114,36 @@ async function readPostHog(slug: string, w: Window) {
     const names = Object.keys(q) as (keyof typeof q)[]
     const rows = await Promise.all(
       names.map(async (name) => {
-        // A hand-rolled timeout rather than AbortSignal.timeout, so a test's fake clock
-        // can drive it. Cleared only after the BODY is read: a stalled body hangs too.
+        // Two timeouts, hand-rolled so a test's fake clock can drive them. The abort
+        // signal covers ONLY the wait for headers: aborting after they arrive tears down
+        // the body's decompression stream, which on Node 20 throws undici's
+        // "controller[kState].transformAlgorithm is not a function" outside any
+        // try/catch and fails the Suspense boundary (seen live 2026-09-23). The body is
+        // raced against a timer instead and, on timeout, simply left to close with the
+        // request.
         const ctl = new AbortController()
-        const timer = setTimeout(() => ctl.abort(), POSTHOG_TIMEOUT_MS)
-        const res = await fetch(url, {
-          signal: ctl.signal,
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.POSTHOG_PERSONAL_API_KEY}` },
-          body: JSON.stringify({ query: { kind: 'HogQLQuery', query: q[name] } }),
-          cache: 'no-store',
+        const headersTimer = setTimeout(() => ctl.abort(), POSTHOG_TIMEOUT_MS)
+        let res: Response
+        try {
+          res = await fetch(url, {
+            signal: ctl.signal,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.POSTHOG_PERSONAL_API_KEY}` },
+            body: JSON.stringify({ query: { kind: 'HogQLQuery', query: q[name] } }),
+            cache: 'no-store',
+          })
+        } finally {
+          clearTimeout(headersTimer)
+        }
+        if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status}`)
+        let bodyTimer: ReturnType<typeof setTimeout> | undefined
+        const stalled = new Promise<never>((_, reject) => {
+          bodyTimer = setTimeout(() => reject(new Error(`PostHog ${name}: the body did not finish in ${POSTHOG_TIMEOUT_MS}ms`)), POSTHOG_TIMEOUT_MS)
         })
         try {
-          if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status}`)
-          return parseHogQL(await res.json(), name)
+          return parseHogQL(await Promise.race([res.json(), stalled]), name)
         } finally {
-          clearTimeout(timer)
+          clearTimeout(bodyTimer)
         }
       }),
     )
