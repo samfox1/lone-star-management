@@ -2,6 +2,7 @@ import { ToolsShell } from './tools-rail'
 import { AssetsShell } from './assets-rail'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { isCustom } from '@/lib/custom-site'
 import { Icon } from '@/components/ui/icons'
 import { Avatar, initials, StatusDot } from '@/components/ui/ui'
 import { ArtistNav } from './artist-tabs'
@@ -119,7 +120,7 @@ export default async function DashboardLayout({
             images / videos) the assets rail; elsewhere it is the page alone. Both live HERE
             so they persist across a tab switch while the page beneath streams in behind
             its loading.tsx (2026-09-10). */}
-        <ToolsShell artistId={id}>
+        <ToolsShell artistId={id} customSite={isCustom(artist)}>
           <AssetsShell artistId={id}>{children}</AssetsShell>
         </ToolsShell>
       </main>

@@ -10,7 +10,17 @@ import type { IconName } from '@/components/ui/icons'
  *  rail beside it already carries the icon for the whole tool (Sam, 2026-09-22). */
 export type ToolTab = { seg: string; label: string }
 
-export type Tool = { seg: string; icon: IconName; label: string; short?: string; desc: string; tabs?: readonly ToolTab[] }
+export type Tool = {
+  seg: string
+  icon: IconName
+  label: string
+  short?: string
+  desc: string
+  tabs?: readonly ToolTab[]
+  /** Only meaningful while the artist's site is one of OUR templates. `toolsFor(true)`
+   *  drops it once a custom site is connected (Sam, 2026-09-23: "remove it for now"). */
+  templateOnly?: true
+}
 
 /** The registry: what the panel lists, in order. `seg` is the route segment under
  *  /artists/[id]/. Derive from this — never hand-list tools elsewhere.
@@ -24,7 +34,7 @@ export type Tool = { seg: string; icon: IconName; label: string; short?: string;
  *  <Icon> wrapper (24 grid, 1.6 stroke). Notices in LICENSES/icons.md. */
 export const TOOLS: readonly Tool[] = [
   { seg: 'tools', icon: 'home', label: 'Overview', desc: 'Status, publish, quick links' },
-  { seg: 'site', icon: 'internet', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video' },
+  { seg: 'site', icon: 'internet', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video', templateOnly: true },
   { seg: 'brand', icon: 'sparkles', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
   { seg: 'connections', icon: 'plug', label: 'Connections', desc: 'Profiles & connected services' },
   { seg: 'tools/seo', icon: 'compass', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers' },
@@ -44,6 +54,16 @@ export const TOOLS: readonly Tool[] = [
     ],
   },
 ]
+
+/**
+ * The tools this artist's rail shows. A bridge-connected custom site ignores the template
+ * picker, the template's text fields and the media panel that make up the Site page, and
+ * the editor owns everything it did — so that tool goes. Filtered here, from the registry,
+ * so the rail, its offset maths and the tests all read the same list.
+ */
+export function toolsFor(customSite: boolean): readonly Tool[] {
+  return customSite ? TOOLS.filter((t) => !t.templateOnly) : TOOLS
+}
 
 /** The tool a pathname is on, or null when the pathname is not a tool route. Longest
  *  segment wins so `tools/seo` beats `tools`. */

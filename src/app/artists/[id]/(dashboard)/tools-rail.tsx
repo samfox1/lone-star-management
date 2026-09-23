@@ -11,9 +11,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { TOOLS, tabFor, toolFor, type Tool } from './tools-registry'
+import { TOOLS, tabFor, toolFor, toolsFor, type Tool } from './tools-registry'
 
-export { TOOLS, tabFor, toolFor }
+export { TOOLS, tabFor, toolFor, toolsFor }
 
 // FULL HEIGHT FROM THE TOP, UNDER THE HEADER (Sam, 2026-09-10). The rail used to start at
 // top:71px — the header's height — so its border-right met the header's border-bottom.
@@ -80,9 +80,9 @@ const RAIL_ITEM_GAP = 4
  * The panel now starts at the RAIL's offset instead of its own, so the two top icons line
  * up. Derived from TOOLS, so adding a tool moves both together.
  */
-const RAIL_COLUMN_TOP = (TOOLS.length * RAIL_ITEM_H + (TOOLS.length - 1) * RAIL_ITEM_GAP) / 2
+const railColumnTop = (count: number) => (count * RAIL_ITEM_H + (count - 1) * RAIL_ITEM_GAP) / 2
 
-export function ToolsRail({ artistId, active, collapsed = false }: { artistId: string; active: string; collapsed?: boolean }) {
+export function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { artistId: string; active: string; collapsed?: boolean; tools?: readonly Tool[] }) {
   return (
     <div className="hidden flex-none md:block" style={{ width: collapsed ? RAIL_COLLAPSED_W : RAIL_W }}>
       <nav
@@ -98,7 +98,7 @@ export function ToolsRail({ artistId, active, collapsed = false }: { artistId: s
         {/* Stretches to the nav, so the icons re-centre as it widens. Deliberately NOT a
             fixed width — see the note on RAIL_COLLAPSED_W. */}
         <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-1.5">
-          {TOOLS.map((t) => {
+          {tools.map((t) => {
             const on = t.seg === active
             return (
               <Link
@@ -137,7 +137,7 @@ export function ToolsRail({ artistId, active, collapsed = false }: { artistId: s
  * shows the tool's icon, and a second column of icons said nothing the first had not
  * (Sam, 2026-09-22: "I dont need icons on the right rail").
  */
-export function SubRail({ artistId, tool, activeSeg }: { artistId: string; tool: Tool; activeSeg: string }) {
+export function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; tool: Tool; activeSeg: string; railCount: number }) {
   return (
     <div className="hidden flex-none md:block" style={{ width: SUB_RAIL_W }}>
       <nav
@@ -147,7 +147,7 @@ export function SubRail({ artistId, tool, activeSeg }: { artistId: string; tool:
       >
         {/* The RAIL's offset, not its own — see RAIL_COLUMN_TOP. No `-translate-y-1/2`:
             that would re-centre it on its own short height and undo the alignment. */}
-        <div className="flex flex-col gap-1 px-2" style={{ marginTop: `calc(50vh - ${RAIL_COLUMN_TOP}px)` }}>
+        <div className="flex flex-col gap-1 px-2" style={{ marginTop: `calc(50vh - ${railColumnTop(railCount)}px)` }}>
           {(tool.tabs ?? []).map((t) => {
             const on = t.seg === activeSeg
             return (
@@ -178,15 +178,18 @@ export function SubRail({ artistId, tool, activeSeg }: { artistId: string; tool:
 /** Wraps the dashboard's page: on a tool route, the rail plus the page; elsewhere the
  *  page alone. One place, so every tool gets the rail and no tool can forget it. A tool
  *  with sub-tabs collapses the rail and adds the second panel. */
-export function ToolsShell({ artistId, children }: { artistId: string; children: React.ReactNode }) {
+export function ToolsShell({ artistId, customSite = false, children }: { artistId: string; customSite?: boolean; children: React.ReactNode }) {
   const pathname = usePathname() ?? ''
   const tool = toolFor(pathname, artistId)
   if (!tool) return <>{children}</>
   const tab = tabFor(tool, pathname, artistId)
+  // The rail's list, not TOOLS: the Site tool leaves it for a custom-site artist, and the
+  // second panel's offset has to count the rows that are actually there.
+  const tools = toolsFor(customSite)
   return (
     <div className="flex gap-8">
-      <ToolsRail artistId={artistId} active={tool.seg} collapsed={tab !== null} />
-      {tab ? <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} /> : null}
+      <ToolsRail artistId={artistId} active={tool.seg} collapsed={tab !== null} tools={tools} />
+      {tab ? <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} /> : null}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   )

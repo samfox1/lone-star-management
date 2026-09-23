@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { TOOLS, ToolsShell, tabFor, toolFor } from '@/app/artists/[id]/(dashboard)/tools-rail'
+import { TOOLS, ToolsShell, tabFor, toolFor, toolsFor } from '@/app/artists/[id]/(dashboard)/tools-rail'
 import { Icon } from '@/components/ui/icons'
 
 let pathname = '/artists/a1/tools'
@@ -174,5 +174,34 @@ describe('every tool icon draws something', () => {
       expect(container.querySelector('svg')!.children.length, t.icon).toBeGreaterThan(0)
       unmount()
     }
+  })
+})
+
+describe('the Site tool leaves the rail once the artist has a custom site (Sam, 2026-09-23)', () => {
+  // The Site page is the template era: a template picker, the template's text fields and
+  // a media panel. A bridge-connected site ignores all three and the editor owns the rest,
+  // so for those artists it is three dead controls and a second Publish button. It stays
+  // for a template-hosted artist (FTBK) until that site has a real URL.
+  const tool = TOOLS.find((t) => t.tabs?.length)!
+
+  it('CRITICAL: hidden for a custom-site artist, and the second panel offset shrinks with it', () => {
+    pathname = `/artists/a1/${tool.seg}`
+    render(<ToolsShell artistId="a1" customSite><p>page</p></ToolsShell>)
+    const rail = screen.getByRole('navigation', { name: 'Manager tools' })
+    expect(rail.querySelector('a[href="/artists/a1/site"]')).toBeNull()
+    const rows = [...rail.querySelectorAll('a')]
+    expect(rows).toHaveLength(toolsFor(true).length)
+    expect(toolsFor(true).length).toBe(TOOLS.length - 1)
+    // Derived from the VISIBLE rows, or the panel would float 28px above the first icon.
+    const h = parseFloat(rows[0].style.height)
+    const top = (rows.length * h + (rows.length - 1) * 4) / 2
+    expect(screen.getByRole('navigation', { name: tool.label }).querySelector('div')!.style.marginTop).toBe(`calc(50vh - ${top}px)`)
+  })
+
+  it('kept for a template-hosted artist', () => {
+    pathname = `/artists/a1/${tool.seg}`
+    render(<ToolsShell artistId="a1" customSite={false}><p>page</p></ToolsShell>)
+    expect(screen.getByRole('navigation', { name: 'Manager tools' }).querySelector('a[href="/artists/a1/site"]')).not.toBeNull()
+    expect(toolsFor(false)).toEqual(TOOLS)
   })
 })
