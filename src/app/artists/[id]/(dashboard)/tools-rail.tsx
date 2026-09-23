@@ -157,10 +157,12 @@ export function SubRail({ artistId, tool, activeSeg }: { artistId: string; tool:
                 aria-current={on ? 'page' : undefined}
                 className={cx(
                   'flex items-center rounded-lg px-2.5 py-2 transition-colors',
-                  // Bold as well as accent for the current tab (Sam, 2026-09-22). Space Mono
-                  // is monospaced, so the bold weight is the same width — the row cannot
-                  // reflow or start truncating just because it is selected.
-                  on ? 'font-bold text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
+                  // Bold BLACK for the current tab (Sam, 2026-09-23; it was accent for a day).
+                  // The rail beside it already lights the tool in accent, and a second blue
+                  // read as two selections. Space Mono is monospaced, so the bold weight is
+                  // the same width — the row cannot reflow or truncate just because it is
+                  // selected.
+                  on ? 'font-bold text-ink' : 'text-ink-muted hover:bg-surface hover:text-ink',
                 )}
               >
                 <span className="truncate font-space text-[13px] tracking-[0.02em]">{t.label}</span>

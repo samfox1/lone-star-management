@@ -76,6 +76,11 @@ describe('ToolsShell — a tool with sub-tabs (Sam, 2026-09-22)', () => {
         const link = panel.querySelector(`a[href="/artists/a1/${tab.seg}"]`)!
         expect(link.className.includes('font-bold'), `${tab.seg} bold?`).toBe(tab.seg === last.seg)
       }
+      // Bold BLACK, not accent (Sam, 2026-09-23): the rail beside it already lights the
+      // tool in accent; a second blue would say "two things are selected".
+      const current = panel.querySelector('a[aria-current="page"]')!
+      expect(current.className).toMatch(/(^|\s)text-ink(\s|$)/)
+      expect(current.className).not.toMatch(/text-accent/)
 
       // It starts where the RAIL's first icon does, not centred on its own short column.
       // With two tabs against nine tools, centring it left the panel floating halfway down
