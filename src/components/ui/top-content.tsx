@@ -80,7 +80,7 @@ export function TopContent({ lists, facts, className }: {
       })}
 
       {opened && (
-        <PortalModal ariaLabel={opened.heading} cardClass={modalCardClass} onClose={() => setOpen(null)}>
+        <PortalModal ariaLabel={opened.heading} cardClass={modalCardClass} onClose={() => { setOpen(null); setTip(null) }}>
           <h2 className="font-space text-[11px] uppercase tracking-[0.1em] text-ink">{opened.heading}</h2>
           <Rows items={lists[opened.key].items} noun={opened.noun} className="mt-2" onTip={setTip} lit={tip?.id} />
         </PortalModal>

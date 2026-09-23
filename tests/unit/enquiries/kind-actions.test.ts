@@ -19,9 +19,13 @@ let rows: { id: string }[] = []
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => {
     // Every builder step returns the chain; awaiting it yields the planted rows.
+    // Like PostgREST, a write returns rows ONLY when `.select` asked for them, so an
+    // action that drops `.select` sees `data: null` and must not read that as "gone".
     const chain: Record<string, unknown> = {}
-    for (const m of ['update', 'delete', 'eq', 'select']) chain[m] = () => chain
-    chain.then = (ok: (v: unknown) => void) => ok({ data: rows, error: null })
+    let selected = false
+    for (const m of ['update', 'delete', 'eq']) chain[m] = () => chain
+    chain.select = () => ((selected = true), chain)
+    chain.then = (ok: (v: unknown) => void) => ok({ data: selected ? rows : null, error: null })
     return { from: () => chain }
   }),
 }))

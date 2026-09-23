@@ -3,15 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { type SectionDiff } from '@/lib/content'
 import { PlacesSection } from '@/components/ui/places-section'
 // TEMPORARY (2026-09-17): the PostHog cross-check panel. Delete this import, the component
-// file, src/lib/posthog-check.ts and the <PostHogCheck /> below when the 30 days are over.
-import { PostHogCheck } from '@/components/ui/posthog-check'
+// file, src/lib/posthog-check.ts and the <PostHogCheckSlot /> below when the 30 days are over.
+import { PostHogCheckSlot } from '@/components/ui/posthog-check'
 import { worldMap } from '@/lib/analytics-map'
 import { MetricExplorer } from './metric-explorer'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
 import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
-import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topContent, trafficWindow, entityRows, entityTargetRows, entityFacts, CONTENT_KINDS, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
+import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topContent, trafficWindow, entityRows, entityTargetRows, entityFacts, targetsCover, CONTENT_KINDS, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DIFF_SECTIONS } from './sections'
 import { analyticsScope, dashboardDiff, requireArtist } from './_data'
@@ -69,7 +69,9 @@ export default async function OverviewPage({
     dashboardDiff(id),
     trafficWindow(supabase, id, days, now),
     entityRows(supabase, id, window.since),
-    entityTargetRows(supabase, id, window.since),
+    // Targets exist only on raw rows; past retention the hover would undercount, so it
+    // is not read at all (review 2026-09-23).
+    targetsCover(window.since, now) ? entityTargetRows(supabase, id, window.since) : null,
   ])
   // The content lists. The ids come from the entity reader, the titles from the
   // tables: a second, dependent wave, one query per kind, in parallel. The kinds
@@ -146,7 +148,7 @@ export default async function OverviewPage({
           is no label here. Ticket clicks are recorded and counted in the metric row
           above, but dates are not ranked against each other — see CONTENT_KINDS. */}
       <section>
-        <TopContent lists={lists} facts={entityFacts(byTarget)} />
+        <TopContent lists={lists} facts={byTarget ? entityFacts(byTarget) : undefined} />
       </section>
 
       {/* The numbers above do not all reach as far back as the window does, and the
@@ -204,7 +206,7 @@ export default async function OverviewPage({
 
       {/* TEMPORARY — full width, below everything: it is a wide monospace table, and it
           renders nothing for any artist but the one being compared. */}
-      <PostHogCheck supabase={supabase} artistId={id} slug={artist.slug} now={now} />
+      <PostHogCheckSlot supabase={supabase} artistId={id} slug={artist.slug} now={now} />
     </div>
   )
 }

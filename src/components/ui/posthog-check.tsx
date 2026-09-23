@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { KLabel } from '@/components/ui/ui'
 import { CHECK_SLUG, checkState } from '@/lib/posthog-check'
 import {
@@ -18,7 +19,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * TEMPORARY (2026-09-17) — the PostHog cross-check, on screen.
  *
  * DELETE THIS WHOLE FILE when the 30-day comparison ends, along with `src/lib/posthog-check.ts`,
- * its test, the one `<PostHogCheck />` line in the artist dashboard page, and the
+ * its test, the one `<PostHogCheckSlot />` line in the artist dashboard page, and the
  * `NEXT_PUBLIC_POSTHOG_*` env vars on skeen. `compare-posthog.ts` and the `compare:posthog`
  * script are NOT part of this: the script is the real tool, and this is a window onto it.
  *
@@ -30,24 +31,41 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * The whole report is text, deliberately: it is a diagnostic for a month, not a feature, and
  * a designed panel would be a thing people expect to keep.
  */
-export async function PostHogCheck({
-  supabase,
-  artistId,
-  slug,
-  now,
-}: {
+type Props = {
   supabase: SupabaseClient
   artistId: string
   slug: string
   /** The page's ONE read of the clock, passed in: the same instant the charts above use. */
   now: number
-}) {
+}
+
+/** How long one PostHog query may take before the panel gives up and says so. */
+export const POSTHOG_TIMEOUT_MS = 8_000
+
+/**
+ * What the page renders. A Suspense boundary with no fallback, so the dashboard streams
+ * without waiting on PostHog and the panel arrives when it arrives (review 2026-09-23:
+ * awaited inline, a slow PostHog held the whole overview page).
+ */
+export function PostHogCheckSlot(props: Props) {
+  return (
+    <Suspense fallback={null}>
+      <PostHogCheck {...props} />
+    </Suspense>
+  )
+}
+
+export async function PostHogCheck({ supabase, artistId, slug, now }: Props) {
   if (checkState(slug, process.env) !== 'ready') return null
 
   let text: string
   try {
     const w = comparisonWindow(30, now)
-    const [ours, ph] = await Promise.all([readOurs(supabase, artistId, w), readPostHog(slug, w)])
+    // PostHog FIRST, ours second, as the script does: a click PostHog holds has already
+    // reached our door, so the gap between the reads can only produce ours-only clicks,
+    // never a false door drop. Read together, they could (review 2026-09-23).
+    const ph = await readPostHog(slug, w)
+    const ours = await readOurs(supabase, artistId, w)
     text = formatReport(compare(oursSide(ours), ph, w))
   } catch (e) {
     // A failed read must not take down a page the manager opens every day.
@@ -91,14 +109,23 @@ async function readPostHog(slug: string, w: Window) {
     const names = Object.keys(q) as (keyof typeof q)[]
     const rows = await Promise.all(
       names.map(async (name) => {
+        // A hand-rolled timeout rather than AbortSignal.timeout, so a test's fake clock
+        // can drive it. Cleared only after the BODY is read: a stalled body hangs too.
+        const ctl = new AbortController()
+        const timer = setTimeout(() => ctl.abort(), POSTHOG_TIMEOUT_MS)
         const res = await fetch(url, {
+          signal: ctl.signal,
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.POSTHOG_PERSONAL_API_KEY}` },
           body: JSON.stringify({ query: { kind: 'HogQLQuery', query: q[name] } }),
           cache: 'no-store',
         })
-        if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status}`)
-        return parseHogQL(await res.json(), name)
+        try {
+          if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status}`)
+          return parseHogQL(await res.json(), name)
+        } finally {
+          clearTimeout(timer)
+        }
       }),
     )
     return Object.fromEntries(names.map((n, i) => [n, rows[i]])) as Record<keyof typeof q, HogQLRows>

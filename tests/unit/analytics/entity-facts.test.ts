@@ -6,8 +6,9 @@
  * (MusicGrid's platform picker, the ONE place a play fires), and a merch click is
  * either the literal `add_to_cart` or the product's own title from the grid tile.
  */
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { entityFacts, SERVICES, type TargetRow } from '@/lib/analytics'
+import { analyticsWindow, entityFacts, RAW_RETENTION_DAYS, SERVICES, targetsCover, WINDOWS, type TargetRow } from '@/lib/analytics'
 
 const row = (entity_id: string, type: string, target: string, count: number): TargetRow =>
   ({ entity_type: type === 'play' ? 'track' : 'merch', entity_id, type, target, count })
@@ -80,5 +81,34 @@ describe('entityFacts — merch', () => {
   it('a product nobody added still reports zero rather than vanishing', () => {
     const f = entityFacts([row('m', 'buy_click', 'Logo Tote', 1)])
     expect(f.m).toEqual({ kind: 'merch', opened: 1, cart: 0 })
+  })
+})
+
+describe('targetsCover — the hover only answers where raw rows still exist', () => {
+  // Review 2026-09-23: targets live only on raw rows, pruned at RAW_RETENTION_DAYS. On a
+  // longer window the hover counted 90 days while the row's count covered the whole
+  // window. Derived from WINDOWS so a new window lands on the right side automatically.
+  const now = Date.parse('2026-09-23T15:00:00Z')
+
+  it('covers every window inside retention and none past it', () => {
+    for (const d of WINDOWS) {
+      expect(targetsCover(analyticsWindow(d, now).since, now), `${d}d`).toBe(d <= RAW_RETENTION_DAYS)
+    }
+  })
+
+  it("RAW_RETENTION_DAYS is the prune's own default, read from the latest migration", () => {
+    // The expected values above use the constant, so they cannot catch it drifting. This
+    // reads the number the database actually prunes at.
+    const dir = 'supabase/migrations'
+    const defs = readdirSync(dir).sort()
+      .map((f) => readFileSync(`${dir}/${f}`, 'utf8'))
+      .filter((sql) => /function\s+public\.prune_analytics\s*\(/.test(sql))
+    const m = defs.at(-1)?.match(/public\.prune_analytics\s*\(\s*p_keep\s+interval\s+default\s+interval\s+'(\d+) days'/)
+    expect(m, 'prune_analytics default not found').toBeTruthy()
+    expect(RAW_RETENTION_DAYS).toBe(Number(m![1]))
+  })
+
+  it('an all-time window reaching past retention is not covered', () => {
+    expect(targetsCover('2026-01-01', now)).toBe(false)
   })
 })

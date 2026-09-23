@@ -336,6 +336,18 @@ export async function entityRows(supabase: SupabaseClient, artistId: string, sin
   }))
 }
 
+/** Days of raw `analytics_events` the nightly prune keeps (`prune_analytics`' default). */
+export const RAW_RETENTION_DAYS = 90
+
+/**
+ * Whether a window starting on `sinceDay` lies wholly inside raw-row retention, so the
+ * target breakdown (raw rows only) counts the same days as the row it annotates. A 180d,
+ * 365d or all-time window does not, and its hover would silently cover only the last 90.
+ */
+export function targetsCover(sinceDay: string, nowMs: number): boolean {
+  return sinceDay >= analyticsWindow(RAW_RETENTION_DAYS, nowMs).since
+}
+
 /**
  * The same window, broken down by TARGET — which service a play named, and whether a
  * merch click was an add-to-cart. Reads raw rows only (the rolled tally has no target

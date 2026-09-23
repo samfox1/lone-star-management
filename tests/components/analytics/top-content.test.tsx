@@ -183,6 +183,18 @@ describe('TopContent', () => {
       expect(tip.textContent).toContain('4')
     })
 
+    it('clears when the View all window closes under the cursor', () => {
+      // Review 2026-09-23: the row unmounts without a mouseleave, so the tip used to stay
+      // painted at its last spot until another row was hovered.
+      withFacts()
+      fireEvent.click(screen.getByRole('button', { name: /view all/i }))
+      fireEvent.mouseEnter(within(screen.getByRole('dialog')).getAllByRole('listitem')[0], { clientX: 40, clientY: 40 })
+      expect(screen.queryByRole('tooltip')).toBeTruthy()
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+
     it('CRITICAL: it sits ABOVE and RIGHT of the cursor, and follows it', () => {
       withFacts()
       const row = rowsIn(colFor('Most Played Songs') as HTMLElement)[0]
