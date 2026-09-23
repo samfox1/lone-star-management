@@ -19,15 +19,18 @@ export type Tool = { seg: string; icon: IconName; label: string; short?: string;
  *  left panel turns to just the icons, and then a new side panel is to the right with the
  *  settings sub tabs") collapses the tools rail to icons and opens a second panel listing
  *  the tabs. The first tab's seg is the tool's own route. */
+/*  Icons chosen by Sam on 2026-09-23 from the picker (prototypes/icon_picker_20260923.html):
+ *  Iconoir, Heroicons, Lucide and Phosphor glyphs, all redrawn through the site's own
+ *  <Icon> wrapper (24 grid, 1.6 stroke). Notices in LICENSES/icons.md. */
 export const TOOLS: readonly Tool[] = [
-  { seg: 'tools', icon: 'grid', label: 'Overview', desc: 'Status, publish, quick links' },
-  { seg: 'site', icon: 'site', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video' },
-  { seg: 'brand', icon: 'photo', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
-  { seg: 'connections', icon: 'links', label: 'Connections', desc: 'Profiles & connected services' },
-  { seg: 'tools/seo', icon: 'search', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers' },
-  { seg: 'epk', icon: 'epk', label: 'Press kit', desc: 'Shareable EPK one-pager' },
-  { seg: 'subscribers', icon: 'list', label: 'Subscribers', desc: 'Emails from the site popup' },
-  { seg: 'enquiries', icon: 'note', label: 'Enquiries', desc: 'Booking & contact messages' },
+  { seg: 'tools', icon: 'home', label: 'Overview', desc: 'Status, publish, quick links' },
+  { seg: 'site', icon: 'internet', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video' },
+  { seg: 'brand', icon: 'sparkles', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
+  { seg: 'connections', icon: 'plug', label: 'Connections', desc: 'Profiles & connected services' },
+  { seg: 'tools/seo', icon: 'compass', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers' },
+  { seg: 'epk', icon: 'package', label: 'Press kit', desc: 'Shareable EPK one-pager' },
+  { seg: 'subscribers', icon: 'userGroup', label: 'Subscribers', desc: 'Emails from the site popup' },
+  { seg: 'enquiries', icon: 'mailbox', label: 'Enquiries', desc: 'Booking & contact messages' },
   {
     seg: 'settings',
     icon: 'settings',

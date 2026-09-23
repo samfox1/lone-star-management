@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { TOOLS, ToolsShell, tabFor, toolFor } from '@/app/artists/[id]/(dashboard)/tools-rail'
+import { Icon } from '@/components/ui/icons'
 
 let pathname = '/artists/a1/tools'
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }))
@@ -161,5 +162,17 @@ describe('the second panel lines up with the rail (review 2026-09-23)', () => {
     const top = (TOOLS.length * h + (TOOLS.length - 1) * gap) / 2
     const column = screen.getByRole('navigation', { name: tool.label }).querySelector('div')!
     expect(column.style.marginTop).toBe(`calc(50vh - ${top}px)`)
+  })
+})
+
+describe('every tool icon draws something', () => {
+  it('CRITICAL: each TOOLS icon has a glyph in the icon set', () => {
+    // A name missing from PATHS renders an EMPTY <svg> with no error: a rail of blank
+    // squares, and nothing red. Derived from TOOLS so a renamed icon cannot slip past.
+    for (const t of TOOLS) {
+      const { container, unmount } = render(<Icon name={t.icon} />)
+      expect(container.querySelector('svg')!.children.length, t.icon).toBeGreaterThan(0)
+      unmount()
+    }
   })
 })

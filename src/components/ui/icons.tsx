@@ -43,6 +43,14 @@ export type IconName =
   | 'folder'
   | 'photo'
   | 'text'
+  | 'home'
+  | 'internet'
+  | 'sparkles'
+  | 'plug'
+  | 'compass'
+  | 'package'
+  | 'userGroup'
+  | 'mailbox'
   | 'note'
   | 'grip'
   | 'minus'
@@ -273,6 +281,61 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
       <circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none" />
       <circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // ── Tool-rail icons chosen 2026-09-23 (prototypes/icon_picker_20260923.html) ──────
+  // Redrawn from open-source sets on the same 24 grid, so the wrapper's 1.6 stroke and
+  // round caps apply unchanged. Sources and notices: LICENSES/icons.md.
+  /** Overview · Iconoir `home` (MIT) */
+  home: (
+    <>
+      <path d="M2 8l9.73-4.87a.6.6 0 0 1 .54 0L22 8" />
+      <path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" />
+    </>
+  ),
+  /** Site & profile · Iconoir `internet` (MIT) */
+  internet: (
+    <>
+      <path d="M22 12A10 10 0 1 0 12 22" />
+      <path d="M13 2.05S16 6 16 12M11 21.95S8 18 8 12s3-9.95 3-9.95" />
+      <path d="M2.63 15.5H12M2.63 8.5h18.74" />
+      <path d="M21.88 17.92c.49.3.46 1.04-.05 1.1l-2.56.29-1.15 2.31c-.23.46-.94.24-1.05-.33l-1.26-6.12c-.1-.48.33-.78.75-.53l5.32 3.28z" />
+    </>
+  ),
+  /** Brand · Heroicons `sparkles` (MIT) */
+  sparkles: (
+    <path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+  ),
+  /** Connections · Phosphor `plug`, regular weight (MIT). Phosphor is a FILLED set drawn
+   *  on a 256 grid: scaled to 24 and filled, its regular weight reads as a 1.5 stroke. */
+  plug: (
+    <g transform="scale(0.09375)" fill="currentColor" stroke="none">
+      <path d="M237.66,66.34a8,8,0,0,0-11.32,0L192,100.69,155.31,64l34.35-34.34a8,8,0,1,0-11.32-11.32L144,52.69,117.66,26.34a8,8,0,0,0-11.32,11.32L112.69,44l-53,53a40,40,0,0,0,0,56.57l15.71,15.71L26.34,218.34a8,8,0,0,0,11.32,11.32l49.09-49.09,15.71,15.71a40,40,0,0,0,56.57,0l53-53,6.34,6.35a8,8,0,0,0,11.32-11.32L203.31,112l34.35-34.34A8,8,0,0,0,237.66,66.34ZM147.72,185a24,24,0,0,1-33.95,0L71,142.23a24,24,0,0,1,0-33.95l53-53L200.69,132Z" />
+    </g>
+  ),
+  /** SEO / GEO · Iconoir `compass` (MIT) */
+  compass: (
+    <>
+      <path d="M10.59 10.59l6.36-3.54-3.54 6.36-6.36 3.54 3.54-6.36z" />
+      <circle cx="12" cy="12" r="10" />
+    </>
+  ),
+  /** Press kit · Lucide `package` (ISC) */
+  package: (
+    <>
+      <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
+      <path d="M12 22V12M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15" />
+    </>
+  ),
+  /** Subscribers · Heroicons `user-group` (MIT) */
+  userGroup: (
+    <path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+  ),
+  /** Enquiries · Lucide `mailbox` (ISC) */
+  mailbox: (
+    <>
+      <path d="M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z" />
+      <path d="M15 9h3v2M6.5 5C9 5 11 7 11 9.5V17a2 2 0 0 1-2 2M6 10h1" />
     </>
   ),
 }
