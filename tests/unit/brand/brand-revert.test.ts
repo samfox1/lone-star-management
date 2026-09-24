@@ -45,7 +45,14 @@ const font = (id: string, slots: string[], extra: Record<string, unknown> = {}):
 const pub = (type: 'media' | 'artist_font', row: ContentRow) => ({ entity_type: type, entity_id: row.id, data: publicSnapshot(type, row) })
 const tomb = (type: string, id: string) => ({ entity_type: type, entity_id: id, data: { _deleted: true } })
 
-type Slot = { slot: string; font_id: string; label?: string | null; note?: string | null }
+/** A slot row. `created_at` defaults to BEFORE the last font publish (PUBLISHED_AT): the
+ *  row the site had. A row made after it is a new row reusing the slot. */
+type Slot = { slot: string; font_id: string; label?: string | null; note?: string | null; created_at?: string }
+
+/** When the fonts were last published (the newest `artist_font` revision). */
+const PUBLISHED_AT = '2026-09-10T12:00:00.000000+00:00'
+const BEFORE_PUBLISH = '2026-09-01T00:00:00.000000+00:00'
+const SINCE_PUBLISH = '2026-09-20T00:00:00.000000+00:00'
 
 function world(o: {
   log: { entity_type: string; entity_id: string; data: Record<string, unknown> }[]
@@ -54,22 +61,49 @@ function world(o: {
   slots?: Slot[]
   /** `artists.<icon>_source_media_id` before the revert (null = the primary logo). */
   sources?: { favicon_source_media_id: string | null; home_icon_source_media_id: string | null }
+  /** A write the database refuses, once (a revert that fails partway). */
+  refuseOnce?: (c: Call) => boolean
 }) {
-  /** The slot FK's ON DELETE CASCADE, which the fake would otherwise not have: a slot row
-   *  whose font was deleted is gone from every later read. */
-  const deletedFonts = new Set<unknown>()
+  /** The fonts and slots as the database holds them — written by the revert, read back by
+   *  it (and by a second run). The slot FK's ON DELETE CASCADE is modelled: deleting a font
+   *  takes every slot row naming it. */
+  const db = {
+    fonts: [...(o.fonts ?? [])],
+    slots: (o.slots ?? []).map((s) => ({ created_at: BEFORE_PUBLISH, label: null, note: null, ...s })),
+  }
+  let refused = false
   const f = fakeClient((c: Call) => {
     if (c.op === 'rpc') return { data: o.log }
-    if (c.op === 'delete' && c.table === 'artist_fonts') deletedFonts.add(filterValue(c, 'id'))
+    if (!refused && o.refuseOnce?.(c)) {
+      refused = true
+      return { error: { message: 'refused' } }
+    }
     if (c.op === 'select' && c.table === 'media') return { data: o.media ?? [], count: (o.media ?? []).length }
-    if (c.op === 'select' && c.table === 'artist_fonts_with_slots') return { data: o.fonts ?? [], count: (o.fonts ?? []).length }
-    if (c.op === 'select' && c.table === 'artist_font_slots') return { data: (o.slots ?? []).filter((s) => !deletedFonts.has(s.font_id)) }
+    if (c.op === 'select' && c.table === 'artist_fonts_with_slots') return { data: db.fonts, count: db.fonts.length }
+    if (c.op === 'select' && c.table === 'artist_font_slots') return { data: db.slots.map((s) => ({ ...s })) }
     if (c.op === 'select' && c.table === 'artists')
       return { data: o.sources ?? { favicon_source_media_id: null, home_icon_source_media_id: null } }
-    if (c.op === 'select' && c.table === 'revisions') return { data: [], count: 0 }
+    if (c.op === 'select' && c.table === 'revisions') {
+      if (c.cols === 'published_at' && filterValue(c, 'entity_type') === 'artist_font' && filterValue(c, 'artist_id') === A)
+        return { data: [{ published_at: PUBLISHED_AT }] }
+      return { data: [], count: 0 }
+    }
+    if (c.op === 'delete' && c.table === 'artist_fonts') {
+      const id = filterValue(c, 'id')
+      db.fonts = db.fonts.filter((r) => r.id !== id)
+      db.slots = db.slots.filter((s) => s.font_id !== id)
+    }
+    if (c.op === 'insert' && c.table === 'artist_fonts') db.fonts.push({ ...(c.payload as ContentRow), slots: [] })
+    if (c.op === 'upsert' && c.table === 'artist_font_slots') {
+      const p = c.payload as Slot
+      const was = db.slots.find((s) => s.slot === p.slot)
+      if (was) Object.assign(was, p)
+      else db.slots.push({ created_at: new Date().toISOString(), label: null, note: null, ...p })
+    }
+    if (c.op === 'delete' && c.table === 'artist_font_slots') db.slots = db.slots.filter((s) => s.slot !== filterValue(c, 'slot'))
     return { data: [{}] }
   })
-  return { ...f, run: () => restoreBrandToPublished(f.client, A) }
+  return { ...f, db, run: () => restoreBrandToPublished(f.client, A) }
 }
 
 const on = (w: ReturnType<typeof world>, table: string, op: string) => w.calls.filter((c) => c.table === table && c.op === op)
@@ -210,22 +244,22 @@ describe('fonts and their slots', () => {
 })
 
 describe('a custom slot keeps its title and note through a revert', () => {
-  it('CRITICAL: its font was uploaded since the publish — deleting it CASCADES the slot away, and the slot comes back WITH its title and note', async () => {
+  it('CRITICAL: its font was uploaded since the publish — the slot goes back to the published font WITH its title and note', async () => {
     // custom_1 was published with f1. Since then f3 was uploaded into it; the title and note
-    // were set on the SLOT row (dashboard-only, never in the log). Reverting deletes f3,
-    // which cascades the slot row away — the old code then re-created it bare, title and
-    // note gone. They are read BEFORE the fonts are touched and written back.
+    // were set on the SLOT row (dashboard-only, never in the log). Deleting f3 would cascade
+    // the slot row away — the first code re-created it bare, title and note gone.
     const f1 = font('f1', ['custom_1'])
     const w = world({
       log: [pub('artist_font', f1)],
       fonts: [{ ...f1, slots: [] }, font('f3', ['custom_1'])],
-      slots: [{ slot: 'custom_1', font_id: 'f3', label: 'Credits', note: 'back cover' }],
+      slots: [{ slot: 'custom_1', font_id: 'f3', label: 'Credits', note: 'back cover', created_at: BEFORE_PUBLISH }],
     })
     await w.run()
     expect(ids(on(w, 'artist_fonts', 'delete'))).toEqual(['f3'])
     expect(on(w, 'artist_font_slots', 'upsert').map((c) => c.payload)).toEqual([
       { artist_id: A, slot: 'custom_1', font_id: 'f1', label: 'Credits', note: 'back cover' },
     ])
+    expect(w.db.slots).toEqual([expect.objectContaining({ slot: 'custom_1', font_id: 'f1', label: 'Credits', note: 'back cover' })])
     // The title and note were read before the first font delete, or the cascade had them.
     const read = w.calls.findIndex((c) => c.table === 'artist_font_slots' && c.op === 'select' && /label/.test(c.cols ?? ''))
     expect(read).toBeGreaterThanOrEqual(0)
@@ -527,9 +561,11 @@ describe('the revert, scoped and counted', () => {
     expect([src.cols, filterValue(src, 'id')]).toEqual(['favicon_source_media_id, home_icon_source_media_id', A])
     const slotReads = w.calls.filter((c) => c.table === 'artist_font_slots' && c.op === 'select')
     expect(slotReads.map((c) => [c.cols, filterValue(c, 'artist_id')])).toEqual([
-      ['slot, font_id, label, note', A],
+      ['slot, font_id, label, note, created_at', A],
       ['slot, font_id', A],
     ])
+    const lastPublish = w.calls.find((c) => c.table === 'revisions' && c.cols === 'published_at')!
+    expect([filterValue(lastPublish, 'artist_id'), filterValue(lastPublish, 'entity_type')]).toEqual([A, 'artist_font'])
   })
 
   it('a logo re-inserted from an OLD revision gets the defaults the log did not carry (kind: photo)', async () => {
@@ -548,5 +584,128 @@ describe('the revert, scoped and counted', () => {
     const w = world({ log: [loose], fonts: [f], slots: [] })
     await w.run()
     expect(on(w, 'artist_font_slots', 'upsert')).toEqual([])
+  })
+})
+
+/**
+ * Review 2 (2026-09-24). A custom slot's title and note live on the SLOT ROW, never in the
+ * log, so a revert decides who they belong to:
+ *
+ *  • LOW #3 — the row the manager holds now may not be the row the site had. Trash
+ *    custom_1 (f1, published), add "Accent" (the next free slot is custom_1 again) with f2:
+ *    Revert put f1 back into custom_1 titled "Accent". A slot row CREATED after the last
+ *    font publish is a new row; the slot comes back without its words. The row the site
+ *    had (created before) keeps its own — the "comes back WITH its title" pin above.
+ *
+ *  • LOW #4 — the words were held only in memory between reading them and writing them
+ *    back, with the font deletes (which cascade the row away) in between. A failure there
+ *    lost them for good, and "running it again finishes the job" was not true of them. Now
+ *    the row is pointed at a font that survives BEFORE its font is deleted, so the database
+ *    keeps the words, and a second run finds them.
+ */
+describe('slot words through a revert (review 2)', () => {
+  it('CRITICAL: a NEW row that reused the freed custom_1 does not lend its title to the restored font', async () => {
+    // Published: f1 in custom_1. Draft: that row trashed (slot row gone, f1 stays in the
+    // library); a new row "Accent" added — nextFreeCustomSlot hands it custom_1 — with f2.
+    const f1 = font('f1', ['custom_1'])
+    const w = world({
+      log: [pub('artist_font', f1)],
+      fonts: [{ ...f1, slots: [] }, font('f2', ['custom_1'])],
+      slots: [{ slot: 'custom_1', font_id: 'f2', label: 'Accent', note: 'for the merch', created_at: SINCE_PUBLISH }],
+    })
+    await w.run()
+    const [up] = on(w, 'artist_font_slots', 'upsert')
+    expect(up.payload, 'restored f1 carries the discarded row\'s words').toEqual({
+      artist_id: A,
+      slot: 'custom_1',
+      font_id: 'f1',
+      label: null,
+      note: null,
+    })
+    expect(w.db.slots).toEqual([expect.objectContaining({ slot: 'custom_1', font_id: 'f1', label: null, note: null })])
+  })
+
+  it('a new row whose font SURVIVES the revert has its words cleared too — not left on the restored slot', async () => {
+    // "Accent" reused custom_1 with f3, a font that was published elsewhere and stays.
+    const f1 = font('f1', ['custom_1'])
+    const f3 = font('f3', [])
+    const w = world({
+      log: [pub('artist_font', f1), pub('artist_font', f3)],
+      fonts: [{ ...f1, slots: [] }, { ...f3, slots: ['custom_1'] }],
+      slots: [{ slot: 'custom_1', font_id: 'f3', label: 'Accent', note: null, created_at: SINCE_PUBLISH }],
+    })
+    await w.run()
+    expect(on(w, 'artist_font_slots', 'upsert').map((c) => c.payload)).toEqual([
+      { artist_id: A, slot: 'custom_1', font_id: 'f1', label: null },
+    ])
+    expect(w.db.slots).toEqual([expect.objectContaining({ slot: 'custom_1', font_id: 'f1', label: null })])
+  })
+
+  it('CRITICAL: the words are written back BEFORE the font that would cascade them goes — a failure after loses nothing', async () => {
+    // custom_1 (the published row, titled) now holds f3, uploaded since; f2 was published
+    // and deleted since, and re-inserting it is refused. The old order (delete f3 → … →
+    // insert f2 → slots) died at the insert with the words only in memory.
+    const f1 = font('f1', ['custom_1'])
+    const f2 = font('f2', ['secondary'])
+    const w = world({
+      log: [pub('artist_font', f1), pub('artist_font', f2)],
+      fonts: [{ ...f1, slots: [] }, font('f3', ['custom_1'])],
+      slots: [{ slot: 'custom_1', font_id: 'f3', label: 'Credits', note: 'back cover', created_at: BEFORE_PUBLISH }],
+      refuseOnce: (c) => c.op === 'insert' && c.table === 'artist_fonts',
+    })
+    await expect(w.run()).rejects.toThrow('refused')
+    expect(w.db.slots, 'the words did not survive the failed revert').toEqual([
+      expect.objectContaining({ slot: 'custom_1', font_id: 'f1', label: 'Credits', note: 'back cover' }),
+    ])
+    const [up] = on(w, 'artist_font_slots', 'upsert')
+    expect(w.calls.indexOf(up)).toBeLessThan(w.calls.indexOf(on(w, 'artist_fonts', 'delete')[0]))
+    // …and running it again finishes the job.
+    await w.run()
+    expect(w.db.fonts.map((r) => r.id).sort()).toEqual(['f1', 'f2'])
+    expect(w.db.slots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ slot: 'custom_1', font_id: 'f1', label: 'Credits', note: 'back cover' }),
+        expect.objectContaining({ slot: 'secondary', font_id: 'f2' }),
+      ]),
+    )
+  })
+
+  it('CRITICAL: …and when the published font itself must be re-inserted, the row is HELD on a surviving font meanwhile', async () => {
+    // custom_1 (published with f2, titled) was moved to f3 (uploaded since), then f2 was
+    // deleted from the library. The revert re-inserts f2 only after f3 goes, so custom_1
+    // cannot be pointed at f2 first — it waits on f1 (a font the revert keeps), words and
+    // all, and a failed insert leaves them in the database for the second run.
+    const f1 = font('f1', ['primary'])
+    const f2 = font('f2', ['custom_1'])
+    const w = world({
+      log: [pub('artist_font', f1), pub('artist_font', f2)],
+      fonts: [f1, font('f3', ['custom_1'])],
+      slots: [
+        { slot: 'primary', font_id: 'f1' },
+        { slot: 'custom_1', font_id: 'f3', label: 'Credits', note: 'back cover', created_at: BEFORE_PUBLISH },
+      ],
+      refuseOnce: (c) => c.op === 'insert' && c.table === 'artist_fonts',
+    })
+    await expect(w.run()).rejects.toThrow('refused')
+    expect(w.db.slots.find((s) => s.slot === 'custom_1'), 'the cascade took the words').toMatchObject({ label: 'Credits', note: 'back cover' })
+    await w.run()
+    expect(w.db.slots.find((s) => s.slot === 'custom_1')).toMatchObject({ font_id: 'f2', label: 'Credits', note: 'back cover' })
+    expect(w.db.slots.find((s) => s.slot === 'primary')).toMatchObject({ font_id: 'f1' })
+  })
+
+  it('a run that goes through counts the held slot ONCE (the hold is not a change of its own)', async () => {
+    const f1 = font('f1', ['primary'])
+    const f2 = font('f2', ['custom_1'])
+    const w = world({
+      log: [pub('artist_font', f1), pub('artist_font', f2)],
+      fonts: [f1, font('f3', ['custom_1'])],
+      slots: [
+        { slot: 'primary', font_id: 'f1' },
+        { slot: 'custom_1', font_id: 'f3', label: 'Credits', note: null, created_at: BEFORE_PUBLISH },
+      ],
+    })
+    // f3 deleted, f2 inserted, custom_1 put back: 3.
+    expect((await w.run()).changed).toBe(3)
+    expect(w.db.slots.find((s) => s.slot === 'custom_1')).toMatchObject({ font_id: 'f2', label: 'Credits' })
   })
 })

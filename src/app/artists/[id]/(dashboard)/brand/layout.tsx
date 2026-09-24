@@ -5,8 +5,10 @@ import { BrandRiser } from './_ui/brand-riser'
 /**
  * BRAND (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): four tabs — Logos · Colors · Fonts · Tab
  * icon — share this frame. The ledger fills the width up to ~1180px; the one Publish bar
- * rises from the bottom when a real change is waiting. `pb-28` keeps the last row clear of
- * that bar. No brand-kit download button (Sam, 2026-09-24: removed; the kit route stays,
+ * rises from the bottom when a real change is waiting. `pb-28` is the room under the last
+ * row; while the bar is up it adds its OWN measured height on top (PublishRiser's in-flow
+ * spacer, review 2 2026-09-24 — a fixed pb-28 left the bottom colour panel under the bar).
+ * No brand-kit download button (Sam, 2026-09-24: removed; the kit route stays,
  * unlinked, for a later home).
  *
  * A layout does not re-render on a tab switch (Next 16 docs, layout.md), which is what

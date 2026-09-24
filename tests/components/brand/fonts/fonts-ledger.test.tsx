@@ -519,11 +519,72 @@ describe('FontsLedger — renaming a font (Sam: Skeen’s arrived as "Sorg_Font"
     expect(refresh).not.toHaveBeenCalled()
   })
 
+  // Review 2 (2026-09-24): "Enter or a click away saves" — but a click outside CLOSED the
+  // menu on mousedown, unmounting the field before it could blur, and a removed field never
+  // blurs. The typed name was simply dropped.
+  it('CRITICAL: a name being typed is SAVED by a click outside the menu — not dropped with the field', async () => {
+    show()
+    const { field } = startRename('Primary', 'Bebas Neue')
+    await act(async () => {})
+    field.textContent = 'Sorg'
+    fireEvent.input(field)
+    await act(async () => {
+      fireEvent.mouseDown(document.body)
+    })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(mRename).toHaveBeenCalledTimes(1)
+    expect(mRename).toHaveBeenCalledWith('a1', 'f2', 'Sorg')
+  })
+
+  it('…and by a click on the chevrons that toggle the menu shut', async () => {
+    show()
+    const { field } = startRename('Primary', 'Bebas Neue')
+    await act(async () => {})
+    field.textContent = 'Sorg'
+    fireEvent.input(field)
+    const trigger = within(rowOf('Primary')).getByRole('button', { name: 'Change font' })
+    await act(async () => {
+      fireEvent.mouseDown(trigger)
+      fireEvent.click(trigger)
+    })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(mRename).toHaveBeenCalledWith('a1', 'f2', 'Sorg')
+  })
+
+  it('a click outside with the name untouched writes nothing', async () => {
+    show()
+    startRename('Primary', 'Bebas Neue')
+    await act(async () => {
+      fireEvent.mouseDown(document.body)
+    })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(mRename).not.toHaveBeenCalled()
+  })
+
   it('arrow keys inside the name field move the caret, not the menu’s focus', () => {
     show()
     const { field } = startRename('Primary', 'PP Mori')
     fireEvent.keyDown(field, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(field)
+  })
+})
+
+describe('FontsLedger — a late upload (review 2, 2026-09-24)', () => {
+  it('CRITICAL: an upload closed mid-flight that lands later does not close a DIFFERENT dialog opened since', async () => {
+    show()
+    const menuA = openMenu('Primary')
+    await act(async () => fireEvent.click(within(menuA).getByRole('menuitem', { name: 'Upload a font…' })))
+    const optsA = upload.opts as unknown as { onSuccess?: () => void }
+    // Close A with its upload still in flight…
+    await act(async () => fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' })))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // …open B on another row…
+    const menuB = openMenu('Secondary')
+    await act(async () => fireEvent.click(within(menuB).getByRole('menuitem', { name: 'Upload a font…' })))
+    expect(within(screen.getByRole('dialog')).getByText('Secondary')).toBeInTheDocument()
+    // …and A lands.
+    await act(async () => optsA.onSuccess?.())
+    expect(screen.queryByRole('dialog'), 'A closed B').not.toBeNull()
   })
 })
 

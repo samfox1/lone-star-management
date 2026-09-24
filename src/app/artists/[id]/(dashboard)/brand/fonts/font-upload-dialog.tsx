@@ -37,10 +37,16 @@ const DEFAULT_WEIGHT = '400'
  * stop with the dialog: the object lands and `writeRow` runs with nobody to ask. Rather than
  * block the close — UploadField does not say when an upload starts or fails, so a guard
  * would guess, and a wrong guess traps the manager in the dialog — a question that can no
- * longer be asked is answered "unknown" at once. The font lands in its row as if the dialog
- * were still open (the upload's own "Font uploaded" toast, the row filling in), and a toast
- * says its weight was not set. Before this it waited on the question forever: no row, the
- * file orphaned in the bucket, and nothing said.
+ * longer be asked is answered "unknown" at once, and a toast says the weight was not set.
+ * Before this it waited on the question forever: no row, the file orphaned in the bucket,
+ * and nothing said.
+ *
+ * A CLOSED DIALOG HAS GIVEN UP ITS ROW (review 2, 2026-09-24). The late font is kept — in
+ * the library, where the Change menu offers it — but placed nowhere: by then the manager
+ * may have picked another font for that row, or dropped the unsaved row it was for, and a
+ * late placement overwrote that with nothing on screen. Nor does its success close
+ * anything: `onSuccess` is captured when the upload starts, and wired straight to onClose
+ * it closed whatever dialog the ledger showed by then — another row's.
  *
  * The licence line lives HERE — the one moment it matters — and nowhere on the page.
  */
@@ -70,7 +76,9 @@ export function FontUploadDialog({
   const [weight, setWeight] = useState(DEFAULT_WEIGHT)
   /** The pending question's answer. A ref: `writeRow` awaits it across renders. */
   const answer = useRef<((w: number | null) => void) | null>(null)
-  /** The dialog is gone: there is nobody left to ask (see "Closed mid-upload" above). */
+  /** The dialog is closed or gone: nobody left to ask, no row to place in, nothing of its own
+   *  to close (see "Closed mid-upload" above). Set as the manager closes it, before the
+   *  unmount, so an answer that settles in between already sees it. */
   const gone = useRef(false)
 
   // Leaving with the question up answers it "unknown" — an await that never settles is an
@@ -94,6 +102,7 @@ export function FontUploadDialog({
   }
 
   function close() {
+    gone.current = true
     settle(null)
     onClose()
   }
@@ -117,12 +126,18 @@ export function FontUploadDialog({
     }
     const w = known ?? (await askWeight())
     const input = { label: named, storagePath: path, format, weight: w }
-    const res = meta ? await addArtistFontAction(artistId, input, slot, meta) : await addArtistFontAction(artistId, input, slot)
+    // Closed by now: the font goes to the library only (see "A closed dialog…" above).
+    const place = !gone.current
+    const res = !place
+      ? await addArtistFontAction(artistId, input)
+      : meta
+        ? await addArtistFontAction(artistId, input, slot, meta)
+        : await addArtistFontAction(artistId, input, slot)
     // A warning is a font that exists but did not land in the row: say so, keep the file
     // (an error here would make the upload delete an object a row still names).
     if (res.warning) toast(res.warning, 'error')
     if (res.error) return res.error
-    if (!res.warning) onPlaced?.()
+    if (place && !res.warning) onPlaced?.()
     // The file could not say its weight and nobody answered for it (the dialog was closed
     // at the question, or before it could be asked): the row will show no weight line.
     if (w === null) toast(`${named} was saved without its weight.`)
@@ -130,7 +145,7 @@ export function FontUploadDialog({
   }
 
   return (
-    <BrandModal label="Upload a font" meta={title} onClose={close} onSave={() => (asking ? settle(Number(weight)) : onClose())}>
+    <BrandModal label="Upload a font" meta={title} onClose={close} onSave={() => (asking ? settle(Number(weight)) : close())}>
       <label className="flex flex-col gap-1">
         <span className="font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Name</span>
         <input
@@ -158,7 +173,10 @@ export function FontUploadDialog({
         rules={FONT_UPLOAD_RULES}
         successMessage="Font uploaded"
         writeRow={writeRow}
-        onSuccess={onClose}
+        // Only while this dialog is still open: a late success is not its to close.
+        onSuccess={() => {
+          if (!gone.current) onClose()
+        }}
       />
       {asking ? (
         <div className="flex items-center gap-4">

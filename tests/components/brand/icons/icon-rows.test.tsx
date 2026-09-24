@@ -20,11 +20,14 @@ vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
   setThemeColorAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
-vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({ storage: { from: () => ({ upload: async () => ({ error: null }), remove: async () => ({ error: null }) }) } }),
+}))
 vi.mock('@/app/artists/[id]/(dashboard)/upload-field', () => ({ UploadField: () => null }))
 
 import { IconRows, type IconRowData } from '@/app/artists/[id]/(dashboard)/brand/icons/icon-rows'
-import { setThemeColorAction } from '@/app/artists/[id]/(dashboard)/brand/actions'
+import { BrowserBarColor } from '@/app/artists/[id]/(dashboard)/brand/icons/browser-bar'
+import { saveFramingAction, setBrandAssetAction, setThemeColorAction } from '@/app/artists/[id]/(dashboard)/brand/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
 const ROW = (over: Partial<IconRowData> = {}): IconRowData => ({
@@ -124,6 +127,29 @@ describe('IconRows — built-in rows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.queryByRole('dialog', { name: 'Home-screen icon' })).toBeNull()
   })
+
+  // Review 2 (2026-09-24): the row knows whether a PNG exists (`generatedUrl`); the editor
+  // must be told, or an icon never generated counts as "already saved" and can never be
+  // made at the framing the manager sees.
+  it('CRITICAL: an icon with NO PNG yet: Edit → Save makes it (the row tells the editor nothing is saved)', async () => {
+    renderRows({ homeIcon: ROW({ generatedUrl: null }) })
+    fireEvent.click(within(rowNamed('Home-screen icon')).getByRole('button', { name: 'Edit' }))
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(setBrandAssetAction).mock.calls[0][1]).toBe('home_icon')
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledWith('a1', DEFAULT_FRAMING, 'home_icon')
+  })
+
+  it('…and with a PNG, Edit → Save writes nothing', async () => {
+    renderRows()
+    fireEvent.click(within(rowNamed('Home-screen icon')).getByRole('button', { name: 'Edit' }))
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => new Promise((r) => setTimeout(r, 50)))
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
+  })
 })
 
 describe('IconRows — Browser bar', () => {
@@ -168,6 +194,61 @@ describe('IconRows — Browser bar', () => {
     fireEvent.keyDown(hex, { key: 'Enter' })
     await act(async () => vi.advanceTimersByTimeAsync(1000))
     expect(vi.mocked(toast)).toHaveBeenCalledWith('Use a color code like #1a2b3c.', 'error')
+  })
+
+  // Review 2 (2026-09-24): each save revalidates the page, and the refresh carrying an
+  // EARLIER save could land while a newer pick was still on its way — the row re-seeded
+  // from it and snapped back mid-pick.
+  describe('a refresh never paints over a newer pick', () => {
+    const hexNow = () => (screen.getByLabelText('Browser bar hex') as HTMLInputElement).value.toLowerCase()
+    const pickHex = (value: string) => {
+      const hex = screen.getByLabelText('Browser bar hex')
+      fireEvent.change(hex, { target: { value } })
+      fireEvent.keyDown(hex, { key: 'Enter' })
+    }
+    const bar = (value: string | null) => <BrowserBarColor artistId="a1" value={value} colors={[]} />
+
+    it('CRITICAL: an earlier save\'s refresh landing mid-pick does not snap the row back', async () => {
+      vi.useFakeTimers()
+      const { rerender } = render(bar('#0d0d0d'))
+      pickHex('#111111')
+      await act(async () => vi.advanceTimersByTimeAsync(600)) // A saves
+      expect(vi.mocked(setThemeColorAction)).toHaveBeenCalledWith('a1', '#111111')
+      pickHex('#222222') // B, its debounce still running…
+      rerender(bar('#111111')) // …and A's refresh lands
+      expect(hexNow(), 'snapped back to the earlier save').toBe('#222222')
+      await act(async () => vi.advanceTimersByTimeAsync(600)) // B saves
+      rerender(bar('#222222')) // B's refresh
+      expect(hexNow()).toBe('#222222')
+    })
+
+    it('with no pick waiting, a new value from the server IS shown (another tab changed it)', () => {
+      const { rerender } = render(bar('#0d0d0d'))
+      rerender(bar('#abcdef'))
+      expect(hexNow()).toBe('#abcdef')
+    })
+
+    it('once its own refresh has landed, the row follows the server again', async () => {
+      vi.useFakeTimers()
+      const { rerender } = render(bar('#0d0d0d'))
+      pickHex('#111111')
+      await act(async () => vi.advanceTimersByTimeAsync(600))
+      rerender(bar('#111111')) // the pick's own echo: caught up
+      rerender(bar('#333333')) // then someone else's change
+      expect(hexNow()).toBe('#333333')
+    })
+
+    it('a refused pick puts the saved colour back — and does not freeze the row', async () => {
+      vi.useFakeTimers()
+      vi.mocked(setThemeColorAction).mockResolvedValueOnce({ error: 'Use a color code like #1a2b3c.' })
+      const { rerender } = render(bar('#0d0d0d'))
+      pickHex('#445566')
+      await act(async () => vi.advanceTimersByTimeAsync(600))
+      expect(vi.mocked(toast)).toHaveBeenCalledWith('Use a color code like #1a2b3c.', 'error')
+      expect(hexNow()).toBe('#0d0d0d')
+      rerender(bar('#777777'))
+      expect(hexNow()).toBe('#777777')
+    })
   })
 
   it('with no colour set, the row offers a + that opens the picker', () => {

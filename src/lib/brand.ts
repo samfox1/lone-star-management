@@ -909,8 +909,16 @@ export type BrandRevert = { changed: number; hasPublished: boolean; skipped: ('m
  *
  * DASHBOARD-ONLY DATA (never in the log, so never "restored" — but never silently lost):
  *   • a surviving row keeps its own: a logo's note and cut-out original, a font's weight;
- *   • a custom font slot's title and note are read BEFORE any font is deleted and written
- *     back, because deleting a font uploaded since the publish cascades its slot row away;
+ *   • a custom font slot's title and note (its WORDS) stay in the database throughout:
+ *     before a font is deleted, every published slot whose row holds it is pointed at a
+ *     font that survives — its published font when that is still here, or else a kept
+ *     font until the published one is re-inserted — so the delete cascades no words away
+ *     (review 2, 2026-09-24: they were held only in memory across the deletes, and a
+ *     failure in between lost them for good);
+ *   • those words belong to the ROW THE SITE HAD. A slot row created after the last font
+ *     publish is a new row reusing the slot (the published one was trashed, "Accent" added
+ *     in its place), so the slot comes back without its words, never with the discarded
+ *     row's (review 2);
  *   • each icon's source is settled by `settleIconSources`: removing an icon image uploaded
  *     since the publish no longer leaves the icon silently on the primary logo while the
  *     PNG put back was cut from a published image;
@@ -922,7 +930,10 @@ export type BrandRevert = { changed: number; hasPublished: boolean; skipped: ('m
  * The same two guards as `restoreToPublished`: nothing published at all → change nothing;
  * a type with no published revision ever → skip it rather than read "never published" as
  * "delete every row" (reported in `skipped`). Not atomic — each statement is its own
- * request, as there. A failure throws, and running it again finishes the job.
+ * request, as there. A failure throws, and running it again finishes the job — slot words
+ * included, since they are never only in memory. The one exception: an artist with NO
+ * published font left to hold a slot on while its own font is re-inserted; that slot's
+ * words ride the few requests between the delete and the re-insert.
  */
 export async function restoreBrandToPublished(supabase: SupabaseClient, artistId: string): Promise<BrandRevert> {
   const latest = await latestRevisions(supabase, artistId)
@@ -1006,17 +1017,70 @@ export async function restoreBrandToPublished(supabase: SupabaseClient, artistId
     const live: ContentRow[] = await listContent(supabase, 'artist_font', artistId)
     const liveIds = new Set(live.map((r) => String(r.id)))
 
-    // A custom slot's title and note live on the SLOT row, which the font FK cascades away
-    // when its font is deleted below (a font uploaded since the publish). Read them FIRST,
-    // so a slot that comes back gets them back — the log never had them to restore.
+    // A custom slot's title and note (its WORDS) live on the SLOT row — never in the log —
+    // which the font FK cascades away when its font is deleted below. Read the rows, and
+    // when the fonts were last published, BEFORE any font is touched.
     const { data: slotsBefore, error: metaErr } = await supabase
       .from('artist_font_slots')
-      .select('slot, font_id, label, note')
+      .select('slot, font_id, label, note, created_at')
       .eq('artist_id', artistId)
     fail(metaErr)
-    const slotMeta = new Map(
-      ((slotsBefore ?? []) as { slot: string; label: string | null; note: string | null }[]).map((s) => [s.slot, s]),
-    )
+    const { data: lastPublish, error: publishErr } = await supabase
+      .from('revisions')
+      .select('published_at')
+      .eq('artist_id', artistId)
+      .eq('entity_type', 'artist_font')
+      .order('published_at', { ascending: false })
+      .limit(1)
+    fail(publishErr)
+    type SlotRow = { slot: string; font_id: string; label: string | null; note: string | null; created_at?: string | null }
+    const before = new Map(((slotsBefore ?? []) as SlotRow[]).map((s) => [s.slot, s]))
+    const publishedAt = Date.parse(String((lastPublish as { published_at?: string }[] | null)?.[0]?.published_at ?? ''))
+    /** The row is the one the site had: it existed at the last font publish. A row created
+     *  after it reuses a slot whose published row was removed (unknown time: assume so). */
+    const theSitesRow = (s: SlotRow) => {
+      const made = Date.parse(String(s.created_at ?? ''))
+      return !(Number.isFinite(made) && Number.isFinite(publishedAt) && made > publishedAt)
+    }
+    /** The words half of a slot's upsert. Named only when the row HAS words (a column not
+     *  named is not touched, and a null is never written where there was nothing): its own
+     *  on the site's row, cleared on a new one. */
+    const words = (slot: string): { label?: string | null; note?: string | null } => {
+      const s = before.get(slot)
+      if (!s) return {}
+      const keep = theSitesRow(s)
+      return {
+        ...(s.label != null ? { label: keep ? s.label : null } : {}),
+        ...(s.note != null ? { note: keep ? s.note : null } : {}),
+      }
+    }
+    const upsertSlot = async (slot: string, fontId: string, withWords: boolean) => {
+      const { error } = await supabase
+        .from('artist_font_slots')
+        .upsert({ artist_id: artistId, slot, font_id: fontId, ...(withWords ? words(slot) : {}) }, { onConflict: 'artist_id,slot' })
+      fail(error)
+    }
+
+    // Slots: the published map is the union of every published font's `slots`.
+    const wantedSlots = new Map<string, string>()
+    for (const [id, snap] of wanted) for (const slot of (snap.slots as string[] | null) ?? []) wantedSlots.set(slot, id)
+
+    // BEFORE any delete: a published slot whose row holds a font about to go is pointed at a
+    // font that stays, so the cascade has nothing to take. Its own published font when it is
+    // still here (done: the slot pass below finds it right); else, if the row has words worth
+    // keeping, any font the revert keeps — a HOLD until its font is re-inserted, not a change.
+    const going = new Set(live.map((r) => String(r.id)).filter((id) => !wanted.has(id)))
+    const keeper = live.map((r) => String(r.id)).find((id) => wanted.has(id))
+    for (const [slot, fontId] of wantedSlots) {
+      const s = before.get(slot)
+      if (!s || !going.has(s.font_id)) continue
+      if (liveIds.has(fontId)) {
+        await upsertSlot(slot, fontId, true)
+        changed++
+      } else if (keeper && theSitesRow(s) && (s.label != null || s.note != null)) {
+        await upsertSlot(slot, keeper, false)
+      }
+    }
 
     // Removals first: a font uploaded since may hold the family token a re-inserted one
     // needs (unique per artist).
@@ -1050,9 +1114,6 @@ export async function restoreBrandToPublished(supabase: SupabaseClient, artistId
       changed++
     }
 
-    // Slots: the published map is the union of every published font's `slots`.
-    const wantedSlots = new Map<string, string>()
-    for (const [id, snap] of wanted) for (const slot of (snap.slots as string[] | null) ?? []) wantedSlots.set(slot, id)
     const { data: liveSlots, error: slotErr } = await supabase
       .from('artist_font_slots')
       .select('slot, font_id')
@@ -1067,21 +1128,9 @@ export async function restoreBrandToPublished(supabase: SupabaseClient, artistId
     }
     for (const [slot, fontId] of wantedSlots) {
       if (liveSlotMap.get(slot) === fontId) continue
-      // The upsert names a title or note only when the slot had one before the revert: a
-      // surviving slot keeps its own (a column not named is not touched), a cascaded one
-      // gets its own back, and a null is never written over one.
-      const meta = slotMeta.get(slot)
-      const { error } = await supabase.from('artist_font_slots').upsert(
-        {
-          artist_id: artistId,
-          slot,
-          font_id: fontId,
-          ...(meta?.label != null ? { label: meta.label } : {}),
-          ...(meta?.note != null ? { note: meta.note } : {}),
-        },
-        { onConflict: 'artist_id,slot' },
-      )
-      fail(error)
+      // `words`: the site's row keeps (or, held or cascaded, gets back) its own; a new row
+      // reusing the slot has its cleared.
+      await upsertSlot(slot, fontId, true)
       changed++
     }
   }

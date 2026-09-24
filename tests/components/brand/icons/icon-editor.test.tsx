@@ -61,6 +61,9 @@ function renderEditor({
   source = { id: 'p', url: LOGOS[0].url } as { id: string | null; url: string | null },
   framing = DEFAULT_FRAMING,
   onClose = vi.fn(),
+  /** A generated PNG exists (the premise of every "not a change" pin). `false` = the icon
+   *  was never generated: nothing is saved yet, whatever the framing says. */
+  generated = true,
 } = {}) {
   return render(
     <IconEditor
@@ -69,6 +72,7 @@ function renderEditor({
       label={LABEL[target]}
       initialFraming={framing}
       source={source}
+      generated={generated}
       logos={LOGOS}
       onClose={onClose}
     />,
@@ -323,5 +327,88 @@ describe('IconEditor — each icon is its own', () => {
     expect(vi.mocked(actions.setBrandAssetAction)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(actions.saveFramingAction)).toHaveBeenCalledWith('a1', { zoom: 3, offsetY: 0.1 }, target)
     expect(vi.mocked(actions.setBrandAssetAction).mock.calls[0][1]).toBe(target)
+  })
+})
+
+/**
+ * Review 2 (2026-09-24), MEDIUM: an icon that was never GENERATED (no PNG row — Skeen's
+ * home-screen icon) used to be seeded as "already saved" from the server's framing and
+ * source, which exist without a PNG. So the only framing that could ever make it — the
+ * default the manager sees — never saved: Size away and back, Reset, or Save alone all
+ * read as "no change". With no PNG, nothing is saved yet; the no-op rule applies once one
+ * exists (the witness below, and the "back where it was saved" pins in
+ * tests/components/site-editor/favicon-editor.test.tsx, which run with a PNG).
+ */
+describe('IconEditor — an icon with NO generated PNG yet', () => {
+  it('CRITICAL: home-screen icon never generated: Size away and back to the default → the PNG is made', async () => {
+    renderEditor({ target: 'home_icon', generated: false })
+    await drawnOnBoard()
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '1' } })
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.saveFramingAction)).toHaveBeenCalledWith('a1', { zoom: 1, offsetY: 0 }, 'home_icon')
+    expect(vi.mocked(actions.setBrandAssetAction), 'no PNG was ever written for the home-screen icon').toHaveBeenCalledTimes(1)
+    expect(vi.mocked(actions.setBrandAssetAction).mock.calls[0][1]).toBe('home_icon')
+  })
+
+  it('the witness: the same moves on an icon that HAS a PNG save nothing', async () => {
+    renderEditor({ target: 'home_icon', generated: true })
+    await drawnOnBoard()
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '1' } })
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.setBrandAssetAction)).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: Reset on a never-generated icon already at the default makes it (even handed DEFAULT_FRAMING itself)', async () => {
+    // The very object: React skips a state update to the same reference, so a Reset that
+    // handed it straight back would never even reach the comparison.
+    renderEditor({ generated: false, framing: DEFAULT_FRAMING })
+    await drawnOnBoard()
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.setBrandAssetAction)).toHaveBeenCalledTimes(1)
+  })
+
+  it('CRITICAL: Save alone on a never-generated icon makes it — and closes', async () => {
+    const onClose = vi.fn()
+    renderEditor({ target: 'home_icon', generated: false, onClose })
+    await drawnOnBoard()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await settle(6)
+    expect(vi.mocked(actions.saveFramingAction)).toHaveBeenCalledWith('a1', DEFAULT_FRAMING, 'home_icon')
+    expect(vi.mocked(actions.setBrandAssetAction)).toHaveBeenCalledTimes(1)
+  })
+
+  it('…while Save alone on an icon that HAS a PNG writes nothing', async () => {
+    const onClose = vi.fn()
+    renderEditor({ target: 'home_icon', generated: true, onClose })
+    await drawnOnBoard()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(actions.setBrandAssetAction)).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: mounting a never-generated icon still saves NOTHING — opening it is not an edit', async () => {
+    renderEditor({ target: 'home_icon', generated: false })
+    await drawnOnBoard()
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(actions.setBrandAssetAction)).not.toHaveBeenCalled()
+  })
+
+  it('once made, the no-op rule holds: away and back to what was just generated saves nothing more', async () => {
+    renderEditor({ target: 'home_icon', generated: false })
+    await drawnOnBoard()
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.setBrandAssetAction)).toHaveBeenCalledTimes(1)
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '1' } })
+    await pastTheSaveWindow()
+    expect(vi.mocked(actions.setBrandAssetAction)).toHaveBeenCalledTimes(1)
   })
 })

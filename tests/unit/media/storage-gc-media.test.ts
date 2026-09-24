@@ -16,14 +16,19 @@ function fake(
   opts: {
     revCount?: number
     mediaRows?: { storage_path: string }[]
+    /** The EXACT count the server reports for the media read. Default: every row it
+     *  returned (a complete read). Larger = PostgREST truncated the read (max-rows). */
+    mediaCount?: number | null
     /** Objects per folder prefix. A prefix with no entry lists empty, like the real bucket. */
     byPrefix?: Record<string, ListObj[]>
   } = {},
 ) {
   const { revCount = 0, mediaRows = [], byPrefix = {} } = opts
+  const mediaCount = opts.mediaCount === undefined ? mediaRows.length : opts.mediaCount
   const removed: string[] = []
   const listedPrefixes: string[] = []
   const eqCalls: [string, unknown][] = []
+  const selectOpts: Record<string, unknown> = {}
   const thenable = (result: unknown): Record<string, unknown> => {
     const p: Record<string, unknown> = {
       select: () => p,
@@ -38,8 +43,10 @@ function fake(
   const client = {
     from(table: string) {
       return {
-        select: () =>
-          table === 'revisions' ? thenable({ count: revCount }) : thenable({ data: mediaRows }),
+        select: (_cols?: string, o?: unknown) => {
+          selectOpts[table] = o
+          return table === 'revisions' ? thenable({ count: revCount }) : thenable({ data: mediaRows, count: mediaCount })
+        },
       }
     },
     storage: {
@@ -58,7 +65,7 @@ function fake(
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
-  return { client, removed, listedPrefixes, eqCalls }
+  return { client, removed, listedPrefixes, eqCalls, selectOpts }
 }
 
 const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString() // 1h ago (past the age gate)
@@ -176,6 +183,45 @@ describe('gcMediaObjects (publish-time sweep of the media folders)', () => {
     })
     await gcMediaObjects(client, 'artist-1')
     expect(removed).toEqual(['artist-1/profile/stale.jpg'])
+  })
+
+  // Review 2 (2026-09-24): PostgREST caps a read at max-rows (1000) and says nothing — the
+  // rest simply is not in `data`. Every row past the cap then looked unreferenced, so an
+  // artist with more than 1000 media rows would have LIVE files swept. listContent refuses
+  // a short read for the same reason; the sweep now does too.
+  describe('a truncated media read sweeps NOTHING', () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => ({ storage_path: `artist-1/gallery/p${i}.jpg` }))
+    const listing = (n: number) => ({
+      'artist-1/gallery': [
+        ...Array.from({ length: n }, (_, i) => ({ name: `p${i}.jpg`, created_at: OLD })),
+        { name: 'orphan.jpg', created_at: OLD },
+      ],
+    })
+
+    it('CRITICAL: 1000 rows back of 1500 → no object is removed (the other 500 are live)', async () => {
+      const rows = many(1500)
+      const { client, removed } = fake({ mediaRows: rows.slice(0, 1000), mediaCount: 1500, byPrefix: listing(1500) })
+      await gcMediaObjects(client, 'artist-1')
+      expect(removed).toEqual([])
+    })
+
+    it('the witness: the same artist read in full sweeps only the orphan', async () => {
+      const { client, removed } = fake({ mediaRows: many(1500), byPrefix: listing(1500) })
+      await gcMediaObjects(client, 'artist-1')
+      expect(removed).toEqual(['artist-1/gallery/orphan.jpg'])
+    })
+
+    it('no count at all is not "complete" — nothing is removed', async () => {
+      const { client, removed } = fake({ mediaRows: [], mediaCount: null, byPrefix: listing(0) })
+      await gcMediaObjects(client, 'artist-1')
+      expect(removed).toEqual([])
+    })
+
+    it('the read asks the server for an exact count (without it, a short read cannot be seen)', async () => {
+      const { client, selectOpts } = fake({ mediaRows: [] })
+      await gcMediaObjects(client, 'artist-1')
+      expect(selectOpts.media).toMatchObject({ count: 'exact' })
+    })
   })
 
   it('never touches another artist\'s folders', async () => {

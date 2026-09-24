@@ -31,7 +31,9 @@ const typing = (target: EventTarget | null) => target instanceof HTMLElement && 
  * Closes on a click outside (the trigger itself excepted — it toggles), and on Escape in
  * the capture phase, so an Escape meant for the menu closes nothing underneath it — unless
  * a name is being typed: that Escape belongs to the field (it cancels the rename), and the
- * next one closes the menu.
+ * next one closes the menu. A click outside — the trigger included — first SAVES a name
+ * being typed ("click away saves"): the close unmounts the field, and a field taken out of
+ * the page never blurs, so the name went with it (review 2, 2026-09-24).
  */
 export function FontMenu({
   fonts,
@@ -88,7 +90,11 @@ export function FontMenu({
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node
-      if (ref.current?.contains(target) || anchor.current?.contains(target)) return
+      if (ref.current?.contains(target)) return
+      // Blur is what saves the name (RowTitle); do it while the field is still here.
+      const field = ref.current?.querySelector<HTMLElement>('[data-renaming] [role="textbox"]')
+      if (field && field === document.activeElement) field.blur()
+      if (anchor.current?.contains(target)) return
       onClose()
     }
     const onKey = (e: globalThis.KeyboardEvent) => {

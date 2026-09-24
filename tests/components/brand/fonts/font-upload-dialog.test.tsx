@@ -189,15 +189,19 @@ describe('FontUploadDialog — the weight', () => {
     ])
   })
 
-  it('closing at the question keeps the upload, with the weight unknown', async () => {
-    // The file is already in the bucket and the manager chose it; a dismissed question is
-    // not a reason to delete their font. The weight is advisory, so it is saved as unknown.
-    open()
+  it('closing at the question keeps the upload, with the weight unknown — in the library, not the row', async () => {
+    // The file is already in the bucket; a dismissed question is not a reason to delete
+    // the font. The weight is advisory, so it is saved as unknown. But a closed dialog has
+    // given up its row (review 2, 2026-09-24), so nothing is placed.
+    const onPlaced = vi.fn()
+    open({ onPlaced })
     name('Archivo')
     const { done } = await drop(woff2())
     await act(async () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' })))
     expect(await done).toBeNull()
-    expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ weight: null }), 'primary')
+    expect(mAdd.mock.calls[0]).toEqual(['a1', expect.objectContaining({ weight: null })])
+    expect(onPlaced).not.toHaveBeenCalled()
+    expect(mToast).toHaveBeenCalledWith('Archivo was saved without its weight.')
     expect(onClose).toHaveBeenCalled()
   })
 })
@@ -249,14 +253,19 @@ describe('FontUploadDialog — the row it fills', () => {
     view.unmount()
     const hung = new Promise((r) => setTimeout(() => r('still waiting'), 300))
     expect(await Promise.race([done, hung])).toBeNull()
-    expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ weight: null }), 'primary')
+    expect(mAdd.mock.calls[0]).toEqual(['a1', expect.objectContaining({ weight: null })])
   })
 
   describe('CRITICAL: closed while the file is still uploading, the font is kept — and the manager is told', () => {
     // UploadField keeps going after the dialog is gone: the object lands in the bucket and
     // writeRow runs with no dialog to ask the WOFF2 question in. It used to wait on that
     // question forever: no row, the file orphaned, nothing said. Now a question that cannot
-    // be asked is answered "unknown" at once, the row is written, and a toast says so.
+    // be asked is answered "unknown" at once, the font is written, and a toast says so.
+    //
+    // Review 2 (2026-09-24): …into the LIBRARY, not the row. By the time a late upload lands
+    // the manager may have picked another font for that row, or dropped the unsaved row it
+    // was for; placing it then overwrote their newer choice with nothing on screen. A
+    // closed dialog has given up its row: the font arrives in the Change menu instead.
     const CLOSERS: [string, () => void][] = [
       ['Save', () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }))],
       ['×', () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }))],
@@ -274,12 +283,13 @@ describe('FontUploadDialog — the row it fills', () => {
         const { done } = await drop(woff2(), 'a1/fonts/44444444-4444-4444-8444-444444444444.woff2')
         const hung = new Promise((r) => setTimeout(() => r('still waiting'), 300))
         expect(await Promise.race([done, hung])).toBeNull()
-        expect(mAdd).toHaveBeenCalledWith(
+        expect(mAdd).toHaveBeenCalledTimes(1)
+        // Exactly two arguments: the font, and NO slot to place it in.
+        expect(mAdd.mock.calls[0]).toEqual([
           'a1',
           { label: 'Archivo', storagePath: 'a1/fonts/44444444-4444-4444-8444-444444444444.woff2', format: 'woff2', weight: null },
-          'primary',
-        )
-        expect(onPlaced).toHaveBeenCalledTimes(1)
+        ])
+        expect(onPlaced).not.toHaveBeenCalled()
         expect(mToast).toHaveBeenCalledWith('Archivo was saved without its weight.')
       })
     }
@@ -291,8 +301,42 @@ describe('FontUploadDialog — the row it fills', () => {
       view.unmount()
       const { done } = await drop(ttf(700))
       expect(await done).toBeNull()
-      expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ weight: 700 }), 'primary')
+      expect(mAdd.mock.calls[0]).toEqual(['a1', expect.objectContaining({ weight: 700 })])
       expect(mToast).not.toHaveBeenCalled()
+    })
+
+    it('an unsaved added row closed mid-upload is not saved by the late font (no slot, no title, no note)', async () => {
+      const onPlaced = vi.fn()
+      const view = open({ slot: 'custom_2', title: 'Gig posters', meta: { label: 'Gig posters', note: 'For merch' }, onPlaced })
+      name('Archivo')
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }))
+      view.unmount()
+      const { done } = await drop(ttf(400))
+      expect(await done).toBeNull()
+      expect(mAdd.mock.calls[0]).toEqual(['a1', expect.objectContaining({ label: 'Archivo', weight: 400 })])
+      expect(onPlaced).not.toHaveBeenCalled()
+    })
+
+    it('CRITICAL: the late upload\'s success does not close anything — it is not its dialog any more', async () => {
+      // `onSuccess` is captured when the upload STARTS. Wired straight to onClose, a late one
+      // closed whatever dialog the ledger showed by then — a different row's.
+      onClose.mockClear()
+      const view = open()
+      name('Archivo')
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }))
+      expect(onClose).toHaveBeenCalledTimes(1)
+      const late = upload.opts!.onSuccess
+      view.unmount()
+      act(() => late?.())
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('the witness: an upload that finishes while its dialog is open closes it', () => {
+      onClose.mockClear()
+      open()
+      name('Archivo')
+      act(() => upload.opts!.onSuccess?.())
+      expect(onClose).toHaveBeenCalledTimes(1)
     })
   })
 

@@ -106,6 +106,21 @@ describe('PublishRiser', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('CRITICAL: …and does not come BACK on the next change, password still typed (one Enter would publish)', () => {
+    // Review 2 (2026-09-24): hiding the prompt behind `open && dirty` left `open` true and
+    // the dialog's password in place, so the next change reopened it by itself, filled in.
+    const { rerender } = render(<PublishRiser dirty message="x" onPublish={ok} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    fireEvent.change(screen.getByPlaceholderText('Your password'), { target: { value: 'hunter2' } })
+    rerender(<PublishRiser dirty={false} message="" onPublish={ok} />) // published from another tab
+    expect(screen.queryByRole('dialog')).toBeNull()
+    rerender(<PublishRiser dirty message="Tour logo added" onPublish={ok} />) // the next change
+    expect(screen.queryByRole('dialog'), 'the prompt reopened by itself').toBeNull()
+    // Asked for again, it starts empty.
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    expect((screen.getByPlaceholderText('Your password') as HTMLInputElement).value).toBe('')
+  })
+
   it('a wrong password keeps the dialog open with the reason', async () => {
     render(<PublishRiser dirty message="x" onPublish={async () => ({ ok: false, error: 'Incorrect password.' })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))

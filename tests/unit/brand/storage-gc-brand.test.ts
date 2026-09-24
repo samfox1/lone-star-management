@@ -72,6 +72,7 @@ describe('gcMediaObjects keeps a cut-out logo’s original', () => {
       reads: {
         media: {
           data: [{ storage_path: `${A}/brand/cutout.png`, source_path: `${A}/brand/original.png` }],
+          count: 1,
         },
       },
       byPrefix: {
@@ -88,7 +89,7 @@ describe('gcMediaObjects keeps a cut-out logo’s original', () => {
   })
 
   it('reads source_path from the media rows (the column the Brand page writes)', async () => {
-    const { client, selected } = fake({ reads: { media: { data: [] } } })
+    const { client, selected } = fake({ reads: { media: { data: [], count: 0 } } })
     await gcMediaObjects(client, A)
     expect(selected.media).toContain('source_path')
   })
@@ -110,7 +111,7 @@ describe('a failed reference read sweeps NOTHING', () => {
   })
 
   it('the same sweep DOES remove those objects when the read succeeds (the witness)', async () => {
-    const { client, removed, buckets } = fake({ reads: { media: { data: [] } }, byPrefix: everythingOld })
+    const { client, removed, buckets } = fake({ reads: { media: { data: [], count: 0 } }, byPrefix: everythingOld })
     await gcMediaObjects(client, A)
     expect(removed.sort()).toEqual([`${A}/brand/logo.png`, `${A}/gallery/photo.jpg`])
     expect(buckets).toEqual(['media'])

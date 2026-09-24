@@ -525,7 +525,8 @@ describe('Revert keeps what only the dashboard holds', () => {
       expect(res.changed).toBeGreaterThan(0)
       expect(await brandPending(asA, t.id)).toEqual({ dirty: false, message: '', canRevert: false })
 
-      // Deleting f3 CASCADED custom_1 away; it is back on f1 WITH its title and note.
+      // custom_1 is back on f1 WITH its title and note — pointed back at f1 before f3 went,
+      // so deleting f3 had no slot row to cascade away (review 2).
       const slot = (await loadBrandFonts(asA, t.id)).custom.find((s) => s.slot === 'custom_1')
       expect(slot?.font?.id).toBe(f1.font!.id)
       expect(slot).toMatchObject({ label: 'Credits', note: 'back cover' })
@@ -544,6 +545,32 @@ describe('Revert keeps what only the dashboard holds', () => {
       // GOES: the logo added since the publish, note and all — it was never on the site,
       // and that is what Revert undoes (the confirm says it cannot be undone).
       expect(logos.added.find((l) => l.id === extra.logo!.id)).toBeUndefined()
+    } finally {
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
+
+  it('CRITICAL: a NEW row that reused a trashed slot does not lend its title to the font the revert puts back (review 2)', async () => {
+    // The fake-client pin (brand-revert.test.ts) plants the timestamps; this proves the real
+    // ones: a re-added slot row is born after the last font publish, the published one before.
+    const t = await createThrowawayArtist(svc, 'Brand revert new row', asA)
+    try {
+      const f1 = await setArtistFont(asA, t.id, { label: 'Head Face', storagePath: fontPath(t.id), format: 'woff2' })
+      expect((await setFontSlot(asA, t.id, 'custom_1', f1.font!.id, { label: 'Headline', note: null })).ok).toBe(true)
+      await publishContent(asA, 'artist_font', t.id)
+
+      // Trash the row (f1 stays in the library), then a new row "Accent" lands on custom_1 again.
+      expect((await clearCustomSlot(asA, t.id, 'custom_1')).ok).toBe(true)
+      const f2 = await setArtistFont(asA, t.id, { label: 'Accent Face', storagePath: fontPath(t.id), format: 'woff2' })
+      expect((await setFontSlot(asA, t.id, 'custom_1', f2.font!.id, { label: 'Accent', note: 'for the merch' })).ok).toBe(true)
+      const before = (await loadBrandFonts(asA, t.id)).custom.find((s) => s.slot === 'custom_1')
+      expect(before).toMatchObject({ label: 'Accent', note: 'for the merch' }) // the witness
+
+      await restoreBrandToPublished(asA, t.id)
+
+      const slot = (await loadBrandFonts(asA, t.id)).custom.find((s) => s.slot === 'custom_1')
+      expect(slot?.font?.id).toBe(f1.font!.id)
+      expect(slot, 'the discarded row\'s words rode along').toMatchObject({ label: null, note: null })
     } finally {
       await deleteThrowawayArtist(svc, t)
     }

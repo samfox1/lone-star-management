@@ -73,6 +73,8 @@ export function IconRows({
           label={editing.title}
           initialFraming={data[editing.target].framing}
           source={data[editing.target].source}
+          // No PNG yet → nothing is saved, so the editor can make one at any framing.
+          generated={data[editing.target].generatedUrl !== null}
           logos={logos}
           onClose={() => setOpen(null)}
         />

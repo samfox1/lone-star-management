@@ -38,28 +38,57 @@ export type PublishRiserProps = {
  * WHILE UP IT LIFTS THE TOASTS by its own height (`liftToasts`): the stack sits
  * bottom-right, on top of Revert and Publish, and a toast raised mid-edit covered them
  * (visual check, 2026-09-23). Measured, not a constant, so the safe-area padding counts.
+ * The same measurement sizes an in-flow SPACER, so the page gains the room the fixed bar
+ * takes (review 2, 2026-09-24: the layout's `pb-28` alone left the bottom colour row's
+ * panel, hex box and all, under the bar). Down, the spacer is 0.
+ *
+ * The password prompt belongs to the change it would publish: when `dirty` goes (published
+ * or reverted from another tab), the prompt closes AND is dropped, typed password with it.
+ * Only hiding it (`open && dirty`) brought it back by itself on the next change, filled
+ * in — one Enter from publishing (review 2, 2026-09-24).
+ *
+ * The message WRAPS rather than truncates: on a phone the ellipsis ate "· not on the site
+ * yet", the one part every message shares (review 2, 2026-09-24).
  */
 /** The spec's tail on every message (BRAND_PAGE_PLAN.md: "<what changed> · not on the site yet"). */
 const NOT_LIVE = ' · not on the site yet'
 
 export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'brand' }: PublishRiserProps) {
   const [open, setOpen] = useState(false)
+  // `dirty` going false closes the prompt (state adjusted while rendering, React's pattern
+  // for "reset when a prop changes"); the dialog is also unmounted then, which drops its
+  // password.
+  const [wasDirty, setWasDirty] = useState(dirty)
+  if (wasDirty !== dirty) {
+    setWasDirty(dirty)
+    if (!dirty) setOpen(false)
+  }
   const [reverting, setReverting] = useState(false)
   // The re-entry latch is a ref (AGENTS.md rule 5): `reverting` is state and lags a click.
   const revertingRef = useRef(false)
   const { ask, dialog } = useConfirm()
   const barRef = useRef<HTMLDivElement>(null)
+  /** The in-flow room the fixed bar takes while up. Sized from the DOM, not state: the
+   *  measurement lands straight on it, with no extra render. */
+  const spacerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const el = barRef.current
     if (!dirty || !el) return
-    const measure = () => liftToasts(el.offsetHeight)
+    const room = (px: number) => {
+      if (spacerRef.current) spacerRef.current.style.height = `${px}px`
+    }
+    const measure = () => {
+      liftToasts(el.offsetHeight)
+      room(el.offsetHeight)
+    }
     measure()
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
     ro?.observe(el)
     return () => {
       ro?.disconnect()
       liftToasts(0)
+      room(0)
     }
   }, [dirty])
 
@@ -81,6 +110,7 @@ export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'bran
 
   return (
     <>
+      <div ref={spacerRef} data-publish-riser-spacer="" aria-hidden="true" style={{ height: 0 }} />
       <div
         ref={barRef}
         data-publish-riser=""
@@ -94,9 +124,10 @@ export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'bran
           dirty ? 'translate-y-0 shadow-[0_-8px_24px_rgba(0,0,0,0.05)]' : 'translate-y-[110%]',
         )}
       >
-        <p className="flex min-w-0 items-center">
-          <span aria-hidden="true" className="mr-2.5 h-[9px] w-[9px] flex-none rounded-full bg-accent-red" />
-          <span className="truncate text-[15px] text-ink">{message ? `${message}${NOT_LIVE}` : ''}</span>
+        <p className="flex min-w-0 items-start">
+          {/* mt-[6px]: centred on the first line (15px × leading-snug) however many it wraps to. */}
+          <span aria-hidden="true" className="mr-2.5 mt-[6px] h-[9px] w-[9px] flex-none rounded-full bg-accent-red" />
+          <span className="min-w-0 text-[15px] leading-snug text-ink [overflow-wrap:anywhere]">{message ? `${message}${NOT_LIVE}` : ''}</span>
         </p>
         <div className="flex flex-none items-center gap-2">
           {onRevert ? (
@@ -118,7 +149,7 @@ export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'bran
           </button>
         </div>
       </div>
-      <PublishPasswordDialog open={open && dirty} onClose={() => setOpen(false)} onPublish={onPublish} noun={noun} />
+      {dirty ? <PublishPasswordDialog open={open} onClose={() => setOpen(false)} onPublish={onPublish} noun={noun} /> : null}
       {dialog}
     </>
   )

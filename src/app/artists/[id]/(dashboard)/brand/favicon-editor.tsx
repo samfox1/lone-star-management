@@ -68,6 +68,9 @@ export type IconLogo = { id: string; label: string; url: string }
  *     slider dragged away and back, or Reset on an icon already at the default (`saved`).
  *     A save uploads a new PNG and swaps the row, so re-saving the same icon would raise
  *     the Publish bar for nothing (fix round, 2026-09-23);
+ *   • …but an icon with NO generated PNG has nothing saved (`generated`), whatever framing
+ *     and source the server seeds: every change, Reset and Save make it (review 2,
+ *     2026-09-24 — seeded as "saved", the default framing could never be generated);
  *   • a change saves itself SAVE_AFTER_MS after the last one (no Save needed), and a
  *     change made while a save is in flight saves once more after it, with the framing as
  *     it is by then (`pendingRef`), so there is only ever one save running;
@@ -82,6 +85,7 @@ function useIconFraming({
   noun,
   initialFraming,
   initialSource,
+  generated,
 }: {
   artistId: string
   target: IconTarget
@@ -89,6 +93,8 @@ function useIconFraming({
   noun: string
   initialFraming: FaviconFraming
   initialSource: IconSourceRef
+  /** A generated PNG exists. Without one the seed is not "saved": nothing is. */
+  generated: boolean
 }) {
   const [framing, setFraming] = useState<FaviconFraming>(initialFraming)
   const [source, setSourceState] = useState<IconSourceRef>(initialSource)
@@ -104,12 +110,16 @@ function useIconFraming({
   const dirtyRef = useRef(false)
   /** What a save reads: the latest framing and source, not the ones it was scheduled with. */
   const latest = useRef({ framing, source })
-  /** What the stored PNG was last made from — the server's seed, then each successful save. */
-  const saved = useRef({ framing: initialFraming, sourceId: initialSource.id })
-  const isSaved = useCallback(
-    (f: FaviconFraming, s: IconSourceRef) => s.id === saved.current.sourceId && sameFraming(f, saved.current.framing),
-    [],
+  /** What the stored PNG was last made from — the server's seed, then each successful save.
+   *  Null while there is no PNG at all: the seed's framing and source exist without one
+   *  (Skeen's home-screen icon), and reading them as saved made the icon un-makeable. */
+  const saved = useRef<{ framing: FaviconFraming; sourceId: string | null } | null>(
+    generated ? { framing: initialFraming, sourceId: initialSource.id } : null,
   )
+  const isSaved = useCallback((f: FaviconFraming, s: IconSourceRef) => {
+    const was = saved.current
+    return was !== null && s.id === was.sourceId && sameFraming(f, was.framing)
+  }, [])
   useEffect(() => {
     latest.current = { framing, source }
   }, [framing, source])
@@ -231,13 +241,18 @@ function useIconFraming({
 
   const change = (next: FaviconFraming) => {
     touched.current = true
-    setFraming(next)
+    // A copy: handed the very object it holds (Reset's DEFAULT_FRAMING on an icon at the
+    // default), React would skip the update and the change would never reach `save`.
+    setFraming({ ...next })
   }
   const setSource = (next: IconSourceRef) => {
     touched.current = true
     setSourceState(next)
   }
-  return { framing, change, source, setSource, image, loading, loadFailed, saving }
+  /** Save now if the icon is not already saved as it stands (Save in the footer): a no-op
+   *  on an icon whose PNG matches, the first PNG on one that has none. */
+  const saveNow = () => saveRef.current()
+  return { framing, change, source, setSource, image, loading, loadFailed, saving, saveNow }
 }
 
 /**
@@ -368,7 +383,8 @@ function FramingControls({
  *
  * Source changes save at once (they are a choice, not a drag); the icon then regenerates
  * from the new source with the current framing. Save closes — everything is already saved,
- * and anything still waiting is flushed as the editor closes.
+ * and anything still waiting is flushed as the editor closes — except an icon with no PNG
+ * yet (`generated` false), which Save makes as it stands.
  */
 export function IconEditor({
   artistId,
@@ -376,6 +392,7 @@ export function IconEditor({
   label,
   initialFraming,
   source,
+  generated,
   logos,
   onClose,
 }: {
@@ -386,12 +403,15 @@ export function IconEditor({
   initialFraming: FaviconFraming
   /** The saved source, resolved (null id = the primary logo). */
   source: IconSourceRef
+  /** Whether a generated PNG exists (the row's `generatedUrl`). Without one nothing is
+   *  saved yet, so Save, Reset and any change make it. */
+  generated: boolean
   /** Primary, Secondary, then the added logos. */
   logos: IconLogo[]
   onClose: () => void
 }) {
   const noun = label.toLowerCase()
-  const ed = useIconFraming({ artistId, target, noun, initialFraming, initialSource: source })
+  const ed = useIconFraming({ artistId, target, noun, initialFraming, initialSource: source, generated })
   /** One source change at a time (AGENTS.md rule 5: a ref, not state). */
   const choosing = useRef(false)
 
@@ -462,6 +482,12 @@ export function IconEditor({
       label={label}
       meta="edit"
       onClose={onClose}
+      // Save closes; anything waiting is flushed as it closes. It also saves the icon AS IT
+      // STANDS when that is not saved yet — an icon with no PNG, opened and judged fine.
+      onSave={() => {
+        ed.saveNow()
+        onClose()
+      }}
       board={board}
       controlsAlign="start"
       beforeSave={

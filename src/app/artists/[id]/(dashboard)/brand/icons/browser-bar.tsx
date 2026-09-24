@@ -8,6 +8,9 @@ import { toast } from '../../toast'
 import { RowIcon } from '../_ui/row-icon'
 import { setThemeColorAction } from '../actions'
 
+/** The same colour, however it is written (#ABC, #aabbcc). */
+const same = (a: string, b: string) => (canonicalHex(a) || a) === (canonicalHex(b) || b)
+
 /**
  * THE BROWSER BAR (BRAND_PAGE_PLAN.md, Tab icon tab): the colour a phone browser paints its
  * top bar on the site (`theme-color`, which sites start reading in a later round). The
@@ -16,7 +19,13 @@ import { setThemeColorAction } from '../actions'
  *
  * Saves as you go, debounced, so a drag across the shade square is one write. Picking the
  * colour it already is, is not a change and writes nothing. With no colour yet, the row is
- * a + that opens the picker. A refusal is an error toast.
+ * a + that opens the picker. A refusal is an error toast, and the saved colour comes back.
+ *
+ * A PICK OUTRANKS A REFRESH until the server has caught up with it (review 2, 2026-09-24):
+ * every save revalidates the page, and the refresh carrying an EARLIER save could land
+ * while a newer pick was still waiting — the row snapped back to it mid-pick. So the latest
+ * pick is shown until the server says that colour (or refuses it); with none waiting, the
+ * row shows whatever the server sends (a change from another tab).
  */
 export function BrowserBarColor({
   artistId,
@@ -30,21 +39,33 @@ export function BrowserBarColor({
   colors: readonly NamedSwatch[]
 }) {
   const saved = value ?? ''
-  // What the row shows; re-seeded when the server sends a different value (a refresh).
-  const [shown, setShown] = useState({ from: saved, now: saved })
-  if (shown.from !== saved) setShown({ from: saved, now: saved })
+  /** The latest pick, until the server echoes it back (or refuses it). */
+  const [pick, setPick] = useState<string | null>(null)
+  // Caught up: the server now says the picked colour, so the row follows the server again.
+  if (pick !== null && same(pick, saved)) setPick(null)
+  const shown = pick ?? saved
 
   const { save } = useDebouncedFieldSave<string>({
     persist: async (_key, hex) => {
-      const res = await setThemeColorAction(artistId, hex || null)
-      if (res.error) toast(res.error, 'error')
+      let res: { error?: string }
+      try {
+        res = await setThemeColorAction(artistId, hex || null)
+      } catch {
+        res = { error: 'Couldn’t save the browser bar colour.' }
+      }
+      if (res.error) {
+        toast(res.error, 'error')
+        // Never saved, so never echoed: show the saved colour again — unless a newer pick
+        // is already waiting, which keeps its place.
+        setPick((p) => (p !== null && same(p, hex) ? null : p))
+      }
       return res
     },
   })
 
   function onChange(hex: string) {
-    if ((canonicalHex(hex) || hex) === (canonicalHex(shown.now) || shown.now)) return
-    setShown((s) => ({ ...s, now: hex }))
+    if (same(hex, shown)) return
+    setPick(hex)
     save('theme_color', hex)
   }
 
@@ -54,7 +75,7 @@ export function BrowserBarColor({
         variant="row"
         label="Browser bar"
         aria="Browser bar"
-        value={shown.now}
+        value={shown}
         onChange={onChange}
         renderEmpty={(open) => <RowIcon icon="plus" label="Pick a color" variant="primary" onClick={open} />}
       />

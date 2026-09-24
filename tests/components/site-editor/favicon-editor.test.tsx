@@ -55,6 +55,9 @@ function Editor({ framing, closable = false }: { framing: FaviconFraming; closab
       label="Tab icon"
       initialFraming={framing}
       source={{ id: 'p', url: URL_ }}
+      // A PNG exists: every guarantee below is about an icon that has been generated. The
+      // never-generated case is pinned in tests/components/brand/icons/icon-editor.test.tsx.
+      generated
       logos={[{ id: 'p', label: 'Primary logo', url: URL_ }]}
       onClose={() => closable && setOpen(false)}
     />

@@ -158,14 +158,20 @@ export async function gcMediaObjects(
     // `source_path` is a logo's original, kept after a background cut-out (20260924120000).
     // Nothing else names that object, so without it here the next publish sweeps it and
     // the cut-out can never be undone.
-    const { data: rows, error } = await client
+    const { data: rows, error, count } = await client
       .from('media')
-      .select('storage_path, source_path')
+      .select('storage_path, source_path', { count: 'exact' })
       .eq('artist_id', artistId)
     // A failed read is NOT "no rows". supabase-js returns `{ data: null, error }` rather
     // than throwing, and reading that as empty made every object past the age gate
     // collectable — one network blip during publish would empty the artist's folders.
     if (error || !rows) return
+    // Nor is a SHORT read all the rows. PostgREST caps a read at max-rows (1000) without a
+    // word, so for an artist with more media than that, every row past the cap looked
+    // unreferenced and its LIVE file was swept (review 2, 2026-09-24). The exact count says
+    // whether `rows` is all of them; short, or unknown, sweeps nothing — the same refusal
+    // listContent makes. Such an artist's strays wait (storage, not data, is what it costs).
+    if (count == null || rows.length < count) return
     const referenced = new Set<string>()
     // `?? []` although the guard above already returned: the guard must be the ONE thing
     // standing between a failed read and an empty `referenced`, not a TypeError that the
