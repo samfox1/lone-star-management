@@ -18,10 +18,10 @@ import { HoverLabel, RowIcon } from '../brand/_ui/row-icon'
 
 /**
  * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html). The emails the
- * site's signup door collected, read-only, in the Brand ledger's frame: the same 150px left
- * column and 32px gap (brand/_ui/ledger.tsx), so the rows sit exactly where Brand's rows sit.
- * Sam's calls: that column stays EMPTY (no "Subscribers" label, no count), no heading, no
- * instruction copy, and every action is an icon with a hover label.
+ * site's signup door collected, read-only, in the Brand ledger's look. The list is a CENTRED
+ * column: the gap on its left equals the gap on its right (Sam, 2026-09-24 — Brand's empty
+ * 150px left column left twice the gap on the left). No "Subscribers" label, no count, no
+ * heading, no instruction copy, and every action is an icon with a hover label.
  *
  * THE TOOLBAR STAYS, THE PAGE SCROLLS (Sam, 2026-09-24). The toolbar is `sticky` just under
  * the dashboard header and the rows scroll beneath it with the page. Not a scroll box of its
@@ -39,8 +39,8 @@ export const STICKY_TOP = ['top-[calc(59px+env(safe-area-inset-top,0px))]', 'md:
 /** How long a copy's check stays up. */
 const FLASH_MS = 1400
 
-/** Brand's ledger frame (LedgerSection) without its label: the column is kept, empty. */
-const FRAME = 'grid grid-cols-1 gap-x-8 min-[900px]:grid-cols-[150px_minmax(0,1fr)]'
+/** A centred column as wide as the list was beside Brand's empty column (~1000px). */
+const FRAME = 'mx-auto w-full max-w-[1000px]'
 
 /** Row icons are faint until their row is hovered — with a MOUSE. A touch screen has no
  *  hover, so there they are always fully visible. */
@@ -126,9 +126,11 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
   const copied = useCallback((email: string) => setSaid(`Copied ${email}`), [])
 
   return (
-    <div className="max-w-[1180px] pb-16">
+    // md:pr-8 mirrors the 32px the tools shell puts between the rail and the page (gap-8,
+    // tools-rail.tsx), so the list is centred on what the eye sees: rail edge to window edge.
+    // Below md the rail is hidden and there is no such gap.
+    <div className="pb-16 md:pr-8">
       <div data-subscribers-frame="" className={FRAME}>
-        <div aria-hidden="true" />
         <div className="min-w-0">
           {subscribers.length === 0 ? (
             <p className={QUIET}>No subscribers yet.</p>

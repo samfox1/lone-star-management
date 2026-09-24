@@ -3,7 +3,7 @@
 /**
  * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html). A read-only
  * list of the emails the site's signup door collected, in the Brand ledger's frame: an empty
- * 150px left column (no label, no count), then a toolbar and the rows.
+ * centred column (no label, no count), then a toolbar and the rows.
  *
  * What has to hold, and is pinned here with the clipboard mocked:
  *   - search filters as you type, ignoring case, and marks the matched part in each email
@@ -72,15 +72,23 @@ describe('the list', () => {
     expect(texts.filter((t) => /^\d[\d,]*$/.test(t) || /\b\d+\s*(emails?|subscribers?|signups?)\b/i.test(t))).toEqual([])
   })
 
-  it('keeps the EMPTY 150px left column, so the rows sit where Brand’s rows sit', () => {
+  it('CENTRES the list, so the gap on its left equals the gap on its right (Sam, 2026-09-24)', () => {
+    // It first kept Brand's empty 150px column; with the list running to the right edge that
+    // left twice the gap on the left. Now the frame is a centred column of a fixed max width,
+    // with no spacer. jsdom can't lay out, so the centring contract is what's pinned.
     const { container } = mount()
     const frame = container.querySelector('[data-subscribers-frame]')!
-    expect(frame.className).toContain('min-[900px]:grid-cols-[150px_minmax(0,1fr)]')
-    expect(frame.className).toContain('gap-x-8')
-    const spacer = frame.firstElementChild!
-    expect(spacer.getAttribute('aria-hidden')).toBe('true')
-    expect(spacer.textContent).toBe('')
-    expect(spacer.contains(list())).toBe(false)
+    expect(frame.className).toMatch(/(^|\s)mx-auto(\s|$)/)
+    expect(frame.className).toMatch(/(^|\s)max-w-\[\d+px\](\s|$)/)
+    expect(frame.className).not.toMatch(/grid-cols-\[150px/)
+    // No empty spacer column as a direct child (the hover labels' own zero-size markers,
+    // deeper down, are not spacers).
+    expect([...frame.children].filter((c) => c.getAttribute('aria-hidden') === 'true' && c.textContent === '')).toEqual([])
+    expect(frame.contains(list())).toBe(true)
+    // …and centred on what the eye sees: the tools shell puts 32px between the rail and the
+    // page (gap-8) on the LEFT only, so the wrapper mirrors it on the right from md up.
+    // Measured 2026-09-24: 178/178 at 1440, 98/98 at 1280, 28/28 at 390.
+    expect(frame.parentElement!.className).toMatch(/(^|\s)md:pr-8(\s|$)/)
   })
 })
 
