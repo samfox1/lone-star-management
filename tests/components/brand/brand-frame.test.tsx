@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 // The frame every Brand tab shares: the brand-kit download and the brand Publish bar.
 /**
- * BrandKitLink: a REAL link to /artists/<id>/brand/kit, named "Download brand kit" — a
  * button would need script to download, and the route checks ownership on its own.
  *
  * BrandRiser: PublishRiser bound to the BRAND publish and revert. The password reaches
@@ -14,7 +13,6 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { BrandKitLink } from '@/app/artists/[id]/(dashboard)/brand/_ui/brand-kit-link'
 import { BrandRiser } from '@/app/artists/[id]/(dashboard)/brand/_ui/brand-riser'
 import { publishBrandWithPasswordAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { revertBrandAction } from '@/app/artists/[id]/(dashboard)/brand/actions'
@@ -27,25 +25,6 @@ vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({ revertBrandActi
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn(), liftToasts: vi.fn() }))
 
 afterEach(cleanup)
-
-describe('BrandKitLink', () => {
-  it('CRITICAL: a real link to this artist\'s brand kit, named for what it does', () => {
-    render(<BrandKitLink artistId="a1" />)
-    const link = screen.getByRole('link', { name: 'Download brand kit' })
-    expect(link.tagName).toBe('A')
-    expect(link.getAttribute('href')).toBe('/artists/a1/brand/kit')
-    expect(link.querySelector('[data-icon="download"]')).not.toBeNull()
-  })
-
-  it('CRITICAL: its hover label prefers to right-align — the link is the rightmost thing on the page', () => {
-    // Centred, the "Download brand kit" chip stuck out 17px past the right edge and gave
-    // the page a horizontal scrollbar at 1440 and 390 (visual check, 2026-09-23). The chip
-    // also shifts to stay on screen whatever it prefers (hover-label.test.tsx).
-    render(<BrandKitLink artistId="a1" />)
-    const marker = screen.getByRole('link', { name: 'Download brand kit' }).querySelector(':scope > [data-side]')!
-    expect(marker.getAttribute('data-align')).toBe('end')
-  })
-})
 
 describe('BrandRiser', () => {
   async function publish(password: string) {

@@ -1,13 +1,13 @@
 import { Suspense } from 'react'
 import { loadBrandPending } from '@/lib/brand-pending'
-import { BrandKitLink } from './_ui/brand-kit-link'
 import { BrandRiser } from './_ui/brand-riser'
 
 /**
  * BRAND (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): four tabs — Logos · Colors · Fonts · Tab
- * icon — share this frame. The ledger fills the width up to ~1180px; the brand-kit
- * download sits top right; the one Publish bar rises from the bottom when a real change is
- * waiting. `pb-28` keeps the last row clear of that bar.
+ * icon — share this frame. The ledger fills the width up to ~1180px; the one Publish bar
+ * rises from the bottom when a real change is waiting. `pb-28` keeps the last row clear of
+ * that bar. No brand-kit download button (Sam, 2026-09-24: removed; the kit route stays,
+ * unlinked, for a later home).
  *
  * A layout does not re-render on a tab switch (Next 16 docs, layout.md), which is what
  * lets the bar keep its place; a save's revalidatePath / router.refresh re-renders it.
@@ -16,9 +16,6 @@ export default async function BrandLayout({ children, params }: { children: Reac
   const { id } = await params
   return (
     <div className="max-w-[1180px] pb-28">
-      <div className="-mt-2 mb-1 flex justify-end">
-        <BrandKitLink artistId={id} />
-      </div>
       {children}
       {/* Its own boundary, so the pending check never holds up the tab it sits under. */}
       <Suspense fallback={null}>

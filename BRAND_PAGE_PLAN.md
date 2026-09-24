@@ -96,9 +96,10 @@ prototype disagree, this file wins (it carries Sam's later calls and the data mo
   - **Browser bar** — swatch + hex via `ColorPanel`. Saves as you go.
 
 ### Brand kit
-- A download icon, top right of every Brand tab ("Download brand kit"). Downloads a zip of
-  what is **live on the site**: logos, tab + home-screen icons, font files for published
-  slots, and `colors.txt` (name, hex, RGB). A real link to a route that checks ownership.
+- **No download button on the Brand tabs** (Sam, 2026-09-24: removed). The route
+  `/artists/[id]/brand/kit` stays, owner-only and unlinked, for a later home: a zip of what
+  is **live on the site** (logos, tab + home-screen icons, font files for published slots)
+  plus `colors.txt` (name, hex, RGB).
 
 ## Data model — one migration, not pushed until Sam says yes
 

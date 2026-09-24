@@ -19,7 +19,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { RowIcon } from '@/app/artists/[id]/(dashboard)/brand/_ui/row-icon'
 import { ModalBoard } from '@/app/artists/[id]/(dashboard)/brand/_ui/modal-board'
-import { BrandKitLink } from '@/app/artists/[id]/(dashboard)/brand/_ui/brand-kit-link'
 import { ColorPlayground } from '@/app/artists/[id]/(dashboard)/brand/colors/playground'
 import { LABEL_GAP, LABEL_MARGIN } from '@/app/artists/[id]/(dashboard)/brand/_ui/label-placement'
 
@@ -73,7 +72,7 @@ describe('HoverLabel — shown, and where it lives', () => {
   it('CRITICAL: while hidden there is NO chip anywhere, only a zero-size marker in the control', () => {
     // The 2026-09-23 horizontal scrollbar came from a transparent chip that still took up
     // room. Hidden now means absent; the marker has no size and no words.
-    render(<BrandKitLink artistId="a1" />)
+    render(<RowIcon icon="download" label="Download brand kit" href="/artists/a1/brand/kit" labelAlign="end" />)
     const link = screen.getByRole('link', { name: 'Download brand kit' })
     expect(document.body.textContent).not.toContain('Download brand kit')
     const m = link.querySelector(':scope > [data-side]') as HTMLElement
@@ -134,8 +133,8 @@ describe('HoverLabel — placed from the real rects', () => {
     expect(chip()!.style.top).toBe(`${160 + LABEL_GAP}px`)
   })
 
-  it('CRITICAL: shifts left at the page\'s right edge (the kit link)', () => {
-    render(<BrandKitLink artistId="a1" />)
+  it('CRITICAL: shifts left at the page\'s right edge (a link at the far right)', () => {
+    render(<RowIcon icon="download" label="Download brand kit" href="/artists/a1/brand/kit" labelAlign="end" />)
     const link = screen.getByRole('link', { name: 'Download brand kit' })
     placeAt(link, rect(window.innerWidth - 40, 20))
     fireEvent.pointerEnter(link)
