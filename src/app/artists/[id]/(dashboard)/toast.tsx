@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 
@@ -19,10 +19,37 @@ export function toast(message: string, kind: ToastKind = 'success') {
   for (const l of listeners) l(t)
 }
 
+/** The stack's distance from the bottom of the screen when nothing is docked there. */
+const STACK_BOTTOM = 24
+
+// THE LIFT (visual check, 2026-09-23). A bar docked across the bottom of the screen — the
+// Brand page's Publish bar — has its Revert and Publish bottom-right, exactly where the
+// stack sits, so a toast raised while it was up covered them. The bar reports its height
+// here while it is up and 0 when it goes; the stack rises by that much. Module-level, like
+// `toast()`, so the bar needs no context or prop from the layout that mounts the Toaster.
+let lift = 0
+let liftListeners: (() => void)[] = []
+
+/** Raise the toast stack by `px` (a docked bar's height); `liftToasts(0)` when it goes. */
+export function liftToasts(px: number) {
+  const next = Math.max(0, Math.round(px))
+  if (next === lift) return
+  lift = next
+  for (const l of liftListeners) l()
+}
+
+function subscribeLift(onChange: () => void) {
+  liftListeners.push(onChange)
+  return () => {
+    liftListeners = liftListeners.filter((x) => x !== onChange)
+  }
+}
+
 /** The toast stack: bottom-right, auto-dismiss, click to dismiss. Mounted once. */
 export function Toaster() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const raised = useSyncExternalStore(subscribeLift, () => lift, () => 0)
 
   useEffect(() => {
     const l: Listener = (t) => {
@@ -40,7 +67,10 @@ export function Toaster() {
   const dismiss = (id: number) => setToasts((cur) => cur.filter((x) => x.id !== id))
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-2">
+    <div
+      className="pointer-events-none fixed right-6 z-[60] flex flex-col items-end gap-2 motion-safe:transition-[bottom] motion-safe:duration-200"
+      style={{ bottom: STACK_BOTTOM + raised }}
+    >
       {toasts.map((t) => (
         <button
           key={t.id}

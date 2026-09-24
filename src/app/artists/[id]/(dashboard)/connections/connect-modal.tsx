@@ -29,8 +29,8 @@ import { connectOneAction, type ConnectResult } from './actions'
  *              manager pastes a handle, not a whole URL; Shopify wants domain + token
  *   run      — each row's ring turns in front of you: empty waits, spinning checks, ink
  *              means done, red means not — with the reason in one sentence under the
- *              value and the field still editable. Retry runs the failed ones only; Done
- *              keeps what worked.
+ *              value and the field still editable. Retry runs the failed ones only; Save
+ *              keeps what worked (the footer word is Save everywhere, Sam 2026-09-23).
  *
  * THE LATCH IS A REF (AGENTS.md rule 5). Two fast presses of Connect both read stale
  * state; the ref is what makes the second one a no-op.
@@ -227,7 +227,7 @@ export function ConnectModal({
                   <button type="button" disabled className={buttonClass('solid', cx(PAIR, 'opacity-55'))}>Connecting…</button>
                 ) : (
                   <>
-                    <button type="button" onClick={leave} className={buttonClass('confirm', PAIR)}>Done</button>
+                    <button type="button" onClick={leave} className={buttonClass('confirm', PAIR)}>Save</button>
                     {failed.length > 0 && (
                       <button type="button" onClick={() => void run(new Set(failed.map((p) => p.def.key)))} className={buttonClass('solid', PAIR)}>
                         Retry

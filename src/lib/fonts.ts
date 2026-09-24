@@ -26,6 +26,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isOwnedStoragePath } from '@/lib/upload'
 import { publicObjectUrl } from '@/lib/storage-url'
+import { brandRefusal, cleanLine, cleanNote } from '@/lib/brand'
+import { usableWeight } from '@/lib/font-weight'
 
 /** The bucket font objects live in. PUBLIC-READ, unlike `documents`: a fan's browser
  *  fetches the file itself, so there is no server in the middle to sign a URL. */
@@ -69,6 +71,20 @@ export type { FontSlot, FontSlotMap, SiteFont } from '@samfox1/site-bridge/paylo
 import { FONT_SLOTS } from '@samfox1/site-bridge/payload'
 import type { FontSlot, FontSlotMap, SiteFont } from '@samfox1/site-bridge/payload'
 
+/** The slots a manager ADDS on the Brand page (max three), as opposed to the two built-ins.
+ *  Derived from FONT_SLOTS, so a fourth custom slot in the vocabulary is addable the day it
+ *  exists. Only these carry a title and a note (20260924120000 CHECKs the same rule). */
+export type CustomFontSlot = Extract<FontSlot, `custom_${string}`>
+export const CUSTOM_FONT_SLOTS = FONT_SLOTS.filter((s): s is CustomFontSlot => s.startsWith('custom_'))
+export const isCustomSlot = (slot: unknown): slot is CustomFontSlot =>
+  (CUSTOM_FONT_SLOTS as readonly unknown[]).includes(slot)
+
+/** The first custom slot nothing fills, or null when all are taken (the Add row hides). */
+export function nextFreeCustomSlot(filled: Iterable<string>): CustomFontSlot | null {
+  const used = new Set(filled)
+  return CUSTOM_FONT_SLOTS.find((s) => !used.has(s)) ?? null
+}
+
 /**
  * How many fonts one artist may upload.
  *
@@ -80,6 +96,9 @@ import type { FontSlot, FontSlotMap, SiteFont } from '@samfox1/site-bridge/paylo
  * costing every visitor — so the number has to exist somewhere, and it is here.
  */
 export const MAX_FONTS_PER_ARTIST = 12
+
+/** The longest name a font may have — at upload and at a rename. Display only. */
+export const MAX_FONT_LABEL = 80
 
 /** One row of the `artist_fonts_with_slots` view, in the database's own casing (this is
  *  what a select returns, and renaming it here would mean two shapes for one row).
@@ -407,14 +426,22 @@ export async function listArtistFonts(supabase: SupabaseClient, artistId: string
 export async function setArtistFont(
   supabase: SupabaseClient,
   artistId: string,
-  input: { label: string; storagePath: string; format: string },
+  /** `weight` is the file's usWeightClass (read from a ttf/otf/woff) or what the manager
+   *  said for a woff2 — 100..900, or left out when unknown. Dashboard-only (not in the
+   *  artist_font snapshot), so it never changes the published stylesheet. */
+  input: { label: string; storagePath: string; format: string; weight?: number | null },
 ): Promise<{ ok: boolean; error?: string; font?: ArtistFont }> {
-  const label = String(input.label ?? '').trim().slice(0, 80)
+  const label = String(input.label ?? '').trim().slice(0, MAX_FONT_LABEL)
   if (!label) return { ok: false, error: 'Give the font a name first.' }
   if (!(FONT_FORMATS as readonly string[]).includes(input.format))
     return { ok: false, error: 'That font format is not supported.' }
   if (!isOwnedStoragePath(artistId, input.storagePath))
     return { ok: false, error: 'That file location is not valid.' }
+  const weight = input.weight ?? null
+  // REFUSED here, where the upload dialog reads a file's odd weight as unknown instead
+  // (usableWeight): a caller that sends 950 sent it on purpose, and should hear no.
+  if (weight !== null && usableWeight(weight) === null)
+    return { ok: false, error: 'Font weight must be between 100 and 900.' }
 
   // A RESERVED name is refused, not quietly bumped. `sanitizeFamily` would turn "Primary"
   // into `primary-1` and the upload would appear to work — leaving a manager whose font
@@ -440,7 +467,15 @@ export async function setArtistFont(
 
   const { data, error } = await supabase
     .from('artist_fonts')
-    .insert({ artist_id: artistId, label, family, storage_path: input.storagePath, format: input.format })
+    // `weight` only when known: a font without one inserts exactly the row it always did.
+    .insert({
+      artist_id: artistId,
+      label,
+      family,
+      storage_path: input.storagePath,
+      format: input.format,
+      ...(weight === null ? {} : { weight }),
+    })
     .select('id, label, family, storage_path, format')
     .single()
   // A blocked INSERT under RLS returns an error, but a no-row success must not read as
@@ -450,6 +485,39 @@ export async function setArtistFont(
   // A brand-new font fills no slots. Stated rather than left undefined: every caller maps
   // over `slots`, and the insert returns the TABLE's columns, not the view's.
   return { ok: true, font: { ...(data as Omit<ArtistFont, 'slots'>), slots: [] } }
+}
+
+/**
+ * Rename an uploaded font (Sam, 2026-09-23: Skeen's arrived as "Sorg_Font"). Its LABEL
+ * only — the name the Brand page, the editor's font list and the site's payload show.
+ *
+ * NEVER the family. The CSS token was derived from the upload's name once and is written
+ * into every per-region style row as `font-<family>` (see the top of this file), so a
+ * rename that re-derived it would retype the site from a page nobody edited. For the same
+ * reason a reserved word is fine here: "Bold" as a LABEL emits nothing; the upload refuses
+ * it only because the family would have been made from it.
+ *
+ * The label is in the artist_font publish snapshot, so a rename raises the Publish bar —
+ * which is right: the new name reaches the editor and the site only when published.
+ * Zero rows back is an error (AGENTS.md rule 3): RLS row-filters a stranger's update.
+ */
+export async function renameArtistFont(
+  supabase: SupabaseClient,
+  artistId: string,
+  fontId: string,
+  label: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const clean = cleanLine(label).slice(0, MAX_FONT_LABEL)
+  if (!clean) return { ok: false, error: 'Give the font a name first.' }
+  const { data, error } = await supabase
+    .from('artist_fonts')
+    .update({ label: clean })
+    .eq('id', fontId)
+    .eq('artist_id', artistId)
+    .select('id')
+  if (error) return { ok: false, error: brandRefusal(error, 'Could not rename that font.') }
+  if (!(data ?? []).length) return { ok: false, error: 'That font is no longer there.' }
+  return { ok: true }
 }
 
 /**
@@ -497,8 +565,13 @@ export async function setFontSlot(
   artistId: string,
   slot: FontSlot,
   fontId: string | null,
+  /** An ADDED slot's title and note, saved in the same write that gives it its font (the
+   *  row exists only once it has one). Keys left out are left alone on an existing row. */
+  meta?: FontSlotMeta,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!(FONT_SLOTS as readonly string[]).includes(slot)) return { ok: false, error: 'Unknown font slot.' }
+  const metaPatch = slotMetaPatch(slot, meta)
+  if ('error' in metaPatch) return { ok: false, error: metaPatch.error }
 
   if (fontId === null) {
     const { data, error } = await supabase
@@ -517,9 +590,9 @@ export async function setFontSlot(
 
   const { data, error } = await supabase
     .from('artist_font_slots')
-    .upsert({ artist_id: artistId, slot, font_id: fontId }, { onConflict: 'artist_id,slot' })
+    .upsert({ artist_id: artistId, slot, font_id: fontId, ...metaPatch.patch }, { onConflict: 'artist_id,slot' })
     .select('slot')
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: brandRefusal(error, error.message) }
   // Same reason as removeArtistFont: a row-filtered write is a silent no-op, and the UI
   // shows a success toast off this return value.
   //
@@ -533,4 +606,131 @@ export async function setFontSlot(
   // starts row-filtering and this is the only thing between that and a success toast.
   if (!(data ?? []).length) return { ok: false, error: 'That font is no longer there.' }
   return { ok: true }
+}
+
+/* ── The Brand page's font rows ───────────────────────────────────────────── */
+
+/** An added slot's title and note. `label: ''` clears the title; `note: ''` or null clears
+ *  the note. Built-in slots take neither (fixed title, guide text instead of a note). */
+export type FontSlotMeta = { label?: string | null; note?: string | null }
+
+function slotMetaPatch(slot: FontSlot, meta: FontSlotMeta | undefined): { patch: Record<string, unknown> } | { error: string } {
+  if (!meta || (meta.label === undefined && meta.note === undefined)) return { patch: {} }
+  if (!isCustomSlot(slot)) return { error: 'Only an added font has a name and a note.' }
+  const patch: Record<string, unknown> = {}
+  if (meta.label !== undefined) patch.label = cleanLine(meta.label) || null
+  if (meta.note !== undefined) patch.note = cleanNote(meta.note)
+  return { patch }
+}
+
+/** Rename an added font row, or change its note. The slot must already hold a font — an
+ *  added row is only a database row once it has one — so zero rows back is an error. */
+export async function setFontSlotMeta(
+  supabase: SupabaseClient,
+  artistId: string,
+  slot: FontSlot,
+  meta: FontSlotMeta,
+): Promise<{ ok: boolean; error?: string }> {
+  const built = slotMetaPatch(slot, meta)
+  if ('error' in built) return { ok: false, error: built.error }
+  if (Object.keys(built.patch).length === 0) return { ok: true }
+  const { data, error } = await supabase
+    .from('artist_font_slots')
+    .update(built.patch)
+    .eq('artist_id', artistId)
+    .eq('slot', slot)
+    .select('slot')
+  if (error) return { ok: false, error: brandRefusal(error, 'Could not save that.') }
+  if (!(data ?? []).length) return { ok: false, error: 'That font row is no longer there.' }
+  return { ok: true }
+}
+
+/** Delete an ADDED font row (the trash icon). The font itself stays in the artist's
+ *  library — other slots may use it, and the Change menu still offers it. Primary and
+ *  secondary are built-in rows and cannot be deleted; `setFontSlot(…, null)` empties them. */
+export async function clearCustomSlot(
+  supabase: SupabaseClient,
+  artistId: string,
+  slot: FontSlot,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isCustomSlot(slot)) return { ok: false, error: 'Primary and Secondary can’t be removed.' }
+  const { data, error } = await supabase
+    .from('artist_font_slots')
+    .delete()
+    .eq('artist_id', artistId)
+    .eq('slot', slot)
+    .select('slot')
+  if (error) return { ok: false, error: error.message }
+  if (!(data ?? []).length) return { ok: false, error: 'That font row is no longer there.' }
+  return { ok: true }
+}
+
+/** One uploaded font as the Brand page shows it. `weight` is null when unknown. */
+export type BrandFont = {
+  id: string
+  label: string
+  family: string
+  format: FontFormat
+  storagePath: string
+  weight: number | null
+}
+
+/** One font row. Built-ins always appear (font null = empty); an added row appears only
+ *  once it holds a font. `label`/`note` are always null on built-ins. */
+export type BrandFontSlot = { slot: FontSlot; label: string | null; note: string | null; font: BrandFont | null }
+
+export type BrandFonts = {
+  primary: BrandFontSlot
+  secondary: BrandFontSlot
+  /** Filled added slots, in slot order. */
+  custom: BrandFontSlot[]
+  /** Every font the artist has uploaded, oldest first — the Change menu. */
+  fonts: BrandFont[]
+  /** Where the next "+ Add font" lands, or null when all three are used. */
+  nextCustomSlot: CustomFontSlot | null
+}
+
+/**
+ * The Fonts tab in one read pair: the slots (with titles and notes) and the fonts (with
+ * weights). Reads the TABLES, not `artist_fonts_with_slots` — the view is the publish
+ * projection, and the dashboard-only columns are deliberately not in it.
+ */
+export async function loadBrandFonts(supabase: SupabaseClient, artistId: string): Promise<BrandFonts> {
+  const [fontsRes, slotsRes] = await Promise.all([
+    supabase
+      .from('artist_fonts')
+      .select('id, label, family, format, storage_path, weight')
+      .eq('artist_id', artistId)
+      .order('created_at'),
+    supabase.from('artist_font_slots').select('slot, font_id, label, note').eq('artist_id', artistId),
+  ])
+  if (fontsRes.error) throw new Error(fontsRes.error.message)
+  if (slotsRes.error) throw new Error(slotsRes.error.message)
+
+  const fonts: BrandFont[] = ((fontsRes.data ?? []) as Record<string, unknown>[]).map((f) => ({
+    id: String(f.id),
+    label: String(f.label),
+    family: String(f.family),
+    format: f.format as FontFormat,
+    storagePath: String(f.storage_path),
+    weight: f.weight == null ? null : Number(f.weight),
+  }))
+  const byId = new Map(fonts.map((f) => [f.id, f]))
+  const rows = new Map(
+    ((slotsRes.data ?? []) as { slot: FontSlot; font_id: string; label: string | null; note: string | null }[]).map((r) => [
+      r.slot,
+      r,
+    ]),
+  )
+  const view = (slot: FontSlot): BrandFontSlot => {
+    const r = rows.get(slot)
+    return { slot, label: r?.label ?? null, note: r?.note ?? null, font: r ? (byId.get(r.font_id) ?? null) : null }
+  }
+  return {
+    primary: view('primary'),
+    secondary: view('secondary'),
+    custom: CUSTOM_FONT_SLOTS.filter((s) => rows.has(s)).map(view),
+    fonts,
+    nextCustomSlot: nextFreeCustomSlot(rows.keys()),
+  }
 }

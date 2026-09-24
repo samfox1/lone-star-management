@@ -92,7 +92,15 @@ describe('a manager gets through, and a failure underneath is reported', () => {
   it('emptying a slot (null) is a legitimate call, not a missing argument', async () => {
     const { setFontSlotAction } = await actions()
     expect((await setFontSlotAction('a1', 'primary', null)).error).toBeUndefined()
-    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'primary', null)
+    // The fifth argument is an added row's title + note; a plain slot change passes none.
+    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'primary', null, undefined)
+  })
+
+  it('an added row’s title and note ride the same slot write (Brand page, 2026-09-24)', async () => {
+    const { setFontSlotAction } = await actions()
+    const meta = { label: 'Credits', note: 'mono for liner notes' }
+    expect((await setFontSlotAction('a1', 'custom_1', 'f1', meta)).error).toBeUndefined()
+    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'custom_1', 'f1', meta)
   })
 })
 
@@ -100,8 +108,15 @@ describe('an upload started from a slot fills that slot (Sam, 2026-09-13)', () =
   it('CRITICAL: places the NEW font id in the slot, after the insert', async () => {
     const { addArtistFontAction } = await actions()
     expect((await addArtistFontAction('a1', VALID, 'secondary')).error).toBeUndefined()
-    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'secondary', 'f1')
+    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'secondary', 'f1', undefined)
     expect(mockedAdd.mock.invocationCallOrder[0]).toBeLessThan(mockedSlot.mock.invocationCallOrder[0])
+  })
+
+  it('an upload into an ADDED slot carries that row’s title and note into the placement', async () => {
+    const { addArtistFontAction } = await actions()
+    const meta = { label: 'Credits', note: null }
+    await addArtistFontAction('a1', VALID, 'custom_2', meta)
+    expect(mockedSlot).toHaveBeenCalledWith(expect.anything(), 'a1', 'custom_2', 'f1', meta)
   })
 
   it('without a slot, nothing is placed', async () => {

@@ -24,7 +24,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { PhotoAddButton } from '@/app/artists/[id]/(dashboard)/images/photo-add'
-import { LogoRow } from '@/app/artists/[id]/(dashboard)/brand/logo-row'
+import { LogoEditor } from '@/app/artists/[id]/(dashboard)/brand/logos/logo-editor'
 import { DEFAULT_BUDGETS } from '@/lib/site-editor/asset-budget'
 
 // The file that actually reaches storage — the whole point of the gate is which one.
@@ -36,6 +36,8 @@ vi.mock('@/app/artists/[id]/(dashboard)/use-storage-upload', () => ({
 vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
   setBrandAssetAction: vi.fn(async () => ({})),
 }))
+// The logo editor refreshes the page after its own writes.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
 // jsdom has no canvas; compress-image.test.ts covers the real pipeline. Here the subject
@@ -150,8 +152,16 @@ describe('uploading a logo on the BRAND page', () => {
   it('CRITICAL: the second dashboard door compresses too', async () => {
     // A second real call site, because the floor lives in UploadField and the claim is
     // that EVERY dashboard image door inherits it — not that one page was patched.
+    // The logo editor's + (Add logo) on an empty Primary logo — the Brand page's door
+    // since the 2026-09-23 rebuild (LogoRow retired).
     render(
-      <LogoRow artistId="a1" purpose="logo_primary" label="Primary logo" currentUrl={null} />,
+      <LogoEditor
+        artistId="a1"
+        target={{ kind: 'builtin', purpose: 'logo_primary', title: 'Primary logo', logo: null }}
+        swatches={[]}
+        derivedIcons={[]}
+        onClose={() => {}}
+      />,
     )
     dropFile(phonePhoto())
 

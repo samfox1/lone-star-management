@@ -21,6 +21,7 @@ import { callerOwns, requireOwnedArtist } from './_owns'
 import { gcVideoObjects, gcDeletedVideoObject, gcMediaObjects, gcDeletedMediaObject, gcDeletedAudioObject, gcFontObjects } from '@/lib/storage-gc'
 import { reorderGallery } from '@/lib/site-editor/gallery'
 import { placeInSlot } from '@/lib/site-editor/slots'
+import { publishBrand } from '@/lib/brand'
 import {
   type CrudEntity,
   type GenericEntity,
@@ -565,14 +566,17 @@ export async function publishSiteWithPasswordAction(artistId: string, password: 
 }
 
 /**
- * Publish what the Brand page holds: the logos and tab icon (media rows) and the fonts
- * (artist_font). One password, both sections — a manager who uploaded a logo and set its
- * font should not have to find two buttons.
+ * Publish what the Brand page holds: the BRAND media (logos, tab and home-screen icons —
+ * `BRAND_MEDIA_PURPOSES`) and the fonts (artist_font). One password, both sections — a
+ * manager who uploaded a logo and set its font should not have to find two buttons.
+ *
+ * Brand media ONLY (2026-09-24): this used to publish the whole media table, so a new
+ * logo also pushed a half-finished gallery live from a page that never showed it. No `gc`
+ * argument, on purpose — see `publishBrand` for why a sliced publish must not sweep.
  */
 export async function publishBrandWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
   return publishGated(artistId, password, async (supabase, userId) => {
-    await publishContent(supabase, 'media', artistId, userId)
-    await publishContent(supabase, 'artist_font', artistId, userId)
+    await publishBrand(supabase, artistId, userId)
   })
 }
 

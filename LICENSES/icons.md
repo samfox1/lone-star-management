@@ -14,6 +14,7 @@ source. Versions are the npm packages the glyphs were taken from.
 | `userGroup` | Heroicons · user-group | heroicons@2.2.0 | MIT |
 | `package` | Lucide · package | lucide-static@1.47.0 | ISC |
 | `mailbox` | Lucide · mailbox | lucide-static@1.47.0 | ISC |
+| `eraser` | Lucide · eraser | lucide-static@1.47.0 | ISC |
 | `plug` | Phosphor · plug (regular) | @phosphor-icons/core@2.1.1 | MIT |
 
 Lucide's own LICENSE file carries two notices — ISC for the project and MIT for the icons

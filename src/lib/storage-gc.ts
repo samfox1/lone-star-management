@@ -51,16 +51,20 @@ async function gcDeletedObject(
   entityType: 'video' | 'media' | 'track',
   bucket: 'videos' | 'media' | 'audio',
   entityId: string,
-  path: string | null,
+  ...paths: (string | null | undefined)[]
 ): Promise<void> {
-  if (!path) return
+  const targets = paths.filter((p): p is string => !!p)
+  if (!targets.length) return
   try {
-    const { count } = await client
+    const { count, error } = await client
       .from('revisions')
       .select('id', { count: 'exact', head: true })
       .eq('entity_type', entityType)
       .eq('entity_id', entityId)
-    if (!count) await client.storage.from(bucket).remove([path])
+    // A failed count is "unknown", not "never published". Reading it as zero deleted a
+    // published file the live site was still serving whenever the count request failed.
+    if (error) return
+    if (!count) await client.storage.from(bucket).remove(targets)
   } catch {
     // best-effort; the next publish's bucket-wide GC is the backstop
   }
@@ -93,8 +97,13 @@ export async function gcDeletedMediaObject(
   client: SupabaseClient,
   mediaId: string,
   storagePath: string | null,
+  /** A logo's ORIGINAL after a background cut-out (`media.source_path`, 20260924120000).
+   *  Same rule as the file itself: if the row was ever published, the original may be the
+   *  path the live site still serves (published before the cut-out), so both wait for the
+   *  publish-time sweep. */
+  sourcePath?: string | null,
 ): Promise<void> {
-  await gcDeletedObject(client, 'media', 'media', mediaId, storagePath)
+  await gcDeletedObject(client, 'media', 'media', mediaId, storagePath, sourcePath)
 }
 
 /**
@@ -146,9 +155,25 @@ export async function gcMediaObjects(
   minAgeMs: number = GC_MIN_AGE_MS,
 ): Promise<void> {
   try {
-    const { data: rows } = await client.from('media').select('storage_path').eq('artist_id', artistId)
+    // `source_path` is a logo's original, kept after a background cut-out (20260924120000).
+    // Nothing else names that object, so without it here the next publish sweeps it and
+    // the cut-out can never be undone.
+    const { data: rows, error } = await client
+      .from('media')
+      .select('storage_path, source_path')
+      .eq('artist_id', artistId)
+    // A failed read is NOT "no rows". supabase-js returns `{ data: null, error }` rather
+    // than throwing, and reading that as empty made every object past the age gate
+    // collectable — one network blip during publish would empty the artist's folders.
+    if (error || !rows) return
     const referenced = new Set<string>()
-    for (const r of rows ?? []) if (r.storage_path) referenced.add(r.storage_path as string)
+    // `?? []` although the guard above already returned: the guard must be the ONE thing
+    // standing between a failed read and an empty `referenced`, not a TypeError that the
+    // catch below happens to swallow (a mutation test could not tell the two apart).
+    for (const r of rows ?? []) {
+      if (r.storage_path) referenced.add(r.storage_path as string)
+      if (r.source_path) referenced.add(r.source_path as string)
+    }
 
     // One round-trip per folder, CONCURRENTLY: they're independent, and this runs
     // inside publish. Sweeping them in series made publish ~3x slower on the network
@@ -182,9 +207,10 @@ export async function gcVideoObjects(
   minAgeMs: number = GC_MIN_AGE_MS,
 ): Promise<void> {
   try {
-    const { data: rows } = await client.from('videos').select('storage_path').eq('artist_id', artistId)
+    const { data: rows, error } = await client.from('videos').select('storage_path').eq('artist_id', artistId)
+    if (error || !rows) return // unknown is not empty — see gcMediaObjects
     const referenced = new Set<string>()
-    for (const r of rows ?? []) if (r.storage_path) referenced.add(r.storage_path as string)
+    for (const r of rows ?? []) if (r.storage_path) referenced.add(r.storage_path as string) // see gcMediaObjects
 
     const prefix = `${artistId}/videos`
     const { data: objs } = await client.storage.from('videos').list(prefix, { limit: 1000 })
@@ -232,6 +258,9 @@ export async function gcFontObjects(
         .eq('entity_type', 'artist_font'),
     ])
 
+    // Either half failing leaves `referenced` short of files a row or the LIVE stylesheet
+    // still names — so either failing sweeps nothing (see gcMediaObjects).
+    if (working.error || published.error || !working.data || !published.data) return
     const referenced = new Set<string>()
     for (const r of working.data ?? []) if (r.storage_path) referenced.add(r.storage_path as string)
     for (const r of published.data ?? []) {

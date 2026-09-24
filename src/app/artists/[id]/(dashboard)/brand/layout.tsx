@@ -1,0 +1,38 @@
+import { Suspense } from 'react'
+import { loadBrandPending } from '@/lib/brand-pending'
+import { BrandKitLink } from './_ui/brand-kit-link'
+import { BrandRiser } from './_ui/brand-riser'
+
+/**
+ * BRAND (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): four tabs — Logos · Colors · Fonts · Tab
+ * icon — share this frame. The ledger fills the width up to ~1180px; the brand-kit
+ * download sits top right; the one Publish bar rises from the bottom when a real change is
+ * waiting. `pb-28` keeps the last row clear of that bar.
+ *
+ * A layout does not re-render on a tab switch (Next 16 docs, layout.md), which is what
+ * lets the bar keep its place; a save's revalidatePath / router.refresh re-renders it.
+ */
+export default async function BrandLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
+  const { id } = await params
+  return (
+    <div className="max-w-[1180px] pb-28">
+      <div className="-mt-2 mb-1 flex justify-end">
+        <BrandKitLink artistId={id} />
+      </div>
+      {children}
+      {/* Its own boundary, so the pending check never holds up the tab it sits under. */}
+      <Suspense fallback={null}>
+        <PendingBar artistId={id} />
+      </Suspense>
+    </div>
+  )
+}
+
+/** Always mounted once loaded: hidden (off-screen, inert) while nothing is pending, so it
+ *  can SLIDE up when a refresh brings `dirty` — a bar mounted only when dirty would just
+ *  appear. `loadBrandPending` is BRAND-SCOPED (brand media purposes + font slots), never
+ *  every media row on the account, and fails closed (hidden). */
+async function PendingBar({ artistId }: { artistId: string }) {
+  const pending = await loadBrandPending(artistId)
+  return <BrandRiser artistId={artistId} dirty={pending.dirty} message={pending.message} canRevert={pending.canRevert} />
+}

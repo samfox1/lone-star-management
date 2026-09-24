@@ -51,6 +51,8 @@ export type IconName =
   | 'package'
   | 'userGroup'
   | 'mailbox'
+  | 'chevronsUpDown'
+  | 'eraser'
   | 'note'
   | 'grip'
   | 'minus'
@@ -336,6 +338,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z" />
       <path d="M15 9h3v2M6.5 5C9 5 11 7 11 9.5V17a2 2 0 0 1-2 2M6 10h1" />
+    </>
+  ),
+  // ── Brand page row actions (BRAND_PAGE_PLAN.md, 2026-09-23) ─────────────────────────
+  /** Change font: two chevrons, up and down — "pick another from a list". Drawn on the
+   *  24 grid to match the prototype's glyph (prototypes/brand_variants_20260923.html). */
+  chevronsUpDown: <path d="M7 9l5-5 5 5M7 15l5 5 5-5" />,
+  /** Remove background · Lucide `eraser` (ISC) */
+  eraser: (
+    <>
+      <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+      <path d="M22 21H7" />
+      <path d="m5 11 9 9" />
     </>
   ),
 }

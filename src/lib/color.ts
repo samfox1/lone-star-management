@@ -127,3 +127,57 @@ export function contrastInk(hex: string): '#000000' | '#ffffff' {
   const b = parseInt(full.slice(5, 7), 16)
   return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? '#000000' : '#ffffff'
 }
+
+/** `#rrggbb` for the given byte triple, clamped and rounded — the inverse of reading
+ *  `parseInt(hex.slice(a,b), 16)`. Shared so anything that reconstructs a colour from
+ *  sampled/averaged pixels (the Brand page's logo-background sniffing) formats it the
+ *  same way the picker does. */
+export function rgbToHex(r: number, g: number, b: number): string {
+  const byte = (n: number) =>
+    Math.round(clamp(n, 0, 255))
+      .toString(16)
+      .padStart(2, '0')
+  return `#${byte(r)}${byte(g)}${byte(b)}`
+}
+
+/** sRGB 0–255 channel → linear-light 0–1, the WCAG 2.x transfer curve used by relative
+ *  luminance. Not the Rec. 601 luma above: WCAG defines its own curve and this is the
+ *  one the 4.5:1 threshold is calibrated against. */
+function srgbChannelToLinear(byteValue: number): number {
+  const c = byteValue / 255
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+}
+
+/** WCAG 2.x relative luminance, or null when `hex` isn't a hex this module accepts. */
+function relativeLuminance(hex: string): number | null {
+  const full = canonicalHex(hex)
+  if (!full) return null
+  const r = parseInt(full.slice(1, 3), 16)
+  const g = parseInt(full.slice(3, 5), 16)
+  const b = parseInt(full.slice(5, 7), 16)
+  return 0.2126 * srgbChannelToLinear(r) + 0.7152 * srgbChannelToLinear(g) + 0.0722 * srgbChannelToLinear(b)
+}
+
+/**
+ * WCAG 2.x contrast ratio between two colours, 1 (identical) to 21 (black on white).
+ * Order doesn't matter — the lighter/darker luminance is sorted internally, exactly as
+ * the spec's formula does, so `contrastRatio(fg, bg) === contrastRatio(bg, fg)`.
+ *
+ * An unparsable hex reads as "no contrast" (1) rather than throwing: the playground
+ * modal recomputes this on every keystroke of a hex field, and a colour that is still
+ * mid-edit (a bare '#a') should read as maximally unreadable, not crash the panel.
+ */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a)
+  const lb = relativeLuminance(b)
+  if (la === null || lb === null) return 1
+  const lighter = Math.max(la, lb)
+  const darker = Math.min(la, lb)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/** WCAG AA for normal text, the threshold the Colors playground's "Easy to read" /
+ *  "Hard to read" verdict is built on: >= 4.5:1. */
+export function isReadable(fg: string, bg: string): boolean {
+  return contrastRatio(fg, bg) >= 4.5
+}

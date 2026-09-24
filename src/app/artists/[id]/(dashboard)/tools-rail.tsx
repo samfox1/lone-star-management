@@ -57,10 +57,10 @@ export { TOOLS, tabFor, toolFor, toolsFor }
 const RAIL_W = 84
 /** Thin state: the icon and its breathing room, nothing else. */
 const RAIL_COLLAPSED_W = 52
-/** The second panel, beside the rail when a tool has sub-tabs. Text only, so only as wide
- *  as a short tab name needs — 60px of it after the paddings, which holds "General" at
- *  13px Space Mono. Longer names `truncate`. */
-const SUB_RAIL_W = 96
+/** The second panel's FLOOR, beside the rail when a tool has sub-tabs. Text only, and
+ *  otherwise as wide as its longest label (Sam, 2026-09-23: "Tab icon" never wraps or
+ *  truncates; the page shifts over instead). 96px still holds "General" with room. */
+const SUB_RAIL_MIN = 'min-w-[96px]'
 
 /**
  * One tools-rail row: py-2 (16) + the 20px icon + gap-1 (4) + the label's 12px line box.
@@ -138,17 +138,31 @@ export function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }
  * (Sam, 2026-09-22: "I dont need icons on the right rail").
  */
 export function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; tool: Tool; activeSeg: string; railCount: number }) {
+  const tabs = tool.tabs ?? []
   return (
-    <div className="hidden flex-none md:block" style={{ width: SUB_RAIL_W }}>
+    // THE WIDTH IS THE LONGEST LABEL (Sam, 2026-09-23). The panel is `fixed`, and a fixed
+    // box pushes nothing, so the slot it leaves in the page's flow is held open by an
+    // invisible copy of every label, laid out exactly as the panel lays them out (same
+    // paddings, same font, BOLD so the current tab's weight can never outgrow it). Both are
+    // `w-max`, so they come to the same width and the page starts where the panel ends —
+    // whichever tool, whichever labels. No number to keep in step with the copy.
+    <div className="hidden flex-none md:block">
+      <div aria-hidden="true" className={cx('invisible flex w-max flex-col border-r border-transparent px-2', SUB_RAIL_MIN)}>
+        {tabs.map((t) => (
+          <span key={t.seg} className="whitespace-nowrap px-2.5 font-space text-[13px] font-bold tracking-[0.02em]">
+            {t.label}
+          </span>
+        ))}
+      </div>
       <nav
         aria-label={tool.label}
-        className="fixed top-0 z-10 flex h-screen flex-col border-r border-hairline bg-paper"
-        style={{ left: RAIL_COLLAPSED_W, width: SUB_RAIL_W }}
+        className={cx('fixed top-0 z-10 flex h-screen w-max flex-col border-r border-hairline bg-paper', SUB_RAIL_MIN)}
+        style={{ left: RAIL_COLLAPSED_W }}
       >
         {/* The RAIL's offset, not its own — see RAIL_COLUMN_TOP. No `-translate-y-1/2`:
             that would re-centre it on its own short height and undo the alignment. */}
         <div className="flex flex-col gap-1 px-2" style={{ marginTop: `calc(50vh - ${railColumnTop(railCount)}px)` }}>
-          {(tool.tabs ?? []).map((t) => {
+          {tabs.map((t) => {
             const on = t.seg === activeSeg
             return (
               <Link
@@ -160,18 +174,48 @@ export function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: st
                   // Bold BLACK for the current tab (Sam, 2026-09-23; it was accent for a day).
                   // The rail beside it already lights the tool in accent, and a second blue
                   // read as two selections. Space Mono is monospaced, so the bold weight is
-                  // the same width — the row cannot reflow or truncate just because it is
-                  // selected.
+                  // the same width — the row cannot reflow just because it is selected.
                   on ? 'font-bold text-ink' : 'text-ink-muted hover:bg-surface hover:text-ink',
                 )}
               >
-                <span className="truncate font-space text-[13px] tracking-[0.02em]">{t.label}</span>
+                {/* nowrap, never `truncate`: a label is read whole or the panel widens. */}
+                <span className="whitespace-nowrap font-space text-[13px] tracking-[0.02em]">{t.label}</span>
               </Link>
             )
           })}
         </div>
       </nav>
     </div>
+  )
+}
+
+/**
+ * A tool's sub-tabs on a PHONE (visual check, 2026-09-23). Below md the rail and the second
+ * panel are hidden, which left Brand's Colors / Fonts / Tab icon and Settings' Email with no
+ * way in. This row sits above the page instead: the same links, text only, the current one
+ * bold black like the panel's. It WRAPS, never scrolls sideways, and every label is nowrap,
+ * so at 390px it takes a second line before it would ever widen the page.
+ */
+export function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: Tool; activeSeg: string }) {
+  return (
+    <nav aria-label={`${tool.label} tabs`} className="-mt-3 mb-5 flex flex-wrap gap-1 md:hidden">
+      {(tool.tabs ?? []).map((t) => {
+        const on = t.seg === activeSeg
+        return (
+          <Link
+            key={t.seg}
+            href={`/artists/${artistId}/${t.seg}`}
+            aria-current={on ? 'page' : undefined}
+            className={cx(
+              'whitespace-nowrap rounded-lg px-2.5 py-2 font-space text-[13px] tracking-[0.02em] transition-colors',
+              on ? 'bg-surface font-bold text-ink' : 'text-ink-muted hover:bg-surface hover:text-ink',
+            )}
+          >
+            {t.label}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -186,11 +230,30 @@ export function ToolsShell({ artistId, customSite = false, children }: { artistI
   // The rail's list, not TOOLS: the Site tool leaves it for a custom-site artist, and the
   // second panel's offset has to count the rows that are actually there.
   const tools = toolsFor(customSite)
+  if (!tab) {
+    return (
+      <div className="flex gap-8">
+        <ToolsRail artistId={artistId} active={tool.seg} tools={tools} />
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    )
+  }
   return (
     <div className="flex gap-8">
-      <ToolsRail artistId={artistId} active={tool.seg} collapsed={tab !== null} tools={tools} />
-      {tab ? <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} /> : null}
-      <div className="min-w-0 flex-1">{children}</div>
+      {/* ONE slot for both fixed panels, 32px from the page (visual check, 2026-09-23: the
+          mock's gap; it was ~92px). The panels are fixed at x=0, but this slot sits inside
+          <main>'s px-7 (layout.tsx), so each placeholder started 28px right of its panel
+          and the shell's gap-8 ran twice. `md:-ml-7` pulls the pair back under their
+          panels, with no gap between them; the shell's one gap-8 is then the whole gap.
+          The test reads main's padding from layout.tsx, so the two cannot drift apart. */}
+      <div className="hidden flex-none md:-ml-7 md:flex">
+        <ToolsRail artistId={artistId} active={tool.seg} collapsed tools={tools} />
+        <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <SubTabStrip artistId={artistId} tool={tool} activeSeg={tab.seg} />
+        {children}
+      </div>
     </div>
   )
 }

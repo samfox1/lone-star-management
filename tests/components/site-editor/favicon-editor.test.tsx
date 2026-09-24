@@ -1,254 +1,336 @@
 // @vitest-environment jsdom
-// The tab-icon controls, checked by what they ask the canvas to draw.
+// The icon editor's save guarantees, checked by what it asks the canvas to draw and save.
 /**
- * FaviconEditor — the controls behind the tab icon.
+ * IconEditor (brand/favicon-editor.tsx) — the controls behind the tab icon and, since the
+ * Brand page rebuild (2026-09-23), the home-screen icon too. MIGRATED from the favicon
+ * editor's tests: the component became one editor for both targets inside a BrandModal
+ * (Size / Up or down sliders instead of Zoom and nudge buttons), and every guarantee below
+ * moved with it, unchanged in substance.
  *
- * jsdom has no canvas implementation, so `getContext` is stubbed with a recorder. That
- * is not a limitation here, it is the point: what matters is WHAT the component asks the
- * canvas to draw, and that both canvases are driven from the same framing. The pixel
- * work itself is `drawFavicon`, unit-tested in brand.test.ts.
+ * jsdom has no canvas implementation, so `getContext` is stubbed with a recorder
+ * (@tests/components/brand/icons/_canvas). That is the point, not a limitation: what
+ * matters is WHAT the editor asks a canvas to draw, and that the board and the exported
+ * file are driven from the same framing. The pixel work itself is `drawFavicon`.
  *
- * The claim under test is the product promise: the true-size preview is the file that
- * gets served, so anything that could make the two disagree has to fail here.
+ * FAKE TIMERS throughout (fix round, 2026-09-23). "Mounting saves NOTHING" and "closing with
+ * nothing changed" each failed once under a loaded machine and never alone: they waited real
+ * seconds and polled with a 1s `waitFor`. Now time only moves when a test moves it
+ * (`pass`), each step is flushed (`settle`), and every test ends by letting its own
+ * save-on-close finish and dropping unconsumed once-values (`drain`) — so no test's work can
+ * land in the next one's.
+ *
+ * Dropped with the old layout: the 32px "true size" canvas. The new editor (the plan) has
+ * one board, and the row shows the generated file itself at 64px.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { FaviconEditor } from '@/app/artists/[id]/(dashboard)/brand/favicon-editor'
-import { DEFAULT_FRAMING, FAVICON_PREVIEW_SIZE, FAVICON_SIZE, faviconDrawBox } from '@/lib/brand'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { useState } from 'react'
+import { DEFAULT_FRAMING, FAVICON_SIZE, faviconDrawBox, type FaviconFraming } from '@/lib/brand'
+import { canvas, drain, installCanvasFakes, lastDrawAt, LOGO, pass, settle } from '@tests/components/brand/icons/_canvas'
 
 vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
   setBrandAssetAction: vi.fn(async () => ({})),
   saveFramingAction: vi.fn(async () => ({})),
+  setIconSourceAction: vi.fn(async () => ({})),
+  addIconSourceAction: vi.fn(async () => ({ mediaId: 'u9' })),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ storage: { from: () => ({ upload: async () => ({ error: null }) }) } }),
 }))
+vi.mock('@/app/artists/[id]/(dashboard)/upload-field', () => ({ UploadField: () => null }))
 
-const LOGO = { width: 1000, height: 200 } // a wide wordmark — the hard case
+import { IconEditor, ICON_BOARD_CANVAS, SAVE_AFTER_MS } from '@/app/artists/[id]/(dashboard)/brand/favicon-editor'
+import { saveFramingAction, setBrandAssetAction } from '@/app/artists/[id]/(dashboard)/brand/actions'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
-/** Every drawImage the component issued, tagged with the canvas size it drew onto. */
-let draws: { size: number; args: number[] }[] = []
+const URL_ = 'https://img.example/logo.png'
 
-beforeEach(() => {
-  draws = []
-  // One recorder per canvas; `size` comes from the canvas the context belongs to.
-  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
-    // Read the size off the canvas HERE rather than holding on to the element: the
-    // width is fixed by the time a context is asked for, and it keeps the closure from
-    // capturing `this`.
-    const size = this.width
-    return {
-      clearRect: () => {},
-      drawImage: (_img: unknown, x: number, y: number, w: number, h: number) => {
-        draws.push({ size, args: [x, y, w, h] })
-      },
-    } as unknown as CanvasRenderingContext2D
-  } as unknown as typeof HTMLCanvasElement.prototype.getContext
-
-  // jsdom never loads images: fire onload synchronously with the natural size set.
-  class FakeImage {
-    onload: (() => void) | null = null
-    crossOrigin = ''
-    width = LOGO.width
-    height = LOGO.height
-    naturalWidth = LOGO.width
-    naturalHeight = LOGO.height
-    set src(_v: string) {
-      queueMicrotask(() => this.onload?.())
-    }
-  }
-  vi.stubGlobal('Image', FakeImage)
-})
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
-
-const renderEditor = async (framing = DEFAULT_FRAMING) => {
-  const view = render(
-    <FaviconEditor artistId="a1" logoUrl="https://img.example/logo.png" initialFraming={framing} />,
-  )
-  await waitFor(() => expect(draws.length).toBeGreaterThan(0))
-  return view
+function Editor({ framing, closable = false }: { framing: FaviconFraming; closable?: boolean }) {
+  const [open, setOpen] = useState(true)
+  return open ? (
+    <IconEditor
+      artistId="a1"
+      target="favicon"
+      label="Tab icon"
+      initialFraming={framing}
+      source={{ id: 'p', url: URL_ }}
+      logos={[{ id: 'p', label: 'Primary logo', url: URL_ }]}
+      onClose={() => closable && setOpen(false)}
+    />
+  ) : null
 }
 
-describe('FaviconEditor', () => {
-  it('offers nothing to frame when there is no primary logo', () => {
-    // No message either (Sam, 2026-09-13: no instruction copy on tool pages) — the row is
-    // simply empty until a primary logo exists.
-    render(<FaviconEditor artistId="a1" logoUrl={null} initialFraming={DEFAULT_FRAMING} />)
-    expect(screen.queryByText(/Add a primary logo/)).toBeNull()
-    expect(screen.queryByLabelText('Zoom')).toBeNull()
-    expect(screen.queryByLabelText('Tab icon at true size')).toBeNull()
+const renderEditor = async (framing: FaviconFraming = DEFAULT_FRAMING, closable = false) => {
+  const view = render(<Editor framing={framing} closable={closable} />)
+  await settle()
+  expect(lastDrawAt(ICON_BOARD_CANVAS), 'the board drew the logo').toBeDefined()
+  return view
+}
+const boxAt = (framing: FaviconFraming, size: number) => {
+  const b = faviconDrawBox(LOGO, framing, size)
+  return [b.x, b.y, b.width, b.height]
+}
+const size = (value: string) => fireEvent.change(screen.getByLabelText('Size'), { target: { value } })
+const upDown = (value: string) => fireEvent.change(screen.getByLabelText('Up or down'), { target: { value } })
+/** Long enough that any save the editor scheduled has run, and then some. */
+const pastTheSaveWindow = () => pass(SAVE_AFTER_MS * 3)
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  installCanvasFakes()
+})
+afterEach(drain)
+
+describe('IconEditor — drawing', () => {
+  it('opens with the SAVED framing, not the default', async () => {
+    const saved = { zoom: 2.5, offsetY: -0.2 }
+    await renderEditor(saved)
+    expect(lastDrawAt(ICON_BOARD_CANVAS)).toEqual(boxAt(saved, ICON_BOARD_CANVAS))
   })
 
-  it('CRITICAL: the true-size preview canvas is really 32px — not a flattering enlargement', () => {
-    // If this ever became a scaled-up canvas, the manager would be approving something
-    // legible that a browser tab then renders as a smudge.
-    render(<FaviconEditor artistId="a1" logoUrl="https://x/l.png" initialFraming={DEFAULT_FRAMING} />)
-    const preview = screen.getByLabelText('Tab icon at true size') as HTMLCanvasElement
-    expect(preview.width).toBe(FAVICON_PREVIEW_SIZE)
-    expect(preview.height).toBe(FAVICON_PREVIEW_SIZE)
-  })
-
-  it('CRITICAL: both canvases draw the SAME framing, each scaled to its own size', async () => {
-    // A magnified view to judge the crop by (Sam, 2026-09-13: true size alone was "way
-    // too small to see how it fits") and the true-size preview — one framing, two sizes.
+  it('Size redraws the mark larger', async () => {
     await renderEditor()
-    const bySize = new Map(draws.map((d) => [d.size, d.args]))
-    for (const [size, args] of bySize) {
-      const box = faviconDrawBox(LOGO, DEFAULT_FRAMING, size)
-      expect(args, `canvas ${size}`).toEqual([box.x, box.y, box.width, box.height])
-    }
-    expect([...bySize.keys()].sort((a, b) => a - b)).toEqual([FAVICON_PREVIEW_SIZE, 96])
+    const before = lastDrawAt(ICON_BOARD_CANVAS)!
+    size('3')
+    await settle()
+    expect(lastDrawAt(ICON_BOARD_CANVAS)![2]).toBeGreaterThan(before[2])
   })
 
-  it('zooming redraws larger on every canvas', async () => {
+  it('CRITICAL: Up or down moves the mark — negative is up, and back again returns it', async () => {
     await renderEditor()
-    const before = new Map(draws.map((d) => [d.size, d.args]))
-    draws = []
-
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '3' } })
-    await waitFor(() => expect(draws.length).toBeGreaterThan(0))
-
-    for (const d of draws) {
-      const [, , w] = d.args
-      expect(w).toBeGreaterThan(before.get(d.size)![2])
-    }
-  })
-
-  it('CRITICAL: "Move up" moves the logo up, and "Move down" moves it back', async () => {
-    await renderEditor()
-    const yAt = () => draws.find((d) => d.size === FAVICON_PREVIEW_SIZE)!.args[1]
-    const start = yAt()
-
-    draws = []
-    fireEvent.click(screen.getByRole('button', { name: 'Move logo up' }))
-    await waitFor(() => expect(draws.length).toBeGreaterThan(0))
-    const up = yAt()
-    expect(up).toBeLessThan(start) // a smaller y is higher on the canvas
-
-    draws = []
-    fireEvent.click(screen.getByRole('button', { name: 'Move logo down' }))
-    await waitFor(() => expect(draws.length).toBeGreaterThan(0))
-    expect(yAt()).toBeCloseTo(start)
+    const start = lastDrawAt(ICON_BOARD_CANVAS)![1]
+    upDown('-0.3')
+    await settle()
+    expect(lastDrawAt(ICON_BOARD_CANVAS)![1]).toBeLessThan(start) // smaller y is higher
+    upDown('0')
+    await settle()
+    expect(lastDrawAt(ICON_BOARD_CANVAS)![1]).toBeCloseTo(start)
   })
 
   it('Reset returns to the whole logo, centred', async () => {
     await renderEditor({ zoom: 4, offsetY: 0.4 })
-    draws = []
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
-    await waitFor(() => expect(draws.length).toBeGreaterThan(0))
-
-    const drawn = draws.find((d) => d.size === FAVICON_PREVIEW_SIZE)!.args
-    const box = faviconDrawBox(LOGO, DEFAULT_FRAMING, FAVICON_PREVIEW_SIZE)
-    expect(drawn).toEqual([box.x, box.y, box.width, box.height])
-  })
-
-  it('opens with the SAVED framing, not the default', async () => {
-    const saved = { zoom: 2.5, offsetY: -0.2 }
-    await renderEditor(saved)
-    const drawn = draws.find((d) => d.size === FAVICON_PREVIEW_SIZE)!.args
-    const box = faviconDrawBox(LOGO, saved, FAVICON_PREVIEW_SIZE)
-    expect(drawn).toEqual([box.x, box.y, box.width, box.height])
+    await settle()
+    expect(lastDrawAt(ICON_BOARD_CANVAS)).toEqual(boxAt(DEFAULT_FRAMING, ICON_BOARD_CANVAS))
   })
 })
 
-describe('FaviconEditor — saving', () => {
+describe('IconEditor — the modal (Sam, 2026-09-23)', () => {
+  it('the header is the name and "edit" — no thumbnail', async () => {
+    await renderEditor()
+    const header = screen.getByRole('dialog', { name: 'Tab icon' }).querySelector('header')!
+    expect(header.textContent).toBe('Tab iconedit')
+    expect(header.querySelector('img, canvas')).toBeNull()
+  })
+
+  it('Reset sits in the footer, immediately LEFT of Save — not in the controls column', async () => {
+    await renderEditor()
+    const footer = screen.getByRole('dialog', { name: 'Tab icon' }).querySelector('footer')!
+    const buttons = within(footer).getAllByRole('button').map((b) => b.textContent)
+    expect(buttons.slice(-2)).toEqual(['Reset', 'Save'])
+    expect(screen.getByRole('button', { name: 'Reset' }).closest('[data-modal-body]')).toBeNull()
+  })
+
+  it('the controls column starts level with the top of the board: source controls first, then the sliders', async () => {
+    await renderEditor()
+    const body = screen.getByRole('dialog', { name: 'Tab icon' }).querySelector('[data-modal-body] > div')!
+    expect(body.className.split(/\s+/)).toContain('items-start')
+    const select = screen.getByRole('combobox', { name: 'Select a logo' })
+    const slider = screen.getByLabelText('Size')
+    expect(select.compareDocumentPosition(slider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
+describe('IconEditor — saving', () => {
   it('CRITICAL: mounting saves NOTHING — the server seed is not an edit', async () => {
-    // Without the `touched` guard every Brand page visit would re-export the PNG, upload
-    // it, and rewrite the favicon asset row, once per image decode.
-    const { saveFramingAction, setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
-    const { toast } = await import('@/app/artists/[id]/(dashboard)/toast')
-    // The export has to WORK for this test to bite: jsdom's own toBlob fails, and a save
-    // that dies before reaching the action looks exactly like a save that never started.
-    // (A mutation check found this test green with the guard deleted, 2026-09-14.)
-    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
-      cb(new Blob(['png'], { type: 'image/png' }))
-    }
+    // Without the `touched` guard every visit would re-export the PNG, upload it, and
+    // rewrite the icon's asset row. The export WORKS here (toBlob is faked), so a save
+    // that ran would reach the actions — a green here is not a save that died early.
     await renderEditor({ zoom: 2.5, offsetY: -0.2 })
-    await new Promise((r) => setTimeout(r, 1500))
+    await pastTheSaveWindow()
     expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
     expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
     expect(vi.mocked(toast)).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: an edit made while a save is in flight is saved after it — the last change never goes unsaved', async () => {
-    const { saveFramingAction, setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
-    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
-      cb(new Blob(['png'], { type: 'image/png' }))
-    }
-    // The first save's upload step hangs until we let it go.
+  it('a change saves itself SAVE_AFTER_MS after it is made — not before', async () => {
+    await renderEditor()
+    size('2')
+    await pass(SAVE_AFTER_MS - 50)
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+    await pass(100)
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledWith('a1', { zoom: 2, offsetY: 0 }, 'favicon')
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
+  })
+
+  it('CRITICAL: an edit made while a save is in flight is saved after it — one save at a time, the last change never goes unsaved', async () => {
     let release!: (v: { error?: string }) => void
     vi.mocked(setBrandAssetAction).mockImplementationOnce(() => new Promise((res) => { release = res }))
     await renderEditor()
 
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '2' } })
-    await waitFor(() => expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    size('2')
+    await pass(SAVE_AFTER_MS)
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(saveFramingAction).mock.calls[0][1]).toMatchObject({ zoom: 2 })
 
     // A second edit lands while that save is still in flight …
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '3' } })
-    await new Promise((r) => setTimeout(r, 900))
+    size('3')
+    await pastTheSaveWindow()
     expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(1) // latched, not a second save yet
 
     // … and when the first save lands, it is saved, with the framing as it is NOW.
     await act(async () => release({}))
-    await waitFor(() => expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    await settle()
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(2)
     expect(vi.mocked(saveFramingAction).mock.calls[1][1]).toMatchObject({ zoom: 3 })
   })
 
   it('CRITICAL: saves the framing BEFORE the asset, so a failed upload keeps the adjustment', async () => {
-    const { saveFramingAction, setBrandAssetAction } = await import(
-      '@/app/artists/[id]/(dashboard)/brand/actions'
-    )
-    // jsdom canvases cannot encode: stub the export so the save path can be exercised.
-    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
-      cb(new Blob(['png'], { type: 'image/png' }))
-    }
     await renderEditor()
-
-    // No Save button (Sam, 2026-09-13): the change writes itself a moment after it is made.
-    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '2' } })
-
-    await waitFor(() => expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalled(), { timeout: 3000 })
+    // No Save needed: the change writes itself a moment after it is made.
+    size('2')
+    await pastTheSaveWindow()
     const framingOrder = vi.mocked(saveFramingAction).mock.invocationCallOrder[0]
     const assetOrder = vi.mocked(setBrandAssetAction).mock.invocationCallOrder[0]
     expect(framingOrder).toBeLessThan(assetOrder)
     expect(vi.mocked(setBrandAssetAction).mock.calls[0][1]).toBe('favicon')
   })
 
-  it('CRITICAL: exports at FAVICON_SIZE, not at the 32px preview size', async () => {
-    // The preview is what the manager JUDGES; the file has to be big enough for a
-    // retina tab and the home-screen icon. Exporting the preview would ship a
-    // 32px image that every other surface then upscales into mush.
-    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
-      cb(new Blob(['png'], { type: 'image/png' }))
-    }
-    // A NON-default framing on purpose. With the default, "exports the manager's framing"
-    // and "exports the default framing" are the same assertion, and a bug that ignored
-    // the manager's adjustment entirely would sail through. (A mutation check caught
-    // exactly that, 2026-08-04.)
+  it('a refused framing is an error toast and uploads nothing', async () => {
+    vi.mocked(saveFramingAction).mockResolvedValueOnce({ error: 'Could not save the icon framing.' })
+    await renderEditor()
+    size('2')
+    await pastTheSaveWindow()
+    expect(vi.mocked(toast)).toHaveBeenCalledWith('Could not save the icon framing.', 'error')
+    expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: exports at FAVICON_SIZE (180px), with the manager\'s framing', async () => {
+    // A NON-default framing on purpose: with the default, "exports the manager's framing"
+    // and "exports the default" are the same assertion (a mutation check caught exactly
+    // that, 2026-08-04).
     const chosen = { zoom: 3.5, offsetY: -0.35 }
-    await renderEditor(chosen)
-    draws = []
+    await renderEditor({ zoom: 3, offsetY: -0.35 })
+    size('3.5')
+    await pastTheSaveWindow()
+    expect(lastDrawAt(FAVICON_SIZE)).toEqual(boxAt(chosen, FAVICON_SIZE))
+    // The whole product promise in one line: the file written is the framing the board
+    // was showing, scaled.
+    const ratio = FAVICON_SIZE / ICON_BOARD_CANVAS
+    const board = boxAt(chosen, ICON_BOARD_CANVAS)
+    expect(lastDrawAt(FAVICON_SIZE)![2]).toBeCloseTo(board[2] * ratio)
+    expect(lastDrawAt(FAVICON_SIZE)![1]).toBeCloseTo(board[1] * ratio)
+    expect(lastDrawAt(ICON_BOARD_CANVAS)).toEqual(board)
+  })
 
-    // Nudge up and back: `chosen` is exactly what saves.
-    fireEvent.click(screen.getByRole('button', { name: 'Move logo up' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Move logo down' }))
+  it('CRITICAL: closing the modal straight after a change still saves it', async () => {
+    // Save closes the modal, and the change is only written a moment after it is made —
+    // without the flush on close, drag-then-Save would drop the last adjustment.
+    await renderEditor(DEFAULT_FRAMING, true)
+    size('2.5')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await settle()
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledWith('a1', { zoom: 2.5, offsetY: 0 }, 'favicon')
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
+  })
 
-    await waitFor(() => expect(draws.some((d) => d.size === FAVICON_SIZE)).toBe(true))
-    const exported = draws.find((d) => d.size === FAVICON_SIZE)!.args
-    const box = faviconDrawBox(LOGO, chosen, FAVICON_SIZE)
-    expect(exported).toEqual([box.x, box.y, box.width, box.height])
+  it('closing with nothing changed saves nothing', async () => {
+    await renderEditor(DEFAULT_FRAMING, true)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await pastTheSaveWindow()
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
+  })
+})
 
-    // The whole product promise in one line: the file written is the framing the
-    // true-size preview was showing when the manager pressed save.
-    const previewBox = faviconDrawBox(LOGO, chosen, FAVICON_PREVIEW_SIZE)
-    const ratio = FAVICON_SIZE / FAVICON_PREVIEW_SIZE
-    expect(exported[2]).toBeCloseTo(previewBox.width * ratio)
-    expect(exported[1]).toBeCloseTo(previewBox.y * ratio)
+/**
+ * Fix round, 2026-09-23: a save REGENERATES the PNG — a new file and a new row, which is a
+ * real "not on the site yet". So a change that lands back where the icon was last saved is
+ * no change: no upload, no row swap, no Publish bar. The comparison is against the last
+ * SAVED framing and source, not the last one on screen.
+ */
+describe('IconEditor — back where it was saved is not a change', () => {
+  it('CRITICAL: a slider moved away and back to its saved spot saves nothing', async () => {
+    await renderEditor({ zoom: 2, offsetY: 0.1 })
+    size('3')
+    upDown('-0.4')
+    size('2')
+    upDown('0.1')
+    await pastTheSaveWindow()
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
+    expect(canvas.draws.some((d) => d.size === FAVICON_SIZE)).toBe(false) // not even exported
+  })
+
+  it('CRITICAL: Reset when the icon already IS the whole logo, centred, saves nothing', async () => {
+    // A FRESH object, as the server sends it — handing in DEFAULT_FRAMING itself would let
+    // React skip the update (same reference) and pass without the comparison existing.
+    await renderEditor({ zoom: 1, offsetY: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await pastTheSaveWindow()
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+    expect(vi.mocked(setBrandAssetAction)).not.toHaveBeenCalled()
+  })
+
+  it('Reset from a real framing IS a change, and saves the default (the witness)', async () => {
+    await renderEditor({ zoom: 4, offsetY: 0.4 })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await pastTheSaveWindow()
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledWith('a1', DEFAULT_FRAMING, 'favicon')
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
+  })
+
+  it('after a save, "saved" is the NEW spot: moving away and back to it saves nothing more', async () => {
+    await renderEditor({ zoom: 2, offsetY: 0 })
+    size('3')
+    await pastTheSaveWindow()
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
+    size('4')
+    size('3')
+    await pastTheSaveWindow()
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
+    // …while the OLD spot is now a change.
+    size('2')
+    await pastTheSaveWindow()
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(2)
+  })
+
+  it('CRITICAL: a change queued behind a save in flight, landing on what THAT save wrote, saves nothing more', async () => {
+    let release!: (v: { error?: string }) => void
+    vi.mocked(setBrandAssetAction).mockImplementationOnce(() => new Promise((res) => { release = res }))
+    await renderEditor({ zoom: 1, offsetY: 0 })
+    size('2')
+    await pass(SAVE_AFTER_MS) // saving zoom 2 …
+    size('3')
+    size('2') // … and back to 2 while it is in flight: queued behind it
+    await pastTheSaveWindow()
+    await act(async () => release({}))
+    await settle()
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
+  })
+
+  it('closing straight after moving back saves nothing (the flush on close compares too)', async () => {
+    await renderEditor({ zoom: 2, offsetY: 0 }, true)
+    size('5')
+    size('2')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await pastTheSaveWindow()
+    expect(vi.mocked(saveFramingAction)).not.toHaveBeenCalled()
+  })
+
+  it('a failed save does not count as saved: moving back afterwards is still a change', async () => {
+    vi.mocked(saveFramingAction).mockResolvedValueOnce({ error: 'Could not save the icon framing.' })
+    await renderEditor({ zoom: 2, offsetY: 0 })
+    size('3')
+    await pastTheSaveWindow()
+    expect(vi.mocked(toast)).toHaveBeenCalledWith('Could not save the icon framing.', 'error')
+    size('4')
+    size('3')
+    await pastTheSaveWindow()
+    expect(vi.mocked(saveFramingAction)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(setBrandAssetAction)).toHaveBeenCalledTimes(1)
   })
 })

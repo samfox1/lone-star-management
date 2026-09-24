@@ -874,14 +874,27 @@ export async function restoreToPublished(
   return { restored, removed, readded, hasPublished }
 }
 
+/** A SLICE of one type to publish, decided on the snapshot (see `publishContent`). */
+export type PublishSlice = { keep: (snapshot: Record<string, unknown>) => boolean }
+
 export async function publishContent(
   supabase: SupabaseClient,
   type: PublishableEntity,
   artistId: string,
   publishedBy?: string,
+  /**
+   * Publish only the entities this accepts — the Brand page publishes brand media and must
+   * leave a gallery draft a draft. Judged on the snapshot, so a DELETED entity is judged by
+   * its last published copy: a deleted logo is tombstoned, a deleted gallery photo is not
+   * (tombstoning it would take it off the live site from a page that never showed it).
+   * `liveIds` stays the WHOLE table either way, or every published row outside the slice
+   * would look deleted. Omitted = the whole type, exactly as before.
+   */
+  slice?: PublishSlice,
 ): Promise<number> {
   const rows = await listContent(supabase, type, artistId)
   const liveIds = new Set(rows.map((row) => row.id))
+  const keep = slice?.keep ?? (() => true)
 
   // What is CURRENTLY live in the log, via the same server-side latest-per-entity RPC
   // the diff reads (uncapped). The raw `select entity_id from revisions` this replaced
@@ -902,7 +915,8 @@ export async function publishContent(
         r.entity_type === type &&
         r.entity_id !== null &&
         r.data._deleted !== true && // already tombstoned — writing another is the growth spiral
-        !liveIds.has(r.entity_id),
+        !liveIds.has(r.entity_id) &&
+        keep(r.data),
     )
     .map((r) => r.entity_id as string)
 
@@ -921,6 +935,7 @@ export async function publishContent(
   const revisions = [
     ...rows
       .map((row) => ({ row, data: publicSnapshot(type, row) }))
+      .filter(({ data }) => keep(data))
       // Compared through stableJson because the stored copy comes back from JSONB with
       // its keys in Postgres's order, not the order publicSnapshot wrote them.
       .filter(({ row, data }) => currentSnapshot.get(String(row.id)) !== stableJson(data))
@@ -1033,6 +1048,51 @@ function sameSnapshot(
   return true
 }
 
+/** One entity that differs from its last published snapshot. `snapshot` is the side that
+ *  exists — the working projection for added/edited, the published copy for deleted — so a
+ *  caller can say WHAT changed (a purpose, a label) without a second read. */
+export type EntityChange = {
+  id: string
+  change: 'added' | 'edited' | 'deleted'
+  snapshot: Record<string, unknown>
+}
+
+/**
+ * THE per-entity comparison behind `diffUnpublished`, exported so a page that owns a SLICE
+ * of a type (the Brand page owns some media purposes, not the gallery) reports its own
+ * dirty state from the same rule instead of a second diff that drifts from this one.
+ *
+ * `latest` is keyed `${type}:${entity_id}` (the `latest_revisions` RPC, one row per
+ * entity). `keep`, when given, scopes BOTH sides by snapshot — a working row and a
+ * published copy alike — so a deleted brand logo is still found by its published purpose.
+ * Tombstones are "not published", exactly as before.
+ */
+export function diffEntities(
+  type: PublishableEntity,
+  rows: ContentRow[],
+  latest: Map<string, Record<string, unknown>>,
+  keep?: (snapshot: Record<string, unknown>) => boolean,
+): EntityChange[] {
+  const out: EntityChange[] = []
+  const working = new Map(rows.map((r) => [String(r.id), publicSnapshot(type, r)]))
+
+  for (const [id, snap] of working) {
+    if (keep && !keep(snap)) continue
+    const pub = latest.get(`${type}:${id}`)
+    if (!pub || pub._deleted === true) out.push({ id, change: 'added', snapshot: snap })
+    else if (!sameSnapshot(PUBLISHABLE[type].snapshot, snap, pub, SNAPSHOT_DEFAULTS[type] ?? {}))
+      out.push({ id, change: 'edited', snapshot: snap })
+  }
+  for (const [key, data] of latest) {
+    if (!key.startsWith(`${type}:`) || data._deleted === true) continue
+    const id = key.slice(type.length + 1)
+    if (working.has(id)) continue
+    if (keep && !keep(data)) continue
+    out.push({ id, change: 'deleted', snapshot: data })
+  }
+  return out
+}
+
 /**
  * What has changed since the last publish, per section. Compares each working
  * row's public snapshot against the latest published revision for that entity
@@ -1064,18 +1124,7 @@ export async function diffUnpublished(
   const result = { profile: emptyDiff() } as UnpublishedDiff
   types.forEach((type, i) => {
     const d = (result[type] = emptyDiff())
-    const working = new Map(rowsByType[i].map((r) => [r.id, publicSnapshot(type, r)]))
-
-    for (const [id, snap] of working) {
-      const pub = latest.get(`${type}:${id}`)
-      if (!pub || pub._deleted === true) d.added++
-      else if (!sameSnapshot(PUBLISHABLE[type].snapshot, snap, pub, SNAPSHOT_DEFAULTS[type] ?? {})) d.edited++
-    }
-    for (const [key, data] of latest) {
-      if (!key.startsWith(`${type}:`) || data._deleted === true) continue
-      const id = key.slice(type.length + 1)
-      if (!working.has(id)) d.deleted++
-    }
+    for (const c of diffEntities(type, rowsByType[i], latest)) d[c.change]++
     d.dirty = d.added + d.edited + d.deleted > 0
   })
 

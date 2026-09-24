@@ -1,6 +1,8 @@
 import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { createClient } from '@/lib/supabase/server'
+import { listBrandColors } from '@/lib/brand-colors'
 import { diffUnpublished, listContent } from '@/lib/content'
+import { loadBrandFonts } from '@/lib/fonts'
 import { groupTracksIntoProjects } from '@/lib/music'
 import { isNewRelease } from '@samfox1/site-bridge/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
@@ -61,7 +63,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     trackRows,
     tourRows,
     draft,
-    { data: fontRows },
+    brandFonts,
+    brandColors,
   ] = await Promise.all([
     supabase.from('artists').select('bio, hero_image_url').eq('id', id).single(),
     supabase.from('site_content').select('key, value').eq('artist_id', id),
@@ -78,12 +81,20 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     listContent(supabase, 'track', id),
     listContent(supabase, 'tour_date', id),
     customSiteUrl ? getWorkingSitePayload(supabase, id) : Promise.resolve(null),
-    supabase.from('artist_fonts').select('family, label').eq('artist_id', id).order('family'),
+    // The Brand page's fonts and palette. Neither may take the editor down: a failed read
+    // leaves the dropdown with the site's own fonts and the swatches with the site's own.
+    loadBrandFonts(supabase, id).catch(() => null),
+    listBrandColors(supabase, id).catch(() => []),
   ])
   // Brand-page uploads, offered in every region's font dropdown alongside the site's own
   // manifest tokens. The token resolves because the published payload emits the matching
-  // .font-<family> class.
-  const uploadedFonts = (fontRows ?? []) as { family: string; label: string }[]
+  // .font-<family> class. An added slot's title names its font there (withSlotTitles).
+  const uploadedFonts = (brandFonts?.fonts ?? [])
+    .map((f) => ({ family: f.family, label: f.label }))
+    .sort((a, b) => a.family.localeCompare(b.family))
+  const fontSlotTitles = (brandFonts?.custom ?? []).flatMap((s) =>
+    s.font && s.label ? [{ family: s.font.family, title: s.label }] : [],
+  )
 
   const siteContent = Object.fromEntries(
     ((contentRows ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? '']),
@@ -303,6 +314,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       releases={releases}
       tours={tours}
       uploadedFonts={uploadedFonts}
+      fontSlotTitles={fontSlotTitles}
+      brandColors={brandColors.map((c) => ({ name: c.name, hex: c.hex }))}
     />
   )
 }

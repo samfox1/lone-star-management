@@ -4,6 +4,8 @@
  * The manager-tools side panel (Sam, 2026-08-28): every tool in the registry, grouped,
  * the current one marked; shown on tool routes only. Expectations derive from TOOLS.
  */
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { TOOLS, ToolsShell, tabFor, toolFor, toolsFor } from '@/app/artists/[id]/(dashboard)/tools-rail'
@@ -203,5 +205,155 @@ describe('the Site tool leaves the rail once the artist has a custom site (Sam, 
     render(<ToolsShell artistId="a1" customSite={false}><p>page</p></ToolsShell>)
     expect(screen.getByRole('navigation', { name: 'Manager tools' }).querySelector('a[href="/artists/a1/site"]')).not.toBeNull()
     expect(toolsFor(false)).toEqual(TOOLS)
+  })
+})
+
+describe('every sub-tab leads somewhere', () => {
+  it('CRITICAL: each tab in TOOLS has a page.tsx under the dashboard', () => {
+    // A tab whose route has no page is a 404 in the second panel, and nothing else would
+    // say so: the link renders, the test for the panel passes. Derived from TOOLS, so a
+    // tab added to the registry without its page goes red here.
+    const dash = join(process.cwd(), 'src/app/artists/[id]/(dashboard)')
+    const tabs = TOOLS.flatMap((t) => t.tabs ?? [])
+    expect(tabs.length).toBeGreaterThan(0)
+    for (const tab of tabs) expect(existsSync(join(dash, tab.seg, 'page.tsx')), tab.seg).toBe(true)
+  })
+})
+
+describe('the second panel is as wide as its LONGEST label (Sam, 2026-09-23)', () => {
+  // "Tab icon" must not wrap or truncate: the panel widens and the page moves over. jsdom
+  // does no layout, so the mechanism is what is pinned: no fixed width anywhere, labels
+  // that cannot wrap or clip, and an in-flow sizer carrying EVERY label, because the
+  // visible panel is `fixed` and a fixed box pushes nothing.
+  for (const tool of tabbed) {
+    it(`CRITICAL: ${tool.label} — no label wraps or truncates, and the page is pushed by all of them`, () => {
+      pathname = `/artists/a1/${tool.seg}`
+      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+      const panel = screen.getByRole('navigation', { name: tool.label })
+
+      // The panel sizes to its content, never a number.
+      expect(panel.style.width, 'fixed width on the panel').toBe('')
+      expect(panel.className).toMatch(/(^|\s)w-max(\s|$)/)
+      expect(panel.className).toMatch(/min-w-\[96px\]/)
+
+      for (const tab of tool.tabs!) {
+        const link = panel.querySelector(`a[href="/artists/a1/${tab.seg}"]`)!
+        const label = [...link.querySelectorAll('span')].find((el) => el.textContent === tab.label)
+        expect(label, tab.seg).toBeTruthy()
+        expect(label!.className, tab.seg).toMatch(/whitespace-nowrap/)
+        expect(label!.className, tab.seg).not.toMatch(/(^|\s)truncate(\s|$)|max-w-/)
+      }
+
+      // The in-flow slot beside it: no fixed width, and a hidden copy of every label is
+      // what gives it its width — so the page's left edge moves with the longest one.
+      const slot = panel.parentElement!
+      expect(slot.style.width, 'fixed width on the slot').toBe('')
+      const sizer = slot.querySelector('[aria-hidden="true"]')
+      expect(sizer, 'sizer').not.toBeNull()
+      expect(sizer!.className).toMatch(/(^|\s)invisible(\s|$)/)
+      expect(sizer!.className).toMatch(/(^|\s)w-max(\s|$)/)
+      const sized = [...sizer!.querySelectorAll('span')].map((el) => el.textContent)
+      for (const tab of tool.tabs!) expect(sized, tab.label).toContain(tab.label)
+      for (const el of sizer!.querySelectorAll('span')) expect(el.className).toMatch(/whitespace-nowrap/)
+      cleanup()
+    })
+  }
+})
+
+describe('a tool\'s tabs on a phone (visual check, 2026-09-23)', () => {
+  // Below md both panels are hidden — the rail and the second panel are desktop furniture —
+  // so Brand's Colors / Fonts / Tab icon (and Settings' Email) could not be reached at all
+  // on a phone. The fallback is a row of the same links above the page, phone-only. It
+  // WRAPS rather than scrolls, so it can never push the page sideways at 390px. jsdom does
+  // no layout or media queries: the mechanism (md:hidden, flex-wrap, nowrap labels) is
+  // what is pinned, and the result was checked in the browser at 390.
+  it('CRITICAL: every tab of every tabbed tool is a link in a phone-only row above the page', () => {
+    for (const tool of tabbed) {
+      for (const tab of tool.tabs!) {
+        pathname = `/artists/a1/${tab.seg}`
+        render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+        const strip = screen.getByRole('navigation', { name: `${tool.label} tabs` })
+        const cls = strip.className.split(/\s+/)
+        expect(cls, tab.seg).toContain('md:hidden')
+        expect(cls, tab.seg).toContain('flex-wrap')
+
+        for (const t of tool.tabs!) {
+          const link = strip.querySelector(`a[href="/artists/a1/${t.seg}"]`)
+          expect(link, `${tab.seg} → ${t.seg}`).not.toBeNull()
+          expect(link!.textContent).toBe(t.label)
+          expect(link!.className).toMatch(/whitespace-nowrap/)
+        }
+        const current = [...strip.querySelectorAll('a[aria-current="page"]')]
+        expect(current.map((a) => a.getAttribute('href'))).toEqual([`/artists/a1/${tab.seg}`])
+
+        // Above the page, in the page's own column.
+        const page = screen.getByText('page')
+        expect(strip.compareDocumentPosition(page) & Node.DOCUMENT_POSITION_FOLLOWING, tab.seg).toBeTruthy()
+        expect(strip.parentElement, tab.seg).toBe(page.parentElement)
+
+        // The desktop panels stay desktop-only, or a phone would get both.
+        for (const nav of [screen.getByRole('navigation', { name: 'Manager tools' }), screen.getByRole('navigation', { name: tool.label })]) {
+          const slot = nav.parentElement!.className.split(/\s+/)
+          expect(slot, tab.seg).toContain('hidden')
+          expect(slot, tab.seg).toContain('md:block')
+        }
+        cleanup()
+      }
+    }
+  })
+
+  it('a tool WITHOUT tabs has no phone row', () => {
+    for (const tool of plain) {
+      pathname = `/artists/a1/${tool.seg}`
+      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+      expect(screen.queryAllByRole('navigation').map((n) => n.getAttribute('aria-label'))).toEqual(['Manager tools'])
+      cleanup()
+    }
+  })
+})
+
+describe('the page starts 32px right of the second panel (visual check, 2026-09-23)', () => {
+  // The panels are `fixed` at x=0; their in-flow slots sat inside <main>'s px-7, so each
+  // slot started 28px right of its panel, and the shell's gap-8 ran twice (rail→panel,
+  // panel→page). The page began ~92px past the panel's edge; the mock has ~32. Now the two
+  // slots share ONE group pulled back over main's padding (so each slot lies exactly under
+  // its panel) with no gap inside it, and a single gap-8 to the page. jsdom does no layout:
+  // the mechanism is pinned, and main's padding is READ from layout.tsx so the pull cannot
+  // drift from it.
+  const dash = join(process.cwd(), 'src/app/artists/[id]/(dashboard)')
+  const mainPad = /<main className="[^"]*\bpx-(\d+)\b/.exec(readFileSync(join(dash, 'layout.tsx'), 'utf8'))?.[1]
+
+  it('self-check: <main> in the dashboard layout has a px-N the pull can match', () => {
+    expect(mainPad).toMatch(/^\d+$/)
+  })
+
+  it('CRITICAL: tabbed — rail and panel slots share one group pulled back over main\'s padding, then ONE gap-8', () => {
+    for (const tool of tabbed) {
+      pathname = `/artists/a1/${tool.seg}`
+      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).parentElement!
+      const panelSlot = screen.getByRole('navigation', { name: tool.label }).parentElement!
+      const side = railSlot.parentElement!
+      expect(panelSlot.parentElement, tool.seg).toBe(side)
+
+      const sideCls = side.className.split(/\s+/)
+      expect(sideCls, tool.seg).toContain(`md:-ml-${mainPad}`)
+      expect(sideCls.filter((c) => /(^|:)gap-/.test(c)), tool.seg).toEqual([])
+
+      const shell = side.parentElement!
+      expect(shell.className.split(/\s+/), tool.seg).toContain('gap-8')
+      expect(screen.getByText('page').parentElement!.parentElement, tool.seg).toBe(shell)
+      cleanup()
+    }
+  })
+
+  it('a tool WITHOUT tabs keeps its spacing: no pull, the same gap-8', () => {
+    const tool = plain[0]
+    pathname = `/artists/a1/${tool.seg}`
+    const { container } = render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+    const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).parentElement!
+    const shell = railSlot.parentElement!
+    expect(shell.className.split(/\s+/)).toContain('gap-8')
+    expect(container.innerHTML).not.toMatch(/-ml-/)
   })
 })

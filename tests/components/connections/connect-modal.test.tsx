@@ -10,7 +10,7 @@
  *   - Connect runs the picks ONE AT A TIME, in order, and a row's state is visible as it
  *     goes: waiting → connecting → connected / failed;
  *   - a failure is red, says why, and leaves the field editable; Retry re-runs ONLY the
- *     failed ones; Done reports back that something was made;
+ *     failed ones; Save reports back that something was made;
  *   - an input the model can refuse is refused without a request;
  *   - two fast presses of Connect run it once (the latch is a ref — AGENTS.md rule 5).
  */
@@ -172,7 +172,7 @@ describe('run', () => {
     await act(async () => release({ ok: true }))
   })
 
-  it('Done reports back only when something was made; Cancel before running reports nothing', async () => {
+  it('Save reports back only when something was made; Cancel before running reports nothing', async () => {
     const { dialog, onClose, onDone } = open()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -183,7 +183,9 @@ describe('run', () => {
     pickAndFill(second.dialog, { Deezer: 'https://deezer.com/artist/1' })
     fireEvent.click(within(second.dialog).getByRole('button', { name: 'Connect' }))
     await waitFor(() => expect(within(second.dialog).getByLabelText('connected')).toBeInTheDocument())
-    fireEvent.click(within(second.dialog).getByRole('button', { name: 'Done' }))
+    // SAVE, never Done — the modal footer word everywhere (Sam, 2026-09-23, BRAND_PAGE_PLAN).
+    expect(within(second.dialog).queryByRole('button', { name: 'Done' })).toBeNull()
+    fireEvent.click(within(second.dialog).getByRole('button', { name: 'Save' }))
     expect(second.onDone).toHaveBeenCalledTimes(1)
     expect(second.onClose).toHaveBeenCalledTimes(1)
   })

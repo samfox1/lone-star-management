@@ -35,7 +35,21 @@ export type Tool = {
 export const TOOLS: readonly Tool[] = [
   { seg: 'tools', icon: 'home', label: 'Overview', desc: 'Status, publish, quick links' },
   { seg: 'site', icon: 'internet', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video', templateOnly: true },
-  { seg: 'brand', icon: 'sparkles', label: 'Brand', desc: 'Logos, fonts & browser tab icon' },
+  {
+    seg: 'brand',
+    icon: 'sparkles',
+    label: 'Brand',
+    desc: 'Logos, colors, fonts & tab icon',
+    // Sub-tabs like Settings (Sam, 2026-09-23, BRAND_PAGE_PLAN.md). No Press photos tab:
+    // the Images page already holds photos. "Tab icon" is the longest label, and the
+    // second panel widens for it rather than wrapping or clipping it.
+    tabs: [
+      { seg: 'brand', label: 'Logos' },
+      { seg: 'brand/colors', label: 'Colors' },
+      { seg: 'brand/fonts', label: 'Fonts' },
+      { seg: 'brand/icons', label: 'Tab icon' },
+    ],
+  },
   { seg: 'connections', icon: 'plug', label: 'Connections', desc: 'Profiles & connected services' },
   { seg: 'tools/seo', icon: 'compass', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers' },
   { seg: 'epk', icon: 'package', label: 'Press kit', desc: 'Shareable EPK one-pager' },

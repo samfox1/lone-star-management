@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { canonicalHex, clamp, contrastInk, fractionAt, hexToHsv, hsvToHex, hueHex, normalizeHex } from '@/lib/color'
@@ -24,6 +24,12 @@ import { CONTROL_LABEL } from './inspector-shared'
  * 2-D slider, and the hex field takes an exact value typed or pasted. The square's maths
  * is `lib/color.ts` — jsdom reports every element as zero-sized, so geometry that must be
  * verified lives in pure functions, not in here.
+ *
+ * TWO PRESENTATIONS, ONE CONTROL (the standing rule: every colour control is this one).
+ * `variant="panel"` is the inspector row above. `variant="row"` is the Brand page's
+ * (BRAND_PAGE_PLAN.md): swatch + hex on the row, and the same square, hue and swatches in a
+ * site-styled panel that opens to the LEFT of the swatch (`rowPanelSide`). Inside the editor,
+ * `BrandSwatchProvider` puts the artist's brand colours first in every swatch row, by name.
  */
 
 /** One arrow-key step across the square, as a fraction of its width/height. Shift is 5×. */
@@ -107,6 +113,76 @@ const NO_COLOR_SWATCH: React.CSSProperties = {
     'linear-gradient(to top right, transparent calc(50% - 0.5px), var(--color-accent-red, #c4403a) calc(50% - 0.5px), var(--color-accent-red, #c4403a) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
 }
 
+/**
+ * THE ARTIST'S BRAND COLOURS, FIRST, BY NAME (BRAND_PAGE_PLAN.md, Colors tab).
+ *
+ * Every swatch row in the site editor is a ColorPalette, and five panels feed it `used`
+ * from `siteSwatches`. The brand colours reach all of them through this one provider,
+ * which the editor shell mounts around the inspector — not a prop threaded through every
+ * panel, where the one panel that forgot it would quietly offer the site's colours only.
+ * Outside a provider (the Brand page itself, every existing test) nothing changes.
+ */
+export type NamedSwatch = { name: string; hex: string }
+/** One swatch as the palette draws it: a hex, and a name when it is a brand colour. */
+export type Swatch = { hex: string; name?: string }
+
+const BrandSwatches = createContext<readonly NamedSwatch[]>([])
+
+export function BrandSwatchProvider({ colors, children }: { colors: readonly NamedSwatch[]; children: ReactNode }) {
+  return <BrandSwatches.Provider value={colors}>{children}</BrandSwatches.Provider>
+}
+
+/**
+ * The swatch row: the brand colours first (named), then the site's own colours that are
+ * not already among them. One swatch per colour — `#F4F1EA` and `#f4f1ea` are the same —
+ * and when two brand colours share a hex, the first one's name is kept. A value that is
+ * not a hex never reaches a style.
+ */
+export function mergeSwatches(brand: readonly NamedSwatch[], used: readonly string[]): Swatch[] {
+  const out: Swatch[] = []
+  const seen = new Set<string>()
+  const push = (raw: string, name?: string) => {
+    const hex = canonicalHex(raw)
+    if (!hex || seen.has(hex)) return
+    seen.add(hex)
+    out.push(name === undefined ? { hex } : { hex, name })
+  }
+  for (const b of brand) push(b.hex, b.name)
+  for (const u of used) push(u)
+  return out
+}
+
+/** The Brand row's panel: its width, its gap from the swatch, and the page gutter it
+ *  must keep clear of. */
+const ROW_PANEL_WIDTH = 232
+const ROW_PANEL_GAP = 12
+const PAGE_GUTTER = 16
+
+/**
+ * Where the Brand row's panel opens (Sam, 2026-09-23: "to the left, never over the row").
+ * LEFT of the swatch whenever the panel, its gap and the page gutter fit before it — its
+ * right edge then sits 12px short of the swatch, so it can cover neither the swatch nor
+ * the hex beside it. When they do not fit (below 900px the ledger stacks and the swatch
+ * sits at the left edge), it opens BELOW instead of off the screen. Measured at open time,
+ * not from a breakpoint, so any container gets the honest answer.
+ *
+ * Vertically, a left panel is TOP-ALIGNED with the swatch and grows down — anchored to its
+ * own row. It was centred on the swatch, and a ~280px panel centred on a ~64px row reaches
+ * ~110px up: the Browser bar's covered the Home-screen icon's tile in the row above (Sam's
+ * screenshot, 2026-09-23). Down is where a ledger has room: the rows below are the ones
+ * still to come, and the last row has only page beneath it.
+ */
+export function rowPanelSide(anchorLeft: number): 'left' | 'below' {
+  return anchorLeft >= ROW_PANEL_WIDTH + ROW_PANEL_GAP + PAGE_GUTTER ? 'left' : 'below'
+}
+
+/** The row variant's empty state, drawn by the caller. A component rather than a call in
+ *  the render, so `open` reaches it as a prop — the way a handler reaches any button —
+ *  and is only ever called from the caller's click. */
+function EmptyState({ render, open }: { render: (open: () => void) => ReactNode; open: () => void }) {
+  return <>{render(open)}</>
+}
+
 export function ColorPalette({
   label,
   aria,
@@ -114,6 +190,8 @@ export function ColorPalette({
   used = [],
   fallbackHex,
   onChange,
+  variant = 'panel',
+  renderEmpty,
 }: {
   label: string
   /** Prefix for every aria-label in the group ("Slot 1 Border color"). */
@@ -132,7 +210,22 @@ export function ColorPalette({
   used?: string[]
   /** Apply a hex, or '' to clear it. */
   onChange: (hex: string) => void
+  /**
+   * `panel` (the default): the site editor's inspector row — clear, swatch, hex — with the
+   * mixer in a small modal. `row`: the Brand page's row (BRAND_PAGE_PLAN.md) — a swatch and
+   * a hex on the row, and the site-styled panel ("On the site" swatches, the shade square,
+   * the hue bar, a hex box) opening to the LEFT of the swatch (`rowPanelSide`). A brand
+   * colour always has one, so the row variant has no clear and never sends ''.
+   */
+  variant?: 'panel' | 'row'
+  /** Row variant, while `value` is '': what the row shows in place of the swatch and hex
+   *  (the Brand page's "No color yet" and its +). `open` toggles the panel. The first
+   *  colour replaces it AT ONCE, panel open or not — except mid-drag (see `held`). */
+  renderEmpty?: (open: () => void) => ReactNode
 }) {
+  const brand = useContext(BrandSwatches)
+  const swatches = mergeSwatches(brand, used)
+  const isRow = variant === 'row'
   const seed = hexToHsv(value)
   const [hue, setHue] = useState(seed?.h ?? 0)
   const [sat, setSat] = useState(seed ? seed.s : 1)
@@ -254,18 +347,270 @@ export function ColorPalette({
   }
 
   /** Commit the hex field: a valid hex applies, an empty field clears, anything else is
-   *  left alone (so a half-typed value isn't destroyed by a blur). */
+   *  left alone (so a half-typed value isn't destroyed by a blur). The row variant has no
+   *  "none", so an empty field there puts the colour back instead. */
   function commitText() {
     const clean = normalizeHex(text)
     if (clean) applyHex(clean)
-    else if (text.trim() === '') applyHex('')
+    else if (text.trim() === '' && !isRow) applyHex('')
     else setText(value)
   }
+
+  /* ── The row variant's panel: where it opens, and what closes it ── */
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const [side, setSide] = useState<'left' | 'below'>('left')
+  /** Opened from the empty state, and still showing it (see below). */
+  const [openedEmpty, setOpenedEmpty] = useState(false)
+  /**
+   * A pointer went down in the panel and has not come up: a drag on the square or the hue.
+   *
+   * THE FIRST COLOUR SHOWS AT ONCE (Sam, 2026-09-23: after a hex saved with the panel open,
+   * the row still said "No color yet +" until it closed). The empty state held for the
+   * whole open panel so the anchor would not change size under a pick — but the only pick
+   * that matters is a DRAG: swapping "No color yet +" for the swatch moves the anchor, the
+   * panel moves with it, and the square or hue bar would slide out from under the pointer
+   * (the square keeps the box it measured at pointerdown; a native range re-reads its own).
+   * So the swap waits only while a gesture that started in the panel is down, and happens
+   * when it lets go. Typed hexes, swatch clicks and keyboard steps swap immediately.
+   */
+  const [held, setHeld] = useState(false)
+  // Once the row has its colour and no gesture is holding it, it stays swapped: a second
+  // drag must not bring "No color yet" back. (Render-time, like `seenValue` above.)
+  if (openedEmpty && value !== '' && !held) setOpenedEmpty(false)
+  /** Hand focus back to the trigger once the panel has closed (Escape, a swatch pick). */
+  const refocus = useRef(false)
+
+  const toggleRowPanel = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    setSide(rowPanelSide(anchorRef.current?.getBoundingClientRect().left ?? 0))
+    setOpenedEmpty(value === '')
+    setOpen(true)
+  }
+  const closeRowPanel = (returnFocus: boolean) => {
+    refocus.current = returnFocus
+    setOpen(false)
+  }
+
+  // A press anywhere outside the swatch and its panel closes it — the panel is non-modal,
+  // so the page behind stays usable and a click elsewhere is the natural way out.
+  useEffect(() => {
+    if (!isRow || !open) return
+    const onDown = (e: Event) => {
+      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [isRow, open])
+
+  // The gesture ends wherever the pointer lets go — usually outside the panel.
+  useEffect(() => {
+    if (!held) return
+    const up = () => setHeld(false)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [held])
+
+  // After the close has rendered, so the trigger that gets focus is the one now showing
+  // (the swatch, when the panel was opened from the empty state and a colour was picked).
+  useEffect(() => {
+    if (open || !refocus.current) return
+    refocus.current = false
+    anchorRef.current?.querySelector<HTMLElement>('button')?.focus()
+  }, [open])
 
   const mixed = hsvToHex({ h: hue, s: sat, v: val })
   const current = value || mixed
   const handleInk = contrastInk(mixed)
   const activeHex = canonicalHex(value)
+
+  /** The mixing surface both variants share: saturation (→) × brightness (↑) over the
+   *  hue, then the hue itself. White-to-transparent over the hue, then a
+   *  transparent-to-black wash on top: the standard HSV square. */
+  const mixer = (squareHeight: string, hueSpacing: string) => (
+    <>
+      <div
+        ref={areaRef}
+        role="slider"
+        tabIndex={0}
+        aria-label={`${aria} saturation and brightness`}
+        aria-valuetext={`${Math.round(sat * 100)}% saturation, ${Math.round(val * 100)}% brightness`}
+        aria-valuenow={Math.round(val * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        onKeyDown={onAreaKeyDown}
+        onPointerDown={(e) => {
+          dragRect.current = e.currentTarget.getBoundingClientRect()
+          setDragging(true)
+          e.currentTarget.setPointerCapture?.(e.pointerId) // absent in jsdom
+          dragTo(e.clientX, e.clientY)
+        }}
+        style={{ backgroundColor: hueHex(hue) }}
+        className={cx(
+          'relative w-full cursor-crosshair touch-none rounded-lg ring-1 ring-hairline focus:outline-none focus:ring-2 focus:ring-ink',
+          squareHeight,
+        )}
+      >
+        <div className="pointer-events-none absolute inset-0 rounded-lg bg-[linear-gradient(to_right,#ffffff,rgba(255,255,255,0))]" />
+        <div className="pointer-events-none absolute inset-0 rounded-lg bg-[linear-gradient(to_top,#000000,rgba(0,0,0,0))]" />
+        {/* The handle. Hidden when no colour is set — there is no position to claim. */}
+        {value !== '' && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)]"
+            style={{ left: `${sat * 100}%`, top: `${(1 - val) * 100}%`, borderColor: handleInk }}
+          />
+        )}
+      </div>
+
+      {/* Hue. A native range so it keeps arrow keys, Home/End and screen-reader support. */}
+      <input
+        type="range"
+        min={0}
+        max={359}
+        value={Math.round(hue)}
+        aria-label={`${aria} hue`}
+        onChange={(e) => {
+          const h = Number(e.target.value)
+          setHue(h)
+          emit(h, sat, val)
+        }}
+        style={{
+          background:
+            'linear-gradient(to right,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000)',
+        }}
+        className={cx(
+          'h-3 w-full cursor-pointer appearance-none rounded-full outline-none',
+          hueSpacing,
+          '[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-paper [&::-webkit-slider-thumb]:bg-transparent [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_rgba(0,0,0,0.35)]',
+          '[&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-paper [&::-moz-range-thumb]:bg-transparent',
+        )}
+      />
+    </>
+  )
+
+  /** A swatch's accessible name and hover text: a brand colour by its name, any other by
+   *  its hex. */
+  const swatchName = (s: Swatch) => s.name ?? s.hex
+
+  if (isRow) {
+    const showEmpty = Boolean(renderEmpty) && (value === '' || (open && openedEmpty))
+    const hexField = (fieldLabel: string, className: string) => (
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commitText}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commitText()
+          }
+        }}
+        maxLength={7}
+        aria-label={fieldLabel}
+        spellCheck={false}
+        className={cx(
+          'rounded-lg border border-hairline bg-paper px-2.5 py-[7px] font-space text-[13px] uppercase text-ink outline-none focus:border-ink',
+          className,
+        )}
+      />
+    )
+    return (
+      <div
+        className="flex items-center gap-2.5"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && open) {
+            e.preventDefault()
+            e.stopPropagation() // Escape answers the panel, not a modal around the page
+            closeRowPanel(true)
+          }
+        }}
+      >
+        {/* The anchor holds the trigger and the panel ONLY. The row's hex sits outside it,
+            to the right, so a panel that ends left of the trigger can never cover it. */}
+        {/* While the panel is open, the trigger's own hover label (a RowIcon's [data-side]
+            child) is hidden: the panel opens beside it and cut the label off ("ick a color"),
+            and an open panel has already said what the control does. */}
+        <div
+          ref={anchorRef}
+          data-color-anchor=""
+          className={cx('relative flex items-center gap-2.5', open && '[&>button>[data-side]]:hidden')}
+        >
+          {showEmpty ? (
+            <EmptyState render={renderEmpty!} open={toggleRowPanel} />
+          ) : (
+            <button
+              type="button"
+              onClick={toggleRowPanel}
+              aria-label={`${aria} palette`}
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              title="Pick a colour"
+              style={value ? { backgroundColor: value } : NO_COLOR_SWATCH}
+              // `outline-solid` under the same variant, or the ring never paints: Tailwind v4's
+              // `outline-hidden` zeroes the style `outline-2` reads (brand/focus-rings.test.tsx).
+              className="block h-8 w-8 flex-none rounded-[9px] border border-hairline outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            />
+          )}
+          {open && (
+            <div
+              role="dialog"
+              aria-label={`${aria} palette`}
+              data-side={side}
+              onPointerDownCapture={() => setHeld(true)}
+              className={cx(
+                'absolute z-30 w-[232px] rounded-xl border border-hairline bg-paper p-3 text-left shadow-[0_12px_32px_rgba(0,0,0,0.08)]',
+                side === 'left' ? 'right-[calc(100%+12px)] top-0' : 'left-0 top-[calc(100%+8px)]',
+              )}
+            >
+              {/* The site's colours first: matching what is already there is the common
+                  pick, and one click settles it (and closes the panel). Absent when the
+                  site has none, since an empty grid is worse than no grid. */}
+              {swatches.length > 0 && (
+                <>
+                  <p className="mb-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">On the site</p>
+                  <div className="mb-3 grid grid-cols-6 gap-1.5">
+                    {swatches.map((s) => (
+                      <button
+                        key={s.hex}
+                        type="button"
+                        onClick={() => {
+                          applyHex(s.hex)
+                          closeRowPanel(true)
+                        }}
+                        aria-label={`${aria} ${swatchName(s)}`}
+                        aria-pressed={activeHex === s.hex}
+                        title={swatchName(s)}
+                        style={{ backgroundColor: s.hex }}
+                        // The picked colour's ring is always on, so it must not share the
+                        // element with a hide at all; the others ring on keyboard focus.
+                        className={cx(
+                          'aspect-square rounded-[7px] border border-hairline',
+                          activeHex === s.hex
+                            ? 'outline-solid outline-2 outline-offset-1 outline-ink'
+                            : 'outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent',
+                        )}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+              {mixer('h-[120px]', 'mb-3 mt-2.5')}
+              {hexField('Hex', 'w-full')}
+            </div>
+          )}
+        </div>
+        {!showEmpty && hexField(`${aria} hex`, 'w-[92px]')}
+      </div>
+    )
+  }
 
   return (
     <div className="py-1.5">
@@ -328,81 +673,28 @@ export function ColorPalette({
           current={current}
           onClose={closeModal}
         >
-          {/* Saturation (→) × brightness (↑). White-to-transparent over the hue, then a
-              transparent-to-black wash on top: the standard HSV square. */}
-          <div
-            ref={areaRef}
-            role="slider"
-            tabIndex={0}
-            aria-label={`${aria} saturation and brightness`}
-            aria-valuetext={`${Math.round(sat * 100)}% saturation, ${Math.round(val * 100)}% brightness`}
-            aria-valuenow={Math.round(val * 100)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            onKeyDown={onAreaKeyDown}
-            onPointerDown={(e) => {
-              dragRect.current = e.currentTarget.getBoundingClientRect()
-              setDragging(true)
-              e.currentTarget.setPointerCapture?.(e.pointerId) // absent in jsdom
-              dragTo(e.clientX, e.clientY)
-            }}
-            style={{ backgroundColor: hueHex(hue) }}
-            className="relative h-44 w-full cursor-crosshair touch-none rounded-lg ring-1 ring-hairline focus:outline-none focus:ring-2 focus:ring-ink"
-          >
-            <div className="pointer-events-none absolute inset-0 rounded-lg bg-[linear-gradient(to_right,#ffffff,rgba(255,255,255,0))]" />
-            <div className="pointer-events-none absolute inset-0 rounded-lg bg-[linear-gradient(to_top,#000000,rgba(0,0,0,0))]" />
-            {/* The handle. Hidden when no colour is set — there is no position to claim. */}
-            {value !== '' && (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)]"
-                style={{ left: `${sat * 100}%`, top: `${(1 - val) * 100}%`, borderColor: handleInk }}
-              />
-            )}
-          </div>
+          {mixer('h-44', 'mt-3')}
 
-          {/* Hue. A native range so it keeps arrow keys, Home/End and screen-reader support. */}
-          <input
-            type="range"
-            min={0}
-            max={359}
-            value={Math.round(hue)}
-            aria-label={`${aria} hue`}
-            onChange={(e) => {
-              const h = Number(e.target.value)
-              setHue(h)
-              emit(h, sat, val)
-            }}
-            style={{
-              background:
-                'linear-gradient(to right,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000)',
-            }}
-            className={cx(
-              'mt-3 h-3 w-full cursor-pointer appearance-none rounded-full outline-none',
-              '[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-paper [&::-webkit-slider-thumb]:bg-transparent [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_rgba(0,0,0,0.35)]',
-              '[&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-paper [&::-moz-range-thumb]:bg-transparent',
-            )}
-          />
-
-          {/* The site's colours, under the mixer: its declared palette first, then anything
-              else already used in its styles. This is what keeps a site in sync — one click,
+          {/* The site's colours, under the mixer: the artist's BRAND colours first, by name
+              (BrandSwatchProvider), then the site's declared palette, then anything else
+              already used in its styles. This is what keeps a site in sync — one click,
               no hex to remember — and it sits where the manager is already choosing. Absent
               when there are none, since an empty row is worse than no row. */}
-          {used.length > 0 && (
+          {swatches.length > 0 && (
             <div className="mt-1">
               <span className={CONTROL_LABEL}>On site</span>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {used.map((hex) => {
-                  const active = activeHex === hex
+                {swatches.map((s) => {
+                  const active = activeHex === s.hex
                   return (
                     <button
-                      key={hex}
+                      key={s.hex}
                       type="button"
-                      onClick={() => applyHex(hex)}
-                      aria-label={`${aria} ${hex}`}
+                      onClick={() => applyHex(s.hex)}
+                      aria-label={`${aria} ${swatchName(s)}`}
                       aria-pressed={active}
-                      title={hex}
-                      style={{ backgroundColor: hex }}
+                      title={swatchName(s)}
+                      style={{ backgroundColor: s.hex }}
                       className={cx(
                         'h-6 w-6 rounded-md border border-hairline',
                         active && 'ring-2 ring-ink ring-offset-1',

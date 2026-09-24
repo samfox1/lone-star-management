@@ -16,7 +16,13 @@
  * have happened. So this asserts the write was never reached.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { setBrandAsset } from '@/lib/brand'
+import { BRAND_ASSET_PURPOSES, BRAND_MEDIA_PURPOSES, setBrandAsset } from '@/lib/brand'
+
+/** The brand purposes with MANY rows each — the ones a vacate-by-purpose would wipe. The one
+ *  hand-written list here, because it is the rule itself ("which purposes are many-row")
+ *  rather than a copy of a registry; the partition test below makes every new brand purpose
+ *  land on one side or the other. */
+const MANY_ROW = ['logo', 'icon_source'] as const
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 // The actions now do an RLS-scoped ownership read before writing. `visible` flips it so
@@ -45,12 +51,31 @@ beforeEach(() => {
 })
 
 describe('setBrandAssetAction — purpose allowlist', () => {
-  it('accepts the three brand purposes', async () => {
+  it('accepts the single-occupancy brand purposes (derived from BRAND_ASSET_PURPOSES)', async () => {
     const { setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
-    for (const ok of ['logo_primary', 'logo_secondary', 'favicon']) {
-      expect((await setBrandAssetAction('a1', ok, 'a1/brand/x.png')).error).toBeUndefined()
+    expect(BRAND_ASSET_PURPOSES.length).toBeGreaterThan(0)
+    for (const ok of BRAND_ASSET_PURPOSES) {
+      expect((await setBrandAssetAction('a1', ok, 'a1/brand/x.png')).error, ok).toBeUndefined()
     }
-    expect(mockedWrite).toHaveBeenCalledTimes(3)
+    expect(mockedWrite).toHaveBeenCalledTimes(BRAND_ASSET_PURPOSES.length)
+  })
+
+  it('CRITICAL: every brand media purpose is EITHER single-occupancy (writable here) OR many-row (refused) — never both, never neither', () => {
+    // A purpose added to BRAND_MEDIA_PURPOSES must be classified before this goes green:
+    // left out of both lists it is untested, and put in BRAND_ASSET_PURPOSES while it has
+    // many rows it becomes a one-call "delete them all".
+    expect([...BRAND_ASSET_PURPOSES, ...MANY_ROW].sort()).toEqual([...BRAND_MEDIA_PURPOSES].sort())
+  })
+
+  it('CRITICAL: refuses the MANY-row brand purposes — a vacate by purpose would delete them all', async () => {
+    // `logo` (added logos) and `icon_source` (uploaded icon images) are legitimate brand
+    // purposes, but the write underneath deletes EVERY row of the purpose before it
+    // inserts one. Accepted here, one call would wipe every added logo the artist has.
+    const { setBrandAssetAction } = await import('@/app/artists/[id]/(dashboard)/brand/actions')
+    for (const bad of MANY_ROW) {
+      expect((await setBrandAssetAction('a1', bad, 'a1/brand/x.png')).error).toBe('Unknown brand asset.')
+    }
+    expect(mockedWrite).not.toHaveBeenCalled()
   })
 
   it('CRITICAL: refuses a media purpose that is not a brand asset', async () => {

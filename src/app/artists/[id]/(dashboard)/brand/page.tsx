@@ -1,62 +1,47 @@
-import { loadFraming } from '@/lib/brand'
-import { listArtistFonts } from '@/lib/fonts'
-import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
+import { loadBrandLogos, loadIconSettings } from '@/lib/brand'
+import { listBrandColors } from '@/lib/brand-colors'
 import { createClient } from '@/lib/supabase/server'
-import { dashboardDiff, requireArtist } from '../_data'
-import { KvRow } from '../modal-kit'
-import { BrandPublish } from './brand-publish'
-import { FaviconEditor } from './favicon-editor'
-import { FontManager } from './font-manager'
-import { LogoRow } from './logo-row'
+import { requireArtist } from '../_data'
+import { LedgerSection } from './_ui/ledger'
+import { LogosList } from './logos/logos-list'
+import type { IconUse } from './logos/remove'
+
+export const metadata = { title: 'Logos — Brand — Lone Star Management' }
 
 /**
- * BRAND (Sam, 2026-09-13): four rows, left-aligned, each only as wide as what is in it —
- * PRIMARY LOGO, SECONDARY LOGO, TAB ICON, FONTS. No headings, no captions: the four
- * paragraphs that used to explain PNGs, monograms, 32 pixels and font slots are gone,
- * and the controls have to say it themselves. Publish is the floating bar.
+ * BRAND → LOGOS (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): the first Brand tab, and only the
+ * logo rows — the tab icon and fonts have their own tabs now. The Publish bar is the
+ * layout's (brand/layout.tsx), so it is the same bar on every tab; this page renders none.
  *
- * PRIMARY is the full lockup: the EPK header, the social card, anywhere with room.
- * SECONDARY is the icon or monogram, for dark backgrounds and tight spaces. The tab icon
- * is derived from the primary. Fonts live here, not in the site editor: a typeface is
- * what the artist IS, chosen once; the editor then offers every font uploaded here.
+ * `icons` is, for each generated icon, whether it exists and which logo it is framed from
+ * (a null source means the primary). Removing a logo removes the icons cut from it; an icon
+ * framed from another logo stays.
  */
-export default async function BrandPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BrandLogosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const [, assetsRes, framing, fonts, diff] = await Promise.all([
-    requireArtist(id),
-    supabase.from('media').select('purpose, storage_path').eq('artist_id', id).in('purpose', ['logo_primary', 'logo_secondary']),
-    loadFraming(supabase, id),
-    listArtistFonts(supabase, id),
-    dashboardDiff(id),
+  const [, logos, colors, icons, iconRows] = await Promise.all([
+    requireArtist(id), // non-owner → 404
+    loadBrandLogos(supabase, id),
+    listBrandColors(supabase, id),
+    loadIconSettings(supabase, id),
+    supabase.from('media').select('purpose').eq('artist_id', id).in('purpose', ['favicon', 'home_icon']),
   ])
-  const assets = assetsRes.data ?? []
-  const pathOf = (purpose: string) => (assets.find((a) => a.purpose === purpose)?.storage_path as string | undefined) ?? null
-  const thumbOf = (purpose: string) => {
-    const path = pathOf(purpose)
-    return path ? mediaThumbUrl(path, { size: 256 }) : null
+
+  const present = new Set(((iconRows.data ?? []) as { purpose: string }[]).map((r) => r.purpose))
+  const iconUse: IconUse = {
+    favicon: { exists: present.has('favicon'), sourceMediaId: icons.favicon.sourceMediaId },
+    home_icon: { exists: present.has('home_icon'), sourceMediaId: icons.homeIcon.sourceMediaId },
   }
-  const primaryPath = pathOf('logo_primary')
 
   return (
-    <div className="pb-24">
-      <div className="mt-2 flex flex-col items-start gap-0.5">
-        <KvRow label="Primary logo">
-          <LogoRow artistId={id} purpose="logo_primary" label="Primary logo" currentUrl={thumbOf('logo_primary')} fullUrl={primaryPath ? mediaUrl(primaryPath) : null} />
-        </KvRow>
-        <KvRow label="Secondary logo">
-          <LogoRow artistId={id} purpose="logo_secondary" label="Secondary logo" currentUrl={thumbOf('logo_secondary')} fullUrl={pathOf('logo_secondary') ? mediaUrl(pathOf('logo_secondary')!) : null} />
-        </KvRow>
-        <KvRow label="Tab icon">
-          <FaviconEditor artistId={id} logoUrl={primaryPath ? mediaUrl(primaryPath) : null} initialFraming={framing} />
-        </KvRow>
-        <KvRow label="Fonts" align="start">
-          <FontManager artistId={id} fonts={fonts} />
-        </KvRow>
-      </div>
-      {/* Logos and the tab icon are media rows; fonts are their own section. Either
-          unpublished lights the bar. */}
-      <BrandPublish artistId={id} dirty={diff.media.dirty || diff.artist_font.dirty} />
-    </div>
+    <LedgerSection label="Logos">
+      <LogosList
+        artistId={id}
+        logos={logos}
+        swatches={colors.map((c) => ({ key: c.id, name: c.name, hex: c.hex }))}
+        icons={iconUse}
+      />
+    </LedgerSection>
   )
 }

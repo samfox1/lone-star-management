@@ -13,6 +13,7 @@ import { CURSOR_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { BrandSwatchProvider, type NamedSwatch } from './color-picker'
 import { EditorPublish } from './editor-publish'
 import { RestoreVersionMenu } from './restore-version'
 import { useFrameBridge } from './use-frame-bridge'
@@ -143,6 +144,32 @@ export function runtimeImageFields(
 }
 
 /**
+ * An added font slot's TITLE is what the editor's font list shows for its font
+ * (BRAND_PAGE_PLAN.md, Fonts: "Custom slot titles are what the site editor's font list
+ * shows"). A font in two titled slots takes the first slot's title; a font in none — or
+ * in a slot left untitled — keeps its own label. Applied here, before `withUploadedFonts`
+ * folds the fonts into the manifest's options, so the dropdown never learns there was a
+ * second name.
+ */
+export function withSlotTitles(
+  uploaded: { family: string; label: string }[],
+  slotTitles: { family: string; title: string }[],
+): { family: string; label: string }[] {
+  const titles = new Map<string, string>()
+  for (const t of slotTitles) {
+    const title = t.title.trim()
+    if (title && !titles.has(t.family)) titles.set(t.family, title)
+  }
+  if (!titles.size) return uploaded
+  return uploaded.map((f) => ({ ...f, label: titles.get(f.family) ?? f.label }))
+}
+
+/** Stable empties, so an omitted prop is not a new array (and a new provider value, and a
+ *  re-render of every swatch row) on each render. */
+const NO_SLOT_TITLES: { family: string; title: string }[] = []
+const NO_BRAND_COLORS: NamedSwatch[] = []
+
+/**
  * The visual editor shell (SITE_EDITOR_PLAN.md phase 2). Sits full-bleed below the
  * dashboard nav: the LEFT inspector (component browser + tools) and the artist's
  * real site in an embedded frame. The frame's controls — device, save status,
@@ -178,6 +205,8 @@ export function EditorShell({
   releases,
   tours,
   uploadedFonts = [],
+  fontSlotTitles = NO_SLOT_TITLES,
+  brandColors = NO_BRAND_COLORS,
 }: {
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
@@ -214,6 +243,12 @@ export function EditorShell({
   /** Fonts uploaded on the Brand page, folded into the frame manifest's font options so
    *  every region's font dropdown offers them (Sam's per-region override model). */
   uploadedFonts?: { family: string; label: string }[]
+  /** The Brand page's added font slots, by the family they hold: their titles name those
+   *  fonts in the font list (`withSlotTitles`). */
+  fontSlotTitles?: { family: string; title: string }[]
+  /** The Brand page's palette, in its order. Every swatch row in the inspector offers
+   *  these first, by name (BrandSwatchProvider in color-picker.tsx). */
+  brandColors?: NamedSwatch[]
 }) {
   const [device, setDevice] = useState<Device>('desktop')
   // The pause/play toggle's own belief; the frame is told, never asked (see the button).
@@ -309,6 +344,8 @@ export function EditorShell({
     return { genre: a.genre ?? '', location: a.location ?? '', schema_type: a.schema_type ?? 'MusicGroup' }
   }, [draft])
 
+  const titledFonts = useMemo(() => withSlotTitles(uploadedFonts, fontSlotTitles), [uploadedFonts, fontSlotTitles])
+
   const panels = useMemo(
     () =>
       resolvePanelInputs({
@@ -325,6 +362,7 @@ export function EditorShell({
   return (
     // Cancel the dashboard main padding so the editor is full-bleed below the nav.
     <div className="-mx-7 -my-8 flex h-[calc(100vh-4rem)] border-t border-hairline">
+      <BrandSwatchProvider colors={brandColors}>
       <EditorInspector
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
@@ -349,7 +387,7 @@ export function EditorShell({
         styleValues={draft?.styles ?? {}}
         styleOptions={{
           ...withStyleVars(
-            withUploadedFonts(panels.styleOptions, uploadedFonts),
+            withUploadedFonts(panels.styleOptions, titledFonts),
             manifest?.bridgeVersion,
           ),
           // The device toggle scopes Size/Padding: phone view writes the …sm-[…] twin.
@@ -375,6 +413,7 @@ export function EditorShell({
         onHighlight={applyHighlight}
         onClearHighlight={clearHighlight}
       />
+      </BrandSwatchProvider>
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface p-3">
         <div className="flex h-full w-full flex-col gap-2.5">
