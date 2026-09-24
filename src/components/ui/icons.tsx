@@ -61,6 +61,8 @@ export type IconName =
   | 'pause'
   | 'replay'
   | 'brush'
+  | 'copy'
+  | 'mail'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
@@ -187,6 +189,20 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
   bolt: <path d="M13 3L4 14h6l-1 7 9-11h-6l1-7z" />,
   check: <path d="M5 12.5l4.5 4.5L19 6.5" />,
+  /** Two stacked sheets: copy to the clipboard (Subscribers). */
+  copy: (
+    <>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </>
+  ),
+  /** An envelope: write to this address (Subscribers). */
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3.5 6.5l8.5 6 8.5-6" />
+    </>
+  ),
   refresh: (
     <>
       <path d="M20 11a8 8 0 0 0-14.3-4.5M4 4v3.5h3.5" />
