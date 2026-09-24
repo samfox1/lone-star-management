@@ -126,7 +126,16 @@ prototype disagree, this file wins (it carries Sam's later calls and the data mo
 - Read `AGENTS.md` first. Tests must be able to fail: see each new test red for the right
   reason (test-first) or delete the guard once to watch it go red, then restore. Denials need
   a planted witness and the specific error code. Derive fixtures from registries.
-- Tests go in `tests/unit|components|integration/<subject>/`. Pure modules with DB-free tests
+- Where things live (reorg 2026-09-24): the Brand route is
+  `src/app/artists/[id]/(dashboard)/(manager-tools)/brand/` (a route group, so the URL is
+  still `/artists/[id]/brand`). Brand-only UI (brand-riser, brand-modal, modal-board) stays
+  in `brand/_ui/`; the pieces every tool shares (ledger, row-icon + HoverLabel,
+  label-placement, inline-text, add-row, publish-riser) are in
+  `(manager-tools)/_ui/`. Brand-only libs are in `src/lib/manager-tools/brand/`
+  (brand-colors, brand-pending, brand-kit, image-checks); `lib/brand.ts`, `fonts.ts`,
+  `font-weight.ts` and `color.ts` stay in `src/lib/` because code outside Brand imports them.
+- Tests go in `tests/<unit|components|integration>/manager-tools/brand/` (shared UI tests in
+  `…/manager-tools/shared/`). Pure modules with DB-free tests
   go on the `mutate` list in `stryker.config.json`.
 - Never `npx supabase`, never `supabase db push` (the orchestrator pushes after Sam's yes),
   never `supabase db reset`, never any seed-skeen / pull-skeen / skeen-* script.

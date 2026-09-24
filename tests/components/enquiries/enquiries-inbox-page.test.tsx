@@ -10,7 +10,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import EnquiriesInboxPage from '@/app/artists/page'
-import { setEnquiryReadAction } from '@/app/artists/[id]/(dashboard)/enquiries/actions'
+import { setEnquiryReadAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
 import { ownedArtists } from '@/app/roster-data'
 
 vi.mock('@/app/roster-data', () => ({ ownedArtists: vi.fn() }))
@@ -22,7 +22,7 @@ vi.mock('@/app/roster-chrome', () => ({
 // ONE action for read and unread. This mock used to name two functions that do not exist
 // (a Read and an Unread action) and stayed green because no test here ever opened a row.
 // A mock that names a function nobody calls guards nothing.
-vi.mock('@/app/artists/[id]/(dashboard)/enquiries/actions', () => ({
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
   setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
   signEnquiryAttachmentsAction: vi.fn(async () => []),
 }))

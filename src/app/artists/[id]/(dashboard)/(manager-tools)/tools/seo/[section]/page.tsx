@@ -1,0 +1,89 @@
+import { notFound } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { FAQ_EXTRA, FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
+import { mediaUrl } from '@/lib/storage-url'
+import { isCustom, publicSiteOrigin } from '@/lib/custom-site'
+import { requireArtist } from '../../../../_data'
+import { isSeoSection } from '../sections'
+import { autoFaqAnswer } from '@samfox1/site-bridge/seo'
+import { listContent } from '@/lib/content'
+import { ListingSection } from '../sections/listing'
+import { LogoSection } from '../sections/logo'
+import { FactsSection } from '../sections/facts'
+import { AboutSection } from '../sections/about'
+import { AltSection, type AltPhoto } from '../sections/alt'
+import { AiSection } from '../sections/ai'
+import { TestSection } from '../sections/test'
+import type { OgSource } from '../og-image-picker'
+
+export default async function SeoSectionPage({ params }: { params: Promise<{ id: string; section: string }> }) {
+  const { id, section } = await params
+  if (!isSeoSection(section)) notFound()
+  const supabase = await createClient()
+  // ONE round of round trips (2026-08-28 trim): the ownership gate, the content and the
+  // facts fly together — every query is RLS-scoped, so nothing waits on the gate to be
+  // safe; it only waits to render. The section-specific query joins the batch below.
+  const [artist, { data: rows }, { data: facts }, { data: mediaRows }, { data: gallery }] = await Promise.all([
+    requireArtist(id),
+    supabase.from('site_content').select('key, value').eq('artist_id', id),
+    supabase.from('artists').select('bio, genre, location, schema_type, hero_image_url').eq('id', id).single(),
+    section === 'logo'
+      ? supabase.from('media').select('purpose, storage_path').eq('artist_id', id).in('purpose', ['logo_primary', 'logo_secondary', 'profile_photo'])
+      : Promise.resolve({ data: null }),
+    section === 'alt'
+      ? supabase.from('media').select('id, storage_path, alt, slug, site_role').eq('artist_id', id).eq('purpose', 'gallery_image').eq('on_site', true).order('sort_order')
+      : Promise.resolve({ data: null }),
+  ])
+  const content = Object.fromEntries((rows ?? []).map((r) => [r.key as string, (r.value as string | null) ?? '']))
+  const seo = Object.fromEntries(SEO_FIELDS.map((f) => [f.key, content[f.key] ?? '']))
+  const bio = ((facts?.bio as string | null) ?? '').trim()
+  const siteUrl = publicSiteOrigin(artist)
+  const schemaType = (facts?.schema_type as string | null) ?? 'MusicGroup'
+
+  if (section === 'listing') return <ListingSection artistId={id} name={artist.name} bio={bio} siteUrl={siteUrl} initial={seo} />
+  if (section === 'facts') {
+    return <FactsSection artistId={id} initial={{ genre: (facts?.genre as string | null) ?? '', location: (facts?.location as string | null) ?? '', schema_type: schemaType }} />
+  }
+  if (section === 'about') return <AboutSection artistId={id} initialBio={bio} initial={seo} />
+  if (section === 'ai') {
+    // The automatic answers, from the DRAFT data the manager sees (what they publish is
+    // what the site answers with).
+    const [tours, releases] = await Promise.all([listContent(supabase, 'tour_date', id), listContent(supabase, 'release', id)])
+    const src = {
+      artist: { ...artist, bio, genre: (facts?.genre as string | null) ?? null, location: (facts?.location as string | null) ?? null, schema_type: schemaType as 'MusicGroup' | 'Person' },
+      site_content: content,
+      tour_dates: tours as unknown as import('@samfox1/site-bridge/payload').SiteTourDate[],
+      releases: releases as unknown as import('@samfox1/site-bridge/payload').SiteRelease[],
+      origin: siteUrl ?? undefined,
+      today: new Date().toISOString().slice(0, 10),
+    }
+    const auto = [1, 2, 3, 4, 5].map((n) => autoFaqAnswer(n, src))
+    const initial = Object.fromEntries([...FAQ_KEYS, ...FAQ_EXTRA.flatMap((e) => [e.q, e.a])].map((k) => [k, content[k] ?? '']))
+    return <AiSection artistId={id} name={artist.name} schemaType={schemaType} initial={initial} auto={auto} />
+  }
+  if (section === 'test') return <TestSection artistId={id} siteUrl={siteUrl} custom={isCustom(artist)} />
+  if (section === 'logo') {
+    const LABEL: Record<string, string> = { logo_primary: 'Primary logo', logo_secondary: 'Secondary logo', profile_photo: 'Profile photo' }
+    const ORDER = ['logo_primary', 'logo_secondary', 'profile_photo']
+    const sources: OgSource[] = (mediaRows ?? [])
+      .sort((a, b) => ORDER.indexOf(a.purpose as string) - ORDER.indexOf(b.purpose as string))
+      .map((m) => ({ url: mediaUrl(m.storage_path as string), label: LABEL[m.purpose as string] ?? 'Image' }))
+    const heroUrl = (facts?.hero_image_url as string | null) ?? null
+    if (heroUrl) sources.push({ url: heroUrl, label: 'Hero image' })
+    return <LogoSection artistId={id} sources={sources} currentUrl={content.og_image ?? ''} />
+  }
+  // alt
+  const photos: AltPhoto[] = (gallery ?? []).map((m) => {
+    const path = m.storage_path as string
+    const role = (m.site_role as string | null) ?? null
+    return {
+      id: m.id as string,
+      url: mediaUrl(path),
+      alt: (m.alt as string | null) ?? '',
+      slug: (m.slug as string | null) ?? path.split('/').pop()!.replace(/\.[a-z0-9]+$/i, ''),
+      // A slot photo's caption lives next to it in site_content (`polaroid_3_caption`).
+      caption: role ? content[role.replace(/_photo$/, '_caption')] ?? null : null,
+    }
+  })
+  return <AltSection artistId={id} artistName={artist.name} photos={photos} />
+}

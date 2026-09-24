@@ -11,7 +11,7 @@
  * ./validate.ts (pure, unit-tested in tests/unit/enquiries/contact-validate.test.ts) or in
  * the submit_enquiry RPC (tested against the real DB in tests/integration/enquiries/
  * enquiry-door.test.ts). The dashboard half lives in src/lib/enquiries and
- * src/app/artists/[id]/(dashboard)/enquiries.
+ * src/app/artists/[id]/(dashboard)/(manager-tools)/enquiries.
  * What is left here is plumbing, and plumbing is what cannot be covered by `npm test`.
  * Keep it that way: logic added here is logic nobody can test.
  *

@@ -196,7 +196,7 @@ Where the code lives:
 - `supabase/functions/contact/` — the public door (cannot move; it cannot import `src/`).
 - `src/lib/enquiries/` — pure logic: `kinds.ts` (slug derivation, labels, list checks),
   `inbox.ts`, `inbox-server.ts`, `attachments.ts`.
-- `src/app/artists/[id]/(dashboard)/enquiries/` — the tool: page, kind rows + modal,
+- `src/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/` — the tool: page, kind rows + modal,
   inbox table, and every server action (`set_enquiry_recipients` is the atomic list write).
 - `tests/{unit,components,integration}/enquiries/`.
 

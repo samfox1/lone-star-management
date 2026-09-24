@@ -30,7 +30,7 @@ afterEach(cleanup)
 
 /** Ring classes on `el` that can never paint (Tailwind v4: `outline-none`/`outline-hidden`
  *  set --tw-outline-style:none, which every `outline-<n>` reads) — the rule
- *  tests/components/brand/focus-rings.test.tsx pins for the shell's controls. */
+ *  tests/components/manager-tools/shared/focus-rings.test.tsx pins for the shell's controls. */
 function deadRings(el: Element): string[] {
   const cls = (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
   if (!cls.some((c) => c === 'outline-none' || c === 'outline-hidden')) return []

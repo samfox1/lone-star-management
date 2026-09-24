@@ -454,7 +454,7 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 
 - **RLS:** `subscribers_read` (SELECT): `is_admin() OR is_manager_of(artist_id)`. No write policy — ingest only via `subscribe()` (SECURITY DEFINER, anon, rate-limited 15/min/artist).
 - **Indexes:** PK; `subscribers_artist_email_idx (artist_id, lower(email))` UNIQUE; `subscribers_artist_created_idx (artist_id, created_at DESC)`.
-- **Referenced (src):** `book/page.tsx` (rollup + recent feed), `(dashboard)/subscribers/page.tsx` (per-artist list). `subscribe()` is called from `src/app/[slug]/actions.ts` (on-site popup) AND the external `skeen-website`.
+- **Referenced (src):** `book/page.tsx` (rollup + recent feed), `(dashboard)/(manager-tools)/subscribers/page.tsx` (per-artist list). `subscribe()` is called from `src/app/[slug]/actions.ts` (on-site popup) AND the external `skeen-website`.
 
 ### Table: tour_dates {#table-tour_dates}
 

@@ -103,6 +103,30 @@ that is only ever wrong in the direction nobody notices.
 Import helpers as `@tests/helpers/…`, never `./helpers/…` — the alias survives a file
 moving between subjects, a relative path does not.
 
+### Manager tools (2026-09-24)
+
+Every tool in the tools rail (`TOOLS` in `_shell/tools-registry.ts`) lives in ONE route
+group, and its tests sit under one subject per tool:
+
+    src/app/artists/[id]/(dashboard)/(manager-tools)/
+      _shell/        the tools rail + registry (private folder: never a route)
+      _ui/           UI two or more tools share: ledger, row-icon (+ HoverLabel),
+                     label-placement, inline-text, add-row, publish-riser
+      brand/ subscribers/ settings/ enquiries/ connections/ epk/ site/ tools/ (overview + seo)
+        <tool>/_ui/  UI only that tool uses (brand/_ui: brand-riser, brand-modal, modal-board)
+    src/lib/manager-tools/<tool>/          pure modules only that tool uses
+    tests/<kind>/manager-tools/<tool>/     brand, subscribers, settings, enquiries,
+                                           connections, epk, seo, shared (the _ui/_shell pieces)
+
+`(manager-tools)` is a ROUTE GROUP: it is not in the URL, so `/artists/[id]/brand` still
+resolves. `_shell` and `_ui` are PRIVATE folders: nothing in them can become a route.
+Dashboard-wide pieces used outside the tools (card-modal, modal-kit, toast, publish-bar,
+upload-field, actions.ts, `_data`, `_owns`, sections, editor/, music, images…) stay in
+`(dashboard)/`. A lib another area imports (brand.ts, fonts.ts, color.ts, content.ts,
+storage-gc.ts, site*, seo*, settings.ts, epk.ts, enquiries/) stays in `src/lib/`. Put a
+new piece in `_ui/` only when a second tool really uses it; until then it belongs to its
+tool.
+
 Plan docs written before this date (`DASHBOARD_PLAN.md`, `SEO_GEO_PLAN.md`,
 `SITE_PAGES_PLAN.md`, `REVIEW_2026-09-03.md`) name tests by their old flat path. They
 are records of what was true then and were left alone; `git log --follow` finds any of

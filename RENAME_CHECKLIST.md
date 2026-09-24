@@ -46,7 +46,7 @@ you will regret.
       `src/app/page.tsx`, `roster/page.tsx`, `apply/page.tsx`,
       `admin/applications/page.tsx`, `videos/page.tsx`, `book/page.tsx`,
       `tour/page.tsx`, `merch/page.tsx`, `artists/page.tsx`,
-      `artists/[id]/(dashboard)/settings/page.tsx`, `…/connections/page.tsx`,
+      `artists/[id]/(dashboard)/(manager-tools)/settings/page.tsx`, `…/connections/page.tsx`,
       `…/subscribers/page.tsx`
 - [ ] `src/app/launcher.tsx:37` — the launcher wordmark
 - [ ] `src/app/welcome/page.tsx:6,35,96` — title, wordmark, copyright

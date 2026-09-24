@@ -69,7 +69,7 @@ export function PublishBar({
 /**
  * THE PASSWORD PROMPT, on its own (2026-09-23): publishing to the public site is
  * password-gated, and every control that publishes asks the same way. PublishBar renders
- * it; the Brand page's rising bar (brand/_ui/publish-riser.tsx) renders the SAME one
+ * it; the Brand page's rising bar ((manager-tools)/_ui/publish-riser.tsx) renders the SAME one
  * rather than a copy, so the latch, the mid-publish lock and the inline error cannot
  * drift between them.
  *

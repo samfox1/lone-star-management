@@ -35,7 +35,11 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = join(process.cwd(), 'src/app/artists/[id]/(dashboard)')
-const SWEPT_DIRS = ['editor', 'tools']
+/** The editor, and the tools tree (the Overview and SEO / GEO), which moved into the
+ *  `(manager-tools)` route group on 2026-09-24 — same files, new folder. The other manager
+ *  tools (brand, epk, enquiries, site…) were never swept; widening to the whole group finds
+ *  five lines today, which is a copy decision for Sam, not a path fix. */
+const SWEPT_DIRS = ['editor', '(manager-tools)/tools']
 
 type Hit = { file: string; line: number; text: string }
 

@@ -1,4 +1,4 @@
-import { ToolsShell } from './tools-rail'
+import { ToolsShell } from './(manager-tools)/_shell/tools-rail'
 import { AssetsShell } from './assets-rail'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'

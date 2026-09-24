@@ -1,6 +1,6 @@
 import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { createClient } from '@/lib/supabase/server'
-import { listBrandColors } from '@/lib/brand-colors'
+import { listBrandColors } from '@/lib/manager-tools/brand/brand-colors'
 import { diffUnpublished, listContent } from '@/lib/content'
 import { loadBrandFonts } from '@/lib/fonts'
 import { groupTracksIntoProjects } from '@/lib/music'

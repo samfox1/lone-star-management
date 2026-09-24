@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { InboxRow } from '@/lib/enquiries/inbox'
 import { attachmentCounts } from '@/lib/enquiries/inbox-server'
 import { labelFromSlug } from '@/lib/enquiries/kinds'
-import { EnquiryTable } from './[id]/(dashboard)/enquiries/enquiry-table'
+import { EnquiryTable } from './[id]/(dashboard)/(manager-tools)/enquiries/enquiry-table'
 import { EmptyState, RosterShell } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
 

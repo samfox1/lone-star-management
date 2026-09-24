@@ -24,7 +24,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { PhotoAddButton } from '@/app/artists/[id]/(dashboard)/images/photo-add'
-import { LogoEditor } from '@/app/artists/[id]/(dashboard)/brand/logos/logo-editor'
+import { LogoEditor } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/logos/logo-editor'
 import { DEFAULT_BUDGETS } from '@/lib/site-editor/asset-budget'
 
 // The file that actually reaches storage — the whole point of the gate is which one.
@@ -33,7 +33,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/use-storage-upload', () => ({
   useStorageUpload: () => ({ busy: false, error: null, progress: null, upload, reset: vi.fn() }),
 }))
 
-vi.mock('@/app/artists/[id]/(dashboard)/brand/actions', () => ({
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({
   setBrandAssetAction: vi.fn(async () => ({})),
 }))
 // The logo editor refreshes the page after its own writes.
