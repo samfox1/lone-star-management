@@ -86,15 +86,21 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     loadBrandFonts(supabase, id).catch(() => null),
     listBrandColors(supabase, id).catch(() => []),
   ])
-  // Brand-page uploads, offered in every region's font dropdown alongside the site's own
-  // manifest tokens. The token resolves because the published payload emits the matching
-  // .font-<family> class. An added slot's title names its font there (withSlotTitles).
+  // Brand-page fonts — uploads and Google Fonts — offered in every region's font dropdown
+  // alongside the site's own manifest tokens. The token resolves because the published
+  // payload emits the matching .font-<family> class; a Google font's stack names its real
+  // family (`googleFamily`, withUploadedFonts). A font in a slot is listed by the slot's
+  // TITLE (BRAND_SYNC_PLAN.md: "lists Google brand fonts in its font list by their slot
+  // titles") — Primary, Secondary, or an added row's own title — via withSlotTitles, which
+  // takes the FIRST title, so the built-ins lead.
   const uploadedFonts = (brandFonts?.fonts ?? [])
-    .map((f) => ({ family: f.family, label: f.label }))
+    .map((f) => ({ family: f.family, label: f.label, googleFamily: f.googleFamily }))
     .sort((a, b) => a.family.localeCompare(b.family))
-  const fontSlotTitles = (brandFonts?.custom ?? []).flatMap((s) =>
-    s.font && s.label ? [{ family: s.font.family, title: s.label }] : [],
-  )
+  const fontSlotTitles = [
+    ...(brandFonts?.primary.font ? [{ family: brandFonts.primary.font.family, title: 'Primary' }] : []),
+    ...(brandFonts?.secondary.font ? [{ family: brandFonts.secondary.font.family, title: 'Secondary' }] : []),
+    ...(brandFonts?.custom ?? []).flatMap((s) => (s.font && s.label ? [{ family: s.font.family, title: s.label }] : [])),
+  ]
 
   const siteContent = Object.fromEntries(
     ((contentRows ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? '']),

@@ -1,13 +1,20 @@
 import { sanitizeFamily } from '@/lib/fonts'
 import { weightName } from '@/lib/font-weight'
+import { isGoogleFamilyName } from '@/lib/google-fonts'
 
 /**
  * The CSS a Brand font is SET IN: the sanitized family token, never the raw one. The
  * family comes off the database and ends up in a `style` attribute (and, through
  * fontFaceCss, in a <style> tag), so it goes through the one allowlist every emitter
  * uses. One spelling, so the row, the menu and the preview can never disagree.
+ *
+ * A GOOGLE font (20260925120000) is set in its real family instead — Google's stylesheet
+ * declares "Big Shoulders Display", and the token names no face at all. The name passes the
+ * Google-name allowlist first (letters, digits, single spaces: nothing to escape); a name
+ * that fails it falls back to the token.
  */
-export const faceOf = (family: string) => `'${sanitizeFamily(family)}', sans-serif`
+export const faceOf = (family: string, googleFamily?: string | null) =>
+  isGoogleFamilyName(googleFamily) ? `'${googleFamily}', sans-serif` : `'${sanitizeFamily(family)}', sans-serif`
 
 /**
  * Samples are matched by MEASURED capital height, not raw px (Sam, 2026-09-23: Sorg Font

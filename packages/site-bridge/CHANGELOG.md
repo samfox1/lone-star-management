@@ -74,7 +74,57 @@ announces `bridgeVersion: '0.32.0'` and the editor is on 0.38.0.
 
 ## Unreleased
 
-Nothing since 0.40.0.
+Nothing since 0.41.0.
+
+---
+
+## 0.41.0 — the site wears the Brand page (BRAND_SYNC_PLAN phase 2)
+
+*Built 2026-09-24. **Not published yet**: it goes to the registry only with Sam's yes,
+and each site then redeploys without build cache.*
+
+**Site action: render `brandCss(site, { supabaseUrl })` in one `<style>` after your own
+stylesheets, and map your colour tokens onto `--brand-<key>` with your current value as the
+fallback** (`--red: var(--brand-primary, #c63a2a)`). That is the whole adoption. The head
+values (`brandHead` → `themeColor`, `appleTouchIcon`) are optional extras. A site that does
+nothing looks exactly as it does now: a 0.40 site never reads `brand`, and its own font
+reader already drops a Google row, whose `path` is null.
+
+**A new module, `@samfox1/site-bridge/brand`** (also re-exported from the root):
+
+| export | returns |
+| --- | --- |
+| `brandColorCss(brand)` | `:root{--brand-<key>:#rrggbb;…}` in the published order, or `''` |
+| `brandFontCss(fonts, slots, { supabaseUrl, googleImport? })` | the css2 `@import` (first), an `@font-face` per upload, `.font-<family>` per font, `:root{--font-<slot>:…}` |
+| `brandCss(payload, { supabaseUrl, googleImport? })` | fonts then colours: the one order that keeps the `@import` first |
+| `googleFontsHref(fonts)` | the css2 URL for a `<link>`, or null |
+| `brandHead(payload, { supabaseUrl })` | `{ themeColor, appleTouchIcon }`: the browser-bar hex, and the `home_icon` URL falling back to the `favicon` |
+| `GOOGLE_FONT_WEIGHTS` | `[100 … 900]`, requested as a DISCRETE list |
+
+**Every value is validated, and anything that fails is dropped.** A colour key must be
+`[a-z0-9-]+` (≤ 64) and a hex `#rrggbb` (lowercased on the way out). A family token must be
+lone-star's sanitized shape and not a slot or Tailwind font utility. A Google family must be
+ASCII words joined by single spaces (≤ 64). A font path must be plain with no `..`, and
+`supabaseUrl` a bare http(s) origin. Each guard was deleted once and its test went red,
+and a targeted Stryker run kills 276 of 277 mutants (the survivor is equivalent).
+
+**Why the weights are a list, not a range.** Google's css2 API answers `400`, failing the
+whole stylesheet, to `wght@100..900` on a family that is not variable (Anton), but serves a
+discrete list naming weights a family lacks. Probed 2026-09-24.
+
+**Payload types (additive, with one widening):**
+- `PublicSitePayload.brand?: SiteBrand | null`, where
+  `SiteBrand = { colors: { key, name, hex }[]; theme_color: string | null }`. The door always
+  sends it from the brand-sync migration on, and it is absent before that.
+- `SiteFont.source?: 'upload' | 'google'` and `SiteFont.google_family?: string | null`.
+- **`SiteFont.path` and `SiteFont.format` are now `string | null`.** A Google row has no
+  file. This is the one change a TypeScript consumer can feel: code that builds a URL from
+  `path` must skip a null, and `tsc` points at each place. The type says what the door
+  sends.
+- `MediaPurpose` gains `'logo' | 'home_icon' | 'icon_source'` (stored since 20260924120000).
+
+`BRIDGE_VERSION` did not move, and the editor gains no gate: nothing here is an editor
+control. `CONNECTING.md` §14 is the sheet.
 
 ---
 

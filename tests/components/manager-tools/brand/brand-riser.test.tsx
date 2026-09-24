@@ -21,6 +21,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({
 
 import { BrandRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/brand-riser'
 import { revertBrandAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions'
+import { BRAND_REVERTED } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/brand-events'
 
 afterEach(cleanup)
 
@@ -42,5 +43,31 @@ describe('BrandRiser', () => {
     })
     expect(revertBrandAction).toHaveBeenCalledWith('a1')
     expect(h.refresh).toHaveBeenCalled()
+  })
+
+  it('CRITICAL: a revert that changed something is ANNOUNCED — the Colors tab re-seeds from it; one that failed is not', async () => {
+    // Colours publish now (20260925120000), so Revert can change the palette the Colors tab
+    // holds its own copy of (brand-events.ts). Only a revert that DID something says so.
+    const heard = vi.fn()
+    window.addEventListener(BRAND_REVERTED, heard)
+    const revert = async () => {
+      fireEvent.click(within(bar()).getByRole('button', { name: 'Revert' }))
+      const ask = await screen.findByRole('dialog', { name: /Revert every brand change/ })
+      await act(async () => {
+        fireEvent.click(within(ask).getByRole('button', { name: 'Revert' }))
+      })
+    }
+    try {
+      render(<BrandRiser artistId="a1" dirty message="Cream changed" canRevert />)
+      await revert()
+      expect(heard).toHaveBeenCalledTimes(1)
+      cleanup()
+      vi.mocked(revertBrandAction).mockResolvedValueOnce({ error: 'Could not undo those changes.' })
+      render(<BrandRiser artistId="a1" dirty message="Cream changed" canRevert />)
+      await revert()
+      expect(heard).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener(BRAND_REVERTED, heard)
+    }
   })
 })

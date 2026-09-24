@@ -56,6 +56,7 @@ const CALLS = {
   deleteBrandColorAction: (m) => m.deleteBrandColorAction(A, 'c1'),
   setBrandColorSlotAction: (m) => m.setBrandColorSlotAction(A, 'primary', '#112233'),
   addArtistFontAction: (m) => m.addArtistFontAction(A, { label: 'Mori', storagePath: FONT_PATH, format: 'woff2' }),
+  addGoogleFontAction: (m) => m.addGoogleFontAction(A, 'Archivo', 'primary'),
   removeArtistFontAction: (m) => m.removeArtistFontAction(A, 'f1'),
   renameArtistFontAction: (m) => m.renameArtistFontAction(A, 'f1', 'Sorg'),
   setFontSlotAction: (m) => m.setFontSlotAction(A, 'custom_1', 'f1', { label: 'Mono' }),

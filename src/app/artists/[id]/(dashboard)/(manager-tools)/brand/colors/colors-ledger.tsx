@@ -14,6 +14,7 @@ import { useConfirm } from '../../../confirm-dialog'
 import { toast } from '../../../toast'
 import { deleteBrandColorAction } from '../actions'
 import { AddRow } from '../../_ui/add-row'
+import { useOnBrandRevert } from '../_ui/brand-events'
 import { ColorRow, type ColorItem } from './color-row'
 import { ColorPlayground } from './playground'
 
@@ -42,9 +43,10 @@ function seedRows(colors: BrandColor[]): ColorItem[] {
 /**
  * BRAND → COLORS (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): PRIMARY and SECONDARY built in
  * ("default on the colors page, they just dont have to be filled in yet"), then a plain
- * palette — Color 3, Color 4, … with no other roles — that saves as you go. Colours are
- * dashboard-only this round, so there is no Publish step and nothing here lights the
- * Publish bar.
+ * palette — Color 3, Color 4, … with no other roles — that saves as you go. Colours
+ * PUBLISH now (Sam, 2026-09-24, BRAND_SYNC_PLAN.md): every save revalidates the page, so the
+ * layout's Publish bar rises for a colour change like any other brand change, and the site
+ * reads each published colour as `--brand-<key>`.
  *
  * A BUILT-IN has a fixed title, grey guide text, no note and no trash. It is "No color yet"
  * and a + until picked; the pick saves it (one upsert by slot, color-row.tsx), and so does
@@ -53,7 +55,10 @@ function seedRows(colors: BrandColor[]): ColorItem[] {
  * The page's copy of the palette is seeded ONCE from the server and is the truth from then
  * on: every save revalidates the route, but the refreshed props would only echo what this
  * copy already holds — and re-seeding from them mid-drag would snap a swatch back to a
- * colour the manager has already moved past. A different visit is a fresh mount.
+ * colour the manager has already moved past. A different visit is a fresh mount. The ONE
+ * exception is the bar's Revert, which changes the palette from outside: it announces itself
+ * (brand-events.ts), and the next props replace this copy — every row remounted, so no row
+ * keeps comparing picks against the colour it held before the revert.
  *
  * ADD (the flow every Brand list shares, add-row.tsx): the name pre-fills the next free
  * "Color N" from 3, selected; the new row is client-only — "No color yet" and a + — until
@@ -72,6 +77,20 @@ export function ColorsLedger({
   siteSwatches: string[]
 }) {
   const [items, setItems] = useState<ColorItem[]>(() => seedRows(colors))
+  /** The props last seen, and whether the bar's Revert asked for them to be taken. */
+  const [seen, setSeen] = useState(colors)
+  const [reseed, setReseed] = useState(false)
+  /** Bumped by a re-seed: part of every row's key, so each row remounts with fresh refs. */
+  const [generation, setGeneration] = useState(0)
+  useOnBrandRevert(() => setReseed(true))
+  if (seen !== colors) {
+    setSeen(colors)
+    if (reseed) {
+      setReseed(false)
+      setItems(seedRows(colors))
+      setGeneration((g) => g + 1)
+    }
+  }
   const [preview, setPreview] = useState<string | null>(null)
   const { ask, dialog } = useConfirm()
   /** Client keys for added rows. A ref: two adds in one tick must not share a key. */
@@ -110,7 +129,7 @@ export function ColorsLedger({
     <>
       {items.map((item) => (
         <ColorRow
-          key={item.key}
+          key={`${generation}:${item.key}`}
           artistId={artistId}
           item={item}
           guide={item.slot ? GUIDE[item.slot] : undefined}

@@ -8,14 +8,19 @@ import { FOCUS_RING } from '../../_ui/focus-ring'
 import { RowTitle, type SaveResult } from '../../_ui/inline-text'
 import { FontSample } from './font-sample'
 
+/** The menu's two actions under the fonts: "Google Fonts…" and "Upload a font…". */
+const ACTION =
+  'block w-full rounded-lg px-2.5 py-2 text-left font-ui text-[13px] text-ink-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:bg-surface-hover'
+
 /** Is this key press for a name being typed (a contentEditable in the menu), not the menu? */
 const typing = (target: EventTarget | null) => target instanceof HTMLElement && target.closest('[contenteditable="true"]') !== null
 
 /**
  * THE CHANGE MENU (BRAND_PAGE_PLAN.md, Fonts; the prototype's `.cp.fm`): a small paper
  * card that opens to the LEFT of the row's chevrons (or +), never over the row. The
- * artist's fonts, each set in its own face, the current one bold; then "Upload a font…".
- * Below 900px the row's controls sit on the left, so the menu drops below instead.
+ * artist's fonts, each set in its own face, the current one bold; then "Google Fonts…"
+ * (BRAND_SYNC_PLAN.md: pick any Google family by name — the picker opens) and "Upload a
+ * font…". Below 900px the row's controls sit on the left, so the menu drops below instead.
  *
  * It only REPORTS the choice: whether a pick is a change (the same font is not) is the
  * row's decision, because only the row knows what it holds.
@@ -41,6 +46,7 @@ export function FontMenu({
   currentId,
   anchor,
   onPick,
+  onGoogle,
   onUpload,
   onRemove,
   onRename,
@@ -52,6 +58,8 @@ export function FontMenu({
   /** The control that opened it: a click on it is a toggle, not "outside". */
   anchor: RefObject<HTMLElement | null>
   onPick: (font: BrandFont) => void
+  /** "Google Fonts…": open the Google picker for this row. */
+  onGoogle: () => void
   onUpload: () => void
   onRemove: (font: BrandFont) => void
   /** Save a font's new name. A refusal comes back as `{ error }` (the field toasts it). */
@@ -171,7 +179,7 @@ export function FontMenu({
                   on && 'font-bold',
                 )}
               >
-                <FontSample family={font.family} cap={11} fallback={15}>
+                <FontSample family={font.family} googleFamily={font.googleFamily} cap={11} fallback={15}>
                   <RowTitle value={font.label} onRename={(label) => onRename(font, label)} label="Font name" maxLength={MAX_FONT_LABEL} />
                 </FontSample>
               </div>
@@ -190,7 +198,7 @@ export function FontMenu({
                   on && 'font-bold',
                 )}
               >
-                <FontSample family={font.family} cap={11} fallback={15}>{font.label}</FontSample>
+                <FontSample family={font.family} googleFamily={font.googleFamily} cap={11} fallback={15}>{font.label}</FontSample>
               </button>
               <button
                 type="button"
@@ -218,12 +226,12 @@ export function FontMenu({
         type="button"
         role="menuitem"
         data-menu-item=""
-        onClick={onUpload}
-        className={cx(
-          'block w-full rounded-lg px-2.5 py-2 text-left font-ui text-[13px] text-ink-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:bg-surface-hover',
-          fonts.length > 0 && 'mt-1 rounded-t-none border-t border-hairline',
-        )}
+        onClick={onGoogle}
+        className={cx(ACTION, fonts.length > 0 && 'mt-1 rounded-t-none border-t border-hairline')}
       >
+        Google Fonts…
+      </button>
+      <button type="button" role="menuitem" data-menu-item="" onClick={onUpload} className={ACTION}>
         Upload a font…
       </button>
     </div>

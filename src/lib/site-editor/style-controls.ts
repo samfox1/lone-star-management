@@ -67,6 +67,7 @@ import {
   SHADOW_STEPS,
   TRACKING_OPTIONS,
 } from '@samfox1/site-bridge/vocabulary'
+import { isGoogleFamilyName } from '@/lib/google-fonts'
 
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean; segmented?: boolean }
@@ -613,7 +614,7 @@ const DEFAULT: StyleOption = { value: '', label: 'Default' }
  */
 export function withUploadedFonts(
   opts: SiteStyleOptions | undefined,
-  uploaded: { family: string; label: string }[],
+  uploaded: { family: string; label: string; googleFamily?: string | null }[],
 ): SiteStyleOptions | undefined {
   if (!uploaded.length) return opts
   const manifest = opts?.fonts ?? []
@@ -621,8 +622,9 @@ export function withUploadedFonts(
   const extra = uploaded
     // `css` is the stack `fontStyleCss` writes for this family, character for character
     // (`.font-<family>{font-family:'<family>',sans-serif}`) — so choosing the font via
-    // the variable renders identically to choosing it via the class.
-    .map((f) => ({ value: `font-${f.family}`, label: f.label, css: `'${f.family}',sans-serif` }))
+    // the variable renders identically to choosing it via the class. A GOOGLE font's class
+    // names its real family (20260925120000), so its stack does too.
+    .map((f) => ({ value: `font-${f.family}`, label: f.label, css: `'${isGoogleFamilyName(f.googleFamily) ? f.googleFamily : f.family}',sans-serif` }))
     .filter((f) => !seen.has(f.value))
   return { ...opts, fonts: [...manifest, ...extra] }
 }

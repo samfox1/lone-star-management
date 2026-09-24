@@ -1,16 +1,20 @@
 /**
- * Custom fonts: uploaded font files an artist's site is typeset in.
+ * Custom fonts: the faces an artist's site is typeset in — uploaded files, and Google Fonts.
  *
- * UPLOADED FILES, not Google Fonts (Sam's call): a foundry font is what makes a music
- * site look like that artist rather than like a template, and half of them are not on any
- * CDN. The manager uploads the file, gives it a name, and it becomes selectable
- * everywhere type is chosen.
+ * UPLOADED FILES first (Sam's call, 2026-08-05): a foundry font is what makes a music site
+ * look like that artist rather than like a template, and half of them are not on any CDN.
+ * The manager uploads the file, gives it a name, and it becomes selectable everywhere type
+ * is chosen. GOOGLE FONTS beside them (Sam, 2026-09-24, BRAND_SYNC_PLAN.md): "pick any
+ * Google family by name". A Google font is the same kind of row with no file —
+ * `source: 'google'` and `google_family` (Google's spelling); the site loads it from
+ * fonts.googleapis.com (`addGoogleFont`, `fontStyleCss`).
  *
  * THREE THINGS EACH FONT HAS, and they are not the same string:
  *   • `label`   — what the manager typed ("PP Mori Semi Mono"). Display only.
  *   • `family`  — the CSS token derived from the label ("pp-mori-semi-mono"). This is
  *                 what lands in the stylesheet and in `.font-<family>`.
- *   • `storage_path` — the object in the PUBLIC `fonts` bucket.
+ *   • `storage_path` — the object in the PUBLIC `fonts` bucket (an upload), or
+ *     `google_family` — the Google family it loads by name (a Google font).
  *
  * `family` is DERIVED ONCE, at upload, and never changes. Per-region style rows store the
  * `font-<family>` class verbatim (site_styles is a raw class string), so renaming a font
@@ -28,6 +32,8 @@ import { isOwnedStoragePath } from '@/lib/upload'
 import { publicObjectUrl } from '@/lib/storage-url'
 import { brandRefusal, cleanLine, cleanNote } from '@/lib/brand'
 import { usableWeight } from '@/lib/font-weight'
+import { googleFontsHref } from '@samfox1/site-bridge/brand'
+import { isGoogleFamilyName } from '@/lib/google-fonts'
 
 /** The bucket font objects live in. PUBLIC-READ, unlike `documents`: a fan's browser
  *  fetches the file itself, so there is no server in the middle to sign a URL. */
@@ -107,10 +113,18 @@ export type ArtistFont = {
   id: string
   label: string
   family: string
-  storage_path: string
-  format: FontFormat
+  /** Null on a Google font, which has no file (20260925120000). */
+  storage_path: string | null
+  format: FontFormat | null
   slots: FontSlot[]
+  source: FontSource
+  /** Google's spelling of the family, on a Google font only. */
+  google_family: string | null
 }
+
+/** Where a face comes from (20260925120000). Every row before Google Fonts is an upload. */
+export type FontSource = 'upload' | 'google'
+const sourceOf = (raw: unknown): FontSource => (raw === 'google' ? 'google' : 'upload')
 
 /** slot → family. Only ASSIGNED slots are present: an absent key means "this site has no
  *  font for that slot", which is not the same as a slot set to nothing. This is the shape
@@ -281,12 +295,16 @@ export function fontUrl(path: string, origin: string = process.env.NEXT_PUBLIC_S
   return publicObjectUrl(FONTS_BUCKET, path, origin)
 }
 
-/** What `fontFaceCss` needs about a font: `path` (a storage path) or a ready `url`. */
+/** What `fontFaceCss` needs about a font: `path` (a storage path) or a ready `url`. Null
+ *  `format`/`path` is a Google font (20260925120000): it has no file, so it gets no
+ *  `@font-face` here — `fontStyleCss` handles it from `google_family`. */
 export type FontFace = {
   family: string
-  format: string
-  path?: string
+  format: string | null
+  path?: string | null
   url?: string
+  /** 'google' rows never get an `@font-face` here, whatever else they carry. */
+  source?: string | null
 }
 
 /**
@@ -315,6 +333,7 @@ export function fontFaceCss(
   const blocks: string[] = []
 
   for (const font of [...fonts].sort((a, b) => String(a.family).localeCompare(String(b.family)))) {
+    if (font.source === 'google') continue // no file of ours: Google's stylesheet declares it
     const format = font.format as FontFormat
     if (!(FONT_FORMATS as readonly string[]).includes(format)) continue // never guess a format
     const family = sanitizeFamily(font.family)
@@ -342,20 +361,77 @@ export function fontSlotVar(slot: FontSlot): string {
   return `--font-${slugify(slot)}`
 }
 
+/* ── Google Fonts (20260925120000) ────────────────────────────────────────── */
+
+/** A payload font that is Google-sourced and loadable: its class token and real name. */
+type GoogleFace = { token: string; name: string }
+
 /**
- * The complete `<style>` block a rendered site gets: every @font-face + utility class,
- * then one `:root` variable per ASSIGNED slot, then the element rules the built-in
- * templates need.
+ * The Google fonts of a payload that the bridge would load — sorted by token, first row per
+ * token, never a token an upload already emitted. Each is checked with the bridge's own
+ * `googleFontsHref` (ONE builder for the css2 URL, app and sites alike), so a class is never
+ * emitted for a family the stylesheet does not request.
+ */
+function googleFaces(fonts: readonly SiteFont[], taken: ReadonlySet<string>): GoogleFace[] {
+  const out: GoogleFace[] = []
+  const seen = new Set(taken)
+  const sorted = [...fonts].sort((a, b) => String(a.family).localeCompare(String(b.family)))
+  for (const f of sorted) {
+    if (f.source !== 'google' || !isGoogleFamilyName(f.google_family)) continue
+    const token = sanitizeFamily(f.family)
+    if (seen.has(token)) continue
+    const face = { token, name: f.google_family }
+    if (!googleFontsHref([asWire(face)])) continue
+    seen.add(token)
+    out.push(face)
+  }
+  return out
+}
+
+const asWire = (g: GoogleFace): SiteFont => ({
+  family: g.token,
+  label: g.name,
+  path: null,
+  format: null,
+  source: 'google',
+  google_family: g.name,
+})
+
+/** The css2 stylesheet for a payload's Google fonts, or null — the URL a template `@import`s
+ *  and the Brand page links. The bridge builds it (all nine weights, `display=swap`). */
+export function googleStylesheetHref(fonts: readonly SiteFont[]): string | null {
+  const faces = googleFaces(fonts, new Set())
+  return faces.length ? googleFontsHref(faces.map(asWire)) : null
+}
+
+/** The uploaded faces fontFaceCss emits, by token. */
+function uploadTokens(fonts: readonly FontFace[], opts: { origin?: string }): Set<string> {
+  const css = fontFaceCss([...fonts], opts)
+  const tokens = new Set<string>()
+  for (const m of css.matchAll(/@font-face\{font-family:'([a-z0-9-]+)'/g)) tokens.add(m[1])
+  return tokens
+}
+
+/**
+ * The complete `<style>` block a rendered site gets: the Google stylesheet `@import` (FIRST —
+ * an `@import` after any other rule is ignored), every @font-face + utility class, then one
+ * `:root` variable per ASSIGNED slot, then the element rules the built-in templates need.
  *
  * The variables are the contract for custom sites (skeen): they set one property per
  * slot and hang their own classes off it. The `h1..h6` / `body` rules exist because the
  * BUILT-IN templates have no slot classes of their own — nothing in them would read a
  * variable, so primary/secondary have to reach them as element rules.
  *
- * A slot is emitted ONLY when its family survived `fontFaceCss`'s gates. A variable
- * pointing at a dropped face sends the site hunting for a family no stylesheet defines,
- * falling back browser-by-browser instead of by our declared fallback — and, unlike a
- * missing font, it looks deliberate.
+ * AN UPLOAD is named by its token (`'sorg'`), which its own @font-face declares. A GOOGLE
+ * font (20260925120000) has no file and no @font-face of ours: Google's stylesheet declares
+ * the REAL family (`'Big Shoulders Display'`), so its class, its slot variables and the
+ * element rules name that — `.font-big-shoulders-display` stays the class. The bridge's
+ * `brandFontCss` does the same for connected sites; the css2 URL is the bridge's builder.
+ *
+ * A slot is emitted ONLY when its family survived the gates. A variable pointing at a
+ * dropped face sends the site hunting for a family no stylesheet defines, falling back
+ * browser-by-browser instead of by our declared fallback — and, unlike a missing font, it
+ * looks deliberate.
  *
  * Emitted in FONT_SLOTS order, not the map's, so the payload is byte-stable and cacheable
  * whatever order the door aggregated the keys in.
@@ -370,25 +446,37 @@ export function fontStyleCss(
   opts: { origin?: string } = {},
 ): string {
   const faces = fontFaceCss(fonts, opts)
-  if (!faces) return ''
+  const uploaded = uploadTokens(fonts, opts)
+  const google = googleFaces(fonts, uploaded)
+  if (!faces && !google.length) return ''
+
+  /** token → the family name CSS must say for it. */
+  const names = new Map<string, string>([...uploaded].map((t) => [t, t]))
+  for (const g of google) names.set(g.token, g.name)
+
+  const parts: string[] = []
+  const href = google.length ? googleFontsHref(google.map(asWire)) : null
+  if (href) parts.push(`@import url('${href}');`)
+  parts.push(faces)
+  for (const g of google) parts.push(`.${fontClass(g.token)}{font-family:'${g.name}',sans-serif}`)
 
   // Only slots in the vocabulary (the map comes off a published payload, which a script
-  // or an older writer could have shaped) whose family actually appears in the faces.
+  // or an older writer could have shaped) whose family actually survived.
   const assigned: [FontSlot, string][] = []
   for (const slot of FONT_SLOTS) {
     const raw = (slots as Record<string, string | undefined>)[slot]
     if (!raw) continue
-    const family = sanitizeFamily(raw)
-    if (faces.includes(`font-family:'${family}'`)) assigned.push([slot, family])
+    const name = names.get(sanitizeFamily(raw))
+    if (name) assigned.push([slot, name])
   }
-  if (!assigned.length) return faces
-
-  const bySlot = new Map(assigned)
-  const parts = [faces, `:root{${assigned.map(([slot, family]) => `${fontSlotVar(slot)}:'${family}'`).join(';')}}`]
-  const primary = bySlot.get('primary')
-  const secondary = bySlot.get('secondary')
-  if (primary) parts.push(`h1,h2,h3,h4,h5,h6{font-family:'${primary}',sans-serif}`)
-  if (secondary) parts.push(`body{font-family:'${secondary}',sans-serif}`)
+  if (assigned.length) {
+    const bySlot = new Map(assigned)
+    parts.push(`:root{${assigned.map(([slot, name]) => `${fontSlotVar(slot)}:'${name}'`).join(';')}}`)
+    const primary = bySlot.get('primary')
+    const secondary = bySlot.get('secondary')
+    if (primary) parts.push(`h1,h2,h3,h4,h5,h6{font-family:'${primary}',sans-serif}`)
+    if (secondary) parts.push(`body{font-family:'${secondary}',sans-serif}`)
+  }
   return parts.join('')
 }
 
@@ -403,14 +491,22 @@ export const FONTS_VIEW = 'artist_fonts_with_slots'
  *  `security_invoker`), so a caller who does not manage the artist gets an empty list
  *  rather than someone else's fonts. */
 export async function listArtistFonts(supabase: SupabaseClient, artistId: string): Promise<ArtistFont[]> {
-  const { data } = await supabase
-    .from(FONTS_VIEW)
-    .select('id, label, family, storage_path, format, slots')
-    .eq('artist_id', artistId)
-    .order('created_at')
+  // `*`, not a column list, ON PURPOSE (the listBrandColors precedent): `source` and
+  // `google_family` arrive with 20260925120000, and naming them would fail every upload
+  // until that migration is pushed. Before it, every font reads as an upload.
+  const { data } = await supabase.from(FONTS_VIEW).select('*').eq('artist_id', artistId).order('created_at')
   // `slots` is a Postgres text[]; coalesced to '{}' in the view, but a legacy/partial read
   // must still yield an array — every caller maps over it.
-  return ((data ?? []) as ArtistFont[]).map((f) => ({ ...f, slots: (f.slots ?? []) as FontSlot[] }))
+  return ((data ?? []) as Record<string, unknown>[]).map((f) => ({
+    id: String(f.id),
+    label: String(f.label),
+    family: String(f.family),
+    storage_path: (f.storage_path as string | null) ?? null,
+    format: (f.format as FontFormat | null) ?? null,
+    slots: ((f.slots as FontSlot[] | null) ?? []) as FontSlot[],
+    source: sourceOf(f.source),
+    google_family: (f.google_family as string | null) ?? null,
+  }))
 }
 
 /**
@@ -484,7 +580,60 @@ export async function setArtistFont(
   if (!data) return { ok: false, error: 'Could not save that font.' }
   // A brand-new font fills no slots. Stated rather than left undefined: every caller maps
   // over `slots`, and the insert returns the TABLE's columns, not the view's.
-  return { ok: true, font: { ...(data as Omit<ArtistFont, 'slots'>), slots: [] } }
+  const row = data as Pick<ArtistFont, 'id' | 'label' | 'family' | 'storage_path' | 'format'>
+  return { ok: true, font: { ...row, slots: [], source: 'upload', google_family: null } }
+}
+
+/**
+ * Add a GOOGLE font (BRAND_SYNC_PLAN.md, 20260925120000): an artist_fonts row with no file,
+ * `source: 'google'` and Google's own spelling in `google_family`. The site loads it from
+ * fonts.googleapis.com; the Brand page adds it to a slot in the same action.
+ *
+ *   • The name must be in the bundled catalogue (lib/google-fonts.ts), matched without
+ *     regard to case or spacing and STORED in Google's spelling — so the database never holds
+ *     a family Google would answer with an error, and the css2 URL is always Google's own.
+ *   • Picking a family the artist already has REUSES that row (one row per Google family,
+ *     `artist_fonts_google_once`): a second "Archivo" would be a second class token for the
+ *     same stylesheet.
+ *   • The family token is `sanitizeFamily` of the name, made unique, exactly like an upload's
+ *     — a reserved word is bumped rather than refused, because nobody typed it: it is
+ *     Google's name, and no family in the catalogue slugs to one today anyway.
+ *   • The same per-artist cap as uploads: a Google family is one more stylesheet entry on
+ *     every page.
+ */
+export async function addGoogleFont(
+  supabase: SupabaseClient,
+  artistId: string,
+  name: string,
+): Promise<{ ok: boolean; error?: string; font?: ArtistFont; reused?: boolean }> {
+  // Loaded here, not at the top: the catalogue is ~40 KB, and this module is in client
+  // bundles (the Brand page draws with fontFaceCss). Only the server action reaches this.
+  const { findGoogleFamily, loadGoogleFonts } = await import('@/lib/google-fonts')
+  const family = findGoogleFamily(await loadGoogleFonts(), name)
+  if (!family) return { ok: false, error: 'That isn’t a Google font.' }
+
+  const existing = await listArtistFonts(supabase, artistId)
+  const same = existing.find((f) => f.source === 'google' && f.google_family === family)
+  if (same) return { ok: true, font: same, reused: true }
+  if (existing.length >= MAX_FONTS_PER_ARTIST)
+    return {
+      ok: false,
+      error: `You can keep up to ${MAX_FONTS_PER_ARTIST} fonts. Remove one before adding another.`,
+    }
+
+  const token = uniqueFamily(sanitizeFamily(family), existing.map((f) => f.family))
+  const { data, error } = await supabase
+    .from('artist_fonts')
+    .insert({ artist_id: artistId, label: family, family: token, source: 'google', google_family: family })
+    .select('id, label, family')
+    .single()
+  if (error) return { ok: false, error: brandRefusal(error, 'Could not add that font.') }
+  if (!data) return { ok: false, error: 'Could not add that font.' }
+  const row = data as { id: string; label: string; family: string }
+  return {
+    ok: true,
+    font: { ...row, storage_path: null, format: null, slots: [], source: 'google', google_family: family },
+  }
 }
 
 /**
@@ -665,14 +814,18 @@ export async function clearCustomSlot(
   return { ok: true }
 }
 
-/** One uploaded font as the Brand page shows it. `weight` is null when unknown. */
+/** One font as the Brand page shows it. `weight` is null when unknown (and on a Google
+ *  font, which has every weight). `storagePath`/`format` are null on a Google font, which
+ *  has `googleFamily` instead. */
 export type BrandFont = {
   id: string
   label: string
   family: string
-  format: FontFormat
-  storagePath: string
+  format: FontFormat | null
+  storagePath: string | null
   weight: number | null
+  source: FontSource
+  googleFamily: string | null
 }
 
 /** One font row. Built-ins always appear (font null = empty); an added row appears only
@@ -697,11 +850,9 @@ export type BrandFonts = {
  */
 export async function loadBrandFonts(supabase: SupabaseClient, artistId: string): Promise<BrandFonts> {
   const [fontsRes, slotsRes] = await Promise.all([
-    supabase
-      .from('artist_fonts')
-      .select('id, label, family, format, storage_path, weight')
-      .eq('artist_id', artistId)
-      .order('created_at'),
+    // `*` for the same reason as listArtistFonts: `source`/`google_family` arrive with
+    // 20260925120000, and the Fonts tab must keep working either side of the push.
+    supabase.from('artist_fonts').select('*').eq('artist_id', artistId).order('created_at'),
     supabase.from('artist_font_slots').select('slot, font_id, label, note').eq('artist_id', artistId),
   ])
   if (fontsRes.error) throw new Error(fontsRes.error.message)
@@ -711,9 +862,11 @@ export async function loadBrandFonts(supabase: SupabaseClient, artistId: string)
     id: String(f.id),
     label: String(f.label),
     family: String(f.family),
-    format: f.format as FontFormat,
-    storagePath: String(f.storage_path),
+    format: (f.format as FontFormat | null) ?? null,
+    storagePath: (f.storage_path as string | null) ?? null,
     weight: f.weight == null ? null : Number(f.weight),
+    source: sourceOf(f.source),
+    googleFamily: (f.google_family as string | null) ?? null,
   }))
   const byId = new Map(fonts.map((f) => [f.id, f]))
   const rows = new Map(

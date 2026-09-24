@@ -13,7 +13,8 @@ const same = (a: string, b: string) => (canonicalHex(a) || a) === (canonicalHex(
 
 /**
  * THE BROWSER BAR (BRAND_PAGE_PLAN.md, Tab icon tab): the colour a phone browser paints its
- * top bar on the site (`theme-color`, which sites start reading in a later round). The
+ * top bar on the site (`theme-color`). It PUBLISHES with the Brand bar (20260925120000): the
+ * site reads `brand.theme_color` from the published payload, so a pick raises the bar. The
  * Brand page's swatch + hex — ColorPalette's `row` variant, the standing rule for every
  * colour control — with the artist's brand colours first in its "On the site" swatches.
  *
@@ -25,7 +26,7 @@ const same = (a: string, b: string) => (canonicalHex(a) || a) === (canonicalHex(
  * every save revalidates the page, and the refresh carrying an EARLIER save could land
  * while a newer pick was still waiting — the row snapped back to it mid-pick. So the latest
  * pick is shown until the server says that colour (or refuses it); with none waiting, the
- * row shows whatever the server sends (a change from another tab).
+ * row shows whatever the server sends (a change from another tab, or the bar's Revert).
  */
 export function BrowserBarColor({
   artistId,

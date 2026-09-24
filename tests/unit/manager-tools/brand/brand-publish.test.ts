@@ -1,5 +1,5 @@
-// The Brand page's Publish sends logos, icons and fonts to the site — and leaves every other
-//   photo's draft where it is.
+// The Brand page's Publish sends logos, icons, fonts, colours and the browser-bar colour to
+//   the site — and leaves every other photo's draft where it is.
 /**
  * `publishBrandWithPasswordAction`, end to end over a fake client (no database).
  *
@@ -62,6 +62,10 @@ const logoGone = media('logo-gone', 'logo_secondary') // published, then deleted
 const photoGone = media('photo-gone', 'gallery_image') // published, then deleted
 const font = { id: 'f1', artist_id: A, label: 'Mori', family: 'mori', storage_path: `${A}/fonts/f1.woff2`, format: 'woff2', created_at: 'x', slots: ['primary'] }
 
+/** A brand colour (with a dashboard-only note) and the browser-bar singleton (20260925120000). */
+const cream = { id: 'c1', artist_id: A, key: 'cream', name: 'Cream', hex: '#f4f1ea', note: 'SECRET-NOTE', slot: null, sort_order: 2, created_at: 'x' }
+const bar = { id: A, artist_id: A, theme_color: '#0a0a0a' }
+
 function world() {
   return fakeClient((c: Call) => {
     if (c.op === 'rpc') return { data: [pub({ ...heroEdited, sort_order: 0 }), pub(logoGone), pub(photoGone)] }
@@ -70,6 +74,8 @@ function world() {
       return { data: rows, count: rows.length }
     }
     if (c.op === 'select' && c.table === 'artist_fonts_with_slots') return { data: [font], count: 1 }
+    if (c.op === 'select' && c.table === 'brand_colors') return { data: [cream], count: 1 }
+    if (c.op === 'select' && c.table === 'artists' && c.cols === 'id, theme_color') return { data: { id: A, theme_color: bar.theme_color } }
     return { data: [] }
   })
 }
@@ -107,6 +113,20 @@ describe('the Brand publish is brand-scoped', () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     await publishBrandWithPasswordAction(A, 'pw')
     expect(written()).toContainEqual(['artist_font', 'f1', false])
+  })
+
+  it('CRITICAL: the colours and the browser-bar colour publish with it now (Sam, 2026-09-24) — the note never rides', async () => {
+    const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
+    await publishBrandWithPasswordAction(A, 'pw')
+    expect(written()).toContainEqual(['brand_color', 'c1', false])
+    expect(written()).toContainEqual(['theme_color', A, false])
+    const rows = fake.calls
+      .filter((c) => c.table === 'revisions' && c.op === 'insert')
+      .flatMap((c) => c.payload as { entity_type: string; data: Record<string, unknown> }[])
+    const colour = rows.find((r) => r.entity_type === 'brand_color')!
+    expect(colour.data).toEqual({ id: 'c1', key: 'cream', name: 'Cream', hex: '#f4f1ea', slot: null, sort_order: 2, created_at: 'x' })
+    expect(JSON.stringify(rows)).not.toContain('SECRET-NOTE')
+    expect(rows.find((r) => r.entity_type === 'theme_color')!.data).toEqual({ id: A, theme_color: '#0a0a0a' })
   })
 
   it('no storage sweep runs on this path (nothing is removed from any bucket)', async () => {

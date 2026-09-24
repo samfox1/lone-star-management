@@ -68,12 +68,20 @@ afterAll(async () => {
 
 describe('the slot rules, written as the service role (RLS is not what refuses)', () => {
   it('CRITICAL: only primary and secondary are slots', async () => {
-    for (const slot of ['tertiary', 'Primary', ''])
-      expectRefusedBy(
-        (await svc.from('brand_colors').insert({ artist_id: A, slot, name: 'Primary', hex: '#000000' })).error,
-        '23514',
-        'brand_colors_slot_known',
-      )
+    // A well-formed unknown slot: only slot_known can refuse it (its key, `tertiary`, is fine).
+    expectRefusedBy(
+      (await svc.from('brand_colors').insert({ artist_id: A, slot: 'tertiary', name: 'Primary', hex: '#000000' })).error,
+      '23514',
+      'brand_colors_slot_known',
+    )
+    // The key trigger copies the slot into `key` (20260925120000), and CHECKs run in name
+    // order, so a malformed slot meets brand_colors_key_format first. Refused either way.
+    for (const slot of ['Primary', '']) {
+      const { error } = await svc.from('brand_colors').insert({ artist_id: A, slot, name: 'Primary', hex: '#000000' })
+      expect(error?.code, `[${error?.code}] ${error?.message}`).toBe('23514')
+      expect(error?.message ?? '').toMatch(/brand_colors_(slot_known|key_format)/)
+    }
+    expect(await countColors(A)).toBe(0)
   })
 
   it('CRITICAL: a built-in’s name is fixed, and it has no note', async () => {

@@ -40,9 +40,12 @@ const font = (id: string, slots: string[], extra: Record<string, unknown> = {}):
   format: 'woff2',
   created_at: '2026-09-01T00:00:00+00:00',
   slots,
+  // 20260925120000: every row carries where its face comes from.
+  source: 'upload',
+  google_family: null,
   ...extra,
 })
-const pub = (type: 'media' | 'artist_font', row: ContentRow) => ({ entity_type: type, entity_id: row.id, data: publicSnapshot(type, row) })
+const pub = (type: 'media' | 'artist_font' | 'brand_color' | 'theme_color', row: ContentRow) => ({ entity_type: type, entity_id: row.id, data: publicSnapshot(type, row) })
 const tomb = (type: string, id: string) => ({ entity_type: type, entity_id: id, data: { _deleted: true } })
 
 /** A slot row. `created_at` defaults to BEFORE the last font publish (PUBLISHED_AT): the
@@ -58,6 +61,10 @@ function world(o: {
   log: { entity_type: string; entity_id: string; data: Record<string, unknown> }[]
   media?: ContentRow[]
   fonts?: ContentRow[]
+  /** brand_colors rows (20260925120000). */
+  colors?: ContentRow[]
+  /** artists.theme_color — `listContent('theme_color')` has a row only while it is set. */
+  theme?: string | null
   slots?: Slot[]
   /** `artists.<icon>_source_media_id` before the revert (null = the primary logo). */
   sources?: { favicon_source_media_id: string | null; home_icon_source_media_id: string | null }
@@ -81,6 +88,8 @@ function world(o: {
     if (c.op === 'select' && c.table === 'media') return { data: o.media ?? [], count: (o.media ?? []).length }
     if (c.op === 'select' && c.table === 'artist_fonts_with_slots') return { data: db.fonts, count: db.fonts.length }
     if (c.op === 'select' && c.table === 'artist_font_slots') return { data: db.slots.map((s) => ({ ...s })) }
+    if (c.op === 'select' && c.table === 'brand_colors') return { data: o.colors ?? [], count: (o.colors ?? []).length }
+    if (c.op === 'select' && c.table === 'artists' && c.cols === 'id, theme_color') return { data: { id: A, theme_color: o.theme ?? null } }
     if (c.op === 'select' && c.table === 'artists')
       return { data: o.sources ?? { favicon_source_media_id: null, home_icon_source_media_id: null } }
     if (c.op === 'select' && c.table === 'revisions') {
@@ -121,7 +130,8 @@ describe('the two guards restoreToPublished taught us', () => {
     const f = font('f1', ['primary'])
     const w = world({ log: [pub('artist_font', f)], media: [media('l1', 'logo', { label: 'Tour' })], fonts: [f], slots: [{ slot: 'primary', font_id: 'f1' }] })
     const res = await w.run()
-    expect(res.skipped).toEqual(['media'])
+    // The colours and the browser bar (20260925120000) were never published here either.
+    expect(res.skipped).toEqual(['media', 'brand_color', 'theme_color'])
     expect(on(w, 'media', 'delete')).toEqual([])
   })
 
@@ -132,7 +142,7 @@ describe('the two guards restoreToPublished taught us', () => {
     const logo = media('p1', 'logo_primary')
     const w = world({ log: [pub('media', logo)], media: [logo], fonts: [font('f1', ['primary'])], slots: [{ slot: 'primary', font_id: 'f1' }] })
     const res = await w.run()
-    expect(res.skipped).toEqual(['artist_font'])
+    expect(res.skipped).toEqual(['artist_font', 'brand_color', 'theme_color'])
     expect(on(w, 'artist_fonts', 'delete')).toEqual([])
     expect(on(w, 'artist_font_slots', 'delete')).toEqual([])
   })
@@ -223,7 +233,8 @@ describe('fonts and their slots', () => {
     const ins = on(w, 'artist_fonts', 'insert')
     expect(ids(del)).toEqual(['f3'])
     expect(ins.map((c) => c.payload)).toEqual([
-      { id: 'f2', artist_id: A, label: 'Font f2', family: 'family-f2', storage_path: `${A}/fonts/f2.woff2`, format: 'woff2' },
+      // …and where its face comes from, so a re-inserted Google font stays a Google font.
+      { id: 'f2', artist_id: A, label: 'Font f2', family: 'family-f2', storage_path: `${A}/fonts/f2.woff2`, format: 'woff2', source: 'upload', google_family: null },
     ])
     expect(w.calls.indexOf(del[0])).toBeLessThan(w.calls.indexOf(ins[0]))
 
@@ -707,5 +718,123 @@ describe('slot words through a revert (review 2)', () => {
     // f3 deleted, f2 inserted, custom_1 put back: 3.
     expect((await w.run()).changed).toBe(3)
     expect(w.db.slots.find((s) => s.slot === 'custom_1')).toMatchObject({ font_id: 'f2', label: 'Credits' })
+  })
+})
+
+/**
+ * COLOURS AND THE BROWSER BAR (BRAND_SYNC_PLAN.md, 20260925120000). They publish now, so
+ * Revert puts them back like any other brand row — and until this round the revert's own
+ * doc said "colours, the browser-bar colour … are not touched at all". Sam changed that call.
+ */
+const color = (id: string, key: string, name: string, hex: string, extra: Record<string, unknown> = {}): ContentRow => ({
+  id,
+  artist_id: A,
+  key,
+  name,
+  hex,
+  note: null,
+  slot: null,
+  sort_order: 1,
+  created_at: '2026-09-01T00:00:00+00:00',
+  ...extra,
+})
+const themeRow = (hex: string): ContentRow => ({ id: A, artist_id: A, theme_color: hex })
+
+describe('colours: back to what the site shows', () => {
+  it('CRITICAL: never published → SKIPPED, not wiped — the palette survives a Revert of a logo', async () => {
+    const logo = media('p1', 'logo_primary')
+    const w = world({ log: [pub('media', logo)], media: [media('p2', 'logo_primary')], colors: [color('c1', 'cream', 'Cream', '#f4f1ea')] })
+    const res = await w.run()
+    expect(res.skipped).toContain('brand_color')
+    expect(w.calls.filter((c) => c.table === 'brand_colors' && c.op !== 'select')).toEqual([])
+    expect(res.changed).toBeGreaterThan(0) // the witness: the logo half DID revert
+  })
+
+  it('CRITICAL: added since → removed; edited → only name/hex/order back; deleted since → re-inserted with its KEY and created_at', async () => {
+    const cream = color('c1', 'cream', 'Cream', '#f4f1ea', { sort_order: 2 })
+    const black = color('c2', 'black', 'Black', '#0a0a0a', { sort_order: 3, created_at: '2026-09-02T00:00:00+00:00' })
+    const w = world({
+      log: [pub('brand_color', cream), pub('brand_color', black)],
+      colors: [
+        { ...cream, hex: '#ffffff', note: 'for buttons' }, // edited (and a note, which is not the log's)
+        color('c9', 'teal', 'Teal', '#00aaaa'), // added since
+      ],
+    })
+    const res = await w.run()
+    const del = on(w, 'brand_colors', 'delete')
+    const up = on(w, 'brand_colors', 'update')
+    const ins = on(w, 'brand_colors', 'insert')
+    expect(ids(del)).toEqual(['c9'])
+    expect(up.map((c) => [filterValue(c, 'id'), c.payload])).toEqual([['c1', { hex: '#f4f1ea' }]])
+    expect(ins.map((c) => c.payload)).toEqual([
+      { id: 'c2', artist_id: A, key: 'black', name: 'Black', hex: '#0a0a0a', slot: null, sort_order: 3, created_at: '2026-09-02T00:00:00+00:00' },
+    ])
+    // Removals before re-inserts: the added colour may hold the key a re-inserted one needs.
+    const order = w.calls.filter((c) => c.table === 'brand_colors' && c.op !== 'select').map((c) => c.op)
+    expect(order).toEqual(['delete', 'update', 'insert'])
+    expect(res.changed).toBe(3)
+  })
+
+  it('CRITICAL: a key or slot is never written on an update — the database refuses any key change, and one refusal stops the whole revert', async () => {
+    // The database cannot hold this pair (the key is immutable, and a slotted row's key IS
+    // its slot), which is exactly why a planted mismatch is the only way to see whether the
+    // revert would try: if it did, the real trigger would throw mid-revert.
+    const cream = color('c1', 'cream', 'Cream', '#f4f1ea')
+    const w = world({ log: [pub('brand_color', cream)], colors: [{ ...cream, key: 'cream-2', slot: 'secondary', hex: '#000000', sort_order: 5 }] })
+    await w.run()
+    const [up] = on(w, 'brand_colors', 'update')
+    expect(up.payload).toEqual({ hex: '#f4f1ea', sort_order: 1 })
+  })
+
+  it('a tombstoned colour is not "published": a live row with that id goes, nothing comes back', async () => {
+    const cream = color('c1', 'cream', 'Cream', '#f4f1ea')
+    const other = color('c2', 'ink', 'Ink', '#111111')
+    const w = world({ log: [tomb('brand_color', 'c1'), pub('brand_color', other)], colors: [cream, other] })
+    await w.run()
+    expect(ids(on(w, 'brand_colors', 'delete'))).toEqual(['c1'])
+    expect(on(w, 'brand_colors', 'insert')).toEqual([])
+  })
+
+  it('every colour write names THIS artist', async () => {
+    const cream = color('c1', 'cream', 'Cream', '#f4f1ea')
+    const gone = color('c2', 'ink', 'Ink', '#111111')
+    const w = world({ log: [pub('brand_color', cream), pub('brand_color', gone)], colors: [{ ...cream, name: 'Off-white' }, color('c3', 'new', 'New', '#222222')] })
+    await w.run()
+    const writes = w.calls.filter((c) => c.table === 'brand_colors' && c.op !== 'select')
+    expect(writes).toHaveLength(3)
+    for (const c of writes) expect(c.op === 'insert' ? (c.payload as { artist_id: string }).artist_id : filterValue(c, 'artist_id'), c.op).toBe(A)
+  })
+})
+
+describe('the browser-bar colour: back to what the site shows', () => {
+  const themeWrites = (w: ReturnType<typeof world>) =>
+    w.calls.filter((c) => c.table === 'artists' && c.op === 'update' && 'theme_color' in (c.payload as object))
+
+  it('CRITICAL: changed since → the published colour, on THIS artist', async () => {
+    const w = world({ log: [pub('theme_color', themeRow('#0a0a0a'))], theme: '#123456' })
+    const res = await w.run()
+    const [up] = themeWrites(w)
+    expect(up.payload).toEqual({ theme_color: '#0a0a0a' })
+    expect(filterValue(up, 'id')).toBe(A)
+    expect(res.changed).toBe(1)
+  })
+
+  it('CRITICAL: cleared and published (a tombstone) → none; cleared since a publish → put back', async () => {
+    const cleared = world({ log: [tomb('theme_color', A)], theme: '#123456' })
+    await cleared.run()
+    expect(themeWrites(cleared).map((c) => c.payload)).toEqual([{ theme_color: null }])
+    const putBack = world({ log: [pub('theme_color', themeRow('#0a0a0a'))], theme: null })
+    await putBack.run()
+    expect(themeWrites(putBack).map((c) => c.payload)).toEqual([{ theme_color: '#0a0a0a' }])
+  })
+
+  it('already what the site shows → no write; never published → skipped, not cleared', async () => {
+    const same = world({ log: [pub('theme_color', themeRow('#0a0a0a'))], theme: '#0a0a0a' })
+    expect((await same.run()).changed).toBe(0)
+    expect(themeWrites(same)).toEqual([])
+    const logo = media('p1', 'logo_primary')
+    const never = world({ log: [pub('media', logo)], media: [logo], theme: '#123456' })
+    expect((await never.run()).skipped).toContain('theme_color')
+    expect(themeWrites(never)).toEqual([])
   })
 })

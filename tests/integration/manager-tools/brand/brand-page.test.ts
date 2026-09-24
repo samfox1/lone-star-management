@@ -401,7 +401,11 @@ describe('fonts: weight, slot titles and notes', () => {
 })
 
 describe('CRITICAL: nothing dashboard-only reaches the public site', () => {
-  it('notes, originals, slot titles, weights, icon sources, framing and theme stay home; a logo title goes', async () => {
+  // The browser-bar colour is not dashboard-only any more (20260925120000): it publishes
+  // with the Brand bar. This publish sends only media, fonts and the profile, so it must
+  // still not appear — the draft theme reaching the door by any other route is the leak.
+  // Its own publish is pinned in brand-sync.test.ts.
+  it('notes, originals, slot titles, weights, icon sources, framing and an UNPUBLISHED theme stay home; a logo title goes', async () => {
     const t = await createThrowawayArtist(svc, 'Brand payload', asA)
     try {
       const primary = brandPath(t.id)
@@ -508,9 +512,12 @@ describe('Revert keeps what only the dashboard holds', () => {
 
       // Dashboard-only edits since (never published, so never "not on the site yet") …
       await setLogoNote(asA, t.id, tour.logo!.id, 'merch table')
+      await saveFraming(asA, t.id, { zoom: 2, offsetY: 0.25 }, 'favicon')
+      // … and a colour and a browser-bar colour. These PUBLISH now (20260925120000), but
+      // neither kind has EVER been published for this artist, so Revert must skip them
+      // rather than read "never published" as "delete" — they stay, and stay on the bar.
       const color = await addBrandColor(asA, t.id, { name: 'Ink', hex: '#111111' })
       await setThemeColor(asA, t.id, '#0a0b0c')
-      await saveFraming(asA, t.id, { zoom: 2, offsetY: 0.25 }, 'favicon')
       // … and real changes: a new font INTO custom_1 (the slot keeps its title), a new logo.
       const f3 = await setArtistFont(asA, t.id, { label: 'New Face', storagePath: fontPath(t.id), format: 'woff2' })
       expect((await setFontSlot(asA, t.id, 'custom_1', f3.font!.id)).ok).toBe(true)
@@ -523,7 +530,10 @@ describe('Revert keeps what only the dashboard holds', () => {
 
       const res = await restoreBrandToPublished(asA, t.id)
       expect(res.changed).toBeGreaterThan(0)
-      expect(await brandPending(asA, t.id)).toEqual({ dirty: false, message: '', canRevert: false })
+      expect(res.skipped).toEqual(['brand_color', 'theme_color'])
+      // Logos and fonts are back on what the site shows; the colour and the browser bar
+      // were never on it, so they are still waiting — and there is nothing to revert them TO.
+      expect(await brandPending(asA, t.id)).toEqual({ dirty: true, message: '2 changes', canRevert: false })
 
       // custom_1 is back on f1 WITH its title and note — pointed back at f1 before f3 went,
       // so deleting f3 had no slot row to cascade away (review 2).
@@ -531,9 +541,9 @@ describe('Revert keeps what only the dashboard holds', () => {
       expect(slot?.font?.id).toBe(f1.font!.id)
       expect(slot).toMatchObject({ label: 'Credits', note: 'back cover' })
 
-      // KEPT: a surviving logo's note, a surviving font's weight, the palette, the
-      // browser-bar colour and the icon framing — none of it is in the log, and Revert
-      // does not touch what it cannot restore.
+      // KEPT: a surviving logo's note, a surviving font's weight and the icon framing (never
+      // in the log), and the never-published palette and browser-bar colour (skipped) —
+      // Revert does not touch what it cannot restore.
       const logos = await loadBrandLogos(asA, t.id)
       expect(logos.added.find((l) => l.id === tour.logo!.id)?.note).toBe('merch table')
       expect(slot?.font?.weight).toBe(700)

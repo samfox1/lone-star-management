@@ -52,15 +52,32 @@ const font = (id: string, slots: string[]): ContentRow => ({
   slots,
 })
 
+/** A brand colour as brand_colors holds it (20260925120000: with its stable key). */
+const color = (id: string, name: string, hex: string, extra: Record<string, unknown> = {}): ContentRow => ({
+  id,
+  artist_id: A,
+  key: name.toLowerCase(),
+  name,
+  hex,
+  note: null,
+  slot: null,
+  sort_order: 1,
+  created_at: '2026-09-01T00:00:00+00:00',
+  ...extra,
+})
+
+/** The browser-bar colour as `listContent('theme_color')` yields it: one row while set. */
+const theme = (hex: string): ContentRow => ({ id: A, artist_id: A, theme_color: hex })
+
 /** A published snapshot of a working row, exactly as publishContent would write it. */
-const published = (type: 'media' | 'artist_font', row: ContentRow) => ({
+const published = (type: 'media' | 'artist_font' | 'brand_color' | 'theme_color', row: ContentRow) => ({
   entity_type: type,
   entity_id: row.id,
   data: publicSnapshot(type, row),
 })
 
 function world(opts: {
-  live: { media?: ContentRow[]; fonts?: ContentRow[] }
+  live: { media?: ContentRow[]; fonts?: ContentRow[]; colors?: ContentRow[]; theme?: ContentRow[] }
   log: { entity_type: string; entity_id: string; data: Record<string, unknown> }[]
   sources?: { favicon_source_media_id?: string | null; home_icon_source_media_id?: string | null }
 }) {
@@ -68,6 +85,10 @@ function world(opts: {
     if (c.op === 'rpc' && c.table === 'latest_revisions') return { data: opts.log }
     if (c.table === 'media') return { data: opts.live.media ?? [], count: (opts.live.media ?? []).length }
     if (c.table === 'artist_fonts_with_slots') return { data: opts.live.fonts ?? [], count: (opts.live.fonts ?? []).length }
+    if (c.table === 'brand_colors') return { data: opts.live.colors ?? [], count: (opts.live.colors ?? []).length }
+    // The browser-bar singleton reads `artists.theme_color` (PUBLISHABLE.theme_color.read).
+    if (c.table === 'artists' && c.cols === 'id, theme_color')
+      return { data: { id: A, theme_color: (opts.live.theme ?? [])[0]?.theme_color ?? null } }
     if (c.table === 'artists') return { data: opts.sources ?? {} }
     // The slot table, derived from the live fonts' `slots` (the view is built from it), so
     // a revert run on the same world sees the same slots the bar did.
@@ -246,5 +267,71 @@ describe('can Revert do anything?', () => {
     const logo = media('p1', 'logo_primary')
     const w = world({ live: { media: [logo, media('g1', 'gallery_image')] }, log: [published('media', logo)] })
     expect(await pending(w)).toEqual({ dirty: false, message: '', canRevert: false })
+  })
+})
+
+/**
+ * COLOURS AND THE BROWSER BAR PUBLISH NOW (Sam, 2026-09-24, BRAND_SYNC_PLAN.md: "Colours,
+ * the browser-bar colour, and fonts now go through draft → Publish like the rest of Brand
+ * (so the bar rises for them)"). Until this round they were dashboard-only and this file
+ * pinned the opposite — that a colour change never lit the bar. That rule is Sam's to change
+ * and he changed it; the note stays dashboard-only, and is pinned so below.
+ */
+describe('colours and the browser bar raise the bar (20260925120000)', () => {
+  it('CRITICAL: a colour never published is "added" — named Primary color, not "Primary"', async () => {
+    const red = color('c1', 'Primary', '#c63a2a', { key: 'primary', slot: 'primary' })
+    expect(await pending(world({ live: { colors: [red] }, log: [] }))).toEqual({
+      dirty: true,
+      message: 'Primary color added',
+      canRevert: false,
+    })
+  })
+
+  it('CRITICAL: published as it is → no bar; a new hex → "<name> changed", revertable', async () => {
+    const cream = color('c3', 'Cream', '#f4f1ea')
+    expect((await pending(world({ live: { colors: [cream] }, log: [published('brand_color', cream)] }))).dirty).toBe(false)
+    const moved = { ...cream, hex: '#ffffff' }
+    expect(await pending(world({ live: { colors: [moved] }, log: [published('brand_color', cream)] }))).toEqual({
+      dirty: true,
+      message: 'Cream changed',
+      canRevert: true,
+    })
+  })
+
+  it('a rename is a change (the name is published); a removed colour is "removed"', async () => {
+    const cream = color('c3', 'Cream', '#f4f1ea')
+    const renamed = { ...cream, name: 'Off-white' }
+    expect((await pending(world({ live: { colors: [renamed] }, log: [published('brand_color', cream)] }))).message).toBe('Off-white changed')
+    expect((await pending(world({ live: { colors: [] }, log: [published('brand_color', cream)] }))).message).toBe('Cream removed')
+  })
+
+  it('CRITICAL: a colour\'s NOTE is still dashboard-only — no bar', async () => {
+    const cream = color('c3', 'Cream', '#f4f1ea')
+    const noted = { ...cream, note: 'for the buttons' }
+    expect((await pending(world({ live: { colors: [noted] }, log: [published('brand_color', cream)] }))).dirty).toBe(false)
+  })
+
+  it('CRITICAL: the browser-bar colour: set → "Browser bar added"; cleared after publishing → "Browser bar removed"', async () => {
+    expect((await pending(world({ live: { theme: [theme('#0a0a0a')] }, log: [] }))).message).toBe('Browser bar added')
+    expect(await pending(world({ live: { theme: [] }, log: [published('theme_color', theme('#0a0a0a'))] }))).toEqual({
+      dirty: true,
+      message: 'Browser bar removed',
+      canRevert: true,
+    })
+    expect((await pending(world({ live: { theme: [theme('#111111')] }, log: [published('theme_color', theme('#0a0a0a'))] }))).message).toBe(
+      'Browser bar changed',
+    )
+  })
+
+  it('an unset browser-bar colour that was never published is nothing (the view has no row)', async () => {
+    expect(await pending(world({ live: { theme: [] }, log: [] }))).toEqual({ dirty: false, message: '', canRevert: false })
+  })
+
+  it('a colour change and a logo change → "2 changes"; Revert shows only if one of them was published', async () => {
+    const logo = media('p1', 'logo_primary')
+    const w = world({ live: { media: [logo], colors: [color('c3', 'Cream', '#f4f1ea')] }, log: [published('media', logo)] })
+    expect(await pending(w)).toEqual({ dirty: true, message: 'Cream added', canRevert: false })
+    const w2 = world({ live: { media: [media('p2', 'logo_primary')], colors: [color('c3', 'Cream', '#f4f1ea')] }, log: [published('media', logo)] })
+    expect(await pending(w2)).toEqual({ dirty: true, message: '2 changes', canRevert: true })
   })
 })

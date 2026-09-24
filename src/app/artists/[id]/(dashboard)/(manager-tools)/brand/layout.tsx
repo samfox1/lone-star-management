@@ -29,8 +29,9 @@ export default async function BrandLayout({ children, params }: { children: Reac
 
 /** Always mounted once loaded: hidden (off-screen, inert) while nothing is pending, so it
  *  can SLIDE up when a refresh brings `dirty` — a bar mounted only when dirty would just
- *  appear. `loadBrandPending` is BRAND-SCOPED (brand media purposes + font slots), never
- *  every media row on the account, and fails closed (hidden). */
+ *  appear. `loadBrandPending` is BRAND-SCOPED (brand media purposes, fonts + slots, colours
+ *  and the browser-bar colour), never every media row on the account, and fails closed
+ *  (hidden). */
 async function PendingBar({ artistId }: { artistId: string }) {
   const pending = await loadBrandPending(artistId)
   return <BrandRiser artistId={artistId} dirty={pending.dirty} message={pending.message} canRevert={pending.canRevert} />

@@ -4,10 +4,11 @@ import { useRouter } from 'next/navigation'
 import { publishBrandWithPasswordAction } from '../../../actions'
 import { revertBrandAction } from '../actions'
 import { PublishRiser } from '../../_ui/publish-riser'
+import { announceBrandRevert } from './brand-events'
 
 /**
- * The Brand tabs' Publish bar, bound to the brand publish (logos, icons, fonts —
- * `publishBrandWithPasswordAction`) and its Revert (`revertBrandAction`, back to what the
+ * The Brand tabs' Publish bar, bound to the brand publish (logos, icons, fonts, colours and
+ * the browser-bar colour — `publishBrandWithPasswordAction`) and its Revert (`revertBrandAction`, back to what the
  * site shows). Rendered once by brand/layout.tsx, so it is the same bar on every Brand
  * tab and survives a tab switch.
  *
@@ -46,6 +47,9 @@ export function BrandRiser({
               const res = await revertBrandAction(artistId)
               if (res.error) return { error: res.error }
               if (res.changed === 0) return { error: 'There was nothing to revert — the site already shows this.' }
+              // Before the refresh: a tab holding its own copy (the Colors palette) re-seeds
+              // from the props the refresh brings (brand-events.ts).
+              announceBrandRevert()
               router.refresh()
             }
           : undefined

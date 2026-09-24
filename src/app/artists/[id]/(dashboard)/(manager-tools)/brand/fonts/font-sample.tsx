@@ -9,11 +9,11 @@ import { faceOf, fittedFontSize, SAMPLE_CAP_PX } from './face'
  * an "H" once the face has loaded. null until then, and wherever there is no canvas (jsdom,
  * very old browsers) — fittedFontSize falls back to the plain size.
  */
-function useCapRatio(family: string): number | null {
+function useCapRatio(family: string, googleFamily?: string | null): number | null {
   const [ratio, setRatio] = useState<number | null>(null)
   useEffect(() => {
     let live = true
-    const face = faceOf(family)
+    const face = faceOf(family, googleFamily)
     const measure = () => {
       const ctx = typeof document !== 'undefined' ? document.createElement('canvas').getContext?.('2d') : null
       if (!ctx) return
@@ -27,29 +27,31 @@ function useCapRatio(family: string): number | null {
     return () => {
       live = false
     }
-  }, [family])
+  }, [family, googleFamily])
   return ratio
 }
 
 /** A font's name (or any text) drawn in that font, sized so its capitals match every
- *  other sample's. `cap` is the target capital height in px. */
-export function FontSample({ family, cap = SAMPLE_CAP_PX, fallback = 16, className, children }: {
+ *  other sample's. `cap` is the target capital height in px. `googleFamily` is set on a
+ *  Google font, which is set in its real family (faceOf). */
+export function FontSample({ family, googleFamily, cap = SAMPLE_CAP_PX, fallback = 16, className, children }: {
   family: string
+  googleFamily?: string | null
   cap?: number
   fallback?: number
   className?: string
   children: ReactNode
 }) {
-  const size = fittedFontSize(useCapRatio(family), cap, fallback)
+  const size = fittedFontSize(useCapRatio(family, googleFamily), cap, fallback)
   return (
-    <span data-font-sample="" style={{ fontFamily: faceOf(family), fontSize: `${size}px` }} className={cx(className)}>
+    <span data-font-sample="" style={{ fontFamily: faceOf(family, googleFamily), fontSize: `${size}px` }} className={cx(className)}>
       {children}
     </span>
   )
 }
 
 /** For elements that must stay themselves (the preview's contentEditable): the style only. */
-export function useSampleStyle(family: string, cap = SAMPLE_CAP_PX, fallback = 16) {
-  const size = fittedFontSize(useCapRatio(family), cap, fallback)
-  return { fontFamily: faceOf(family), fontSize: `${size}px` }
+export function useSampleStyle(family: string, cap = SAMPLE_CAP_PX, fallback = 16, googleFamily?: string | null) {
+  const size = fittedFontSize(useCapRatio(family, googleFamily), cap, fallback)
+  return { fontFamily: faceOf(family, googleFamily), fontSize: `${size}px` }
 }

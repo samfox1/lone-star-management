@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   CUSTOM_FONT_SLOTS,
   fontFaceCss,
+  googleStylesheetHref,
   nextFreeCustomSlot,
   type BrandFont,
   type BrandFonts,
@@ -20,6 +21,7 @@ import type { SaveResult } from '../../_ui/inline-text'
 import { LedgerRow, LedgerSection } from '../../_ui/ledger'
 import { RowIcon } from '../../_ui/row-icon'
 import {
+  addGoogleFontAction,
   clearCustomFontSlotAction,
   removeArtistFontAction,
   renameArtistFontAction,
@@ -31,6 +33,7 @@ import { FontSample } from './font-sample'
 import { FontMenu } from './font-menu'
 import { FontPreview } from './font-preview'
 import { FontUploadDialog } from './font-upload-dialog'
+import { GoogleFontPicker } from './google-font-picker'
 
 /** The built-in rows: a fixed title and fixed grey guide text (Brand's approved exception
  *  to the no-instruction-copy rule). PRIMARY is headings and display type, SECONDARY body —
@@ -77,8 +80,13 @@ type Upload = { slot: FontSlot; title: string; meta?: FontSlotMeta }
  * Primary and Secondary, then the added rows (custom slots, at most CUSTOM_FONT_SLOTS).
  *
  * EVERY FONT IS SHOWN IN ITSELF: the component injects the same @font-face CSS the site
- * gets (fontFaceCss, which re-sanitizes every family — the family is a CSS-injection sink),
- * and every inline face goes through `faceOf`, the same allowlist.
+ * gets (fontFaceCss, which re-sanitizes every family — the family is a CSS-injection sink)
+ * and, for Google fonts, the css2 stylesheet the bridge builds; every inline face goes
+ * through `faceOf`, the same allowlists.
+ *
+ * GOOGLE FONTS (BRAND_SYNC_PLAN.md, 2026-09-24): the Change menu's "Google Fonts…" opens
+ * the picker; a family picked there is added and placed in one action. Its row says
+ * "Google Fonts" where an upload says its weight (a Google family carries every weight).
  *
  * Writes go straight to the server actions; a refusal is an error toast and nothing moves.
  * After a write, `router.refresh()` so the layout's Publish bar sees the real change. A pick
@@ -96,6 +104,8 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
   const [focusSlot, setFocusSlot] = useState<FontSlot | null>(null)
   const [menuFor, setMenuFor] = useState<FontSlot | null>(null)
   const [uploading, setUploading] = useState<Upload | null>(null)
+  /** The row the Google picker is open for. */
+  const [googleFor, setGoogleFor] = useState<Row | null>(null)
   const [previewing, setPreviewing] = useState<{ title: string; font: BrandFont } | null>(null)
   /** The re-entry latch. A ref: two fast clicks both read the pre-render state. */
   const busy = useRef(false)
@@ -138,7 +148,19 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
   /** Where "+ Add font" lands; null hides it (every custom slot filled or claimed). */
   const freeSlot = nextFreeCustomSlot(custom.map((r) => r.slot))
 
-  const css = fontFaceCss(data.fonts.map((f) => ({ family: f.family, format: f.format, path: f.storagePath })))
+  // Every font drawn in itself: uploads through the same @font-face the site gets, Google
+  // fonts through the css2 stylesheet the bridge builds (all nine weights), set by their
+  // real family (faceOf). The @import leads, or the browser ignores it.
+  const wire = data.fonts.map((f) => ({
+    family: f.family,
+    label: f.label,
+    format: f.format,
+    path: f.storagePath,
+    source: f.source,
+    google_family: f.googleFamily,
+  }))
+  const googleHref = googleStylesheetHref(wire)
+  const css = (googleHref ? `@import url('${googleHref}');` : '') + fontFaceCss(wire)
 
   const patchPending = (slot: FontSlot, patch: Partial<Pending>) =>
     setPending((ps) => ps.map((p) => (p.slot === slot ? { ...p, ...patch } : p)))
@@ -177,6 +199,31 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
     if (!ok) return
     if (pending.some((p) => p.slot === row.slot)) patchPending(row.slot, { font, saved: true })
     else setPicked((m) => ({ ...m, [row.slot]: font }))
+  }
+
+  function openGoogle(row: Row) {
+    setMenuFor(null)
+    setGoogleFor(row)
+  }
+
+  /** A Google family picked for a row: add it (or reuse the artist's row for it) and place
+   *  it, in ONE action — with an unsaved row's title and note, which it saves. The family
+   *  the row already holds is not a change and writes nothing. A placement that failed is a
+   *  warning: the font was added and is in the Change menu. */
+  async function pickGoogle(row: Row, family: string) {
+    setGoogleFor(null)
+    if (row.font?.source === 'google' && row.font.googleFamily === family) return
+    const meta = row.unsaved ? metaOf(row) : undefined
+    let warned = false
+    const ok = await run(async () => {
+      const res = await addGoogleFontAction(artistId, family, row.slot, meta)
+      if (res.warning) {
+        warned = true
+        toast(res.warning, 'error')
+      }
+      return res
+    }, 'Couldn’t add that font.')
+    if (ok && !warned && pending.some((p) => p.slot === row.slot)) patchPending(row.slot, { saved: true })
   }
 
   function openUpload(row: Row) {
@@ -256,6 +303,7 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
             onToggleMenu={() => setMenuFor((s) => (s === row.slot ? null : row.slot))}
             onCloseMenu={() => setMenuFor(null)}
             onPick={(font) => void pick(row, font)}
+            onGoogle={() => openGoogle(row)}
             onUpload={() => openUpload(row)}
             onRemoveFont={(font) => void removeFont(font)}
             onRenameFont={renameFont}
@@ -275,6 +323,14 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
           meta={uploading.meta}
           onClose={() => setUploading(null)}
           onPlaced={() => patchPending(uploading.slot, { saved: true })}
+        />
+      ) : null}
+      {googleFor ? (
+        <GoogleFontPicker
+          title={googleFor.title}
+          current={googleFor.font?.source === 'google' ? googleFor.font.googleFamily : null}
+          onPick={(family) => void pickGoogle(googleFor, family)}
+          onClose={() => setGoogleFor(null)}
         />
       ) : null}
       {previewing ? <FontPreview title={previewing.title} font={previewing.font} onClose={() => setPreviewing(null)} /> : null}
@@ -303,6 +359,7 @@ function FontRow({
   onToggleMenu,
   onCloseMenu,
   onPick,
+  onGoogle,
   onUpload,
   onRemoveFont,
   onRenameFont,
@@ -318,6 +375,7 @@ function FontRow({
   onToggleMenu: () => void
   onCloseMenu: () => void
   onPick: (font: BrandFont) => void
+  onGoogle: () => void
   onUpload: () => void
   onRemoveFont: (font: BrandFont) => void
   onRenameFont: (font: BrandFont, label: string) => Promise<SaveResult>
@@ -337,13 +395,13 @@ function FontRow({
     <LedgerRow
       title={row.title}
       onRename={row.guide ? undefined : onRename}
-      meta={font ? <WeightLine weight={font.weight} /> : undefined}
+      meta={font ? font.source === 'google' ? 'Google Fonts' : <WeightLine weight={font.weight} /> : undefined}
       {...words}
       // An added row's trash, in the row's end slot so every row's sample lines up.
       remove={row.guide ? undefined : <RowIcon icon="trash" label="Remove" tone="danger" onClick={onDelete} />}
     >
       {font ? (
-        <FontSample family={font.family} className="min-w-0 truncate whitespace-nowrap tracking-[-0.005em] text-ink">
+        <FontSample family={font.family} googleFamily={font.googleFamily} className="min-w-0 truncate whitespace-nowrap tracking-[-0.005em] text-ink">
           {font.label}
         </FontSample>
       ) : (
@@ -367,6 +425,7 @@ function FontRow({
             currentId={font?.id ?? null}
             anchor={trigger}
             onPick={onPick}
+            onGoogle={onGoogle}
             onUpload={onUpload}
             onRemove={onRemoveFont}
             onRename={onRenameFont}

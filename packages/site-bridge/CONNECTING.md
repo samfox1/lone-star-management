@@ -650,6 +650,82 @@ different questions, two different answers, neither wrong. Do not read that gap 
 Cookieless on both sides (`persistence: 'memory'`), no autocapture, no session recording,
 no surveys. Delete the env var when the comparison passes and the module goes inert again.
 
+## 14. Wear the brand (0.41.0)
+
+The manager's Brand page is the one place colours, fonts, the browser-bar colour and the
+home-screen icon are set, and they publish like everything else. The bridge turns them into
+CSS variables and `<head>` values. **It never says where a colour goes.** Your stylesheet
+does, exactly as it does today.
+
+```ts
+import { brandCss, brandHead } from '@samfox1/site-bridge/brand'
+
+const opts = { supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL! }
+
+// Late in the document, after your own stylesheets (skeen: in SiteBody).
+<style dangerouslySetInnerHTML={{ __html: brandCss(site, opts) }} />
+
+// app/layout.tsx
+export async function generateViewport() {
+  return { themeColor: brandHead(await getSite(), opts).themeColor ?? '#0a0a0a' }
+}
+// …and in generateMetadata: icons.apple = brandHead(site, opts).appleTouchIcon ?? undefined
+```
+
+**Colours are `--brand-<key>`.** `--brand-primary` and `--brand-secondary` always exist as
+names; every colour the manager adds gets a key slugged from its name when it is created
+(`--brand-cream`, `--brand-charcoal`). **A key never changes**, not even when the colour is
+renamed, so you can write your stylesheet against it once. The colour's name never reaches
+CSS.
+
+**Map your own tokens onto them, with your current value as the fallback.** Do not replace
+your palette. Point it:
+
+```css
+:root {
+  --red:        var(--brand-primary,   #c63a2a);
+  --sky:        var(--brand-secondary, #8dbfd5);
+  --cream:      var(--brand-cream,     #f4f1ea);
+  --background: var(--brand-black,     #0a0a0a);
+  --charcoal:   var(--brand-charcoal,  #17191c);
+}
+```
+
+That is skeen's mapping. With nothing published, or on a door older than 0.41, the
+variables are unset and every fallback applies. The site looks exactly as it did.
+
+**Fonts work as before, and Google fonts arrive with them.** `--font-primary`,
+`--font-secondary` and `--font-custom-1..3` are set for every assigned slot, and a
+`.font-<family>` class is emitted per font, for uploads and Google fonts alike. An upload
+gets an `@font-face`. A Google font gets the `fonts.googleapis.com` stylesheet instead:
+one request for every Google family, all nine weights, `display=swap`. Its variable and
+class name Google's spelling (`'Big Shoulders Display'`), not the token.
+
+- **Keep the `@import` first.** `brandCss` leads with it, and a browser ignores an
+  `@import` that comes after any other rule. Give it its own `<style>` and do not
+  prepend anything to that string.
+- **Prefer a `<link>`?** Put `googleFontsHref(site.fonts)` in a
+  `<link rel="stylesheet">` (and preconnect to `fonts.gstatic.com`), then call
+  `brandFontCss(site.fonts, site.font_slots, { ...opts, googleImport: false })` +
+  `brandColorCss(site.brand)` so the sheet is not requested twice.
+- **A Content-Security-Policy** must allow `https://fonts.googleapis.com` in `style-src`
+  and `https://fonts.gstatic.com` in `font-src`.
+- **Slot defaults stay yours.** Declare `--font-primary: var(--font-display)` and the rest
+  in your own `:root`, as today. The bridge's `:root` wins by coming later, so its
+  `<style>` must render after your stylesheets.
+
+**Head values, not head tags.** `brandHead(site, opts)` returns `{ themeColor,
+appleTouchIcon }`. `themeColor` is the manager's browser-bar colour. `appleTouchIcon` is the
+published 180px home-screen icon, falling back to the favicon, never a logo. Either is
+`null` when nothing is published. Keep your own value then.
+
+**Do not hand-roll any of this.** Every value lands in a `<style>` served to fans, so each
+one is an injection sink: a key becomes a property name, a Google family goes into a string
+and a URL, a font path into `url('…')`. The builders re-check every value against an
+allowlist and drop anything that fails. A copy in your site would have to do the same, and
+would drift: skeen's own font reader once silently stopped applying slot fonts when the
+wire changed under it (August 2026, `lib/fonts.ts`).
+
 ## Known rough edges
 
 Written down so nobody rediscovers them.

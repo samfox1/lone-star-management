@@ -94,9 +94,10 @@ export const DRAFT_PRESENCE: Record<DraftPresenceEntity, true> = {
 /** The types a DASHBOARD PAGE publishes on its own, from its own password-gated bar:
  *  Videos, Tour, Merch and Connections each publish just their own entity. It is what
  *  `publishEntityAction` accepts, so a type with no page of its own — media, track,
- *  release, site_content, site_styles, artist_font — is a compile error there and cannot
- *  be published by a route that has no bar to publish it from. Those go out with the
- *  Site publish, or with releases, or from the editor's publish window.
+ *  release, site_content, site_styles, artist_font, brand_color, theme_color — is a
+ *  compile error there and cannot be published by a route that has no bar to publish it
+ *  from. Those go out with the Site publish, or with releases, or from the editor's publish
+ *  window, or (brand media, fonts, colours, the browser bar) from the Brand bar.
  *
  *  It is NOT a subset of LIVE_TOGGLE and never was, whatever the old name said: tour_date
  *  and merch are DRAFT_PRESENCE types. Presence and publishing are different questions —
@@ -110,7 +111,14 @@ export type LiveTogglePublishable = PagePublishable
  *  Media + site_content are published here but have no generic CRUD form (each
  *  has its own bespoke editor). The artist PROFILE is published separately as a
  *  singleton (publishProfile). */
-export type PublishableEntity = CrudEntity | 'media' | 'site_content' | 'site_styles' | 'artist_font'
+export type PublishableEntity =
+  | CrudEntity
+  | 'media'
+  | 'site_content'
+  | 'site_styles'
+  | 'artist_font'
+  | 'brand_color'
+  | 'theme_color'
 
 /** Fan-visible artist-profile columns that publish together as one snapshot.
  *  Deliberately excludes config/secret columns (shopify_domain, bandsintown_name)
@@ -160,6 +168,9 @@ export const ARTIST_SNAPSHOT = [
 export const SNAPSHOT_DEFAULTS: Partial<Record<PublishableEntity | 'artist', Record<string, unknown>>> = {
   media: { kind: 'photo' }, // 20260826130000
   artist: { schema_type: 'MusicGroup' }, // 20260826160000
+  // 20260925120000: every font before Google Fonts is an upload. The migration backfilled
+  // the LATEST revision of each font; this covers the older ones a restore-to-a-moment reads.
+  artist_font: { source: 'upload' },
 }
 
 export type ContentRow = Record<string, unknown> & {
@@ -246,6 +257,28 @@ type PublishConfig = {
    * downstream.
    */
   orderBy: readonly OrderKey[]
+  /**
+   * A type whose rows are not "the rows of `table` for this artist_id" supplies its own
+   * read — `listContent` calls this instead of the generic select. Only `theme_color` does:
+   * a singleton that lives on the `artists` row itself (it has no `artist_id` column to
+   * filter on). The read must return EVERY row of the type for the artist, as listContent
+   * promises, and throw on a failed read rather than return fewer.
+   */
+  read?: (supabase: SupabaseClient, artistId: string) => Promise<ContentRow[]>
+}
+
+/**
+ * The browser-bar colour as publishable rows: ONE row per artist while `theme_color` is
+ * set, NONE while it is not (20260925120000). So an unset colour is nothing to publish (no
+ * Publish bar for a colour nobody chose), and clearing a published one reads as the row
+ * being deleted — Publish writes a tombstone and the door reports null again. The row's id
+ * is the artist's (the entity_id of the singleton, as for the `artist` profile).
+ */
+async function themeColorRows(supabase: SupabaseClient, artistId: string): Promise<ContentRow[]> {
+  const { data, error } = await supabase.from('artists').select('id, theme_color').eq('id', artistId).maybeSingle()
+  if (error) throw new Error(error.message)
+  const row = data as { id: string; theme_color: string | null } | null
+  return row?.theme_color ? [{ id: row.id, artist_id: row.id, theme_color: row.theme_color }] : []
 }
 
 export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
@@ -403,10 +436,34 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   // family with no @font-face. Inside the font's own row that state cannot be expressed.
   // Writes still go to `artist_fonts` / `artist_font_slots` directly (lib/fonts.ts);
   // artist_font is not a CrudEntity, so nothing writes through this table name.
+  //
+  // `source` + `google_family` (20260925120000): a Google font has no file — the site loads it
+  // from fonts.googleapis.com by `google_family`, so `storage_path`/`format` are null on it.
   artist_font: {
     table: 'artist_fonts_with_slots',
-    snapshot: ['id', 'label', 'family', 'storage_path', 'format', 'slots'],
+    snapshot: ['id', 'label', 'family', 'storage_path', 'format', 'slots', 'source', 'google_family'],
     orderBy: ['created_at'],
+  },
+  // The Brand page's palette (BRAND_SYNC_PLAN.md, 20260925120000): one revision per colour.
+  // `key` is the stable CSS name (`--brand-<key>`); `slot` and `sort_order` order the door's
+  // list (Primary, Secondary, then the added ones); `created_at` breaks a tie. The NOTE is
+  // dashboard-only and never rides.
+  brand_color: {
+    table: 'brand_colors',
+    snapshot: ['id', 'key', 'name', 'hex', 'slot', 'sort_order', 'created_at'],
+    orderBy: ['sort_order', 'created_at'],
+  },
+  // The browser-bar colour, a SINGLETON published by the Brand page (20260925120000). It
+  // lives on `artists`, but not in ARTIST_SNAPSHOT: the profile publishes with the whole
+  // site, so riding it would drag a half-written bio out with a Brand publish. Read by
+  // `themeColorRows` — one row while a colour is set, none otherwise — so an unset colour is
+  // nothing to publish and clearing a published one publishes a tombstone. entity_id is the
+  // artist's id. Written through `artists.theme_color` (lib/brand.ts setThemeColor), never here.
+  theme_color: {
+    table: 'artists',
+    snapshot: ['id', 'theme_color'],
+    orderBy: ['id'],
+    read: themeColorRows,
   },
 }
 
@@ -451,6 +508,8 @@ export async function listContent(
   type: PublishableEntity,
   artistId: string,
 ): Promise<ContentRow[]> {
+  const custom = PUBLISHABLE[type].read
+  if (custom) return custom(supabase, artistId)
   const table = PUBLISHABLE[type].table
   let query = supabase.from(table).select('*', { count: 'exact' }).eq('artist_id', artistId)
   for (const key of PUBLISHABLE[type].orderBy) {

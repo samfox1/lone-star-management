@@ -24,6 +24,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { FontsLedger } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/fonts/fonts-ledger'
 import {
   addArtistFontAction,
+  addGoogleFontAction,
   clearCustomFontSlotAction,
   removeArtistFontAction,
   renameArtistFontAction,
@@ -46,6 +47,7 @@ const refresh = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({
   addArtistFontAction: vi.fn(async () => ({})),
+  addGoogleFontAction: vi.fn(async () => ({})),
   clearCustomFontSlotAction: vi.fn(async () => ({})),
   removeArtistFontAction: vi.fn(async () => ({})),
   renameArtistFontAction: vi.fn(async () => ({})),
@@ -70,6 +72,7 @@ const mAdd = vi.mocked(addArtistFontAction)
 const mRemove = vi.mocked(removeArtistFontAction)
 const mRename = vi.mocked(renameArtistFontAction)
 const mToast = vi.mocked(toast)
+const mGoogle = vi.mocked(addGoogleFontAction)
 
 const font = (over: Partial<BrandFont> = {}): BrandFont => ({
   id: 'f1',
@@ -78,6 +81,8 @@ const font = (over: Partial<BrandFont> = {}): BrandFont => ({
   format: 'woff2',
   storagePath: 'a1/fonts/11111111-1111-4111-8111-111111111111.woff2',
   weight: 400,
+  source: 'upload',
+  googleFamily: null,
   ...over,
 })
 const MORI = font()
@@ -164,6 +169,7 @@ beforeEach(() => {
   mAdd.mockResolvedValue({})
   mRemove.mockResolvedValue({})
   mRename.mockResolvedValue({})
+  mGoogle.mockResolvedValue({})
 })
 afterEach(() => {
   cleanup()
@@ -408,11 +414,11 @@ describe('FontsLedger — Change font', () => {
     expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ label: 'Archivo', format: 'woff2' }), 'secondary')
   })
 
-  it('with no fonts uploaded, the menu offers only the upload', () => {
+  it('with no fonts yet, the menu offers the two ways to get one: Google Fonts, then an upload', () => {
     show(data({ primary: null, secondary: null, fonts: [] }))
     const menu = openMenu('Primary')
     expect(within(menu).queryAllByRole('menuitemradio')).toHaveLength(0)
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Upload a font…'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Google Fonts…', 'Upload a font…'])
   })
 
   it('CRITICAL: removing a font from the library asks first; No removes nothing', async () => {
@@ -738,3 +744,133 @@ describe('FontsLedger — the eye', () => {
     expect(within(rowOf('Primary')).getByText('Bebas Neue')).toBeInTheDocument()
   })
 })
+
+/**
+ * GOOGLE FONTS (BRAND_SYNC_PLAN.md, Sam 2026-09-24: "pick any Google family by name"). The
+ * Change menu's "Google Fonts…" opens a searchable list of Google's families (the bundled
+ * catalogue, loaded for real here); a pick is ONE action that adds the font and places it in
+ * the row it came from — an unsaved row's title and note riding with it. A Google font is
+ * drawn in its REAL family through Google's stylesheet, sized like every other sample.
+ */
+describe('FontsLedger — Google Fonts', () => {
+  const ARCHIVO = font({ id: 'g1', label: 'Archivo', family: 'archivo', format: null, storagePath: null, weight: null, source: 'google', googleFamily: 'Archivo' })
+  const BIG = font({ id: 'g2', label: 'Big Shoulders Display', family: 'big-shoulders-display', format: null, storagePath: null, weight: null, source: 'google', googleFamily: 'Big Shoulders Display' })
+
+  const openGoogle = async (title: string) => {
+    fireEvent.click(within(openMenu(title)).getByRole('menuitem', { name: 'Google Fonts…' }))
+    const dialog = screen.getByRole('dialog', { name: 'Google Fonts' })
+    // The catalogue is a dynamic import: wait for the first family to arrive.
+    await waitForNames(dialog, (n) => n.includes('Roboto'))
+    return dialog
+  }
+
+  it('CRITICAL: "Google Fonts…" opens the searchable list; a search narrows it, most popular first', async () => {
+    show()
+    const dialog = await openGoogle('Primary')
+    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search Google Fonts' }), { target: { value: 'archivo' } })
+    const names = await waitForNames(dialog, (n) => n[0] === 'Archivo')
+    expect(names[0]).toBe('Archivo')
+    expect(names.every((n) => /archivo/i.test(n))).toBe(true)
+    // Each family is drawn in itself, from ONE css2 stylesheet for the rows on screen.
+    expect(within(dialog).getByText('Archivo', { selector: '[data-font-sample]' })).toHaveStyle({ fontFamily: "'Archivo', sans-serif" })
+    const href = dialog.querySelector('link[rel="stylesheet"]')?.getAttribute('href') ?? ''
+    expect(href.startsWith('https://fonts.googleapis.com/css2?family=Archivo&')).toBe(true)
+  })
+
+  it('CRITICAL: a pick is ONE action — add + place in THAT row\'s slot — then the dialog closes and the page refreshes', async () => {
+    show()
+    const dialog = await openGoogle('Secondary')
+    await act(async () => {
+      fireEvent.click(familyButton(dialog, 'Roboto'))
+    })
+    expect(mGoogle).toHaveBeenCalledTimes(1)
+    expect(mGoogle).toHaveBeenCalledWith('a1', 'Roboto', 'secondary', undefined)
+    expect(screen.queryByRole('dialog', { name: 'Google Fonts' })).toBeNull()
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('Enter in the search picks the top match', async () => {
+    show()
+    const dialog = await openGoogle('Primary')
+    const box = within(dialog).getByRole('searchbox', { name: 'Search Google Fonts' })
+    fireEvent.change(box, { target: { value: 'inter' } })
+    await act(async () => {
+      fireEvent.keyDown(box, { key: 'Enter' })
+    })
+    expect(mGoogle).toHaveBeenCalledWith('a1', 'Inter', 'primary', undefined)
+  })
+
+  it('CRITICAL: picking the Google family the row already holds writes nothing', async () => {
+    show(data({ primary: ARCHIVO, fonts: [...FONTS, ARCHIVO] }))
+    const dialog = await openGoogle('Primary')
+    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search Google Fonts' }), { target: { value: 'archivo' } })
+    await waitForNames(dialog, (n) => n[0] === 'Archivo')
+    const mine = familyButton(dialog, 'Archivo')
+    expect(mine).toHaveAttribute('aria-pressed', 'true')
+    await act(async () => {
+      fireEvent.click(mine)
+    })
+    expect(mGoogle).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: from an unsaved added row, the pick carries its title and note (the row is saved by it)', async () => {
+    show()
+    fireEvent.click(addControl()!)
+    fireEvent.change(nameField(), { target: { value: 'Gig posters' } })
+    fireEvent.keyDown(nameField(), { key: 'Enter' })
+    const dialog = await openGoogle('Gig posters')
+    await act(async () => {
+      fireEvent.click(familyButton(dialog, 'Roboto'))
+    })
+    expect(mGoogle).toHaveBeenCalledWith('a1', 'Roboto', CUSTOM_FONT_SLOTS[0], { label: 'Gig posters', note: null })
+  })
+
+  it('a refusal is an error toast; a placement that failed is a warning toast — neither is silent', async () => {
+    show()
+    mGoogle.mockResolvedValueOnce({ error: 'That isn’t a Google font.' })
+    let dialog = await openGoogle('Primary')
+    await act(async () => {
+      fireEvent.click(familyButton(dialog, 'Roboto'))
+    })
+    expect(mToast).toHaveBeenCalledWith('That isn’t a Google font.', 'error')
+    mGoogle.mockResolvedValueOnce({ warning: 'The font was added but could not be placed.' })
+    dialog = await openGoogle('Primary')
+    await act(async () => {
+      fireEvent.click(familyButton(dialog, 'Roboto'))
+    })
+    expect(mToast).toHaveBeenCalledWith('The font was added but could not be placed.', 'error')
+  })
+
+  it('CRITICAL: a Google font row is drawn in its REAL family, says "Google Fonts", and its stylesheet is injected FIRST', () => {
+    const { container } = show(data({ primary: BIG, fonts: [...FONTS, BIG] }))
+    const row = rowOf('Primary')
+    expect(within(row).getByText('Big Shoulders Display')).toHaveStyle({ fontFamily: "'Big Shoulders Display', sans-serif" })
+    expect(within(row).getByText('Google Fonts')).toBeInTheDocument()
+    const css = container.querySelector('style')?.textContent ?? ''
+    expect(css.startsWith("@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display")).toBe(true)
+    // The uploads still get their faces.
+    expect(css).toContain("@font-face{font-family:'pp-mori'")
+  })
+})
+
+/** The picker's button for one family (its sample text, exactly — "Roboto" is not "Roboto Mono"). */
+function familyButton(dialog: HTMLElement, family: string): HTMLElement {
+  const hit = within(dialog)
+    .queryAllByRole('button')
+    .find((b) => b.querySelector('[data-font-sample]')?.textContent === family)
+  if (!hit) throw new Error(`no ${family} in the picker`)
+  return hit
+}
+
+/** The family names the picker shows, once `ready` holds for them (the search is deferred). */
+async function waitForNames(dialog: HTMLElement, ready: (names: string[]) => boolean): Promise<string[]> {
+  const read = () => within(dialog).queryAllByRole('button').map((b) => b.querySelector('[data-font-sample]')?.textContent ?? '').filter(Boolean)
+  for (let i = 0; i < 50; i++) {
+    const names = read()
+    if (names.length && ready(names)) return names
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+  }
+  return read()
+}

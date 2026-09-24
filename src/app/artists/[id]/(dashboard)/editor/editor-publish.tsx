@@ -25,6 +25,8 @@ const SECTIONS: { key: keyof UnpublishedDiff; label: string }[] = [
   { key: 'site_content', label: 'Site text' },
   { key: 'site_styles', label: 'Styles' },
   { key: 'artist_font', label: 'Fonts' },
+  { key: 'brand_color', label: 'Brand colors' },
+  { key: 'theme_color', label: 'Browser bar' },
   { key: 'media', label: 'Photos & media' },
   { key: 'track', label: 'Songs' },
   { key: 'release', label: 'Releases' },

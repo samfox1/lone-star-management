@@ -197,6 +197,15 @@ export type MediaPurpose =
   | 'logo_primary'
   | 'logo_secondary'
   | 'favicon'
+  // Brand page (20260924120000). `logo` is an ADDED logo (the Brand page's third and
+  // later rows; `label` is its title); `home_icon` is the generated 180px home-screen
+  // PNG, single occupancy like `favicon` — `brandHead` in ./brand reads it for the
+  // apple-touch-icon; `icon_source` is an image uploaded only to be framed into one of
+  // the two icons. Every site filters media by an explicit purpose, so a site that does
+  // not know these renders none of them.
+  | 'logo'
+  | 'home_icon'
+  | 'icon_source'
 
 /** Editable site text as key → override value (published or working). Absent
  *  keys fall back to the template default. */
@@ -209,12 +218,49 @@ export type SiteContent = Record<string, string>
 export type SiteStyles = Record<string, string>
 
 /** One published custom font: the sanitized family token, the manager's label, the
- *  storage path in lone-star's public `fonts` bucket, and its format hint. */
+ *  storage path in lone-star's public `fonts` bucket, and its format hint.
+ *
+ *  A font is either an UPLOADED file or a GOOGLE FONTS family (BRAND_SYNC_PLAN,
+ *  2026-09-24). `family` is the CSS token for both (`big-shoulders-display`) — it is what
+ *  `.font-<family>` and `font_slots` name, and uploads and Google fonts share one
+ *  namespace per artist. `google_family` is Google's own spelling ("Big Shoulders
+ *  Display"), which is what Google's stylesheet declares and so what the variables and
+ *  the class must point at: the token alone only works for one-word families.
+ *  `brandFontCss` in ./brand emits both kinds. */
 export type SiteFont = {
   family: string
   label: string
-  path: string
-  format: string
+  /** The object in the `fonts` bucket. NULL on a Google row (0.41.0), which has no file —
+   *  a reader that builds a URL from it must skip a null. */
+  path: string | null
+  /** `woff2` / `woff` / `ttf` / `otf`. NULL on a Google row (0.41.0). */
+  format: string | null
+  /** Where the face comes from. Every row carries it from the Google fonts migration on;
+   *  ABSENT on revisions published before it — read with `?? 'upload'`, which is what
+   *  every older font is. */
+  source?: 'upload' | 'google'
+  /** Google's spelling of the family, on `'google'` rows only (upload rows have no such
+   *  key). The door checks `^[A-Za-z0-9]+( [A-Za-z0-9]+)*$`, ≤ 64. */
+  google_family?: string | null
+}
+
+/** One brand colour. `key` is STABLE — `primary` / `secondary` for the two built-ins, a
+ *  slug of the name at creation for the rest (`cream`, `charcoal`), immutable in the DB —
+ *  and never changes when the manager renames the colour, because it is the
+ *  `--brand-<key>` variable a site's stylesheet is written against. `name` is the
+ *  manager's label, display only: it never reaches CSS. `hex` is `#rrggbb`, lowercase. */
+export type SiteBrandColor = {
+  key: string
+  name: string
+  hex: string
+}
+
+/** What the Brand page publishes for a site to wear (BRAND_SYNC_PLAN, 2026-09-24). */
+export type SiteBrand = {
+  /** Primary, secondary, then the added colours in the manager's order. */
+  colors: SiteBrandColor[]
+  /** The browser-bar colour (`<meta name="theme-color">`), `#rrggbb` or null. */
+  theme_color: string | null
 }
 
 /** The named font slots a site can bind (`--font-primary` etc.). The VALUE list is
@@ -314,4 +360,10 @@ export type PublicSitePayload = {
   /** Which uploaded font fills each named slot. Absent before 20260805200000 —
    *  read with `?? {}`. */
   font_slots: FontSlotMap
+  /** The published brand colours and browser-bar colour. The door always sends it
+   *  (`colors: []`, `theme_color: null` when nothing is published), but it is ABSENT on
+   *  every door older than the brand-sync migration (2026-09-24) — read with `?? null`, and
+   *  let `brandColorCss` / `brandHead` in ./brand do the reading: they validate every
+   *  value, and an absent or empty brand emits nothing, so the site keeps its own colours. */
+  brand?: SiteBrand | null
 }

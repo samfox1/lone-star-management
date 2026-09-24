@@ -34,6 +34,7 @@ import {
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import { COLOR_SLOTS, COLOR_SLOT_NAMES, MAX_ADDED_COLORS, MAX_BRAND_COLORS, type BrandColor } from '@/lib/manager-tools/brand/brand-colors'
+import { announceBrandRevert } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/brand-events'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({
   addBrandColorAction: vi.fn(async (_artist: string, input: { name: string; hex: string; note?: string | null }) => ({
@@ -555,5 +556,43 @@ describe('adding a colour', () => {
     // The list's own Add control is gone; the new row has its + (as do the empty built-ins).
     expect(screen.queryAllByRole('button', { name: 'Add color' }).filter((b) => !b.closest('[data-ledger-row]'))).toEqual([])
     expect(within(rowOf(`Color ${MAX_BRAND_COLORS}`)).getByRole('button', { name: 'Add color' })).toBeTruthy()
+  })
+})
+
+/**
+ * THE BAR'S REVERT (BRAND_SYNC_PLAN.md, 20260925120000). Colours publish now, so Revert can
+ * change the palette from outside the page — and this page keeps its own copy, deliberately
+ * deaf to refreshes (a refresh landing mid-drag must not snap a swatch back). The bar
+ * announces a revert; the next props replace the copy, every row remounted.
+ */
+describe('a Revert from the Brand bar', () => {
+  const reverted: BrandColor[] = [{ ...COLORS[0], hex: '#222222' }, COLORS[1]]
+  const hexOf = (name: string) => (screen.getByLabelText(`${name} hex`) as HTMLInputElement).value
+
+  it('the witness: an ordinary refresh does NOT repaint the page\'s copy', () => {
+    const { rerender } = renderLedger()
+    rerender(<ColorsLedger artistId="a1" colors={reverted} siteSwatches={SITE} />)
+    expect(hexOf('Color 1')).toBe('#0d0d0d')
+  })
+
+  it('CRITICAL: after the bar reverts, the next props replace the palette', () => {
+    const { rerender } = renderLedger()
+    act(() => announceBrandRevert())
+    rerender(<ColorsLedger artistId="a1" colors={reverted} siteSwatches={SITE} />)
+    expect(hexOf('Color 1')).toBe('#222222')
+    // …once: the refresh after that is ordinary again.
+    rerender(<ColorsLedger artistId="a1" colors={COLORS} siteSwatches={SITE} />)
+    expect(hexOf('Color 1')).toBe('#222222')
+  })
+
+  it('CRITICAL: a reverted row saves the colour it held BEFORE the revert — its memory went with it', async () => {
+    const { rerender } = renderLedger()
+    act(() => announceBrandRevert())
+    rerender(<ColorsLedger artistId="a1" colors={reverted} siteSwatches={SITE} />)
+    const hex = screen.getByLabelText('Color 1 hex')
+    fireEvent.change(hex, { target: { value: '#0d0d0d' } })
+    fireEvent.keyDown(hex, { key: 'Enter' })
+    await settle()
+    expect(setBrandColorHexAction).toHaveBeenCalledWith('a1', 'c1', '#0d0d0d')
   })
 })

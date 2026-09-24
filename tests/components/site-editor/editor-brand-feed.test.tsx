@@ -132,4 +132,16 @@ describe('EditorShell feeds the Brand page into the editor', () => {
     expect(opts.fonts?.find((f) => f.value === 'font-lsf-archivo')?.label).toBe('Gig posters')
     expect(opts.fonts?.find((f) => f.value === 'font-lsf-grotesk')?.label).toBe('Grotesk')
   })
+
+  it('CRITICAL: a GOOGLE brand font reaches the list by its slot title, its stack naming the real family', () => {
+    // BRAND_SYNC_PLAN.md (20260925120000): Google fonts join the editor's list like uploads,
+    // listed by slot title; the stack must say "Big Shoulders Display", not the token, or
+    // choosing it renders sans-serif.
+    const opts = renderShell({
+      uploadedFonts: [{ family: 'big-shoulders-display', label: 'Big Shoulders Display', googleFamily: 'Big Shoulders Display' }],
+      fontSlotTitles: [{ family: 'big-shoulders-display', title: 'Primary' }],
+    })
+    const offered = opts.fonts?.find((f) => f.value === 'font-big-shoulders-display')
+    expect(offered).toMatchObject({ label: 'Primary', css: "'Big Shoulders Display',sans-serif" })
+  })
 })

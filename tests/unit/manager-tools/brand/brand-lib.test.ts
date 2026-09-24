@@ -410,8 +410,12 @@ describe('the Brand bar\'s subjects', () => {
     })
     expect((await brandPending(fake.client, A)).message).toBe('Home-screen icon changed')
     expect(fake.calls.find((c) => c.op === 'rpc')!.args).toEqual({ p_artist_id: A })
-    const src = fake.calls.find((c) => c.table === 'artists')!
+    // Two reads of `artists` now: the icon sources, and the browser-bar colour (a published
+    // singleton since 20260925120000). Both this artist's.
+    const src = fake.calls.find((c) => c.table === 'artists' && c.cols !== 'id, theme_color')!
     expect([src.cols, filterValue(src, 'id')]).toEqual(['favicon_source_media_id, home_icon_source_media_id', A])
+    const bar = fake.calls.find((c) => c.table === 'artists' && c.cols === 'id, theme_color')!
+    expect(filterValue(bar, 'id')).toBe(A)
   })
 
   it('publishBrand reports every revision it wrote — media AND fonts', async () => {

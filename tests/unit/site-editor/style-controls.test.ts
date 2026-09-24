@@ -765,6 +765,23 @@ describe('withUploadedFonts — Brand-page uploads join the manifest dropdown', 
     expect(opts?.fonts?.[0].label).toBe('Compiled Archivo')
   })
 
+  it('CRITICAL: a GOOGLE brand font is set by its real family — Google\'s stylesheet declares that, not the token', () => {
+    // BRAND_SYNC_PLAN.md (20260925120000). The token alone only matches a one-word family
+    // (CSS compares 'archivo' to 'Archivo' case-insensitively); "big-shoulders-display"
+    // names no face at all, so choosing it would silently fall back to sans-serif.
+    const opts = withUploadedFonts(undefined, [
+      { family: 'big-shoulders-display', label: 'Big Shoulders Display', googleFamily: 'Big Shoulders Display' },
+    ])
+    const font = buildStyleControls(opts).find((c) => c.id === 'font')
+    if (font?.kind !== 'select') throw new Error('no font control')
+    expect(font.options.find((o) => o.label === 'Big Shoulders Display')?.value).toBe('fontfam-[Big_Shoulders_Display,sans-serif]')
+  })
+
+  it('a Google name that is not Google-shaped is never put in the stack — the token is used instead', () => {
+    const opts = withUploadedFonts(undefined, [{ family: 'evil', label: 'Evil', googleFamily: "Evil'),x" }])
+    expect(opts?.fonts?.[0]).toMatchObject({ value: 'font-evil', css: "'evil',sans-serif" })
+  })
+
   it('no uploads returns the manifest options untouched (same reference)', () => {
     const manifest = { fonts: [{ value: 'font-momo', label: 'Momo' }] }
     expect(withUploadedFonts(manifest, [])).toBe(manifest)

@@ -11,10 +11,11 @@ import { useSampleStyle } from './font-sample'
  *
  * Set at the NORMAL weight on purpose: an uploaded @font-face declares no weight, so
  * anything heavier is the browser faking bold over the file, which is exactly what the
- * row's "no Bold" warns about. The stage shows the face as it was drawn.
+ * row's "no Bold" warns about. The stage shows the face as it was drawn. A Google font
+ * is set in its real family (the ledger loads its stylesheet).
  */
 export function FontPreview({ title, font, onClose }: { title: string; font: BrandFont; onClose: () => void }) {
-  const sample = useSampleStyle(font.family, 23, 32)
+  const sample = useSampleStyle(font.family, 23, 32, font.googleFamily)
   return (
     <BrandModal label={title} meta="preview" onClose={onClose}>
       <figure className="m-0 flex flex-col items-center gap-2">

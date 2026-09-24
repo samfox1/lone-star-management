@@ -1,7 +1,8 @@
 'use server'
 
 /**
- * Brand server actions: logos, icons, the browser-bar colour, the palette and the fonts.
+ * Brand server actions: logos, icons, the browser-bar colour, the palette and the fonts
+ * (uploads and Google Fonts).
  *
  * Its own actions file rather than more surface on the dashboard's shared `actions.ts`,
  * for the same reason the press kit got one — a self-contained page with a small write
@@ -46,6 +47,7 @@ import {
 import {
   type FontSlot,
   type FontSlotMeta,
+  addGoogleFont,
   clearCustomSlot,
   removeArtistFont,
   renameArtistFont,
@@ -260,6 +262,33 @@ export async function addArtistFontAction(
   return {}
 }
 
+/**
+ * Add a GOOGLE font (BRAND_SYNC_PLAN.md: "pick any Google family by name") and, with `slot`,
+ * put it there — `meta` being an added row's title and note, saved with it. The family must
+ * be in the bundled catalogue (`addGoogleFont` checks, and stores Google's spelling); a
+ * family the artist already has is reused, not added twice.
+ *
+ * Same answer shape as `addArtistFontAction`: the font is added FIRST, so a slot that will
+ * not take it is a `warning` — the font stays in the Change menu — never an error that
+ * pretends nothing happened. Nothing to clean up on either path: a Google font has no file.
+ */
+export async function addGoogleFontAction(
+  artistId: string,
+  family: string,
+  slot?: FontSlot,
+  meta?: FontSlotMeta,
+): Promise<{ error?: string; warning?: string }> {
+  const supabase = await createClient()
+  if (!(await callerOwns(supabase, artistId))) return { error: 'Not found.' }
+  const res = await addGoogleFont(supabase, artistId, family)
+  if (!res.ok || !res.font) return { error: res.error ?? 'Could not add that font.' }
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  if (!slot) return {}
+  const placed = await setFontSlot(supabase, artistId, slot, res.font.id, meta)
+  revalidatePath(`/artists/${artistId}`, 'layout')
+  return placed.ok ? {} : { warning: placed.error ?? 'The font was added but could not be placed.' }
+}
+
 /** Remove a font, then sweep the bucket. The sweep keeps anything a PUBLISHED revision
  *  still names, so removing a font that is live on the site does not pull the file out
  *  from under it before the removal is published. */
@@ -315,9 +344,9 @@ export async function clearCustomFontSlotAction(artistId: string, slot: FontSlot
 /* ── Revert ──────────────────────────────────────────────────────────────── */
 
 /**
- * The Publish bar's Revert: the Brand page's logos, icons and fonts back to what the site
- * shows (`restoreBrandToPublished`). Dashboard-only settings — colours, notes, slot titles,
- * framing, the browser-bar colour — are not published this round, so there is no published
+ * The Publish bar's Revert: the Brand page's logos, icons, fonts, colours and browser-bar
+ * colour back to what the site shows (`restoreBrandToPublished`). Dashboard-only settings —
+ * notes, slot titles, framing, weights — are never published, so there is no published
  * version of them to go back to and they are kept. The one exception is an icon's source,
  * which follows the icon image the revert puts back or removes (see `settleIconSources`).
  */

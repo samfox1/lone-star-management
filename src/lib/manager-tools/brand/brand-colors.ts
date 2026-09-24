@@ -6,9 +6,12 @@
  * and Secondary are rows with a SLOT: a fixed name, no note, not deletable, and no row at
  * all until the manager picks the colour (`setSlotColor`, one upsert). Everything else is
  * an added colour — "Color 3", "Color 4", … — with a name the manager can change, a hex
- * and an optional note. They save as they go and are dashboard-only this round: not a
- * revisions entity type, not in any public payload. The site editor reads them first in
- * its swatches, by name, Primary and Secondary leading (`listBrandColors`' order).
+ * and an optional note. They save as they go, as DRAFTS: since 20260925120000 they are a
+ * revisions entity type (`brand_color`), published by the Brand bar, and the site reads each
+ * as `--brand-<key>` (BRAND_SYNC_PLAN.md). `key` is set by the database — the slot for a
+ * built-in, a slug of the name at creation otherwise — and never changes; the note never
+ * publishes. The site editor reads them first in its swatches, by name, Primary and
+ * Secondary leading (`listBrandColors`' order).
  *
  * THE DATABASE IS THE AUTHORITY (20260924120000): the hex shape (`#rrggbb`, lowercase), the
  * name (1–40 characters, one line) and the cap (24 per artist, a trigger under a lock). This

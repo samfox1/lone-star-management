@@ -144,17 +144,19 @@ export function runtimeImageFields(
 }
 
 /**
- * An added font slot's TITLE is what the editor's font list shows for its font
+ * A font slot's TITLE is what the editor's font list shows for its font
  * (BRAND_PAGE_PLAN.md, Fonts: "Custom slot titles are what the site editor's font list
- * shows"). A font in two titled slots takes the first slot's title; a font in none — or
- * in a slot left untitled — keeps its own label. Applied here, before `withUploadedFonts`
+ * shows"; BRAND_SYNC_PLAN.md: Google brand fonts "by their slot titles" — the page passes
+ * Primary and Secondary first). A font in two titled slots takes the first slot's title; a
+ * font in none — or in a slot left untitled — keeps its own label. Any other field on a
+ * font (a Google font's `googleFamily`) rides through untouched. Applied here, before `withUploadedFonts`
  * folds the fonts into the manifest's options, so the dropdown never learns there was a
  * second name.
  */
-export function withSlotTitles(
-  uploaded: { family: string; label: string }[],
+export function withSlotTitles<F extends { family: string; label: string }>(
+  uploaded: F[],
   slotTitles: { family: string; title: string }[],
-): { family: string; label: string }[] {
+): F[] {
   const titles = new Map<string, string>()
   for (const t of slotTitles) {
     const title = t.title.trim()
@@ -242,7 +244,9 @@ export function EditorShell({
   tours: EditorTour[]
   /** Fonts uploaded on the Brand page, folded into the frame manifest's font options so
    *  every region's font dropdown offers them (Sam's per-region override model). */
-  uploadedFonts?: { family: string; label: string }[]
+  /** `googleFamily` is set on a Google Fonts brand font (20260925120000): its stack names
+   *  the real family (withUploadedFonts). */
+  uploadedFonts?: { family: string; label: string; googleFamily?: string | null }[]
   /** The Brand page's added font slots, by the family they hold: their titles name those
    *  fonts in the font list (`withSlotTitles`). */
   fontSlotTitles?: { family: string; title: string }[]

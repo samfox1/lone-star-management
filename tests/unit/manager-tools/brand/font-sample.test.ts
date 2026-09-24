@@ -7,7 +7,7 @@
  * no canvas, so the maths is pinned here, on the pure function all three samples use.
  */
 import { describe, expect, it } from 'vitest'
-import { fittedFontSize, SAMPLE_CAP_PX, SAMPLE_MAX_PX, SAMPLE_MIN_PX } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/fonts/face'
+import { faceOf, fittedFontSize, SAMPLE_CAP_PX, SAMPLE_MAX_PX, SAMPLE_MIN_PX } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/fonts/face'
 
 describe('fittedFontSize', () => {
   it('gives a short-capped face a bigger size than a tall-capped one, to the same cap height', () => {
@@ -33,5 +33,27 @@ describe('fittedFontSize', () => {
     // …and the floor scales UP with it, not down: a face with a huge cap at the preview's
     // target gets twice the minimum, not half.
     expect(fittedFontSize(5, SAMPLE_CAP_PX * 2)).toBe(SAMPLE_MIN_PX * 2)
+  })
+})
+
+/**
+ * `faceOf` — the CSS family a Brand sample is set in. An upload's token goes through the
+ * sanitizer (the family is a CSS-injection sink); a GOOGLE font (20260925120000) is set in
+ * its real family, because Google's stylesheet declares that and the token names no face —
+ * but only a Google-shaped name gets through, or the token is used instead.
+ */
+describe('faceOf', () => {
+  it('an upload is set in its sanitized token', () => {
+    expect(faceOf('pp-mori')).toBe("'pp-mori', sans-serif")
+    expect(faceOf("x'; } body{")).not.toContain('}')
+  })
+
+  it('CRITICAL: a Google font is set in its REAL family', () => {
+    expect(faceOf('big-shoulders-display', 'Big Shoulders Display')).toBe("'Big Shoulders Display', sans-serif")
+  })
+
+  it('CRITICAL: a Google name that is not Google-shaped never reaches the style — the token does', () => {
+    expect(faceOf('evil', "Evil'); } body{")).toBe("'evil', sans-serif")
+    expect(faceOf('inter', null)).toBe("'inter', sans-serif")
   })
 })

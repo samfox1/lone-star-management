@@ -39,6 +39,9 @@ function stubClient(failOn?: string) {
       not: () => q,
       order: () => q,
       single: async () => ({ data: rows[0] ?? null, error: null }),
+      // The browser-bar singleton (PUBLISHABLE.theme_color, 20260925120000) reads the artist
+      // row itself: a colour is set, so it too has its one row to publish.
+      maybeSingle: async () => ({ data: table === 'artists' ? { id: 'a1', theme_color: '#000000' } : (rows[0] ?? null), error: null }),
       then: (ok: (v: unknown) => unknown, err: (e: unknown) => unknown) =>
         Promise.resolve(result).then(ok, err),
       insert: async (payload: Row | Row[]) => {

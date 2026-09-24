@@ -51,7 +51,7 @@ describe('custom font slots', () => {
         slot: 'custom_2',
         label: 'Credits',
         note: 'liner notes',
-        font: { id: 'f2', label: 'Mono', family: 'mono-1', format: 'ttf', storagePath: 'a1/fonts/2.ttf', weight: null },
+        font: { id: 'f2', label: 'Mono', family: 'mono-1', format: 'ttf', storagePath: 'a1/fonts/2.ttf', weight: null, source: 'upload', googleFamily: null },
       },
     ])
     expect(fonts.nextCustomSlot).toBe('custom_1')

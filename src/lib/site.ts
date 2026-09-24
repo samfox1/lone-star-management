@@ -13,6 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ARTIST_SNAPSHOT, DRAFT_PRESENCE, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
 import { FONT_SLOTS, type FontSlot, type FontSlotMap } from '@/lib/fonts'
+import { isGoogleFamilyName } from '@/lib/google-fonts'
 import { mediaUrl } from '@/lib/storage-url'
 
 /**
@@ -32,12 +33,17 @@ export type {
   SiteContent,
   SiteStyles,
   MediaKind,
+  SiteBrand,
+  SiteBrandColor,
 } from '@samfox1/site-bridge/payload'
 // Imported AGAIN for local use: `export type ... from` re-exports without binding names
 // in this module's scope, and the query builders below reference them directly.
 import type {
   MediaPurpose,
   PublicSitePayload,
+  SiteBrand,
+  SiteBrandColor,
+  SiteFont,
   SiteTrack,
   SiteTourDate,
   SiteMerch,
@@ -88,7 +94,61 @@ export async function getPublishedSite(
   // Revisions published before 20260805160000 have no fonts key, and any published before
   // 20260805200000 has no font_slots key; a legacy payload must render, not crash the
   // whole site over a feature it predates.
-  return { ...site, media: toSiteMedia(site.media), fonts: site.fonts ?? [], font_slots: site.font_slots ?? {} }
+  // `brand` is newer still (20260925120000): absent on a door older than it.
+  return {
+    ...site,
+    media: toSiteMedia(site.media),
+    fonts: site.fonts ?? [],
+    font_slots: site.font_slots ?? {},
+    brand: site.brand ?? { colors: [], theme_color: null },
+  }
+}
+
+/* ── Brand + fonts: the preview's copy of the door's rules (20260925120000) ─────── */
+
+/** A colour key and hex the door passes: the shapes the bridge interpolates into CSS. The
+ *  door drops any other row, so the preview does too. */
+const COLOR_KEY_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+const HEX_RE = /^#[0-9a-f]{6}$/
+
+/** Primary, Secondary, then the added colours in their own order — the door's `brand.colors`
+ *  order. `rows` arrive sorted by sort_order, created_at (the door's next keys), so a stable
+ *  sort on the slot is the whole rule. */
+export function brandColorsPayload(
+  rows: readonly { key?: unknown; name?: unknown; hex?: unknown; slot?: unknown }[],
+): SiteBrandColor[] {
+  const rank = (slot: unknown) => (slot === 'primary' ? 0 : slot === 'secondary' ? 1 : 2)
+  return [...rows]
+    .filter(
+      (r) =>
+        typeof r.key === 'string' && r.key.length <= 40 && COLOR_KEY_RE.test(r.key) && typeof r.hex === 'string' && HEX_RE.test(r.hex),
+    )
+    .sort((a, b) => rank(a.slot) - rank(b.slot))
+    .map((r) => ({ key: r.key as string, name: String(r.name ?? ''), hex: r.hex as string }))
+}
+
+/** One font row as the door's `fonts_live` sees it, or null when the door would drop it: an
+ *  upload needs its file, a Google font a well-formed name. Upload rows carry no
+ *  `google_family` key at all — the door's exact shape (preview-parity compares with toEqual). */
+export function fontPayload(f: {
+  family?: unknown
+  label?: unknown
+  storage_path?: unknown
+  format?: unknown
+  source?: unknown
+  google_family?: unknown
+}): SiteFont | null {
+  if (typeof f.family !== 'string' || !f.family) return null
+  const base = {
+    family: f.family,
+    label: String(f.label ?? ''),
+    path: (f.storage_path as string | null) ?? null,
+    format: (f.format as string | null) ?? null,
+  }
+  if (f.source === 'google') {
+    return isGoogleFamilyName(f.google_family) ? { ...base, source: 'google', google_family: f.google_family } : null
+  }
+  return base.path ? { ...base, source: 'upload' } : null
 }
 
 async function workingSection<T>(
@@ -129,7 +189,7 @@ export async function getWorkingSitePayload(
   // The artist row and every section are independent, so fetch them in ONE wave — the
   // artist row used to serially gate the other eight for no reason (a full round-trip
   // before any section query started). A missing artist just discards the rest below.
-  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows] =
+  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows, colorRows, themeColor] =
     await Promise.all([
       supabase
         .from('artists')
@@ -208,10 +268,29 @@ export async function getWorkingSitePayload(
       .then(({ data }) => (data?.[0]?.published_at as string | undefined) ?? null),
     supabase
       .from('artist_fonts_with_slots') // the VIEW: the font plus the slots it fills
-      .select('family, label, storage_path, format, slots')
+      // `*`: `source`/`google_family` join the view in 20260925120000, and naming them would
+      // take the whole preview down until that migration is pushed.
+      .select('*')
       .eq('artist_id', artistId)
       .order('family') // matches get_public_site's fonts order
       .then(({ data }) => data ?? []),
+    // The palette, in the door's order keys (sort_order, created_at); brandColorsPayload puts
+    // Primary and Secondary first. `*` so `key` (20260925120000) is read when it exists.
+    supabase
+      .from('brand_colors')
+      .select('*')
+      .eq('artist_id', artistId)
+      .order('sort_order')
+      .order('created_at')
+      .then(({ data }) => data ?? []),
+    // The browser-bar colour. Read from `artists`, not the publish view, so the preview does
+    // not depend on it; the door validates the same #rrggbb shape below.
+    supabase
+      .from('artists')
+      .select('theme_color')
+      .eq('id', artistId)
+      .maybeSingle()
+      .then(({ data }) => ((data as { theme_color?: string | null } | null)?.theme_color ?? null) as string | null),
   ])
   if (!artist) return null
 
@@ -255,17 +334,21 @@ export async function getWorkingSitePayload(
   // Invert the fonts' slot lists into the door's slot→family map. Built from the same
   // rows the `fonts` array comes from, so a slot can never name a font the preview does
   // not also carry — the same property the published side gets from riding the snapshot.
-  const fontRowList = fontRows as {
-    family: string
-    label: string
-    storage_path: string
-    format: string
-    slots: string[] | null
-  }[]
+  // Only the fonts the door would carry (an upload with its file, a Google font with a
+  // well-formed name) — and the slots are built from those same rows, as the door builds
+  // `font_slots` from its `fonts_live`.
+  const fontRowList = (fontRows as Record<string, unknown>[])
+    .map((row) => ({ row, font: fontPayload(row) }))
+    .filter((f): f is { row: Record<string, unknown>; font: SiteFont } => f.font !== null)
   const font_slots: FontSlotMap = {}
   for (const slot of FONT_SLOTS) {
-    const owner = fontRowList.find((f) => (f.slots ?? []).includes(slot))
-    if (owner) font_slots[slot as FontSlot] = owner.family
+    const owner = fontRowList.find(({ row }) => ((row.slots as string[] | null) ?? []).includes(slot))
+    if (owner) font_slots[slot as FontSlot] = owner.font.family
+  }
+
+  const brand: SiteBrand = {
+    colors: brandColorsPayload(colorRows as Record<string, unknown>[]),
+    theme_color: themeColor && HEX_RE.test(themeColor) ? themeColor : null,
   }
 
   // Same region_key→class_names shape get_public_site's jsonb_object_agg produces
@@ -297,17 +380,16 @@ export async function getWorkingSitePayload(
     site_content,
     styles,
     // Same field names the door's fonts array carries (path, not storage_path), so
-    // preview and the custom-site bridge see the published shape.
-    fonts: fontRowList.map((f) => ({
-      family: f.family,
-      label: f.label,
-      path: f.storage_path,
-      format: f.format,
-    })),
+    // preview and the custom-site bridge see the published shape — `source` on every font,
+    // `google_family` on a Google one only (fontPayload).
+    fonts: fontRowList.map(({ font }) => font),
     // Mirrors the door's font_slots: slot → family, assigned slots only, built by
     // inverting each font's own slot list. Iterated in FONT_SLOTS order so the preview
     // payload is byte-stable, exactly like the door's ordered aggregate.
     font_slots: font_slots,
+    // The Brand page's colours and browser-bar colour as the door serves them, from the
+    // WORKING rows (20260925120000).
+    brand,
   }
 }
 

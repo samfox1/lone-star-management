@@ -694,16 +694,28 @@ const PURPOSE_NOUN: Record<Exclude<BrandMediaPurpose, 'logo' | 'icon_source'>, s
 
 type Subject = { noun: string; changes: EntityChange['change'][]; viaSource: boolean }
 
+/** A built-in colour's row name on the bar: "Primary" alone would read as the logo. */
+const COLOR_SLOT_NOUN: Record<string, string> = { primary: 'Primary color', secondary: 'Secondary color' }
+
+/** The browser-bar colour's row name (its title on the Tab icon tab). */
+const THEME_NOUN = 'Browser bar'
+
 /**
  * Group the diff into the things a manager changed. One subject per ROW NAME, not per
  * database row: replacing the primary logo is a delete and an insert (vacate-then-insert)
  * but it is ONE change, "Primary logo changed". An uploaded icon image rides with the icon
  * it feeds, so a new tab icon reads as one change rather than two.
+ *
+ * Colours (BRAND_SYNC_PLAN.md, 20260925120000) are one subject each, by the name the
+ * manager sees — "Cream added", "Primary color changed" — and the browser-bar colour is
+ * "Browser bar".
  */
 export function brandSubjects(
   media: EntityChange[],
   fonts: EntityChange[],
   sources: { favicon: string | null; homeIcon: string | null } = { favicon: null, homeIcon: null },
+  colors: EntityChange[] = [],
+  theme: EntityChange[] = [],
 ): Subject[] {
   const subjects = new Map<string, Subject>()
   const add = (key: string, noun: string, change: EntityChange['change'], viaSource = false) => {
@@ -722,6 +734,11 @@ export function brandSubjects(
     } else add(purpose, PURPOSE_NOUN[purpose], c.change)
   }
   for (const c of fonts) add('fonts', 'Fonts', c.change)
+  for (const c of colors) {
+    const slot = typeof c.snapshot.slot === 'string' ? c.snapshot.slot : null
+    add(`color:${c.id}`, (slot && COLOR_SLOT_NOUN[slot]) || cleanLine(c.snapshot.name) || 'Color', c.change)
+  }
+  for (const c of theme) add('theme', THEME_NOUN, c.change)
   return [...subjects.values()]
 }
 
@@ -756,19 +773,23 @@ async function latestRevisions(supabase: SupabaseClient, artistId: string): Prom
 
 /**
  * Is anything the Brand page publishes different from the live site? BRAND-SCOPED: only
- * the brand media purposes and the fonts, never a gallery photo — the bar on this page
- * must not light up for a change made somewhere else. Built on `diffEntities`, the same
- * comparison `diffUnpublished` uses, so the two can never disagree about one row.
+ * the brand media purposes, the fonts, the colours and the browser-bar colour, never a
+ * gallery photo — the bar on this page must not light up for a change made somewhere else.
+ * Built on `diffEntities`, the same comparison `diffUnpublished` uses, so the two can never
+ * disagree about one row.
  *
  * Uncached on purpose: the bar has to appear the moment a change lands.
- * Dashboard-only settings (notes, colours, icon sources, framing, the browser-bar colour)
- * are not published this round, so they are never "not on the site yet".
+ * Colours and the browser-bar colour publish now (Sam, 2026-09-24, BRAND_SYNC_PLAN.md), so
+ * a colour change IS "not on the site yet". Still dashboard-only, and so never on the bar:
+ * notes, icon sources, framing, slot titles, weights.
  */
 export async function brandPending(supabase: SupabaseClient, artistId: string): Promise<BrandPending> {
-  const [latest, media, fonts, { data: artist }] = await Promise.all([
+  const [latest, media, fonts, colors, theme, { data: artist }] = await Promise.all([
     latestRevisions(supabase, artistId),
     listContent(supabase, 'media', artistId),
     listContent(supabase, 'artist_font', artistId),
+    listContent(supabase, 'brand_color', artistId),
+    listContent(supabase, 'theme_color', artistId),
     supabase
       .from('artists')
       .select('favicon_source_media_id, home_icon_source_media_id')
@@ -778,17 +799,23 @@ export async function brandPending(supabase: SupabaseClient, artistId: string): 
   const byKey = new Map<string, Record<string, unknown>>()
   for (const r of latest) if (r.entity_id) byKey.set(`${r.entity_type}:${r.entity_id}`, r.data)
   const a = (artist ?? {}) as { favicon_source_media_id?: string | null; home_icon_source_media_id?: string | null }
-  const mediaChanges = diffEntities('media', media, byKey, BRAND_MEDIA_SLICE.keep)
-  const fontChanges = diffEntities('artist_font', fonts, byKey)
-  const subjects = brandSubjects(mediaChanges, fontChanges, {
-    favicon: a.favicon_source_media_id ?? null,
-    homeIcon: a.home_icon_source_media_id ?? null,
-  })
+  const changes: Record<BrandKind, EntityChange[]> = {
+    media: diffEntities('media', media, byKey, BRAND_MEDIA_SLICE.keep),
+    artist_font: diffEntities('artist_font', fonts, byKey),
+    brand_color: diffEntities('brand_color', colors, byKey),
+    theme_color: diffEntities('theme_color', theme, byKey),
+  }
+  const subjects = brandSubjects(
+    changes.media,
+    changes.artist_font,
+    { favicon: a.favicon_source_media_id ?? null, homeIcon: a.home_icon_source_media_id ?? null },
+    changes.brand_color,
+    changes.theme_color,
+  )
   const message = brandPendingMessage(subjects)
   // The revert's own skip rule (`revertableTypes`), so the button and the action agree.
   const revertable = revertableTypes(latest)
-  const canRevert =
-    (mediaChanges.length > 0 && revertable.has('media')) || (fontChanges.length > 0 && revertable.has('artist_font'))
+  const canRevert = BRAND_KINDS.some((kind) => changes[kind].length > 0 && revertable.has(kind))
   return { dirty: message !== '', message, canRevert }
 }
 
@@ -800,8 +827,18 @@ export async function brandPending(supabase: SupabaseClient, artistId: string): 
 export const BRAND_MEDIA_SLICE = { keep: (snap: Record<string, unknown>) => isBrandMediaPurpose(snap.purpose) }
 
 /**
- * The Brand page's Publish: brand media (never a gallery photo, hero or profile draft)
- * and the fonts with their slots. Returns the revision rows written.
+ * Every kind the Brand page publishes, in the order it publishes them: brand media, the
+ * fonts (with their slots), the colours, the browser-bar colour. A RECORD below keys the
+ * bar's diff by it, so a kind added here is a compile error until the bar counts it.
+ */
+export const BRAND_KINDS = ['media', 'artist_font', 'brand_color', 'theme_color'] as const
+export type BrandKind = (typeof BRAND_KINDS)[number]
+
+/**
+ * The Brand page's Publish: brand media (never a gallery photo, hero or profile draft),
+ * the fonts with their slots, the colours and the browser-bar colour (20260925120000).
+ * Returns the revision rows written. Only media is SLICED — the other three are the Brand
+ * page's whole, so each publishes whole.
  *
  * No storage sweep here, deliberately. `gcMediaObjects` treats every object no WORKING row
  * names as an orphan, which is only true straight after a WHOLE-media publish. After this
@@ -809,9 +846,10 @@ export const BRAND_MEDIA_SLICE = { keep: (snap: Record<string, unknown>) => isBr
  * written), and its file must outlive it until the gallery itself is published.
  */
 export async function publishBrand(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
-  const media = await publishContent(supabase, 'media', artistId, publishedBy, BRAND_MEDIA_SLICE)
-  const fonts = await publishContent(supabase, 'artist_font', artistId, publishedBy)
-  return media + fonts
+  let written = 0
+  for (const kind of BRAND_KINDS)
+    written += await publishContent(supabase, kind, artistId, publishedBy, kind === 'media' ? BRAND_MEDIA_SLICE : undefined)
+  return written
 }
 
 /* ── Revert: the Brand page back to what the site shows ───────────────────────── */
@@ -887,7 +925,18 @@ const FONT_RESTORE = PUBLISHABLE.artist_font.snapshot.filter((c) => c !== 'id' &
 const snapValue = (type: 'media' | 'artist_font', snap: Record<string, unknown>, col: string) =>
   col in snap ? (snap[col] ?? null) : ((SNAPSHOT_DEFAULTS[type] ?? {})[col] ?? null)
 
-export type BrandRevert = { changed: number; hasPublished: boolean; skipped: ('media' | 'artist_font')[] }
+/** Colour columns a revert UPDATES on a colour that is still here: what the manager can
+ *  change. Never `key` (immutable, 20260925120000) or `slot` (the key follows it), never
+ *  `id`/`created_at` (identity). Derived from PUBLISHABLE, so a column that joins the
+ *  snapshot is restored in the same edit. */
+const COLOR_IMMUTABLE = new Set(['id', 'key', 'slot', 'created_at'])
+const COLOR_RESTORE = PUBLISHABLE.brand_color.snapshot.filter((c) => !COLOR_IMMUTABLE.has(c))
+/** …and the columns a re-inserted colour gets: the whole snapshot, key and created_at
+ *  included — the key is the site's `--brand-<key>`, and a new created_at would make the
+ *  row read as "changed" against the very snapshot it was restored from. */
+const COLOR_REINSERT = PUBLISHABLE.brand_color.snapshot.filter((c) => c !== 'id')
+
+export type BrandRevert = { changed: number; hasPublished: boolean; skipped: BrandKind[] }
 
 /**
  * Put the Brand page's DRAFT back to the last publish: brand media rows and fonts (with
@@ -922,7 +971,12 @@ export type BrandRevert = { changed: number; hasPublished: boolean; skipped: ('m
  *   • each icon's source is settled by `settleIconSources`: removing an icon image uploaded
  *     since the publish no longer leaves the icon silently on the primary logo while the
  *     PNG put back was cut from a published image;
- *   • colours, the browser-bar colour and icon framing are not touched at all.
+ *   • a colour's note is kept (it is never in the log); icon framing is not touched at all.
+ * The colours and the browser-bar colour publish (20260925120000), so they come back too:
+ * a colour changed since is put back (name, hex, order), one added since is removed, one
+ * deleted since is re-inserted with its key — the site's `--brand-<key>` — and its
+ * created_at; the browser-bar colour goes back to the published one, or to none when the
+ * site has none.
  * What does go: a row ADDED since the publish, with whatever note it had — it was never on
  * the site, which is what Revert undoes. A row the manager deleted comes back without the
  * note it had (the delete took it, and the log never had it).
@@ -1131,6 +1185,58 @@ export async function restoreBrandToPublished(supabase: SupabaseClient, artistId
       // `words`: the site's row keeps (or, held or cascaded, gets back) its own; a new row
       // reusing the slot has its cleared.
       await upsertSlot(slot, fontId, true)
+      changed++
+    }
+  }
+
+  /* Colours: removals first — a colour added since may hold the key (or, from a script, the
+     slot) a re-inserted one needs, and both are unique per artist. */
+  if (!everPublished.has('brand_color')) skipped.push('brand_color')
+  else {
+    const wanted = publishedOf('brand_color')
+    const live = await listContent(supabase, 'brand_color', artistId)
+    const liveIds = new Set(live.map((r) => String(r.id)))
+    for (const row of live) {
+      const id = String(row.id)
+      if (wanted.has(id)) continue
+      const { error } = await supabase.from('brand_colors').delete().eq('id', id).eq('artist_id', artistId)
+      fail(error)
+      changed++
+    }
+    for (const row of live) {
+      const snap = wanted.get(String(row.id))
+      if (!snap) continue
+      const patch: Record<string, unknown> = {}
+      for (const col of COLOR_RESTORE) {
+        const next = snap[col] ?? null
+        if (JSON.stringify(row[col] ?? null) !== JSON.stringify(next)) patch[col] = next
+      }
+      if (Object.keys(patch).length === 0) continue
+      const { error } = await supabase.from('brand_colors').update(patch).eq('id', String(row.id)).eq('artist_id', artistId)
+      fail(error)
+      changed++
+    }
+    for (const [id, snap] of wanted) {
+      if (liveIds.has(id)) continue
+      const insert: Record<string, unknown> = { id, artist_id: artistId }
+      for (const col of COLOR_REINSERT) insert[col] = snap[col] ?? null
+      const { error } = await supabase.from('brand_colors').insert(insert)
+      fail(error)
+      changed++
+    }
+  }
+
+  /* The browser-bar colour: a singleton on `artists`. A tombstone (cleared, then published)
+     means the site has none, so null. */
+  if (!everPublished.has('theme_color')) skipped.push('theme_color')
+  else {
+    const published = publishedOf('theme_color').get(artistId)
+    const wanted = (published?.theme_color as string | null | undefined) ?? null
+    const [current] = await listContent(supabase, 'theme_color', artistId)
+    const now = (current?.theme_color as string | null | undefined) ?? null
+    if (now !== wanted) {
+      const { error } = await supabase.from('artists').update({ theme_color: wanted }).eq('id', artistId)
+      fail(error)
       changed++
     }
   }

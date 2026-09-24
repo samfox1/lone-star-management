@@ -28,6 +28,8 @@ export const DIFF_SECTIONS = [
   { key: 'site_content', label: 'Site text', seg: 'site' },
   { key: 'site_styles', label: 'Site styles', seg: 'site' },
   { key: 'artist_font', label: 'Fonts', seg: 'brand' },
+  { key: 'brand_color', label: 'Brand colors', seg: 'brand' },
+  { key: 'theme_color', label: 'Browser bar', seg: 'brand' },
 ] as const satisfies readonly DiffSection[]
 
 /** The route segments this registry actually emits. Tabs are typed against it, so a tab
