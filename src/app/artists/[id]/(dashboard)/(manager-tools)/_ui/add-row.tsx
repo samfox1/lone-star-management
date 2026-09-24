@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
+import { cx } from '@/lib/cx'
+import { FOCUS_RING } from './focus-ring'
 import { RowIcon } from './row-icon'
 
 /**
@@ -85,7 +87,7 @@ export function AddRow({
           ref={addButton}
           type="button"
           onClick={start}
-          className="inline-flex w-max items-center gap-2 py-1.5 text-[14px] text-ink-muted outline-hidden transition-colors duration-150 hover:text-ink focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+          className={cx('inline-flex w-max items-center gap-2 py-1.5 text-[14px] text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-offset-2 motion-reduce:transition-none', FOCUS_RING)}
         >
           <Icon name="plus" size={16} />
           {`Add ${noun}`}

@@ -4,6 +4,7 @@ import { useId, useState } from 'react'
 import { contrastRatio, isReadable } from '@/lib/color'
 import { cx } from '@/lib/cx'
 import { BrandModal } from '../_ui/brand-modal'
+import { FOCUS_RING } from '../../_ui/focus-ring'
 import { HoverLabel } from '../../_ui/row-icon'
 
 /** A colour the playground can offer: every palette row that has one. */
@@ -109,9 +110,7 @@ export function ColorPlayground({ palette, startKey, onClose }: { palette: PlayC
                       // Picked: an ink ring, always. Otherwise a ring on keyboard focus. Each ring
                       // says `outline-solid` itself — Tailwind v4's `outline-hidden` would zero the
                       // style `outline-2` reads (tests/components/manager-tools/shared/focus-rings.test.tsx).
-                      on
-                        ? 'outline-solid outline-2 outline-offset-2 outline-ink'
-                        : 'outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                      on ? 'outline-solid outline-2 outline-offset-2 outline-ink' : cx(FOCUS_RING, 'focus-visible:outline-offset-2'),
                     )}
                   >
                     <HoverLabel label={c.name} side="top" />

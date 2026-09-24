@@ -6,6 +6,7 @@ import { rowHoverClass } from '@/components/ui/ui'
 import { recipientLine, type SettingsRow } from '@/lib/settings'
 import { toast } from '../../toast'
 import { KvLabel } from '../../modal-kit'
+import { useSeeded } from '../_ui/use-seeded'
 import { saveArtistNameAction, saveBookingEmailAction } from './actions'
 
 /**
@@ -20,12 +21,10 @@ import { saveArtistNameAction, saveBookingEmailAction } from './actions'
  * that". They carry no hover, no pencil, no input, nothing to click.
  */
 export function SettingsView({ artistId, rows: initial }: { artistId: string; rows: SettingsRow[] }) {
-  // Seeded from the server and re-seeded when it changes; render-phase, not an effect.
-  const [state, setState] = useState({ from: initial, rows: initial })
-  if (state.from !== initial) setState({ from: initial, rows: initial })
-  const rows = state.rows
+  // Seeded from the server and re-seeded when it changes (useSeeded).
+  const [rows, setRows] = useSeeded(initial)
   const patch = (key: SettingsRow['key'], next: Partial<SettingsRow>) =>
-    setState((s) => ({ ...s, rows: s.rows.map((r) => (r.key === key ? { ...r, ...next } : r)) }))
+    setRows((all) => all.map((r) => (r.key === key ? { ...r, ...next } : r)))
 
   async function save(row: SettingsRow, value: string): Promise<{ error?: string } | void> {
     if (row.key === 'booking_email') {
@@ -56,9 +55,7 @@ function Row({ row, onSave }: { row: SettingsRow; onSave: (v: string) => Promise
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(row.value)
   // What the row SHOWS: optimistic, put back if the save is refused.
-  const [shown, setShown] = useState({ from: row.value, now: row.value })
-  if (shown.from !== row.value) setShown({ from: row.value, now: row.value })
-  const current = shown.now
+  const [current, setCurrent] = useSeeded(row.value)
 
   function begin() {
     if (!row.editable || editing) return
@@ -70,10 +67,10 @@ function Row({ row, onSave }: { row: SettingsRow; onSave: (v: string) => Promise
     setEditing(false)
     if (next === current) return
     const prev = current
-    setShown((s) => ({ ...s, now: next }))
+    setCurrent(next)
     const res = await onSave(next)
     if (res && 'error' in res && res.error) {
-      setShown((s) => ({ ...s, now: prev }))
+      setCurrent(prev)
       toast(res.error, 'error')
     }
   }

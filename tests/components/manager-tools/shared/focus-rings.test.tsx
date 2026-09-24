@@ -24,6 +24,8 @@ import { RowIcon } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/row-
 import { AddRow } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/add-row'
 import { ModalBoard } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/modal-board'
 import { ColorPlayground } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/colors/playground'
+import { FOCUS_RING } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/focus-ring'
+import { SubscribersLedger } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/subscribers-ledger'
 
 afterEach(cleanup)
 
@@ -124,6 +126,22 @@ describe('focus and selected rings paint (Tailwind v4 outline-style)', () => {
         else expectFocusRing(d)
       }
     }
+    expect(everyDeadRing()).toEqual([])
+  })
+
+  it('CRITICAL: FOCUS_RING, the one ring every manager tool shares, paints on its own', () => {
+    // Brand and Subscribers take their keyboard ring from _ui/focus-ring.ts. A copy of the
+    // shipped bug there (dropping the `outline-solid`) would kill every ring at once.
+    const el = document.createElement('button')
+    el.className = FOCUS_RING
+    expectFocusRing(el)
+  })
+
+  it('CRITICAL: the Subscribers toolbar and rows have keyboard rings that paint', () => {
+    render(<SubscribersLedger artistId="a1" subscribers={[{ email: 'a@example.com', created_at: '2026-09-01T00:00:00Z' }]} />)
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search emails' }), { target: { value: 'a' } })
+    expectFocusRing(screen.getByRole('button', { name: 'Clear search' }))
+    for (const b of within(screen.getByRole('group', { name: 'Sort' })).getAllByRole('button')) expectFocusRing(b)
     expect(everyDeadRing()).toEqual([])
   })
 })

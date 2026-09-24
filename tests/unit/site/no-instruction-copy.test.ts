@@ -213,9 +213,15 @@ describe('the detector itself', () => {
 
   it('CRITICAL: the walker actually descends — a sweep over nothing would pass forever', () => {
     // Without this, every assertion below is vacuous the day the walk breaks.
+    // EACH swept tree must yield files, not just the total: a stale path for one of them
+    // (the tools tree moved into (manager-tools)/ on 2026-09-24) would otherwise hide
+    // behind the other's count. The total floor dropped from 40 to 30 when the SEO page's
+    // unused copy-button.tsx was deleted (40 files left).
+    for (const d of SWEPT_DIRS) expect(allTsxFiles(join(ROOT, d)).length, d).toBeGreaterThan(5)
     const files = SWEPT_DIRS.flatMap((d) => allTsxFiles(join(ROOT, d)))
-    expect(files.length).toBeGreaterThan(40)
+    expect(files.length).toBeGreaterThan(30)
     expect(files.some((f) => f.endsWith('site-tools.tsx'))).toBe(true)
+    expect(files.some((f) => f.endsWith('og-image-picker.tsx'))).toBe(true)
   })
 })
 

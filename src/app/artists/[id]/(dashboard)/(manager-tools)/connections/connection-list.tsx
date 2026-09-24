@@ -11,6 +11,7 @@ import { publishEntityAction, setOnSiteAction } from '../../actions'
 import { PublishBar } from '../../publish-bar'
 import { SelectToggle } from '../../select-toggle'
 import { toast } from '../../toast'
+import { useSeeded } from '../_ui/use-seeded'
 import { ConnectModal } from './connect-modal'
 import { ConnectionMark } from './connection-mark'
 import { ConnectionModal } from './connection-modal'
@@ -32,12 +33,8 @@ import { pullConnectionAction, syncProfileAction } from './actions'
 export function ConnectionList({ artistId, rows: initial, dirty = false }: { artistId: string; rows: ConnectionRow[]; dirty?: boolean }) {
   const router = useRouter()
   // Seeded from the server's rows and RE-SEEDED when they change (a refresh after a
-  // connect), so an optimistic row can't outlive the truth. Render-phase, not an effect —
-  // the modal kit's rule, and the lint rule's.
-  const [state, setState] = useState({ from: initial, rows: initial })
-  if (state.from !== initial) setState({ from: initial, rows: initial })
-  const rows = state.rows
-  const setRows = (fn: (rows: ConnectionRow[]) => ConnectionRow[]) => setState((s) => ({ ...s, rows: fn(s.rows) }))
+  // connect), so an optimistic row can't outlive the truth (useSeeded).
+  const [rows, setRows] = useSeeded(initial)
   const [connect, setConnect] = useState(false)
 
   async function publish(password: string) {

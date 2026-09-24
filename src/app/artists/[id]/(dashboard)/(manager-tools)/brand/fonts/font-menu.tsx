@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 
 import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
 import { MAX_FONT_LABEL, type BrandFont } from '@/lib/fonts'
+import { FOCUS_RING } from '../../_ui/focus-ring'
 import { RowTitle, type SaveResult } from '../../_ui/inline-text'
 import { FontSample } from './font-sample'
 
@@ -196,7 +197,7 @@ export function FontMenu({
                 role="menuitem"
                 aria-label={`Rename ${font.label}`}
                 onClick={() => setEditing(font.id)}
-                className="flex-none rounded-md p-1.5 text-ink-faint opacity-0 outline-hidden transition-opacity hover:text-ink focus-visible:opacity-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent group-hover/fo:opacity-100"
+                className={cx('flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/fo:opacity-100', FOCUS_RING)}
               >
                 <Icon name="edit" size={14} />
               </button>
@@ -205,7 +206,7 @@ export function FontMenu({
                 role="menuitem"
                 aria-label={`Remove ${font.label}`}
                 onClick={() => onRemove(font)}
-                className="flex-none rounded-md p-1.5 text-ink-faint opacity-0 outline-hidden transition-opacity hover:text-accent-red focus-visible:opacity-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent group-hover/fo:opacity-100"
+                className={cx('flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-accent-red focus-visible:opacity-100 group-hover/fo:opacity-100', FOCUS_RING)}
               >
                 <Icon name="trash" size={14} />
               </button>

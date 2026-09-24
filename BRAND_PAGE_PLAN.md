@@ -130,7 +130,7 @@ prototype disagree, this file wins (it carries Sam's later calls and the data mo
   `src/app/artists/[id]/(dashboard)/(manager-tools)/brand/` (a route group, so the URL is
   still `/artists/[id]/brand`). Brand-only UI (brand-riser, brand-modal, modal-board) stays
   in `brand/_ui/`; the pieces every tool shares (ledger, row-icon + HoverLabel,
-  label-placement, inline-text, add-row, publish-riser) are in
+  label-placement, inline-text, add-row, publish-riser, focus-ring, use-seeded) are in
   `(manager-tools)/_ui/`. Brand-only libs are in `src/lib/manager-tools/brand/`
   (brand-colors, brand-pending, brand-kit, image-checks); `lib/brand.ts`, `fonts.ts`,
   `font-weight.ts` and `color.ts` stay in `src/lib/` because code outside Brand imports them.

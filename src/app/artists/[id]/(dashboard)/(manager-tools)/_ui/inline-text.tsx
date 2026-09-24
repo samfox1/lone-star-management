@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent, type RefObject } from 'react'
 import { cx } from '@/lib/cx'
 import { toast } from '../../toast'
+import { useSeeded } from './use-seeded'
 
 /**
  * TITLES AND NOTES YOU CLICK INTO (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): "click → a thin
@@ -43,9 +44,7 @@ function InlineText({ value, onCommit, label, maxLength, allowEmpty, placeholder
   const el = useRef<HTMLSpanElement>(null)
   // What the row shows as saved. Re-seeded when the parent sends a new value (a refresh
   // after another save), so a stale optimistic value cannot outlive the server's.
-  const [shown, setShown] = useState({ from: value, now: value })
-  if (shown.from !== value) setShown({ from: value, now: value })
-  const current = shown.now
+  const [current, setCurrent] = useSeeded(value)
   /** Enter / Escape already settled this edit; the blur they cause must not save again. */
   const settled = useRef(false)
 
@@ -69,7 +68,7 @@ function InlineText({ value, onCommit, label, maxLength, allowEmpty, placeholder
     }
     const prev = current
     putBack(next)
-    setShown((s) => ({ ...s, now: next }))
+    setCurrent(next)
     let res: SaveResult
     try {
       res = await onCommit(next)
@@ -78,7 +77,7 @@ function InlineText({ value, onCommit, label, maxLength, allowEmpty, placeholder
     }
     if (res && 'error' in res && res.error) {
       toast(res.error, 'error')
-      setShown((s) => ({ ...s, now: prev }))
+      setCurrent(prev)
       putBack(prev)
     }
   }

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type MouseEventHandler, t
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
+import { FOCUS_RING } from './focus-ring'
 import { placeLabel, type LabelAlign } from './label-placement'
 
 /**
@@ -238,11 +239,10 @@ export function RowIcon({
 }: RowIconProps) {
   const box = variant === 'boxed' ? BOX[size] : null
   const cls = cx(
-    'relative inline-flex flex-none items-center justify-center outline-hidden transition-[opacity,color,background-color] duration-150',
-    // `outline-solid` under the SAME variant, or no ring ever paints: in Tailwind v4
-    // `outline-hidden` sets --tw-outline-style:none and `outline-2` reads that variable
-    // (tests/components/manager-tools/shared/focus-rings.test.tsx).
-    'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+    'relative inline-flex flex-none items-center justify-center transition-[opacity,color,background-color] duration-150',
+    // The shared keyboard ring (focus-ring.ts), which says why it needs its own `outline-solid`.
+    FOCUS_RING,
+    'focus-visible:outline-offset-2',
     VARIANT[variant],
     box?.cls,
     TONE[tone ?? (icon === 'plus' ? 'accent' : 'default')],

@@ -111,7 +111,8 @@ group, and its tests sit under one subject per tool:
     src/app/artists/[id]/(dashboard)/(manager-tools)/
       _shell/        the tools rail + registry (private folder: never a route)
       _ui/           UI two or more tools share: ledger, row-icon (+ HoverLabel),
-                     label-placement, inline-text, add-row, publish-riser
+                     label-placement, inline-text, add-row, publish-riser,
+                     focus-ring (FOCUS_RING), use-seeded (useSeeded)
       brand/ subscribers/ settings/ enquiries/ connections/ epk/ site/ tools/ (overview + seo)
         <tool>/_ui/  UI only that tool uses (brand/_ui: brand-riser, brand-modal, modal-board)
     src/lib/manager-tools/<tool>/          pure modules only that tool uses

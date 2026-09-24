@@ -14,6 +14,7 @@ import {
   type Subscriber,
   type SubscriberSort,
 } from '@/lib/manager-tools/subscribers/subscribers'
+import { FOCUS_RING } from '../_ui/focus-ring'
 import { HoverLabel, RowIcon } from '../_ui/row-icon'
 
 /**
@@ -46,9 +47,6 @@ const FRAME = 'mx-auto w-full max-w-[1000px]'
  *  hover, so there they are always fully visible. */
 const TOUCH_VISIBLE = 'pointer-coarse:opacity-100'
 
-/** A keyboard ring that paints: `outline-hidden` alone would kill `outline-2` in Tailwind 4
- *  (tests/components/manager-tools/shared/focus-rings.test.tsx), so the variant also says `outline-solid`. */
-const RING = 'outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent'
 
 const QUIET = 'py-7 text-[14px] text-ink-faint'
 
@@ -163,7 +161,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                         setQuery('')
                         searchRef.current?.focus()
                       }}
-                      className={cx('absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-md text-ink-faint transition-colors hover:text-ink', RING)}
+                      className={cx('absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-md text-ink-faint transition-colors hover:text-ink', FOCUS_RING)}
                     >
                       <Icon name="close" size={14} />
                       <HoverLabel label="Clear search" align="end" />
@@ -182,7 +180,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                         onClick={() => setSort(s.key)}
                         className={cx(
                           'whitespace-nowrap rounded-[7px] px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-offset-1',
-                          RING,
+                          FOCUS_RING,
                           on ? 'bg-paper text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]' : 'text-ink-muted hover:text-ink',
                         )}
                       >
