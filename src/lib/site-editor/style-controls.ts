@@ -15,7 +15,7 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsDeltas, bridgeSupportsItemDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsDeltas, bridgeSupportsEffects, bridgeSupportsItemDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
@@ -60,6 +60,7 @@ import {
   // ENTRANCE_OPTIONS, ENTRANCE_SPEED_STEPS, ENTRANCE_TRAVEL_STEPS — ENTRANCES PAUSED
   // (2026-08-12), see motionControls().
   HOVER_OPTIONS,
+  TAP_OPTIONS,
   TEXT_STROKE_STEPS,
   RADIUS_STEPS,
   SCALE_STEPS,
@@ -311,6 +312,9 @@ export type EditorStyleOptions = SiteStyleOptions & {
   /** The site's window/inner splitter re-wears the sentinel (0.25.4), so PER-ITEM saves
    *  may store deltas too. */
   deltaItemStyles?: boolean
+  /** The site is at 0.40.0+: the hover list has Glitch and Magnetic, and phone view
+   *  gets "On tap" (see effectsControls). */
+  effects?: boolean
   /** The editor is currently in PHONE view. With the vars flags, controls become
    *  phone-scoped: same control, writing the `…sm-[…]` twin. */
   mobileView?: boolean
@@ -336,6 +340,7 @@ export function withStyleVars(
     mobileItemVars: bridgeSupportsMobileItem(bridgeVersion),
     deltaStyles: bridgeSupportsDeltas(bridgeVersion),
     deltaItemStyles: bridgeSupportsItemDeltas(bridgeVersion),
+    effects: bridgeSupportsEffects(bridgeVersion),
   }
 }
 
@@ -814,7 +819,7 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
     onClass: usesTextVars(opts) ? 'fstyle-[italic]' : ITALIC_TOGGLE_CLASS,
     owns: (t) => t === ITALIC_TOGGLE_CLASS || t === 'fstyle-[italic]',
   })
-  controls.push(...motionControls())
+  controls.push(...motionControls(opts))
   if (phoneTextScope(opts)) return twinTextControls(controls)
   return controls
 }
@@ -967,7 +972,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   // A stored line-through still renders; the section panel still offers it.
   controls.push({ ...hexControl('decocolor', 'decoColor', 'Line color'), impliesLine: true })
   controls.push({ id: 'decoThickness', label: 'Line thickness', kind: 'slider', steps: DECO_THICKNESS_STEPS, defaultOffScale: true, rank: thicknessRank, owns: (t) => t.startsWith('decothick-['), impliesLine: true })
-  controls.push(...motionControls())
+  controls.push(...motionControls(opts))
   if (phoneTextScope(opts)) return twinTextControls(controls)
   return controls
 }
@@ -1315,6 +1320,12 @@ function scopedControls(
       ICON_SIZE_CONTROL,
       ...(iconColor ? [{ ...iconColor, label: 'Icon color' }] : []),
       GROUP_HOVER_COLOR_CONTROL,
+      // Hover / tap effects, 0.40 SITES ONLY (review, 2026-09-24): a wired row's base
+      // carries `lse-fx-kids`, so the class plays on each icon, not the row. An older
+      // site has neither the marker nor the kids-scoped CSS — the same pick there would
+      // scale the whole row — so icon groups gate on the version where element regions,
+      // for compatibility, keep the legacy select.
+      ...((opts as EditorStyleOptions | undefined)?.effects ? effectsControls(opts) : []),
       ...(isFlexOrGrid && base.some((t) => /^gap-\d/.test(t) || t.startsWith('gap-[')) ? [maybePhoneGap(controls)] : []),
     ]
   }
@@ -1413,7 +1424,79 @@ function scopedControls(
 /** Slice-3 motion (2026-08-11): entrance + its speed + hover, on every styleable
  *  surface. The classes are compiled CSS (tokens.css effects block), the speed lifts
  *  inline — see vocabulary.ts. */
-function motionControls(): StyleControl[] {
+/** The hover effects a site can render: the 0.40.0 pair only on a site that ships
+ *  their CSS. On an older site the select would emit a class nothing compiled. */
+const LEGACY_HOVER = new Set(['', 'hover-grow', 'hover-shrink', 'hover-lift', 'hover-tilt', 'hover-brighten', 'hover-glow'])
+/** Built-ins plus the SITE'S OWN named effects (manifest styleOptions.hoverEffects /
+ *  .tapEffects, 0.40.0) — a custom move like skeen's ×-spin appears in the select by
+ *  the name the site gave it. Site options are 0.40 features like Glitch/Magnetic:
+ *  on an older site they would emit a class whose family the bridge cannot store, so
+ *  the same `effects` gate hides them. */
+const hoverOptions = (opts?: SiteStyleOptions): StyleOption[] =>
+  (opts as EditorStyleOptions | undefined)?.effects
+    ? [...HOVER_OPTIONS, ...(opts?.hoverEffects ?? []).filter((o) => /^hover-/.test(o.value))]
+    : HOVER_OPTIONS.filter((o) => LEGACY_HOVER.has(o.value))
+// The prefix filter on both (review, 2026-09-24): a declared value OUTSIDE the prefix
+// would render in the select but never sweep, park, or survive a save (familyOf null)
+// — a live control that silently loses the pick. Dropping it here turns that bug into
+// "my option never appeared", which a site author notices immediately.
+const tapOptions = (opts?: SiteStyleOptions): StyleOption[] =>
+  [...TAP_OPTIONS, ...(opts?.tapEffects ?? []).filter((o) => /^tap-/.test(o.value))]
+
+/** The hover DIALS (0.40.0, Sam: "a scale or a multiplier … very fast or very slow").
+ *  Speed lifts `fxspeed-[Nms]` → --lse-fx-speed, which every hover rule's transition
+ *  reads; amount lifts `fxscale-[N]` → --lse-fx-scale, which the scale-shaped rules
+ *  (grow, tilt, a site's own by convention) read. Unset, the fallbacks are the old
+ *  fixed timings — a site that never touches the dials renders exactly as before. */
+const FX_SPEED_STEPS: StyleOption[] = [
+  { value: 'fxspeed-[100ms]', label: 'Very fast' },
+  { value: 'fxspeed-[180ms]', label: 'Fast' },
+  { value: 'fxspeed-[250ms]', label: 'Normal' },
+  { value: 'fxspeed-[450ms]', label: 'Slow' },
+  { value: 'fxspeed-[700ms]', label: 'Slower' },
+  { value: 'fxspeed-[1100ms]', label: 'Very slow' },
+]
+const FX_SCALE_STEPS: StyleOption[] = [
+  { value: 'fxscale-[1.01]', label: 'Whisper' },
+  { value: 'fxscale-[1.02]', label: 'Subtle' },
+  { value: 'fxscale-[1.05]', label: 'Normal' },
+  { value: 'fxscale-[1.08]', label: 'Bold' },
+  { value: 'fxscale-[1.12]', label: 'Big' },
+]
+const stepRank = (steps: StyleOption[]) => (t: string) => {
+  const i = steps.findIndex((o) => o.value === t)
+  return i === -1 ? null : i
+}
+
+/**
+ * Hover and tap, BY VIEW (0.40.0, Sam: "add and change hover effects and also tap
+ * effects (only for mobile) in the editor"). Desktop view offers "On hover" — a phone
+ * has nothing to hover with — and phone view offers "On tap", which is `:active` under
+ * `@media (hover: none)`, so a mouse click never plays it. Both are ordinary tokens on
+ * the region (`hover-*`, `tap-*`), disjoint families, so a desktop edit never disturbs
+ * the phone pick and vice versa.
+ */
+function effectsControls(opts?: SiteStyleOptions): StyleControl[] {
+  const o = opts as EditorStyleOptions | undefined
+  if (o?.mobileView) {
+    return o.effects
+      ? [{ id: 'tap', label: 'On tap', kind: 'select', options: tapOptions(opts), owns: (t) => t.startsWith('tap-') }]
+      : []
+  }
+  return [
+    { id: 'hover', label: 'On hover', kind: 'select', options: hoverOptions(opts), owns: (t) => t.startsWith('hover-') },
+    // The dials only on a 0.40 site: below it the CSS reads no var, so the sliders
+    // would write tokens that render nothing.
+    ...(o?.effects
+      ? ([
+          { id: 'hoverSpeed', label: 'Hover speed', kind: 'slider', steps: FX_SPEED_STEPS, rank: stepRank(FX_SPEED_STEPS), owns: (t) => t.startsWith('fxspeed-[') },
+          { id: 'hoverAmount', label: 'Hover amount', kind: 'slider', steps: FX_SCALE_STEPS, rank: stepRank(FX_SCALE_STEPS), owns: (t) => t.startsWith('fxscale-[') },
+        ] satisfies StyleControl[])
+      : []),
+  ]
+}
+
+function motionControls(opts?: SiteStyleOptions): StyleControl[] {
   return [
     // ENTRANCES PAUSED (Sam, 2026-08-12) — pulled from the panel, not deleted. The
     // blocker: the IntersectionObserver watches the element's TRANSFORMED box, so a
@@ -1425,7 +1508,7 @@ function motionControls(): StyleControl[] {
     // { id: 'entrance', label: 'Entrance', kind: 'select', options: ENTRANCE_OPTIONS, owns: (t) => t.startsWith('enter-') },
     // { id: 'entranceSpeed', label: 'Entrance speed', kind: 'slider', steps: ENTRANCE_SPEED_STEPS, rank: msRank, owns: (t) => t.startsWith('enterdur-[') },
     // { id: 'entranceTravel', label: 'Entrance travel', kind: 'slider', steps: ENTRANCE_TRAVEL_STEPS, rank: distRank, owns: (t) => t.startsWith('enterdist-[') },
-    { id: 'hover', label: 'On hover', kind: 'select', options: HOVER_OPTIONS, owns: (t) => t.startsWith('hover-') },
+    ...effectsControls(opts),
     // Hover colour (Sam, 2026-08-12). Two tokens as ONE value: the `hovercolor`
     // marker class carries the compiled :hover rule, `hovercolor-[#hex]` lifts the
     // colour inline — apart they are both no-ops, so they are written and cleared
@@ -1480,7 +1563,7 @@ export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] 
     // you can remove the matte slider"). Padding on an <img> inside a clipping window
     // just shrinks the photo over the window's background. Stored pad- tokens on old
     // items still lift; they simply have no control now.
-    ...motionControls(),
+    ...motionControls(opts),
   ]
 }
 
@@ -1654,7 +1737,7 @@ export function buildVideoItemStyleControls(kind: 'embed' | 'file', opts?: SiteS
     tiltControl(),
     { id: 'shape', label: 'Shape', kind: 'select', options: SHAPE_STEPS, owns: (t) => t.startsWith('shape-') },
     { id: 'feather', label: 'Feather', kind: 'slider', steps: FEATHER_STEPS, rank: pctRank0('feather'), owns: (t) => /^feather-\d/.test(t) },
-    ...motionControls(),
+    ...motionControls(opts),
   ]
 }
 

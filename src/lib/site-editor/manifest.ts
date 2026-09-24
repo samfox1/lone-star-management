@@ -121,6 +121,16 @@ export function bridgeSupportsMobileItem(siteVersion: string | undefined): boole
 /** Delta overrides (`lse-delta …`) render on 0.24+ appliers; the editor must keep
  *  writing full strings to anything older — a delta there would render as replace
  *  semantics with a stray sentinel class. */
+/** Hover/tap EFFECTS as a pickable family (0.40.0): Glitch and Magnetic joined the hover
+ *  select, and "On tap" arrived for phone view. An older site has neither the CSS nor
+ *  the `tap` family in its delta reader, so the editor keeps the pre-0.40 hover list and
+ *  offers no tap control. */
+const EFFECTS_SINCE = '0.40.0'
+
+export function bridgeSupportsEffects(siteVersion: string | undefined): boolean {
+  return !!siteVersion && !bridgeOutdated(siteVersion, EFFECTS_SINCE)
+}
+
 const DELTA_SINCE = '0.24.0'
 
 export function bridgeSupportsDeltas(siteVersion: string | undefined): boolean {

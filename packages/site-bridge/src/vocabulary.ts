@@ -325,7 +325,43 @@ export const HOVER_OPTIONS: StyleOption[] = [
   { value: 'hover-tilt', label: 'Tilt' },
   { value: 'hover-brighten', label: 'Brighten' },
   { value: 'hover-glow', label: 'Glow' },
+  // 0.40.0 (Sam, 2026-09-23, from skeen's hover prototypes). Glitch is a two-ghost
+  // split (a red ghost one side, a cyan one the other — the defaults; --lse-glitch-a/-b
+  // override) that jitters while hovered; on an SVG icon the ghosts are a filter, since a glyph
+  // has no text to shadow. Magnetic leans the element toward the pointer — CSS holds
+  // the transition, the effects runtime (effects.ts) feeds it --lse-magnet-x/-y.
+  { value: 'hover-glitch', label: 'Glitch' },
+  { value: 'hover-magnet', label: 'Magnetic' },
 ]
+
+/**
+ * TAP effects (0.40.0): what a finger gets INSTEAD of a hover, on a device with no
+ * pointer to hover with. Rules are wrapped in `@media (hover: none)` so a mouse click
+ * never plays one. A site must have SOMETHING listening for touchstart, or iOS Safari
+ * never applies `:active` at all — the effects runtime (effects.ts) binds a passive
+ * no-op listener for exactly that.
+ */
+export const TAP_OPTIONS: StyleOption[] = [
+  { value: '', label: 'None' },
+  { value: 'tap-press', label: 'Press' },
+  { value: 'tap-icon', label: 'Press (icon)' },
+  { value: 'tap-tint', label: 'Tint' },
+]
+
+/**
+ * THE KIDS MARKER. A hover or tap class lands on the REGION, and a region is often the
+ * container (a nav row, a socials row, a list) while the thing a visitor hovers is one
+ * of its children. A site puts this class in such a region's base, and every effect
+ * rule below then targets `> :hover` / `> :active` — one child at a time — instead of
+ * the container itself. Without it, hovering anywhere in a row would grow the row.
+ */
+export const KIDS_CLASS = 'lse-fx-kids'
+/** The two forms every effect rule takes: the element itself, or a marked container's
+ *  children. `:where()` keeps specificity at one class either way. */
+const selfOrKids = (cls: string, state: string) =>
+  `.${cls}:where(:not(.${KIDS_CLASS})):${state},.${KIDS_CLASS}.${cls} > :${state}`
+const selfOrKidsRest = (cls: string) =>
+  `.${cls}:where(:not(.${KIDS_CLASS})),.${KIDS_CLASS}.${cls} > *`
 
 /** Entrance speed: `enterdur-[Nms]` lifts to the `--lse-enter-duration` custom
  *  property inline, which the entrance rules read — so speed works on deployed sites
@@ -377,12 +413,30 @@ const ENTRANCE_HIDDEN: Record<string, string> = {
  *  filter from the effect sliders (inline always wins) — a real edge, chosen over
  *  `!important`, which would break the sliders the other way round. */
 const HOVER_RULE: Record<string, string> = {
-  'hover-grow': 'transform:scale(1.05)',
+  // Grow and tilt read the AMOUNT var (0.40.0): the editor's "Hover amount" slider
+  // lifts `fxscale-[N]` inline as --lse-fx-scale, and unset they render exactly the
+  // old fixed numbers. Shrink stays fixed — "amount" means how big it grows, and a
+  // grow-scaled shrink would silently invert.
+  'hover-grow': 'transform:scale(var(--lse-fx-scale, 1.05))',
   'hover-shrink': 'transform:scale(0.95)',
   'hover-lift': 'transform:translateY(-6px);box-shadow:0 14px 28px rgb(0 0 0 / 0.18)',
-  'hover-tilt': 'transform:rotate(2deg) scale(1.02)',
+  'hover-tilt': 'transform:rotate(2deg) scale(var(--lse-fx-scale, 1.02))',
   'hover-brighten': 'filter:brightness(1.15)',
   'hover-glow': 'filter:drop-shadow(0 0 10px currentColor)',
+  'hover-glitch':
+    'text-shadow:-2px 0 var(--lse-glitch-a, #c63a2a),2px 0 var(--lse-glitch-b, #2ee6e6);animation:lse-jitter 220ms steps(2, end) infinite',
+  // The runtime writes the two vars while the pointer is near; leaving ends :hover and
+  // the transition carries the element back to rest.
+  'hover-magnet': 'transform:translate(var(--lse-magnet-x, 0px), var(--lse-magnet-y, 0px))',
+}
+
+/** What each tap class does while pressed (`:active`). Press is skeen's chosen
+ *  treatment for cards and buttons, Press (icon) the harder version a 44px circle needs
+ *  to be seen moving at all, Tint for wide rows where a scale wobbles instead. */
+const TAP_RULE: Record<string, string> = {
+  'tap-press': 'transform:scale(0.96)',
+  'tap-icon': 'transform:scale(0.88)',
+  'tap-tint': 'background-color:color-mix(in srgb, currentColor 8%, transparent)',
 }
 
 /** Text elements override: a box-shadow around a heading's CONTAINER draws a floating
@@ -435,13 +489,62 @@ export function effectsCss(): string {
     if (o.value === '') continue
     const rule = HOVER_RULE[o.value]
     if (!rule) throw new Error(`hover option without CSS: ${o.value}`)
+    // Two selectors per rule since 0.40.0 (KIDS_CLASS): the element itself, unless it
+    // is a marked container, in which case its children one at a time.
+    // Every duration reads the SPEED var (0.40.0): the editor's "Hover speed" slider
+    // lifts `fxspeed-[Nms]` inline as --lse-fx-speed, one knob for built-ins and a
+    // site's own custom effects alike (they read the same var by convention). Unset,
+    // the fallbacks render the old fixed timings; magnet keeps its snappier default
+    // and its ease-out.
+    const speed = `var(--lse-fx-speed, ${o.value === 'hover-magnet' ? '0.12s' : '0.25s'})`
+    const ease = o.value === 'hover-magnet' ? 'ease-out' : 'ease'
+    // `color 0.15s ease` rides every list (review, 2026-09-24): this rest rule RESETS
+    // transition-property on the element, and it beat sites' own colour fades — skeen's
+    // social icons snapped to their hover colour, and the editor's own hovercolor pick
+    // never eased. GLITCH transitions transform alone: its split and ghosts must SNAP
+    // on (the mock's feel, Sam signed it off); easing the text-shadow in dulls it.
+    const trans =
+      o.value === 'hover-glitch'
+        ? `transform ${speed} ${ease},color 0.15s ease`
+        : `transform ${speed} ${ease},filter ${speed} ease,box-shadow ${speed} ease,text-shadow ${speed} ease,color 0.15s ease`
     out.push(
-      `.${o.value}{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}`,
-      `.${o.value}:hover{${rule}}`,
+      `${selfOrKidsRest(o.value)}{transition:${trans}}`,
+      `${selfOrKids(o.value, 'hover')}{${rule}}`,
     )
     const textRule = HOVER_TEXT_RULE[o.value]
-    if (textRule) out.push(`:where(${TEXT_ELEMENTS}).${o.value}:hover{${textRule}}`)
+    if (textRule) out.push(`:where(${TEXT_ELEMENTS}).${o.value}:where(:not(.${KIDS_CLASS})):hover,.${KIDS_CLASS}.${o.value} > :where(${TEXT_ELEMENTS}):hover{${textRule}}`)
   }
+  // Glitch on an ICON: an <svg> has no text to shadow, so its ghosts are a filter on
+  // the svg inside the hovered element. Same two colours, same defaults. The LIGHT
+  // ghost goes first: chained drop-shadows compound (the second shadows the first's
+  // ghost too), and this order lands the stray copy under the glyph, out of sight.
+  out.push(
+    `${selfOrKids('hover-glitch', 'hover')
+      .split(',')
+      .map((s) => `${s} svg`)
+      .join(',')}{filter:drop-shadow(3px 0 var(--lse-glitch-b, #2ee6e6)) drop-shadow(-3px 0 var(--lse-glitch-a, #c63a2a))}`,
+    '@keyframes lse-jitter{0%{translate:0 0}50%{translate:1px -1px}100%{translate:-1px 1px}}',
+    // A visitor who asked for less motion keeps the split as a still.
+    `@media (prefers-reduced-motion: reduce){${selfOrKids('hover-glitch', 'hover')}{animation:none}}`,
+  )
+  // TAP effects, touch devices only: `hover: none` is the media feature that means "no
+  // pointer that can hover", which is a phone, and never a desktop mouse click.
+  const tap: string[] = []
+  for (const o of TAP_OPTIONS) {
+    if (o.value === '') continue
+    const rule = TAP_RULE[o.value]
+    if (!rule) throw new Error(`tap option without CSS: ${o.value}`)
+    tap.push(
+      // Fast in, slow out: a tap is often under 100ms, and with a symmetrical transition
+      // a quick press barely renders and the element feels dead.
+      `${selfOrKidsRest(o.value)}{transition:transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1),background-color 200ms ease;-webkit-tap-highlight-color:transparent}`,
+      `${selfOrKids(o.value, 'active')}{transition-duration:80ms;${rule}}`,
+    )
+  }
+  out.push(`@media (hover: none){${tap.join('')}}`)
+  out.push(
+    `@media (prefers-reduced-motion: reduce) and (hover: none){${selfOrKids('tap-press', 'active')},${selfOrKids('tap-icon', 'active')}{transform:none;background-color:color-mix(in srgb, currentColor 8%, transparent)}}`,
+  )
   return out.join('\n')
 }
 
@@ -499,6 +602,7 @@ export const VOCABULARY: { id: string; origin: "section" | "item"; options: Styl
   // drop out of tokens.css automatically.
   { id: "entrance", origin: "item", options: ENTRANCE_OPTIONS },
   { id: "hover", origin: "item", options: HOVER_OPTIONS },
+  { id: "tap", origin: "item", options: TAP_OPTIONS },
   { id: "entranceSpeed", origin: "item", options: ENTRANCE_SPEED_STEPS },
 ];
 

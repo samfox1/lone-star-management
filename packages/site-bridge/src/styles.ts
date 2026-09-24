@@ -509,7 +509,16 @@ export function familyOf(raw: string): string | null {
   if (/^textshadow-/.test(t)) return "textshadow";
   // Bare-suffix families the bracket branch cannot see (found by the derived
   // invariant sweep the moment it existed — the same way border-t was found).
-  if (/^hover-(grow|shrink|lift|tilt|brighten|glow)$/.test(t)) return "hover";
+  // The whole PREFIX, not an enum (0.40.0): a site may declare its OWN named effects
+  // (manifest.ts SiteStyleOptions.hoverEffects / .tapEffects — skeen's ×-spin,
+  // underline sweep…), and the prefix is what routes such a pick into the family so
+  // the delta stores it and the select parks on it. The prefix is therefore RESERVED:
+  // any `hover-*` / `tap-*` class on a styled region belongs to the effect system and
+  // is swept when a manager picks another effect. `hovercolor` and
+  // `hovercolor-[#…]` stay untouched — no dash after "hover", checked below and
+  // pinned by test, which is why that pair was named without one.
+  if (/^hover-/.test(t)) return "hover";
+  if (/^tap-/.test(t)) return "tap";
   if (/^feather-\d/.test(t)) return "feather";
   if (t === "hovercolor") return "hovercolor"; // the marker half of the two-token pick
   if (/^textglow-/.test(t)) return "textglow";
@@ -729,6 +738,16 @@ function sectionEffectStyle(token: string): Record<string, string> | null {
   // it on :hover — inline styles cannot express pseudo-classes.
   m = token.match(/^hovercolor-\[(#[0-9a-fA-F]{3,8})\]$/);
   if (m) return { "--lse-hover-color": m[1]! };
+  // Effect speed and amount (0.40.0): the hover rules' durations read the speed var,
+  // and the scale-shaped rules (grow, tilt — plus a site's own custom effects, by the
+  // same convention) read the amount var. Classes stay compiled CSS; the knobs lift
+  // inline exactly like the entrance speed above.
+  m = token.match(/^fxspeed-\[(\d{2,4})ms\]$/);
+  if (m) return { "--lse-fx-speed": `${m[1]}ms` };
+  // `1.x` only (review, 2026-09-24): "amount" means how big it GROWS. A hand-stored
+  // 0.x would silently invert Grow into a shrink; unmatched it stays an inert token.
+  m = token.match(/^fxscale-\[(1\.\d{1,3})\]$/);
+  if (m) return { "--lse-fx-scale": m[1]! };
   m = token.match(/^frost-\[(\d{1,2})px\]$/);
   if (m) return { backdropFilter: `blur(${m[1]}px)`, WebkitBackdropFilter: `blur(${m[1]}px)` };
   m = token.match(/^pad-\[(\d{1,3})px\]$/);
@@ -819,6 +838,8 @@ export const MANAGED_STYLE_PROPS = [
   "--lse-enter-duration",
   "--lse-enter-distance",
   "--lse-hover-color",
+  "--lse-fx-speed",
+  "--lse-fx-scale",
   "--lse-icon-size",
   "width",
   "margin-left",

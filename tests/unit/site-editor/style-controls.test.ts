@@ -10,6 +10,7 @@ import { sizeLength } from '@samfox1/site-bridge/styles'
 import {
   applyStyleValue,
   buildItemStyleControls,
+  deltaFromEffective,
   buildStyleControls,
   buildVideoItemStyleControls,
   readStyleValue,
@@ -20,6 +21,7 @@ import {
   controlsForRegion,
   type SiteStyleOptions,
   type StyleControl,
+  withStyleVars, type EditorStyleOptions,
 } from '@/lib/site-editor/style-controls'
 
 const PALETTE: SiteStyleOptions = {
@@ -347,6 +349,10 @@ describe('controlsForRegion — a site-wide region styles the SURFACE only', () 
     const socials = controlsForRegion(controls, {
       key: 'socials', label: 'Social icons', base: 'flex gap-4 text-ink/60', scope: 'icons',
     })
+    // NO "hover" here: this build passes no version, and an icon group only gains the
+    // effect pair on a 0.40 site (review, 2026-09-24) — an older site has no kids-scoped
+    // CSS, so the same pick would scale the whole row. The 0.40 shape is pinned in the
+    // effects describe below.
     expect(socials.map((c) => c.id)).toEqual(['iconSize', 'textColor', 'hoverColor', 'gap'])
     const size = socials.find((c) => c.id === 'iconSize')!
     if (size.kind !== 'slider') throw new Error('unreachable')
@@ -1003,5 +1009,129 @@ describe('Font color in the text-field editor (2026-08-11)', () => {
     for (const controls of [buildTextItemStyleControls(PALETTE), buildStyleControls(PALETTE)]) {
       expect(controls.map((c) => c.id)).not.toContain('textgradFrom')
     }
+  })
+})
+
+describe('hover and tap effects, by view and by bridge version (0.40.0)', () => {
+  // Sam, 2026-09-23: "add and change hover effects and also tap effects (only for
+  // mobile) in the editor". Desktop view offers "On hover", phone view "On tap"; a site
+  // below 0.40.0 has neither the new CSS nor the tap family, so it keeps the old list.
+  const region = { key: 'hero_nav', label: 'Hero nav', base: 'lse-fx-kids flex gap-10' }
+  const ids = (opts?: EditorStyleOptions) =>
+    controlsForRegion(buildStyleControls(opts), region).map((c) => c.id)
+  const hover = (opts?: EditorStyleOptions) =>
+    controlsForRegion(buildStyleControls(opts), region).find((c) => c.id === 'hover')!
+
+  it('desktop view: "On hover" with Glitch and Magnetic on a 0.40 site, the old six below it', () => {
+    const on = withStyleVars({}, '0.40.0')
+    expect(ids(on)).toContain('hover')
+    expect(ids(on)).not.toContain('tap')
+    const h = hover(on)
+    if (h.kind !== 'select') throw new Error('unreachable')
+    expect(h.options.map((o) => o.value)).toContain('hover-glitch')
+    expect(h.options.map((o) => o.value)).toContain('hover-magnet')
+    const old = hover(withStyleVars({}, '0.39.0'))
+    if (old.kind !== 'select') throw new Error('unreachable')
+    expect(old.options.map((o) => o.value)).not.toContain('hover-glitch')
+    expect(old.options.map((o) => o.value)).toContain('hover-grow')
+  })
+
+  it('CRITICAL: phone view: "On tap" instead of "On hover", and only on a 0.40 site', () => {
+    const phone = { ...withStyleVars({}, '0.40.0'), mobileView: true }
+    expect(ids(phone)).toContain('tap')
+    expect(ids(phone)).not.toContain('hover')
+    const t = controlsForRegion(buildStyleControls(phone), region).find((c) => c.id === 'tap')!
+    if (t.kind !== 'select') throw new Error('unreachable')
+    expect(t.options.map((o) => o.value)).toEqual(['', 'tap-press', 'tap-icon', 'tap-tint'])
+    // Disjoint families: a tap pick never sweeps the hover pick, and vice versa.
+    let s = applyStyleValue('hover-glitch', t, 'tap-press')
+    expect(s.split(/\s+/)).toContain('hover-glitch')
+    expect(s.split(/\s+/)).toContain('tap-press')
+    const h = hover(withStyleVars({}, '0.40.0'))
+    s = applyStyleValue(s, h, 'hover-magnet')
+    expect(s.split(/\s+/)).toEqual(expect.arrayContaining(['hover-magnet', 'tap-press']))
+    expect(s.split(/\s+/)).not.toContain('hover-glitch')
+    // An older site gets no tap control at all in phone view.
+    expect(ids({ ...withStyleVars({}, '0.39.0'), mobileView: true })).not.toContain('tap')
+  })
+
+  it("CRITICAL: the site's own named effects join the selects and round-trip like built-ins", () => {
+    // The dynamic half of 0.40 (Sam, 2026-09-23: "if something genuinely not able to be
+    // selected in the editor, it can be a custom style … given a name that fits it").
+    // The site declares {value,label} pairs; the editor offers them by that name; the
+    // hover-/tap- prefix routes the pick through apply → delta → read like a built-in.
+    const site = {
+      hoverEffects: [{ value: 'hover-spin', label: 'Quarter-turn' }],
+      tapEffects: [{ value: 'tap-brackets', label: 'Bracket close' }],
+    }
+    const on = withStyleVars(site, '0.40.0')
+    const h = hover(on)
+    if (h.kind !== 'select') throw new Error('unreachable')
+    // Offered under the site's own name, after the built-ins.
+    expect(h.options.at(-1)).toEqual({ value: 'hover-spin', label: 'Quarter-turn' })
+    // Swap in: the custom pick sweeps the previous hover…
+    const s = applyStyleValue('lse-fx-kids hover-glitch', h, 'hover-spin')
+    expect(s.split(/\s+/)).toContain('hover-spin')
+    expect(s.split(/\s+/)).not.toContain('hover-glitch')
+    // …parks the select on read-back…
+    expect(readStyleValue(h, s)).toBe('hover-spin')
+    // …and SURVIVES the save: the delta stores it (the prefix routes the family; before
+    // the widening this was the silent drop).
+    expect(deltaFromEffective('lse-fx-kids hover-glitch', s)).toContain('hover-spin')
+    // Phone view: the tap select carries the site's tapEffects the same way.
+    const phone = { ...withStyleVars(site, '0.40.0'), mobileView: true }
+    const t = controlsForRegion(buildStyleControls(phone), region).find((c) => c.id === 'tap')!
+    if (t.kind !== 'select') throw new Error('unreachable')
+    expect(t.options.at(-1)).toEqual({ value: 'tap-brackets', label: 'Bracket close' })
+    // A pre-0.40 site hides the custom options with the rest of the 0.40 set: their CSS
+    // ships with the site, but the FAMILY does not — a save there would drop the pick.
+    const old = hover(withStyleVars(site, '0.39.0'))
+    if (old.kind !== 'select') throw new Error('unreachable')
+    expect(old.options.map((o) => o.value)).not.toContain('hover-spin')
+  })
+
+  it('CRITICAL: the hover dials appear beside the select, dial in tokens, and park', () => {
+    // Sam, 2026-09-24: "a scale or a multiplier … change it to very fast or very slow".
+    const on = withStyleVars({}, '0.40.0')
+    const speed = controlsForRegion(buildStyleControls(on), region).find((c) => c.id === 'hoverSpeed')!
+    const amount = controlsForRegion(buildStyleControls(on), region).find((c) => c.id === 'hoverAmount')!
+    if (speed.kind !== 'slider' || amount.kind !== 'slider') throw new Error('unreachable')
+    // Dial: the token joins the string beside the effect, and re-dialing replaces it.
+    let s = applyStyleValue('lse-fx-kids hover-grow', speed, 'fxspeed-[700ms]')
+    s = applyStyleValue(s, speed, 'fxspeed-[1100ms]')
+    s = applyStyleValue(s, amount, 'fxscale-[1.02]')
+    expect(s.split(/\s+/).sort()).toEqual(['fxscale-[1.02]', 'fxspeed-[1100ms]', 'hover-grow', 'lse-fx-kids'])
+    // Park on read-back, and survive the save (bracket prefixes are their own family).
+    expect(readStyleValue(speed, s)).toBe('fxspeed-[1100ms]')
+    expect(deltaFromEffective('lse-fx-kids hover-grow', s).split(/\s+/)).toEqual(
+      expect.arrayContaining(['fxscale-[1.02]', 'fxspeed-[1100ms]']),
+    )
+    // No dials below 0.40 (no CSS reads the vars there), none in phone view (tap is
+    // fixed-timing; the dials are the hover pair's).
+    expect(controlsForRegion(buildStyleControls(withStyleVars({}, '0.39.0')), region).map((c) => c.id)).not.toContain('hoverSpeed')
+    const phone = { ...on, mobileView: true }
+    expect(controlsForRegion(buildStyleControls(phone), region).map((c) => c.id)).not.toContain('hoverSpeed')
+  })
+
+  it('a declared option OUTSIDE the prefix is dropped, not offered broken', () => {
+    // Without the prefix, familyOf is null: the pick would render in the select but
+    // never sweep, park, or survive a save. Dropped here, the author sees "my option
+    // never appeared" instead of a control that silently loses the pick.
+    const on = withStyleVars({ hoverEffects: [{ value: 'spin-x', label: 'Broken' }, { value: 'hover-ok', label: 'Fine' }] }, '0.40.0')
+    const h = hover(on)
+    if (h.kind !== 'select') throw new Error('unreachable')
+    const values = h.options.map((o) => o.value)
+    expect(values).toContain('hover-ok')
+    expect(values).not.toContain('spin-x')
+  })
+
+  it('an icon group gets the same pair, by view', () => {
+    const socials = { key: 'socials', label: 'Socials', base: 'lse-fx-kids flex gap-4 text-ink/60', scope: 'icons' as const }
+    // The icon set is built inside controlsForRegion, so the view rides ITS opts.
+    const desk = withStyleVars({}, '0.40.0')
+    const phone = { ...desk, mobileView: true }
+    expect(controlsForRegion(buildStyleControls(desk), socials, desk).map((c) => c.id)).toContain('hover')
+    expect(controlsForRegion(buildStyleControls(phone), socials, phone).map((c) => c.id)).toContain('tap')
+    expect(controlsForRegion(buildStyleControls(phone), socials, phone).map((c) => c.id)).not.toContain('hover')
   })
 })

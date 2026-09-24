@@ -89,20 +89,24 @@ describe('effectsCss — the derived rules', () => {
     // A box-shadow around a heading draws a floating rectangle (Sam, 2026-08-11:
     // "It should be around the text when its applied to text").
     const css = effectsCss()
-    const textRule = css.split('\n').find((l) => l.startsWith(':where(') && l.includes('.hover-lift:hover'))
+    // Since 0.40.0 every rule is written in both forms (the element, or a marked
+    // container's children), so the selector carries the kids marker.
+    const textRule = css.split('\n').find((l) => l.startsWith(':where(') && l.includes('.hover-lift:where(:not(.lse-fx-kids)):hover'))
     expect(textRule).toBeTruthy()
     expect(textRule).toContain('box-shadow:none')
     expect(textRule).toContain('text-shadow:')
     // Source order is the tiebreak (:where keeps specificity equal) — the text
     // override must come AFTER the box rule or it never wins.
-    expect(css.indexOf(textRule!)).toBeGreaterThan(css.indexOf('.hover-lift:hover{'))
+    expect(css.indexOf(textRule!)).toBeGreaterThan(css.indexOf('.hover-lift:where(:not(.lse-fx-kids)):hover{'))
   })
 
   it('every hover option has a :hover rule, and speed rides the custom property', () => {
     const css = effectsCss()
     for (const o of HOVER_OPTIONS) {
       if (!o.value) continue
-      expect(css, o.value).toContain(`.${o.value}:hover{`)
+      // Both forms (0.40.0): the element itself unless it is a marked container, and
+      // a marked container's children one at a time.
+      expect(css, o.value).toContain(`.${o.value}:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.${o.value} > :hover{`)
     }
     expect(css).toContain('var(--lse-enter-duration')
     expect(resolveStyle('enterdur-[400ms]').style['--lse-enter-duration']).toBe('400ms')

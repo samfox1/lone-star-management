@@ -24,7 +24,7 @@
  * consumed from source, and a JSON import of package.json is not part of the export surface.)
  */
 import type { ManifestAbout } from './seo'
-export const PACKAGE_VERSION = '0.39.0'
+export const PACKAGE_VERSION = '0.40.0'
 
 /** How an editable field's value is rendered (v1). `richtext` is a v2 seed — the
  *  type is here so the field model doesn't need a rewrite when it lands. */
@@ -325,6 +325,22 @@ export type SiteStyleOptions = {
    * ladder, which keeps older builds and lone-star's own templates working unchanged.
    */
   textSizes?: StyleOption[]
+  /**
+   * The site's OWN named hover / tap effects (0.40.0) — bespoke moves the built-in
+   * vocabulary cannot express (skeen: the ×'s quarter-turn, the footer link's
+   * underline sweep), offered in the editor's "On hover" / "On tap" selects beside
+   * the built-ins. Same authority rule as `fonts` and the colours: the class is the
+   * site's, its CSS lives in the site, and the editor only ever offers what the site
+   * declared it compiled.
+   *
+   * The `value` MUST keep the `hover-` / `tap-` prefix. The prefix IS the wiring:
+   * `familyOf` routes any `hover-*` / `tap-*` token into the hover/tap family, which
+   * is what lets a custom pick be stored in a delta, swept when the manager picks
+   * something else, and parked in the select on read-back. A custom class named
+   * outside the prefix is dropped on save.
+   */
+  hoverEffects?: StyleOption[]
+  tapEffects?: StyleOption[]
 }
 
 /** What a slot needs from an uploaded file. All fields optional; absent means "no

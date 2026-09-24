@@ -47,7 +47,7 @@ dropping *every* message from the other side, `ready` included (`protocol.ts:240
 and `package.json` disagree; `tests/unit/site-editor/site-bridge-version.test.ts` catches the same drift, but
 only on the next test run, which is after a wrong number could already be on the registry.
 
-**The editor's per-version behaviour is exactly seven gates** (`src/lib/site-editor/manifest.ts`),
+**The editor's per-version behaviour is exactly eight gates** (`src/lib/site-editor/manifest.ts`),
 and nothing else in the editor branches on a site's version:
 
 | gate | since | what an older site loses |
@@ -59,8 +59,9 @@ and nothing else in the editor branches on a site's version:
 | `bridgeSupportsMobileItem` | 0.23.0 | phone twins for item scale |
 | `bridgeSupportsDeltas` | 0.24.0 | delta overrides (a stored override REPLACES the base instead) |
 | `bridgeSupportsItemDeltas` | 0.25.4 | per-item deltas |
+| `bridgeSupportsEffects` | 0.40.0 | hover Glitch/Magnetic, the whole tap family, the effect dials, site-declared custom effects, and "On hover" on icon groups |
 
-All seven are at or below 0.32.0, so **both live sites clear every gate**. When a site is
+The first seven are at or below 0.32.0, so **both live sites clear them**. When a site is
 behind, the editor keeps writing the older form rather than emitting a token the site cannot
 lift — upgrading is safe in either order. A site that stamps no version at all is treated as
 old and never gets value tokens.
@@ -73,7 +74,50 @@ announces `bridgeVersion: '0.32.0'` and the editor is on 0.38.0.
 
 ## Unreleased
 
-Nothing since 0.39.0.
+Nothing since 0.40.0.
+
+---
+
+## 0.40.0 — hover and tap effects a manager can pick
+
+**Site action: mount the effects runtime** (`mountEffects(document)` from
+`@samfox1/site-bridge/effects`, beside `mountEntrances`) **and mark container regions
+with `lse-fx-kids`.** Neither is required to keep building; without the runtime,
+Magnetic does nothing and iOS never plays a tap effect; without the marker, a hover on a
+row grows the row instead of the icon.
+
+**Two new hover effects: Glitch and Magnetic.** Glitch is a two-ghost split (a red
+ghost one side, a cyan one the other, `--lse-glitch-a` / `--lse-glitch-b` to recolour)
+that jitters while hovered; an SVG inside the element gets the same ghosts as a filter.
+Magnetic leans the element toward the pointer; the runtime feeds `--lse-magnet-x/-y`.
+
+**Tap effects, a new family.** `tap-press`, `tap-icon`, `tap-tint`, in `@media (hover:
+none)` so a mouse click never plays one. The editor offers them as "On tap" in phone
+view only, and "On hover" in desktop view only, on sites at 0.40.0 or later.
+
+**Site-declared custom effects.** A site may name its OWN moves — `styleOptions.hoverEffects`
+/ `.tapEffects` on the manifest, `{ value, label }` pairs — and the editor offers them in
+the same selects, by those labels (skeen ships five: Subtle grow, Quarter-turn, Underline
+sweep, Bracket close, Pop). The value MUST keep the `hover-` / `tap-` prefix: `familyOf`
+now families the whole prefix, which is what lets a custom pick be stored in a delta,
+swept, and parked like a built-in — the prefix is therefore RESERVED for effects. The CSS
+lives in the site, written in the selfOrKids selector shape.
+
+**The effect dials.** "Hover speed" and "Hover amount" sliders beside the hover select:
+`fxspeed-[Nms]` lifts to `--lse-fx-speed`, which every hover rule's transition reads, and
+`fxscale-[1.NN]` lifts to `--lse-fx-scale`, which the scale-shaped rules (Grow, Tilt, and
+a site's customs by the same convention) read. Unset, the fallbacks are the old fixed
+timings. Every rest transition also carries `color 0.15s ease`, so a site's own hover
+recolour eases instead of snapping; Glitch transitions transform alone — its split must
+snap on, not fade in.
+
+**The kids marker, `lse-fx-kids`.** A hover or tap class lands on the region, and a
+region is often the container of the thing a visitor actually hovers. A site that puts
+`lse-fx-kids` in such a region's base makes every effect rule target the container's
+CHILDREN one at a time (`> :hover`, `> :active`). Every hover rule, old ones included,
+is now written in both forms; a site without the marker sees no change.
+
+`familyOf` learns the two new hover classes and the `tap` family, so deltas store them.
 
 ---
 

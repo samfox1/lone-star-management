@@ -46,12 +46,17 @@
 @source inline("font-semibold");
 @source inline("font-thin");
 @source inline("hover-brighten");
+@source inline("hover-glitch");
 @source inline("hover-glow");
 @source inline("hover-grow");
 @source inline("hover-lift");
+@source inline("hover-magnet");
 @source inline("hover-shrink");
 @source inline("hover-tilt");
 @source inline("italic");
+@source inline("tap-icon");
+@source inline("tap-press");
+@source inline("tap-tint");
 @source inline("text-2xl");
 @source inline("text-3xl");
 @source inline("text-4xl");
@@ -123,19 +128,28 @@ html[data-lse-entrances] .enter-zoom:not([data-lse-entered]){opacity:0;transform
 html[data-lse-entrances] .enter-blur:not([data-lse-entered]){opacity:0;filter:blur(10px)}
 .hovercolor{transition:color 0.25s ease}
 .hovercolor:hover{color:var(--lse-hover-color, currentColor)}
-.hover-grow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
-.hover-grow:hover{transform:scale(1.05)}
-.hover-shrink{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
-.hover-shrink:hover{transform:scale(0.95)}
-.hover-lift{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
-.hover-lift:hover{transform:translateY(-6px);box-shadow:0 14px 28px rgb(0 0 0 / 0.18)}
-:where(h1,h2,h3,h4,h5,h6,p,span,a,em,strong,blockquote,li,figcaption).hover-lift:hover{box-shadow:none;text-shadow:0 12px 18px rgb(0 0 0 / 0.3)}
-.hover-tilt{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
-.hover-tilt:hover{transform:rotate(2deg) scale(1.02)}
-.hover-brighten{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
-.hover-brighten:hover{filter:brightness(1.15)}
-.hover-glow{transition:transform 0.25s ease,filter 0.25s ease,box-shadow 0.25s ease,text-shadow 0.25s ease}
-.hover-glow:hover{filter:drop-shadow(0 0 10px currentColor)}
+.hover-grow:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-grow > *{transition:transform var(--lse-fx-speed, 0.25s) ease,filter var(--lse-fx-speed, 0.25s) ease,box-shadow var(--lse-fx-speed, 0.25s) ease,text-shadow var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-grow:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-grow > :hover{transform:scale(var(--lse-fx-scale, 1.05))}
+.hover-shrink:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-shrink > *{transition:transform var(--lse-fx-speed, 0.25s) ease,filter var(--lse-fx-speed, 0.25s) ease,box-shadow var(--lse-fx-speed, 0.25s) ease,text-shadow var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-shrink:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-shrink > :hover{transform:scale(0.95)}
+.hover-lift:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-lift > *{transition:transform var(--lse-fx-speed, 0.25s) ease,filter var(--lse-fx-speed, 0.25s) ease,box-shadow var(--lse-fx-speed, 0.25s) ease,text-shadow var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-lift:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-lift > :hover{transform:translateY(-6px);box-shadow:0 14px 28px rgb(0 0 0 / 0.18)}
+:where(h1,h2,h3,h4,h5,h6,p,span,a,em,strong,blockquote,li,figcaption).hover-lift:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-lift > :where(h1,h2,h3,h4,h5,h6,p,span,a,em,strong,blockquote,li,figcaption):hover{box-shadow:none;text-shadow:0 12px 18px rgb(0 0 0 / 0.3)}
+.hover-tilt:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-tilt > *{transition:transform var(--lse-fx-speed, 0.25s) ease,filter var(--lse-fx-speed, 0.25s) ease,box-shadow var(--lse-fx-speed, 0.25s) ease,text-shadow var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-tilt:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-tilt > :hover{transform:rotate(2deg) scale(var(--lse-fx-scale, 1.02))}
+.hover-brighten:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-brighten > *{transition:transform var(--lse-fx-speed, 0.25s) ease,filter var(--lse-fx-speed, 0.25s) ease,box-shadow var(--lse-fx-speed, 0.25s) ease,text-shadow var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-brighten:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-brighten > :hover{filter:brightness(1.15)}
+.hover-glow:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-glow > *{transition:transform var(--lse-fx-speed, 0.25s) ease,filter var(--lse-fx-speed, 0.25s) ease,box-shadow var(--lse-fx-speed, 0.25s) ease,text-shadow var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-glow:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-glow > :hover{filter:drop-shadow(0 0 10px currentColor)}
+.hover-glitch:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-glitch > *{transition:transform var(--lse-fx-speed, 0.25s) ease,color 0.15s ease}
+.hover-glitch:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-glitch > :hover{text-shadow:-2px 0 var(--lse-glitch-a, #c63a2a),2px 0 var(--lse-glitch-b, #2ee6e6);animation:lse-jitter 220ms steps(2, end) infinite}
+.hover-magnet:where(:not(.lse-fx-kids)),.lse-fx-kids.hover-magnet > *{transition:transform var(--lse-fx-speed, 0.12s) ease-out,filter var(--lse-fx-speed, 0.12s) ease,box-shadow var(--lse-fx-speed, 0.12s) ease,text-shadow var(--lse-fx-speed, 0.12s) ease,color 0.15s ease}
+.hover-magnet:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-magnet > :hover{transform:translate(var(--lse-magnet-x, 0px), var(--lse-magnet-y, 0px))}
+.hover-glitch:where(:not(.lse-fx-kids)):hover svg,.lse-fx-kids.hover-glitch > :hover svg{filter:drop-shadow(3px 0 var(--lse-glitch-b, #2ee6e6)) drop-shadow(-3px 0 var(--lse-glitch-a, #c63a2a))}
+@keyframes lse-jitter{0%{translate:0 0}50%{translate:1px -1px}100%{translate:-1px 1px}}
+@media (prefers-reduced-motion: reduce){.hover-glitch:where(:not(.lse-fx-kids)):hover,.lse-fx-kids.hover-glitch > :hover{animation:none}}
+@media (hover: none){.tap-press:where(:not(.lse-fx-kids)),.lse-fx-kids.tap-press > *{transition:transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1),background-color 200ms ease;-webkit-tap-highlight-color:transparent}.tap-press:where(:not(.lse-fx-kids)):active,.lse-fx-kids.tap-press > :active{transition-duration:80ms;transform:scale(0.96)}.tap-icon:where(:not(.lse-fx-kids)),.lse-fx-kids.tap-icon > *{transition:transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1),background-color 200ms ease;-webkit-tap-highlight-color:transparent}.tap-icon:where(:not(.lse-fx-kids)):active,.lse-fx-kids.tap-icon > :active{transition-duration:80ms;transform:scale(0.88)}.tap-tint:where(:not(.lse-fx-kids)),.lse-fx-kids.tap-tint > *{transition:transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1),background-color 200ms ease;-webkit-tap-highlight-color:transparent}.tap-tint:where(:not(.lse-fx-kids)):active,.lse-fx-kids.tap-tint > :active{transition-duration:80ms;background-color:color-mix(in srgb, currentColor 8%, transparent)}}
+@media (prefers-reduced-motion: reduce) and (hover: none){.tap-press:where(:not(.lse-fx-kids)):active,.lse-fx-kids.tap-press > :active,.tap-icon:where(:not(.lse-fx-kids)):active,.lse-fx-kids.tap-icon > :active{transform:none;background-color:color-mix(in srgb, currentColor 8%, transparent)}}
 
 /* ── Mobile overrides (0.19.0) — REAL rules. The bridge cannot put an @media in an
  * inline style, so a phone-only value rides a variable plus one of these marker
