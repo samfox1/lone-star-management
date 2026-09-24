@@ -1,0 +1,591 @@
+<title>Brand Layout Variants</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+:root{--paper:#fff;--surface:#fafafa;--hover:#f6f7f8;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--accent-soft:#eef4ff;--red:#e5484d}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--accent-soft:#1a2440}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--accent-soft:#1a2440}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif}
+.mono{font-family:"Space Mono",ui-monospace,monospace}
+button{font:inherit}
+/* ── the shell: header, icon rail, sub-panel sized to its labels ── */
+.top{height:52px;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:10px;padding:0 16px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--paper);z-index:3}
+.top .av{width:24px;height:24px;border-radius:50%;background:var(--hair);display:grid;place-items:center;font-size:11px;font-weight:700}
+.top b{font-size:15px;letter-spacing:-.01em}
+.top .pick{margin-left:auto;display:flex;gap:4px;align-items:center}
+.top .pick span{font-family:"Space Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-right:6px}
+.top .pick button{all:unset;cursor:pointer;padding:5px 10px;border-radius:999px;border:1px solid var(--hair);font-size:12px;color:var(--muted)}
+.top .pick button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.top .pick button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.shell{display:flex;min-height:calc(100% - 52px)}
+.rail{flex:none;width:52px;border-right:1px solid var(--hair);display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 6px;position:sticky;top:52px;height:calc(100vh - 52px)}
+.rail .ri{height:52px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
+.rail .ri.on{color:var(--accent)}
+.rail svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+/* width from the longest label, never a wrap: "Tab icon" pushes the page over instead */
+.sub{flex:none;width:max-content;min-width:96px;border-right:1px solid var(--hair);position:sticky;top:52px;height:calc(100vh - 52px)}
+.sub .col{display:flex;flex-direction:column;gap:4px;padding:0 8px;margin-top:calc(50vh - 26px - 222px)}
+.sub button{all:unset;cursor:pointer;display:flex;align-items:center;padding:8px 10px;border-radius:8px;color:var(--muted);font-family:"Space Mono",ui-monospace,monospace;font-size:13px;letter-spacing:.02em;white-space:nowrap}
+.sub button:hover{background:var(--surface);color:var(--ink)}
+.sub button.on{color:var(--ink);font-weight:700}
+.sub button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{flex:1;min-width:0;padding-block:28px 96px;padding-inline:32px}
+.wrap{max-width:1180px}
+/* ── shared pieces ── */
+.b{all:unset;cursor:pointer;font-size:13px;font-weight:500;padding:7px 12px;border-radius:8px;border:1px solid var(--hair);background:var(--paper);color:var(--ink);white-space:nowrap}
+.b:hover{background:var(--hover)}
+.b.solid{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.b.ghost{border-color:transparent;color:var(--muted)}
+.b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tile{width:112px;height:64px;border:1px solid var(--hair);border-radius:8px;background:var(--surface);display:grid;place-items:center;overflow:hidden;flex:none}
+.tile.dark{background:#111;color:#fff;border-color:#111}
+.tile.empty{border-style:dashed;color:var(--faint);font-size:12px}
+.tile .word{font-weight:700;letter-spacing:-.02em;font-size:18px}
+.icons{display:flex;flex-direction:column;gap:6px;color:var(--faint)}
+.icons svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;cursor:pointer}
+.icons svg:hover{color:var(--ink)}
+.swatch{display:flex;align-items:center;gap:10px}
+.swatch i{width:28px;height:28px;border-radius:8px;border:1px solid var(--hair);display:block}
+.swatch .mono{font-size:12px;color:var(--muted)}
+.sw{all:unset;cursor:pointer;display:block;position:relative}
+.sw i{width:32px;height:32px;border-radius:9px;border:1px solid var(--hair);display:block}
+.sw:focus-visible i{outline:2px solid var(--accent);outline-offset:2px}
+.hex{font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--hair);border-radius:8px;padding:7px 10px;width:92px;text-transform:uppercase}
+.hex:focus{outline:none;border-color:var(--ink)}
+/* the color panel: site swatches, a spectrum, the hex — the same paper card as every menu */
+.cp{position:absolute;top:50%;transform:translateY(-50%);right:calc(100% + 12px);z-index:6;width:232px;background:var(--paper);border:1px solid var(--hair);border-radius:12px;padding:12px;box-shadow:0 12px 32px rgba(0,0,0,.08)}
+.cp .cph{font-family:"Space Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.cp .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px}
+.cp .grid button{all:unset;cursor:pointer;aspect-ratio:1;border-radius:7px;border:1px solid var(--hair);box-sizing:border-box}
+.cp .grid button.on{outline:2px solid var(--ink);outline-offset:1px}
+.cp .sq{position:relative;width:100%;height:120px;border-radius:8px;border:1px solid var(--hair);cursor:crosshair;margin-bottom:10px;touch-action:none;
+  background-image:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--h))}
+.cp .sq i{position:absolute;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none}
+.cp .hue{-webkit-appearance:none;appearance:none;width:100%;height:12px;border-radius:6px;margin:0 0 12px;border:1px solid var(--hair);
+  background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.cp .hue::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--paper);border:1px solid var(--hair);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.cp .hue::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--paper);border:1px solid var(--hair)}
+.cp .hexrow{display:flex;gap:8px;align-items:center}.cp .hexrow .hex{flex:1;width:auto}
+.fontprev{font-size:16px;letter-spacing:-.005em;white-space:nowrap}
+.fontprev.empty{color:var(--faint);font-size:14px}
+body.va .row .eye[data-empty]{opacity:1;color:var(--ink)}
+.eye[data-empty]:focus{outline:2px solid var(--accent);outline-offset:2px}
+.note{display:inline-block;color:var(--muted);font-size:13px;margin-top:2px;outline:none;min-height:1.45em;min-width:160px;max-width:40ch;cursor:text;border-bottom:1px solid transparent}
+.note:empty::before{content:attr(data-ph);color:var(--faint)}
+.note:focus{border-bottom-color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--hair);border-radius:999px;padding:4px 10px;font-size:12px}
+.chip.add{border-style:dashed;color:var(--faint)}
+.fav{display:flex;align-items:center;gap:14px}
+.fav .big{width:64px;height:64px;border-radius:12px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:26px}
+.fav .small{width:16px;height:16px;border-radius:3px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:8px}
+input[type=range]{width:160px;accent-color:var(--ink)}
+.l{font-size:15px;font-weight:500;white-space:nowrap}
+.d{color:var(--muted);font-size:13px;margin-top:2px}
+body:not(.desc) .d{display:none}
+.r{display:flex;justify-content:flex-end;align-items:center;gap:10px;min-width:0}
+.state{color:var(--muted);font-size:13px}
+.state.dirty::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:8px;vertical-align:1px}
+.preview{display:none}
+[hidden]{display:none!important}
+/* ── A · Ledger: no boxes at all, one hairline per row, a mono section word on the left ── */
+body.va .sec{display:grid;grid-template-columns:150px 1fr;gap:0 32px;padding:8px 0 28px;border-bottom:1px solid var(--hair)}
+body.va .sec:last-of-type{border-bottom:0}
+body.va .hd{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding-top:22px}
+body.va .rows{display:flex;flex-direction:column}
+body.va .row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,1.4fr);gap:24px;align-items:center;padding:16px 0;border-bottom:1px solid var(--hair-soft)}
+body.va .row:last-child{border-bottom:0}
+body.va .ft{grid-column:2;display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:14px}
+/* Sam 2026-09-23: Ledger, plus the preview where the thing itself is worth seeing */
+body.va .preview{display:none}
+body.va .rows{grid-column:2}
+body.va .eye{display:inline-flex}
+body.va .row .eye{opacity:.4;margin-left:10px;padding:6px;border-radius:8px}
+body.va .row .eye:hover{background:var(--hover)}
+body.va .row:hover .eye,body.va .row .eye:focus-visible{opacity:1}
+body.va .bar{display:flex}
+body.va .ft .state{display:none}
+body.va .only-not-a{display:none}
+/* ── the workbench: live preview + size/position, in one of three places ── */
+.bench{display:grid;grid-template-columns:1fr;gap:16px}
+.bench .stages{display:flex;gap:10px;flex-wrap:wrap}
+.bench .st{flex:1;min-width:140px;height:110px;border-radius:10px;display:grid;place-items:center;overflow:hidden;position:relative}
+.bench .st .word{font-weight:700;font-size:26px;letter-spacing:-.02em;will-change:transform}
+.bench .st.tabwrap{background:var(--surface)}
+.bench .tab{display:inline-flex;align-items:center;gap:12px;border:1px solid var(--hair);border-bottom:0;border-radius:12px 12px 0 0;padding:12px 22px;background:var(--paper);font-size:20px;transform:translateY(20px)}
+.bench .tab .clip{width:32px;height:32px;border-radius:6px;background:#111;color:#fff;display:grid;place-items:center;overflow:hidden;font-weight:700;font-size:16px}
+.bench .ctl{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:center}
+.bench .ctl label{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.bench .ctl input[type=range]{width:100%}
+.bench .ctl output{font-family:"Space Mono",ui-monospace,monospace;font-size:12px;color:var(--muted);min-width:44px;text-align:right}
+.bench .ctl .b{grid-column:1/-1;justify-self:end}
+/* A · right pane: sticky column beside the ledger on these two tabs */
+body.wpane .wrap.has-bench{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:32px;align-items:start}
+body.wpane .pane{position:sticky;top:76px;border:1px solid var(--hair);border-radius:14px;padding:18px 20px 20px;background:var(--paper)}
+body.wpane .pane .bench .st{height:120px}
+body.wpane .pane .who{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+body:not(.wpane) .pane{display:none}
+body.wpane .row[data-item]{cursor:pointer}
+body.wpane .row[data-item].sel .l{color:var(--accent)}
+/* B · inline: the row opens a workbench under itself */
+body.winline .inl{grid-column:1/-1;padding:4px 0 18px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+body:not(.winline) .inl{display:none}
+body.winline .row[data-item]{cursor:pointer}
+body.winline .row[data-item].sel{border-bottom-color:transparent}
+/* C · in the modal: the eye opens preview + controls together */
+.modal .mb .bench{width:min(720px,100%);display:grid;grid-template-columns:320px minmax(0,1fr);gap:28px;align-items:center}
+.modal .mb .bench .stages{justify-content:center;grid-row:1/span 2}
+.modal .mb .bench .side{display:flex;flex-direction:column;gap:22px;align-self:center}
+.modal .mb .bench .board{width:320px;height:320px;max-width:100%;border-radius:14px;border:1px solid var(--hair);display:grid;place-items:center;overflow:hidden;
+  background-color:#fff;background-image:linear-gradient(45deg,#e6e6e6 25%,transparent 25%),linear-gradient(-45deg,#e6e6e6 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e6e6e6 75%),linear-gradient(-45deg,transparent 75%,#e6e6e6 75%);background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0}
+.modal .mb .bench .stages{flex-direction:column;align-items:center;gap:10px}
+.bgset{display:flex;gap:10px;justify-content:center;align-self:center}
+.bgsw{all:unset;cursor:pointer;position:relative;width:24px;height:24px;border-radius:50%;border:1px solid var(--hair);box-sizing:border-box}
+.bgsw.on{outline:2px solid var(--ink);outline-offset:2px}
+.bgsw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bgsw.bg-light{background:#fff}.bgsw.bg-dark{background:#111;border-color:#111}
+.bgsw.bg-check{background-color:#fff;background-image:linear-gradient(45deg,#d9d9d9 25%,transparent 25%),linear-gradient(-45deg,#d9d9d9 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#d9d9d9 75%),linear-gradient(-45deg,transparent 75%,#d9d9d9 75%);background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0}
+.bgsw::after{content:attr(aria-label);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translate(-50%,4px);background:var(--ink);color:var(--paper);font:12px/1 "Instrument Sans",system-ui,sans-serif;font-weight:500;padding:6px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;z-index:5}
+.bgsw:hover::after,.bgsw:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+.modal .mb .bench .board.bd-light{background:#fff;background-image:none}
+.modal .mb .bench .board.bd-dark{background:#111;background-image:none;border-color:#111}
+.modal .mb .bench .board.bd-dark .word{color:#fff}
+.modal .mb .bench .board .word{font-weight:800;font-size:72px;letter-spacing:-.03em;color:#111}
+.modal .mb .bench .board .clip{width:192px;height:192px;border-radius:36px;background:#111;color:#fff;display:grid;place-items:center;overflow:hidden;font-weight:800;font-size:96px}
+.modal .mb .bench .ctl{width:100%;margin-top:0}
+.modal .mb .bench .ctl.off{opacity:.35}
+.ib:disabled{opacity:.35;cursor:default}
+.ib:disabled:hover{background:none;color:var(--muted)}
+.ib:disabled::after{display:none}
+input[type=range]:disabled{cursor:default}
+.modal .mb .bench .acts{display:flex;justify-content:flex-start;align-items:center;gap:14px;margin-top:0;padding-bottom:0}
+@media (max-width:760px){.modal .mb .bench{grid-template-columns:1fr}.modal .mb .bench .stages{grid-row:auto}}
+.modal .mb .bench .acts .sel{height:44px;border-radius:12px;padding:0 12px}
+.ib{all:unset;cursor:pointer;width:44px;height:44px;border-radius:12px;border:1px solid var(--hair);display:grid;place-items:center;color:var(--muted);box-sizing:border-box}
+.ib:hover{background:var(--hover);color:var(--ink)}
+.ib[data-act="remove"]:hover{color:var(--red)}
+.ib:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cands{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px dashed var(--hair);width:360px;max-width:100%}
+.cands span{width:100%;text-align:center;font-family:"Space Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.cands .ib.on{border-color:var(--ink);color:var(--ink)}
+.ib,.eye{position:relative}
+.ib::after,.eye::after{content:attr(aria-label);position:absolute;top:calc(100% + 8px);left:50%;transform:translate(-50%,-4px);background:var(--ink);color:var(--paper);font:12px/1 "Instrument Sans",system-ui,sans-serif;font-weight:500;padding:6px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;z-index:5}
+.ib:hover::after,.ib:focus-visible::after,.eye:hover::after,.eye:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:no-preference){.ib::after,.eye::after{transition:opacity .12s,transform .12s}}
+.row.add{padding:10px 0 0;border-bottom:0}
+.addrow{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:14px;padding:6px 0;width:max-content}
+@media (prefers-reduced-motion:no-preference){.addrow{transition:color .12s}}
+.addrow:hover{color:var(--ink)}
+.addrow:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.addrow svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round}
+.addform{display:flex;gap:8px;align-items:center;grid-column:1/-1}
+.addform .name{font:inherit;font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--hair);border-radius:8px;padding:7px 10px;width:220px}
+.addform .name:focus{outline:none;border-color:var(--ink)}
+.ib.sm{width:36px;height:36px;border-radius:9px}
+.ib.sm svg{width:18px;height:18px}
+.ib[data-ok]:hover{color:var(--accent)}
+.ib[data-cancel]:hover{color:var(--red)}
+.fm{width:200px;padding:8px}
+.fm .cph{margin:4px 6px 6px}
+.fo{all:unset;cursor:pointer;display:block;width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;font-size:15px;color:var(--ink);text-align:left}
+.fo:hover{background:var(--hover)}
+.fo.on{font-weight:700}
+.fo.up{font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px;color:var(--muted);border-top:1px solid var(--hair);border-radius:0 0 8px 8px;margin-top:4px}
+.uses{display:inline-block;position:relative;margin-left:10px;font-family:"Space Mono",ui-monospace,monospace;font-size:10px;font-weight:400;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);vertical-align:2px;cursor:default}
+.uses[data-where=""]{cursor:default}
+.uses:not([data-where=""])::after{content:attr(data-where);position:absolute;top:calc(100% + 6px);left:0;background:var(--ink);color:var(--paper);font:12px/1.3 "Instrument Sans",system-ui,sans-serif;text-transform:none;letter-spacing:0;padding:6px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;z-index:5}
+.uses:not([data-where=""]):hover::after{opacity:1}
+.aa{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;color:var(--faint);margin-right:6px;white-space:nowrap}
+.aa::before{content:"✓ ";color:var(--faint)}
+.aa.bad{color:var(--red)}.aa.bad::before{content:"! ";color:var(--red)}
+.l.edit{outline:none;cursor:text;border-bottom:1px solid transparent;display:inline-block;min-width:60px}
+.l.edit:focus{border-bottom-color:var(--ink)}
+.guide{color:var(--muted);font-size:13px;margin-top:2px;max-width:40ch}
+.wts{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;color:var(--faint);margin-top:4px}
+.wts .miss{font-weight:400;color:var(--red)}
+.homeic{width:56px;height:56px;border-radius:14px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:24px}
+.tile.photo{width:96px;height:64px;background-size:cover}
+.kitbar{display:flex;justify-content:flex-end;margin:-8px 0 4px}
+.modal .mb .bench .board .clip.home{border-radius:44px}
+.modal .mb .bench .board .wbox{background:#fff;padding:26px 30px;display:grid;place-items:center}
+.modal .mb .bench .board .photo{width:100%;height:100%;display:block}
+.bgsw.bg-site{background:var(--sitebg)}
+.modal .mb .bench .board.bd-site{background:var(--sitebg);background-image:none;border-color:var(--sitebg)}
+.modal .mb .bench .board.bd-site .word{color:var(--sitetext)}
+.warn{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--hair);border-radius:10px;font-size:13px;color:var(--ink)}
+.warn::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--red);flex:none}
+.warn span{flex:1}
+.kit{display:flex;flex-direction:column;gap:0;width:min(420px,100%)}
+.kit div{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair-soft);font-size:14px}
+.kit div span{color:var(--muted);font-family:"Space Mono",ui-monospace,monospace;font-size:12px}
+.kit p{margin:12px 0 0;color:var(--faint);font-family:"Space Mono",ui-monospace,monospace;font-size:11px}
+.play{display:grid;grid-template-columns:300px 240px;gap:24px;align-items:start}
+.play .card{border-radius:14px;padding:22px 22px 24px;background:var(--pb);color:var(--pt);border:2px solid var(--pl);display:flex;flex-direction:column;gap:10px;min-height:190px;box-sizing:border-box}
+.play .ct{font-size:28px;font-weight:700;letter-spacing:-.02em;outline:none}
+.play .cp2{font-size:14px;opacity:.85;margin:0}
+.play .cbtn{align-self:flex-start;margin-top:auto;background:var(--pa);color:var(--pb);font-weight:600;font-size:13px;padding:8px 14px;border-radius:9px}
+.play .clink{color:var(--pa);text-decoration:underline;font-size:14px}
+.parts{display:flex;flex-direction:column;gap:14px}
+.part span{display:block;font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.dots{display:flex;gap:8px;flex-wrap:wrap}
+.dot{all:unset;cursor:pointer;position:relative;width:26px;height:26px;border-radius:50%;border:1px solid var(--hair);box-sizing:border-box}
+.dot.on{outline:2px solid var(--ink);outline-offset:2px}
+.dot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dot::after{content:attr(aria-label);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);font:12px/1 "Instrument Sans",system-ui,sans-serif;padding:6px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;z-index:5}
+.dot:hover::after{opacity:1}
+.read{font-size:13px;color:var(--muted)}.read::before{content:"✓ "}
+.read.bad{color:var(--red)}.read.bad::before{content:"! "}
+@media (max-width:640px){.play{grid-template-columns:1fr}}
+.ib svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.modal .mb .bench .board .none{color:var(--muted);font-size:14px;background:var(--paper);padding:6px 12px;border-radius:8px}
+@media (max-width:900px){body.wpane .wrap.has-bench{grid-template-columns:1fr}body.wpane .pane{position:static}body.winline .inl{grid-template-columns:1fr}}
+/* the preview modal: same paper card as the modal kit, the stages inside, Done to close */
+.eye{display:none;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer;background:none;border:0;padding:0;font:inherit}
+.eye:hover{color:var(--ink)}
+.eye svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.eye:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);display:grid;place-items:center;z-index:10;padding:16px}
+.modal{width:auto;min-width:320px;max-width:min(960px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--hair);border-radius:16px;overflow:hidden}
+.modal .mb{overflow:auto}
+.modal .mh{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--hair)}
+.modal .mh .sq{width:36px;height:36px;border-radius:10px;background:var(--surface);display:grid;place-items:center;color:var(--muted)}
+.modal .mh b{font-size:15px}
+.modal .mh .meta{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.modal .mb{padding:20px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.modal .mb .stage{width:300px;height:160px;border-radius:12px;display:grid;place-items:center;font-weight:700;font-size:32px;letter-spacing:-.02em;box-sizing:border-box}
+.modal .mb .stage.text{width:520px;max-width:100%;padding:0 28px;outline:none;cursor:text;text-align:center;white-space:pre-wrap;word-break:break-word}
+.modal .mb .stage.text:focus{box-shadow:none}
+.modal .mb .fig{margin:0;display:flex;flex-direction:column;gap:8px;align-items:center}
+.modal .mb .fig figcaption{font-family:"Space Mono",ui-monospace,monospace;font-size:12px;color:var(--muted)}
+.modal .mb .fig .stage.text{width:300px}
+.modal .mb .tip{width:100%;text-align:center;color:var(--faint);font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.modal .mb .tabstrip{width:420px;max-width:100%;height:120px;border-radius:12px;background:var(--surface);display:grid;place-items:center}
+.modal .mb .tab{display:inline-flex;align-items:center;gap:14px;border:1px solid var(--hair);border-bottom:0;border-radius:14px 14px 0 0;padding:14px 26px;background:var(--paper);font-size:24px}
+.modal .mb .tab .ico{width:32px;height:32px;border-radius:6px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:16px}
+.modal .mb .true{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.modal .mb .true .ico{width:16px;height:16px;border-radius:3px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:8px}
+.modal .mf{display:flex;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--hair)}
+/* ── B · Panels: soft surface blocks, no borders, the name floats above ── */
+body.vb .sec{margin-bottom:28px}
+body.vb .hd{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:0 0 10px 4px}
+body.vb .rows{background:var(--surface);border-radius:14px;padding:6px 20px}
+body.vb .row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,1.4fr);gap:24px;align-items:center;padding:16px 0;border-bottom:1px solid var(--hair)}
+body.vb .row:last-child{border-bottom:0}
+body.vb .ft{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 4px 0}
+/* ── C · Sheet: one continuous table, sections are just spaced groups, sticky publish bar ── */
+body.vc .wrap{max-width:980px}
+body.vc .sec{margin-bottom:36px}
+body.vc .hd{font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+body.vc .row{display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:center;padding:14px 0;border-top:1px solid var(--hair)}
+body.vc .rows{border-bottom:1px solid var(--hair)}
+body.vc .r{justify-content:flex-start}
+body.vc .ft{display:none}
+body.vc .bar{display:flex}
+.bar{display:none;position:fixed;left:0;right:0;bottom:0;padding:18px 32px;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--hair);background:var(--paper);justify-content:space-between;align-items:center;z-index:2;box-shadow:0 -8px 24px rgba(0,0,0,.05)}
+.bar .state{font-size:15px;color:var(--ink)}
+.bar .state.dirty::before{width:9px;height:9px;margin-right:10px}
+.bar .b{font-size:14px;padding:10px 18px;border-radius:10px}
+.bar .b.solid{padding:10px 22px}
+@media (prefers-reduced-motion:no-preference){.bar{transition:transform .2s ease}}
+.bar[data-off]{transform:translateY(110%)}
+/* ── D · Preview-led: each section opens with the thing itself, controls sit under it ── */
+body.vd .sec{margin-bottom:32px;border:1px solid var(--hair);border-radius:14px;overflow:hidden}
+body.vd .hd{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:12px 20px 0}
+body.vd .preview{display:flex;gap:12px;padding:14px 20px 18px;align-items:center;flex-wrap:wrap}
+body.vd .preview .stage{flex:1;min-width:220px;height:120px;border-radius:10px;display:grid;place-items:center;font-weight:700;font-size:28px;letter-spacing:-.02em}
+body.vd .rows{border-top:1px solid var(--hair);background:var(--surface);padding:4px 20px}
+body.vd .row{display:grid;grid-template-columns:minmax(160px,1fr) minmax(0,1.4fr);gap:24px;align-items:center;padding:12px 0;border-bottom:1px solid var(--hair)}
+body.vd .row:last-child{border-bottom:0}
+body.vd .ft{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--hair)}
+@media (max-width:900px){body.va .sec{grid-template-columns:1fr}body.va .ft{grid-column:1}.row{grid-template-columns:1fr!important}.r{justify-content:flex-start!important}}
+@media (max-width:640px){.rail,.sub{display:none}main{padding-inline:16px}}
+</style>
+<header class="top"><span class="mono" style="color:var(--faint)">‹</span><span class="av">S</span><b>Skeen</b>
+  <div class="pick" role="group" aria-label="Variant"><span>Try</span>
+    <button type="button" data-v="va" class="on">A Ledger</button><button type="button" data-v="vb">B Panels</button><button type="button" data-v="vc">C Sheet</button><button type="button" data-v="vd">D Preview</button>
+    <span style="margin-left:14px">Text</span><button type="button" id="desc">labels only</button>
+  </div>
+</header>
+<div class="shell">
+  <nav class="rail" aria-label="Manager tools">
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M2 8l9.73-4.87a.6.6 0 0 1 .54 0L22 8"/><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"/></svg></div>
+    <div class="ri on"><svg viewBox="0 0 24 24"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><g transform="scale(0.09375)" fill="currentColor" stroke="none"><path d="M237.66,66.34a8,8,0,0,0-11.32,0L192,100.69,155.31,64l34.35-34.34a8,8,0,1,0-11.32-11.32L144,52.69,117.66,26.34a8,8,0,0,0-11.32,11.32L112.69,44l-53,53a40,40,0,0,0,0,56.57l15.71,15.71L26.34,218.34a8,8,0,0,0,11.32,11.32l49.09-49.09,15.71,15.71a40,40,0,0,0,56.57,0l53-53,6.34,6.35a8,8,0,0,0,11.32-11.32L203.31,112l34.35-34.34A8,8,0,0,0,237.66,66.34ZM147.72,185a24,24,0,0,1-33.95,0L71,142.23a24,24,0,0,1,0-33.95l53-53L200.69,132Z"/></g></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M10.59 10.59l6.36-3.54-3.54 6.36-6.36 3.54 3.54-6.36z"/><circle cx="12" cy="12" r="10"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z"/><path d="M15 9h3v2M6.5 5C9 5 11 7 11 9.5V17a2 2 0 0 1-2 2M6 10h1"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15z"/></svg></div>
+  </nav>
+  <nav class="sub" aria-label="Brand"><div class="col">
+    <button type="button" class="on" data-tab="logos">Logos</button>
+    <button type="button" data-tab="colors">Colors</button>
+    <button type="button" data-tab="fonts">Fonts</button>
+    <button type="button" data-tab="icon">Tab icon</button>
+  </div></nav>
+  <main><div class="wrap" id="wrap">
+    <div class="kitbar"><button type="button" class="ib sm" data-kit aria-label="Download brand kit"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button></div>
+
+    <section class="sec" data-panel="logos">
+      <div class="hd">Logos</div>
+      <div class="preview"><div class="stage" style="background:#fff;border:1px solid var(--hair);color:#111">SKEEN</div><div class="stage" style="background:#111;color:#fff">SKEEN</div></div>
+      <div class="rows">
+        <div class="row" data-item="primary"><div><div class="l">Primary logo</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">Site header and the press kit.</div></div>
+          <div class="r"><div class="tile"><span class="word">SKEEN</span></div><button type="button" class="eye" data-edit aria-label="Edit"><svg viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></svg></button></div></div>
+        <div class="row" data-item="secondary"><div><div class="l">Secondary logo</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">A mark or a light version, for dark backgrounds.</div></div>
+          <div class="r"><div class="tile empty">Add</div><button type="button" class="eye" data-edit data-empty aria-label="Add logo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div></div>
+        <div class="row add"><button type="button" class="addrow" data-add="logo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add logo</button><div class="addform" data-form="logo" hidden><input class="name" placeholder="Tertiary logo" aria-label="Name" maxlength="40"><button type="button" class="ib sm" data-ok="logo" aria-label="Add"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="ib sm" data-cancel="logo" aria-label="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
+      </div>
+          </section>
+
+    <section class="sec" data-panel="colors" hidden>
+      <div class="hd">Colors</div>
+      <div class="preview"><div class="stage text" contenteditable="true" spellcheck="false" style="background:#0d0d0d;color:#f4f1ea">Test <span style="color:#e5484d">×</span></div><div class="tip">type to try your own words</div></div>
+      <div class="rows">
+        <div class="row" data-ckey="background"><div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">Color 1</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">Our black.</div></div><div class="r swatch"><button type="button" class="sw" data-color aria-label="Pick a color"><i style="background:#0d0d0d"></i></button><input class="hex mono" value="#0D0D0D" aria-label="Background hex" maxlength="7" spellcheck="false"><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage" style="background:#0d0d0d;color:#f4f1ea;font-size:14px;font-weight:400">#0D0D0D</div></template></div></div>
+        <div class="row" data-ckey="text"><div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">Color 2</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">Warm cream.</div></div><div class="r swatch"><button type="button" class="sw" data-color aria-label="Pick a color"><i style="background:#f4f1ea"></i></button><input class="hex mono" value="#F4F1EA" aria-label="Text hex" maxlength="7" spellcheck="false"><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text" contenteditable="true" spellcheck="false" style="background:#0d0d0d;color:#f4f1ea">Test</div><div class="tip">type to try your own words</div></template></div></div>
+        <div class="row" data-ckey="accent"><div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">Color 3</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">The red.</div></div><div class="r swatch"><button type="button" class="sw" data-color aria-label="Pick a color"><i style="background:#e5484d"></i></button><input class="hex mono" value="#E5484D" aria-label="Accent hex" maxlength="7" spellcheck="false"><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text" contenteditable="true" spellcheck="false" style="background:#0d0d0d;color:#e5484d">Test</div><div class="tip">type to try your own words</div></template></div></div>
+        <div class="row add"><button type="button" class="addrow" data-add="color"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add color</button><div class="addform" data-form="color" hidden><input class="name" placeholder="Color 4" aria-label="Name" maxlength="40"><button type="button" class="ib sm" data-ok="color" aria-label="Add"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="ib sm" data-cancel="color" aria-label="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
+      </div>
+    </section>
+
+    <section class="sec" data-panel="fonts" hidden>
+      <div class="hd">Fonts</div>
+      <div class="preview"><div class="stage text" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-family:'Instrument Sans'">Test</div><div class="stage text mono" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-size:20px;font-weight:400">Test</div><div class="tip">type to try your own words</div></div>
+      <div class="rows">
+        <div class="row"><div><div class="l">Primary</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">Headings and names.</div><div class="wts">Regular · Medium · Bold</div></div><div class="r"><span class="fontprev" style="font-family:'Instrument Sans'">Instrument Sans</span><button type="button" class="eye" data-change aria-label="Change font"><svg viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg></button><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-family:'Instrument Sans'">Test</div><div class="tip">type to try your own words</div></template></div></div>
+        <div class="row"><div><div class="l">Secondary</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">Labels, numbers, handles.</div><div class="wts">Regular · Bold</div></div><div class="r"><span class="fontprev mono">Space Mono</span><button type="button" class="eye" data-change aria-label="Change font"><svg viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg></button><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text mono" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-size:20px;font-weight:400">Test</div><div class="tip">type to try your own words</div></template></div></div>
+        <div class="row" data-kind="font"><div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">Archivo</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note">Gig posters and merch.</div><div class="wts">Medium <b class="miss">· no Bold</b></div></div><div class="r"><span class="fontprev" style="font-family:Archivo,'Instrument Sans'">Archivo</span><button type="button" class="eye" data-change aria-label="Change font"><svg viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg></button><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-family:Archivo,'Instrument Sans'">Test</div><div class="tip">type to try your own words</div></template></div></div>
+        <div class="row" data-kind="font"><div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">Skeen Display</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note"></div><div class="wts">Regular · Bold</div></div><div class="r"><span class="fontprev" style="font-family:'Instrument Sans'">Skeen Display</span><button type="button" class="eye" data-change aria-label="Change font"><svg viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg></button><button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-family:'Instrument Sans'">Test</div><div class="tip">type to try your own words</div></template></div></div>
+        <div class="row add"><button type="button" class="addrow" data-add="font"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add font</button><div class="addform" data-form="font" hidden><input class="name" placeholder="Skeen Display" aria-label="Name" maxlength="40"><button type="button" class="ib sm" data-ok="font" aria-label="Add"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><button type="button" class="ib sm" data-cancel="font" aria-label="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
+      </div>
+          </section>
+
+    <section class="sec" data-panel="icon" hidden>
+      <div class="hd">Tab icon</div>
+      <div class="preview"><div class="tabstrip"><span class="tab"><span class="ico">S</span>Skeen</span></div><div class="true"><span class="ico">S</span>true size · 16px</div></div>
+      <div class="rows">
+        <div class="row" data-item="icon"><div><div class="l">Tab icon</div><div class="guide">Browser tabs and bookmarks.</div></div><div class="r fav"><div class="big">S</div><button type="button" class="eye" data-edit aria-label="Edit"><svg viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></svg></button><template class="rp"><div class="tabstrip"><span class="tab"><span class="ico">S</span>Skeen</span></div><div class="true"><span class="ico">S</span>true size · 16px</div></template></div></div>
+        <div class="row" data-item="home"><div><div class="l">Home-screen icon</div><div class="guide">When a fan saves the site to their phone.</div></div><div class="r fav"><div class="homeic">S</div><button type="button" class="eye" data-edit aria-label="Edit"><svg viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></svg></button></div></div>
+        <div class="row" data-ckey="bar"><div><div class="l">Browser bar</div><div class="guide">The phone browser's top bar on the site.</div></div><div class="r swatch"><button type="button" class="sw" data-color aria-label="Pick a color"><i style="background:#0d0d0d"></i></button><input class="hex mono" value="#0D0D0D" aria-label="Browser bar hex" maxlength="7" spellcheck="false"></div></div>
+      </div>
+      
+    </section>
+
+
+  </div></main>
+</div>
+<aside class="pane" id="pane" hidden><div class="who" id="who">Primary logo</div><div id="panebench"></div></aside>
+<div class="scrim" id="scrim" hidden><div class="modal" role="dialog" aria-label="Preview"><div class="mh"><b id="mtitle">Logos</b><span class="meta">preview</span></div><div class="mb" id="mbody"></div><div class="mf"><button type="button" class="b solid" id="mdone">Save</button></div></div></div>
+<div class="bar" id="bar" data-off><span class="state dirty" id="barmsg">Primary logo changed · not on the site yet</span><div><button type="button" class="b ghost" id="revert">Revert</button> <button type="button" class="b solid" id="publish">Publish</button></div></div>
+<script>
+(() => {
+  const body = document.body, KEY = 'brand-variants-v2'
+  let st = { v: 'va', tab: 'logos', desc: false }
+  try { st = { ...st, ...(JSON.parse(localStorage.getItem(KEY) || 'null') || {}) } } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)) } catch {} }
+  const tabs = document.querySelectorAll('.sub button'), panels = document.querySelectorAll('[data-panel]'), picks = document.querySelectorAll('.pick [data-v]'), desc = document.getElementById('desc')
+  function render() {
+    body.className = st.v + (st.desc ? ' desc' : '')
+    picks.forEach((p) => p.classList.toggle('on', p.dataset.v === st.v))
+    tabs.forEach((t) => t.classList.toggle('on', t.dataset.tab === st.tab))
+    panels.forEach((p) => { p.hidden = p.dataset.panel !== st.tab })
+    desc.textContent = st.desc ? 'with descriptions' : 'labels only'
+    desc.classList.toggle('on', st.desc)
+  }
+  tabs.forEach((t) => t.addEventListener('click', () => { st.tab = t.dataset.tab; save(); render() }))
+  picks.forEach((p) => p.addEventListener('click', () => { st.v = p.dataset.v; save(); render() }))
+  desc.addEventListener('click', () => { st.desc = !st.desc; save(); render() })
+  render()
+  // ── the workbench ──
+  const W = { primary: { size: 100, y: 0 }, secondary: { size: 100, y: 0 }, icon: { size: 160, y: 0 }, home: { size: 120, y: 0 } }
+  const KIND = { primary: 'logo', secondary: 'logo', icon: 'icon', home: 'icon', ph1: 'photo', ph2: 'photo', ph3: 'photo' }
+  const PH = {"ph1": "linear-gradient(135deg,#1b1b1b,#e5484d)", "ph2": "linear-gradient(160deg,#2a2a2a,#6b7280 60%,#f4f1ea)", "ph3": "linear-gradient(200deg,#0d0d0d,#2563eb)"}
+  const cut = { primary: true }, warn = {}
+  const hexOf = (key) => (document.querySelector(`[data-ckey="${key}"] .hex`)?.value || '#111111').toLowerCase()
+  let where = 'modal', sel = 'primary'
+  const wpills = document.querySelectorAll('.pick [data-w]')
+  const stagesFor = (k) => {
+    const w = W[k], tf = `transform:translateY(${w.y}px) scale(${w.size / 100})`
+    if (where === 'modal') {
+      if (KIND[k] === 'icon') return `<div class="stages"><div class="board"><span class="clip${k === 'home' ? ' home' : ''}"><span style="${tf};display:block">S</span></span></div></div>`
+      if (KIND[k] === 'photo') return `<div class="stages"><div class="board" style="background:${has[k] ? PH[k] || 'linear-gradient(135deg,#333,#999)' : ''}">${has[k] ? '' : '<span class="none">No photo yet</span>'}</div></div>`
+      const word = `<span class="word">${k === 'primary' ? 'SKEEN' : 'SK'}</span>`
+      const inner = !has[k] ? `<span class="none">No ${name(k).toLowerCase()} yet</span>` : cut[k] ? word : `<span class="wbox">${word}</span>`
+      const sw = [['check', 'Transparent'], ['light', 'Light'], ['dark', 'Dark'], ['site', 'Site background']].map(([m, l]) => `<button type="button" class="bgsw bg-${m}${bgMode === m ? ' on' : ''}" data-bg="${m}" aria-label="${l}"></button>`).join('')
+      return `<div class="stages" style="--sitebg:${hexOf('background')};--sitetext:${hexOf('text')}"><div class="board bd-${bgMode}">${inner}</div><div class="bgset">${sw}</div></div>`
+    }
+    if (k === 'icon') return `<div class="stages"><div class="st tabwrap"><span class="tab"><span class="clip"><span style="${tf};display:block">S</span></span>Skeen</span></div><div class="st" style="background:var(--surface);color:var(--muted);font-size:13px;gap:8px"><span class="clip" style="width:16px;height:16px;border-radius:3px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:8px;overflow:hidden"><span style="${tf};display:block">S</span></span></div></div>`
+    const word = k === 'secondary' ? 'SK' : 'SKEEN'
+    return `<div class="stages"><div class="st" style="background:#fff;border:1px solid var(--hair);color:#111"><span class="word" style="${tf}">${word}</span></div><div class="st" style="background:#111;color:#fff"><span class="word" style="${tf}">${word}</span></div></div>`
+  }
+  const has = { primary: true, secondary: false, ph1: true, ph2: true, ph3: true }
+  const benchHTML = (k) => {
+    const on = k === 'icon' || has[k], dis = on ? '' : ' disabled', w = W[k]
+    if (KIND[k] === 'photo') return `${stagesFor(k)}<div class="side"><div class="acts"><button type="button" class="ib" data-act="${has[k] ? 'replace' : 'add'}" aria-label="${has[k] ? 'Upload new' : 'Add photo'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" class="ib" data-act="remove" aria-label="Remove"${has[k] ? '' : ' disabled'}><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div></div>`
+    const warnBox = KIND[k] === 'logo' && has[k] && warn[k] ? `<div class="warn"><span>${warn[k]}</span><button type="button" class="ib sm" data-act="cutout" aria-label="Remove background"><svg viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button></div>` : ''
+    const acts = KIND[k] === 'icon'
+      ? `<button type="button" class="ib" data-act="replace-icon" aria-label="Upload new" title="Upload new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><select class="sel" aria-label="Select a logo"><option>Select a logo…</option><option>Primary logo</option><option>Secondary logo</option></select>`
+      : `<button type="button" class="ib" data-act="${on ? 'replace' : 'add'}" aria-label="${on ? 'Upload new' : 'Add logo'}" title="${on ? 'Upload new' : 'Add logo'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" class="ib" data-act="remove" aria-label="Remove" title="Remove"${dis}><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>`
+    if (KIND[k] === 'logo') return `${stagesFor(k)}<div class="side"><div class="acts">${acts}</div>${warnBox}</div>`
+    return `${stagesFor(k)}<div class="side"><div class="acts">${acts}</div>${warnBox}<div class="ctl${on ? '' : ' off'}"><label>Size</label><input type="range" data-k="${k}" data-p="size" min="40" max="220" value="${w.size}" aria-label="Size"${dis}><output>${w.size}%</output><label>Up / down</label><input type="range" data-k="${k}" data-p="y" min="-80" max="80" value="${w.y}" aria-label="Up or down"${dis}><output>${w.y}px</output><button type="button" class="b ghost" data-reset="${k}"${dis}>Reset</button></div></div>`
+  }
+  const name = (k) => ({ primary: 'Primary logo', secondary: 'Secondary logo', icon: 'Tab icon', home: 'Home-screen icon', ph1: 'Live at Fabric', ph2: 'Studio portrait', ph3: 'Tour poster shoot' })[k] ?? names[k] ?? 'Logo'
+  function paint() {
+    body.classList.remove('wpane', 'winline', 'wmodal'); body.classList.add('w' + where)
+    wpills.forEach((p) => p.classList.toggle('on', p.dataset.w === where))
+    const onBench = st.tab === 'logos' || st.tab === 'icon'
+    document.getElementById('wrap').classList.toggle('has-bench', where === 'pane' && onBench)
+    if (st.tab === 'icon') sel = 'icon'; else if (sel === 'icon') sel = 'primary'
+    // pane
+    const pane = document.getElementById('pane'); pane.hidden = !(where === 'pane' && onBench)
+    document.getElementById('who').textContent = name(sel); document.getElementById('panebench').innerHTML = benchHTML(sel)
+    // inline
+    document.querySelectorAll('.inl').forEach((e) => e.remove())
+    document.querySelectorAll('.row[data-item]').forEach((r) => r.classList.toggle('sel', r.dataset.item === sel && where !== 'modal'))
+    if (where === 'inline' && onBench) { const r = document.querySelector(`.row[data-item="${sel}"]`); const d = document.createElement('div'); d.className = 'inl bench'; d.innerHTML = benchHTML(sel); r.insertAdjacentElement('afterend', d) }
+    wire()
+  }
+  function wire() {
+    document.querySelectorAll('.bench input[type=range], .modal input[type=range][data-k]').forEach((i) => i.oninput = () => { W[i.dataset.k][i.dataset.p] = Number(i.value); dirty(name(i.dataset.k) + ' adjusted · not on the site yet'); i.nextElementSibling.textContent = i.value + (i.dataset.p === 'size' ? '%' : 'px'); document.querySelectorAll('.bench, .modal .mb').forEach((b) => { const st_ = b.querySelector('.stages'); if (st_ && b.querySelector(`[data-k="${i.dataset.k}"]`)) st_.outerHTML = stagesFor(i.dataset.k) }) })
+    document.querySelectorAll('[data-reset]').forEach((b) => b.onclick = () => { W[b.dataset.reset] = b.dataset.reset === 'icon' ? { size: 160, y: 0 } : { size: 100, y: 0 }; paint(); if (!scrim.hidden) openBench(b.dataset.reset) })
+  }
+  document.querySelectorAll('.row[data-item]').forEach((r) => r.addEventListener('click', (ev) => { if (ev.target.closest('button, input, .tile, svg')) return; if (where === 'modal') return; sel = r.dataset.item; paint() }))
+  wpills.forEach((p) => p.addEventListener('click', () => { where = p.dataset.w; st.where = where; save(); paint() }))
+  document.addEventListener('click', (ev) => { const t = ev.target.closest('.row[data-item] [data-edit], .row[data-item] .tile'); if (t) openBench(t.closest('.row').dataset.item) })
+  const syncLogo = (k) => {
+    const r = document.querySelector(`.row[data-item="${k}"]`); if (!r || KIND[k] === 'icon') return
+    const tile = r.querySelector('.tile'), btn = r.querySelector('[data-edit]')
+    const photo = KIND[k] === 'photo'
+    tile.className = has[k] ? (photo ? 'tile photo' : 'tile') : 'tile empty'; tile.style.background = has[k] && photo ? (PH[k] || 'linear-gradient(135deg,#333,#999)') : ''; tile.innerHTML = has[k] ? (photo ? '' : `<span class="word">${k === 'primary' ? 'SKEEN' : 'SK'}</span>`) : 'Add'
+    btn.innerHTML = has[k] ? '<svg viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'; btn.toggleAttribute('data-empty', !has[k]); btn.setAttribute('aria-label', has[k] ? 'Edit' : KIND[k] === 'photo' ? 'Add photo' : 'Add logo')
+  }
+  document.addEventListener('click', (ev) => {
+    const g = ev.target.closest('[data-bg]'); if (g) { bgMode = g.dataset.bg; openBench(curK); return }
+    const c = ev.target.closest('[data-cand]'); if (c) { document.querySelectorAll('[data-cand]').forEach((x) => x.classList.toggle('on', x === c)); document.querySelector('[data-act="replace"]').innerHTML = c.innerHTML; return }
+    const a = ev.target.closest('[data-act]'); if (!a) return
+    const k = curK
+    if (a.dataset.act === 'cutout') { cut[k] = true; warn[k] = null; dirty(name(k) + ' background removed · not on the site yet') }
+    else if (a.dataset.act === 'remove') { has[k] = false; const u = document.querySelector(`.row[data-item="${k}"] .uses`); const used = u && u.textContent !== 'Not used' ? ' · it was used in ' + u.textContent : ''; dirty(name(k) + ' removed' + used) }
+    else { has[k] = true; if (KIND[k] === 'logo') { cut[k] = false; warn[k] = 'This logo has a white box behind it.' } dirty(name(k) + (a.dataset.act === 'add' ? ' added' : ' replaced') + ' · not on the site yet') }
+    syncLogo(k); openBench(k)
+  })
+  const openBench = (k) => { curK = k; mtitle.textContent = name(k); document.querySelector('.modal .mh .meta').textContent = 'edit'; mbody.innerHTML = `<div class="bench">${benchHTML(k)}</div>`; scrim.hidden = false; wire() }
+  tabs.forEach((t) => t.addEventListener('click', paint))
+  // ── colors: a swatch opens the panel; the hex field edits directly ──
+  const SITE = ['#0d0d0d','#f4f1ea','#e5484d','#111111','#ffffff','#6b7280','#2563eb','#fafafa','#ececec','#1a1a1a','#d9d9d9','#9aa0a6']
+  let bgMode = 'check', curK = 'primary'
+  let openCp = null
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] }
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05) }
+  function checkAA() { const bg = hexOf('background'); document.querySelectorAll('[data-aa]').forEach((t) => { const v = ratio(hexOf(t.dataset.aa), bg), ok = v >= 4.5; t.className = 'aa' + (ok ? '' : ' bad'); t.textContent = (ok ? 'Readable' : 'Hard to read') + ' · ' + v.toFixed(1) + ':1' }) }
+  function hexToHsv(hex) { const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let h = 0; if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = Math.round(h * 60); if (h < 0) h += 360 } return { h, s: mx ? d / mx : 0, v: mx } }
+  function hsvToHex({ h, s, v }) { const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c; let [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]; return '#' + [r, g, b].map((q) => Math.round((q + m) * 255).toString(16).padStart(2, '0')).join('') }
+  const closeCp = () => {
+    if (!openCp) return
+    const r = openCp.closest('.row'); openCp.remove(); openCp = null
+    if (r && r.dataset.picked && r.querySelector('[data-empty][data-color]')) { r.querySelector('.fontprev.empty')?.remove(); r.querySelector('[data-empty][data-color]').remove(); r.querySelector('.sw').hidden = false; r.querySelector('.hex').hidden = false }
+  }
+  const setColor = (row, v) => { v = v.toLowerCase(); if (!/^#[0-9a-f]{6}$/.test(v)) return; row.querySelector('.sw i').style.background = v; row.querySelector('.hex').value = v.toUpperCase(); const fresh = !row.dataset.picked && row.querySelector('[data-empty][data-color]'); row.dataset.picked = '1'; checkAA(); dirty(row.querySelector('.l').textContent + (fresh ? ' color added' : ' color changed') + ' · not on the site yet') }
+  const wireColor = (scope) => { scope.querySelectorAll('[data-color]').forEach((sw) => sw.addEventListener('click', (ev) => {
+    ev.stopPropagation(); const row = sw.closest('.row'); const cur = row.querySelector('.hex').value.toLowerCase()
+    if (openCp && openCp.parentElement === sw) return closeCp()
+    closeCp()
+    const cp = document.createElement('div'); cp.className = 'cp'; cp.addEventListener('click', (e) => e.stopPropagation())
+    const hsv = hexToHsv(cur)
+    cp.innerHTML = `<p class="cph">On the site</p><div class="grid">${SITE.map((c) => `<button type="button" style="background:${c}" data-c="${c}" class="${c === cur ? 'on' : ''}" aria-label="${c}"></button>`).join('')}</div><p class="cph">Custom</p><div class="sq" style="--h:hsl(${hsv.h},100%,50%)"><i style="left:${hsv.s * 100}%;top:${(1 - hsv.v) * 100}%"></i></div><input type="range" class="hue" min="0" max="360" value="${hsv.h}" aria-label="Hue"><div class="hexrow"><input class="hex mono" value="${cur.toUpperCase()}" maxlength="7" aria-label="Hex"></div>`
+    const sq = cp.querySelector('.sq'), dot = sq.querySelector('i'), hue = cp.querySelector('.hue'), hx = cp.querySelector('.hex')
+    const apply = () => { const v = hsvToHex(hsv); sq.style.setProperty('--h', `hsl(${hsv.h},100%,50%)`); dot.style.left = hsv.s * 100 + '%'; dot.style.top = (1 - hsv.v) * 100 + '%'; hx.value = v.toUpperCase(); setColor(row, v) }
+    const pick = (e) => { const r = sq.getBoundingClientRect(); hsv.s = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); hsv.v = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)); apply() }
+    sq.addEventListener('pointerdown', (e) => { sq.setPointerCapture(e.pointerId); pick(e); sq.onpointermove = pick; sq.onpointerup = () => (sq.onpointermove = null) })
+    hue.addEventListener('input', () => { hsv.h = Number(hue.value); apply() })
+    cp.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { setColor(row, b.dataset.c); closeCp() }))
+    hx.addEventListener('change', () => { const v = hx.value.toLowerCase(); if (/^#[0-9a-f]{6}$/.test(v)) { Object.assign(hsv, hexToHsv(v)); apply() } })
+    sw.appendChild(cp); openCp = cp
+  })); scope.querySelectorAll('.row .hex').forEach((h) => h.addEventListener('change', () => setColor(h.closest('.row'), h.value))) }
+  wireColor(document); checkAA()
+  document.addEventListener('click', closeCp)
+  // ── add a logo, a color, a font: name it, it becomes a row (and a name the editor lists) ──
+  const SW = '<svg viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></svg>'
+  document.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => { b.hidden = true; const f = b.nextElementSibling; f.hidden = false; const n = f.querySelector('.name'); if (b.dataset.add === 'color') { n.value = 'Color ' + (document.querySelectorAll('[data-panel="colors"] .row:not(.add)').length + 1); n.select() } n.focus() }))
+  document.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', () => { const f = b.closest('.addform'); f.hidden = true; f.previousElementSibling.hidden = false; f.querySelector('.name').value = '' }))
+  const addItem = (kind, name) => {
+    const addRow = document.querySelector(`.row.add [data-add="${kind}"]`).closest('.row')
+    const r = document.createElement('div'); r.className = 'row'
+    if (false) { const k = 'ph' + Date.now(); KIND[k] = 'photo'; has[k] = false; names[k] = name; r.dataset.item = k; r.innerHTML = `<div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">${name}</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Photo credit…" aria-label="Note"></div></div><div class="r"><div class="tile empty">Add</div><button type="button" class="eye" data-edit data-empty aria-label="Add photo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>` }
+    if (kind === 'logo') { const k = 'logo' + Date.now(); KIND[k] = 'logo'; has[k] = false; W[k] = { size: 100, y: 0 }; names[k] = name; r.dataset.item = k; r.innerHTML = `<div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">${name}</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note"></div></div><div class="r"><div class="tile empty">Add</div><button type="button" class="eye" data-edit data-empty aria-label="Add logo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>` }
+    if (kind === 'color') { r.innerHTML = `<div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">${name}</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note"></div></div><div class="r swatch"><span class="fontprev empty">No color yet</span><button type="button" class="eye" data-color data-empty aria-label="Add color"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" class="sw" data-color aria-label="Pick a color" hidden><i style="background:#111111"></i></button><input class="hex mono" value="#111111" aria-label="${name} hex" maxlength="7" spellcheck="false" hidden></div>`; wireColor(r) }
+    if (kind === 'font') { r.dataset.kind = 'font'; r.innerHTML = `<div><div class="l edit" contenteditable="true" spellcheck="false" aria-label="Name">${name}</div><div class="note" contenteditable="true" spellcheck="false" data-ph="Add a note…" aria-label="Note"></div></div><div class="r"><span class="fontprev empty">No font yet</span><button type="button" class="eye" data-change data-empty aria-label="Add font"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>` }
+    addRow.insertAdjacentElement('beforebegin', r)
+    requestAnimationFrame(() => r.querySelector('.note').focus())
+    dirty(`${name} added · not on the site yet`)
+    const f = addRow.querySelector('.addform'); f.hidden = true; f.previousElementSibling.hidden = false; f.querySelector('.name').value = ''
+  }
+  const names = {}
+  document.querySelectorAll('[data-ok]').forEach((b) => b.addEventListener('click', () => { const n = b.closest('.addform').querySelector('.name').value.trim(); if (n) addItem(b.dataset.ok, n) }))
+  document.querySelectorAll('.addform .name').forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const n = i.value.trim(); if (n) addItem(i.closest('.addform').dataset.form, n) } if (e.key === 'Escape') i.closest('.addform').querySelector('[data-cancel]').click() }))
+  const scrim = document.getElementById('scrim'), mbody = document.getElementById('mbody'), mtitle = document.getElementById('mtitle')
+  // ── the color playground ──
+  const palette = () => [...document.querySelectorAll('[data-panel="colors"] .row:not(.add)')].filter((r) => r.querySelector('.hex') && !r.querySelector('.hex').hidden).map((r) => ({ name: r.querySelector('.l').textContent, hex: r.querySelector('.hex').value.toLowerCase() }))
+  const PARTS = [['bg', 'Background'], ['text', 'Text'], ['line', 'Border'], ['acc', 'Accent']]
+  function openPlay(hex) {
+    const pal = palette(), others = pal.filter((c) => c.hex !== hex)
+    const best = others.slice().sort((a, b) => ratio(b.hex, hex) - ratio(a.hex, hex))
+    const roles = { bg: hex, text: (best[0] || pal[0]).hex, line: (best[1] || best[0] || pal[0]).hex, acc: (others.find((c) => c.hex !== (best[0] || {}).hex) || best[0] || pal[0]).hex }
+    const draw = () => {
+      const ok = ratio(roles.text, roles.bg) >= 4.5
+      mbody.innerHTML = `<div class="play"><div class="card" style="--pb:${roles.bg};--pt:${roles.text};--pl:${roles.line};--pa:${roles.acc}"><div class="ct" contenteditable="true" spellcheck="false">Test</div><p class="cp2">Skeen live at Fabric · Sat 04 Oct</p><span class="clink">Listen now</span><span class="cbtn">Tickets</span></div><div class="parts">${PARTS.map(([k, l]) => `<div class="part"><span>${l}</span><div class="dots">${pal.map((c) => `<button type="button" class="dot${roles[k] === c.hex ? ' on' : ''}" style="background:${c.hex}" data-part="${k}" data-hex="${c.hex}" aria-label="${c.name}"></button>`).join('')}</div></div>`).join('')}<div class="read${ok ? '' : ' bad'}">${ok ? 'Easy to read' : 'Hard to read'}</div></div></div>`
+      mbody.querySelectorAll('[data-part]').forEach((d) => d.addEventListener('click', () => { roles[d.dataset.part] = d.dataset.hex; draw() }))
+    }
+    mtitle.textContent = pal.find((c) => c.hex === hex)?.name || 'Color'; document.querySelector('.modal .mh .meta').textContent = 'preview'; draw(); scrim.hidden = false
+  }
+  document.addEventListener('click', (ev) => { const e = ev.target.closest('[data-eye]'); if (!e) return; const cr = e.closest('[data-panel="colors"] .row'); if (cr) { openPlay(cr.querySelector('.hex').value.toLowerCase()); return } (() => {
+    const row = e.closest('.row'), sec = e.closest('.sec')
+    document.querySelector('.modal .mh .meta').textContent = 'preview'
+    if (row) { mtitle.textContent = row.querySelector('.l').textContent; mbody.innerHTML = row.querySelector('template.rp').innerHTML }
+    else { mtitle.textContent = sec.querySelector('.hd').textContent; mbody.innerHTML = sec.querySelector('.preview').innerHTML }
+    scrim.hidden = false; const t = mbody.querySelector('[contenteditable]'); (t || document.getElementById('mdone')).focus()
+  })() })
+  const close = () => { scrim.hidden = true; document.getElementById('mdone').textContent = 'Save' }
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('[data-kit]')) return
+    const n = (sel) => document.querySelectorAll(sel).length
+    mtitle.textContent = 'Brand kit'; document.querySelector('.modal .mh .meta').textContent = 'download'
+    mbody.innerHTML = `<div class="kit"><div>Logos<span>${Object.keys(has).filter((k) => KIND[k] === 'logo' && has[k]).length} · PNG + SVG</span></div><div>Colors<span>${n('[data-panel="colors"] .row .hex')} · hex + RGB</span></div><div>Fonts<span>${n('[data-panel="fonts"] .fontprev:not(.empty)')} files</span></div><div>Press photos<span>${Object.keys(has).filter((k) => KIND[k] === 'photo' && has[k]).length} · with credits</span></div><div>Tab + home-screen icons<span>PNG</span></div><p>skeen-brand-kit.zip · only what's live on the site</p></div>`
+    document.getElementById('mdone').textContent = 'Download'; scrim.hidden = false
+  })
+  document.addEventListener('focusin', (e) => { if (e.target.classList?.contains('edit')) e.target.dataset.was = e.target.textContent })
+  document.addEventListener('focusout', (e) => { const t = e.target; if (!t.classList?.contains('edit')) return; if (!t.textContent.trim()) t.textContent = t.dataset.was; else if (t.textContent !== t.dataset.was) dirty(t.textContent.trim() + ' renamed · not on the site yet') })
+  document.addEventListener('keydown', (e) => { if (e.target.classList?.contains('edit') && e.key === 'Enter') { e.preventDefault(); e.target.blur() } })
+  document.addEventListener('keydown', (e) => { if (e.target.classList?.contains('note') && e.key === 'Enter') { e.preventDefault(); const next = e.target.closest('.row').querySelector('[data-empty]'); if (next) next.focus(); else e.target.blur() } })
+  // Mock only: any Replace/Change/Add marks the page dirty and the bar rises; Revert or
+  // Publish clears it. In the app this is dashboardDiff, the same signal BrandPublish reads.
+  const bar = document.getElementById('bar'), barmsg = document.getElementById('barmsg')
+  const dirty = (msg) => { barmsg.textContent = msg; bar.removeAttribute('data-off') }
+  const clean = () => bar.setAttribute('data-off', '')
+  
+  const ICONS = {'Pick from list':'<svg viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg>','Swap':'<svg viewBox="0 0 24 24"><path d="M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4"/></svg>','Cycle':'<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M3 21v-5h5M21 3v5h-5"/></svg>','Menu':'<svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h7"/><path d="M17 15l2.5 3 2.5-3"/></svg>'}
+  let changeGlyph = ICONS['Pick from list']
+  document.querySelectorAll('[data-ci]').forEach((b) => b.addEventListener('click', () => { changeGlyph = ICONS[b.dataset.ci]; document.querySelectorAll('[data-ci]').forEach((x) => x.classList.toggle('on', x === b)); document.querySelectorAll('[data-change]').forEach((c) => (c.innerHTML = changeGlyph)) }))
+  const FONTS = [['Instrument Sans', "'Instrument Sans'"], ['Space Mono', "'Space Mono'"], ['Archivo', "Archivo,'Instrument Sans'"], ['Skeen Display', "'Instrument Sans'"]]
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-change]'); if (!b || ev.target.closest('.fm')) return
+    ev.stopPropagation(); if (openCp && openCp.parentElement === b) return closeCp(); closeCp()
+    const row = b.closest('.row'), prev = row.querySelector('.fontprev'), cur = prev.textContent
+    const m = document.createElement('div'); m.className = 'cp fm'; m.addEventListener('click', (e) => e.stopPropagation())
+    m.innerHTML = `<p class="cph">Fonts</p>${FONTS.map(([n, f]) => `<button type="button" class="fo${n === cur ? ' on' : ''}" data-f="${n}" style="font-family:${f}">${n}</button>`).join('')}<button type="button" class="fo up" data-up>Upload a font…</button>`
+    m.querySelectorAll('[data-f]').forEach((o) => o.addEventListener('click', () => {
+      if (o.dataset.f !== cur) { const f = FONTS.find(([n]) => n === o.dataset.f)[1]; prev.textContent = o.dataset.f; prev.style.fontFamily = f; prev.classList.remove('mono', 'empty'); if (b.hasAttribute('data-empty')) { b.removeAttribute('data-empty'); b.setAttribute('aria-label', 'Change font'); b.querySelector('svg').outerHTML = changeGlyph; b.insertAdjacentHTML('afterend', `<button type="button" class="eye" data-eye aria-label="Preview"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button><template class="rp"><div class="stage text" contenteditable="true" spellcheck="false" style="background:var(--surface);color:var(--ink);font-family:${f}">Test</div><div class="tip">type to try your own words</div></template>`); dirty(row.querySelector('.l').textContent + ' font added · not on the site yet') } else dirty(row.querySelector('.l').textContent + ' font changed · not on the site yet') }
+      closeCp()
+    }))
+    m.querySelector('[data-up]').addEventListener('click', closeCp)
+    b.style.position = 'relative'; b.appendChild(m); openCp = m
+  }, true)
+  document.getElementById('revert').addEventListener('click', clean)
+  document.getElementById('publish').addEventListener('click', clean)
+  paint()
+  document.getElementById('mdone').addEventListener('click', close)
+  scrim.addEventListener('click', (ev) => { if (ev.target === scrim) close() })
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close() })
+})()
+</script>

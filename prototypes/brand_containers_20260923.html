@@ -1,0 +1,127 @@
+<title>Brand Containers</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+:root{--paper:#fff;--surface:#fafafa;--hover:#f6f7f8;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--accent-soft:#eef4ff;--red:#e5484d}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--accent-soft:#1a2440}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--accent-soft:#1a2440}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif}
+.mono{font-family:"Space Mono",ui-monospace,monospace}
+.top{height:52px;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:10px;padding:0 16px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--paper);z-index:3}
+.top .av{width:24px;height:24px;border-radius:50%;background:var(--hair);display:grid;place-items:center;font-size:11px;font-weight:700}
+.top b{font-size:15px;letter-spacing:-.01em}
+.shell{display:flex;min-height:calc(100% - 52px)}
+.rail{flex:none;width:52px;border-right:1px solid var(--hair);display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 6px;position:sticky;top:52px;height:calc(100vh - 52px)}
+.rail .ri{height:52px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
+.rail .ri.on{color:var(--accent)}
+.rail svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sub{flex:none;width:96px;border-right:1px solid var(--hair);position:sticky;top:52px;height:calc(100vh - 52px)}
+.sub .col{display:flex;flex-direction:column;gap:4px;padding:0 8px;margin-top:calc(50vh - 26px - 222px)}
+.sub button{all:unset;cursor:pointer;display:flex;align-items:center;padding:8px 10px;border-radius:8px;color:var(--muted);font-family:"Space Mono",ui-monospace,monospace;font-size:13px;letter-spacing:.02em}
+.sub button:hover{background:var(--surface);color:var(--ink)}
+.sub button.on{color:var(--ink);font-weight:700}
+.sub button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{flex:1;min-width:0;padding-block:28px 64px;padding-inline:28px}
+.wrap{max-width:1180px;display:flex;flex-direction:column;gap:20px}
+.card{border:1px solid var(--hair);border-radius:12px;background:var(--paper);overflow:hidden}
+.card .hd{padding:14px 20px;border-bottom:1px solid var(--hair);font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.row{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,1.4fr);gap:24px;align-items:center;padding:18px 20px;border-bottom:1px solid var(--hair-soft)}
+.row:last-of-type{border-bottom:0}
+.row .l{font-size:15px;font-weight:500}
+.row .d{color:var(--muted);font-size:13px;margin-top:2px}
+.row .r{display:flex;justify-content:flex-end;align-items:center;gap:10px;min-width:0}
+.ft{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid var(--hair);background:var(--surface)}
+.ft .note{color:var(--muted);font-size:13px}
+.b{all:unset;cursor:pointer;font:inherit;font-size:13px;font-weight:500;padding:7px 12px;border-radius:8px;border:1px solid var(--hair);background:var(--paper);color:var(--ink)}
+.b:hover{background:var(--hover)}
+.b.solid{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.b.solid:hover{opacity:.9}
+.b.ghost{border-color:transparent;color:var(--muted)}
+.b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tile{width:112px;height:64px;border:1px solid var(--hair);border-radius:8px;background:var(--surface);display:grid;place-items:center;overflow:hidden}
+.tile.empty{border-style:dashed;color:var(--faint);font-size:12px}
+.tile .word{font-weight:700;letter-spacing:-.02em;font-size:18px}
+.icons{display:flex;flex-direction:column;gap:6px;color:var(--faint)}
+.icons svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;cursor:pointer}
+.icons svg:hover{color:var(--ink)}
+.swatch{display:flex;align-items:center;gap:10px}
+.swatch i{width:28px;height:28px;border-radius:8px;border:1px solid var(--hair);display:block}
+.swatch .mono{font-size:12px;color:var(--muted)}
+.fontprev{font-size:22px;letter-spacing:-.01em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.chip{border:1px solid var(--hair);border-radius:999px;padding:4px 10px;font-size:12px}
+.chip.add{border-style:dashed;color:var(--faint)}
+.fav{display:flex;align-items:center;gap:14px}
+.fav .big{width:64px;height:64px;border-radius:12px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:26px}
+.fav .small{width:16px;height:16px;border-radius:3px;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:8px}
+input[type=range]{width:160px;accent-color:var(--ink)}
+.hint{color:var(--faint);font-size:12px;font-family:"Space Mono",ui-monospace,monospace;letter-spacing:.02em}
+[hidden]{display:none!important}
+@media (max-width:900px){.row{grid-template-columns:1fr}.row .r{justify-content:flex-start}}
+@media (max-width:640px){.rail,.sub{display:none}main{padding-inline:16px}}
+</style>
+<header class="top"><span class="mono" style="color:var(--faint)">‹</span><span class="av">S</span><b>Skeen</b></header>
+<div class="shell">
+  <nav class="rail" aria-label="Manager tools">
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M2 8l9.73-4.87a.6.6 0 0 1 .54 0L22 8"/><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"/></svg></div>
+    <div class="ri on"><svg viewBox="0 0 24 24"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><g transform="scale(0.09375)" fill="currentColor" stroke="none"><path d="M237.66,66.34a8,8,0,0,0-11.32,0L192,100.69,155.31,64l34.35-34.34a8,8,0,1,0-11.32-11.32L144,52.69,117.66,26.34a8,8,0,0,0-11.32,11.32L112.69,44l-53,53a40,40,0,0,0,0,56.57l15.71,15.71L26.34,218.34a8,8,0,0,0,11.32,11.32l49.09-49.09,15.71,15.71a40,40,0,0,0,56.57,0l53-53,6.34,6.35a8,8,0,0,0,11.32-11.32L203.31,112l34.35-34.34A8,8,0,0,0,237.66,66.34ZM147.72,185a24,24,0,0,1-33.95,0L71,142.23a24,24,0,0,1,0-33.95l53-53L200.69,132Z"/></g></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M10.59 10.59l6.36-3.54-3.54 6.36-6.36 3.54 3.54-6.36z"/><circle cx="12" cy="12" r="10"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z"/><path d="M15 9h3v2M6.5 5C9 5 11 7 11 9.5V17a2 2 0 0 1-2 2M6 10h1"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15z"/></svg></div>
+  </nav>
+  <nav class="sub" aria-label="Brand"><div class="col">
+    <button type="button" class="on" data-tab="logos">Logos</button>
+    <button type="button" data-tab="colours">Colours</button>
+    <button type="button" data-tab="fonts">Fonts</button>
+    <button type="button" data-tab="icon">Tab icon</button>
+  </div></nav>
+  <main><div class="wrap">
+
+    <section class="card" data-panel="logos">
+      <div class="hd">Logos</div>
+      <div class="row"><div><div class="l">Primary logo</div><div class="d">Used on the site header and the press kit.</div></div>
+        <div class="r"><div class="tile"><span class="word">SKEEN</span></div><div class="icons"><svg viewBox="0 0 24 24" aria-label="Replace"><path d="M12 21V9M7 14l5-5 5 5M5 3h14"/></svg><svg viewBox="0 0 24 24" aria-label="Remove"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></div></div></div>
+      <div class="row"><div><div class="l">Secondary logo</div><div class="d">A mark or a light version, for dark backgrounds.</div></div>
+        <div class="r"><div class="tile empty">Add</div><div class="icons" style="visibility:hidden"><svg viewBox="0 0 24 24"><path d="M12 21V9"/></svg><svg viewBox="0 0 24 24"><path d="M12 21V9"/></svg></div></div></div>
+      <div class="ft"><span class="note">Primary logo changed · not on the site yet</span><div><button type="button" class="b ghost">Revert</button> <button type="button" class="b solid">Publish</button></div></div>
+    </section>
+
+    <section class="card" data-panel="colours" hidden>
+      <div class="hd">Site colours</div>
+      <div class="row"><div><div class="l">Background</div><div class="d">The page behind everything.</div></div><div class="r swatch"><i style="background:#0d0d0d"></i><span class="mono">#0D0D0D</span></div></div>
+      <div class="row"><div><div class="l">Text</div><div class="d">Body and headings.</div></div><div class="r swatch"><i style="background:#f4f1ea"></i><span class="mono">#F4F1EA</span></div></div>
+      <div class="row"><div><div class="l">Accent</div><div class="d">Links, the × on modals, live dots.</div></div><div class="r swatch"><i style="background:#e5484d"></i><span class="mono">#E5484D</span></div></div>
+      <div class="ft"><span class="note">These are the colours the site declares. Change them in the editor.</span><button type="button" class="b">Open editor</button></div>
+    </section>
+
+    <section class="card" data-panel="fonts" hidden>
+      <div class="hd">Fonts</div>
+      <div class="row"><div><div class="l">Primary</div><div class="d">Headings and names.</div></div><div class="r"><span class="fontprev" style="font-family:'Instrument Sans'">Instrument Sans</span><button type="button" class="b">Change</button></div></div>
+      <div class="row"><div><div class="l">Secondary</div><div class="d">Labels, numbers, handles.</div></div><div class="r"><span class="fontprev mono">Space Mono</span><button type="button" class="b">Change</button></div></div>
+      <div class="row"><div><div class="l">Uploaded</div><div class="d">Your own files. Any of them can take a role above.</div></div><div class="r chips"><span class="chip">Archivo</span><span class="chip">Skeen Display</span><span class="chip add">+ Add font</span></div></div>
+      <div class="ft"><span class="note">Fonts are live on the site</span><button type="button" class="b ghost" disabled>Publish</button></div>
+    </section>
+
+    <section class="card" data-panel="icon" hidden>
+      <div class="hd">Tab icon</div>
+      <div class="row"><div><div class="l">Preview</div><div class="d">Cut from the primary logo. Left is magnified, right is true size.</div></div><div class="r fav"><div class="big">S</div><div class="small">S</div></div></div>
+      <div class="row"><div><div class="l">Zoom</div></div><div class="r"><input type="range" id="zoom" min="1" max="3" step="0.05" value="1.6" aria-label="Zoom"></div></div>
+      <div class="row"><div><div class="l">Position</div></div><div class="r"><button type="button" class="b">Up</button><button type="button" class="b">Down</button></div></div>
+      <div class="ft"><span class="note">Autosaves</span><button type="button" class="b ghost">Reset</button></div>
+    </section>
+
+    <p class="hint" id="hint">Mock · click the tabs on the left</p>
+  </div></main>
+</div>
+<script>
+(() => {
+  const tabs = document.querySelectorAll('.sub button'), panels = document.querySelectorAll('[data-panel]')
+  tabs.forEach((t) => t.addEventListener('click', () => {
+    tabs.forEach((x) => x.classList.toggle('on', x === t))
+    panels.forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.tab })
+  }))
+})()
+</script>

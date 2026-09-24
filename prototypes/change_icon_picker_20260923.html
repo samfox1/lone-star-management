@@ -1,0 +1,759 @@
+<title>Font Change Icons</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&family=Archivo:wght@500&display=swap">
+<style>
+:root{--paper:#fff;--surface:#fafafa;--hover:#f6f7f8;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--accent-soft:#eef4ff;--sw:1.6}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--accent-soft:#1a2440}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--accent-soft:#1a2440}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif}
+.app{display:flex;min-height:100%}
+/* the live mock: the Fonts ledger, sticky on the left, wearing whatever you click */
+.mock{position:sticky;top:env(safe-area-inset-top,0px);align-self:flex-start;height:100vh;box-sizing:border-box;flex:none;width:380px;border-right:1px solid var(--hair);padding:28px 24px;display:flex;flex-direction:column;gap:6px}
+.mock .hd{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.row{display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid var(--hair-soft)}
+.row .l{font-size:15px;font-weight:500}
+.row .fp{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .fp.mono{font-family:"Space Mono",ui-monospace,monospace}
+.act{display:flex;gap:4px}
+.ic{all:unset;cursor:pointer;display:grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--muted);opacity:.45}
+.row:hover .ic{opacity:1}.ic:hover{background:var(--hover);color:var(--ink)}
+.ic svg,.ic .g,.ic .g svg{width:20px;height:20px;display:block}
+.mock .now{margin-top:18px;display:flex;flex-direction:column;gap:6px}
+.mock .now span{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.mock .now b{font-weight:600}
+.mock .big{display:flex;gap:14px;align-items:center;margin-top:8px;color:var(--ink)}
+.mock .big .g{width:40px;height:40px;display:block}.mock .big .g svg{width:40px;height:40px;display:block}
+.mock .ctl{margin-top:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mock .ctl label{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+input[type=range]{width:120px;accent-color:var(--ink)}
+.b{all:unset;cursor:pointer;font-size:13px;font-weight:500;padding:7px 12px;border-radius:8px;border:1px solid var(--hair);color:var(--ink)}
+.b:hover{background:var(--hover)}
+.b:focus-visible,.c:focus-visible,.ic:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{flex:1;min-width:0;padding-block:28px 64px;padding-inline:28px;max-width:980px}
+h1{font-size:18px;font-weight:600;margin:0 0 4px;text-wrap:balance}
+.sub{margin:0 0 20px;color:var(--muted)}
+.set{border-top:1px solid var(--hair);padding-block:16px}
+.set h2{font-family:"Space Mono",ui-monospace,monospace;font-size:11px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 10px}
+.cells{display:flex;flex-wrap:wrap;gap:6px}
+.c{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;width:84px;padding:12px 2px 8px;border:1px solid transparent;border-radius:10px;color:var(--muted);box-sizing:border-box}
+.c:hover{background:var(--hover);color:var(--ink)}
+.c.sel{border-color:var(--ink);color:var(--ink)}
+.c .g{width:22px;height:22px;display:block}.c .g svg{width:22px;height:22px;display:block}
+.c .n{font-family:"Space Mono",ui-monospace,monospace;font-size:9px;line-height:11px;color:var(--faint);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g[data-stroke] svg *{stroke-width:var(--sw)}
+@media (max-width:760px){.app{flex-direction:column}.mock{position:static;height:auto;width:auto;border-right:0;border-bottom:1px solid var(--hair)}main{padding-inline:16px}}
+@media (prefers-reduced-motion:no-preference){.c,.ic{transition:background .12s,opacity .12s}}
+</style>
+<div class="app">
+  <aside class="mock" aria-label="Fonts page preview">
+    <div class="hd">Fonts</div>
+    <div class="row"><span class="l">Primary</span><span class="fp " style="font-family:'Instrument Sans'">Instrument Sans</span><span class="act"><button type="button" class="ic chg" aria-label="Change font"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m7 15 5 5 5-5" />
+  <path d="m7 9 5-5 5 5" />
+</svg></span></button><button type="button" class="ic" aria-label="Preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button></span></div>
+    <div class="row"><span class="l">Secondary</span><span class="fp mono" style="font-family:'Space Mono'">Space Mono</span><span class="act"><button type="button" class="ic chg" aria-label="Change font"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m7 15 5 5 5-5" />
+  <path d="m7 9 5-5 5 5" />
+</svg></span></button><button type="button" class="ic" aria-label="Preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button></span></div>
+    <div class="row"><span class="l">Archivo</span><span class="fp " style="font-family:Archivo,'Instrument Sans'">Archivo</span><span class="act"><button type="button" class="ic chg" aria-label="Change font"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m7 15 5 5 5-5" />
+  <path d="m7 9 5-5 5 5" />
+</svg></span></button><button type="button" class="ic" aria-label="Preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button></span></div>
+    <div class="now"><span>Picked</span><b id="pick">Lucide · chevrons-up-down</b><div class="big"><span class="g" data-stroke id="big"><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m7 15 5 5 5-5" />
+  <path d="m7 9 5-5 5 5" />
+</svg></span></div></div>
+    <div class="ctl"><label for="sw">Stroke</label><input id="sw" type="range" min="1.2" max="2.2" step="0.1" value="1.6"><span id="swv">1.6</span><button type="button" class="b" id="copy">Copy pick</button></div>
+  </aside>
+  <main>
+    <h1>Change icon for fonts</h1>
+    <p class="sub">Click one. The rows on the left take it at real size, drawn at the site's 1.6 stroke.</p>
+    <section class="set"><h2>Lucide</h2><div class="cells"><button type="button" class="c" data-set="lucide" data-name="chevrons-up-down" title="Lucide · chevrons-up-down"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m7 15 5 5 5-5" />
+  <path d="m7 9 5-5 5 5" />
+</svg></span><span class="n">chevrons-up-down</span></button><button type="button" class="c" data-set="lucide" data-name="arrow-left-right" title="Lucide · arrow-left-right"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M8 3 4 7l4 4" />
+  <path d="M4 7h16" />
+  <path d="m16 21 4-4-4-4" />
+  <path d="M20 17H4" />
+</svg></span><span class="n">arrow-left-right</span></button><button type="button" class="c" data-set="lucide" data-name="arrow-right-left" title="Lucide · arrow-right-left"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m16 3 4 4-4 4" />
+  <path d="M20 7H4" />
+  <path d="m8 21-4-4 4-4" />
+  <path d="M4 17h16" />
+</svg></span><span class="n">arrow-right-left</span></button><button type="button" class="c" data-set="lucide" data-name="arrow-up-down" title="Lucide · arrow-up-down"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m21 16-4 4-4-4" />
+  <path d="M17 20V4" />
+  <path d="m3 8 4-4 4 4" />
+  <path d="M7 4v16" />
+</svg></span><span class="n">arrow-up-down</span></button><button type="button" class="c" data-set="lucide" data-name="repeat" title="Lucide · repeat"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m17 2 4 4-4 4" />
+  <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+  <path d="m7 22-4-4 4-4" />
+  <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+</svg></span><span class="n">repeat</span></button><button type="button" class="c" data-set="lucide" data-name="repeat-2" title="Lucide · repeat-2"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m2 9 3-3 3 3" />
+  <path d="M13 18H7a2 2 0 0 1-2-2V6" />
+  <path d="m22 15-3 3-3-3" />
+  <path d="M11 6h6a2 2 0 0 1 2 2v10" />
+</svg></span><span class="n">repeat-2</span></button><button type="button" class="c" data-set="lucide" data-name="refresh-cw" title="Lucide · refresh-cw"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+  <path d="M21 3v5h-5" />
+  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+  <path d="M8 16H3v5" />
+</svg></span><span class="n">refresh-cw</span></button><button type="button" class="c" data-set="lucide" data-name="rotate-cw" title="Lucide · rotate-cw"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+  <path d="M21 3v5h-5" />
+</svg></span><span class="n">rotate-cw</span></button><button type="button" class="c" data-set="lucide" data-name="replace" title="Lucide · replace"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M14 4a1 1 0 0 1 1-1" />
+  <path d="M15 10a1 1 0 0 1-1-1" />
+  <path d="M21 4a1 1 0 0 0-1-1" />
+  <path d="M21 9a1 1 0 0 1-1 1" />
+  <path d="m3 7 3 3 3-3" />
+  <path d="M6 10V5a2 2 0 0 1 2-2h2" />
+  <rect x="3" y="14" width="7" height="7" rx="1" />
+</svg></span><span class="n">replace</span></button><button type="button" class="c" data-set="lucide" data-name="replace-all" title="Lucide · replace-all"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M14 14a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1" />
+  <path d="M14 4a1 1 0 0 1 1-1" />
+  <path d="M15 10a1 1 0 0 1-1-1" />
+  <path d="M19 14a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1" />
+  <path d="M21 4a1 1 0 0 0-1-1" />
+  <path d="M21 9a1 1 0 0 1-1 1" />
+  <path d="m3 7 3 3 3-3" />
+  <path d="M6 10V5a2 2 0 0 1 2-2h2" />
+  <rect x="3" y="14" width="7" height="7" rx="1" />
+</svg></span><span class="n">replace-all</span></button><button type="button" class="c" data-set="lucide" data-name="shuffle" title="Lucide · shuffle"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m18 14 4 4-4 4" />
+  <path d="m18 2 4 4-4 4" />
+  <path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22" />
+  <path d="M2 6h1.972a4 4 0 0 1 3.6 2.2" />
+  <path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45" />
+</svg></span><span class="n">shuffle</span></button><button type="button" class="c" data-set="lucide" data-name="list-restart" title="Lucide · list-restart"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M21 5H3" />
+  <path d="M7 12H3" />
+  <path d="M7 19H3" />
+  <path d="M12 18a5 5 0 0 0 9-3 4.5 4.5 0 0 0-4.5-4.5c-1.33 0-2.54.54-3.41 1.41L11 14" />
+  <path d="M11 10v4h4" />
+</svg></span><span class="n">list-restart</span></button><button type="button" class="c" data-set="lucide" data-name="case-sensitive" title="Lucide · case-sensitive"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16" />
+  <path d="M22 9v7" />
+  <path d="M3.304 13h6.392" />
+  <circle cx="18.5" cy="12.5" r="3.5" />
+</svg></span><span class="n">case-sensitive</span></button><button type="button" class="c" data-set="lucide" data-name="a-large-small" title="Lucide · a-large-small"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16" />
+  <path d="M15.697 14h5.606" />
+  <path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16" />
+  <path d="M3.304 13h6.392" />
+</svg></span><span class="n">a-large-small</span></button><button type="button" class="c" data-set="lucide" data-name="type" title="Lucide · type"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M12 4v16" />
+  <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+  <path d="M9 20h6" />
+</svg></span><span class="n">type</span></button><button type="button" class="c" data-set="lucide" data-name="text-cursor-input" title="Lucide · text-cursor-input"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6" />
+  <path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7" />
+  <path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1" />
+  <path d="M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1" />
+  <path d="M9 6v12" />
+</svg></span><span class="n">text-cursor-input</span></button><button type="button" class="c" data-set="lucide" data-name="pen-line" title="Lucide · pen-line"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M13 21h8" />
+  <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+</svg></span><span class="n">pen-line</span></button><button type="button" class="c" data-set="lucide" data-name="square-pen" title="Lucide · square-pen"><span class="g" data-stroke><svg aria-hidden="true"
+ 
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+  <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+</svg></span><span class="n">square-pen</span></button></div></section>
+<section class="set"><h2>Tabler</h2><div class="cells"><button type="button" class="c" data-set="tabler" data-name="selector" title="Tabler · selector"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 9l4 -4l4 4" />
+  <path d="M16 15l-4 4l-4 -4" />
+</svg></span><span class="n">selector</span></button><button type="button" class="c" data-set="tabler" data-name="arrows-left-right" title="Tabler · arrows-left-right"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M21 17l-18 0" />
+  <path d="M6 10l-3 -3l3 -3" />
+  <path d="M3 7l18 0" />
+  <path d="M18 20l3 -3l-3 -3" />
+</svg></span><span class="n">arrows-left-right</span></button><button type="button" class="c" data-set="tabler" data-name="arrows-exchange" title="Tabler · arrows-exchange"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M7 10h14l-4 -4" />
+  <path d="M17 14h-14l4 4" />
+</svg></span><span class="n">arrows-exchange</span></button><button type="button" class="c" data-set="tabler" data-name="arrows-exchange-2" title="Tabler · arrows-exchange-2"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M17 10h-14l4 -4" />
+  <path d="M7 14h14l-4 4" />
+</svg></span><span class="n">arrows-exchange-2</span></button><button type="button" class="c" data-set="tabler" data-name="arrows-up-down" title="Tabler · arrows-up-down"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M7 3l0 18" />
+  <path d="M10 6l-3 -3l-3 3" />
+  <path d="M20 18l-3 3l-3 -3" />
+  <path d="M17 21l0 -18" />
+</svg></span><span class="n">arrows-up-down</span></button><button type="button" class="c" data-set="tabler" data-name="switch-horizontal" title="Tabler · switch-horizontal"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M16 3l4 4l-4 4" />
+  <path d="M10 7l10 0" />
+  <path d="M8 13l-4 4l4 4" />
+  <path d="M4 17l9 0" />
+</svg></span><span class="n">switch-horizontal</span></button><button type="button" class="c" data-set="tabler" data-name="switch-vertical" title="Tabler · switch-vertical"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 8l4 -4l4 4" />
+  <path d="M7 4l0 9" />
+  <path d="M13 16l4 4l4 -4" />
+  <path d="M17 10l0 10" />
+</svg></span><span class="n">switch-vertical</span></button><button type="button" class="c" data-set="tabler" data-name="repeat" title="Tabler · repeat"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 12v-3a3 3 0 0 1 3 -3h13m-3 -3l3 3l-3 3" />
+  <path d="M20 12v3a3 3 0 0 1 -3 3h-13m3 3l-3 -3l3 -3" />
+</svg></span><span class="n">repeat</span></button><button type="button" class="c" data-set="tabler" data-name="refresh" title="Tabler · refresh"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+  <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+</svg></span><span class="n">refresh</span></button><button type="button" class="c" data-set="tabler" data-name="replace" title="Tabler · replace"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+  <path d="M15 16a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+  <path d="M21 11v-3a2 2 0 0 0 -2 -2h-6l3 3m0 -6l-3 3" />
+  <path d="M3 13v3a2 2 0 0 0 2 2h6l-3 -3m0 6l3 -3" />
+</svg></span><span class="n">replace</span></button><button type="button" class="c" data-set="tabler" data-name="arrows-shuffle" title="Tabler · arrows-shuffle"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M18 4l3 3l-3 3" />
+  <path d="M18 20l3 -3l-3 -3" />
+  <path d="M3 7h3a5 5 0 0 1 5 5a5 5 0 0 0 5 5h5" />
+  <path d="M21 7h-5a4.978 4.978 0 0 0 -3 1m-4 8a4.984 4.984 0 0 1 -3 1h-3" />
+</svg></span><span class="n">arrows-shuffle</span></button><button type="button" class="c" data-set="tabler" data-name="letter-case" title="Tabler · letter-case"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M14 15.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0" />
+  <path d="M3 19v-10.5a3.5 3.5 0 0 1 7 0v10.5" />
+  <path d="M3 13h7" />
+  <path d="M21 12v7" />
+</svg></span><span class="n">letter-case</span></button><button type="button" class="c" data-set="tabler" data-name="typography" title="Tabler · typography"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 20l3 0" />
+  <path d="M14 20l7 0" />
+  <path d="M6.9 15l6.9 0" />
+  <path d="M10.2 6.3l5.8 13.7" />
+  <path d="M5 20l6 -16l2 0l7 16" />
+</svg></span><span class="n">typography</span></button><button type="button" class="c" data-set="tabler" data-name="text-size" title="Tabler · text-size"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 7v-2h13v2" />
+  <path d="M10 5v14" />
+  <path d="M12 19h-4" />
+  <path d="M15 13v-1h6v1" />
+  <path d="M18 12v7" />
+  <path d="M17 19h2" />
+</svg></span><span class="n">text-size</span></button><button type="button" class="c" data-set="tabler" data-name="transform" title="Tabler · transform"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 6a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+  <path d="M21 11v-3a2 2 0 0 0 -2 -2h-6l3 3m0 -6l-3 3" />
+  <path d="M3 13v3a2 2 0 0 0 2 2h6l-3 -3m0 6l3 -3" />
+  <path d="M15 18a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+</svg></span><span class="n">transform</span></button><button type="button" class="c" data-set="tabler" data-name="exchange" title="Tabler · exchange"><span class="g" data-stroke><svg aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+ 
+ 
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+ 
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+  <path d="M17 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+  <path d="M19 8v5a5 5 0 0 1 -5 5h-3l3 -3m0 6l-3 -3" />
+  <path d="M5 16v-5a5 5 0 0 1 5 -5h3l-3 -3m0 6l3 -3" />
+</svg></span><span class="n">exchange</span></button></div></section>
+<section class="set"><h2>Phosphor</h2><div class="cells"><button type="button" class="c" data-set="phosphor" data-name="caret-up-down" title="Phosphor · caret-up-down"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M180.24,171.76a6,6,0,0,1,0,8.48l-48,48a6,6,0,0,1-8.48,0l-48-48a6,6,0,0,1,8.48-8.48L128,215.51l43.76-43.75A6,6,0,0,1,180.24,171.76Zm-96-87.52L128,40.49l43.76,43.75a6,6,0,0,0,8.48-8.48l-48-48a6,6,0,0,0-8.48,0l-48,48a6,6,0,0,0,8.48,8.48Z"/></svg></span><span class="n">caret-up-down</span></button><button type="button" class="c" data-set="phosphor" data-name="arrows-left-right" title="Phosphor · arrows-left-right"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M212.24,171.76a6,6,0,0,1,0,8.48l-32,32a6,6,0,0,1-8.48-8.48L193.51,182H48a6,6,0,0,1,0-12H193.51l-21.75-21.76a6,6,0,0,1,8.48-8.48ZM75.76,116.24a6,6,0,0,0,8.48-8.48L62.49,86H208a6,6,0,0,0,0-12H62.49L84.24,52.24a6,6,0,0,0-8.48-8.48l-32,32a6,6,0,0,0,0,8.48Z"/></svg></span><span class="n">arrows-left-right</span></button><button type="button" class="c" data-set="phosphor" data-name="arrows-down-up" title="Phosphor · arrows-down-up"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M116.24,171.76a6,6,0,0,1,0,8.48l-32,32a6,6,0,0,1-8.48,0l-32-32a6,6,0,0,1,8.48-8.48L74,193.51V48a6,6,0,0,1,12,0V193.51l21.76-21.75A6,6,0,0,1,116.24,171.76Zm96-96-32-32a6,6,0,0,0-8.48,0l-32,32a6,6,0,0,0,8.48,8.48L170,62.49V208a6,6,0,0,0,12,0V62.49l21.76,21.75a6,6,0,0,0,8.48-8.48Z"/></svg></span><span class="n">arrows-down-up</span></button><button type="button" class="c" data-set="phosphor" data-name="arrows-clockwise" title="Phosphor · arrows-clockwise"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M222,48V96a6,6,0,0,1-6,6H168a6,6,0,0,1,0-12h33.52L183.47,72a81.51,81.51,0,0,0-57.53-24h-.46A81.5,81.5,0,0,0,68.19,71.28a6,6,0,1,1-8.38-8.58,93.38,93.38,0,0,1,65.67-26.76H126a93.45,93.45,0,0,1,66,27.53l18,18V48a6,6,0,0,1,12,0ZM187.81,184.72a81.5,81.5,0,0,1-57.29,23.34h-.46a81.51,81.51,0,0,1-57.53-24L54.48,166H88a6,6,0,0,0,0-12H40a6,6,0,0,0-6,6v48a6,6,0,0,0,12,0V174.48l18,18.05a93.45,93.45,0,0,0,66,27.53h.52a93.38,93.38,0,0,0,65.67-26.76,6,6,0,1,0-8.38-8.58Z"/></svg></span><span class="n">arrows-clockwise</span></button><button type="button" class="c" data-set="phosphor" data-name="arrows-counter-clockwise" title="Phosphor · arrows-counter-clockwise"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M88,102H40a6,6,0,0,1-6-6V48a6,6,0,0,1,12,0V81.52l18-18a93.45,93.45,0,0,1,66-27.53h.52A93.39,93.39,0,0,1,196.19,62.7a6,6,0,0,1-8.38,8.58A82,82,0,0,0,72.53,72L54.48,90H88a6,6,0,0,1,0,12Zm128,52H168a6,6,0,0,0,0,12h33.52l-18.05,18a81.51,81.51,0,0,1-57.53,24h-.46a81.5,81.5,0,0,1-57.29-23.34,6,6,0,0,0-8.38,8.58,93.39,93.39,0,0,0,65.67,26.76H126a93.45,93.45,0,0,0,66-27.53l18-18.05V208a6,6,0,0,0,12,0V160A6,6,0,0,0,216,154Z"/></svg></span><span class="n">arrows-counter-clockwise</span></button><button type="button" class="c" data-set="phosphor" data-name="repeat" title="Phosphor · repeat"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M26,128A70.08,70.08,0,0,1,96,58H209.51L195.76,44.24a6,6,0,0,1,8.48-8.48l24,24a6,6,0,0,1,0,8.48l-24,24a6,6,0,0,1-8.48-8.48L209.51,70H96a58.07,58.07,0,0,0-58,58,6,6,0,0,1-12,0Zm198-6a6,6,0,0,0-6,6,58.07,58.07,0,0,1-58,58H46.49l13.75-13.76a6,6,0,0,0-8.48-8.48l-24,24a6,6,0,0,0,0,8.48l24,24a6,6,0,0,0,8.48-8.48L46.49,198H160a70.08,70.08,0,0,0,70-70A6,6,0,0,0,224,122Z"/></svg></span><span class="n">repeat</span></button><button type="button" class="c" data-set="phosphor" data-name="swap" title="Phosphor · swap"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M222,48V152a14,14,0,0,1-14,14H94.49l13.75,13.76a6,6,0,1,1-8.48,8.48l-24-24a6,6,0,0,1,0-8.48l24-24a6,6,0,0,1,8.48,8.48L94.49,154H208a2,2,0,0,0,2-2V48a2,2,0,0,0-2-2H96a2,2,0,0,0-2,2v8a6,6,0,0,1-12,0V48A14,14,0,0,1,96,34H208A14,14,0,0,1,222,48ZM168,194a6,6,0,0,0-6,6v8a2,2,0,0,1-2,2H48a2,2,0,0,1-2-2V104a2,2,0,0,1,2-2H161.51l-13.75,13.76a6,6,0,1,0,8.48,8.48l24-24a6,6,0,0,0,0-8.48l-24-24a6,6,0,0,0-8.48,8.48L161.51,90H48a14,14,0,0,0-14,14V208a14,14,0,0,0,14,14H160a14,14,0,0,0,14-14v-8A6,6,0,0,0,168,194Z"/></svg></span><span class="n">swap</span></button><button type="button" class="c" data-set="phosphor" data-name="shuffle" title="Phosphor · shuffle"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M236.24,179.76a6,6,0,0,1,0,8.48l-24,24a6,6,0,0,1-8.48-8.48L217.52,190H200.94a70.16,70.16,0,0,1-57-29.31l-41.71-58.4A58.11,58.11,0,0,0,55.06,78H32a6,6,0,0,1,0-12H55.06a70.16,70.16,0,0,1,57,29.31l41.71,58.4A58.11,58.11,0,0,0,200.94,178h16.58l-13.76-13.76a6,6,0,0,1,8.48-8.48Zm-92.06-74.41a5.91,5.91,0,0,0,3.48,1.12,6,6,0,0,0,4.89-2.51l1.19-1.67A58.11,58.11,0,0,1,200.94,78h16.58L203.76,91.76a6,6,0,1,0,8.48,8.48l24-24a6,6,0,0,0,0-8.48l-24-24a6,6,0,0,0-8.48,8.48L217.52,66H200.94a70.16,70.16,0,0,0-57,29.31L142.78,97A6,6,0,0,0,144.18,105.35Zm-32.36,45.3a6,6,0,0,0-8.37,1.39l-1.19,1.67A58.11,58.11,0,0,1,55.06,178H32a6,6,0,0,0,0,12H55.06a70.16,70.16,0,0,0,57-29.31l1.19-1.67A6,6,0,0,0,111.82,150.65Z"/></svg></span><span class="n">shuffle</span></button><button type="button" class="c" data-set="phosphor" data-name="text-aa" title="Phosphor · text-aa"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M85.43,53.45a6,6,0,0,0-10.86,0l-64,136a6,6,0,1,0,10.86,5.11L38.63,158h82.74l17.2,36.55a6,6,0,1,0,10.86-5.11ZM44.28,146,80,70.09,115.72,146ZM200,98c-12.21,0-21.71,3.28-28.23,9.74a6,6,0,0,0,8.46,8.52c4.18-4.15,10.84-6.26,19.77-6.26,14.34,0,26,9.87,26,22v7.24A40.36,40.36,0,0,0,200,130c-20.95,0-38,15.25-38,34s17.05,34,38,34a40.36,40.36,0,0,0,26-9.24V192a6,6,0,0,0,12,0V132C238,113.25,221,98,200,98Zm0,88c-14.34,0-26-9.87-26-22s11.66-22,26-22,26,9.87,26,22S214.34,186,200,186Z"/></svg></span><span class="n">text-aa</span></button><button type="button" class="c" data-set="phosphor" data-name="text-t" title="Phosphor · text-t"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M206,56V88a6,6,0,0,1-12,0V62H134V194h26a6,6,0,0,1,0,12H96a6,6,0,0,1,0-12h26V62H62V88a6,6,0,0,1-12,0V56a6,6,0,0,1,6-6H200A6,6,0,0,1,206,56Z"/></svg></span><span class="n">text-t</span></button><button type="button" class="c" data-set="phosphor" data-name="pencil-simple-line" title="Phosphor · pencil-simple-line"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M225.91,74.79,181.22,30.1a14,14,0,0,0-19.8,0L38.1,153.41a13.94,13.94,0,0,0-4.1,9.9V208a14,14,0,0,0,14,14H216a6,6,0,0,0,0-12H110.49L225.91,94.59A14,14,0,0,0,225.91,74.79ZM93.52,210H48a2,2,0,0,1-2-2V163.31a2,2,0,0,1,.59-1.41L136,72.49,183.52,120ZM217.42,86.1,192,111.52,144.49,64,169.9,38.59a2,2,0,0,1,2.83,0l44.69,44.68A2,2,0,0,1,217.42,86.1Z"/></svg></span><span class="n">pencil-simple-line</span></button><button type="button" class="c" data-set="phosphor" data-name="arrows-horizontal" title="Phosphor · arrows-horizontal"><span class="g"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M236.24,132.24l-32,32a6,6,0,0,1-8.48-8.48L217.51,134h-179l21.75,21.76a6,6,0,1,1-8.48,8.48l-32-32a6,6,0,0,1,0-8.48l32-32a6,6,0,0,1,8.48,8.48L38.49,122h179l-21.75-21.76a6,6,0,0,1,8.48-8.48l32,32A6,6,0,0,1,236.24,132.24Z"/></svg></span><span class="n">arrows-horizontal</span></button></div></section>
+<section class="set"><h2>Heroicons</h2><div class="cells"><button type="button" class="c" data-set="heroicons" data-name="chevron-up-down" title="Heroicons · chevron-up-down"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"/>
+</svg></span><span class="n">chevron-up-down</span></button><button type="button" class="c" data-set="heroicons" data-name="arrows-right-left" title="Heroicons · arrows-right-left"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
+</svg></span><span class="n">arrows-right-left</span></button><button type="button" class="c" data-set="heroicons" data-name="arrows-up-down" title="Heroicons · arrows-up-down"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"/>
+</svg></span><span class="n">arrows-up-down</span></button><button type="button" class="c" data-set="heroicons" data-name="arrow-path" title="Heroicons · arrow-path"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/>
+</svg></span><span class="n">arrow-path</span></button><button type="button" class="c" data-set="heroicons" data-name="arrow-path-rounded-square" title="Heroicons · arrow-path-rounded-square"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3"/>
+</svg></span><span class="n">arrow-path-rounded-square</span></button><button type="button" class="c" data-set="heroicons" data-name="arrow-uturn-left" title="Heroicons · arrow-uturn-left"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"/>
+</svg></span><span class="n">arrow-uturn-left</span></button><button type="button" class="c" data-set="heroicons" data-name="pencil-square" title="Heroicons · pencil-square"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/>
+</svg></span><span class="n">pencil-square</span></button><button type="button" class="c" data-set="heroicons" data-name="adjustments-horizontal" title="Heroicons · adjustments-horizontal"><span class="g" data-stroke><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"/>
+</svg></span><span class="n">adjustments-horizontal</span></button></div></section>
+<section class="set"><h2>Iconoir</h2><div class="cells"><button type="button" class="c" data-set="iconoir" data-name="sort" title="Iconoir · sort"><span class="g" data-stroke><svg aria-hidden="true" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 14H2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8 10H2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6 6H2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12 18H2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19 20V4M19 20L22 17M19 20L16 17M19 4L22 7M19 4L16 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">sort</span></button><button type="button" class="c" data-set="iconoir" data-name="data-transfer-both" title="Iconoir · data-transfer-both"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M17 20V4M17 4L20 7M17 4L14 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7 4V20M7 20L10 17M7 20L4 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">data-transfer-both</span></button><button type="button" class="c" data-set="iconoir" data-name="refresh" title="Iconoir · refresh"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M21.8883 13.5C21.1645 18.3113 17.013 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C16.1006 2 19.6248 4.46819 21.1679 8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17 8H21.4C21.7314 8 22 7.73137 22 7.4V3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">refresh</span></button><button type="button" class="c" data-set="iconoir" data-name="refresh-double" title="Iconoir · refresh-double"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M21.1679 8C19.6247 4.46819 16.1006 2 11.9999 2C6.81459 2 2.55104 5.94668 2.04932 11" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17 8H21.4C21.7314 8 22 7.73137 22 7.4V3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M2.88146 16C4.42458 19.5318 7.94874 22 12.0494 22C17.2347 22 21.4983 18.0533 22 13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7.04932 16H2.64932C2.31795 16 2.04932 16.2686 2.04932 16.6V21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">refresh-double</span></button><button type="button" class="c" data-set="iconoir" data-name="repeat" title="Iconoir · repeat"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M17 17H8C6.33333 17 3 16 3 12C3 8 6.33333 7 8 7H16C17.6667 7 21 8 21 12C21 13.4943 20.5348 14.57 19.865 15.3312" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.5 14.5L17 17L14.5 19.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">repeat</span></button><button type="button" class="c" data-set="iconoir" data-name="shuffle" title="Iconoir · shuffle"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M22 6.99999C19 6.99999 13.5 6.99999 11.5 12.5C9.5 18 5 18 2 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M20 5C20 5 21.219 6.21895 22 7C21.219 7.78105 20 9 20 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22 18C19 18 13.5 18 11.5 12.5C9.5 6.99999 5 7.00001 2 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M20 20C20 20 21.219 18.781 22 18C21.219 17.219 20 16 20 16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">shuffle</span></button><button type="button" class="c" data-set="iconoir" data-name="text" title="Iconoir · text"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M19 7V5L5 5V7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12 5L12 19M12 19H10M12 19H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">text</span></button><button type="button" class="c" data-set="iconoir" data-name="text-size" title="Iconoir · text-size"><span class="g" data-stroke><svg aria-hidden="true" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3 7L3 5L17 5V7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10 5L10 19M10 19H12M10 19H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13 14L13 12H21V14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17 12V19M17 19H15.5M17 19H18.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">text-size</span></button><button type="button" class="c" data-set="iconoir" data-name="arrow-separate" title="Iconoir · arrow-separate"><span class="g" data-stroke><svg aria-hidden="true" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M8 7L3 12L8 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M16 7L21 12L16 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">arrow-separate</span></button><button type="button" class="c" data-set="iconoir" data-name="arrow-union" title="Iconoir · arrow-union"><span class="g" data-stroke><svg aria-hidden="true" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M20 7L15 12L20 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4 7L9 12L4 17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">arrow-union</span></button><button type="button" class="c" data-set="iconoir" data-name="edit-pencil" title="Iconoir · edit-pencil"><span class="g" data-stroke><svg aria-hidden="true" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M14.3632 5.65156L15.8431 4.17157C16.6242 3.39052 17.8905 3.39052 18.6716 4.17157L20.0858 5.58579C20.8668 6.36683 20.8668 7.63316 20.0858 8.41421L18.6058 9.8942M14.3632 5.65156L4.74749 15.2672C4.41542 15.5993 4.21079 16.0376 4.16947 16.5054L3.92738 19.2459C3.87261 19.8659 4.39148 20.3848 5.0115 20.33L7.75191 20.0879C8.21972 20.0466 8.65806 19.8419 8.99013 19.5099L18.6058 9.8942M14.3632 5.65156L18.6058 9.8942" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">edit-pencil</span></button><button type="button" class="c" data-set="iconoir" data-name="design-pencil" title="Iconoir · design-pencil"><span class="g" data-stroke><svg aria-hidden="true" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8 21.1679V14L12 7L16 14V21.1679" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8 14C8 14 9.12676 15 10 15C10.8732 15 12 14 12 14C12 14 13.1268 15 14 15C14.8732 15 16 14 16 14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="n">design-pencil</span></button></div></section>
+  </main>
+</div>
+<script>
+(() => {
+  const KEY = 'font-change-icon-v1'
+  const cells = document.querySelectorAll('.c'), pick = document.getElementById('pick'), big = document.getElementById('big')
+  function choose(c) {
+    cells.forEach((x) => x.classList.toggle('sel', x === c))
+    const g = c.querySelector('.g')
+    document.querySelectorAll('.chg .g').forEach((t) => { t.innerHTML = g.innerHTML; t.toggleAttribute('data-stroke', g.hasAttribute('data-stroke')) })
+    big.innerHTML = g.innerHTML; big.toggleAttribute('data-stroke', g.hasAttribute('data-stroke'))
+    pick.textContent = c.title
+    try { localStorage.setItem(KEY, c.dataset.set + '/' + c.dataset.name) } catch {}
+  }
+  cells.forEach((c) => c.addEventListener('click', () => choose(c)))
+  let saved = null; try { saved = localStorage.getItem(KEY) } catch {}
+  const start = saved && document.querySelector('.c[data-set="' + saved.split('/')[0] + '"][data-name="' + saved.split('/')[1] + '"]')
+  choose(start || document.querySelector('.c[data-set="lucide"][data-name="chevrons-up-down"]') || cells[0])
+  document.getElementById('sw').addEventListener('input', (e) => { document.documentElement.style.setProperty('--sw', e.target.value); document.getElementById('swv').textContent = e.target.value })
+  document.getElementById('copy').addEventListener('click', async (e) => {
+    try { await navigator.clipboard.writeText(pick.textContent); e.target.textContent = 'Copied' } catch { const r = document.createRange(); r.selectNodeContents(pick); getSelection().removeAllRanges(); getSelection().addRange(r); e.target.textContent = 'Selected' }
+    setTimeout(() => (e.target.textContent = 'Copy pick'), 1500)
+  })
+})()
+</script>
