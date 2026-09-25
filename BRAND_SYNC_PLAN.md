@@ -47,6 +47,18 @@ media:      the existing rows, now including purpose 'home_icon' (180px PNG) and
   name. (Review 2026-09-24: Primary/Secondary no longer retitle a font; the site's own
   "Primary font" entry is the one that follows the slot. `editorFontSlotTitles`.)
 
+## Status (2026-09-24)
+
+Phases 1–3 done: migration live (checked: every site's payload unchanged apart from the new
+keys), bridge 0.41.0 published after a five-agent review + fixes (1d351f7), Skeen's Brand
+seeded as a DRAFT. Phase 4 built on skeen-website `feat/brand-sync` (8b3d787), committed
+locally, NOT pushed or deployed. Follow-ups the review left open: a colour added before its
+namesake is deleted gets `cream-2`, so the site's `--brand-cream` falls back silently; one
+Brand Publish makes up to 4 publish moments (not atomic); a mixed Revert doesn't say what it
+skipped; editor swatches save the hex, not the brand key; the door doesn't re-check font
+family/path shape (the bridge does); Google Fonts send fan IPs to Google (skeen avoids it
+with `selfHosted`).
+
 ## Phases
 
 1. **Dashboard + database** (this repo): migration (colour `key`, colours + theme colour

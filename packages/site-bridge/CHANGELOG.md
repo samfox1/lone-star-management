@@ -80,8 +80,9 @@ Nothing since 0.41.0.
 
 ## 0.41.0 — the site wears the Brand page (BRAND_SYNC_PLAN phase 2)
 
-*Built 2026-09-24. **Not published yet**: it goes to the registry only with Sam's yes,
-and each site then redeploys without build cache.*
+*Published 2026-09-24, after a five-agent review (bugs, security, publish pipeline, tests,
+visual). Each site redeploys WITHOUT build cache to pick it up. skeen's adoption is on its
+`feat/brand-sync` branch, not deployed yet.*
 
 **Site action: render `brandCss(site, { supabaseUrl })` in one `<style>` after your own
 stylesheets, and map your colour tokens onto `--brand-<key>` with your current value as the
