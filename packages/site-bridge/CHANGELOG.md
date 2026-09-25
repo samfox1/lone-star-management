@@ -95,18 +95,23 @@ reader already drops a Google row, whose `path` is null.
 | export | returns |
 | --- | --- |
 | `brandColorCss(brand)` | `:root{--brand-<key>:#rrggbb;…}` in the published order, or `''` |
-| `brandFontCss(fonts, slots, { supabaseUrl, googleImport? })` | the css2 `@import` (first), an `@font-face` per upload, `.font-<family>` per font, `:root{--font-<slot>:…}` |
-| `brandCss(payload, { supabaseUrl, googleImport? })` | fonts then colours: the one order that keeps the `@import` first |
-| `googleFontsHref(fonts)` | the css2 URL for a `<link>`, or null |
+| `brandFontCss(fonts, slots, { supabaseUrl, googleImport?, selfHosted? })` | the css2 `@import` (first), an `@font-face` per upload, `.font-<family>` per font, `:root{--font-<slot>:'…',sans-serif}` |
+| `brandCss(payload, { supabaseUrl, googleImport?, selfHosted? })` | fonts then colours: the one order that keeps the `@import` first |
+| `googleFontsHref(fonts, { selfHosted? })` | the css2 URL for a `<link>`, or null |
 | `brandHead(payload, { supabaseUrl })` | `{ themeColor, appleTouchIcon }`: the browser-bar hex, and the `home_icon` URL falling back to the `favicon` |
 | `GOOGLE_FONT_WEIGHTS` | `[100 … 900]`, requested as a DISCRETE list |
 
-**Every value is validated, and anything that fails is dropped.** A colour key must be
-`[a-z0-9-]+` (≤ 64) and a hex `#rrggbb` (lowercased on the way out). A family token must be
+**`selfHosted`: Google families the site already serves** (next/font) are left out of the
+css2 request, keeping their class and slot variable. next/font names its faces by the plain
+family, so without this Google's sheet would take over the site's own files. skeen passes
+every family it loads with next/font.
+
+**Every value is validated, and anything that fails is dropped.** A colour key must be the
+door's shape, lowercase words joined by single hyphens (≤ 40), and a hex `#rrggbb` (lowercased on the way out). A family token must be
 lone-star's sanitized shape and not a slot or Tailwind font utility. A Google family must be
 ASCII words joined by single spaces (≤ 64). A font path must be plain with no `..`, and
 `supabaseUrl` a bare http(s) origin. Each guard was deleted once and its test went red,
-and a targeted Stryker run kills 276 of 277 mutants (the survivor is equivalent).
+and a targeted Stryker run killed 276 of 277 mutants before `selfHosted` and the slot fallback joined (the survivor is equivalent; each new rule was broken by hand once and went red).
 
 **Why the weights are a list, not a range.** Google's css2 API answers `400`, failing the
 whole stylesheet, to `wght@100..900` on a family that is not variable (Anton), but serves a

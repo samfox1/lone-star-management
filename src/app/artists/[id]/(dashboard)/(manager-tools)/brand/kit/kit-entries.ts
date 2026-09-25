@@ -10,6 +10,8 @@
  * the layer that keeps them readable and keeps `.png` at the END when two titles collide.
  */
 import { FONTS_BUCKET, FONT_SLOTS } from '@/lib/fonts'
+import { isGoogleFamilyName } from '@/lib/google-fonts'
+import type { BrandColor } from '@/lib/manager-tools/brand/brand-kit'
 import { isOwnedStoragePath } from '@/lib/upload'
 
 /**
@@ -25,8 +27,11 @@ export const MAX_KIT_BYTES = 4 * 1024 * 1024
  *  purposes the bridge's wire type may not list yet (`logo`, `home_icon`). */
 export type LiveBrand = {
   media?: { purpose?: string | null; path?: string | null; label?: string | null }[] | null
-  fonts?: { family?: string | null; label?: string | null; path?: string | null }[] | null
+  fonts?:
+    | { family?: string | null; label?: string | null; path?: string | null; source?: string | null; google_family?: string | null }[]
+    | null
   font_slots?: Record<string, string | null | undefined> | null
+  brand?: { colors?: { key?: string | null; name?: string | null; hex?: string | null }[] | null } | null
 } | null
 
 export type KitEntry = { name: string; bucket: 'media' | typeof FONTS_BUCKET; path: string }
@@ -89,13 +94,26 @@ export function planBrandKit(artistId: string, live: LiveBrand): { entries: KitE
   const fonts = live.fonts ?? []
   const slots = live.font_slots ?? {}
   const shipped = new Set<string>()
+  const googled = new Set<string>()
   for (const slot of FONT_SLOTS) {
     const family = slots[slot]
     if (!family) continue
     const font = fonts.find((f) => f?.family === family)
-    if (!font || !font.path || shipped.has(font.path)) continue
+    if (!font) continue
+    const base = `font-${nameSlug(font.label) || nameSlug(family) || 'font'}`
+    // A Google font has no file (20260925120000: the door gives it no path). Say where it
+    // lives rather than leave the manager wondering why Primary is missing. The family goes
+    // into the line only when it is Google-shaped: skipped.txt is one line per file.
+    if (font.source === 'google') {
+      if (googled.has(family)) continue
+      googled.add(family)
+      const where = isGoogleFamilyName(font.google_family) ? `get ${font.google_family}` : 'get it'
+      skipped.push({ name: base, reason: `a Google font, ${where} from fonts.google.com` })
+      continue
+    }
+    if (!font.path || shipped.has(font.path)) continue
     shipped.add(font.path)
-    add(`font-${nameSlug(font.label) || nameSlug(family) || 'font'}`, FONTS_BUCKET, font.path)
+    add(base, FONTS_BUCKET, font.path)
   }
 
   for (const row of media) {
@@ -104,6 +122,17 @@ export function planBrandKit(artistId: string, live: LiveBrand): { entries: KitE
   }
 
   return { entries, skipped }
+}
+
+/**
+ * colors.txt's palette: the door's `brand.colors` (20260925120000), in the site's order —
+ * the PUBLISHED colours, like every other file in the kit, never the working rows. Empty
+ * before anything is published and on a door older than the key.
+ */
+export function liveColors(live: LiveBrand): BrandColor[] {
+  return (live?.brand?.colors ?? []).flatMap((c) =>
+    typeof c?.name === 'string' && typeof c.hex === 'string' ? [{ name: c.name, hex: c.hex }] : [],
+  )
 }
 
 /** skipped.txt: one line per file left out, `name: why`. */

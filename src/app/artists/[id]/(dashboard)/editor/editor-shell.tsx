@@ -144,11 +144,11 @@ export function runtimeImageFields(
 }
 
 /**
- * A font slot's TITLE is what the editor's font list shows for its font
+ * An added font slot's TITLE is what the editor's font list shows for its font
  * (BRAND_PAGE_PLAN.md, Fonts: "Custom slot titles are what the site editor's font list
- * shows"; BRAND_SYNC_PLAN.md: Google brand fonts "by their slot titles" — the page passes
- * Primary and Secondary first). A font in two titled slots takes the first slot's title; a
- * font in none — or in a slot left untitled — keeps its own label. Any other field on a
+ * shows"; Primary/Secondary never title a font — editorFontSlotTitles). A font in two
+ * titled slots takes the first slot's title; a font in none — or in a slot left
+ * untitled — keeps its own label. Any other field on a
  * font (a Google font's `googleFamily`) rides through untouched. Applied here, before `withUploadedFonts`
  * folds the fonts into the manifest's options, so the dropdown never learns there was a
  * second name.

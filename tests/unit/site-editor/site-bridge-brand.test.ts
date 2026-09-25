@@ -30,6 +30,8 @@ import {
 // The APP's reserved list: an independent source, so the bridge's copy is checked against
 // what lone-star refuses rather than against itself.
 import { RESERVED_FAMILIES as APP_RESERVED } from '@/lib/fonts'
+// The PREVIEW's copy of the door's colour rules: the bridge must pass exactly what it passes.
+import { brandColorsPayload } from '@/lib/site'
 
 const SB = 'https://sb.co'
 const OPTS = { supabaseUrl: SB }
@@ -127,7 +129,7 @@ describe('brandColorCss', () => {
     expect(brandColorCss({ colors: 'primary' as unknown as SiteBrand['colors'], theme_color: null })).toBe('')
   })
 
-  it('SECURITY: drops every key that is not [a-z0-9-]+ — a key is a property NAME', () => {
+  it('SECURITY: drops every key that is not the door’s shape — a key is a property NAME', () => {
     const hostile = [
       'Primary', // uppercase: not a key the door ever writes
       'brand primary',
@@ -137,16 +139,30 @@ describe('brandColorCss', () => {
       'crème',
       '',
       'x\n',
-      'k'.repeat(65), // absurd length
+      '-x', // hyphens only BETWEEN words, as the door and the DB check write them
+      'x-',
+      'a--b',
+      'k'.repeat(41), // longer than any key the door can hold
     ]
     const brand: SiteBrand = {
       colors: [...hostile.map((key) => ({ key, name: 'n', hex: '#123456' })), { key: 'ok-2', name: 'n', hex: '#abcdef' }],
       theme_color: null,
     }
     expect(brandColorCss(brand)).toBe(':root{--brand-ok-2:#abcdef}')
-    // The length cap is a ceiling, not an off-by-one: 64 is a key, 65 is not.
-    const k64 = 'k'.repeat(64)
-    expect(brandColorCss({ colors: [{ key: k64, name: 'n', hex: '#123456' }], theme_color: null })).toBe(`:root{--brand-${k64}:#123456}`)
+    // The length cap is a ceiling, not an off-by-one: 40 is a key, 41 is not.
+    const k40 = 'k'.repeat(40)
+    expect(brandColorCss({ colors: [{ key: k40, name: 'n', hex: '#123456' }], theme_color: null })).toBe(`:root{--brand-${k40}:#123456}`)
+  })
+
+  it('SECURITY: passes exactly the keys the door passes (checked against the preview’s copy of its rule)', () => {
+    // Two copies of one rule drift; this is the check that they have not. lib/site.ts
+    // mirrors the door's `brand.colors` filter for the preview, so it stands in for the SQL.
+    const keys = ['primary', 'cream-2', 'a1', '9', 'Primary', '-x', 'x-', 'a--b', 'a_b', 'k'.repeat(40), 'k'.repeat(41), '']
+    for (const key of keys) {
+      const row = { key, name: 'n', hex: '#123456' }
+      const bridge = brandColorCss({ colors: [row], theme_color: null }) !== ''
+      expect(bridge, key).toBe(brandColorsPayload([row]).length === 1)
+    }
   })
 
   it('SECURITY: drops every hex that is not #rrggbb — a hex is a property VALUE', () => {
@@ -265,7 +281,7 @@ describe('brandFontCss', () => {
         `.font-archivo{font-family:'Archivo',sans-serif}` +
         `.font-inter{font-family:'Inter',sans-serif}` +
         SORG_FACE +
-        `:root{--font-primary:'Archivo';--font-secondary:'Inter';--font-custom-1:'sorg'}`,
+        `:root{--font-primary:'Archivo',sans-serif;--font-secondary:'Inter',sans-serif;--font-custom-1:'sorg',sans-serif}`,
     )
   })
 
@@ -283,7 +299,7 @@ describe('brandFontCss', () => {
     expect(brandFontCss([big], { primary: 'big-shoulders-display' }, OPTS)).toBe(
       `@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@${W}&display=swap');` +
         `.font-big-shoulders-display{font-family:'Big Shoulders Display',sans-serif}` +
-        `:root{--font-primary:'Big Shoulders Display'}`,
+        `:root{--font-primary:'Big Shoulders Display',sans-serif}`,
     )
   })
 
@@ -295,25 +311,48 @@ describe('brandFontCss', () => {
 
   it('googleImport:false leaves the stylesheet to the site’s own <link> and keeps everything else', () => {
     expect(brandFontCss([ARCHIVO], { primary: 'archivo' }, { ...OPTS, googleImport: false })).toBe(
-      `.font-archivo{font-family:'Archivo',sans-serif}:root{--font-primary:'Archivo'}`,
+      `.font-archivo{font-family:'Archivo',sans-serif}:root{--font-primary:'Archivo',sans-serif}`,
     )
   })
 
-  it("BACK-COMPAT: a 0.40 font (no source) is an upload, and the CSS is exactly today's", () => {
+  it('selfHosted: a Google family the site already serves is not imported again, and keeps its class and slot', () => {
+    // next/font names its faces by the plain family ('Archivo'). An @import of Google's
+    // sheet declares the same family later in the document, so it would TAKE OVER the
+    // site's own files: a third-party request and a font swap for nothing.
+    expect(brandFontCss([ARCHIVO, INTER], { primary: 'archivo', secondary: 'inter' }, { ...OPTS, selfHosted: ['Archivo'] })).toBe(
+      `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@${W}&display=swap');` +
+        `.font-archivo{font-family:'Archivo',sans-serif}` +
+        `.font-inter{font-family:'Inter',sans-serif}` +
+        `:root{--font-primary:'Archivo',sans-serif;--font-secondary:'Inter',sans-serif}`,
+    )
+    // Every Google family self-hosted: no request at all.
+    expect(brandFontCss([ARCHIVO, INTER], {}, { ...OPTS, selfHosted: ['Inter', 'Archivo'] })).not.toContain('@import')
+    // Google's spelling, exactly: 'archivo' is not 'Archivo', so it is still imported.
+    expect(brandFontCss([ARCHIVO], {}, { ...OPTS, selfHosted: ['archivo'] })).toContain('family=Archivo:')
+    // googleFontsHref takes the same list, for a site that links the sheet itself.
+    expect(googleFontsHref([ARCHIVO, INTER], { selfHosted: ['Archivo'] })).toBe(
+      `https://fonts.googleapis.com/css2?family=Inter:wght@${W}&display=swap`,
+    )
+    expect(googleFontsHref([ARCHIVO], { selfHosted: ['Archivo'] })).toBeNull()
+  })
+
+  it("BACK-COMPAT: a 0.40 font (no source) is an upload: today's face and class, and its slot", () => {
+    // The slot variable gains a generic fallback in 0.41 (`'sorg',sans-serif`): without it a
+    // region set to a slot shows the browser's default SERIF while the face loads.
     const p = payload040()
-    expect(brandFontCss(p.fonts, p.font_slots, OPTS)).toBe(SORG_FACE + `:root{--font-custom-1:'sorg'}`)
+    expect(brandFontCss(p.fonts, p.font_slots, OPTS)).toBe(SORG_FACE + `:root{--font-custom-1:'sorg',sans-serif}`)
   })
 
   it('every slot in FONT_SLOTS becomes its --font-<kebab> variable, in FONT_SLOTS order', () => {
     // Derived from the registry (AGENTS.md rule 4): a sixth slot is covered the day it lands.
     const slots = Object.fromEntries(FONT_SLOTS.map((s) => [s, 'sorg']))
-    const vars = FONT_SLOTS.map((s) => `--font-${s.replace(/_/g, '-')}:'sorg'`).join(';')
+    const vars = FONT_SLOTS.map((s) => `--font-${s.replace(/_/g, '-')}:'sorg',sans-serif`).join(';')
     expect(brandFontCss([SORG], slots, OPTS)).toBe(SORG_FACE + `:root{${vars}}`)
   })
 
   it('a slot is emitted only when its font survived (a variable at a missing face looks deliberate)', () => {
     expect(brandFontCss([SORG], { primary: 'ghost', secondary: 'sorg' }, OPTS)).toBe(
-      SORG_FACE + `:root{--font-secondary:'sorg'}`,
+      SORG_FACE + `:root{--font-secondary:'sorg',sans-serif}`,
     )
     // Keys outside the vocabulary are ignored, whatever they point at.
     expect(brandFontCss([SORG], { heading: 'sorg' } as never, OPTS)).toBe(SORG_FACE)
@@ -356,6 +395,22 @@ describe('brandFontCss', () => {
     // 32 is the ceiling, not an off-by-one.
     const f32 = 'f'.repeat(32)
     expect(brandFontCss([{ ...SORG, family: f32 }], {}, OPTS)).toContain(`.font-${f32}{`)
+  })
+
+  it('a bad font is dropped ALONE: the good fonts beside it still ship', () => {
+    // Per row, never all-or-nothing: one bad row must not take every brand font off the site.
+    const bad: SiteFont = { ...SORG, family: "x'}body{display:none}" }
+    const css = brandFontCss([bad, SORG, ARCHIVO], { primary: 'archivo', custom_1: 'sorg' }, OPTS)
+    expect(css).toContain(SORG_FACE)
+    expect(css).toContain(`.font-archivo{`)
+    expect(css).toContain(`--font-custom-1:'sorg',sans-serif`)
+    expect(css).not.toContain('display:none')
+  })
+
+  it('a family that merely CONTAINS a reserved word is fine (the check is exact, not a substring)', () => {
+    for (const family of ['primary-sans', 'bold-face', 'sans-2', 'my-black']) {
+      expect(brandFontCss([{ ...SORG, family }], {}, OPTS), family).toContain(`.font-${family}{`)
+    }
   })
 
   it('SECURITY: refuses every family lone-star itself refuses (derived from the app’s list)', () => {
@@ -441,8 +496,8 @@ describe('brandCss', () => {
     expect(css.startsWith("@import url('https://fonts.googleapis.com/css2?")).toBe(true)
   })
 
-  it("BACK-COMPAT: a 0.40 payload gets exactly today's font CSS and no colours", () => {
-    expect(brandCss(payload040(), OPTS)).toBe(SORG_FACE + `:root{--font-custom-1:'sorg'}`)
+  it("BACK-COMPAT: a 0.40 payload gets today's face and class, its slot, and no colours", () => {
+    expect(brandCss(payload040(), OPTS)).toBe(SORG_FACE + `:root{--font-custom-1:'sorg',sans-serif}`)
   })
 
   it('nothing published, nothing emitted', () => {
@@ -507,8 +562,8 @@ describe('brandHead', () => {
 })
 
 /*
- * MUTATION CHECKS, 2026-09-24 — by hand, because packages/site-bridge is not in
- * stryker.config.json's `mutate` list. Each guard in brand.ts was broken once and the
+ * MUTATION CHECKS, 2026-09-24 — by hand first (brand.ts joined stryker.config.json's
+ * `mutate` list in the same commit, 89c3f19, so the full sweep now covers it too). Each guard in brand.ts was broken once and the
  * named suite went red; all 33 were restored:
  *   colour key regex / length · hex check · hex lowercasing · colour-key dedupe ·
  *   family regex / length / reserved set · Google family regex / length · path regex /

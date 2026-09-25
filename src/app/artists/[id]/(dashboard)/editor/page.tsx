@@ -6,6 +6,7 @@ import { loadBrandFonts } from '@/lib/fonts'
 import { groupTracksIntoProjects } from '@/lib/music'
 import { isNewRelease } from '@samfox1/site-bridge/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
+import { editorFontSlotTitles } from '@/lib/site-editor/style-controls'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
@@ -89,18 +90,13 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   // Brand-page fonts — uploads and Google Fonts — offered in every region's font dropdown
   // alongside the site's own manifest tokens. The token resolves because the published
   // payload emits the matching .font-<family> class; a Google font's stack names its real
-  // family (`googleFamily`, withUploadedFonts). A font in a slot is listed by the slot's
-  // TITLE (BRAND_SYNC_PLAN.md: "lists Google brand fonts in its font list by their slot
-  // titles") — Primary, Secondary, or an added row's own title — via withSlotTitles, which
-  // takes the FIRST title, so the built-ins lead.
+  // family (`googleFamily`, withUploadedFonts). A font in an ADDED slot is listed by that
+  // slot's title (withSlotTitles); a Primary/Secondary font by its own name, since the site
+  // declares its own "Primary font" entry (editorFontSlotTitles says why).
   const uploadedFonts = (brandFonts?.fonts ?? [])
     .map((f) => ({ family: f.family, label: f.label, googleFamily: f.googleFamily }))
     .sort((a, b) => a.family.localeCompare(b.family))
-  const fontSlotTitles = [
-    ...(brandFonts?.primary.font ? [{ family: brandFonts.primary.font.family, title: 'Primary' }] : []),
-    ...(brandFonts?.secondary.font ? [{ family: brandFonts.secondary.font.family, title: 'Secondary' }] : []),
-    ...(brandFonts?.custom ?? []).flatMap((s) => (s.font && s.label ? [{ family: s.font.family, title: s.label }] : [])),
-  ]
+  const fontSlotTitles = editorFontSlotTitles(brandFonts)
 
   const siteContent = Object.fromEntries(
     ((contentRows ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? '']),

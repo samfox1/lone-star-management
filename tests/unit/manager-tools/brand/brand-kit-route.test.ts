@@ -2,7 +2,7 @@
 /**
  * GET /artists/[id]/brand/kit (BRAND_PAGE_PLAN.md, "Brand kit"): a zip of what is LIVE on
  * the site — the published logos, the tab and home-screen icons, the font files for
- * published slots — plus colors.txt from the palette.
+ * published slots — plus colors.txt from the PUBLISHED palette (the door's `brand.colors`).
  *
  * The Supabase client is the PostgREST-shaped fake (`_fake-client.ts`) and storage is a
  * stubbed global `fetch`, so what this file pins is the route's DECISIONS: the ownership
@@ -22,8 +22,9 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => fake.client 
 import { GET } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/route'
 
 type DoorMedia = { id: string; purpose: string; path: string; label?: string | null }
-type DoorFont = { family: string; label: string; path: string; format: string }
-type Door = { media: DoorMedia[]; fonts: DoorFont[]; font_slots: Record<string, string> } | null
+type DoorFont = { family: string; label: string; path: string | null; format: string | null; source?: string; google_family?: string }
+type DoorColor = { key: string; name: string; hex: string }
+type Door = { media: DoorMedia[]; fonts: DoorFont[]; font_slots: Record<string, string>; brand?: { colors: DoorColor[] } } | null
 
 /** What the live site shows: the published door's payload. */
 const PUBLISHED: NonNullable<Door> = {
@@ -42,14 +43,23 @@ const PUBLISHED: NonNullable<Door> = {
     { family: 'spare', label: 'Spare', path: 'a1/fonts/spare.ttf', format: 'ttf' },
   ],
   font_slots: { primary: 'skeen-display' },
+  brand: {
+    colors: [
+      { key: 'primary', name: 'Ink', hex: '#0d0d0d' },
+      { key: 'cream', name: 'Cream', hex: '#f4f1ea' },
+    ],
+  },
 }
 
 /** A logo added on the dashboard and never published — the planted witness. */
 const DRAFT_LOGO = { id: 'm-d', purpose: 'logo', label: 'Draft logo', storage_path: 'a1/brand/draft.png', note: null }
 
+/** The WORKING palette: Ink renamed and a colour added, neither published — the planted
+ *  witness that colors.txt reads the door, like every other file in the kit. */
 const COLORS = [
-  { id: 'c1', name: 'Ink', hex: '#0d0d0d', note: null, sort_order: 0 },
-  { id: 'c2', name: 'Cream', hex: '#f4f1ea', note: null, sort_order: 1 },
+  { id: 'c1', key: 'primary', name: 'Ink (draft)', hex: '#111111', note: null, sort_order: 0 },
+  { id: 'c2', key: 'cream', name: 'Cream', hex: '#f4f1ea', note: null, sort_order: 1 },
+  { id: 'c3', key: 'draft-pink', name: 'Draft pink', hex: '#ff00aa', note: null, sort_order: 2 },
 ]
 
 function world({
@@ -177,11 +187,13 @@ describe('brand kit route — only what is live on the site', () => {
     expect(Object.keys(await unzip(res))).not.toContain('logo-primary.png')
   })
 
-  it('with nothing published yet, the kit is the palette and a note saying so', async () => {
+  it('with nothing published yet, the kit is an empty colors.txt and a note saying so', async () => {
     world({ door: null })
     const entries = await unzip(await call())
     expect(fetchMock).not.toHaveBeenCalled()
     expect(Object.keys(entries).sort()).toEqual(['colors.txt', 'skipped.txt'])
+    // The draft palette has three colours; none of them is on the site.
+    expect(strFromU8(entries['colors.txt'])).toBe('')
     expect(strFromU8(entries['skipped.txt'])).toMatch(/nothing is on the site yet/i)
   })
 })
@@ -234,12 +246,23 @@ describe('brand kit route — names', () => {
 })
 
 describe('brand kit route — colors.txt', () => {
-  it('CRITICAL: colors.txt is present, one line per palette colour', async () => {
+  it('CRITICAL: colors.txt is the PUBLISHED palette, one line per colour — the draft palette never ships', async () => {
+    // Witness first: the working palette really differs (a rename and an added colour), so
+    // the published lines below mean the route chose the door, not that the two agreed.
+    const { data: working } = await fake.client.from('brand_colors').select('name, hex').eq('artist_id', 'a1')
+    expect(working).toEqual(COLORS)
+    fake.calls.length = 0
+
     const entries = await unzip(await call())
     expect(strFromU8(entries['colors.txt'])).toBe('Ink, #0d0d0d, RGB 13, 13, 13\nCream, #f4f1ea, RGB 244, 241, 234\n')
-    // Read through the RLS-scoped palette reader, for THIS artist.
-    const read = fake.calls.find((c) => c.table === 'brand_colors')!
-    expect(read.filters).toContainEqual(['eq', 'artist_id', 'a1'])
+    expect(fake.calls.some((c) => c.table === 'brand_colors')).toBe(false)
+  })
+
+  it('a site with no colours published: colors.txt is empty and skipped.txt says why', async () => {
+    world({ door: { ...PUBLISHED, brand: { colors: [] } } })
+    const entries = await unzip(await call())
+    expect(strFromU8(entries['colors.txt'])).toBe('')
+    expect(strFromU8(entries['skipped.txt'])).toBe('colors.txt: no colours are on the site yet.\n')
   })
 })
 
@@ -313,19 +336,18 @@ describe('brand kit route — what it leaves out, and says so', () => {
     expect(pulled).toBe(false)
   })
 
-  it('a palette that cannot be read still gives a kit — and says colors.txt is empty for that reason', async () => {
-    fake = fakeClient((c: Call): Reply => {
-      if (isOwnershipRead(c)) return { data: { id: 'a1' } }
-      if (c.table === 'artists') return { data: { slug: 'lone-pine' } }
-      if (c.op === 'rpc') return { data: PUBLISHED }
-      if (c.table === 'brand_colors') return { error: { message: 'boom' } }
-      return { data: [] }
+  it('a Google font in a published slot is listed in skipped.txt with where to get it; the header names it too', async () => {
+    world({
+      door: {
+        ...PUBLISHED,
+        fonts: [...PUBLISHED.fonts, { family: 'archivo', label: 'Archivo', path: null, format: null, source: 'google', google_family: 'Archivo' }],
+        font_slots: { primary: 'skeen-display', secondary: 'archivo' },
+      },
     })
     const res = await call()
-    expect(res.status).toBe(200)
-    const entries = await unzip(res)
-    expect(strFromU8(entries['colors.txt'])).toBe('')
-    expect(strFromU8(entries['skipped.txt'])).toMatch(/colors\.txt: the palette could not be read/)
+    expect(strFromU8((await unzip(res))['skipped.txt'])).toBe('font-archivo: a Google font, get Archivo from fonts.google.com\n')
+    expect(res.headers.get('x-brand-kit-skipped')).toBe('font-archivo')
+    expect(fetched().some((u) => u.includes('null'))).toBe(false)
   })
 
   it('CRITICAL: a door that errors is a 502, not a kit claiming nothing is on the site', async () => {

@@ -17,12 +17,14 @@ import {
   sliderIndex,
   sliderSteps,
   withUploadedFonts,
+  editorFontSlotTitles,
   buildTextItemStyleControls,
   controlsForRegion,
   type SiteStyleOptions,
   type StyleControl,
   withStyleVars, type EditorStyleOptions,
 } from '@/lib/site-editor/style-controls'
+import type { BrandFont, BrandFontSlot, FontSlot } from '@/lib/fonts'
 
 const PALETTE: SiteStyleOptions = {
   fonts: [
@@ -786,6 +788,38 @@ describe('withUploadedFonts — Brand-page uploads join the manifest dropdown', 
     const manifest = { fonts: [{ value: 'font-momo', label: 'Momo' }] }
     expect(withUploadedFonts(manifest, [])).toBe(manifest)
     expect(withUploadedFonts(undefined, [])).toBeUndefined()
+  })
+})
+
+describe('editorFontSlotTitles — only an ADDED slot renames its font in the editor list', () => {
+  const font = (family: string, label: string): BrandFont => ({
+    id: family, label, family, format: null, storagePath: null, weight: null, source: 'google', googleFamily: label,
+  })
+  const slot = (s: FontSlot, f: BrandFont | null, label: string | null = null): BrandFontSlot => ({ slot: s, label, note: null, font: f })
+  const archivo = font('archivo', 'Archivo')
+  const inter = font('inter', 'Inter')
+  const sorg = font('lsf-sorg', 'Sorg')
+
+  it('CRITICAL: Primary and Secondary fonts are NOT retitled — the site has its own "Primary font" entry', () => {
+    // A connected site (skeen) declares "Primary font" = `font-primary`, which follows the
+    // slot. Listing Archivo as "Primary" too offered a second Primary that pins
+    // `font-archivo`: change Primary on the Brand page and that region stays on Archivo.
+    expect(
+      editorFontSlotTitles({ primary: slot('primary', archivo), secondary: slot('secondary', inter), custom: [slot('custom_1', sorg, 'Polaroids')] }),
+    ).toEqual([{ family: 'lsf-sorg', title: 'Polaroids' }])
+  })
+
+  it('a font in Primary AND a titled added slot takes the added slot\'s title', () => {
+    expect(
+      editorFontSlotTitles({ primary: slot('primary', archivo), secondary: slot('secondary', null), custom: [slot('custom_2', archivo, 'Gig posters')] }),
+    ).toEqual([{ family: 'archivo', title: 'Gig posters' }])
+  })
+
+  it('an untitled or empty added slot names nothing; no brand read names nothing', () => {
+    expect(
+      editorFontSlotTitles({ primary: slot('primary', null), secondary: slot('secondary', null), custom: [slot('custom_1', sorg), slot('custom_2', null, 'Empty')] }),
+    ).toEqual([])
+    expect(editorFontSlotTitles(null)).toEqual([])
   })
 })
 

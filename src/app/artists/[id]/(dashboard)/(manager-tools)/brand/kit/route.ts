@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { strToU8 } from 'fflate'
 import { buildBrandKitZip, type BrandKitFile } from '@/lib/manager-tools/brand/brand-kit'
-import { listBrandColors, type BrandColor } from '@/lib/manager-tools/brand/brand-colors'
 import { publicObjectUrl } from '@/lib/storage-url'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from '../../../_owns'
-import { MAX_KIT_BYTES, nameSlug, planBrandKit, skippedTxt, type KitSkip, type LiveBrand } from './kit-entries'
+import { MAX_KIT_BYTES, liveColors, nameSlug, planBrandKit, skippedTxt, type KitSkip, type LiveBrand } from './kit-entries'
 
 /** A storage object that has not answered in this long is left out, not waited on. */
 const FETCH_TIMEOUT_MS = 8000
@@ -13,15 +12,15 @@ const FETCH_TIMEOUT_MS = 8000
 /**
  * THE BRAND KIT (BRAND_PAGE_PLAN.md): a zip of what is LIVE on the site — the published
  * logos, the tab and home-screen icons, the font files for published slots — and
- * `colors.txt` from the palette. Built on click, nothing stored.
+ * `colors.txt` from the published palette. Built on click, nothing stored.
  *
  * OWNER-ONLY, by the same check every brand action makes (`callerOwns`, RLS-scoped), and
- * FIRST: a caller who cannot see this artist gets a 404 before the door, the palette or a
- * single storage object is read. The 404 does not say whether the artist exists.
+ * FIRST: a caller who cannot see this artist gets a 404 before the door or a single
+ * storage object is read. The 404 does not say whether the artist exists.
  *
  * "Live" means the published door, `get_public_site` — the payload every website reads —
- * never the working rows, so a logo added on the dashboard and not yet published is not in
- * the kit. The objects come from the PUBLIC buckets over plain HTTP; no service role.
+ * never the working rows, so a logo (or a colour) added on the dashboard and not yet
+ * published is not in the kit. The objects come from the PUBLIC buckets over plain HTTP; no service role.
  *
  * Anything left out (a missing object, the size cap) is listed in `skipped.txt` inside the
  * zip — the download is a plain link, so the manager never sees a header — and in
@@ -35,19 +34,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!artist) return notFound()
   const slug = String((artist as { slug: unknown }).slug ?? '')
 
-  const [door, palette] = await Promise.all([
-    supabase.rpc('get_public_site', { p_slug: slug }),
-    listBrandColors(supabase, id).then(
-      (colors) => ({ colors, ok: true as const }),
-      () => ({ colors: [] as BrandColor[], ok: false as const }),
-    ),
-  ])
+  const door = await supabase.rpc('get_public_site', { p_slug: slug })
   if (door.error) return NextResponse.json({ error: 'Could not read the site.' }, { status: 502, headers: NO_STORE })
 
   const live = (door.data ?? null) as LiveBrand
+  const colors = liveColors(live)
   const notes: string[] = []
-  if (!live) notes.push('Nothing is on the site yet, so the kit holds only colors.txt.')
-  if (!palette.ok) notes.push('colors.txt: the palette could not be read.')
+  if (!live) notes.push('Nothing is on the site yet, so the kit is empty.')
+  else if (!colors.length) notes.push('colors.txt: no colours are on the site yet.')
 
   const plan = planBrandKit(id, live)
   const skipped: KitSkip[] = [...plan.skipped]
@@ -66,10 +60,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   if (skipped.length || notes.length) files.unshift({ path: 'skipped.txt', bytes: strToU8(skippedTxt(skipped, notes)) })
-  const zip = buildBrandKitZip(
-    files,
-    palette.colors.map((c) => ({ name: c.name, hex: c.hex })),
-  )
+  const zip = buildBrandKitZip(files, colors)
 
   return new NextResponse(Buffer.from(zip), {
     headers: {

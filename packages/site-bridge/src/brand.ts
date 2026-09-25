@@ -28,11 +28,12 @@ import { FONT_SLOTS, type FontSlot, type FontSlotMap, type PublicSitePayload, ty
 
 /* ── The allowlists ───────────────────────────────────────────────────────── */
 
-/** A brand colour key, as BRAND_SYNC_PLAN states it. It becomes `--brand-<key>`, so it
- *  must never hold anything that could end the property name. */
-const COLOR_KEY = /^[a-z0-9-]+$/
-/** Keys are slugs of a colour name; nothing legitimate is this long. */
-const MAX_COLOR_KEY = 64
+/** A brand colour key, exactly the door's shape (and the DB check's): lowercase words
+ *  joined by single hyphens. It becomes `--brand-<key>`, so it must never hold anything
+ *  that could end the property name. */
+const COLOR_KEY = /^[a-z0-9]+(-[a-z0-9]+)*$/
+/** The door's ceiling: `brand_colors_key_format`. */
+const MAX_COLOR_KEY = 40
 /** `#rrggbb` and nothing else. Case-insensitive in, lowercase out. JS `$` has no
  *  "before a final newline" exception without the `m` flag, so `#c63a2a\n` fails. */
 const HEX = /^#[0-9a-f]{6}$/i
@@ -202,9 +203,10 @@ function readyFonts(fonts: readonly SiteFont[] | null | undefined, origin: strin
   return out.sort((a, b) => (a.token < b.token ? -1 : 1))
 }
 
-function hrefFor(ready: readonly ReadyFont[]): string | null {
+function hrefFor(ready: readonly ReadyFont[], selfHosted: readonly string[] | undefined): string | null {
+  const skip = new Set(Array.isArray(selfHosted) ? selfHosted : [])
   const names: string[] = []
-  for (const f of ready) if (f.kind === 'google' && !names.includes(f.name)) names.push(f.name)
+  for (const f of ready) if (f.kind === 'google' && !skip.has(f.name) && !names.includes(f.name)) names.push(f.name)
   if (!names.length) return null
   const weights = GOOGLE_FONT_WEIGHTS.join(';')
   // GOOGLE_FAMILY leaves only letters, digits and single spaces, so encoding a family
@@ -217,11 +219,14 @@ function hrefFor(ready: readonly ReadyFont[]): string | null {
  * The Google Fonts stylesheet URL for every Google-sourced font, in ONE css2 request, or
  * null when there are none. For a site that prefers `<link rel="stylesheet">` (and a
  * preconnect) over the `@import` `brandFontCss` leads with — pass `googleImport: false`
- * there so the sheet is not requested twice.
+ * there so the sheet is not requested twice. `selfHosted` as in `BrandCssOptions`.
  */
-export function googleFontsHref(fonts: readonly SiteFont[] | null | undefined): string | null {
+export function googleFontsHref(
+  fonts: readonly SiteFont[] | null | undefined,
+  opts: { selfHosted?: readonly string[] } = {},
+): string | null {
   // Uploads play no part in the URL, so no origin is needed to read them.
-  return hrefFor(readyFonts(fonts, null))
+  return hrefFor(readyFonts(fonts, null), opts.selfHosted)
 }
 
 export type BrandCssOptions = {
@@ -231,6 +236,17 @@ export type BrandCssOptions = {
   /** Lead the CSS with `@import url('<googleFontsHref>')`. Default true, so one `<style>`
    *  is the whole job; false when the site links the stylesheet itself. */
   googleImport?: boolean
+  /**
+   * Google families the site ALREADY serves itself, in Google's spelling (`'Archivo'`,
+   * `'Bebas Neue'`). They are left out of the css2 request; their class and slot variable
+   * are still emitted, and point at the site's own face.
+   *
+   * Needed with next/font: it names its faces by the plain family, so Google's sheet —
+   * later in the document, same family, same descriptors — would take over the site's own
+   * files (skeen, 2026-09-24: a third-party request and a font swap on every page, for a
+   * face the page already had).
+   */
+  selfHosted?: readonly string[]
 }
 
 /**
@@ -241,8 +257,8 @@ export type BrandCssOptions = {
  *   2. Per font, sorted by family: an `@font-face` (uploads only — Google's stylesheet
  *      declares its own faces) and the `.font-<family>` utility the editor's per-region
  *      font tokens resolve against.
- *   3. `:root{--font-primary:…;--font-secondary:…;--font-custom-1:…}` for every assigned
- *      slot whose font survived, in FONT_SLOTS order. A variable pointing at a dropped
+ *   3. `:root{--font-primary:'…',sans-serif;…}` for every assigned slot whose font
+ *      survived, in FONT_SLOTS order. A variable pointing at a dropped
  *      face would send the browser hunting for a family nothing defines, and look
  *      deliberate.
  *
@@ -260,7 +276,7 @@ export function brandFontCss(
 ): string {
   const ready = readyFonts(fonts, safeOrigin(opts.supabaseUrl))
   const parts: string[] = []
-  const href = opts.googleImport === false ? null : hrefFor(ready)
+  const href = opts.googleImport === false ? null : hrefFor(ready, opts.selfHosted)
   if (href) parts.push(`@import url('${href}');`)
   for (const f of ready) {
     if (f.kind === 'upload') {
@@ -276,7 +292,9 @@ export function brandFontCss(
   const vars: string[] = []
   for (const slot of FONT_SLOTS) {
     const name = byToken.get(map[slot])
-    if (name) vars.push(`--font-${slotToken(slot)}:'${name}'`)
+    // A generic fallback, as the class has: without one, a region set to the slot shows the
+    // browser's default SERIF while the face loads (display=swap) or if it never does.
+    if (name) vars.push(`--font-${slotToken(slot)}:'${name}',sans-serif`)
   }
   if (vars.length) parts.push(`:root{${vars.join(';')}}`)
   return parts.join('')

@@ -15,6 +15,8 @@
  *   • the slug helper's grants (not callable by anon or a manager: 42501 AND its name);
  *   • the door: `brand` from the PUBLISHED snapshot only, in palette order; a Google font's
  *     wire shape; a cleared browser bar is a tombstone; and the preview payload equal to it;
+ *   • the door's OWN filters (key, hex, Google family, bar colour), on revisions planted
+ *     straight into the log, since the table CHECKs stop the app from ever reaching them;
  *   • the Brand publish and Revert moving colours and the browser bar on the real log.
  *
  * Throwaway artists only (rule 6): made here, dropped here.
@@ -308,6 +310,67 @@ describe('the door: the PUBLISHED brand, and the preview equal to it', () => {
       const working = await getWorkingSitePayload(asA, t.id)
       expect(working?.fonts).toEqual(live.fonts)
       expect(working?.font_slots).toEqual(live.font_slots)
+    } finally {
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
+})
+
+describe("the door's OWN filters — what no table CHECK lets reach the log, planted there directly", () => {
+  // brand_colors' key/hex CHECKs and artist_fonts_google_family_clean refuse these shapes
+  // long before a publish could snapshot them, so nothing through the app ever reached the
+  // door's filter. But revisions are jsonb, written by scripts and restores too, and the
+  // bridge interpolates key, hex and family into CSS: the door is the last line. So the
+  // service key writes the log straight, a GOOD row beside every bad one (an empty answer
+  // could otherwise mean nothing was read at all), and the witness below proves each bad
+  // row IS the live revision for its entity — its absence is the filter's doing.
+  // Seen red (2026-09-24) by making the bad rows well-formed ('#abcdef', 'Evil X'), i.e. what
+  // the door would serve without its filter; the SQL itself was not broken (no migration).
+  it('CRITICAL: a malformed colour key or hex, a quoted Google family and a malformed bar colour are dropped; the good ones are served', async () => {
+    const t = await createThrowawayArtist(svc, 'Brand door filters', asA)
+    try {
+      await publishProfile(asA, t.id)
+      // `published_at` on every row: a bulk insert sends the union of the rows' columns, so
+      // one row that sets it would null it on the rest.
+      const rev = (entity_type: string, data: Record<string, unknown>, entity_id: string = crypto.randomUUID(), published_at = new Date().toISOString()) => ({
+        artist_id: t.id, entity_type, entity_id, data: { id: entity_id, ...data }, published_at,
+      })
+      const color = (key: string, name: string, hex: string, sort_order: number) =>
+        rev('brand_color', { key, name, hex, slot: null, sort_order, created_at: '2026-09-25T00:00:00Z' })
+      const google = (family: string, google_family: string, slots: string[]) =>
+        rev('artist_font', { family, label: family, source: 'google', google_family, storage_path: null, format: null, slots })
+
+      const { error } = await svc.from('revisions').insert([
+        color('cream', 'Cream', '#f4f1ea', 1),
+        color('BAD KEY', 'Spaced key', '#000000', 2),
+        color('x'.repeat(41), 'Long key', '#000000', 3),
+        color('upper', 'Uppercase hex', '#ABCDEF', 4),
+        color('seven', 'Seven-digit hex', '#abcdef0', 5),
+        rev('brand_color', { name: 'No key', hex: '#111111', slot: null, sort_order: 6 }),
+        google('archivo', 'Archivo', ['primary']),
+        google('evil', "Evil', x", ['secondary']),
+        rev('theme_color', { theme_color: '#0a0a0a' }, t.id, '2026-01-01T00:00:00Z'),
+      ])
+      expect(error).toBeNull()
+      // The bar colour's good half: served...
+      expect((await door(t.slug)).brand?.theme_color).toBe('#0a0a0a')
+      // ...until a NEWER malformed revision of the same entity is what `live` holds: then
+      // null, not the bad value and not the older good one.
+      expect((await svc.from('revisions').insert(rev('theme_color', { theme_color: '#ABCDEF' }, t.id))).error).toBeNull()
+
+      // Witness: every bad row is live (latest for its entity, not deleted).
+      const { data: liveRows } = await svc.rpc('published_revisions', { p_artist_id: t.id })
+      const live = (liveRows ?? []) as { entity_type: string; data: Record<string, unknown> }[]
+      expect(live.filter((r) => r.entity_type === 'brand_color').map((r) => r.data.name).sort()).toEqual(
+        ['Cream', 'Long key', 'No key', 'Seven-digit hex', 'Spaced key', 'Uppercase hex'],
+      )
+      expect(live.filter((r) => r.entity_type === 'artist_font').map((r) => r.data.family).sort()).toEqual(['archivo', 'evil'])
+      expect(live.filter((r) => r.entity_type === 'theme_color').map((r) => r.data.theme_color)).toEqual(['#ABCDEF'])
+
+      const site = await door(t.slug)
+      expect(site.brand).toEqual({ colors: [{ key: 'cream', name: 'Cream', hex: '#f4f1ea' }], theme_color: null })
+      expect(site.fonts?.map((f) => f.family)).toEqual(['archivo'])
+      expect(site.font_slots).toEqual({ primary: 'archivo' })
     } finally {
       await deleteThrowawayArtist(svc, t)
     }

@@ -47,7 +47,7 @@ export type GenericEntity = Exclude<CrudEntity, 'video' | 'release'>
  *  row, `tour` a `tour_date`), so this map is the translation — and the reason the two
  *  paths can't be compared by eye. Tables come from PUBLISHABLE, never hand-copied. */
 export type LiveToggleKind = 'photo' | 'link' | 'video'
-export const LIVE_TOGGLE: Record<LiveToggleKind, PublishableEntity> = {
+export const LIVE_TOGGLE: Record<LiveToggleKind, TableEntity> = {
   photo: 'media',
   link: 'link',
   video: 'video',
@@ -56,7 +56,7 @@ export const LIVE_TOGGLE: Record<LiveToggleKind, PublishableEntity> = {
 /** Every editor/page kind whose on_site a toggle writes, live OR draft — the table the
  *  toggle action needs. LIVE_TOGGLE and DRAFT_PRESENCE partition its entities. */
 export type ToggleKind = LiveToggleKind | 'tour' | 'merch' | 'track'
-export const TOGGLE_KIND: Record<ToggleKind, PublishableEntity> = {
+export const TOGGLE_KIND: Record<ToggleKind, TableEntity> = {
   ...LIVE_TOGGLE,
   tour: 'tour_date',
   merch: 'merch',
@@ -218,9 +218,11 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
  *  a bare string cannot say so — which is how the drift below went unnoticed. */
 type OrderKey = string | { col: string; asc: boolean }
 
-/** Table + public-safe snapshot + ordering for every versioned/published entity. */
+/** Table (or its own read) + public-safe snapshot + ordering for every versioned/published
+ *  entity. A type has a `table` OR a `read`, never both (the union below): every generic
+ *  write goes to `PUBLISHABLE[type].table`, and a table named only to satisfy the type
+ *  (theme_color's was `artists`) is one `absent: 'delete'` away from deleting artist rows. */
 type PublishConfig = {
-  table: string
   /** Public-safe columns copied into a published revision. */
   snapshot: string[]
   /**
@@ -262,10 +264,23 @@ type PublishConfig = {
    * read — `listContent` calls this instead of the generic select. Only `theme_color` does:
    * a singleton that lives on the `artists` row itself (it has no `artist_id` column to
    * filter on). The read must return EVERY row of the type for the artist, as listContent
-   * promises, and throw on a failed read rather than return fewer.
+   * promises, and throw on a failed read rather than return fewer. Such a type has NO
+   * `table`: see TableEntity.
    */
-  read?: (supabase: SupabaseClient, artistId: string) => Promise<ContentRow[]>
-}
+} & (
+  | { table: string; read?: never }
+  | { read: (supabase: SupabaseClient, artistId: string) => Promise<ContentRow[]>; table?: never }
+)
+
+/**
+ * The types whose rows ARE rows of a table — every one but a type with its own `read`
+ * (theme_color, a singleton on `artists`). Anything that writes through
+ * `PUBLISHABLE[type].table` (EDITOR_RESTORE, the toggles) is typed by this, so naming
+ * `theme_color` there is a compile error rather than a write to `artists`.
+ */
+export type TableEntity = {
+  [K in PublishableEntity]: (typeof PUBLISHABLE)[K] extends { table: string } ? K : never
+}[PublishableEntity]
 
 /**
  * The browser-bar colour as publishable rows: ONE row per artist while `theme_color` is
@@ -281,7 +296,7 @@ async function themeColorRows(supabase: SupabaseClient, artistId: string): Promi
   return row?.theme_color ? [{ id: row.id, artist_id: row.id, theme_color: row.theme_color }] : []
 }
 
-export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
+export const PUBLISHABLE = {
   track: {
     table: 'tracks',
     // source + platform ids are provenance for the doors' Released/Unreleased
@@ -460,12 +475,11 @@ export const PUBLISHABLE: Record<PublishableEntity, PublishConfig> = {
   // nothing to publish and clearing a published one publishes a tombstone. entity_id is the
   // artist's id. Written through `artists.theme_color` (lib/brand.ts setThemeColor), never here.
   theme_color: {
-    table: 'artists',
     snapshot: ['id', 'theme_color'],
     orderBy: ['id'],
     read: themeColorRows,
   },
-}
+} satisfies Record<PublishableEntity, PublishConfig>
 
 /** Keep only the editable columns for a CRUD type, dropping anything else. */
 function pickFields(type: CrudEntity, input: Record<string, unknown>) {
@@ -508,11 +522,11 @@ export async function listContent(
   type: PublishableEntity,
   artistId: string,
 ): Promise<ContentRow[]> {
-  const custom = PUBLISHABLE[type].read
-  if (custom) return custom(supabase, artistId)
-  const table = PUBLISHABLE[type].table
+  const cfg: PublishConfig = PUBLISHABLE[type]
+  if (cfg.read) return cfg.read(supabase, artistId)
+  const table = cfg.table
   let query = supabase.from(table).select('*', { count: 'exact' }).eq('artist_id', artistId)
-  for (const key of PUBLISHABLE[type].orderBy) {
+  for (const key of cfg.orderBy) {
     const { col, asc } = typeof key === 'string' ? { col: key, asc: true } : key
     query = query.order(col, { ascending: asc })
   }
@@ -802,7 +816,7 @@ function stableJson(value: unknown): string {
  *     uploaded file). Undo takes it out of its slot; it must never delete the file.
  */
 export const EDITOR_RESTORE: {
-  type: PublishableEntity
+  type: TableEntity
   columns: string[]
   absent: 'delete' | 'unplace'
 }[] = [

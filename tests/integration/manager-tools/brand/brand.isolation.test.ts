@@ -31,6 +31,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { DEFAULT_FRAMING, loadFraming, saveFraming, setBrandAsset } from '@/lib/brand'
 import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
+import { expectRlsDenied } from '@tests/helpers/rls'
 
 let tenantA: ThrowawayArtist
 let artistA: string
@@ -92,6 +93,107 @@ describe('brand writes are tenant-scoped', () => {
     // RLS hides the row entirely, and loadFraming's no-row guard turns that into the
     // default rather than an exception — so B learns nothing about A's settings.
     expect(await loadFraming(asB, artistA)).toEqual(DEFAULT_FRAMING)
+  })
+})
+
+/**
+ * Brand colours and the browser-bar colour (20260925120000 made both publishable, so a
+ * cross-tenant write now reaches another artist's live site). `brand_colors_rw` and the
+ * artists policies are the only gate. Every denial is judged against a row PLANTED here by
+ * the service client and re-read by it afterwards: a denied UPDATE/DELETE is row-filtered
+ * (no error, zero rows — AGENTS.md rule 3), and an INSERT denial is 42501 exactly, so a
+ * CHECK or unique violation cannot stand in for it.
+ */
+describe("brand colours and the browser-bar colour are A's alone", () => {
+  let primaryId: string
+  let creamId: string
+  const THEME = '#123456'
+
+  const colorsOfA = async () => {
+    const { data, error } = await svc
+      .from('brand_colors')
+      .select('id, key, slot, name, hex')
+      .eq('artist_id', artistA)
+      .order('key')
+    if (error) throw new Error(error.message)
+    return data ?? []
+  }
+  const themeOfA = async () =>
+    ((await svc.from('artists').select('theme_color').eq('id', artistA).single()).data as { theme_color: string | null }).theme_color
+
+  beforeAll(async () => {
+    const { data, error } = await svc
+      .from('brand_colors')
+      .insert([
+        { artist_id: artistA, slot: 'primary', name: 'Primary', hex: '#c63a2a', sort_order: 0 },
+        { artist_id: artistA, name: 'Cream', hex: '#f4f1ea', sort_order: 1 },
+      ])
+      .select('id, key')
+    if (error || !data) throw new Error(`plant colours: ${error?.message}`)
+    primaryId = data.find((r) => r.key === 'primary')!.id as string
+    creamId = data.find((r) => r.key === 'cream')!.id as string
+    const { error: e2 } = await svc.from('artists').update({ theme_color: THEME }).eq('id', artistA)
+    if (e2) throw new Error(`plant theme colour: ${e2.message}`)
+  })
+
+  const PLANTED = [
+    { key: 'cream', slot: null, name: 'Cream', hex: '#f4f1ea' },
+    { key: 'primary', slot: 'primary', name: 'Primary', hex: '#c63a2a' },
+  ]
+  const planted = async () => (await colorsOfA()).map(({ key, slot, name, hex }) => ({ key, slot, name, hex }))
+
+  it("CRITICAL: B cannot READ A's colours", async () => {
+    expect(await planted()).toEqual(PLANTED)
+    const byArtist = await asB.from('brand_colors').select('id').eq('artist_id', artistA)
+    expect(byArtist.error).toBeNull()
+    expect(byArtist.data).toEqual([])
+    const byId = await asB.from('brand_colors').select('id').in('id', [primaryId, creamId])
+    expect(byId.data).toEqual([])
+  })
+
+  it("CRITICAL: B cannot UPDATE A's colours (rename, re-hex)", async () => {
+    // Only writes A's own manager could make: a built-in's name is fixed by a CHECK, so
+    // renaming Primary would be refused by the CHECK with the door wide open (it was, the
+    // first time this ran). `error: null` proves each write reached RLS, not a constraint.
+    const rename = await asB.from('brand_colors').update({ name: 'Hacked', hex: '#000000' }).eq('id', creamId).select('id')
+    const rehex = await asB.from('brand_colors').update({ hex: '#000000' }).eq('id', primaryId).select('id')
+    for (const res of [rename, rehex]) {
+      // Row-filtered: no error, no rows. The state below is the proof.
+      expect(res.error).toBeNull()
+      expect(res.data).toEqual([])
+    }
+    expect(await planted()).toEqual(PLANTED)
+  })
+
+  it("CRITICAL: B cannot DELETE A's colours", async () => {
+    const byId = await asB.from('brand_colors').delete().in('id', [primaryId, creamId])
+    const byArtist = await asB.from('brand_colors').delete().eq('artist_id', artistA)
+    expect(byId.error).toBeNull()
+    expect(byArtist.error).toBeNull()
+    expect(await planted()).toEqual(PLANTED)
+  })
+
+  it('CRITICAL: B cannot INSERT a colour into A — by name, with an explicit key, or by upserting A\'s Primary', async () => {
+    const byName = await asB.from('brand_colors').insert({ artist_id: artistA, name: 'Intruder', hex: '#ff00aa' })
+    expectRlsDenied(byName.error, 'insert into A by name')
+    // A key no row of A's holds: were RLS open, nothing else would refuse this (the
+    // unique and slot CHECKs pass), so 42501 is RLS's answer and not a constraint's.
+    const withKey = await asB.from('brand_colors').insert({ artist_id: artistA, key: 'b-was-here', name: 'B', hex: '#ff00aa' })
+    expectRlsDenied(withKey.error, 'insert into A with an explicit key')
+    // setSlotColor's own shape: INSERT … ON CONFLICT (artist_id, slot) DO UPDATE.
+    const upsert = await asB
+      .from('brand_colors')
+      .upsert({ artist_id: artistA, slot: 'primary', name: 'Primary', hex: '#000000' }, { onConflict: 'artist_id,slot' })
+    expectRlsDenied(upsert.error, "upsert of A's Primary")
+    expect(await planted()).toEqual(PLANTED)
+  })
+
+  it("CRITICAL: B cannot change A's browser-bar colour", async () => {
+    expect(await themeOfA()).toBe(THEME)
+    const res = await asB.from('artists').update({ theme_color: '#000000' }).eq('id', artistA).select('id')
+    expect(res.error).toBeNull()
+    expect(res.data).toEqual([])
+    expect(await themeOfA()).toBe(THEME)
   })
 })
 

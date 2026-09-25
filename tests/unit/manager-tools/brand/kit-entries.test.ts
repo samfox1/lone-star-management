@@ -7,7 +7,7 @@
  * exact text.
  */
 import { describe, expect, it } from 'vitest'
-import { nameSlug, planBrandKit, skippedTxt, type LiveBrand } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries'
+import { liveColors, nameSlug, planBrandKit, skippedTxt, type LiveBrand } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries'
 
 const A = 'a1'
 const names = (live: LiveBrand) => planBrandKit(A, live).entries.map((e) => e.name)
@@ -75,6 +75,47 @@ describe('planBrandKit', () => {
     expect(planBrandKit(A, { media: [{ purpose: 'favicon', path: 'b2/brand/f.png' }] }).skipped).toEqual([
       { name: 'tab-icon', reason: 'not a file of this artist' },
     ])
+  })
+
+  it('CRITICAL: a GOOGLE font in a slot has no file to ship, so skipped.txt says where to get it — once, however many slots', () => {
+    // 20260925120000: a Google font's door entry has no path. Silently leaving it out made
+    // a kit whose Primary font was just missing. An upload beside it still ships.
+    const live: LiveBrand = {
+      fonts: [
+        { family: 'archivo', label: 'Archivo', path: null, source: 'google', google_family: 'Archivo' },
+        { family: 'mori', label: 'Mori', path: `${A}/fonts/m.woff2`, source: 'upload' },
+      ],
+      font_slots: { primary: 'archivo', secondary: 'mori', custom_1: 'archivo' },
+    }
+    expect(planBrandKit(A, live)).toEqual({
+      entries: [{ name: 'font-mori.woff2', bucket: 'fonts', path: `${A}/fonts/m.woff2` }],
+      skipped: [{ name: 'font-archivo', reason: 'a Google font, get Archivo from fonts.google.com' }],
+    })
+  })
+
+  it('a Google font whose family is not Google-shaped is still reported, without repeating the name', () => {
+    const live: LiveBrand = {
+      fonts: [{ family: 'odd', label: 'Odd', path: null, source: 'google', google_family: 'Odd\nfake.png: line' }],
+      font_slots: { primary: 'odd' },
+    }
+    expect(planBrandKit(A, live).skipped).toEqual([{ name: 'font-odd', reason: 'a Google font, get it from fonts.google.com' }])
+  })
+})
+
+describe('liveColors — colors.txt reads the PUBLISHED palette', () => {
+  it('the door’s brand.colors, in its order, name and hex only', () => {
+    const live: LiveBrand = {
+      brand: { colors: [{ key: 'primary', name: 'Red', hex: '#c63a2a' }, { key: 'cream', name: 'Cream', hex: '#f4f1ea' }] },
+    }
+    expect(liveColors(live)).toEqual([{ name: 'Red', hex: '#c63a2a' }, { name: 'Cream', hex: '#f4f1ea' }])
+  })
+
+  it('nothing published, no brand key (a door older than 20260925120000), or a malformed entry: no colour', () => {
+    expect(liveColors(null)).toEqual([])
+    expect(liveColors({})).toEqual([])
+    expect(liveColors({ brand: { colors: null } })).toEqual([])
+    const odd = { brand: { colors: [null, { name: 'No hex' }, { hex: '#000000' }, { name: 'Ok', hex: '#ffffff' }] } } as unknown as LiveBrand
+    expect(liveColors(odd)).toEqual([{ name: 'Ok', hex: '#ffffff' }])
   })
 })
 

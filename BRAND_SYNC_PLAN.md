@@ -43,7 +43,9 @@ media:      the existing rows, now including purpose 'home_icon' (180px PNG) and
   `--background: var(--brand-black, #0a0a0a)`, `--charcoal: var(--brand-charcoal, #17191c)`.
   Unset or unpublished → the site looks exactly as it does now.
 - **The editor** keeps showing brand colours first in its swatches (done) and lists Google
-  brand fonts in its font list by their slot titles.
+  brand fonts in its font list like uploads: by an ADDED slot's title, else by their own
+  name. (Review 2026-09-24: Primary/Secondary no longer retitle a font; the site's own
+  "Primary font" entry is the one that follows the slot. `editorFontSlotTitles`.)
 
 ## Phases
 

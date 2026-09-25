@@ -695,7 +695,8 @@ That is skeen's mapping. With nothing published, or on a door older than 0.41, t
 variables are unset and every fallback applies. The site looks exactly as it did.
 
 **Fonts work as before, and Google fonts arrive with them.** `--font-primary`,
-`--font-secondary` and `--font-custom-1..3` are set for every assigned slot, and a
+`--font-secondary` and `--font-custom-1..3` are set for every assigned slot (with a
+`sans-serif` fallback, so text never flashes in the browser's default serif), and a
 `.font-<family>` class is emitted per font, for uploads and Google fonts alike. An upload
 gets an `@font-face`. A Google font gets the `fonts.googleapis.com` stylesheet instead:
 one request for every Google family, all nine weights, `display=swap`. Its variable and
@@ -704,6 +705,13 @@ class name Google's spelling (`'Big Shoulders Display'`), not the token.
 - **Keep the `@import` first.** `brandCss` leads with it, and a browser ignores an
   `@import` that comes after any other rule. Give it its own `<style>` and do not
   prepend anything to that string.
+- **Already serving a Google family yourself? List it in `selfHosted`.** next/font names
+  its faces by the plain family (`Archivo`), so Google's sheet, arriving later with the same
+  family, would take over your own files: a third-party request and a font swap for a face
+  you already had. `brandCss(site, { ...opts, selfHosted: ['Archivo', 'Inter'] })` leaves
+  those out of the request and still emits their class and slot variable, which then point
+  at your face. Google's spelling, exactly. skeen lists every family it loads with
+  next/font.
 - **Prefer a `<link>`?** Put `googleFontsHref(site.fonts)` in a
   `<link rel="stylesheet">` (and preconnect to `fonts.gstatic.com`), then call
   `brandFontCss(site.fonts, site.font_slots, { ...opts, googleImport: false })` +

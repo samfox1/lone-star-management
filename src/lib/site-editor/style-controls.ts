@@ -68,6 +68,7 @@ import {
   TRACKING_OPTIONS,
 } from '@samfox1/site-bridge/vocabulary'
 import { isGoogleFamilyName } from '@/lib/google-fonts'
+import type { BrandFonts } from '@/lib/fonts'
 
 export type StyleControl =
   | { id: string; label: string; kind: 'select'; options: StyleOption[]; owns: (token: string) => boolean; impliesLine?: boolean; phoneScoped?: boolean; segmented?: boolean }
@@ -627,6 +628,21 @@ export function withUploadedFonts(
     .map((f) => ({ value: `font-${f.family}`, label: f.label, css: `'${isGoogleFamilyName(f.googleFamily) ? f.googleFamily : f.family}',sans-serif` }))
     .filter((f) => !seen.has(f.value))
   return { ...opts, fonts: [...manifest, ...extra] }
+}
+
+/**
+ * The Brand slot titles that NAME fonts in the editor's font list (`withSlotTitles`): an
+ * ADDED slot's title only (BRAND_PAGE_PLAN.md: "Custom slot titles are what the site
+ * editor's font list shows"). Primary and Secondary are deliberately not read: a connected
+ * site declares its own "Primary font" entry (`font-primary`, which follows the slot), so
+ * titling the font "Primary" as well offered a second Primary that pins the font's OWN
+ * class — change Primary on the Brand page and that region stays put while the label
+ * moves. A built-in slot's font is listed by its own name.
+ */
+export function editorFontSlotTitles(
+  brand: Pick<BrandFonts, 'primary' | 'secondary' | 'custom'> | null,
+): { family: string; title: string }[] {
+  return (brand?.custom ?? []).flatMap((s) => (s.font && s.label ? [{ family: s.font.family, title: s.label }] : []))
 }
 
 /**

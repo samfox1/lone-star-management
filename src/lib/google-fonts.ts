@@ -30,6 +30,17 @@ export function isGoogleFamilyName(raw: unknown): raw is string {
   return typeof raw === 'string' && raw.length <= MAX_GOOGLE_FAMILY && GOOGLE_FAMILY_RE.test(raw)
 }
 
+/**
+ * Whether a family in Google's catalogue metadata (`fonts`: one key per style, "400" upright,
+ * "400i" italic) has any UPRIGHT style. A family without one (Molle, 2026-09-24: "400i"
+ * only) never loads: sites and the picker ask css2 for upright faces, and css2 answers that
+ * with a 400 or leaves the family out. `scripts/build-google-fonts.ts` drops such families.
+ */
+export function hasUprightStyle(styles: unknown): boolean {
+  if (!styles || typeof styles !== 'object') return false
+  return Object.keys(styles).some((k) => /^\d+$/.test(k))
+}
+
 /** Google's categories, as one letter each in the bundled list. */
 export const CATEGORY_CODE = {
   'Sans Serif': 's',

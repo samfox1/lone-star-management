@@ -22,6 +22,7 @@ import {
   CATEGORY_LABEL,
   findGoogleFamily,
   googlePreviewHref,
+  hasUprightStyle,
   isGoogleFamilyName,
   loadGoogleFonts,
   searchGoogleFonts,
@@ -50,6 +51,34 @@ describe('the bundled catalogue', () => {
     const rows = await loadGoogleFonts()
     for (const name of ['Archivo', 'Inter']) expect(findGoogleFamily(rows, name), name).toBe(name)
     expect(new Set(rows.map(([f]) => f)).size).toBe(rows.length)
+  })
+
+  it('CRITICAL: no ITALIC-ONLY family — Molle has no upright style, so an upright css2 request for it never loads', async () => {
+    // Google's catalogue listed Molle (only "400i") on 2026-09-24. The site asks css2 for
+    // upright weights and the picker for the regular face; css2 answers `family=Molle` alone
+    // with a 400 and silently leaves it out of a request with others (checked 2026-09-24).
+    // Either way the family never loads, so a manager could pick a font that never shows.
+    const rows = await loadGoogleFonts()
+    expect(findGoogleFamily(rows, 'Molle')).toBeNull()
+    expect(findGoogleFamily(rows, 'Archivo')).toBe('Archivo') // the positive half beside it
+  })
+})
+
+describe('hasUprightStyle — the catalogue script keeps a family only with a non-italic style', () => {
+  it('a weight key without the "i" suffix is upright; italics alone, or no styles, are not', () => {
+    expect(hasUprightStyle({ '400': {}, '400i': {} })).toBe(true)
+    expect(hasUprightStyle({ '700': {} })).toBe(true)
+    expect(hasUprightStyle({ '400i': {} })).toBe(false)
+    expect(hasUprightStyle({ '100i': {}, '900i': {} })).toBe(false)
+    expect(hasUprightStyle({})).toBe(false)
+    expect(hasUprightStyle(undefined)).toBe(false)
+    expect(hasUprightStyle(null)).toBe(false)
+  })
+
+  it('only a BARE weight counts, and only on an object: "i400" is not upright, nor is a string of digits', () => {
+    expect(hasUprightStyle({ i400: {} })).toBe(false)
+    // Object.keys('400') is ['0','1','2']: bare digits, but not a metadata object.
+    expect(hasUprightStyle('400')).toBe(false)
   })
 })
 

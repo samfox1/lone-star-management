@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { PUBLISHABLE, publishAll } from '@/lib/content'
+import { EDITOR_RESTORE, PUBLISHABLE, publishAll, type TableEntity } from '@/lib/content'
 
 type Row = Record<string, unknown>
 
@@ -83,5 +83,19 @@ describe('publishAll ordering', () => {
     const { client, writes } = stubClient('media')
     await expect(publishAll(client, 'a1')).rejects.toThrow('media insert failed')
     expect(writes).not.toContain('artist')
+  })
+})
+
+describe('PUBLISHABLE: a table OR its own read, never both (review 2026-09-24)', () => {
+  it('CRITICAL: theme_color names no table, and nothing that writes a table can name it', () => {
+    // It named `artists` only to satisfy the type; one EDITOR_RESTORE entry with
+    // absent: 'delete' would then have deleted the artist row. The union type makes both a
+    // compile error (tsc); these keep the rule visible to a vitest-only run too.
+    expect(Object.keys(PUBLISHABLE.theme_color)).not.toContain('table')
+    expect(EDITOR_RESTORE.map((e) => e.type)).not.toContain('theme_color')
+    // @ts-expect-error — a type with its own `read` is not a TableEntity. If TableEntity is
+    // ever widened back to every PublishableEntity, this line stops erroring and tsc fails.
+    const never: TableEntity = 'theme_color'
+    expect(never).toBe('theme_color')
   })
 })

@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EditorShell, withSlotTitles } from '@/app/artists/[id]/(dashboard)/editor/editor-shell'
 import { ColorPalette } from '@/app/artists/[id]/(dashboard)/editor/color-picker'
-import type { EditorStyleOptions } from '@/lib/site-editor/style-controls'
+import { editorFontSlotTitles, type EditorStyleOptions } from '@/lib/site-editor/style-controls'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
 
 const seen: { styleOptions?: EditorStyleOptions }[] = []
@@ -133,15 +133,26 @@ describe('EditorShell feeds the Brand page into the editor', () => {
     expect(opts.fonts?.find((f) => f.value === 'font-lsf-grotesk')?.label).toBe('Grotesk')
   })
 
-  it('CRITICAL: a GOOGLE brand font reaches the list by its slot title, its stack naming the real family', () => {
-    // BRAND_SYNC_PLAN.md (20260925120000): Google fonts join the editor's list like uploads,
-    // listed by slot title; the stack must say "Big Shoulders Display", not the token, or
-    // choosing it renders sans-serif.
+  it('CRITICAL: a GOOGLE font in Primary reaches the list by its OWN name, its stack naming the real family', () => {
+    // BRAND_SYNC_PLAN.md (20260925120000): Google fonts join the editor's list like uploads;
+    // the stack must say "Big Shoulders Display", not the token, or choosing it renders
+    // sans-serif. A Primary/Secondary font is NOT titled "Primary": the site's own
+    // "Primary font" entry (`font-primary`) is the one that follows the slot. The titles
+    // come from the page's real rule, so re-adding the built-ins there goes red here.
+    const bsd = {
+      id: 'f1', label: 'Big Shoulders Display', family: 'big-shoulders-display', format: null, storagePath: null,
+      weight: null, source: 'google' as const, googleFamily: 'Big Shoulders Display',
+    }
     const opts = renderShell({
-      uploadedFonts: [{ family: 'big-shoulders-display', label: 'Big Shoulders Display', googleFamily: 'Big Shoulders Display' }],
-      fontSlotTitles: [{ family: 'big-shoulders-display', title: 'Primary' }],
+      uploadedFonts: [{ family: bsd.family, label: bsd.label, googleFamily: bsd.googleFamily }],
+      fontSlotTitles: editorFontSlotTitles({
+        primary: { slot: 'primary', label: null, note: null, font: bsd },
+        secondary: { slot: 'secondary', label: null, note: null, font: null },
+        custom: [],
+      }),
     })
+    expect(opts.fonts?.map((f) => f.label)).not.toContain('Primary')
     const offered = opts.fonts?.find((f) => f.value === 'font-big-shoulders-display')
-    expect(offered).toMatchObject({ label: 'Primary', css: "'Big Shoulders Display',sans-serif" })
+    expect(offered).toMatchObject({ label: 'Big Shoulders Display', css: "'Big Shoulders Display',sans-serif" })
   })
 })
