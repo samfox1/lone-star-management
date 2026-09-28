@@ -25,6 +25,7 @@
     "site:custom": "tsx scripts/set-custom-site.ts",
     "tokens": "tsx scripts/generate-bridge-tokens.ts",
     "social-icons": "tsx scripts/generate-social-icons.ts",
+    "service-icons": "tsx scripts/generate-service-icons.ts",
     "mutation:changed": "tsx scripts/mutation-changed.ts",
     "audit:regions": "tsx scripts/audit-regions.ts",
     "audit:grants": "tsx scripts/audit-grants.ts",
