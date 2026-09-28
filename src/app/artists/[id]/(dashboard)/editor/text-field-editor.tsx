@@ -4,7 +4,6 @@ import type { EditorStyleOptions } from '@/lib/site-editor/style-controls'
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
-import { formatCount, isTooLong, nearLimit, tooLongError } from '@/lib/site-editor/text-limits'
 import { mergeStyle } from '@samfox1/site-bridge'
 import {
   applyStyleValue,
@@ -12,7 +11,7 @@ import {
   storableStyle,
 } from '@/lib/site-editor/style-controls'
 import { type EditorTextField } from './inspector-types'
-import { FIELD, SaveLine, type SaveStatus } from './inspector-shared'
+import { FIELD, SaveLine, TextLimitHint, type SaveStatus } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
 
@@ -73,13 +72,10 @@ export function TextFieldEditor({
   }
   const shown = touched || value !== '' ? value : defaultSeed
   const region = field.styleRegion
-  // THE CAP, SHOWN AND HELD (Sam, 2026-09-28). A small count appears in the last tenth of
-  // the allowance; past it the box keeps every character (nothing is cut, a paste is not
-  // truncated) but the save refuses it and this says so. No `maxLength` attribute on the
-  // input for exactly that reason: the browser would cut a paste silently.
+  // THE CAP (Sam, 2026-09-28), shown via TextLimitHint below: a small count near the
+  // allowance, the refusal past it. No `maxLength` attribute on the input for that
+  // reason — the browser would cut a paste silently, and the box keeps every character.
   const max = field.maxLength
-  const tooLong = max !== undefined && isTooLong(shown, max)
-  const counted = max !== undefined && nearLimit(shown, max)
 
   // STAGED LOCALLY, like StyleTools and ItemEditor. Reading the class string straight
   // off `styleValues` made every control lag: the inspector only refreshes that map on a
@@ -135,16 +131,7 @@ export function TextFieldEditor({
             className={FIELD}
           />
         )}
-        {max !== undefined && counted && (
-          <div className={cx('pt-1 text-right font-space text-[11px]', tooLong ? 'text-accent-red' : 'text-ink-faint')}>
-            {formatCount(shown.trim().length)} / {formatCount(max)}
-          </div>
-        )}
-        {max !== undefined && tooLong && (
-          <p role="alert" className="pt-1 font-space text-[11px] text-accent-red">
-            {tooLongError(max)}
-          </p>
-        )}
+        {max !== undefined && <TextLimitHint value={shown} max={max} />}
       </div>
 
       <div className="mt-3 border-t border-hairline-soft px-5 pt-3">

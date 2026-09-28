@@ -7,11 +7,10 @@
  * Textarea, and one quiet mono line under a card. No surface tint, no inspector rows.
  */
 import { cx } from '@/lib/cx'
-import { KLabel, Input, Textarea } from '@/components/ui/ui'
-import { SaveLine, type SaveStatus } from '../../../../editor/inspector-shared'
+import { KLabel } from '@/components/ui/ui'
+import { SaveLine, TextLimitHint } from '../../../../editor/inspector-shared'
 
-export { KLabel, Input, Textarea, SaveLine }
-export type { SaveStatus }
+export { SaveLine, TextLimitHint }
 
 /** A section caption: the assets pages' "12 photos" label, here naming the card. */
 export function GroupLabel({ children }: { children: React.ReactNode }) {

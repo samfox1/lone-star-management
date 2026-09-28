@@ -217,16 +217,25 @@ describe('a failed reference read sweeps NOTHING', () => {
   })
 
   it('CRITICAL: gcFontObjects — a failed WORKING read', async () => {
-    const { client, removed } = fake({ reads: { artist_fonts: failed, revisions: { data: [] } }, byPrefix: everythingOld })
+    const { client, removed } = fake({
+      reads: { artist_fonts: failed, latest_revisions: { data: [], count: 0 } },
+      byPrefix: everythingOld,
+    })
     await gcFontObjects(client, A)
     expect(removed).toEqual([])
   })
 
   it('CRITICAL: gcFontObjects — a failed PUBLISHED read (the live stylesheet still names the file)', async () => {
-    const { client, removed } = fake({ reads: { artist_fonts: { data: [] }, revisions: failed }, byPrefix: everythingOld })
+    const { client, removed } = fake({
+      reads: { artist_fonts: { data: [], count: 0 }, latest_revisions: failed },
+      byPrefix: everythingOld,
+    })
     await gcFontObjects(client, A)
     expect(removed).toEqual([])
-    const ok = fake({ reads: { artist_fonts: { data: [] }, revisions: { data: [] } }, byPrefix: everythingOld })
+    const ok = fake({
+      reads: { artist_fonts: { data: [], count: 0 }, latest_revisions: { data: [], count: 0 } },
+      byPrefix: everythingOld,
+    })
     await gcFontObjects(ok.client, A)
     expect(ok.removed).toEqual([`${A}/fonts/face.woff2`])
   })

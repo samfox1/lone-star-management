@@ -257,12 +257,27 @@ export async function gcVideoObjects(
  * object and repoints the row, and the old file sits in a PUBLIC bucket referenced by
  * nothing, collected by no one, forever. The brand folder leaked exactly this way.
  *
- * `referenced` is the union of the WORKING rows and every path in a live PUBLISHED
- * revision, which makes this safe to call from either place: at delete time (the common
- * case — upload the wrong file, remove it) and after a fonts publish. A font that is
- * still live on the published site keeps its object even though its working row is gone,
- * because the published stylesheet still names that URL and a fan's browser will still
- * ask for it. Take that away and the site loses its typeface with no error anywhere.
+ * `referenced` is the union of the WORKING rows and the path in the LATEST non-tombstoned
+ * PUBLISHED revision per font — mirrors gcMediaObjects exactly (2026-09-28), and for the
+ * same reason: a font removed in draft but not yet re-published is still the one the live
+ * stylesheet names, so its object must survive until that deletion itself is published.
+ *
+ * LATEST, not every historical revision (the bug this replaced): the old code selected
+ * every `artist_font` row ever written to `revisions` with a plain, uncounted `select`, so
+ * a font published once was kept FOREVER even after being replaced and re-published many
+ * times over, and past 1000 historical rows (PostgREST's silent max-rows cap) the read was
+ * truncated with no error, which the old code could not even detect. Only the latest
+ * revision can ever matter: `restoreToPublished` (the editor's Restore version, which can
+ * reach an arbitrary older publish) never touches `artist_font` at all — EDITOR_RESTORE
+ * excludes it ("No brand revert for now — the Brand page has its own") — and the Brand
+ * page's own revert (`restoreBrandToPublished`) only ever goes back to the LATEST publish,
+ * never an older moment. No restore path can ever need an older file, so keeping only the
+ * latest is not a narrower guess — it is everything either restore path can reach.
+ *
+ * Read with an EXACT count, both halves: a failed read is not "no rows" (that swept every
+ * live file on a network blip), and a SHORT read is not "all of it" (past the row cap,
+ * every row beyond it looked unreferenced and its LIVE file was swept). Either read being
+ * incomplete sweeps NOTHING — the same refusal gcMediaObjects makes.
  *
  * The GC_MIN_AGE_MS floor still applies, so an object uploaded moments ago survives a
  * sweep triggered before its row lands. Best-effort, like every other GC here.
@@ -274,22 +289,22 @@ export async function gcFontObjects(
 ): Promise<void> {
   try {
     const [working, published] = await Promise.all([
-      client.from('artist_fonts').select('storage_path').eq('artist_id', artistId),
-      client
-        .from('revisions')
-        .select('data')
-        .eq('artist_id', artistId)
-        .eq('entity_type', 'artist_font'),
+      client.from('artist_fonts').select('storage_path', { count: 'exact' }).eq('artist_id', artistId),
+      // Server-side latest-per-entity (one row each, tombstones included), fonts only.
+      client.rpc('latest_revisions', { p_artist_id: artistId }, { count: 'exact' }).eq('entity_type', 'artist_font'),
     ])
 
-    // Either half failing leaves `referenced` short of files a row or the LIVE stylesheet
-    // still names — so either failing sweeps nothing (see gcMediaObjects).
-    if (working.error || published.error || !working.data || !published.data) return
+    // A failed read is NOT "no rows"; a SHORT read is NOT "all of it" — see gcMediaObjects.
+    const complete = (r: { data: unknown[] | null; error: unknown; count: number | null }) =>
+      !r.error && !!r.data && r.count != null && r.data.length >= r.count
+    if (!complete(working) || !complete(published)) return
     const referenced = new Set<string>()
     for (const r of working.data ?? []) if (r.storage_path) referenced.add(r.storage_path as string)
-    for (const r of published.data ?? []) {
-      const path = (r.data as { storage_path?: string } | null)?.storage_path
-      if (path) referenced.add(path)
+    // A tombstone (`{ _deleted: true }`) names no file, so a deleted-and-published font's
+    // file is collected here, same as gcMediaObjects.
+    for (const r of (published.data ?? []) as { data: { storage_path?: unknown } | null }[]) {
+      const path = r.data?.storage_path
+      if (typeof path === 'string' && path) referenced.add(path)
     }
 
     const prefix = `${artistId}/${FONT_FOLDER}`

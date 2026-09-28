@@ -14,6 +14,7 @@ import { AiSection, probePrompts } from '@/app/artists/[id]/(dashboard)/(manager
 import { AltSection } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections/alt'
 import { SEO_SECTIONS, isSeoSection } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
 import { FAQ_KEYS } from '@/lib/site-content-schema'
+import { TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
 import { ABOUT_PLACEMENTS } from '@samfox1/site-bridge/seo'
 import { saveArtistFactAction, saveEditorFieldAction, saveSeoFieldAction, setMediaAltAction, renameMediaAction } from '@/app/artists/[id]/(dashboard)/actions'
 
@@ -61,6 +62,32 @@ describe('sections save through the gates', () => {
     const select = screen.getByRole('combobox', { name: 'Placement' }) as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'hidden' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', 'about_placement', 'hidden'))
+  })
+  /**
+   * Sam, 2026-09-28: the bio box got the same server refusal as the editor's text fields
+   * (saveEditorField refuses a bio over TEXT_LIMITS.bio) but only ever showed "Save
+   * failed" — this same box, from the same table (text-limits.ts), the same TextLimitHint
+   * the editor's Text panel renders.
+   */
+  it('CRITICAL: a bio over the cap counts down, refuses with the real message, and is never sent', async () => {
+    vi.useFakeTimers()
+    try {
+      render(<AboutSection artistId="a1" initialBio="Old" initial={{ about_placement: '', about_heading: '' }} />)
+      const box = screen.getByRole('textbox', { name: 'About the artist' })
+
+      fireEvent.change(box, { target: { value: 'x'.repeat(TEXT_LIMITS.bio - 1) } }) // near the cap: counted
+      expect(screen.getByText(`${(TEXT_LIMITS.bio - 1).toLocaleString('en-US')} / ${TEXT_LIMITS.bio.toLocaleString('en-US')}`)).toBeTruthy()
+      expect(screen.queryByRole('alert')).toBeNull()
+
+      fireEvent.change(box, { target: { value: 'x'.repeat(TEXT_LIMITS.bio + 1) } }) // over it
+      expect((box as HTMLTextAreaElement).value).toHaveLength(TEXT_LIMITS.bio + 1) // kept, not cut
+      expect(screen.getByRole('alert').textContent).toBe(tooLongError(TEXT_LIMITS.bio))
+
+      vi.advanceTimersByTime(1000)
+      expect(fieldMock).not.toHaveBeenCalled() // refused before it was ever sent
+    } finally {
+      vi.useRealTimers()
+    }
   })
   /**
    * Review 2026-09-03, M9: this page offered the whole ABOUT_PLACEMENTS registry while the

@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { ABOUT_PLACEMENTS, type AboutPlacement, type ManifestAbout } from '@samfox1/site-bridge/seo'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveEditorFieldAction, saveSeoFieldAction } from '../../../../actions'
-import { Body, ControlRow, FieldBlock, GroupLabel, INPUT, SaveLine, SeeIt, SELECT, TEXTAREA } from './rows'
+import { Body, ControlRow, FieldBlock, GroupLabel, INPUT, SaveLine, SeeIt, SELECT, TEXTAREA, TextLimitHint } from './rows'
+import { isTooLong, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
 import { cx } from '@/lib/cx'
 
 const PLACEMENT: Record<AboutPlacement, string> = { home: 'On the homepage', page: 'Its own page', hidden: 'Hidden from visitors' }
@@ -35,6 +36,11 @@ export function AboutSection({
   const [v, setV] = useState(initial)
   const bioSave = useDebouncedFieldSave<string>({
     persist: (_k, val) => saveEditorFieldAction(artistId, 'artist_bio', val, { store: 'artist', column: 'bio' }).then((r) => ({ ok: r.ok, error: r.error })),
+    // Refused HERE too, before it is queued or sent (Sam, 2026-09-28), same as the
+    // editor's Text panel: the server would refuse it anyway (saveEditorField, same
+    // table) but that only ever said "Save failed" — this box now says why, in the
+    // server's own words, and never spends a round trip finding out.
+    normalize: (val) => (isTooLong(val, TEXT_LIMITS.bio) ? null : val),
   })
   const seoSave = useDebouncedFieldSave<string>({ persist: (k, val) => saveSeoFieldAction(artistId, k, val).then((r) => ({ ok: r.ok, error: r.error })) })
   const set = (k: string, val: string) => {
@@ -60,6 +66,7 @@ export function AboutSection({
             }}
             className={cx(TEXTAREA, 'min-h-48')}
           />
+          <TextLimitHint value={bio} max={TEXT_LIMITS.bio} />
         </FieldBlock>
         <SaveLine status={bioSave.status} />
       </Body>

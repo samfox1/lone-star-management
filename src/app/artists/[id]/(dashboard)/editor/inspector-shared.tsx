@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { formatCount, isTooLong, nearLimit, tooLongError } from '@/lib/site-editor/text-limits'
 
 /**
  * The shared vocabulary of the editor inspector — the primitives every panel (Style,
@@ -333,6 +334,33 @@ export function NoSlots({ noun }: { noun: string }) {
 export function SaveLine({ status }: { status: SaveStatus }) {
   if (status !== 'error') return null
   return <p className={cx('px-5 pt-3', EYEBROW, 'text-accent-red')}>Save failed</p>
+}
+
+/**
+ * THE CAP, SHOWN AND HELD (Sam, 2026-09-28), read off ONE box: a small count in the last
+ * tenth of the allowance, and the exact refusal once it is passed — same words the server
+ * gives, from the same table (text-limits.ts), so a box can never show a different number
+ * or a vaguer message than what actually gets saved. Every text field with a cap renders
+ * this over its own live value; nothing here is specific to the editor's Text panel.
+ */
+export function TextLimitHint({ value, max }: { value: string; max: number }) {
+  const tooLong = isTooLong(value, max)
+  const counted = nearLimit(value, max)
+  if (!counted && !tooLong) return null
+  return (
+    <>
+      {counted && (
+        <div className={cx('pt-1 text-right font-space text-[11px]', tooLong ? 'text-accent-red' : 'text-ink-faint')}>
+          {formatCount(value.trim().length)} / {formatCount(max)}
+        </div>
+      )}
+      {tooLong && (
+        <p role="alert" className="pt-1 font-space text-[11px] text-accent-red">
+          {tooLongError(max)}
+        </p>
+      )}
+    </>
+  )
 }
 
 /** A panel-level group heading: the mono eyebrow padded to the gutter, hairline rule
