@@ -96,16 +96,20 @@ shows it as a plain labelled link.
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/apple-music/index.ts` — this service's own
+  code: `social` (link method, the artist-id regex as `idFromUrl`) and `source` (the
+  registry entry).
 - `src/lib/apple.ts` — `createAppleMusicClient`: the iTunes `lookup` call, artwork
   upsizing, track mapping.
 - `src/lib/sync.ts` — `syncAppleTracks`: writes/merges into `tracks`.
 - `src/lib/sync-match.ts` — cross-platform title/duration matching shared by all
   three catalog services.
-- `src/lib/connections.ts` — `idFromProfileUrl` (the `apple music` regex), row
+- `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above), row
   building.
-- `src/lib/connect-methods.ts` — `'apple music': { kind: 'link' }`.
-- `src/lib/integrations-registry.ts` — registry entry (`idField: apple_artist_id`,
-  `section: 'music'`) and `TRACK_ID_COLUMN.apple`.
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above.
+- `src/lib/integrations-registry.ts` — assembles the entry above into
+  `INTEGRATION_REGISTRY` (in `INTEGRATION_KEYS` order) and
+  `TRACK_ID_COLUMN.apple`.
 - `src/app/artists/[id]/(dashboard)/actions.ts` — `saveAppleIdAction`,
   `syncAppleAction`.
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires the save/pull actions

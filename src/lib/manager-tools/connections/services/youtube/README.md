@@ -95,17 +95,20 @@ placed — YouTube has no hosted audio/video of its own on this platform.
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/youtube/index.ts` — this service's own code:
+  `social` (the handle spec, `fromPath` for channel/c/user links, `idFromUrl`) and
+  `source` (the registry entry).
 - `src/lib/youtube.ts` — the API client: `channelSelector`, `getChannelVideos`,
   `viewCounts`, Shorts probing.
 - `src/lib/http.ts` — shared GET-with-429-retry used by the client.
 - `src/lib/sync.ts` — `syncYouTubeVideos`: writes the `videos` table, filters out Shorts,
   `on_site: false` on insert.
-- `src/lib/connect-methods.ts` — the `youtube` handle spec (parse/build the profile link,
-  `fromPath` for channel/c/user links).
-- `src/lib/connections.ts` — `idFromProfileUrl` (returns the URL itself for YouTube),
-  merges the social + source into one `CONNECTIONS` entry.
-- `src/lib/integrations-registry.ts` — registry entry: `idField: 'youtube_channel_id'`,
-  `section: 'videos'`, placeholder, pull label "Import uploads."
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the spec above;
+  `parseHandle` reads and builds the profile link.
+- `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above: the URL
+  itself), merges the social + source into one `CONNECTIONS` entry.
+- `src/lib/integrations-registry.ts` — assembles the entry above into
+  `INTEGRATION_REGISTRY` (in `INTEGRATION_KEYS` order).
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires `saveYoutubeChannelAction` /
   `syncYouTubeAction` to the registry entry.
 - `src/app/artists/[id]/(dashboard)/actions.ts` — `saveYoutubeChannelAction`,

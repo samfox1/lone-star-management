@@ -84,6 +84,8 @@ once the manager publishes them on.
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/bandsintown/index.ts` — this service's own
+  code: `source`: the registry entry (`idField: 'bandsintown_name'`, `section: 'tour'`).
 - `src/lib/bandsintown.ts` — the API client: `getArtistEvents`, event → tour-date mapping.
 - `src/lib/http.ts` — shared GET-with-429-retry used by the client.
 - `src/lib/country.ts` — `canonicalCountry`, the shared spelling with Ticketmaster.
@@ -92,8 +94,8 @@ once the manager publishes them on.
   `on_site: false` on insert.
 - `src/lib/connections.ts` — merges the Bandsintown registry entry into `CONNECTIONS` as a
   standalone service (no matching social).
-- `src/lib/integrations-registry.ts` — registry entry: `idField: 'bandsintown_name'`,
-  `section: 'tour'`, placeholder, pull label "Pull tour dates."
+- `src/lib/integrations-registry.ts` — assembles the entry above into
+  `INTEGRATION_REGISTRY` (in `INTEGRATION_KEYS` order).
 - `src/lib/service-icons.ts` — `SERVICE_ICONS.bandsintown`, the dashboard-only brand mark
   (generated from simple-icons by `scripts/generate-service-icons.ts`).
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires `saveBandsintownNameAction` /

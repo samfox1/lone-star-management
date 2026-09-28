@@ -7,7 +7,7 @@ Link only (no API, nothing is pulled).
 ## What the manager enters
 The username alone (e.g. "the Twitch username"), shown between its address in grey (`twitch.tv/` [username]). Accepted: the username with or without @, or a pasted profile link from twitch.tv — share junk (`www.`, tracking params, a trailing slash) stripped.
 
-The rule in plain words: letters, numbers and underscores, 4-25 characters. Regex (`src/lib/connect-methods.ts`, `SPECS.twitch.rule`): `/^[A-Za-z0-9_]{4,25}$/`
+The rule in plain words: letters, numbers and underscores, 4-25 characters. Regex (`social.method.rule` in `index.ts` here): `/^[A-Za-z0-9_]{4,25}$/`
 
 No special link shapes for this platform — a pasted link reduces to its first path segment.
 
@@ -24,7 +24,8 @@ Errors the manager can see, built in `parseHandle` (`src/lib/connect-methods.ts`
 Bridge slug `twitch` (`packages/site-bridge/src/social.ts`, `SOCIAL_PLATFORMS`), icon from `social-icons.ts` (simple-icons, CC0; brand colour `#9146FF`, though the dashboard draws it monochrome). Sites render it from the published `links`. A site must render every bridge platform (skeen gained that on branch feat/all-socials, 2026-09-28; before, it drew only six).
 
 ## Code map
-- `src/lib/connect-methods.ts` — SPECS.twitch: noun/hosts/rule/before-after/url builder; `parseHandle`/`handleFromUrl` do the parsing both ways.
+- `src/lib/manager-tools/connections/services/twitch/index.ts` — this service's own code: `social`: the handle spec (noun/hosts/rule/url builder).
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the spec above; `parseHandle`/`handleFromUrl` do the parsing both ways.
 - `src/lib/connections.ts` — `profileLink` builds the link from the handle, `connectInputError` refuses a bad one, `isProfileLink`/`methodOf`/`connectionHandle` read it back.
 - `.../connections/connect-modal.tsx` — the handle field: `twitch.tv/` shown in grey, paste-tidies-on-paste-and-blur.
 - `.../connections/actions.ts` — `connectOneAction` turns the handle into the link and inserts the `links` row off-site (`addContentAction(..., { offSite: true })`).

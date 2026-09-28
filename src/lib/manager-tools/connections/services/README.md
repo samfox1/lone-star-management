@@ -44,12 +44,17 @@ A new connection starts **off the site**. A site button is added in the site edi
 
 ## Where the code is
 
-- `src/lib/connections.ts` — the list of connections (derived from the bridge's
-  `SOCIAL_PLATFORMS` + `integrations-registry.ts` + Shopify), input checks, the page's rows.
-- `src/lib/connect-methods.ts` — how each social is entered: handle rules, the address
-  shown around the field, reading a pasted link back to its handle.
-- `src/lib/integrations-registry.ts` — the syncable sources: id column, section, how a pull
-  is proven.
+Each folder holds a README and an `index.ts`: that service's own code, and only that
+(`service.ts` says what a file may hold). `index.ts` here lists all of them.
+
+- `<slug>/index.ts` — one `Service`: `social` (bridge slug, how it is entered, the id inside
+  its link), `source` (its sync-registry entry), `service` (a whole def, for Shopify).
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS`; `parseHandle` and
+  `handleFromUrl`, shared by every handle platform.
+- `src/lib/connections.ts` — assembles `CONNECTIONS` (bridge `SOCIAL_PLATFORMS` + the
+  registry + Shopify), `idFromProfileUrl`, input checks, the page's rows.
+- `src/lib/integrations-registry.ts` — assembles `INTEGRATION_REGISTRY` in
+  `INTEGRATION_KEYS` order; how a pull is proven.
 - `src/lib/service-icons.ts` — the services' brand marks (generated, simple-icons CC0);
   the socials' marks are the bridge's `social-icons`.
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/` — the page, the Connect
@@ -57,11 +62,12 @@ A new connection starts **off the site**. A site button is added in the site edi
 
 ## Adding a service
 
-1. A social: add it to the bridge's `SOCIAL_PLATFORMS` (and its icon via
-   `npm run social-icons`), then its handle rule in `connect-methods.ts`. The tests fail
-   until both exist.
-2. A syncable source: an `INTEGRATION_REGISTRY` entry and its pull action in the
-   dashboard's `integrations.ts`.
-3. A service: its connect path in `connections/actions.ts` and its mark via
+1. Make its folder: `<slug>/index.ts` exporting one `Service`, and add it to `index.ts`
+   here. `services.test.ts` fails until every folder is listed.
+2. A social: also add it to the bridge's `SOCIAL_PLATFORMS` (and its icon via
+   `npm run social-icons`). The tests fail until the bridge and the file agree.
+3. A syncable source: add its key to `INTEGRATION_KEYS` (the order the registry takes) and
+   its pull action in the dashboard's `integrations.ts`.
+4. A service: its connect path in `connections/actions.ts` and its mark via
    `npm run service-icons`.
-4. Write its README here, with the same headings as the others.
+5. Write its README with the same headings as the others, and its line in the table above.

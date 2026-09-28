@@ -96,12 +96,15 @@ publishable snapshot.
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/google-drive/index.ts` — this service's own
+  code: `source`: the `drive` registry entry (`idField: 'drive_folder_id'`, `section:
+  'files'`).
 - `src/lib/drive.ts` — `createDriveClient`: `parseDriveFolderId`, `driveKind`, `getFolder`,
   `listMediaFiles`, `listAllMediaFiles`, `getFileMeta`, `downloadFile`.
 - `src/lib/drive-import.ts` — `importDriveFile`: validates kind/parent/extension/size,
   downloads, calls `performUpload`, maps `23505` to a friendly message.
-- `src/lib/integrations-registry.ts` — the `drive` entry (`idField: 'drive_folder_id'`,
-  `section: 'files'`, `pullLabel: 'Check folder'`).
+- `src/lib/integrations-registry.ts` — assembles the entry above into
+  `INTEGRATION_REGISTRY` (in `INTEGRATION_KEYS` order).
 - `src/lib/connections.ts` — folds the registry entry into `CONNECTIONS` as a service.
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires `saveDriveFolderAction` /
   `checkDriveFolderAction` to the registry entry (see Known gaps for who calls `save`).

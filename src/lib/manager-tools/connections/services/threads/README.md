@@ -7,7 +7,7 @@ Link only (no API, nothing is pulled).
 ## What the manager enters
 The handle alone (e.g. "the Threads handle"), shown between its address in grey (`threads.net/@` [handle]). Accepted: the handle with or without @, or a pasted profile link from threads.net and threads.com — share junk (`www.`, tracking params, a trailing slash) stripped.
 
-The rule in plain words: letters, numbers, periods and underscores, 1-30 characters. Regex (`src/lib/connect-methods.ts`, `SPECS.threads.rule`): `/^[A-Za-z0-9._]{1,30}$/`
+The rule in plain words: letters, numbers, periods and underscores, 1-30 characters. Regex (`social.method.rule` in `index.ts` here): `/^[A-Za-z0-9._]{1,30}$/`
 
 A pasted `threads.com` link (also listed in `hosts`) is accepted the same way as `threads.net` and rebuilt on `threads.net` — the field's address and the built link never show `.com`.
 
@@ -24,7 +24,8 @@ Errors the manager can see, built in `parseHandle` (`src/lib/connect-methods.ts`
 Bridge slug `threads` (`packages/site-bridge/src/social.ts`, `SOCIAL_PLATFORMS`), icon from `social-icons.ts` (simple-icons, CC0; brand colour `#000000`, though the dashboard draws it monochrome). Sites render it from the published `links`. A site must render every bridge platform (skeen gained that on branch feat/all-socials, 2026-09-28; before, it drew only six).
 
 ## Code map
-- `src/lib/connect-methods.ts` — SPECS.threads: noun/hosts/rule/before-after/url builder, the two-entry `hosts` list that also matches `threads.com`; `parseHandle`/`handleFromUrl` do the parsing both ways.
+- `src/lib/manager-tools/connections/services/threads/index.ts` — this service's own code: `social`: the handle spec (noun/hosts/rule/url builder; `threads.com` is a second host).
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the spec above; `parseHandle`/`handleFromUrl` do the parsing both ways.
 - `src/lib/connections.ts` — `profileLink` builds the link from the handle, `connectInputError` refuses a bad one, `isProfileLink`/`methodOf`/`connectionHandle` read it back.
 - `.../connections/connect-modal.tsx` — the handle field: `threads.net/@` shown in grey, paste-tidies-on-paste-and-blur.
 - `.../connections/actions.ts` — `connectOneAction` turns the handle into the link and inserts the `links` row off-site (`addContentAction(..., { offSite: true })`).
@@ -39,4 +40,4 @@ Bridge slug `threads` (`packages/site-bridge/src/social.ts`, `SOCIAL_PLATFORMS`)
 - No other test names Threads specifically — it otherwise rides the shared Connect/editor UI tests that exercise any handle platform generically.
 
 ## Known gaps
-`threads.com` is accepted as a pasted host (SPECS.threads.hosts) alongside `threads.net`, but the built link and the address shown in the field always use `threads.net` — a `threads.com` paste is silently normalised to the other domain.
+`threads.com` is accepted as a pasted host (`social.method.hosts` in `index.ts` here) alongside `threads.net`, but the built link and the address shown in the field always use `threads.net` — a `threads.com` paste is silently normalised to the other domain.

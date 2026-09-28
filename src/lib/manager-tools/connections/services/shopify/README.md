@@ -133,12 +133,15 @@ reaches the site or the browser. The payload shape is `SiteMerch`
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/shopify/index.ts` — this service's own code:
+  `SHOPIFY_KEY` and `service`: Shopify's whole `CONNECTIONS` def (neither registry has
+  it).
 - `src/lib/merch/shopify.ts` — `createShopifyClient`: the Storefront client, paging,
   throttle handling, `ShopifyApiError`, `METAFIELDS`, `PAGE_SIZES`.
 - `src/lib/merch/sync.ts`, `probe.ts`, `live.ts`, `index.ts` — `syncShopifyMerch` (products
   → `merch` rows via `syncExternal`); `probeShopify`/`classify`/`probeAdvice` (the "Test
   connection" failure taxonomy); `toLiveProducts`/`isPublicSlug`; the one export door.
-- `src/lib/connections.ts` — `SHOPIFY_KEY` and its special-cased `CONNECTIONS` entry.
+- `src/lib/connections.ts` — re-exports `SHOPIFY_KEY`; appends the def above to `CONNECTIONS`.
 - `src/app/artists/[id]/(dashboard)/merch/actions.ts` — `connectShopifyAction`,
   `probeShopifyAction`, `disconnectShopifyAction`, `syncShopifyAction`.
 - `src/app/artists/[id]/(dashboard)/merch/page.tsx`, `merch-browser.tsx`, `merch-card.tsx` —

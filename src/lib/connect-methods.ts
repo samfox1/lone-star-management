@@ -14,6 +14,10 @@
  * Services with an API of their own (Shopify, Bandsintown, Drive…) are not here: each keeps
  * its own fields in lib/connections.
  *
+ * Each platform's spec (noun, hosts, rule, the address around the field) lives in its own
+ * service file, `lib/manager-tools/connections/services/<slug>/index.ts`; this module
+ * assembles them and holds the parsing every platform shares.
+ *
  * Derived from the bridge's SOCIAL_PLATFORMS: every platform a site can show must have a
  * method, and every link a handle builds must be one `platformFromUrl` recognises as that
  * platform (connect-methods.test.ts), or the site would draw it as a plain link.
@@ -22,6 +26,7 @@
  * door, the modal the affordance).
  */
 import { SOCIAL_PLATFORMS, platformFromUrl } from '@samfox1/site-bridge/social'
+import { SERVICES, type ConnectSpec } from '@/lib/manager-tools/connections/services'
 
 export type HandleMethod = {
   kind: 'handle'
@@ -54,71 +59,8 @@ export type LinkMethod = { kind: 'link'; label: string }
 
 export type ConnectMethod = HandleMethod | LinkMethod
 
-type Spec = Omit<HandleMethod, 'kind' | 'label'> | { kind: 'link' }
-
-const at = (host: string) => ({ before: `${host}/@`, after: '', url: (h: string) => `https://${host}/@${h}` })
-const slash = (host: string) => ({ before: `${host}/`, after: '', url: (h: string) => `https://${host}/${h}` })
-
-const SPECS: Record<string, Spec> = {
-  instagram: { noun: 'username', hosts: ['instagram.com'], rule: /^[A-Za-z0-9._]{1,30}$/, example: 'skeenmusic', ...slash('instagram.com') },
-  tiktok: { noun: 'handle', hosts: ['tiktok.com'], rule: /^[A-Za-z0-9._]{2,24}$/, example: 'skeenmusic', ...at('tiktok.com') },
-  youtube: {
-    noun: 'handle',
-    hosts: ['youtube.com', 'youtu.be'],
-    rule: /^[A-Za-z0-9._-]{3,30}$/,
-    example: 'skeenmusic',
-    ...at('youtube.com'),
-    // A channel link with no handle in it is still the channel: keep it, on the one host.
-    fromPath: (segments) => {
-      const [first, second] = segments
-      if (first && ['channel', 'c', 'user'].includes(first) && second) return { url: `https://youtube.com/${first}/${second}` }
-      return undefined
-    },
-  },
-  soundcloud: { noun: 'username', hosts: ['soundcloud.com'], rule: /^[A-Za-z0-9_-]{2,25}$/, example: 'skeenmusic', ...slash('soundcloud.com') },
-  bandcamp: {
-    noun: 'name',
-    hosts: ['bandcamp.com'],
-    rule: /^[A-Za-z0-9-]{1,63}$/,
-    example: 'skeen',
-    before: '',
-    after: '.bandcamp.com',
-    url: (h) => `https://${h}.bandcamp.com`,
-    subdomain: true,
-  },
-  facebook: {
-    noun: 'page name',
-    hosts: ['facebook.com', 'fb.com'],
-    rule: /^[A-Za-z0-9.]{2,50}$/,
-    example: 'skeenmusic',
-    ...slash('facebook.com'),
-    fromPath: (segments, url) => {
-      const id = url.searchParams.get('id')
-      if (segments[0] === 'profile.php' && id && /^\d+$/.test(id)) return { url: `https://facebook.com/profile.php?id=${id}` }
-      return undefined
-    },
-  },
-  x: { noun: 'handle', hosts: ['x.com', 'twitter.com'], rule: /^[A-Za-z0-9_]{1,15}$/, example: 'skeenmusic', ...slash('x.com') },
-  threads: { noun: 'handle', hosts: ['threads.net', 'threads.com'], rule: /^[A-Za-z0-9._]{1,30}$/, example: 'skeenmusic', ...at('threads.net') },
-  substack: { noun: 'handle', hosts: ['substack.com'], rule: /^[A-Za-z0-9_-]{1,40}$/, example: 'skeen', ...at('substack.com'), alsoSubdomain: true },
-  patreon: { noun: 'page name', hosts: ['patreon.com'], rule: /^[A-Za-z0-9_]{1,64}$/, example: 'skeen', ...slash('patreon.com') },
-  discord: {
-    noun: 'invite code',
-    hosts: ['discord.gg', 'discord.com'],
-    rule: /^[A-Za-z0-9-]{2,32}$/,
-    example: 'AbC123',
-    ...slash('discord.gg'),
-    fromPath: (segments, url) => {
-      if (url.hostname.endsWith('discord.com') && segments[0] === 'invite' && segments[1]) return { handle: segments[1] }
-      return undefined
-    },
-  },
-  twitch: { noun: 'username', hosts: ['twitch.tv'], rule: /^[A-Za-z0-9_]{4,25}$/, example: 'skeenmusic', ...slash('twitch.tv') },
-  spotify: { kind: 'link' },
-  'apple music': { kind: 'link' },
-  deezer: { kind: 'link' },
-  tidal: { kind: 'link' },
-}
+/** Each platform's own spec, from its service file (`lib/manager-tools/connections/services/<slug>`). */
+const SPECS: Record<string, ConnectSpec> = Object.fromEntries(SERVICES.flatMap((s) => (s.social ? [[s.social.key, s.social.method]] : [])))
 
 /** Every social platform the bridge knows, keyed by its slug, with how it connects. */
 export const CONNECT_METHODS: Readonly<Record<string, ConnectMethod>> = Object.fromEntries(

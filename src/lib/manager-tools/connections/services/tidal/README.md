@@ -70,11 +70,12 @@ Tidal still renders it as a plain labelled link.
 
 ## Code map
 
-- `src/lib/connect-methods.ts` — `tidal: { kind: 'link' }`, the only Tidal-specific
-  line of connection logic.
-- `src/lib/connections.ts` — `idFromProfileUrl`'s `default` branch (no id
-  extraction for Tidal); `CONNECTIONS` includes Tidal as a plain social with no
-  `source` because no `INTEGRATION_REGISTRY` entry has label `'Tidal'`.
+- `src/lib/manager-tools/connections/services/tidal/index.ts` — this service's own code:
+  `social`: `{ kind: 'link' }`, the only Tidal-specific line of connection logic.
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above.
+- `src/lib/connections.ts` — `idFromProfileUrl` answers null (Tidal has no `idFromUrl`);
+  `CONNECTIONS` includes Tidal as a plain social with no `source` because no
+  `INTEGRATION_REGISTRY` entry has label `'Tidal'`.
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions.ts` —
   `connectOneAction` (the profile-link-only path), `disconnectConnectionAction`.
 - `packages/site-bridge/src/social.ts`, `social-icons.ts` — the `tidal` slug,

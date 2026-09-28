@@ -14,7 +14,12 @@
  * their catalogs into union rows (`lib/sync.ts syncTracks`). Shopify is intentionally
  * NOT here: it is a connect/disconnect storefront-token flow (token → Vault), not an
  * artist-id column, and the code that lists it beside these resolves it by name.
+ *
+ * Each entry's DATA is its service's own (2026-09-28): it lives beside that service's
+ * README in `lib/manager-tools/connections/services/<slug>/index.ts`, and this module
+ * assembles them. The keys, types and the rules below stay here.
  */
+import { SERVICES } from '@/lib/manager-tools/connections/services'
 
 /** The artist columns an integration reads to decide if it is connected. */
 export type ArtistIdField =
@@ -50,17 +55,17 @@ export type IntegrationDef = {
   pullLabel: string
 }
 
-export const INTEGRATION_REGISTRY: readonly IntegrationDef[] = [
-  { key: 'spotify', label: 'Spotify', section: 'music', idField: 'spotify_artist_id', placeholder: 'Spotify artist ID', pullLabel: 'Pull from Spotify' },
-  { key: 'apple', label: 'Apple Music', section: 'music', idField: 'apple_artist_id', placeholder: 'Apple Music artist ID', pullLabel: 'Pull from Apple Music' },
-  { key: 'deezer', label: 'Deezer', section: 'music', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID', pullLabel: 'Pull from Deezer' },
-  { key: 'youtube', label: 'YouTube', section: 'videos', idField: 'youtube_channel_id', placeholder: 'YouTube @handle, channel ID, or URL', pullLabel: 'Import uploads' },
-  { key: 'bandsintown', label: 'Bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name', pullLabel: 'Pull tour dates' },
-  { key: 'ticketmaster', label: 'Ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID', pullLabel: 'Pull tour dates' },
-  // Not a catalog source: a link-shared folder the dashboard can browse and copy-import
-  // audio/images/videos from ("Check" verifies sharing + counts).
-  { key: 'drive', label: 'Google Drive', section: 'files', idField: 'drive_folder_id', placeholder: 'Google Drive folder link', pullLabel: 'Check folder' },
-]
+/**
+ * Every source, in INTEGRATION_KEYS order (sync, the overview and the Sync dialogs walk it in
+ * this order). Each entry is its service's own, from
+ * `lib/manager-tools/connections/services/<slug>/index.ts`; a key no service declares throws
+ * here, on import, rather than dropping a source without a word.
+ */
+export const INTEGRATION_REGISTRY: readonly IntegrationDef[] = INTEGRATION_KEYS.map((key) => {
+  const source = SERVICES.find((s) => s.source?.key === key)?.source
+  if (!source) throw new Error(`No service file declares the ${key} source`)
+  return source
+})
 
 /** The subset of the artist row the registry reads — a structural projection. */
 export type IntegrationArtist = { [K in ArtistIdField]?: string | null }

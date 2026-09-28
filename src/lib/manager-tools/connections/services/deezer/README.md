@@ -94,15 +94,20 @@ shows it as a plain labelled link.
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/deezer/index.ts` — this service's own code:
+  `social` (link method, the artist-id regex as `idFromUrl`) and `source` (the registry
+  entry).
 - `src/lib/deezer.ts` — `createDeezerClient`: pagination, title dedupe, the
   in-body quota-error handling.
 - `src/lib/sync.ts` — `syncDeezerTracks`: writes/merges into `tracks`.
 - `src/lib/sync-match.ts` — cross-platform title/duration matching shared by all
   three catalog services.
-- `src/lib/connections.ts` — `idFromProfileUrl` (the `deezer` regex), row building.
-- `src/lib/connect-methods.ts` — `deezer: { kind: 'link' }`.
-- `src/lib/integrations-registry.ts` — registry entry (`idField:
-  deezer_artist_id`, `section: 'music'`) and `TRACK_ID_COLUMN.deezer`.
+- `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above), row
+  building.
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above.
+- `src/lib/integrations-registry.ts` — assembles the entry above into
+  `INTEGRATION_REGISTRY` (in `INTEGRATION_KEYS` order) and
+  `TRACK_ID_COLUMN.deezer`.
 - `src/app/artists/[id]/(dashboard)/actions.ts` — `saveDeezerIdAction`,
   `syncDeezerAction`.
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires the save/pull actions

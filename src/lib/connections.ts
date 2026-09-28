@@ -14,7 +14,11 @@
  *   • every syncable source (`INTEGRATION_REGISTRY`) either attaches to the social with
  *     the same name, or stands alone as a service (Bandsintown, Ticketmaster, Drive);
  *   • Shopify is the one service outside both registries — a Vault token, not an id
- *     column — so it is named here explicitly, the same way `sync-sections.ts` does.
+ *     column — so its whole def comes from its own service file.
+ *
+ * Each platform's own pieces (its handle rule, the id inside its link, its source, Shopify's
+ * def) live in `lib/manager-tools/connections/services/<slug>/index.ts`, beside its README;
+ * this module assembles them and holds every rule that is not one platform's.
  *
  * Pure. No DB, no React. The page reads rows and passes them in; the modal reads defs.
  */
@@ -29,8 +33,9 @@ import {
 import { isContactLink, looksLikeEmail } from './url'
 import { displayAddress } from './settings'
 import { CONNECT_METHODS, handleFromUrl, parseHandle, withArticle, type ConnectMethod } from './connect-methods'
+import { SERVICES, SHOPIFY_KEY } from '@/lib/manager-tools/connections/services'
 
-export const SHOPIFY_KEY = 'shopify'
+export { SHOPIFY_KEY }
 
 /** What a connection can feed. The registry's sections plus Merch (Shopify). */
 export type ConnectionSection = IntegrationSection | 'merch'
@@ -78,7 +83,8 @@ export const CONNECTIONS: readonly ConnectionDef[] = (() => {
     if (host) host.source = source
     else defs.push({ key: intg.key, label: intg.label, kind: 'service', source })
   }
-  defs.push({ key: SHOPIFY_KEY, label: 'Shopify', kind: 'service', source: { key: SHOPIFY_KEY, section: 'merch', placeholder: 'store.myshopify.com' } })
+  // A service in neither registry (Shopify) brings its whole def.
+  for (const s of SERVICES) if (s.service) defs.push(s.service)
   return defs
 })()
 
@@ -99,6 +105,9 @@ export function searchConnections(query: string, defs: readonly ConnectionDef[] 
   return defs.filter((d) => d.label.toLowerCase().includes(q))
 }
 
+/** Each social's own id reader (`social.idFromUrl` in its service file), by its key. */
+const ID_FROM_URL = new Map(SERVICES.flatMap((s) => (s.social?.idFromUrl ? [[s.social.key, s.social.idFromUrl] as const] : [])))
+
 /**
  * The source id hidden inside a profile URL, for the platforms that put it there. Null
  * when the platform does not (Instagram), or the URL is not an artist page (a playlist).
@@ -108,22 +117,7 @@ export function searchConnections(query: string, defs: readonly ConnectionDef[] 
 export function idFromProfileUrl(def: ConnectionDef, url: string): string | null {
   const u = url.trim()
   if (!u) return null
-  const grab = (re: RegExp) => {
-    const m = u.match(re)
-    return m ? m[1] : null
-  }
-  switch (def.key) {
-    case 'spotify':
-      return grab(/open\.spotify\.com\/(?:intl-[a-z]+\/)?artist\/([A-Za-z0-9]+)/)
-    case 'apple music':
-      return grab(/music\.apple\.com\/(?:[a-z]{2}\/)?artist\/(?:[^/]+\/)?(\d+)/)
-    case 'deezer':
-      return grab(/deezer\.com\/(?:[a-z]{2}\/)?artist\/(\d+)/)
-    case 'youtube':
-      return /youtube\.com\//.test(u) ? u : null
-    default:
-      return null
-  }
+  return ID_FROM_URL.get(def.key)?.(u) ?? null
 }
 
 /**

@@ -98,16 +98,21 @@ slug still renders it as a plain labelled link.
 
 ## Code map
 
+- `src/lib/manager-tools/connections/services/spotify/index.ts` — this service's own code:
+  `social` (link method, the artist-id regex as `idFromUrl`) and `source` (the registry
+  entry).
 - `src/lib/spotify.ts` — `createSpotifyClient`: token fetch/reuse, pagination,
   album + track fetch, release-type classification, date normalization.
 - `src/lib/sync.ts` — `syncSpotifyTracks`, `syncSpotifyReleases`: writes/merges into
   `tracks` and `releases`.
 - `src/lib/sync-match.ts` — cross-platform title/duration matching shared by all
   three catalog services.
-- `src/lib/connections.ts` — `idFromProfileUrl` (the Spotify regex), row building.
-- `src/lib/connect-methods.ts` — `spotify: { kind: 'link' }`.
-- `src/lib/integrations-registry.ts` — registry entry (`idField:
-  spotify_artist_id`, `section: 'music'`) and `TRACK_ID_COLUMN.spotify`.
+- `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above), row
+  building.
+- `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above.
+- `src/lib/integrations-registry.ts` — assembles the entry above into
+  `INTEGRATION_REGISTRY` (in `INTEGRATION_KEYS` order) and
+  `TRACK_ID_COLUMN.spotify`.
 - `src/app/artists/[id]/(dashboard)/actions.ts` — `saveSpotifyIdAction`,
   `syncSpotifyAction` (pulls tracks + releases, then snapshots a release revision).
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires the save/pull actions
