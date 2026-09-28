@@ -53,9 +53,9 @@ Phases 1–3 done: migration live (checked: every site's payload unchanged apart
 keys), bridge 0.41.0 published after a five-agent review + fixes (1d351f7), Skeen's Brand
 seeded as a DRAFT. Phase 4 DEPLOYED 2026-09-28: skeen-website main = 8b3d787 (bridge 0.41 verified in
 the live HTML). Skeen's Brand draft is still unpublished: the site looks as before until
-Sam presses Publish, and the same after (the values equal the fallbacks). Follow-ups the review left open: a colour added before its
-namesake is deleted gets `cream-2`, so the site's `--brand-cream` falls back silently; one
-Brand Publish makes up to 4 publish moments (not atomic); a mixed Revert doesn't say what it
+Sam presses Publish, and the same after (the values equal the fallbacks). Follow-ups the review left open (the `cream-2` trap is FIXED
+2026-09-28 by 20260928120000: a deleted colour hands its key to a never-published namesake);
+one Brand Publish makes up to 4 publish moments (not atomic); a mixed Revert doesn't say what it
 skipped; editor swatches save the hex, not the brand key; the door doesn't re-check font
 family/path shape (the bridge does); Google Fonts send fan IPs to Google (skeen avoids it
 with `selfHosted`).

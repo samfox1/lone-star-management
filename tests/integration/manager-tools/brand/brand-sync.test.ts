@@ -165,6 +165,85 @@ describe('brand_colors.key — assigned by the database', () => {
   })
 })
 
+/**
+ * THE HANDOVER (Sam, 2026-09-28, 20260928120000). Adding a new "Cream" while the old one
+ * still exists makes the new one `cream-2`; deleting the old one then left the site's
+ * `--brand-cream` pointing at nothing, and the site quietly fell back to its own cream. Now
+ * the deletion hands the freed key to a colour whose NAME slugs to it — but only to one that
+ * has never been published, so no key the site already reads ever moves.
+ */
+describe('brand_colors.key — a deleted colour hands its key to its namesake', () => {
+  async function keyOf(id: string) {
+    const { data, error } = await svc.from('brand_colors').select('key').eq('id', id).single()
+    if (error) throw new Error(error.message)
+    return (data as { key: string }).key
+  }
+
+  it('CRITICAL: new "Cream" added before the old one is deleted takes over `cream`, and the site gets it on Publish', async () => {
+    const t = await createThrowawayArtist(svc, 'Brand key handover', asA)
+    try {
+      const old = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#f4f1ea' })
+      await publishProfile(asA, t.id)
+      await publishBrand(asA, t.id)
+      const heir = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#fffdf5' })
+      expect(await keyOf(heir.color!.id)).toBe('cream-2') // the witness: taken, so suffixed
+      expect((await deleteBrandColor(asA, t.id, old.color!.id)).ok).toBe(true)
+      expect(await keyOf(heir.color!.id)).toBe('cream')
+      await publishBrand(asA, t.id)
+      expect((await door(t.slug)).brand?.colors).toEqual([{ key: 'cream', name: 'Cream', hex: '#fffdf5' }])
+    } finally {
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
+
+  it('CRITICAL: a namesake the site already reads keeps its own key (a published key never moves)', async () => {
+    const t = await createThrowawayArtist(svc, 'Brand key handover published', asA)
+    try {
+      const old = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#f4f1ea' })
+      const heir = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#fffdf5' })
+      await publishProfile(asA, t.id)
+      await publishBrand(asA, t.id) // cream-2 is now on the site
+      await deleteBrandColor(asA, t.id, old.color!.id)
+      expect(await keyOf(heir.color!.id)).toBe('cream-2')
+    } finally {
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
+
+  it('only a colour NAMED like the freed key inherits it; with two, the oldest does', async () => {
+    const t = await createThrowawayArtist(svc, 'Brand key handover names', asA)
+    try {
+      const old = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#f4f1ea' })
+      const other = await addBrandColor(asA, t.id, { name: 'Ivory', hex: '#fffff0' })
+      const first = await addBrandColor(asA, t.id, { name: 'cream', hex: '#eeeeee' }) // same slug
+      const second = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#dddddd' })
+      await deleteBrandColor(asA, t.id, old.color!.id)
+      expect(await keyOf(first.color!.id)).toBe('cream')
+      expect(await keyOf(second.color!.id)).toBe('cream-3')
+      expect(await keyOf(other.color!.id)).toBe('ivory')
+    } finally {
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
+
+  it('Revert still brings the published colour back under its own key (the heir, a draft, goes)', async () => {
+    const t = await createThrowawayArtist(svc, 'Brand key handover revert', asA)
+    try {
+      const old = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#f4f1ea' })
+      await publishProfile(asA, t.id)
+      await publishBrand(asA, t.id)
+      const heir = await addBrandColor(asA, t.id, { name: 'Cream', hex: '#fffdf5' })
+      await deleteBrandColor(asA, t.id, old.color!.id)
+      expect(await keyOf(heir.color!.id)).toBe('cream') // the handover happened
+      await restoreBrandToPublished(asA, t.id)
+      const { data } = await svc.from('brand_colors').select('id, key, hex').eq('artist_id', t.id)
+      expect(data).toEqual([{ id: old.color!.id, key: 'cream', hex: '#f4f1ea' }])
+    } finally {
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
+})
+
 describe('artist_fonts: Google rows', () => {
   it('CRITICAL: a Google row has a name and NO file; an upload has a file and no name — both ways, by constraint name', async () => {
     expectCheck(
