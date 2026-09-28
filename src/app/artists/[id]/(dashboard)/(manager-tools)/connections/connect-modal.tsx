@@ -14,6 +14,7 @@ import {
   type ConnectionDef,
 } from '@/lib/connections'
 import { parseHandle } from '@/lib/connect-methods'
+import { isShopDomain, normalizeShopDomain, shopifyInstallPath } from '@/lib/merch/shop-domain'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { ConnectionMark } from './connection-mark'
 import { connectOneAction, type ConnectResult } from './actions'
@@ -36,6 +37,13 @@ import { connectOneAction, type ConnectResult } from './actions'
  *              value and the field still editable. Retry runs the failed ones only; Save
  *              keeps what worked (the footer word is Save everywhere, Sam 2026-09-23).
  *
+ * SHOPIFY, WHEN THE APP IS SET UP (`shopifyApp`, Sam 2026-09-28): the row asks for the store
+ * address alone, and the footer's action is a "Connect with Shopify" LINK to the install
+ * route — the trip to Shopify IS the connect, so Shopify never goes through
+ * `connectOneAction` here. With other picks, Connect runs those first and the link comes
+ * after, so leaving for Shopify never strands a pick nobody ran. Without the app, Shopify is
+ * the typed domain + token it always was.
+ *
  * THE LATCH IS A REF (AGENTS.md rule 5). Two fast presses of Connect both read stale
  * state; the ref is what makes the second one a no-op.
  */
@@ -50,6 +58,7 @@ export function ConnectModal({
   defs,
   onClose,
   onDone,
+  shopifyApp = false,
 }: {
   artistId: string
   /** Keys already on the page — dimmed in the grid, not addable twice. */
@@ -60,6 +69,9 @@ export function ConnectModal({
   onClose: () => void
   /** Called once when the manager leaves with at least one connection made. */
   onDone: () => void
+  /** The Shopify app's credentials are set (a server-made boolean — never the secret):
+   *  Shopify connects by going to Shopify, not by a pasted token. */
+  shopifyApp?: boolean
 }) {
   useLockBodyScroll(true)
   const [step, setStep] = useState<'pick' | 'details' | 'run'>('pick')
@@ -68,6 +80,10 @@ export function ConnectModal({
   const [running, setRunning] = useState(false)
   const busyRef = useRef(false)
   const madeOne = useRef(false)
+  /** Why the typed store address can't be used, shown under it until it changes. */
+  const [shopError, setShopError] = useState<string | null>(null)
+  /** A pick that connects by the trip to Shopify, not by `connectOneAction`. */
+  const viaApp = (p: Pick) => shopifyApp && p.def.key === SHOPIFY_KEY
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !running && onClose()
@@ -89,6 +105,7 @@ export function ConnectModal({
   }
 
   function setInput(key: string, patch: ConnectInput) {
+    if (key === SHOPIFY_KEY) setShopError(null)
     setPicks((all) => all.map((p) => (p.def.key === key ? { ...p, input: { ...p.input, ...patch } } : p)))
   }
 
@@ -97,9 +114,11 @@ export function ConnectModal({
     busyRef.current = true
     setRunning(true)
     setStep('run')
-    // Reset the rows about to run; leave the ones that already worked alone.
-    setPicks((all) => all.map((p) => (!only || only.has(p.def.key) ? { ...p, status: 'wait', result: undefined } : p)))
-    const queue = picks.filter((p) => !only || only.has(p.def.key))
+    // Reset the rows about to run; leave the ones that already worked alone. A Shopify pick
+    // in app mode never runs here: its connect is the trip to Shopify.
+    const runs = (p: Pick) => !viaApp(p) && (!only || only.has(p.def.key))
+    setPicks((all) => all.map((p) => (runs(p) ? { ...p, status: 'wait', result: undefined } : p)))
+    const queue = picks.filter(runs)
     for (const p of queue) {
       const problem = connectInputError(p.def, p.input)
       if (problem) {
@@ -124,6 +143,11 @@ export function ConnectModal({
   const failed = picks.filter((p) => p.status === 'fail')
   const done = picks.filter((p) => p.status === 'ok')
   const finished = step === 'run' && !running
+  const toRun = picks.filter((p) => !viaApp(p))
+  const appPick = picks.find(viaApp)
+  const shopifyLink = appPick ? (
+    <ShopifyLink artistId={artistId} domain={appPick.input.domain} onBad={setShopError} className={buttonClass('solid', cx(PAIR, 'whitespace-nowrap'))} />
+  ) : null
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Connect" className={modalOverlayClass} onMouseDown={(e) => e.target === e.currentTarget && leave()}>
@@ -205,14 +229,18 @@ export function ConnectModal({
           <>
             <div className="mt-1">
               {picks.map((p) => (
-                <DetailRow key={p.def.key} pick={p} onChange={(patch) => setInput(p.def.key, patch)} />
+                <DetailRow key={p.def.key} pick={p} app={viaApp(p)} error={viaApp(p) ? shopError : null} onChange={(patch) => setInput(p.def.key, patch)} />
               ))}
             </div>
             <div className="mt-6 flex items-center justify-between">
               <button type="button" onClick={() => setStep('pick')} className={buttonClass('confirm', PAIR)}>Back</button>
-              <button type="button" onClick={() => void run()} className={buttonClass('solid', PAIR)}>
-                Connect{picks.length > 1 ? ` ${picks.length}` : ''}
-              </button>
+              {toRun.length > 0 ? (
+                <button type="button" onClick={() => void run()} className={buttonClass('solid', PAIR)}>
+                  Connect{toRun.length > 1 ? ` ${toRun.length}` : ''}
+                </button>
+              ) : (
+                shopifyLink
+              )}
             </div>
           </>
         )}
@@ -221,7 +249,14 @@ export function ConnectModal({
           <>
             <div className="mt-1">
               {picks.map((p) => (
-                <RunRow key={p.def.key} pick={p} editable={finished && p.status === 'fail'} onChange={(patch) => setInput(p.def.key, patch)} />
+                <RunRow
+                  key={p.def.key}
+                  pick={p}
+                  app={viaApp(p)}
+                  error={viaApp(p) ? shopError : null}
+                  editable={finished && (p.status === 'fail' || viaApp(p))}
+                  onChange={(patch) => setInput(p.def.key, patch)}
+                />
               ))}
             </div>
             <div className="mt-6 flex items-center justify-between">
@@ -241,6 +276,7 @@ export function ConnectModal({
                         Retry
                       </button>
                     )}
+                    {shopifyLink}
                   </>
                 )}
               </div>
@@ -283,9 +319,35 @@ function shownValue(def: ConnectionDef, input: ConnectInput): string {
  * the handle between its address, the artist link, the service's fields. `failed` paints the
  * field's line red.
  */
-function ConnectField({ def, input, failed, onChange }: { def: ConnectionDef; input: ConnectInput; failed?: boolean; onChange: (patch: ConnectInput) => void }) {
+function ConnectField({
+  def,
+  input,
+  failed,
+  app,
+  onChange,
+}: {
+  def: ConnectionDef
+  input: ConnectInput
+  failed?: boolean
+  /** Shopify via the app: the store address alone. */
+  app?: boolean
+  onChange: (patch: ConnectInput) => void
+}) {
   const line = failed ? 'border-accent-red focus:border-accent-red' : 'border-hairline focus:border-ink'
   const m = methodOf(def)
+  if (def.key === SHOPIFY_KEY && app)
+    return (
+      <input
+        aria-label="Shopify store domain"
+        placeholder="store.myshopify.com"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        value={input.domain ?? ''}
+        onChange={(e) => onChange({ domain: e.target.value })}
+        className={cx(FIELD, line)}
+      />
+    )
   if (def.key === SHOPIFY_KEY)
     return (
       <>
@@ -362,21 +424,44 @@ function SyncSwitch({ def, input, onChange }: { def: ConnectionDef; input: Conne
   )
 }
 
-function DetailRow({ pick, onChange }: { pick: Pick; onChange: (patch: ConnectInput) => void }) {
+/** The reason a store address can't be used, under its field. */
+function ShopError({ error }: { error: string | null }) {
+  if (!error) return null
+  return (
+    <div role="alert" className="text-[12.5px] leading-snug text-accent-red">
+      {error}
+    </div>
+  )
+}
+
+function DetailRow({ pick, app, error, onChange }: { pick: Pick; app?: boolean; error?: string | null; onChange: (patch: ConnectInput) => void }) {
   const { def, input } = pick
   return (
     <div className="flex items-center gap-3.5 py-3">
       <span className="flex w-5 flex-none justify-center text-ink"><ConnectionMark def={def} size={16} /></span>
       <span className="w-28 flex-none truncate text-sm font-semibold">{def.label}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <ConnectField def={def} input={input} onChange={onChange} />
+        <ConnectField def={def} input={input} app={app} failed={!!error} onChange={onChange} />
         <SyncSwitch def={def} input={input} onChange={onChange} />
+        <ShopError error={error ?? null} />
       </div>
     </div>
   )
 }
 
-function RunRow({ pick, editable, onChange }: { pick: Pick; editable: boolean; onChange: (patch: ConnectInput) => void }) {
+function RunRow({
+  pick,
+  app,
+  error,
+  editable,
+  onChange,
+}: {
+  pick: Pick
+  app?: boolean
+  error?: string | null
+  editable: boolean
+  onChange: (patch: ConnectInput) => void
+}) {
   const { def, input, status, result } = pick
   const value = shownValue(def, input)
   return (
@@ -386,7 +471,8 @@ function RunRow({ pick, editable, onChange }: { pick: Pick; editable: boolean; o
       <div className="min-w-0 flex-1">
         {editable ? (
           <div className="flex flex-col gap-2">
-            <ConnectField def={def} input={input} failed onChange={onChange} />
+            <ConnectField def={def} input={input} app={app} failed={!app || !!error} onChange={onChange} />
+            <ShopError error={error ?? null} />
           </div>
         ) : (
           <span className={cx('block h-6 truncate font-space text-[13px] leading-6', status === 'ok' ? 'text-ink' : 'text-ink-muted')}>{value}</span>
@@ -415,5 +501,31 @@ function RunRow({ pick, editable, onChange }: { pick: Pick; editable: boolean; o
         {status === 'fail' && <Icon name="close" size={11} strokeWidth={2.4} />}
       </span>
     </div>
+  )
+}
+
+/** What a bad store address says. One sentence, the fix in it. */
+export const SHOP_ADDRESS_ERROR = 'Use the store address that ends in .myshopify.com.'
+
+/**
+ * "Connect with Shopify": a real link to the install route, which checks the manager and the
+ * store and sends the browser on to Shopify. The address is tidied first (case, https://, the
+ * admin.shopify.com/store/… link people have open); one that still isn't a store stops here,
+ * with the reason, instead of leaving.
+ */
+export function ShopifyLink({ artistId, domain, onBad, className }: { artistId: string; domain?: string; onBad: (error: string) => void; className?: string }) {
+  const shop = normalizeShopDomain(domain ?? '')
+  return (
+    <a
+      href={shopifyInstallPath(artistId, shop)}
+      onClick={(e) => {
+        if (isShopDomain(shop)) return
+        e.preventDefault()
+        onBad(SHOP_ADDRESS_ERROR)
+      }}
+      className={className}
+    >
+      Connect with Shopify
+    </a>
   )
 }

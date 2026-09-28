@@ -3,8 +3,10 @@ import { CONNECTIONS, buildConnectionRows, type ConnectionSection, type SourceCo
 import { provenBy, type IntegrationKey, type IntegrationSection } from '@/lib/integrations-registry'
 import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
+import { shopifyAppConfigured, shopifyReturnNotice } from '@/lib/merch/shopify-oauth'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../../_data'
 import { ConnectionList } from './connection-list'
+import { ShopifyReturnNotice } from './shopify-return'
 
 export const metadata = { title: 'Connections — Lone Star Management' }
 
@@ -47,8 +49,16 @@ async function sourceCounts(supabase: SupabaseClient, artistId: string): Promise
   return Object.fromEntries(counts)
 }
 
-export default async function ConnectionsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ConnectionsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const { id } = await params
+  // Back from Shopify's approve screen: the callback sends a CODE, the words are chosen here.
+  const shopifyReturn = shopifyReturnNotice(await searchParams)
   const supabase = await createClient()
   const [artist, shopifyDomain, links, counts, diff] = await Promise.all([
     requireArtist(id),
@@ -73,5 +83,12 @@ export default async function ConnectionsPage({ params }: { params: Promise<{ id
 
   // The floating Publish lights up on unpublished link EDITS — the same flag behind the
   // nav's pending dot, so the two always agree (the tour page's rule).
-  return <ConnectionList artistId={id} rows={rows} dirty={diff.link.dirty} />
+  // `shopifyApp` is the one thing about the Shopify app the browser learns: whether it is set
+  // up. The key and the secret stay on the server.
+  return (
+    <>
+      {shopifyReturn && <ShopifyReturnNotice {...shopifyReturn} />}
+      <ConnectionList artistId={id} rows={rows} dirty={diff.link.dirty} shopifyApp={shopifyAppConfigured()} />
+    </>
+  )
 }

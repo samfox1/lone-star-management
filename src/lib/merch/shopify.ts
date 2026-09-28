@@ -10,6 +10,7 @@
  */
 
 import { parseRetryAfterSeconds } from '@/lib/http'
+import { SHOP_DOMAIN_RE } from './shop-domain'
 
 const API_VERSION = '2024-01'
 
@@ -38,8 +39,8 @@ export class ShopifyApiError extends Error {
 // primary domains front only the online store, never the GraphQL endpoint.
 // Validating here keeps a bad manager-supplied domain from redirecting the
 // request (and its storefront token) to an attacker host. connect_shopify
-// validates authoritatively in SQL; this is defense in depth.
-const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/
+// validates authoritatively in SQL; this is defense in depth. The pattern is
+// shared with the OAuth app's checks (./shop-domain), so there is one rule.
 
 function assertShopDomain(domain: string): void {
   if (domain !== domain.trim() || !SHOP_DOMAIN_RE.test(domain)) {

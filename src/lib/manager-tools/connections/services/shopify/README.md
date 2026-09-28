@@ -12,12 +12,33 @@ an artist-id column) and marks it `kind: 'service'`. Sam, 2026-09-28: "I will us
 differently" — it is never a site button; it feeds the site's merch pages and buy buttons
 instead (see On the site).
 
+Two ways in, one result. **Connect with Shopify** (OAuth, a Shopify app with custom
+distribution; Sam, 2026-09-28: "If they have their own connect portal … lets just prompt
+that") is used whenever the app's credentials are set. Without them, the manager pastes a
+**storefront token** as before. Either way the same kind of Storefront token lands in Vault
+through the same `connect_shopify` path, so everything below "How it is stored" is shared.
+
 ## What the manager enters
 
-Two required fields in the Connections modal (`ConnectField`, `connect-modal.tsx`): a
-**store domain** (placeholder `store.myshopify.com`) and a **storefront access token**
-(placeholder `Storefront access token`, a `type="password"` field so it isn't shown in
-plain text while typing).
+**With the app set up** (`SHOPIFY_API_KEY` + `SHOPIFY_API_SECRET` both set; the page passes
+the boolean `shopifyApp`, never a credential): the **store address** alone, then **Connect
+with Shopify** — a link to `/api/shopify/install`. In the Connect window it is the footer's
+action (with other picks, Connect runs those first and the link comes after); in Shopify's
+own edit window it replaces the token field and Change token. The address is tidied first
+(case, `https://`, and the `admin.shopify.com/store/{store}/…` link people usually have open).
+
+Error, from `ShopifyLink` (`connect-modal.tsx`), before anything leaves:
+- `Use the store address that ends in .myshopify.com.` — not a `{store}.myshopify.com` host.
+
+The manager approves on Shopify's screen and lands back on Connections with one line above
+the list (`shopify-return.tsx`): `Shopify connected.`, or what went wrong in plain words.
+The callback sends only a CODE (`?shopify=failed&reason=hmac`); the page picks the words
+(`shopifyReturnNotice`, `shopify-oauth.ts`), so nobody can put text on the page by link.
+
+**Without the app:** two required fields in the Connections modal (`ConnectField`,
+`connect-modal.tsx`): a **store domain** (placeholder `store.myshopify.com`) and a
+**storefront access token** (placeholder `Storefront access token`, a `type="password"`
+field so it isn't shown in plain text while typing).
 
 Error, from `connectInputError` (`src/lib/connections.ts`):
 - `Enter the store domain and its storefront token.` — either field blank.
@@ -25,6 +46,51 @@ Error, from `connectInputError` (`src/lib/connections.ts`):
 The domain is validated more strictly once it reaches the database (see How it is stored).
 There is no separate "Test connection" button in the current UI — connecting, probing and
 the first pull all happen in one action (see Sync / integration).
+
+## Set up the Shopify app (one time)
+
+Sam does this once, in Shopify's **Dev Dashboard** (dev.shopify.com — where Shopify moved
+app creation; the old Partner Dashboard and store-admin "custom apps" no longer make new
+ones). Until step 3 is done, nothing changes: the Connect window keeps the domain + token
+fields. `<dashboard>` below is the production address of this app, e.g.
+`https://lone-star-management.vercel.app`.
+
+1. **Create the app.** Apps → Create app → Start from Dev Dashboard → name it `Lone Star`.
+2. **Create a version** (Versions → Create version), then Release:
+   - **App URL:** `<dashboard>/api/shopify/install` (opening the app from Shopify's admin
+     lands on the Lone Star dashboard).
+   - **Embed app in Shopify admin:** off, if the form offers it. This app runs on its own
+     site, not inside Shopify's admin.
+   - **Scopes:** `unauthenticated_read_product_listings` — only that (`SHOPIFY_SCOPES`).
+   - **Redirect URLs:** both `<dashboard>/api/shopify/callback` and
+     `http://localhost:3000/api/shopify/callback` (for local testing).
+   - **Webhooks API version:** the newest offered.
+   - **Webhooks,** if the form has them: `app/uninstalled` →
+     `<dashboard>/api/shopify/webhooks`. (The callback also registers it for each store with
+     the one-time Admin token, so this is a back-up.) **Compliance webhooks** (customer data
+     request, customer data erasure, shop data erasure): the same URL for all three.
+3. **Credentials.** Settings → copy the **Client ID** and **Client secret**. In Vercel →
+   Project → Settings → Environment Variables add `SHOPIFY_API_KEY` = Client ID and
+   `SHOPIFY_API_SECRET` = Client secret (Production, plus Preview if you test there), then
+   redeploy. For local testing, the same two lines in `.env.local`.
+4. **Distribution.** Home → Distribution → Select distribution method → **Custom
+   distribution** (this cannot be changed later) → enter the store's `.myshopify.com`
+   address → Generate link. **A custom-distribution app installs on ONE store** (or the
+   stores of one Shopify Plus organization). This app is Skeen's store's.
+5. **Connect.** In Lone Star: Connections → Connect → Shopify (or Shopify's own row) → type
+   the store address → Connect with Shopify → sign in to the store if asked → approve. You
+   land back on Connections with "Shopify connected." If the store owner opens the install
+   link from step 4 instead, Shopify sends them to the Lone Star dashboard afterwards;
+   finishing from the artist's Connections page then goes straight through.
+6. **Products.** In the store's admin, make the products available to the `Lone Star` app
+   (the product's sales channels and apps). A product that isn't is simply missing from the
+   pull, with no error — the same rule the pasted token always had.
+
+**A second artist's store** cannot install this app (custom distribution is one store). It
+needs **public distribution** (Shopify's App Store review; the listing can be unlisted) —
+the same code, just a different distribution choice on a new app — or the pasted-token path.
+While these two env vars are set, though, the Connect window shows only Connect with Shopify
+for every artist (see Known gaps).
 
 ## How it is stored
 
@@ -39,6 +105,12 @@ the first pull all happen in one action (see Sync / integration).
   `record_label`, `shipping_days`. A partial unique index, `merch_handle_uniq` on
   `(artist_id, handle) where handle is not null`, keeps `/merch/[handle]` unambiguous.
 - No `links` row — Shopify is a service, never a profile.
+- **Connect with Shopify stores nothing new.** The Admin API token Shopify hands the callback
+  lives for that one request: it makes the Storefront token and registers the uninstall
+  webhook, then it is dropped — never a column, never Vault, never logged. The trip's
+  **state** is a cookie (`ls_shopify_oauth`, HttpOnly, SameSite=Lax, path
+  `/api/shopify/callback`, ten minutes, signed with the app secret, spent on return), not a
+  table.
 
 ## Sync / integration
 
@@ -49,8 +121,27 @@ redirect the token to an attacker host) and, authoritatively, inside `connect_sh
 
 Auth is **per-store**, not a global env var: a Storefront token sent as
 `X-Shopify-Storefront-Access-Token`, read from Vault at pull time by the owner-gated
-`shopify_credentials` RPC. No `SHOPIFY_...` env var is actually wired to any of this — see
-Known gaps.
+`shopify_credentials` RPC. `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` are the APP's credentials
+and are used only by the connect routes, never by a pull.
+
+**Connect with Shopify** (`src/lib/merch/shopify-oauth.ts`, the three routes under
+`src/app/api/shopify/`):
+1. `/install?artist=&shop=` — a signed-in manager of that artist only (`callerOwns`; anyone
+   else gets a 404; /api is outside the proxy's login gate, so the route checks). Signs the
+   state cookie (artist + manager + store + nonce) and redirects to
+   `https://{store}/admin/oauth/authorize` with the client id, the scope, the callback URL
+   (built from THIS request's origin, since the cookie belongs to it; Shopify's redirect
+   allow-list pins the origins) and the nonce.
+2. `/callback` — every check before any call: the signed cookie, Shopify's `hmac` over the
+   query (sorted `k=v`, HMAC-SHA256 hex, compared in constant time), the nonce, the store
+   (a signed return from another store is refused), the same signed-in manager, still an
+   owner. Then: trade the code for an Admin token (`POST /admin/oauth/access_token`, no
+   redirects followed), refuse if the granted scopes fall short, make a Storefront token
+   (Admin GraphQL `storefrontAccessTokenCreate`, API `2026-07`), register `APP_UNINSTALLED`
+   (https origins only; best effort), and save the Storefront token through
+   `connectOneAction` — exactly the steps below. Any refusal goes back with a code and saves
+   nothing.
+3. `/webhooks` — see Known gaps for what uninstall can and can't remove.
 
 Connecting (`connectOneAction` → `connectShopify`, `connections/actions.ts`) does three
 things in order, via `app/artists/[id]/(dashboard)/merch/actions.ts`:
@@ -138,6 +229,15 @@ reaches the site or the browser. The payload shape is `SiteMerch`
   it).
 - `src/lib/merch/shopify.ts` — `createShopifyClient`: the Storefront client, paging,
   throttle handling, `ShopifyApiError`, `METAFIELDS`, `PAGE_SIZES`.
+- `src/lib/merch/shop-domain.ts` — the one `{store}.myshopify.com` rule (`SHOP_DOMAIN_RE`,
+  `isShopDomain`), `normalizeShopDomain`, `shopifyInstallPath`. Client-safe.
+- `src/lib/merch/shopify-oauth.ts` — the app: `SHOPIFY_SCOPES`, `shopifyAppConfig`,
+  `verifyCallbackHmac`, `createState`/`readState`/`checkCallbackState`, `authorizeUrl`,
+  `exchangeCode`, `createStorefrontToken`, `registerUninstallWebhook`, `verifyWebhookHmac`,
+  and the return codes + words (`OAUTH_FAILURES`, `returnPath`, `shopifyReturnNotice`).
+  Server-only (node:crypto).
+- `src/app/api/shopify/install/route.ts`, `callback/route.ts`, `webhooks/route.ts` — the
+  three routes.
 - `src/lib/merch/sync.ts`, `probe.ts`, `live.ts`, `index.ts` — `syncShopifyMerch` (products
   → `merch` rows via `syncExternal`); `probeShopify`/`classify`/`probeAdvice` (the "Test
   connection" failure taxonomy); `toLiveProducts`/`isPublicSlug`; the one export door.
@@ -149,8 +249,12 @@ reaches the site or the browser. The payload shape is `SiteMerch`
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions.ts` —
   `connectOneAction` (the Shopify branch), `disconnectConnectionAction`,
   `pullConnectionAction`.
-- `.../connections/connect-modal.tsx`, `connection-modal.tsx` — the domain/token fields;
-  Shopify has no `idField`, so the edit modal shows no editable "ID" row (see Known gaps).
+- `.../connections/connect-modal.tsx`, `connection-modal.tsx` — the domain/token fields, or
+  the store address + `ShopifyLink` ("Connect with Shopify") when `shopifyApp`; the edit
+  window's Store row changes the store either way.
+- `.../connections/page.tsx` — computes `shopifyApp` and the return notice;
+  `connection-list.tsx` passes `shopifyApp` to both windows; `shopify-return.tsx` is the
+  line shown on return.
 - `src/app/artists/[id]/(dashboard)/sync-sections.ts` — resolves Shopify by name for the
   merch Sync dialog (it has no registry entry to be found by).
 - `src/lib/service-icons.ts` — `SERVICE_ICONS.shopify`.
@@ -181,6 +285,22 @@ reaches the site or the browser. The payload shape is `SiteMerch`
   site editor's Merch panel; a manual product's stay editable.
 - `tests/components/manager-tools/connections/connect-modal.test.tsx` — the domain/token
   step and its connecting → connected/failed states.
+- `tests/unit/shopify/shopify-oauth.test.ts` — the app's rules: the callback `hmac` (built
+  from Shopify's recipe, not the code), constant-time compare, the state cookie (tampered
+  artist, other secret, expiry, other nonce/store/manager), the store address, the
+  authorize link, the scope list, the webhook signature, the Shopify calls (fetch mocked),
+  and every return code having words.
+- `tests/unit/shopify/shopify-oauth-routes.test.ts` — the three routes: install only for an
+  owner; the callback saves the STOREFRONT token through `connectOneAction` and each
+  refusal (hmac, state, other store, expiry, other manager, non-owner, no cookie) saves
+  nothing and calls Shopify for nothing, each after a planted witness saves; the webhook
+  deletes only the signed store's row.
+- `tests/unit/manager-tools/connections/connect-shopify-reason.test.ts` — the step codes
+  (`connect`, `probe-…`, `sync`) the callback reports.
+- `tests/unit/manager-tools/connections/connections-page-shopify.test.ts` — `shopifyApp`
+  follows the two env vars and no credential reaches a prop.
+- `tests/components/manager-tools/connections/shopify-app-connect.test.tsx` — both windows
+  in both modes, the bad-address stop, mixed picks, and the return line.
 - `tests/unit/manager-tools/connections/connections.test.ts`,
   `integrations-registry.test.ts`, `service-icons.test.ts` — Shopify as a `CONNECTIONS`
   entry outside both registries, its two-field error and count-based row state,
@@ -192,15 +312,30 @@ reaches the site or the browser. The payload shape is `SiteMerch`
   (2026-09-10): `integrations` has never held a real Shopify row and `merch` has never held
   a synced product — Sam is waiting on the artist's team for a domain + token and declined a
   throwaway dev store. Every test mocks the network.
-- **`.env.example` lists `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET`, but neither name appears
-  anywhere in the application code.** Real auth is the per-store Storefront token in Vault,
-  set via `connect_shopify`. These look like leftovers or placeholders for the "OAuth app
-  long term" step `MERCH_PLAN.md` describes as future work, not anything wired up today.
-- **No token-rotation UI once connected.** The per-connection edit modal only shows an
-  editable "ID" row when `def.source.idField` is set, and Shopify has none — no domain/token
-  field there at all. The Connect grid also disables an already-connected tile
-  (`disabled={already}`). The only way to change a store's token is Remove then Connect
-  again — which, per the point above, leaves the old store's `merch` rows in place.
+- **The app has never met real Shopify.** The OAuth flow is built to Shopify's documented
+  spec and tested with fetch mocked; the first real run is step 5 of the setup above.
+- **One app = one store.** Custom distribution installs on a single store. With the two env
+  vars set, the Connect window offers ONLY Connect with Shopify, for every artist — so a
+  second artist on a different store is stuck (Shopify refuses the install, on Shopify's
+  page, and the pasted-token fields are hidden). Before a second store: public distribution,
+  or a "use a token instead" fallback in the UI.
+- **Uninstall leaves the Vault secret behind.** `app/uninstalled` deletes the store's
+  `integrations` row with the service role, because `disconnect_shopify` checks that the
+  CALLER manages the artist and a webhook has no caller. The secret it pointed to stays in
+  Vault, holding a token Shopify revoked at uninstall. Fixing it needs a service-role-only
+  SQL door (secret first, then row, by store domain) — not added yet.
+- **Uninstall matches by store, not by how it was connected.** If the same store was also
+  connected to another artist with a pasted token (not through the app), uninstalling the
+  app removes that connection too, though its token still works.
+- **`shop/redact` keeps the synced merch rows.** The credential goes at uninstall; product
+  titles/images/prices stay, since they are the artist's published catalogue. No Shopify
+  customer or order data is ever held (the only scope reads published products), so the two
+  `customers/*` webhooks have nothing to do.
+- **Each Connect with Shopify makes a new Storefront token** (Shopify allows 100 per store);
+  a failure after it is made (the save, the probe) leaves it unused on Shopify's side until
+  the app is uninstalled.
+- Changing the store (or its token) from Shopify's edit window keeps the old store's
+  `merch` rows, as Remove does; a reused handle then collides (see Limits).
 - `MERCH_PLAN.md` itself is stale in one place: it still names `shopify-panel.tsx` as the
   connect UI. That file is gone; connecting now runs through the Connections tool.
 - The live lane needs `NEXT_PUBLIC_LONE_STAR_URL` set on the connected site's deploy or it

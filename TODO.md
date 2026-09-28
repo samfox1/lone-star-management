@@ -1,5 +1,22 @@
 # TODO
 
+## Shopify connect app — LATER, Sam creates it (added 2026-09-28)
+
+The "Connect with Shopify" portal is built (Connections → Shopify: type the store name,
+approve in Shopify). It switches on once a Shopify app exists; until then the manual
+store domain + storefront token entry keeps working. Setup steps are in
+`src/lib/manager-tools/connections/services/shopify/README.md` ("Set up the Shopify app").
+
+- [ ] **Now-ish (Skeen's store):** create a custom-distribution app in Shopify's Dev
+      Dashboard for Skeen's store (one app = one store; no Shopify review). Set its redirect
+      and webhook URLs, then put its Client ID / secret in Vercel as `SHOPIFY_API_KEY` /
+      `SHOPIFY_API_SECRET`.
+- [ ] **When a second artist has a store:** switch to a public app (Shopify reviews it; it
+      can stay unlisted). Same connect code; only the app's distribution changes.
+- [ ] Decide on the small database door that lets an uninstall clean up exactly like
+      Remove (today an uninstall deletes the connection row and leaves its already-revoked
+      token in Vault).
+
 ## Delete the PostHog cross-check — ON OR AFTER 2026-10-15 (added 2026-09-18)
 
 The whole apparatus is **scheduled for deletion**, and `stryker.config.json` says so twice.
@@ -170,7 +187,8 @@ Decisions that don't change the sequence:
 - **Analytics landing** (redesign centerpiece): build on data we OWN now (site
   visits, catalog counts, link/ticket/buy clicks), leave a slot for real streaming
   data to drop in later. The prototype's "monthly listeners/streams" are fabricated.
-- **Bandsintown gate**: stays a TODO note (not enforced in code) — see bottom section.
+- **Bandsintown gate**: enforced in code now (2026-09-28), in `createBandsintownClient`
+  (`src/lib/bandsintown.ts`) — every pull path runs through it. See bottom section.
 
 ### New to-dos from the review
 - [ ] **Get a GOOGLE_API_KEY to switch on the Drive integration** (built + tested
@@ -567,9 +585,18 @@ Hardening (low priority):
 
 ## Bandsintown — compliance before going live (BLOCKED on Bandsintown)
 
-The Bandsintown integration (Milestone 7) is built and tested, but **do not enable
-it in production until the items below are resolved.** Bandsintown's API is not
-self-serve and has display/storage obligations.
+The Bandsintown integration (Milestone 7) is built and tested, but **do not turn the
+gate on until the items below are resolved.** Bandsintown's API is not self-serve and
+has display/storage obligations.
+
+**The gate is now enforced in code (2026-09-28), not just this note.**
+`createBandsintownClient` (`src/lib/bandsintown.ts`) refuses every pull — Connect, Sync,
+Pull now, Retry all go through it — unless BOTH `BANDSINTOWN_APP_ID` is set AND
+`BANDSINTOWN_TERMS_COMPLIANT` is the exact string `"true"`. Set the second env var by
+hand only once the checklist below is actually done; it is not enough to get the app_id.
+No dev exception — the same two checks run in every environment. When closed, the
+refusal is one sentence ("Bandsintown isn't switched on yet.") and nothing is written;
+connecting still saves the artist's Bandsintown name, it just doesn't pull.
 
 **Blocking step — get an app_id + clarify use case**
 - [ ] Email `support@bandsintown.com` to request an `app_id` (no signup page; an

@@ -30,7 +30,18 @@ import { pullConnectionAction, syncProfileAction } from './actions'
  * the editor"). A connection is an account; the editor's Socials makes a site button from
  * it, and that button is this same link — so an edit here changes the button.
  */
-export function ConnectionList({ artistId, rows: initial, dirty = false }: { artistId: string; rows: ConnectionRow[]; dirty?: boolean }) {
+export function ConnectionList({
+  artistId,
+  rows: initial,
+  dirty = false,
+  shopifyApp = false,
+}: {
+  artistId: string
+  rows: ConnectionRow[]
+  dirty?: boolean
+  /** The Shopify app is set up: Shopify connects by going to Shopify (a server-made boolean). */
+  shopifyApp?: boolean
+}) {
   const router = useRouter()
   // Seeded from the server's rows and RE-SEEDED when they change (a refresh after a
   // connect), so an optimistic row can't outlive the truth (useSeeded).
@@ -61,19 +72,32 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
             key={r.key}
             artistId={artistId}
             row={r}
+            shopifyApp={shopifyApp}
             onChange={(next) => setRows((all) => (next ? all.map((x) => (x.key === r.key ? next : x)) : all.filter((x) => x.key !== r.key)))}
           />
         ))}
       </div>
 
-      {connect && <ConnectModal artistId={artistId} taken={rows.map((r) => r.key)} onClose={() => setConnect(false)} onDone={() => router.refresh()} />}
+      {connect && (
+        <ConnectModal artistId={artistId} taken={rows.map((r) => r.key)} shopifyApp={shopifyApp} onClose={() => setConnect(false)} onDone={() => router.refresh()} />
+      )}
 
       <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="connections" />
     </div>
   )
 }
 
-function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row: ConnectionRow; onChange: (next: ConnectionRow | null) => void }) {
+function ConnectionRowView({
+  artistId,
+  row,
+  shopifyApp,
+  onChange,
+}: {
+  artistId: string
+  row: ConnectionRow
+  shopifyApp: boolean
+  onChange: (next: ConnectionRow | null) => void
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pulling, setPulling] = useState(false)
@@ -157,7 +181,7 @@ function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row:
         </span>
       </div>
 
-      <ConnectionModal artistId={artistId} row={row} open={open} onClose={() => setOpen(false)} onChange={onChange} />
+      <ConnectionModal artistId={artistId} row={row} open={open} shopifyApp={shopifyApp} onClose={() => setOpen(false)} onChange={onChange} />
     </>
   )
 }

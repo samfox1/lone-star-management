@@ -15,6 +15,7 @@ import {
   type LinkRowLike,
 } from '@/lib/connections'
 import { probeAdvice } from '@/lib/merch/probe'
+import type { ReturnReason } from '@/lib/merch/shopify-oauth'
 import { addContentAction, deleteContentAction, saveSourceIdAction } from '../../actions'
 import { INTEGRATIONS } from '../../integrations'
 import { connectShopifyAction, disconnectShopifyAction, probeShopifyAction, syncShopifyAction } from '../../merch/actions'
@@ -55,6 +56,9 @@ export type ConnectResult = {
   error?: string
   /** What to do about it, when we know (the Shopify probe's advice). */
   detail?: string
+  /** Shopify only: where the save stopped, as a CODE (`connect`, `probe-bad-token`, `sync`)
+   *  — what the OAuth callback puts in its return URL instead of any text. */
+  reason?: ReturnReason
 }
 
 export async function connectOneAction(artistId: string, key: string, input: ConnectInput): Promise<ConnectResult> {
@@ -125,14 +129,14 @@ async function connectShopify(artistId: string, input: ConnectInput): Promise<Co
   fd.set('store_domain', input.domain!.trim())
   fd.set('storefront_token', input.token!.trim())
   const connected = await connectShopifyAction(artistId, fd)
-  if (connected.error) return { ok: false, error: connected.error }
+  if (connected.error) return { ok: false, error: connected.error, reason: 'connect' }
   const probe = await probeShopifyAction(artistId)
   if (!probe.ok) {
     const advice = probeAdvice(probe.reason)
-    return { ok: false, error: advice.title, detail: advice.fix }
+    return { ok: false, error: advice.title, detail: advice.fix, reason: `probe-${probe.reason}` }
   }
   const pulled = await syncShopifyAction(artistId)
-  if (!pulled.ok) return { ok: false, error: pulled.error }
+  if (!pulled.ok) return { ok: false, error: pulled.error, reason: 'sync' }
   return { ok: true, message: pulled.message ?? `${probe.products.length} product${probe.products.length === 1 ? '' : 's'} found` }
 }
 

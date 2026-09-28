@@ -12,6 +12,7 @@ import { CardModal } from '../../card-modal'
 import { KvField, KvRow, ModalHeader } from '../../modal-kit'
 import { toast } from '../../toast'
 import { ConnectionMark } from './connection-mark'
+import { ShopifyLink } from './connect-modal'
 import { connectOneAction, disconnectConnectionAction, getShopifyDomainAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
 
 const FIELD_CLASS =
@@ -30,6 +31,7 @@ export function ConnectionModal({
   open,
   onClose,
   onChange,
+  shopifyApp = false,
 }: {
   artistId: string
   row: ConnectionRow
@@ -37,6 +39,9 @@ export function ConnectionModal({
   onClose: () => void
   /** The row as it now is, or null once removed. */
   onChange: (next: ConnectionRow | null) => void
+  /** The Shopify app is set up (a server-made boolean): the Store row changes the store by
+   *  going to Shopify, and there is no token to type. */
+  shopifyApp?: boolean
 }) {
   const router = useRouter()
   const [pulling, setPulling] = useState(false)
@@ -54,6 +59,8 @@ export function ConnectionModal({
   const [savingStore, setSavingStore] = useState(false)
   const savingStoreRef = useRef(false)
   const [storeResult, setStoreResult] = useState<ConnectResult | null>(null)
+  /** App mode: why the typed store address can't be used, until it changes. */
+  const [shopError, setShopError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !isShopify) return
@@ -191,7 +198,36 @@ export function ConnectionModal({
         {row.def.source?.idField && row.sourceId !== undefined && (
           <KvField label="ID" value={row.sourceId ?? ''} mono onSave={saveId} onError={fail} />
         )}
-        {isShopify && (
+        {/* With the app set up, the store is changed (or its token renewed) by going to
+            Shopify again — the callback saves through the same connect path. */}
+        {isShopify && shopifyApp && (
+          <KvRow label="Store" align="start">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <input
+                aria-label="Store domain"
+                placeholder="store.myshopify.com"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={domain}
+                onChange={(e) => {
+                  setDomain(e.target.value)
+                  setShopError(null)
+                }}
+                className={cx(FIELD_CLASS, 'font-space', shopError && 'border-accent-red focus:border-accent-red')}
+              />
+              <div className="flex items-center gap-3">
+                <ShopifyLink artistId={artistId} domain={domain} onBad={setShopError} className={buttonClass('ghost', 'whitespace-nowrap')} />
+              </div>
+              {shopError && (
+                <span role="alert" className="font-space text-[11px] text-accent-red">
+                  {shopError}
+                </span>
+              )}
+            </div>
+          </KvRow>
+        )}
+        {isShopify && !shopifyApp && (
           <KvRow label="Store" align="start">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <input
