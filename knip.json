@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/build-google-fonts.ts",
+        "scripts/build-major-cities.ts",
+        "scripts/build-map-data.ts",
+        "supabase/functions/*/index.ts"
+      ],
+      "ignore": [
+        "design/**"
+      ]
+    },
+    "lone-star-agent": {
+      "entry": [
+        "agent/agent.ts",
+        "agent/channels/*.ts",
+        "agent/tools/*.ts"
+      ],
+      "ignore": [
+        ".eve/**",
+        ".output/**"
+      ]
+    }
+  }
+}

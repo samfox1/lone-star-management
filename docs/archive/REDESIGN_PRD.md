@@ -1,5 +1,11 @@
 # Dashboard Redesign — PRD
 
+> Archived 2026-09-28: shipped. Phases 0-3 landed 2026-06-30/07-01 (roster home at `/roster`,
+> manager launcher at `/`, public `/welcome` + `/apply`, account settings, artist top-nav with
+> Analytics as index) — the "draft for approval" status below is stale. §8 decisions resolved
+> in practice: Analytics scoped to real data (not fabricated streaming stats), sign-up stayed
+> invite-only (no sign-up route built).
+
 Porting the `prototypes/lone_star_app_v9.html` design into the real app. This is a **presentation + IA redesign plus a new public/auth surface** — it does **not** touch the data layer, publish model, RLS, doors, integration clients, or the fan-facing site.
 
 Status: draft for approval. No code until the open decisions in §8 are settled.

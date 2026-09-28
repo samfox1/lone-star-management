@@ -64,8 +64,13 @@ COSTLY-TO-GET-WRONG a thing is — not a flat "test everything strictly":
   changing.
 
 Finding a bug and then fixing the test that locked it in is normal — a test proves the
-code does what we SAID, not that what we said is right. Run the FULL suite once before
-every push; while building, run only the related tests.
+code does what we SAID, not that what we said is right.
+
+**When the full suite runs** (Sam, 2026-09-28: "move fast with development and then come
+back and test … often enough to know where we stand"): while building and for ordinary
+pushes to `dev`, run only the tests near the change. Run the FULL suite at the end of each
+batch of work, and ALWAYS before anything goes live — a migration push, a site deploy, a
+bridge release, a merge to `main`.
 
 # Test discipline: a test must be able to FAIL
 

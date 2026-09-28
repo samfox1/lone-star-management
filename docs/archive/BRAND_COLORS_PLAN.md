@@ -1,5 +1,7 @@
 # Brand colours — the short version
 
+> Archived 2026-09-28: superseded by the Colors section of `BRAND_PAGE_PLAN.md` (2026-09-23).
+
 _Sam, 2026-09-17: "when the artist onboards they select their brand colours. They can choose
 multiple, and if it's super light maybe we add a warning. This can also be updated in the
 brand page of manager tools."_

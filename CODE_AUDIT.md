@@ -73,20 +73,20 @@ setup sequence). That is deliberate and the destructive four should STAY unwired
 | Verdict | Files |
 | --- | --- |
 | REFERENCE (stays at root) | AGENTS.md, CLAUDE.md, PLAN.md, README.md, CONTEXT.md, CODE_AUDIT.md |
-| LIVE | TODO.md, steaksauce.md, BRAND_COLORS_PLAN.md, MERCH_PLAN.md, PRESENCE_PLAN.md, SEO_GEO_PLAN.md, SITE_BRIDGE_PLAN.md, SITE_BRIDGE_REVIEW.md, SITE_EDITOR_PLAN.md, SITE_STYLING_PLAN.md, REDESIGN_PRD.md |
-| SHIPPED (historical record) | ANALYTICS_PAGE_PLAN.md, ANALYTICS_STATS_PLAN.md, DASHBOARD_PLAN.md, SITE_PAGES_PLAN.md, REVIEW_2026-09-03.md, REVIEW_2026-09-11_ANALYTICS.md |
+| LIVE | TODO.md, steaksauce.md, MERCH_PLAN.md, PRESENCE_PLAN.md, SEO_GEO_PLAN.md, SITE_BRIDGE_PLAN.md, SITE_EDITOR_PLAN.md, SITE_STYLING_PLAN.md, BRAND_PAGE_PLAN.md, BRAND_SYNC_PLAN.md, RENAME_CHECKLIST.md |
+| SHIPPED (historical record) | ANALYTICS_PAGE_PLAN.md, ANALYTICS_STATS_PLAN.md, DASHBOARD_PLAN.md, SITE_PAGES_PLAN.md, REVIEW_2026-09-03.md, REVIEW_2026-09-11_ANALYTICS.md, REDESIGN_PRD.md, SITE_BRIDGE_REVIEW.md, BRAND_COLORS_PLAN.md |
 | STALE | SERVICE_MODEL_PLAN.md (354 lines, "Paused 2026-08-21. Nothing here is built." — verified: no code, no routes) |
 
-Two contradictions worth a decision, not a fix:
-- `REDESIGN_PRD.md` says "draft for approval, no code until decisions settled" while the
-  multi-page dashboard it describes is already live. The PRD is really a reskin of an IA
-  that shipped underneath it.
-- `BRAND_COLORS_PLAN.md` puts colour choice in onboarding; `REDESIGN_PRD.md` puts
-  onboarding out of scope.
+UPDATE 2026-09-28 (docs organization pass): the two contradictions above are resolved —
+`REDESIGN_PRD.md` and `SITE_BRIDGE_REVIEW.md` moved to `docs/archive/` (each carries an
+"Archived" line explaining why), and `BRAND_COLORS_PLAN.md` moved there too, now that
+`BRAND_PAGE_PLAN.md`'s Colors section supersedes it — so the onboarding-scope contradiction
+is moot. `BRAND_PAGE_PLAN.md`, `BRAND_SYNC_PLAN.md` and `RENAME_CHECKLIST.md` (all written
+after this wave-1 pass) are added to LIVE. See `docs/README.md` for the current root-doc list.
 
-Nothing here is dead enough to delete. The move that pays is **archiving the six SHIPPED
-docs to `docs/archive/`**: it takes ~2,000 lines of finished plan out of the root, and the
-root then lists only what is still true. Their names are cited from test comments
+Nothing here is dead enough to delete. The move that paid in wave 1 was **archiving the six
+SHIPPED docs to `docs/archive/`**: it took ~2,000 lines of finished plan out of the root, and
+the root then lists only what is still true. Their names are cited from test comments
 (`REVIEW_2026-09-03 H3`, etc.) but by NAME, never by path, so the citations survive a move.
 `docs/` already holds 12 ADRs and 4 contracts and is the right home.
 

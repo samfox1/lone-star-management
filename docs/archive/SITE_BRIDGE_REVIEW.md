@@ -1,5 +1,11 @@
 # Site-bridge portability review — 2026-08-06
 
+> Archived 2026-09-28: findings fixed. Phase 1 (extract `@lone-star/site-bridge`) shipped and
+> is now v0.41.0, used by three connected sites (skeen, ftbk, wren) — the proof-by-site-#N this
+> review asked for. Phases 2-3 (manifest-declared video slots/gallery geometry, CONNECTING.md)
+> also shipped; only phase 4 (socials bind-by-key, "not urgent") remains, tracked informally.
+> Recommendations folded into `SITE_BRIDGE_PLAN.md` v2, which stays at root as the live plan.
+
 **The question (Sam):** is the editor↔site architecture a long-term, sustainable solution
 for MORE websites? When the next site connects, is the bridge doable — and can lone-star
 pick up specific UI elements and modify them?
