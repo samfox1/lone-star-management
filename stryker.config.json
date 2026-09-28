@@ -41,6 +41,7 @@
     "src/lib/color.ts",
     "src/lib/compare-posthog.ts",
     "src/lib/connections.ts",
+    "src/lib/connect-methods.ts",
     "src/lib/content-form.ts",
     "src/lib/cover-url.ts",
     "src/lib/custom-site.ts",

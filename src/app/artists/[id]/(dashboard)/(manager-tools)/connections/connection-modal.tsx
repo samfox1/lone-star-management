@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
-import type { ConnectionRow } from '@/lib/connections'
+import { methodOf, type ConnectionRow } from '@/lib/connections'
+import { handleFromUrl, parseHandle } from '@/lib/connect-methods'
 import { saveSourceIdAction, updateContentAction } from '../../actions'
 import { CardModal } from '../../card-modal'
 import { KvField, KvRow, ModalHeader } from '../../modal-kit'
@@ -47,6 +48,21 @@ export function ConnectionModal({
     const res = await updateContentAction('link', row.linkId, artistId, fd)
     if (!res?.error) onChange({ ...row, url })
     return res
+  }
+
+  // A handle platform shows the HANDLE (Sam, 2026-09-28), and saves the link it builds; a
+  // stored link that is not a plain profile (a YouTube channel id) is shown as the link.
+  const found = methodOf(row.def)
+  const method = found?.kind === 'handle' ? found : null
+  const handle = method && row.url ? handleFromUrl(method, row.url) : null
+  const handleLabel = method ? method.noun[0].toUpperCase() + method.noun.slice(1) : ''
+
+  async function saveHandle(raw: string) {
+    if (!method) return
+    const parsed = parseHandle(method, raw)
+    if ('error' in parsed) return { error: parsed.error }
+    if (parsed.url === row.url) return
+    return saveUrl(parsed.url)
   }
 
   async function saveId(id: string) {
@@ -102,11 +118,10 @@ export function ConnectionModal({
       <div className="mt-5">
         {row.linkId && (
           <KvField
-            label="Link"
-            value={row.url ?? ''}
-            type="url"
+            {...(method && handle !== null
+              ? { label: handleLabel, value: handle, onSave: saveHandle }
+              : { label: 'Link', value: row.url ?? '', type: 'url' as const, onSave: saveUrl })}
             mono
-            onSave={saveUrl}
             onError={fail}
             trailing={
               row.url ? (

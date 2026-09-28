@@ -87,10 +87,26 @@ describe('connectOneAction — one paste, two jobs', () => {
     expect(res.error).toMatch(/didn’t answer/)
   })
 
+  it('CRITICAL: an X HANDLE is all it takes — the action builds the link the site shows', async () => {
+    const { connectOneAction } = await actions()
+    expect(await connectOneAction('a1', 'x', { handle: '@skeenmusic' })).toEqual({ ok: true })
+    const fd = vi.mocked(addContentAction).mock.calls[0][2] as FormData
+    expect([fd.get('label'), fd.get('url')]).toEqual(['X', 'https://x.com/skeenmusic'])
+  })
+
+  it('CRITICAL: sync turned off links the profile and pulls nothing', async () => {
+    const { connectOneAction } = await actions()
+    expect(await connectOneAction('a1', 'spotify', { url: 'https://open.spotify.com/artist/26K', sync: false })).toEqual({ ok: true })
+    expect(addContentAction).toHaveBeenCalledTimes(1)
+    expect(saveSourceIdAction).not.toHaveBeenCalled()
+    expect(spotifyPull()).not.toHaveBeenCalled()
+  })
+
   it('refuses an unknown connection and a bad input before touching anything', async () => {
     const { connectOneAction } = await actions()
     expect((await connectOneAction('a1', 'nope', { url: 'x' })).ok).toBe(false)
     expect((await connectOneAction('a1', 'spotify', { url: '' })).ok).toBe(false)
+    expect((await connectOneAction('a1', 'x', { handle: 'not a handle' })).ok).toBe(false)
     expect(addContentAction).not.toHaveBeenCalled()
   })
 })

@@ -100,11 +100,12 @@ describe('the rows', () => {
 })
 
 describe('click to edit', () => {
-  it('CRITICAL: a click on the row opens its modal, and the Link row saves the URL alone', async () => {
+  it('CRITICAL: a click on the row opens its modal; a handle platform shows the HANDLE, and saves the link it builds', async () => {
     mount()
     const dialog = openRow('Instagram')
     expect(within(dialog).getByRole('heading', { name: 'Instagram' })).toBeInTheDocument()
-    editRow(dialog, 'Link', 'https://instagram.com/skeen_new')
+    expect(within(kvRow(dialog, 'Username')).getByRole('button')).toHaveTextContent(/^skeen$/)
+    editRow(dialog, 'Username', '@skeen_new')
     await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
     const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
     expect([type, id, artistId]).toEqual(['link', 'l-ig', 'a1'])
@@ -115,10 +116,26 @@ describe('click to edit', () => {
   it('an unchanged value never writes', async () => {
     mount()
     const dialog = openRow('Instagram')
-    fireEvent.click(within(kvRow(dialog, 'Link')).getByRole('button'))
-    fireEvent.blur(within(dialog).getByLabelText('Link'))
+    fireEvent.click(within(kvRow(dialog, 'Username')).getByRole('button'))
+    fireEvent.blur(within(dialog).getByLabelText('Username'))
     await act(async () => {})
     expect(updateContentAction).not.toHaveBeenCalled()
+  })
+
+  it('a handle that cannot be one never writes', async () => {
+    mount()
+    const dialog = openRow('Instagram')
+    editRow(dialog, 'Username', 'not a handle')
+    await act(async () => {})
+    expect(updateContentAction).not.toHaveBeenCalled()
+  })
+
+  it('a music service still shows and saves its artist LINK', async () => {
+    mount()
+    const dialog = openRow('Spotify')
+    editRow(dialog, 'Link', 'https://open.spotify.com/artist/27K')
+    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
+    expect((vi.mocked(updateContentAction).mock.calls[0][3] as FormData).get('url')).toBe('https://open.spotify.com/artist/27K')
   })
 
   it('the modal offers the link to open, and a source its ID and a Pull now', () => {

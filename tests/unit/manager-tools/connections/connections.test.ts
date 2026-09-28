@@ -32,6 +32,9 @@ import {
   searchConnections,
   type ConnectionRow,
   type LinkRowLike,
+  methodOf,
+  profileLink,
+  wantsSync,
 } from '@/lib/connections'
 
 const byKey = (k: string) => {
@@ -129,16 +132,55 @@ describe('idFromProfileUrl — the id inside the profile', () => {
 })
 
 describe('connectInputError — refused before a request is made', () => {
-  it('a social needs a link, and the bare site address does not count', () => {
-    expect(connectInputError(byKey('instagram'), {})).toMatch(/Instagram link/)
-    expect(connectInputError(byKey('instagram'), { url: 'https://instagram.com/' })).toMatch(/rest of the link/)
-    expect(connectInputError(byKey('instagram'), { url: 'https://instagram.com' })).toMatch(/rest of the link/) // no slash, same address
+  it('CRITICAL: a handle platform needs only the handle (Sam, 2026-09-28), and reads a pasted link too', () => {
+    expect(connectInputError(byKey('x'), { handle: 'skeenmusic' })).toBeNull()
+    expect(connectInputError(byKey('x'), { handle: '@skeenmusic' })).toBeNull()
+    expect(connectInputError(byKey('x'), { handle: 'https://twitter.com/skeenmusic' })).toBeNull()
+    expect(connectInputError(byKey('x'), {})).toBe('Enter the X handle.')
+    expect(connectInputError(byKey('x'), { handle: 'skeen music' })).toBe('That doesn’t look like an X handle.')
+    // An older caller that sends a whole link still works: it is read back to its handle.
     expect(connectInputError(byKey('instagram'), { url: '  https://instagram.com/skeen  ' })).toBeNull()
-    expect(connectInputError(byKey('instagram'), { url: '   ' })).toMatch(/Instagram link/)
+    expect(connectInputError(byKey('instagram'), { url: 'https://instagram.com/' })).toBe('Enter the Instagram username.')
   })
 
   it('CRITICAL: a link to a DIFFERENT known platform is refused, by name', () => {
-    expect(connectInputError(byKey('instagram'), { url: 'https://tiktok.com/@skeen' })).toBe('That’s a TikTok link, not Instagram.')
+    expect(connectInputError(byKey('instagram'), { handle: 'https://tiktok.com/@skeen' })).toBe('That’s a TikTok link, not Instagram.')
+    expect(connectInputError(byKey('spotify'), { url: 'https://tiktok.com/@skeen' })).toBe('That’s a TikTok link, not Spotify.')
+  })
+
+  it('a music service (no handles) needs its artist link, and the bare site address does not count', () => {
+    expect(connectInputError(byKey('spotify'), {})).toMatch(/Spotify link/)
+    expect(connectInputError(byKey('spotify'), { url: '   ' })).toMatch(/Spotify link/)
+    expect(connectInputError(byKey('spotify'), { url: 'https://open.spotify.com/artist/' })).toMatch(/rest of the link/)
+    expect(connectInputError(byKey('spotify'), { url: 'https://open.spotify.com/artist/26K' })).toBeNull()
+  })
+
+  it('profileLink: the one link a social saves — built from the handle, or the pasted link as is', () => {
+    expect(profileLink(byKey('x'), { handle: '@skeenmusic' })).toEqual({ url: 'https://x.com/skeenmusic' })
+    expect(profileLink(byKey('bandcamp'), { handle: 'skeen' })).toEqual({ url: 'https://skeen.bandcamp.com' })
+    expect(profileLink(byKey('spotify'), { url: ' https://open.spotify.com/artist/26K ' })).toEqual({ url: 'https://open.spotify.com/artist/26K' })
+    expect(profileLink(byKey('x'), { handle: '' })).toEqual({ error: 'Enter the X handle.' })
+  })
+
+  it('wantsSync: a connection that can pull does, unless the manager turned it off; a plain social never does', () => {
+    expect(wantsSync(byKey('spotify'), {})).toBe(true)
+    expect(wantsSync(byKey('spotify'), { sync: true })).toBe(true)
+    expect(wantsSync(byKey('spotify'), { sync: false })).toBe(false)
+    expect(wantsSync(byKey('youtube'), { sync: false })).toBe(false)
+    expect(wantsSync(byKey('x'), { sync: true })).toBe(false)
+  })
+
+  it('every social has its connect method; the services have none', () => {
+    for (const d of CONNECTIONS) expect(!!methodOf(d), d.key).toBe(!!d.social)
+    expect(methodOf(byKey('x'))?.kind).toBe('handle')
+    expect(methodOf(byKey('spotify'))?.kind).toBe('link')
+  })
+
+  it('CRITICAL: a connection is PLAIN DATA — it crosses from the server page to the client list', () => {
+    // A def (inside every ConnectionRow) is passed to client components, and a function or
+    // a RegExp on it cannot be serialized: the whole Connections page answered 500 when the
+    // handle rules rode on the def (2026-09-28). The rules are looked up by slug instead.
+    for (const d of CONNECTIONS) expect(JSON.parse(JSON.stringify(d)), d.key).toEqual(d)
   })
 
   it('a service needs its id; Shopify needs the domain AND the token', () => {

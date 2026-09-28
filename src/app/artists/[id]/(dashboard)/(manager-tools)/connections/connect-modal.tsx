@@ -7,12 +7,13 @@ import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/
 import {
   SHOPIFY_KEY,
   connectInputError,
-  connectionByKey,
   connectionsAtoZ,
+  methodOf,
   searchConnections,
   type ConnectInput,
   type ConnectionDef,
 } from '@/lib/connections'
+import { parseHandle } from '@/lib/connect-methods'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { ConnectionMark } from './connection-mark'
 import { connectOneAction, type ConnectResult } from './actions'
@@ -25,8 +26,11 @@ import { connectOneAction, type ConnectResult } from './actions'
  * Three steps, no headings (Sam: "People know whats going on"):
  *   pick     — every connection we know, A to Z, socials and services in one grid; the
  *              ones already on the page dimmed with a grey tick; pick as many as you like
- *   details  — one row per pick with the platform's address prefilled in grey, so the
- *              manager pastes a handle, not a whole URL; Shopify wants domain + token
+ *   details  — one row per pick, asking for as little as each platform can take (Sam,
+ *              2026-09-28): a handle platform for the handle alone, its address in grey
+ *              around the field (`x.com/` [skeenmusic]); a music service for its artist
+ *              link, with Sync on unless switched off; a service for its own fields
+ *              (Shopify: domain + token)
  *   run      — each row's ring turns in front of you: empty waits, spinning checks, ink
  *              means done, red means not — with the reason in one sentence under the
  *              value and the field still editable. Retry runs the failed ones only; Save
@@ -244,13 +248,115 @@ export function ConnectModal({
   )
 }
 
-/** The first thing in the field: the platform's address, so a handle is all that's left to type. */
+/** A pick's empty input: the handle or the link it asks for, and Sync on where it can pull. */
 function seed(def: ConnectionDef): ConnectInput {
-  if (def.social) return { url: def.urlHint ?? '' }
-  return {}
+  if (!def.social) return {}
+  const sync = def.source ? { sync: true } : {}
+  return methodOf(def)?.kind === 'handle' ? { handle: '', ...sync } : { url: '', ...sync }
 }
 
+/** The switch's words, by what the source feeds. */
+const SYNC_WORD: Partial<Record<string, string>> = { music: 'Sync music', videos: 'Import videos' }
+
 const FIELD = 'block h-6 min-w-0 w-full border-b bg-transparent p-0 font-space text-[13px] leading-6 text-ink outline-none placeholder:text-hairline'
+/** The input inside a handle field: the border belongs to the row around it. */
+const BARE = 'block h-6 min-w-0 flex-1 bg-transparent p-0 font-space text-[13px] leading-6 text-ink outline-none placeholder:text-hairline'
+
+/** What a pick's value reads as once it is not being edited: a handle as the link it became
+ *  (`x.com/skeenmusic`), anything else as typed. */
+function shownValue(def: ConnectionDef, input: ConnectInput): string {
+  if (def.key === SHOPIFY_KEY) return input.domain ?? ''
+  const method = methodOf(def)
+  if (method?.kind === 'handle') {
+    const parsed = parseHandle(method, input.handle ?? '')
+    return 'error' in parsed ? (input.handle ?? '') : parsed.url.replace(/^https:\/\//, '')
+  }
+  return def.social ? (input.url ?? '') : (input.id ?? '')
+}
+
+/**
+ * The one place a pick is typed into, in both steps (details, and a failed row in run):
+ * the handle between its address, the artist link, the service's fields. `failed` paints the
+ * field's line red.
+ */
+function ConnectField({ def, input, failed, onChange }: { def: ConnectionDef; input: ConnectInput; failed?: boolean; onChange: (patch: ConnectInput) => void }) {
+  const line = failed ? 'border-accent-red focus:border-accent-red' : 'border-hairline focus:border-ink'
+  const m = methodOf(def)
+  if (def.key === SHOPIFY_KEY)
+    return (
+      <>
+        <input aria-label="Shopify store domain" placeholder="store.myshopify.com" value={input.domain ?? ''} onChange={(e) => onChange({ domain: e.target.value })} className={cx(FIELD, line)} />
+        <input aria-label="Shopify storefront token" type="password" placeholder="Storefront access token" value={input.token ?? ''} onChange={(e) => onChange({ token: e.target.value })} className={cx(FIELD, line)} />
+      </>
+    )
+  if (m?.kind === 'handle') {
+    const typed = input.handle ?? ''
+    // A pasted link becomes its handle at once, and leaving the field drops a typed @ — so
+    // the field reads `x.com/` skeenmusic, never `x.com/https://twitter.com/…`. Anything
+    // that is not a handle stays exactly as typed, for the manager to fix.
+    const tidy = (raw: string) => {
+      const parsed = parseHandle(m, raw)
+      return 'error' in parsed || parsed.handle === null ? raw : parsed.handle
+    }
+    // A link kept whole (a YouTube channel id) shows without the address around it.
+    const whole = typed.includes('/')
+    return (
+      <div className={cx('flex min-w-0 items-baseline border-b', failed ? 'border-accent-red' : 'border-hairline focus-within:border-ink')}>
+        {m.before && !whole && <span aria-hidden className="flex-none font-space text-[13px] leading-6 text-ink-faint">{m.before}</span>}
+        <input
+          aria-label={`${def.label} ${m.noun}`}
+          placeholder={m.noun}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={typed}
+          onChange={(e) => onChange({ handle: e.target.value })}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text')
+            const handle = tidy(text)
+            if (handle === text) return
+            e.preventDefault()
+            onChange({ handle })
+          }}
+          onBlur={(e) => {
+            const handle = tidy(e.target.value)
+            if (handle !== e.target.value) onChange({ handle })
+          }}
+          // With an address AFTER it (`.bandcamp.com`), the field is as wide as its text, so
+          // the address follows the name instead of waiting at the far edge. Space Mono is
+          // monospaced, so `ch` is exact.
+          className={cx(BARE, m.after && !whole && 'max-w-full flex-none')}
+          style={m.after && !whole ? { width: `${Math.max(typed.length, m.noun.length) + 0.5}ch` } : undefined}
+        />
+        {m.after && !whole && <span aria-hidden className="flex-none font-space text-[13px] leading-6 text-ink-faint">{m.after}</span>}
+      </div>
+    )
+  }
+  if (def.social)
+    return (
+      <input
+        aria-label={`${def.label} link`}
+        placeholder={`Paste your ${def.label} artist link`}
+        value={input.url ?? ''}
+        onChange={(e) => onChange({ url: e.target.value })}
+        className={cx(FIELD, line)}
+      />
+    )
+  return (
+    <input aria-label={`${def.label} ${def.source?.placeholder ?? 'id'}`} placeholder={def.source?.placeholder} value={input.id ?? ''} onChange={(e) => onChange({ id: e.target.value })} className={cx(FIELD, line)} />
+  )
+}
+
+/** Link only, or link AND pull: shown on a profile that can also feed the dashboard. */
+function SyncSwitch({ def, input, onChange }: { def: ConnectionDef; input: ConnectInput; onChange: (patch: ConnectInput) => void }) {
+  if (!def.social || !def.source) return null
+  return (
+    <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-ink-muted">
+      <input type="checkbox" checked={input.sync !== false} onChange={(e) => onChange({ sync: e.target.checked })} className="h-3.5 w-3.5 accent-ink" />
+      {SYNC_WORD[def.source.section] ?? 'Sync'}
+    </label>
+  )
+}
 
 function DetailRow({ pick, onChange }: { pick: Pick; onChange: (patch: ConnectInput) => void }) {
   const { def, input } = pick
@@ -259,16 +365,8 @@ function DetailRow({ pick, onChange }: { pick: Pick; onChange: (patch: ConnectIn
       <span className="flex w-5 flex-none justify-center text-ink"><ConnectionMark def={def} size={16} /></span>
       <span className="w-28 flex-none truncate text-sm font-semibold">{def.label}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {def.key === SHOPIFY_KEY ? (
-          <>
-            <input aria-label="Shopify store domain" placeholder="store.myshopify.com" value={input.domain ?? ''} onChange={(e) => onChange({ domain: e.target.value })} className={cx(FIELD, 'border-hairline focus:border-ink')} />
-            <input aria-label="Shopify storefront token" type="password" placeholder="Storefront access token" value={input.token ?? ''} onChange={(e) => onChange({ token: e.target.value })} className={cx(FIELD, 'border-hairline focus:border-ink')} />
-          </>
-        ) : def.social ? (
-          <input aria-label={`${def.label} link`} value={input.url ?? ''} onChange={(e) => onChange({ url: e.target.value })} className={cx(FIELD, 'border-hairline focus:border-ink')} />
-        ) : (
-          <input aria-label={`${def.label} ${def.source?.placeholder ?? 'id'}`} placeholder={def.source?.placeholder} value={input.id ?? ''} onChange={(e) => onChange({ id: e.target.value })} className={cx(FIELD, 'border-hairline focus:border-ink')} />
-        )}
+        <ConnectField def={def} input={input} onChange={onChange} />
+        <SyncSwitch def={def} input={input} onChange={onChange} />
       </div>
     </div>
   )
@@ -276,19 +374,16 @@ function DetailRow({ pick, onChange }: { pick: Pick; onChange: (patch: ConnectIn
 
 function RunRow({ pick, editable, onChange }: { pick: Pick; editable: boolean; onChange: (patch: ConnectInput) => void }) {
   const { def, input, status, result } = pick
-  const value = def.key === SHOPIFY_KEY ? input.domain ?? '' : def.social ? input.url ?? '' : input.id ?? ''
+  const value = shownValue(def, input)
   return (
     <div className={cx('flex items-start gap-3.5 py-3', (status === 'wait' || status === 'busy') && 'text-ink-muted')}>
       <span className={cx('mt-0.5 flex w-5 flex-none justify-center', status === 'ok' ? 'text-ink' : 'text-ink-faint')}><ConnectionMark def={def} size={16} /></span>
       <span className="w-28 flex-none truncate pt-0.5 text-sm font-semibold">{def.label}</span>
       <div className="min-w-0 flex-1">
         {editable ? (
-          <input
-            aria-label={`${def.label} ${def.social ? 'link' : def.key === SHOPIFY_KEY ? 'store domain' : 'id'}`}
-            value={value}
-            onChange={(e) => onChange(def.key === SHOPIFY_KEY ? { domain: e.target.value } : def.social ? { url: e.target.value } : { id: e.target.value })}
-            className={cx(FIELD, 'border-accent-red focus:border-accent-red')}
-          />
+          <div className="flex flex-col gap-2">
+            <ConnectField def={def} input={input} failed onChange={onChange} />
+          </div>
         ) : (
           <span className={cx('block h-6 truncate font-space text-[13px] leading-6', status === 'ok' ? 'text-ink' : 'text-ink-muted')}>{value}</span>
         )}

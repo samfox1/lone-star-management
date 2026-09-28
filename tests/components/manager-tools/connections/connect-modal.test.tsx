@@ -6,7 +6,9 @@
  *   - the grid is EVERY connection, A to Z, socials and services in one list, and the
  *     ones already on the page cannot be picked twice;
  *   - search narrows by name; several can be picked and the footer counts them;
- *   - the details step prefills each social's address so the manager pastes a handle;
+ *   - the details step asks each platform for as little as it can (Sam, 2026-09-28): a
+ *     handle platform for the handle alone, its address shown around the field; a music
+ *     service for its artist link, with a Sync switch; a service for its own fields;
  *   - Connect runs the picks ONE AT A TIME, in order, and a row's state is visible as it
  *     goes: waiting → connecting → connected / failed;
  *   - a failure is red, says why, and leaves the field editable; Retry re-runs ONLY the
@@ -87,11 +89,55 @@ describe('pick', () => {
 })
 
 describe('details', () => {
-  it('prefills each social’s address; a service asks for its id; Shopify wants domain and token', () => {
+  it('CRITICAL: X asks for the handle alone, with its address shown around the field', () => {
+    const { dialog } = open()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'X' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    const field = within(dialog).getByRole('textbox', { name: 'X handle' })
+    expect(field).toHaveValue('')
+    expect(field).toHaveAttribute('placeholder', 'handle')
+    expect(field.parentElement).toHaveTextContent('x.com/')
+    // Nothing to sync on X, so no switch.
+    expect(within(dialog).queryByRole('checkbox')).toBeNull()
+  })
+
+  it('CRITICAL: a pasted profile link tidies itself to the handle; leaving the field drops the @', () => {
+    const { dialog } = open()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'X' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    const field = within(dialog).getByRole('textbox', { name: 'X handle' })
+    fireEvent.paste(field, { clipboardData: { getData: () => 'https://twitter.com/skeenmusic?s=21' } })
+    expect(field).toHaveValue('skeenmusic')
+    fireEvent.change(field, { target: { value: '@skeen_2' } })
+    fireEvent.blur(field)
+    expect(field).toHaveValue('skeen_2')
+    // Something that is not a handle is left exactly as typed, for the manager to fix.
+    fireEvent.change(field, { target: { value: 'skeen music' } })
+    fireEvent.blur(field)
+    expect(field).toHaveValue('skeen music')
+  })
+
+  it('Bandcamp’s name goes BEFORE its address', () => {
+    const { dialog } = open()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Bandcamp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    const field = within(dialog).getByRole('textbox', { name: 'Bandcamp name' })
+    expect(field.nextElementSibling).toHaveTextContent('.bandcamp.com')
+  })
+
+  it('a music service asks for its artist link, and syncs unless switched off', () => {
+    const { dialog } = open()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Deezer' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    expect(within(dialog).getByRole('textbox', { name: 'Deezer link' })).toHaveValue('')
+    expect(within(dialog).getByRole('textbox', { name: 'Deezer link' })).toHaveAttribute('placeholder', 'Paste your Deezer artist link')
+    expect(within(dialog).getByRole('checkbox', { name: 'Sync music' })).toBeChecked()
+  })
+
+  it('a service asks for its id; Shopify wants domain and token', () => {
     const { dialog } = open()
     for (const n of ['Deezer', 'Bandsintown', 'Shopify']) fireEvent.click(within(dialog).getByRole('button', { name: n }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
-    expect(within(dialog).getByRole('textbox', { name: 'Deezer link' })).toHaveValue('https://deezer.com/artist/')
     expect(within(dialog).getByRole('textbox', { name: 'Bandsintown Bandsintown artist name' })).toHaveValue('')
     expect(within(dialog).getByRole('textbox', { name: 'Shopify store domain' })).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Shopify storefront token')).toHaveAttribute('type', 'password')
@@ -105,12 +151,42 @@ describe('run', () => {
     pickAndFill(dialog, { Deezer: 'https://deezer.com/artist/5723457', Bandsintown: 'Skeen' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Connect 2' }))
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledTimes(2))
-    expect(vi.mocked(connectOneAction).mock.calls[0]).toEqual(['a1', 'deezer', { url: 'https://deezer.com/artist/5723457' }])
+    expect(vi.mocked(connectOneAction).mock.calls[0]).toEqual(['a1', 'deezer', { url: 'https://deezer.com/artist/5723457', sync: true }])
     expect(vi.mocked(connectOneAction).mock.calls[1]).toEqual(['a1', 'bandsintown', { id: 'Skeen' }])
     await waitFor(() => expect(within(dialog).getAllByLabelText('connected')).toHaveLength(2))
     expect(dialog).toHaveTextContent('2 connected')
     expect(dialog).toHaveTextContent('24 songs found')
     expect(dialog).not.toHaveTextContent('Music ·')
+  })
+
+  it('CRITICAL: an X handle is sent as typed, and the row shows the link it becomes', async () => {
+    const { dialog } = open()
+    pickAndFill(dialog, { X: '@skeenmusic' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(connectOneAction).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(connectOneAction).mock.calls[0]).toEqual(['a1', 'x', { handle: '@skeenmusic' }])
+    await waitFor(() => expect(within(dialog).getByLabelText('connected')).toBeInTheDocument())
+    expect(dialog).toHaveTextContent('x.com/skeenmusic')
+  })
+
+  it('Sync switched off is sent as sync: false', async () => {
+    const { dialog } = open()
+    pickAndFill(dialog, { Deezer: 'https://deezer.com/artist/5723457' })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Sync music' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(connectOneAction).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(connectOneAction).mock.calls[0]).toEqual(['a1', 'deezer', { url: 'https://deezer.com/artist/5723457', sync: false }])
+  })
+
+  it('a handle that cannot be one is refused in place, without a request', async () => {
+    const { dialog } = open()
+    pickAndFill(dialog, { X: 'skeen music' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(within(dialog).getByLabelText('failed')).toBeInTheDocument())
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('That doesn’t look like an X handle.')
+    expect(connectOneAction).not.toHaveBeenCalled()
+    // The field is still the handle, still editable.
+    expect(within(dialog).getByRole('textbox', { name: 'X handle' })).toHaveValue('skeen music')
   })
 
   it('shows the row connecting while its request is out, and the others waiting', async () => {
@@ -139,7 +215,7 @@ describe('run', () => {
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Bandsintown has no artist by that name.')
     expect(dialog).toHaveTextContent('1 connected · 1 didn’t')
 
-    const fix = within(dialog).getByRole('textbox', { name: 'Bandsintown id' })
+    const fix = within(dialog).getByRole('textbox', { name: 'Bandsintown Bandsintown artist name' })
     fireEvent.change(fix, { target: { value: 'Skeen' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledTimes(3))

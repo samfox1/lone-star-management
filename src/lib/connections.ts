@@ -27,6 +27,7 @@ import {
   type IntegrationSection,
 } from './integrations-registry'
 import { isContactLink, looksLikeEmail } from './url'
+import { CONNECT_METHODS, parseHandle, withArticle, type ConnectMethod } from './connect-methods'
 
 export const SHOPIFY_KEY = 'shopify'
 
@@ -49,7 +50,7 @@ export type ConnectionDef = {
   kind: 'social' | 'service'
   /** Set when the connection has a public profile a site shows (a `links` row). */
   social?: string
-  /** Prefilled so the manager pastes a handle, not a whole URL. */
+  /** The platform's own address — the bare site, which is never a profile. */
   urlHint?: string
   /** Set when the connection pulls content into the dashboard. */
   source?: ConnectionSource
@@ -62,7 +63,13 @@ function socialFor(label: string) {
 
 /** Every connection we know, in registry order (socials first, then the lone services). */
 export const CONNECTIONS: readonly ConnectionDef[] = (() => {
-  const defs: ConnectionDef[] = SOCIAL_PLATFORMS.map((p) => ({ key: p.slug, label: p.label, kind: 'social', social: p.slug, urlHint: p.urlHint }))
+  const defs: ConnectionDef[] = SOCIAL_PLATFORMS.map((p) => ({
+    key: p.slug,
+    label: p.label,
+    kind: 'social',
+    social: p.slug,
+    urlHint: p.urlHint,
+  }))
   for (const intg of INTEGRATION_REGISTRY) {
     const source: ConnectionSource = { key: intg.key, section: intg.section, idField: intg.idField, placeholder: intg.placeholder }
     const social = socialFor(intg.label)
@@ -118,8 +125,46 @@ export function idFromProfileUrl(def: ConnectionDef, url: string): string | null
   }
 }
 
-/** What the manager typed for one connection in the Connect flow. */
-export type ConnectInput = { url?: string; id?: string; domain?: string; token?: string }
+/**
+ * How a social is connected: by handle (X, Instagram…) or by its artist link (Spotify…), from
+ * lib/connect-methods; undefined for a service. LOOKED UP, never stored on the def: a def is
+ * passed from the server page to client components, and the method's functions and RegExps
+ * cannot cross that boundary (the page answered 500 when they rode on it, 2026-09-28).
+ */
+export function methodOf(def: ConnectionDef): ConnectMethod | undefined {
+  return def.social ? CONNECT_METHODS[def.social] : undefined
+}
+
+/** What the manager typed for one connection in the Connect flow. `handle` for a handle
+ *  platform, `url` for a music service's artist link; `sync: false` links the profile and
+ *  pulls nothing (absent = pull, which is what connecting a source has always meant). */
+export type ConnectInput = { url?: string; handle?: string; id?: string; domain?: string; token?: string; sync?: boolean }
+
+/**
+ * The one link a social connection saves, or why it can't be. A handle platform builds it
+ * from the handle (a pasted link is read back to its handle first, so an older caller that
+ * sends `url` still works); a music service takes its artist link as pasted.
+ */
+export function profileLink(def: ConnectionDef, input: ConnectInput): { url: string } | { error: string } {
+  const method = methodOf(def)
+  if (method?.kind === 'handle') {
+    const parsed = parseHandle(method, input.handle ?? input.url ?? '')
+    return 'error' in parsed ? parsed : { url: parsed.url }
+  }
+  const url = input.url?.trim() ?? ''
+  if (!url) return { error: `Paste the ${def.label} link.` }
+  // The bare platform root is not a profile.
+  if (def.urlHint && url.replace(/\/+$/, '') === def.urlHint.replace(/\/+$/, '')) return { error: 'Add the rest of the link — that’s just the site’s address.' }
+  const found = platformFromUrl(url)
+  if (found && found.slug !== def.social) return { error: `That’s ${withArticle(found.label)} link, not ${def.label}.` }
+  return { url }
+}
+
+/** Whether this connection pulls: only one that has a source, and not when the manager
+ *  turned sync off to just link the profile (Sam, 2026-09-28). */
+export function wantsSync(def: ConnectionDef, input: ConnectInput): boolean {
+  return !!def.source && input.sync !== false
+}
 
 /**
  * Why this input cannot be connected, or null when it can. Pure, so the modal can answer
@@ -131,13 +176,8 @@ export function connectInputError(def: ConnectionDef, input: ConnectInput): stri
     return null
   }
   if (def.social) {
-    const url = input.url?.trim() ?? ''
-    if (!url) return `Paste the ${def.label} link.`
-    // The bare platform root is what the hint prefills — it is not a profile.
-    if (def.urlHint && url.replace(/\/+$/, '') === def.urlHint.replace(/\/+$/, '')) return 'Add the rest of the link — that’s just the site’s address.'
-    const found = platformFromUrl(url)
-    if (found && found.slug !== def.social) return `That’s a ${found.label} link, not ${def.label}.`
-    return null
+    const link = profileLink(def, input)
+    return 'error' in link ? link.error : null
   }
   if (!input.id?.trim()) return `Enter the ${def.source?.placeholder ?? 'id'}.`
   return null

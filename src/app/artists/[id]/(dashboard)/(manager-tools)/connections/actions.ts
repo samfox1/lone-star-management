@@ -9,6 +9,8 @@ import {
   connectionByKey,
   idFromProfileUrl,
   isProfileLink,
+  profileLink,
+  wantsSync,
   type ConnectInput,
   type LinkRowLike,
 } from '@/lib/connections'
@@ -54,7 +56,10 @@ export async function connectOneAction(artistId: string, key: string, input: Con
 
     let pulled: ConnectResult | null = null
     if (def.social) {
-      const url = input.url!.trim()
+      // A handle becomes its link here, the same way the modal showed it (lib/connect-methods).
+      const link = profileLink(def, input)
+      if ('error' in link) return { ok: false, error: link.error }
+      const url = link.url
       // Idempotent: a Retry after the link saved but the pull failed must not be refused
       // with "Spotify is already on this site". The profile link that exists is the one.
       const existing = (await profileLinks(artistId)).find((l) => socialSlug(l.label ?? '') === def.social)
@@ -65,7 +70,8 @@ export async function connectOneAction(artistId: string, key: string, input: Con
         const added = await addContentAction('link', artistId, fd)
         if (added.error) return { ok: false, error: added.error }
       }
-      const id = input.id?.trim() || (def.source ? idFromProfileUrl(def, url) : null)
+      // Sync off (Sam, 2026-09-28): the profile is linked, nothing is pulled.
+      const id = wantsSync(def, input) ? input.id?.trim() || idFromProfileUrl(def, url) : null
       if (def.source?.idField && id) pulled = await connectSource(artistId, def.source.idField, def.source.key, id)
     } else if (def.source?.idField) {
       pulled = await connectSource(artistId, def.source.idField, def.source.key, input.id!.trim())
