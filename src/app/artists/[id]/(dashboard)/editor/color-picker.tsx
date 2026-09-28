@@ -49,6 +49,7 @@ function ColorModal({
   label,
   value,
   current,
+  linkedName,
   onClose,
   children,
 }: {
@@ -57,6 +58,8 @@ function ColorModal({
   value: string
   /** The colour as it stands, for the header chip. */
   current: string
+  /** The Brand page colour the value is linked to, by name (a brand colour token). */
+  linkedName?: string
   onClose: () => void
   children: React.ReactNode
 }) {
@@ -85,7 +88,9 @@ function ColorModal({
             style={value ? { backgroundColor: current } : NO_COLOR_SWATCH}
           />
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.01em]">{label}</h2>
-          <span className="flex-none font-space text-[11px] text-ink-muted">{value || 'None'}</span>
+          <span className="flex-none font-space text-[11px] text-ink-muted">
+            {linkedName ? `${linkedName} · ${value}` : value || 'None'}
+          </span>
         </div>
         {children}
         <button
@@ -122,9 +127,11 @@ const NO_COLOR_SWATCH: React.CSSProperties = {
  * panel, where the one panel that forgot it would quietly offer the site's colours only.
  * Outside a provider (the Brand page itself, every existing test) nothing changes.
  */
-export type NamedSwatch = { name: string; hex: string }
-/** One swatch as the palette draws it: a hex, and a name when it is a brand colour. */
-export type Swatch = { hex: string; name?: string }
+export type NamedSwatch = { name: string; hex: string; key?: string }
+/** One swatch as the palette draws it: a hex, and a name when it is a brand colour — with
+ *  its `key` (`cream`) when the Brand page gave one, which is what lets a pick save a brand
+ *  colour TOKEN that follows the Brand page (bridge 0.42.0) instead of a copy of the hex. */
+export type Swatch = { hex: string; name?: string; key?: string }
 
 const BrandSwatches = createContext<readonly NamedSwatch[]>([])
 
@@ -141,13 +148,13 @@ export function BrandSwatchProvider({ colors, children }: { colors: readonly Nam
 export function mergeSwatches(brand: readonly NamedSwatch[], used: readonly string[]): Swatch[] {
   const out: Swatch[] = []
   const seen = new Set<string>()
-  const push = (raw: string, name?: string) => {
+  const push = (raw: string, name?: string, key?: string) => {
     const hex = canonicalHex(raw)
     if (!hex || seen.has(hex)) return
     seen.add(hex)
-    out.push(name === undefined ? { hex } : { hex, name })
+    out.push({ hex, ...(name === undefined ? {} : { name }), ...(key === undefined ? {} : { key }) })
   }
-  for (const b of brand) push(b.hex, b.name)
+  for (const b of brand) push(b.hex, b.name, b.key)
   for (const u of used) push(u)
   return out
 }
@@ -186,7 +193,8 @@ function EmptyState({ render, open }: { render: (open: () => void) => ReactNode;
 export function ColorPalette({
   label,
   aria,
-  value,
+  value: storedValue,
+  brandKey,
   used = [],
   fallbackHex,
   onChange,
@@ -196,8 +204,16 @@ export function ColorPalette({
   label: string
   /** Prefix for every aria-label in the group ("Slot 1 Border color"). */
   aria: string
-  /** The current hex, '' when no colour is set. */
+  /** The current hex, '' when no colour is set. For a brand-linked value, the hex it
+   *  carried when picked — the fallback while the colour is not in the provider. */
   value: string
+  /**
+   * The Brand page colour the stored value is LINKED to (a brand colour token, bridge
+   * 0.42.0), by key. Inside a BrandSwatchProvider that has it, the palette shows that
+   * colour's CURRENT hex and its name, and its swatch is the pressed one — so after Cream
+   * changes on the Brand page, the region still reads as Cream.
+   */
+  brandKey?: string
   /** What the element ACTUALLY shows when nothing is set here — the site's own default
    *  for this channel. Most regions never declare a colour; they inherit one, and the
    *  swatch used to answer that with a "no colour" mark, so a site that is plainly cream
@@ -208,8 +224,9 @@ export function ColorPalette({
    *  swatches so a manager can match what they picked before instead of re-deriving the
    *  hex by eye — the palette is precise, but on its own it does nothing for consistency. */
   used?: string[]
-  /** Apply a hex, or '' to clear it. */
-  onChange: (hex: string) => void
+  /** Apply a hex, or '' to clear it. A BRAND swatch (one with a key) also hands up its
+   *  key; a mixed, typed or cleared colour hands up the hex alone. */
+  onChange: (hex: string, brandKey?: string) => void
   /**
    * `panel` (the default): the site editor's inspector row — clear, swatch, hex — with the
    * mixer in a small modal. `row`: the Brand page's row (BRAND_PAGE_PLAN.md) — a swatch and
@@ -225,6 +242,11 @@ export function ColorPalette({
 }) {
   const brand = useContext(BrandSwatches)
   const swatches = mergeSwatches(brand, used)
+  // A brand-linked value reads as the colour the Brand page has NOW, not the hex it carried.
+  const linked = brandKey ? brand.find((b) => b.key === brandKey && canonicalHex(b.hex)) : undefined
+  // Its swatch is then the pressed one by hex, as ever: mergeSwatches keeps one swatch per
+  // hex, and the linked colour's swatch carries exactly this hex.
+  const value = linked ? canonicalHex(linked.hex) : storedValue
   const isRow = variant === 'row'
   const seed = hexToHsv(value)
   const [hue, setHue] = useState(seed?.h ?? 0)
@@ -253,14 +275,17 @@ export function ColorPalette({
   }, [])
 
   /** Apply a hex ('' clears): remember it as ours, mirror it into the field, move the
-   *  handles to it, and send it up. Every non-drag apply path routes through here so the
-   *  four steps can't drift apart per call site. */
-  const applyHex = (hex: string) => {
+   *  handles to it, and send it up — with the brand key when a brand swatch was picked.
+   *  Every non-drag apply path routes through here so the four steps can't drift apart per
+   *  call site. */
+  const applyHex = (hex: string, key?: string) => {
     setEmitted(hex)
     setText(hex)
     seedFrom(hex)
-    onChange(hex)
+    if (key === undefined) onChange(hex)
+    else onChange(hex, key)
   }
+  const applySwatch = (s: Swatch) => applyHex(s.hex, s.key)
 
   // Re-seed from an outside change (a Revert, a different item), never from our own.
   const [seenValue, setSeenValue] = useState(value)
@@ -351,7 +376,10 @@ export function ColorPalette({
    *  "none", so an empty field there puts the colour back instead. */
   function commitText() {
     const clean = normalizeHex(text)
-    if (clean) applyHex(clean)
+    // Unchanged (a blur, an Enter on the same colour): nothing to send — and sending it
+    // would turn a brand-linked colour into a plain copy of its hex.
+    if (clean && canonicalHex(clean) === canonicalHex(value)) setText(value)
+    else if (clean) applyHex(clean)
     else if (text.trim() === '' && !isRow) applyHex('')
     else setText(value)
   }
@@ -582,7 +610,7 @@ export function ColorPalette({
                         key={s.hex}
                         type="button"
                         onClick={() => {
-                          applyHex(s.hex)
+                          applySwatch(s)
                           closeRowPanel(true)
                         }}
                         aria-label={`${aria} ${swatchName(s)}`}
@@ -643,10 +671,17 @@ export function ColorPalette({
           onClick={() => setOpen(true)}
           aria-label={`${aria} palette`}
           aria-haspopup="dialog"
-          title="Pick a colour"
+          title={linked ? linked.name : 'Pick a colour'}
           style={value ? { backgroundColor: current } : fallbackHex ? { backgroundColor: fallbackHex } : NO_COLOR_SWATCH}
           className="h-6 w-6 flex-none rounded-md border border-hairline transition-shadow hover:ring-2 hover:ring-hairline"
         />
+        {/* A brand-linked colour says which one: it follows the Brand page, so its name is
+            the thing that stays true when the hex beside it changes. */}
+        {linked && (
+          <span className="max-w-[72px] flex-none truncate font-space text-[11px] text-ink-muted" title={linked.name}>
+            {linked.name}
+          </span>
+        )}
         <input
           type="text"
           value={text}
@@ -671,6 +706,7 @@ export function ColorPalette({
           label={label}
           value={value}
           current={current}
+          linkedName={linked?.name}
           onClose={closeModal}
         >
           {mixer('h-44', 'mt-3')}
@@ -690,7 +726,7 @@ export function ColorPalette({
                     <button
                       key={s.hex}
                       type="button"
-                      onClick={() => applyHex(s.hex)}
+                      onClick={() => applySwatch(s)}
                       aria-label={`${aria} ${swatchName(s)}`}
                       aria-pressed={active}
                       title={swatchName(s)}

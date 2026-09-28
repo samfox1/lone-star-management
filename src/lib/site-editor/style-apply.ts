@@ -25,6 +25,18 @@ export {
 } from '@samfox1/site-bridge/styles'
 
 /**
+ * The Brand page's palette as the editor's swatches (BrandSwatchProvider): its name, its
+ * hex, and its key when the row carries one. The key is what a brand pick saves in a brand
+ * colour token (`text-[brand-<key>_#hex]`, bridge 0.42.0), so dropping it here quietly
+ * turns every brand pick back into a copy of the hex. Pure, so the server page can call it.
+ */
+export function brandSwatches(
+  colors: readonly { name: string; hex: string; key?: string | null }[],
+): { name: string; hex: string; key?: string }[] {
+  return colors.map((c) => ({ name: c.name, hex: c.hex, ...(c.key ? { key: c.key } : {}) }))
+}
+
+/**
  * The site's OWN declared colours, as hexes.
  *
  * A site declares its palette as classes (`text-flash-1`) because those are what its
@@ -76,8 +88,10 @@ export function usedColors(styleValues: Record<string, string>, limit = 12): str
   for (const classString of Object.values(styleValues)) {
     for (const token of (classString ?? '').split(/\s+/).filter(Boolean)) {
       const color = colorToken(token)
-      if (!color) continue
-      const hex = canonicalHex(color.value)
+      // A BRAND token's hex is only its fallback; the brand swatch already offers that
+      // colour, by name and at its current hex (BrandSwatchProvider).
+      if (!color || color.kind === 'brand') continue
+      const hex = canonicalHex(color.hex)
       if (!hex) continue
       const entry = counts.get(hex)
       if (entry) entry.count++

@@ -51,6 +51,10 @@ export type BrandColor = {
   sortOrder: number
   /** Primary / Secondary, or null for an added colour. */
   slot: ColorSlot | null
+  /** The CSS key (`--brand-<key>`), set by the database. Present when the read selected it
+   *  (`listBrandColors`' `*`); the site editor's brand swatches save it in a brand colour
+   *  token so a region follows this colour (bridge 0.42.0). */
+  key?: string
 }
 
 type Result = { ok: boolean; error?: string }
@@ -65,6 +69,7 @@ function toColor(r: Record<string, unknown>): BrandColor {
     note: (r.note as string | null) ?? null,
     sortOrder: Number(r.sort_order ?? 0),
     slot: isColorSlot(r.slot) ? r.slot : null,
+    ...(typeof r.key === 'string' ? { key: r.key } : {}),
   }
 }
 

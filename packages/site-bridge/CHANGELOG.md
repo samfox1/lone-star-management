@@ -47,7 +47,7 @@ dropping *every* message from the other side, `ready` included (`protocol.ts:240
 and `package.json` disagree; `tests/unit/site-editor/site-bridge-version.test.ts` catches the same drift, but
 only on the next test run, which is after a wrong number could already be on the registry.
 
-**The editor's per-version behaviour is exactly eight gates** (`src/lib/site-editor/manifest.ts`),
+**The editor's per-version behaviour is exactly nine gates** (`src/lib/site-editor/manifest.ts`),
 and nothing else in the editor branches on a site's version:
 
 | gate | since | what an older site loses |
@@ -60,6 +60,7 @@ and nothing else in the editor branches on a site's version:
 | `bridgeSupportsDeltas` | 0.24.0 | delta overrides (a stored override REPLACES the base instead) |
 | `bridgeSupportsItemDeltas` | 0.25.4 | per-item deltas |
 | `bridgeSupportsEffects` | 0.40.0 | hover Glitch/Magnetic, the whole tap family, the effect dials, site-declared custom effects, and "On hover" on icon groups |
+| `bridgeSupportsBrandColors` | 0.42.0 | a brand swatch saves a brand colour token that follows the Brand page; an older site gets the plain hex, as before |
 
 The first seven are at or below 0.32.0, so **both live sites clear them**. When a site is
 behind, the editor keeps writing the older form rather than emitting a token the site cannot
@@ -74,13 +75,75 @@ announces `bridgeVersion: '0.32.0'` and the editor is on 0.38.0.
 
 ## Unreleased
 
+Nothing yet.
+
+---
+
+## 0.42.0 — regions painted a brand colour follow the Brand page
+
+*Not published yet (built 2026-09-28). Each site redeploys WITHOUT build cache to pick it up.*
+
+**Site action: bump to 0.42.0 and redeploy. Nothing to write** — the applier lifts the new
+token itself, inline, like every colour before it. For a region to actually FOLLOW the Brand
+page the site must already render `brandCss` (0.41.0, `CONNECTING.md` §14); without it the
+token paints the hex it carries, which is exactly what it painted before. Once a site is on
+0.42, `scripts/link-brand-colors.ts <slug>` (dry run by default) links the colours picked
+before this release; see below.
+
+**Brand colour tokens** (Sam, 2026-09-28: "They all should share and look at the same
+variable, so if it changes on the brand page, it should everywhere"). Until now the editor
+offered the Brand page's colours first in every swatch row, but a pick saved a COPY of the hex
+(`text-[#f4f1ea]`), so the region never followed a Brand change. A brand pick now saves
+
+    text-[brand-cream_#f4f1ea]     bg-[brand-primary_#c63a2a]     border-[brand-black_#0a0a0a]
+
+which the applier (`resolveRegionStyle`, the frame's live apply) renders as
+`color: var(--brand-cream, #f4f1ea)`: the variable `brandCss` emits from the published
+brand, falling back to the hex the colour had when picked. So a site with no published brand
+still paints what the manager saw, and a rename never breaks it (the key never changes).
+The same three prefixes the colour token has always had; hover, line and gradient colours
+still save a plain hex. A typed or dragged custom colour stays a plain hex too.
+
+- **Validated like every other CSS sink.** The key must pass `isBrandColorKey` (new export
+  from `./brand`, the one rule `brandColorCss` also uses: kebab words, at most 40) and the hex
+  the colour tokens' own `#` + 3–8 hex digits. A brand-SHAPED token that fails either is
+  DROPPED: no style, no class, no delta family. Nothing of it is ever interpolated. Each
+  guard was deleted once and its test went red (`tests/unit/site-editor/site-bridge-brand-tokens.test.ts`).
+- **`familyOf`** reads the three as `textColor` / `bgColor` / `borderColor`, so a brand pick
+  and a hex pick replace each other in a delta. Checked first: `border-[brand-…]` must not
+  fall through to the border WIDTH family.
+- **`colorToken(token)` now returns `{ prop, kind: 'hex' | 'brand', hex, brandKey? }`**
+  (it was `{ prop, value }`; `value` is now `hex`). `colorClass(prefix, hex, brandKey?)`
+  writes the brand token for a valid key and the plain hex otherwise. No connected site
+  calls either (checked skeen and ftbk); lone-star's editor was the only reader.
+- **`auditRegions`** accepts a brand token in a site's base as a colour the picker can show.
+- **Hardening:** the colour-prefix lookup is a `Map` now. `constructor-[#fff]` found
+  `Object.prototype.constructor` and wrote a garbage inline property.
+
+**Why the editor gates it.** A 0.41 applier does not know the shape. It keeps
+`text-[brand-…]` as a dead class, so the pick silently does nothing on the live site (the
+region shows its base colour), and it reads `border-[brand-…]` as a border WIDTH, which in a
+delta strips the base's border. So the editor writes brand tokens only to a site announcing
+0.42.0 or later (`bridgeSupportsBrandColors`, the ninth gate), and the plain hex to anything
+older. Upgrading is safe in either order.
+
+**Linking the picks made before this.** `scripts/link-brand-colors.ts <slug>` rewrites a
+plain text/bg/border hex in the artist's WORKING style rows that equals a PUBLISHED brand
+colour into that colour's token (the published brand is what `--brand-<key>` holds live, so a
+link changes nothing a fan sees when it lands). Draft only: it never touches `revisions`, so
+Publish ships it and Revert undoes it. Dry run by default; `--apply` backs up every
+before/after first. Run it only once the site is on 0.42.
+
+### Also in 0.42.0 (released from Unreleased)
+
+
 **`SOCIAL_PLATFORMS` gains an optional `aliasHosts` field, and `platformFromUrl` reads it**
 (Sam, 2026-09-28: Threads moved to threads.com, and threads.net now redirects there).
 Threads' `urlHint` moved to `https://threads.com/@`, with `aliasHosts: ['threads.net']` so a
 link built before this change (or pasted from the old domain) is still recognised as Threads
 — the dashboard's "that's a Threads link" check and every site's "is this link one of ours"
 check both go through `platformFromUrl`. **Site action: none** — sites read `slug`, not
-`urlHint`, and no manifest gate is involved. Not published; `PACKAGE_VERSION` unchanged.
+`urlHint`, and no manifest gate is involved.
 
 **`orderShows` now puts undated shows LAST, always** (Sam, 2026-09-28, answering the
 0.39.0 flag). The 0.39.0 release ported skeen's manual-mode comparator verbatim, quirk
@@ -92,8 +155,7 @@ are now sliced out before manual mode is decided and appended after the dated ro
 in the manager's own drag order (`sort_order`) among themselves. A site that never sees a
 partial drag over a mixed dated/undated list never noticed the old behaviour and needs no
 action; one that does gets the corrected order on its next render with no code change.
-**Site action: none** — same function, same signature. Not published; `PACKAGE_VERSION`
-unchanged.
+**Site action: none** — same function, same signature.
 
 **An unconfigured site's public-content readers now log.** `fetchPublicSite` and
 `fetchPublicReleases` render the empty site when the site's backend env (Supabase URL,
@@ -102,8 +164,7 @@ anon key, slug) is missing — that choice is unchanged — but now also call
 in a server log instead of nowhere. Before this, an unconfigured site and a site with
 nothing published rendered identically with nothing said anywhere; that is how juniper and
 operator sat empty in production, unnoticed, for weeks (2026-08-15). **Site action:
-none** — the log is server-side only and changes no return value. Not published;
-`PACKAGE_VERSION` unchanged.
+none** — the log is server-side only and changes no return value.
 
 ---
 

@@ -15,13 +15,13 @@
  * Pure string logic, no React — so it's unit-testable and importable server-side.
  */
 import { colorClass, colorToken } from '@/lib/site-editor/style-apply'
-import { bridgeSupportsDeltas, bridgeSupportsEffects, bridgeSupportsItemDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
+import { bridgeSupportsBrandColors, bridgeSupportsDeltas, bridgeSupportsEffects, bridgeSupportsItemDeltas, bridgeSupportsMobileItem, bridgeSupportsMobileText, bridgeSupportsMobileVars, bridgeSupportsStyleVars, bridgeSupportsTextVars } from '@/lib/site-editor/manifest'
 
 // MOVED to @samfox1/site-bridge (they ride the manifest — a site declares its palette
 // through them). Re-exported from their historical home; imported for local use.
 export type { SiteStyleOptions } from '@samfox1/site-bridge/manifest'
 import type { ManifestStyleRegion, StyleOption, SiteStyleOptions } from '@samfox1/site-bridge/manifest'
-import { DELTA_SENTINEL, TEXT_SIZES, familyOf } from '@samfox1/site-bridge/styles'
+import { DELTA_SENTINEL, TEXT_SIZES, familyOf, type ManagedColorProp } from '@samfox1/site-bridge/styles'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 // The option TABLES live in the package's vocabulary module (2026-08-07 deepening):
 // they generate tokens.css, which is append-only contract, so the vocabulary lives
@@ -83,7 +83,13 @@ export type StyleControl =
       kind: 'color'
       owns: (token: string) => boolean
       hexOf?: (classString: string) => string
-      toToken?: (hex: string, classString: string) => string
+      /** The Brand page colour a stored BRAND token names (`cream`), '' for none (0.42.0).
+       *  The picker shows that colour's CURRENT hex and its name, so the swatch still
+       *  reads as picked after the colour changes on the Brand page. */
+      brandOf?: (classString: string) => string
+      /** `brandKey` is set when the manager picked a BRAND swatch. Only the text / bg /
+       *  border colour controls use it, and only on a 0.42+ site (`brandColors`). */
+      toToken?: (hex: string, classString: string, brandKey?: string) => string
       /** A decoration DRESSING: writing a value also switches a line on if none is set
        *  (see applyStyleValue). Declared at the control's definition, not inferred from
        *  its tokens, so a new dressing can't miss the rule. */
@@ -209,6 +215,11 @@ const usesVars = (opts?: SiteStyleOptions) =>
 const usesTextVars = (opts?: SiteStyleOptions) =>
   (opts as EditorStyleOptions | undefined)?.textVars !== false
 
+/** May a brand swatch save a BRAND colour token? Needs a 0.42+ applier (withStyleVars);
+ *  absent means yes, the same reading as the other eras. */
+const usesBrandTokens = (opts?: SiteStyleOptions) =>
+  (opts as EditorStyleOptions | undefined)?.brandColors !== false
+
 /** Phone-scoped editing: BOTH the phone view and a 0.19+ site. An older site in phone
  *  view keeps the desktop-scoped controls — a phone token it cannot lift would be a
  *  dead class AND an invisible marker class. */
@@ -317,6 +328,9 @@ export type EditorStyleOptions = SiteStyleOptions & {
   /** The site is at 0.40.0+: the hover list has Glitch and Magnetic, and phone view
    *  gets "On tap" (see effectsControls). */
   effects?: boolean
+  /** The site is at 0.42.0+: a brand swatch saves a brand colour token
+   *  (`text-[brand-<key>_#hex]`) that follows the Brand page, not a copy of its hex. */
+  brandColors?: boolean
   /** The editor is currently in PHONE view. With the vars flags, controls become
    *  phone-scoped: same control, writing the `…sm-[…]` twin. */
   mobileView?: boolean
@@ -343,6 +357,7 @@ export function withStyleVars(
     deltaStyles: bridgeSupportsDeltas(bridgeVersion),
     deltaItemStyles: bridgeSupportsItemDeltas(bridgeVersion),
     effects: bridgeSupportsEffects(bridgeVersion),
+    brandColors: bridgeSupportsBrandColors(bridgeVersion),
   }
 }
 
@@ -752,8 +767,8 @@ export function buildStyleControls(opts?: SiteStyleOptions): StyleControl[] {
   // declares no palette at all. Each control still OWNS the declared palette classes,
   // so picking a hex REPLACES a stored `bg-black` instead of fighting it, and a
   // stored palette class reads back as its declared hex so the picker tells the truth.
-  controls.push(sectionColorControl('textColor', 'Text color', 'color', 'text', opts?.textColors))
-  controls.push(sectionColorControl('bgColor', 'Background color', 'backgroundColor', 'bg', opts?.bgColors))
+  controls.push(channelColorControl('textColor', 'Text color', 'color', 'text', opts, opts?.textColors))
+  controls.push(channelColorControl('bgColor', 'Background color', 'backgroundColor', 'bg', opts, opts?.bgColors))
   controls.push({
     id: 'align',
     label: 'Alignment',
@@ -970,20 +985,7 @@ export function buildTextItemStyleControls(opts?: SiteStyleOptions): StyleContro
   // swatch row comes from siteSwatches at the render site). Replaces the gradient
   // pair, which he judged not worth its two rows here; the textgrad tokens still
   // resolve, so anything stored keeps rendering.
-  controls.push({
-    id: 'textColor',
-    label: 'Font color',
-    kind: 'color',
-    owns: (t) => colorToken(t)?.prop === 'color',
-    hexOf: (cls) => {
-      for (const t of cls.split(/\s+/)) {
-        const c = colorToken(t)
-        if (c?.prop === 'color') return c.value
-      }
-      return ''
-    },
-    toToken: (hex) => (hex ? colorClass('text', hex) : ''),
-  })
+  controls.push(channelColorControl('textColor', 'Font color', 'color', 'text', opts))
   controls.push({ id: 'underline', label: 'Underline', kind: 'toggle', onClass: UNDERLINE_TOGGLE, owns: (t) => t === UNDERLINE_TOGGLE })
   // No strikethrough here (Sam, 2026-08-12: "for the text tab, remove strikethrough")
   // — the underline is the one decoration, so the dressing below is unambiguously its.
@@ -1117,34 +1119,44 @@ export function sliderIndex(
   return { idx: middle, label: 'Default', exact: false }
 }
 
-/** A section colour control in the house picker format: hex 'color' kind rendered as
- *  ColorPalette (custom picker + colours-on-site swatches). Owns BOTH the hex tokens
- *  for its property AND the site's declared palette classes for it; a declared class
- *  reads back as its declared hex (StyleOption.hex) so the picker shows where the
- *  site actually is — '' when the site never said. */
-function sectionColorControl(
+/** A colour control over one of the three colour channels (text, background, border) in
+ *  the house picker format: hex 'color' kind rendered as ColorPalette (custom picker +
+ *  colours-on-site swatches). Owns BOTH the colour tokens for its property AND the
+ *  site's declared palette classes for it (sections only — items declare none); a
+ *  declared class reads back as its declared hex (StyleOption.hex) so the picker shows
+ *  where the site actually is — '' when the site never said.
+ *
+ *  BRAND COLOURS (0.42.0): a picked brand swatch arrives with its key, and on a site that
+ *  can lift it the control writes `text-[brand-<key>_#hex]` — the region then follows the
+ *  Brand page. On an older site, and for any custom colour, it writes the plain hex. */
+function channelColorControl(
   id: string,
   label: string,
-  prop: 'color' | 'backgroundColor',
-  chan: 'text' | 'bg',
-  declared: StyleOption[] | undefined,
+  prop: ManagedColorProp,
+  chan: 'text' | 'bg' | 'border',
+  opts: SiteStyleOptions | undefined,
+  declared?: StyleOption[],
 ): StyleControl {
   const declaredHex = new Map((declared ?? []).map((o) => [o.value, o.hex ?? '']))
+  const brandTokens = usesBrandTokens(opts)
+  /** The first token that says this channel's colour: a colour token or a declared class. */
+  const read = (cls: string): { hex: string; brandKey?: string } => {
+    for (const t of cls.split(/\s+/)) {
+      const c = colorToken(t)
+      if (c?.prop === prop) return { hex: c.hex, brandKey: c.brandKey }
+      const d = declaredHex.get(t)
+      if (d) return { hex: d }
+    }
+    return { hex: '' }
+  }
   return {
     id,
     label,
     kind: 'color',
     owns: (t) => colorToken(t)?.prop === prop || declaredHex.has(t),
-    hexOf: (cls) => {
-      for (const t of cls.split(/\s+/)) {
-        const c = colorToken(t)
-        if (c?.prop === prop) return c.value
-        const d = declaredHex.get(t)
-        if (d) return d
-      }
-      return ''
-    },
-    toToken: (hex) => (hex ? colorClass(chan, hex) : ''),
+    hexOf: (cls) => read(cls).hex,
+    brandOf: (cls) => read(cls).brandKey ?? '',
+    toToken: (hex, _cls, brandKey) => (hex ? colorClass(chan, hex, brandTokens ? brandKey : undefined) : ''),
   }
 }
 
@@ -1551,23 +1563,10 @@ export function buildItemStyleControls(opts?: SiteStyleOptions): StyleControl[] 
     phoneItemScope(opts) ? phoneTwin(scale) : scale,
     { id: 'opacity', label: 'Transparency', kind: 'slider', steps: OPACITY_STEPS, rank: pctRank('opacity'), owns: (t) => t.startsWith('opacity-'), measure: measureOpacityPct },
     { id: 'borderWidth', label: 'Border', kind: 'slider', steps: BORDER_WIDTH_STEPS, rank: pxRank(BORDER_PX), owns: isBorderWidth, measure: (m) => m.borderWidthPx ?? null },
-    {
-      id: 'borderColor',
-      label: 'Border color',
-      kind: 'color',
-      owns: (t) => colorToken(t)?.prop === 'borderColor',
-      // Own hex read/write, so the GENERIC StyleControlRow colour branch renders it —
-      // ItemEditor no longer special-cases it (2026-08-12 consolidation). Reads the hex
-      // back out of the same resolution the site uses, so the picker reflects what's set.
-      hexOf: (cls) => {
-        for (const t of cls.split(/\s+/)) {
-          const c = colorToken(t)
-          if (c?.prop === 'borderColor') return c.value
-        }
-        return ''
-      },
-      toToken: (hex) => (hex ? colorClass('border', hex) : ''),
-    },
+    // Own hex read/write, so the GENERIC StyleControlRow colour branch renders it —
+    // ItemEditor no longer special-cases it (2026-08-12 consolidation). Reads the hex
+    // back out of the same resolution the site uses, so the picker reflects what's set.
+    channelColorControl('borderColor', 'Border color', 'borderColor', 'border', opts),
     { id: 'radius', label: 'Corners', kind: 'slider', steps: RADIUS_STEPS, rank: pxRank(RADIUS_PX), owns: isRadius, measure: (m) => m.radiusPx ?? null },
     { id: 'shadow', label: 'Shadow', kind: 'slider', steps: SHADOW_STEPS, rank: shadowRank, owns: isShadow },
     // Slice-1 effects (2026-08-10). All lift inline, so they work on every deployed

@@ -92,6 +92,7 @@
     "src/lib/settings.ts",
     "src/lib/site-content-schema.ts",
     "src/lib/site-editor/asset-budget.ts",
+    "src/lib/site-editor/brand-link.ts",
     "src/lib/site-editor/compress-image.ts",
     "src/lib/site-editor/link-vocabulary.ts",
     "src/lib/site-editor/panel-inputs.ts",

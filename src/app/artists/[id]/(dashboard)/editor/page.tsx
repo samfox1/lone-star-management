@@ -9,6 +9,7 @@ import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import { editorFontSlotTitles } from '@/lib/site-editor/style-controls'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
 import { textLimit } from '@/lib/site-editor/text-limits'
+import { brandSwatches } from '@/lib/site-editor/style-apply'
 import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
 import { requireArtist } from '../_data'
@@ -319,7 +320,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       tours={tours}
       uploadedFonts={uploadedFonts}
       fontSlotTitles={fontSlotTitles}
-      brandColors={brandColors.map((c) => ({ name: c.name, hex: c.hex }))}
+      brandColors={brandSwatches(brandColors)}
     />
   )
 }

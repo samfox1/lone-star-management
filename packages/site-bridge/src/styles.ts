@@ -13,6 +13,7 @@
  * generated from.
  */
 import { STYLE_ATTR, WINDOW_ATTR } from "./markers";
+import { isBrandColorKey } from "./brand";
 import type { SiteStyles } from "./payload";
 
 export { STYLE_ATTR, WINDOW_ATTR };
@@ -403,6 +404,33 @@ export const DELTA_SENTINEL = "lse-delta";
 // themselves on the next re-save (2026-08-17 review, both agents independently).
 const NOT_TOKEN = /^lse-not-\[([a-zA-Z]+)\]$/;
 
+/* ── BRAND COLOUR TOKENS (0.42.0) ─────────────────────────────────────────────────────
+ * `text-[brand-cream_#f4f1ea]` renders `color: var(--brand-cream, #f4f1ea)`: the variable
+ * `brandCss` emits from the published Brand page, falling back to the hex the colour had
+ * when the manager picked it. So a region painted a brand colour FOLLOWS the Brand page
+ * (Sam, 2026-09-28: "if it changes on the brand page, it should everywhere"), and a site
+ * with no published brand still paints what the manager saw. `text`, `bg` and `border`:
+ * the three prefixes the colour token has always had.
+ *
+ * The key lands in a `var()` name on an inline style, so it must pass brand.ts's key rule
+ * (isBrandColorKey) and the hex the colour tokens' own hex shape. A token that is
+ * brand-SHAPED but fails either check is dropped outright: no style, no class, no family.
+ * Nothing of it is ever interpolated. */
+
+/** The hex a colour token carries — the shape colour tokens have always accepted. */
+const COLOR_HEX = /^#[0-9a-fA-F]{3,8}$/;
+/** A brand token's bracket payload. `_` cannot occur in a key, so the split is exact. */
+const BRAND_PAYLOAD = /^brand-([a-z0-9-]+)_(#[0-9a-fA-F]{3,8})$/;
+/** Any brand-shaped colour token, valid or not — the ones a malformed payload must not
+ *  slip past as a class or, worse, as a border WIDTH (`border-[…]`'s other family). */
+const BRAND_SHAPED = /^(text|bg|border)-\[brand-/;
+/** The delta family each colour property belongs to (the hex tokens' families). */
+const COLOR_FAMILY: Record<ManagedColorProp, string> = {
+  color: "textColor",
+  backgroundColor: "bgColor",
+  borderColor: "borderColor",
+};
+
 /** Is this stored string a delta? The sentinel leads by construction, but membership is
  *  enough — an editor that reordered tokens must not silently flip semantics. */
 export function isDeltaOverride(stored: string): boolean {
@@ -450,6 +478,13 @@ export function familyOf(raw: string): string | null {
     // A match guarantees both groups; `!` states it for strict consumers (ftbk).
     const prefix = arb[1]!;
     const payload = arb[2]!;
+    // A brand colour token is its channel's colour family, exactly like the hex beside it,
+    // and a malformed one is NO family (it strips nothing; the applier drops it). First,
+    // because `border-[brand-…]` would otherwise fall through to the border WIDTH family.
+    if (BRAND_SHAPED.test(t)) {
+      const c = colorToken(t);
+      return c ? COLOR_FAMILY[c.prop] : null;
+    }
     if (prefix === "text") {
       if (payload.startsWith("#")) return "textColor";
       // Only a measurable size shape is the size family; anything else in the bracket
@@ -566,13 +601,14 @@ export function mergeStyle(
   return base.trim() ? `${base.trim()} ${override.trim()}` : override.trim();
 }
 
-/** Arbitrary-value colour utilities → the CSS property each sets. */
-const COLOR_PROPS: Record<string, "borderColor" | "color" | "backgroundColor"> =
-  {
-    border: "borderColor",
-    text: "color",
-    bg: "backgroundColor",
-  };
+/** Arbitrary-value colour utilities → the CSS property each sets. A Map, not an object
+ *  literal: a lookup by an arbitrary prefix must not find `Object.prototype` members
+ *  (`constructor-[#fff]` read as a colour on 0.41 and wrote a garbage style property). */
+const COLOR_PROPS = new Map<string, ManagedColorProp>([
+  ["border", "borderColor"],
+  ["text", "color"],
+  ["bg", "backgroundColor"],
+]);
 
 /* The editor's whole per-item vocabulary applies as INLINE STYLE, not classes
  * (mirrors lone-star's style-apply.ts, 2026-08-03). Classes failed two ways: this
@@ -894,11 +930,14 @@ const MIN_PLAYBACK_RATE = 0.0625;
 const MAX_PLAYBACK_RATE = 16;
 
 /** An arbitrary hex colour token → the inline property it sets, or null. Colours lift
- *  from ANY string: no build can compile 16.7M of them, so they were never classes. */
+ *  from ANY string: no build can compile 16.7M of them, so they were never classes. A
+ *  BRAND token (0.42.0) sets the same property to `var(--brand-<key>, <hex>)`; a
+ *  malformed one returns `{}` — lifts nothing AND stays out of the class list (the
+ *  convention an unreadable `fontfam-[…]` already follows). */
 function colorStyle(token: string): Record<string, string> | null {
-  const m = token.match(/^([a-z]+)-\[(#[0-9a-fA-F]{3,8})\]$/);
-  const prop = m ? COLOR_PROPS[m[1]!] : undefined;
-  return m && prop ? { [prop]: m[2]! } : null;
+  const c = colorToken(token);
+  if (c) return { [c.prop]: c.kind === "brand" ? `var(--brand-${c.brandKey}, ${c.hex})` : c.hex };
+  return BRAND_SHAPED.test(token) ? {} : null;
 }
 
 /** `speed-[Nx]` → a rate a media element will actually accept, or null. */
@@ -985,16 +1024,40 @@ function resolveTokens(
  *  kebab-case twin used with style.setProperty/removeProperty). */
 export type ManagedColorProp = "borderColor" | "color" | "backgroundColor";
 
-/** `<prefix>-[#hex]` → its CSS property + hex, or null if not an arbitrary colour. */
-export function colorToken(token: string): { prop: ManagedColorProp; value: string } | null {
-  const m = token.match(/^([a-z]+)-\[(#[0-9a-fA-F]{3,8})\]$/);
-  const prop = m ? COLOR_PROPS[m[1]!] : undefined;
-  return m && prop ? { prop, value: m[2]! } : null;
+/** One colour token, read. `hex` is the colour itself for a plain token, and the
+ *  FALLBACK (the hex when picked) for a brand token, whose live value is the site's
+ *  `--brand-<brandKey>`. */
+export type ColorTokenRead = {
+  prop: ManagedColorProp;
+  kind: "hex" | "brand";
+  hex: string;
+  /** Only on a brand token: the Brand page colour's key (`cream` → `--brand-cream`). */
+  brandKey?: string;
+};
+
+/** `<prefix>-[#hex]` or `<prefix>-[brand-<key>_#hex]` → what it paints, or null if it is
+ *  neither (a malformed brand token included). 0.42.0 widened this from `{ prop, value }`
+ *  (the hex was `value`); lone-star's editor was its only reader. */
+export function colorToken(token: string): ColorTokenRead | null {
+  const m = token.match(/^([a-z]+)-\[(.+)\]$/);
+  const prop = m ? COLOR_PROPS.get(m[1]!) : undefined;
+  if (!m || !prop) return null;
+  const payload = m[2]!;
+  if (COLOR_HEX.test(payload)) return { prop, kind: "hex", hex: payload };
+  const brand = payload.match(BRAND_PAYLOAD);
+  if (brand && isBrandColorKey(brand[1]))
+    return { prop, kind: "brand", hex: brand[2]!, brandKey: brand[1]! };
+  return null;
 }
 
-/** The arbitrary-colour utility for a prefix — the write half of `colorToken`. */
-export function colorClass(prefix: "border" | "text" | "bg", hex: string): string {
-  return `${prefix}-[${hex}]`;
+/** The colour utility for a prefix — the write half of `colorToken`. With a `brandKey`
+ *  (0.42.0) it writes the brand token, the hex riding along as the fallback; a key that
+ *  fails the brand key rule, or a hex that is not one, writes the plain hex token
+ *  instead, so a bad key can never be what reaches a stored string. */
+export function colorClass(prefix: "border" | "text" | "bg", hex: string, brandKey?: string): string {
+  return brandKey !== undefined && isBrandColorKey(brandKey) && COLOR_HEX.test(hex)
+    ? `${prefix}-[brand-${brandKey}_${hex}]`
+    : `${prefix}-[${hex}]`;
 }
 
 /** `speed-[<rate>x]` → the playback rate it sets, or null (malformed or outside what a

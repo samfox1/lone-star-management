@@ -18,7 +18,7 @@
  * (no shadow, no glow) is not a finding, and a first pass that flagged those buried the
  * four real answers in 250 lines of noise.
  */
-import { familyOf } from "./styles";
+import { colorToken, familyOf } from "./styles";
 
 /** A region as the manifest declares it. */
 export type AuditRegion = {
@@ -34,7 +34,6 @@ export type AuditRegion = {
 
 export type AuditFinding = { key: string; problem: string };
 
-const ARBITRARY_HEX = /^(text|bg|border)-\[#[0-9a-fA-F]{3,8}\]$/;
 
 /**
  * Which colour control could show this token, or null for a token no colour control owns.
@@ -83,7 +82,8 @@ export function auditRegions(
     // 1. A colour the region WEARS that no picker can recognise.
     for (const token of tokens) {
       const bare = token.replace(/^!/, "");
-      if (!colorChannel(bare) || ARBITRARY_HEX.test(bare) || declared.has(bare)) continue;
+      // A hex or a brand colour token (0.42.0) is something the picker reads directly.
+      if (!colorChannel(bare) || colorToken(bare) || declared.has(bare)) continue;
       findings.push({ key: region.key, problem: `wears ${bare}, which the palette never declares` });
     }
 

@@ -6,6 +6,7 @@
         "scripts/build-google-fonts.ts",
         "scripts/build-major-cities.ts",
         "scripts/build-map-data.ts",
+        "scripts/link-brand-colors.ts",
         "supabase/functions/*/index.ts"
       ],
       "ignore": [

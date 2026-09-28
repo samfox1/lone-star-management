@@ -1,6 +1,7 @@
 // Applying a style to a region or an item, and which parts of the class string survive it.
 import { describe, it, expect } from 'vitest'
 import {
+  brandSwatches,
   isItemKey,
   mergeStyle,
   resolveRegionStyle,
@@ -8,6 +9,8 @@ import {
   siteSwatches,
   usedColors,
 } from '@/lib/site-editor/style-apply'
+import { listBrandColors } from '@/lib/manager-tools/brand/brand-colors'
+import { fakeClient } from '@tests/unit/manager-tools/brand/_fake-client'
 import { buildVideoItemStyleControls } from '@/lib/site-editor/style-controls'
 
 describe('resolveStyle — arbitrary colours leave the class string', () => {
@@ -150,6 +153,29 @@ describe('mergeStyle — items add, sections replace', () => {
   })
 })
 
+describe('brandSwatches — the Brand palette as the editor gets it', () => {
+  it('keeps each colour\'s key (what a brand pick saves in its token), and a keyless row stays keyless', () => {
+    expect(
+      brandSwatches([
+        { name: 'Cream', hex: '#f4f1ea', key: 'cream' },
+        { name: 'Ink', hex: '#111111' },
+        { name: 'Old', hex: '#222222', key: null },
+      ]),
+    ).toEqual([
+      { name: 'Cream', hex: '#f4f1ea', key: 'cream' },
+      { name: 'Ink', hex: '#111111' },
+      { name: 'Old', hex: '#222222' },
+    ])
+  })
+
+  it('listBrandColors carries the key the database set (select *), so the page can pass it on', async () => {
+    const fake = fakeClient(() => ({ data: [{ id: 'c1', name: 'Cream', hex: '#f4f1ea', key: 'cream', sort_order: 0, slot: null }] }))
+    const [cream] = await listBrandColors(fake.client, 'a1')
+    expect(cream.key).toBe('cream')
+    expect(brandSwatches([cream])).toEqual([{ name: 'Cream', hex: '#f4f1ea', key: 'cream' }])
+  })
+})
+
 describe('usedColors — what the site already uses', () => {
   it('collects every hex across all regions, most-used first', () => {
     const styles = {
@@ -172,6 +198,14 @@ describe('usedColors — what the site already uses', () => {
   it('ignores non-colour classes, empty strings and named tokens', () => {
     expect(usedColors({ a: 'scale-110 border-[4px] bg-flash-1', b: '', c: 'rounded-full' })).toEqual([])
     expect(usedColors({})).toEqual([])
+  })
+
+  it('skips BRAND colour tokens: the brand swatch offers them, by name, at their current hex', () => {
+    // A brand token's hex is only its fallback. After Cream changes on the Brand page, the
+    // stale #f4f1ea would otherwise sit in the row as a second, nameless "cream".
+    expect(usedColors({ a: 'text-[brand-cream_#f4f1ea]', b: 'bg-[#123abc] border-[brand-cream_#f4f1ea]' })).toEqual([
+      '#123abc',
+    ])
   })
 
   it('caps the list so the swatch row cannot run away', () => {

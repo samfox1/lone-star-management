@@ -146,9 +146,10 @@ export function StyleControlRow({
           label=""
           aria={aria}
           value={control.hexOf(cls)}
+          brandKey={control.brandOf?.(cls) || undefined}
           used={swatches ?? []}
           fallbackHex={siteDefaultHex(control.id, palette)}
-          onChange={(hex) => onChange(control.toToken!(hex, cls))}
+          onChange={(hex, brandKey) => onChange(control.toToken!(hex, cls, brandKey))}
         />
       </ControlRow>
     )

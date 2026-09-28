@@ -138,6 +138,18 @@ export function bridgeSupportsDeltas(siteVersion: string | undefined): boolean {
   return !bridgeOutdated(siteVersion, DELTA_SINCE)
 }
 
+/** BRAND COLOUR tokens (0.42.0): `text-[brand-cream_#f4f1ea]` → `var(--brand-cream,
+ *  #f4f1ea)`, so a region painted a Brand colour follows the Brand page. A 0.41 applier
+ *  does not know the shape: it rides through as a dead class, the pick silently does
+ *  nothing on the live site, and `border-[brand-…]` even reads as a border WIDTH there.
+ *  So an older site keeps getting the plain hex. */
+const BRAND_COLORS_SINCE = '0.42.0'
+
+export function bridgeSupportsBrandColors(siteVersion: string | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, BRAND_COLORS_SINCE)
+}
+
 /** PER-ITEM deltas: the window/inner splitter re-wears the sentinel on both halves
  *  from 0.25.4; an older applier would render a delta item row's window half with
  *  replace semantics and blow away the card frame. */

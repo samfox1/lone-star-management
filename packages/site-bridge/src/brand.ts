@@ -34,6 +34,14 @@ import { FONT_SLOTS, type FontSlot, type FontSlotMap, type PublicSitePayload, ty
 const COLOR_KEY = /^[a-z0-9]+(-[a-z0-9]+)*$/
 /** The door's ceiling: `brand_colors_key_format`. */
 const MAX_COLOR_KEY = 40
+/**
+ * Is this a brand colour key? The one rule for it, shared with the style applier: a brand
+ * colour TOKEN (`text-[brand-cream_#f4f1ea]`, 0.42.0) puts the key into a `var()` name on
+ * an inline style, so styles.ts checks it here rather than keeping a second copy.
+ */
+export function isBrandColorKey(key: unknown): key is string {
+  return typeof key === 'string' && key.length <= MAX_COLOR_KEY && COLOR_KEY.test(key)
+}
 /** `#rrggbb` and nothing else. Case-insensitive in, lowercase out. JS `$` has no
  *  "before a final newline" exception without the `m` flag, so `#c63a2a\n` fails. */
 const HEX = /^#[0-9a-f]{6}$/i
@@ -148,7 +156,7 @@ export function brandColorCss(brand: SiteBrand | null | undefined): string {
   for (const c of colors as unknown[]) {
     if (!c) continue // a primitive destructures to undefined fields and fails below
     const { key, hex } = c as { key?: unknown; hex?: unknown }
-    if (typeof key !== 'string' || key.length > MAX_COLOR_KEY || !COLOR_KEY.test(key)) continue
+    if (!isBrandColorKey(key)) continue
     const value = hexOrNull(hex)
     if (!value || seen.has(key)) continue
     seen.add(key)

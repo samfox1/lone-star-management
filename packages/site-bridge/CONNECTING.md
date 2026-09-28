@@ -149,9 +149,10 @@ Concretely:
   `py-12` — and `sizesm-[28px]`, the phone floor, beside a declared `size-[48px]`).
   Without one the handle rests on a guess, and dragging can make something smaller when
   it should get bigger. This has now bitten three separate controls; declare both ends.
-- **Colours** go in the base **and** in `styleOptions`. A picker recognises exactly two
-  things: a colour your palette declares, and an arbitrary hex (`text-[#ffffffcc]`). Use
-  the hex form for a colour with no palette entry.
+- **Colours** go in the base **and** in `styleOptions`. A picker recognises exactly three
+  things: a colour your palette declares, an arbitrary hex (`text-[#ffffffcc]`), and a
+  brand colour token (`text-[brand-cream_#f4f1ea]`, 0.42.0, §14). Use the hex form for a
+  colour with no palette entry.
 - **Every opacity you actually use** is its own palette entry. `text-ink/60` being
   declared does nothing for `text-ink/70`.
 
@@ -733,6 +734,36 @@ and a URL, a font path into `url('…')`. The builders re-check every value agai
 allowlist and drop anything that fails. A copy in your site would have to do the same, and
 would drift: skeen's own font reader once silently stopped applying slot fonts when the
 wire changed under it (August 2026, `lib/fonts.ts`).
+
+### Regions painted a brand colour follow it (0.42.0)
+
+When the manager picks a Brand page colour in the editor's swatch row, the region stores a
+**brand colour token** instead of a copy of the hex:
+
+| Stored | Rendered inline |
+| --- | --- |
+| `text-[brand-cream_#f4f1ea]` | `color: var(--brand-cream, #f4f1ea)` |
+| `bg-[brand-primary_#c63a2a]` | `background-color: var(--brand-primary, #c63a2a)` |
+| `border-[brand-black_#0a0a0a]` | `border-color: var(--brand-black, #0a0a0a)` |
+
+So when Cream changes on the Brand page and Brand is published, every region painted Cream
+changes with it. The hex is the fallback: the colour as it was when picked, which is what
+shows while no brand is published. A typed or dragged custom colour stays a plain hex.
+
+**There is nothing to write.** The applier (`regionProps`, `resolveRegionStyle`, the frame's
+live apply) lifts the token itself, the same way every colour lifts, and it only needs the
+`--brand-<key>` variables `brandCss` already emits (above). A site that renders `brandCss`
+gets the follow for free; one that does not paints the fallback hex, which is exactly what it
+painted before.
+
+- **Bump to 0.42.0 and redeploy (without build cache).** The editor only writes brand tokens
+  to a site announcing `bridgeVersion` 0.42.0 or later: a 0.41 applier keeps
+  `text-[brand-…]` as a dead class, so the pick would silently do nothing on your page.
+- **Do not hand-roll the token.** The key goes into a `var()` name on an inline style, so the
+  applier re-checks it (kebab words, at most 40, the `brand_colors` key rule) and the hex; a
+  token that fails either is dropped entirely: no style, and not even a class.
+- **A base may wear one.** `auditRegions` treats a brand token in your base like a hex: a
+  colour the picker can show. Your own palette class is still the usual choice there.
 
 ## Known rough edges
 

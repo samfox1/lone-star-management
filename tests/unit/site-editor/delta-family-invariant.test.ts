@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { familyOf } from '@samfox1/site-bridge/styles'
 import { mergeStyle } from '@samfox1/site-bridge'
 import { cleanClassText } from '@/lib/site-editor/save'
+import { PACKAGE_VERSION } from '@samfox1/site-bridge/manifest'
 import {
   buildItemStyleControls,
   buildStyleControls,
@@ -36,6 +37,16 @@ const OPTS = withStyleVars(
   '0.24.0',
 )
 const PHONE = { ...OPTS, mobileView: true }
+/** The same palette on a site at the editor's own bridge — every era flag on, brand colour
+ *  tokens (0.42.0) included. */
+const CURRENT = withStyleVars(
+  {
+    fonts: [{ value: 'font-momo', label: 'Momo', css: '"Momo", serif' }],
+    textColors: [{ value: 'text-foreground', label: 'Fg', hex: '#f4f1ea' }],
+    bgColors: [{ value: 'bg-black', label: 'Black', hex: '#000000' }],
+  },
+  PACKAGE_VERSION,
+)
 
 /** Every control the editor can render, both device scopes, section + item + region. */
 function allControls(): StyleControl[] {
@@ -50,6 +61,9 @@ function allControls(): StyleControl[] {
     ...buildTextItemStyleControls(PHONE),
     ...buildItemStyleControls(OPTS),
     ...buildItemStyleControls(PHONE),
+    ...buildStyleControls(CURRENT),
+    ...buildTextItemStyleControls(CURRENT),
+    ...buildItemStyleControls(CURRENT),
     ...buildVideoItemStyleControls('embed', OPTS),
     ...buildVideoItemStyleControls('file', OPTS),
     ...controlsForRegion(buildStyleControls(OPTS), region),
@@ -57,12 +71,13 @@ function allControls(): StyleControl[] {
   ]
 }
 
-/** Every token a control can WRITE. Colour controls emit runtime hexes; sampled. */
+/** Every token a control can WRITE. Colour controls emit runtime hexes; sampled — as a
+ *  custom colour AND as a brand swatch pick (a brand colour token where the site takes one). */
 function emittedTokens(c: StyleControl): string[] {
   if (c.kind === 'select') return c.options.map((o) => o.value)
   if (c.kind === 'slider') return sliderSteps(c).map((s) => s.value)
   if (c.kind === 'toggle') return [c.onClass]
-  if (c.kind === 'color' && c.toToken) return [c.toToken('#12ab34', '')]
+  if (c.kind === 'color' && c.toToken) return [c.toToken('#12ab34', ''), c.toToken('#12ab34', '', 'cream')]
   if (c.kind === 'color') return ['text-[#12ab34]'] // the plain border/colour form
   return []
 }
