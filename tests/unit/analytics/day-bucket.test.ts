@@ -1,5 +1,5 @@
-// The day-bucketing math shared by roster-data.ts (rosterDailyViews, artistDailyViews)
-// and entity-sparkline.tsx, pulled into ONE home (CODE_AUDIT.md item I) after three
+// The day-bucketing math shared by roster-data.ts (rosterDailyViews)
+// and the since-removed entity-sparkline.tsx, pulled into ONE home (CODE_AUDIT.md item I) after three
 // near-duplicate copies drifted: roster-data.ts floored "now" to midnight then walked an
 // ms-epoch INDEX (`windowStartMs` + `Date.parse` + `Math.round`), while entity-sparkline.tsx
 // built its own day list from raw `Date.now()` arithmetic and a string-keyed Map. Both

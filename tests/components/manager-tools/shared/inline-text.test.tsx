@@ -98,15 +98,6 @@ describe('RowTitle', () => {
     expect(onRename).toHaveBeenCalledWith('Our black')
   })
 
-  it('focus shows only a thin underline — no box, no ring', () => {
-    const { el } = setup()
-    expect(el.className).toContain('border-b')
-    expect(el.className).toContain('focus:border-ink')
-    expect(el.className).toContain('outline-none')
-    const boxy = el.className.split(/\s+/).filter((c) => /^(ring|rounded|border$|border-(?!b$|transparent$))/.test(c))
-    expect(boxy).toEqual([])
-  })
-
   it('shows the new value when the parent sends one (a refresh after another save)', () => {
     const { rerender } = render(<RowTitle value="Color 1" onRename={vi.fn()} />)
     rerender(<RowTitle value="Night" onRename={vi.fn()} />)

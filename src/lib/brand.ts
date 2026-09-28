@@ -52,7 +52,7 @@ export type LogoPurpose = (typeof LOGO_PURPOSES)[number]
 
 /** What an icon may be framed from: any logo, or an image uploaded just for it. Never a
  *  derived PNG (`favicon`, `home_icon`) — framing a framed icon compounds the crop. */
-export const ICON_SOURCE_PURPOSES = [...LOGO_PURPOSES, 'icon_source'] as const
+const ICON_SOURCE_PURPOSES = [...LOGO_PURPOSES, 'icon_source'] as const
 
 /** The two generated icons. Each has its own source and its own framing. */
 export const ICON_TARGETS = ['favicon', 'home_icon'] as const
@@ -68,7 +68,7 @@ const ICON_COLUMNS: Record<IconTarget, { source: string; zoom: string; offsetY: 
 /** A title (added logo, colour, custom font slot) and a note: the database's own limits
  *  (20260924120000), stated once so the sentences below quote the same numbers. */
 export const TITLE_MAX = 40
-export const NOTE_MAX = 500
+const NOTE_MAX = 500
 
 /** The storage folder every brand object lives under: `{artistId}/brand/<uuid>.png`.
  *  Exported because THREE places must agree and only one of them fails loudly — the two
@@ -80,10 +80,6 @@ export const BRAND_FOLDER = 'brand'
  *  browsers downscale cleanly, and the same file covers the iPhone home-screen icon
  *  (180px) without a second asset or a second decision. */
 export const FAVICON_SIZE = 180
-
-/** What the manager judges the result at. A tab icon is tiny and unforgiving, so the
- *  preview shows TRUE size rather than a flattering enlargement. */
-export const FAVICON_PREVIEW_SIZE = 32
 
 /** 1 = the whole logo visible. Above that crops into it, which is the point for a wide
  *  wordmark: at 32px a full lockup is unreadable, so you zoom into the mark. The ceiling
@@ -133,7 +129,7 @@ export function sameFraming(a: FaviconFraming, b: FaviconFraming): boolean {
 }
 
 /** Where to draw the logo on a `size`×`size` canvas. */
-export type DrawBox = { x: number; y: number; width: number; height: number }
+type DrawBox = { x: number; y: number; width: number; height: number }
 
 /**
  * The one piece of maths behind both the preview and the exported file.
@@ -817,7 +813,7 @@ export async function brandPending(supabase: SupabaseClient, artistId: string): 
  * bar's diff by it, so a kind added here is a compile error until the bar counts it.
  */
 export const BRAND_KINDS = ['media', 'artist_font', 'brand_color', 'theme_color'] as const
-export type BrandKind = (typeof BRAND_KINDS)[number]
+type BrandKind = (typeof BRAND_KINDS)[number]
 
 /**
  * The Brand page's Publish: brand media (never a gallery photo, hero or profile draft),
@@ -873,7 +869,7 @@ async function readIconSources(supabase: SupabaseClient, artistId: string): Prom
  *      pair a PNG with the wrong picture. The framing is not in the log either, so it stays
  *      as the manager left it; the next edit regenerates the icon from both.
  */
-export function settleIconSources(o: {
+function settleIconSources(o: {
   before: IconSources
   /** Brand media ids the revert deleted. */
   removed: ReadonlySet<string>
@@ -923,7 +919,7 @@ const COLOR_RESTORE = PUBLISHABLE.brand_color.snapshot.filter((c) => !COLOR_IMMU
  *  row read as "changed" against the very snapshot it was restored from. */
 const COLOR_REINSERT = PUBLISHABLE.brand_color.snapshot.filter((c) => c !== 'id')
 
-export type BrandRevert = { changed: number; hasPublished: boolean; skipped: BrandKind[] }
+type BrandRevert = { changed: number; hasPublished: boolean; skipped: BrandKind[] }
 
 /**
  * Put the Brand page's DRAFT back to the last publish: brand media rows and fonts (with

@@ -15,15 +15,10 @@ export const EVENT_TYPES = [
 ] as const
 
 export type OnSiteEvent = (typeof EVENT_TYPES)[number]['type']
-export const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES.map((e) => e.type))
 
 /** Content kinds an event can be ATTRIBUTED to (mirrors record_event's SQL allowlist). */
 export const ENTITY_KINDS = ['release', 'track', 'merch', 'video', 'tour_date', 'link'] as const
 export type EntityKind = (typeof ENTITY_KINDS)[number]
-
-/** The item an event is about: its kind + id, plus an optional human label (the venue
- *  name / item title we store as `target` for readability). */
-export type TrackedEntity = { kind: EntityKind; id: string; label?: string }
 
 /**
  * The typed emitter seam, re-exported from the bridge so the DECLARATION and the LISTENER
@@ -36,4 +31,4 @@ export type TrackedEntity = { kind: EntityKind; id: string; label?: string }
  * use an off-allowlist type, which is exactly what used to break silently across the
  * hand-written emitters.
  */
-export { trackAttrs, type TrackAttrs, type TrackOptions } from '@samfox1/site-bridge/analytics'
+export { trackAttrs } from '@samfox1/site-bridge/analytics'

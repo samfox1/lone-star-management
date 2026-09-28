@@ -298,10 +298,6 @@ export function groupByPrefix<T extends { key: string; group?: string }>(
   return [...out.entries()]
 }
 
-/** The style panel's grouping, by its original name. Same function — the Text panel now
- *  groups the same way, so the two panels can never disagree about a site's outline. */
-export const groupStyleRegions = groupByPrefix
-
 /**
  * A child row's label under a group HEADING, with the heading word removed — so a
  * "Hero" section reads "Name" / "Tagline", not "Hero name" / "Hero tagline", and a

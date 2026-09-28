@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { cx } from '@/lib/cx'
 import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
-import { groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { groupByPrefix, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { mergeStyle } from '@samfox1/site-bridge'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import {
@@ -321,7 +321,7 @@ export function StyleTools({
   // controls; browsing lists ONLY site-wide regions. Note `text` still seeds from ALL
   // regions: a click must find its value already loaded.
   const groupedRegions = useMemo(
-    () => groupStyleRegions(visibleStyleRegions(regions, selected)),
+    () => groupByPrefix(visibleStyleRegions(regions, selected)),
     [regions, selected],
   )
   useEffect(() => {

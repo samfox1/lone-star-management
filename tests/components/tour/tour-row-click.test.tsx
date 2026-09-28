@@ -23,9 +23,6 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
 }))
-vi.mock('@/app/artists/[id]/(dashboard)/entity-sparkline', () => ({
-  EntitySparkline: () => <div data-testid="sparkline" />,
-}))
 
 const ARTIST = 'artist-1'
 const tour: TourDate = {

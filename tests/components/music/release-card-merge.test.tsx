@@ -29,9 +29,6 @@ import { mergeSongsAction } from '@/app/artists/[id]/(dashboard)/music/actions'
 import type { MergeTarget } from '@/app/artists/[id]/(dashboard)/music/merge-song-modal'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
-vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
-  TrackAudioUploader: () => <div data-testid="uploader" />,
-}))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     rpc: async () => ({ data: [] }),

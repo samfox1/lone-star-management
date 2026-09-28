@@ -9,7 +9,7 @@ import { dayList, sumByDay } from '@/lib/analytics'
  * dashboard uses, just rolled up. No fabricated data: callers render honest empty
  * states where a real signal doesn't exist.
  */
-export type RosterArtist = { id: string; name: string; slug: string }
+type RosterArtist = { id: string; name: string; slug: string }
 
 export type ArtistEvents = {
   views: number
@@ -19,7 +19,7 @@ export type ArtistEvents = {
   buyClicks: number
 }
 
-export function thirtyDaysAgoIso(): string {
+function thirtyDaysAgoIso(): string {
   return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 }
 
@@ -34,7 +34,7 @@ export async function ownedArtists(supabase: SupabaseClient): Promise<RosterArti
   return (data ?? []) as RosterArtist[]
 }
 
-export type RosterAnalytics = {
+type RosterAnalytics = {
   byArtist: Record<string, ArtistEvents>
   totals: ArtistEvents
   /** Artists sorted by 30-day views, descending. */
@@ -94,9 +94,8 @@ type DailyRow = { artist_id: string; day: string; views: number }
 /** Per-artist daily VIEW series + the roster total series over the last `days`.
  *
  * Zero-filled and bucketed by `sumByDay` (lib/analytics) against `dayList`'s day
- * strings — not the ms-epoch index math this used to do independently of
- * `artistDailyViews` below, which is exactly the kind of drift that misplaces a row
- * on a window's edge. See CODE_AUDIT.md item I. */
+ * strings — not the ms-epoch index math this used to do, which is exactly the kind
+ * of drift that misplaces a row on a window's edge. See CODE_AUDIT.md item I. */
 export async function rosterDailyViews(
   supabase: SupabaseClient,
   artists: RosterArtist[],
@@ -119,21 +118,7 @@ export async function rosterDailyViews(
   return { byArtist, total }
 }
 
-/** One artist's daily VIEW series over the last `days`. */
-export async function artistDailyViews(
-  supabase: SupabaseClient,
-  artistId: string,
-  days = 30,
-): Promise<number[]> {
-  const list = dayList(days)
-  const { data } = await supabase.rpc('analytics_daily', {
-    p_since: `${list[0]}T00:00:00Z`,
-    p_artist_id: artistId,
-  })
-  return sumByDay((data ?? []) as DailyRow[], list, (r) => r.day, (r) => r.views)
-}
-
-export type RosterRow = { row: ContentRow; artist: RosterArtist }
+type RosterRow = { row: ContentRow; artist: RosterArtist }
 
 /** Flatten one content type across every owned artist, each row tagged with its artist. */
 export async function rosterRows(

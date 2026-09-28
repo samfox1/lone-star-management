@@ -28,9 +28,6 @@ import { setTrackFeaturedAction, setTrackOnSiteAction, setTrackReleasedAction, s
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
-vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
-  TrackAudioUploader: () => <div data-testid="uploader" />,
-}))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     rpc: async () => ({ data: [] }),

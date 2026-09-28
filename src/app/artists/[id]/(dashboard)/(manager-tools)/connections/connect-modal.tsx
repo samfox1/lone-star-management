@@ -505,7 +505,7 @@ function RunRow({
 }
 
 /** What a bad store address says. One sentence, the fix in it. */
-export const SHOP_ADDRESS_ERROR = 'Use the store address that ends in .myshopify.com.'
+const SHOP_ADDRESS_ERROR = 'Use the store address that ends in .myshopify.com.'
 
 /**
  * "Connect with Shopify": a real link to the install route, which checks the manager and the

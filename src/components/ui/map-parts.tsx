@@ -113,7 +113,7 @@ export function HoverReadout({ hover, frame }: { hover: Hover<CityDot> | null; f
 }
 
 /** What the pointer is over — a country, or a major city with its state — and its numbers. */
-export function MapReadout({ name, sub, visitors, views, style }: { name: string; sub?: string; visitors: number; views: number; style: CSSProperties }) {
+function MapReadout({ name, sub, visitors, views, style }: { name: string; sub?: string; visitors: number; views: number; style: CSSProperties }) {
   return (
     <div
       aria-hidden

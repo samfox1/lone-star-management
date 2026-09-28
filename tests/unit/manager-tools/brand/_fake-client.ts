@@ -28,8 +28,6 @@ export type Call = {
 
 export type Reply = { data?: unknown; error?: { code?: string; message: string } | null; count?: number | null }
 
-export const WRITES: readonly Op[] = ['insert', 'update', 'delete', 'upsert', 'rpc']
-
 /** The value a filter was given, or undefined. */
 export function filterValue(call: Call, col: string, method = 'eq'): unknown {
   return call.filters.find(([m, c]) => m === method && c === col)?.[2]

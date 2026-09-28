@@ -1,6 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { cx } from '@/lib/cx'
-import { Icon, type IconName } from './icons'
 
 /* ── Button ──────────────────────────────────────────────────────────────── */
 export type ButtonVariant = 'solid' | 'accent' | 'ghost' | 'danger' | 'confirm'
@@ -56,29 +55,6 @@ export const modalCardClass = 'relative flex max-h-[88vh] w-[640px] max-w-full f
  *  vertical scroll, so both columns read at a glance. */
 export const modalCardWideClass = 'relative flex w-[880px] max-w-[94vw] flex-col rounded-2xl bg-paper p-7 shadow-2xl'
 
-/** Square icon button with a hairline border. */
-export function IconButton({
-  name,
-  active = false,
-  className,
-  ...rest
-}: { name: IconName; active?: boolean } & ComponentProps<'button'>) {
-  return (
-    <button
-      className={cx(
-        'inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors',
-        active
-          ? 'border-accent-soft bg-accent-soft text-accent'
-          : 'border-hairline bg-paper text-ink-muted hover:text-ink',
-        className,
-      )}
-      {...rest}
-    >
-      <Icon name={name} size={17} />
-    </button>
-  )
-}
-
 /* ── Avatar ──────────────────────────────────────────────────────────────── */
 export function Avatar({
   initials,
@@ -133,36 +109,6 @@ export function KLabel({ className, children }: { className?: string; children: 
       )}
     >
       {children}
-    </div>
-  )
-}
-
-/* ── Stat — big mono number with a caption ───────────────────────────────── */
-export function Stat({
-  value,
-  label,
-  accent,
-  className,
-}: {
-  value: ReactNode
-  label: ReactNode
-  accent?: 'blue' | 'red'
-  className?: string
-}) {
-  return (
-    <div className={className}>
-      <div
-        className={cx(
-          'font-space text-[25px] font-bold tracking-[-0.02em]',
-          accent === 'blue' && 'text-accent',
-          accent === 'red' && 'text-accent-red',
-        )}
-      >
-        {value}
-      </div>
-      <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-        {label}
-      </div>
     </div>
   )
 }

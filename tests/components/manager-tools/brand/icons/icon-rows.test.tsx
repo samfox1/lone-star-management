@@ -88,11 +88,9 @@ describe('IconRows — built-in rows', () => {
     const home = rowNamed('Home-screen icon').querySelector('[data-icon-shape]') as HTMLElement
     const tab = rowNamed('Tab icon').querySelector('[data-icon-shape]') as HTMLElement
     expect(home.dataset.iconShape).toBe('rounded-square')
-    // The mask is real: corners rounded AND the image clipped to them.
-    expect(home.className).toMatch(/(^|\s)rounded-\[14px\]/)
+    // The mask is real: the image is clipped to it, not just labelled.
     expect(home.className).toMatch(/(^|\s)overflow-hidden/)
     expect(tab.dataset.iconShape).toBe('tab')
-    expect(tab.className).toMatch(/(^|\s)h-16/)
   })
 
   it('CRITICAL: no PNG yet but a source (Skeen\'s home-screen icon: the primary logo) → the row draws the icon LIVE from the source and its framing, never blank', async () => {

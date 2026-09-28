@@ -161,7 +161,7 @@ export function kindLabeller(kinds: readonly { slug: string; label: string }[]):
  * `pickRecipients` alike, and Resend then rejects the WHOLE send — every recipient,
  * including the primary. The dashboard is the one place a human can be told.
  */
-export const RECIPIENT_EMAIL_RE = /^[\x21-\x3f\x41-\x7e]+@[\x21-\x3f\x41-\x7e]+\.[\x21-\x3f\x41-\x7e]+$/
+const RECIPIENT_EMAIL_RE = /^[\x21-\x3f\x41-\x7e]+@[\x21-\x3f\x41-\x7e]+\.[\x21-\x3f\x41-\x7e]+$/
 
 /**
  * Why a candidate address cannot join a list, or null if it can. The database enforces

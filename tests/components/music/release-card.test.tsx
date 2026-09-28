@@ -28,9 +28,6 @@ import { ReleaseCard, type Release, type ReleaseSong } from '@/app/artists/[id]/
 import { setReleaseLinkAction, setReleaseTypeAction, setTrackFeaturedAction, updateContentAction, updateReleaseDetailsAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
-vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
-  TrackAudioUploader: () => <div data-testid="uploader" />,
-}))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     rpc: async () => ({ data: [] }),

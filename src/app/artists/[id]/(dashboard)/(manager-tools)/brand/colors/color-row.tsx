@@ -36,7 +36,7 @@ export type ColorItem = {
 
 /** How long the colour must hold still before it is saved. A drag across the square is
  *  sixty changes a second; the database wants the one it ended on. */
-export const SAVE_DELAY_MS = 300
+const SAVE_DELAY_MS = 300
 
 /**
  * ONE ROW OF THE PALETTE (BRAND_PAGE_PLAN.md, Colors). A renamable title, a note, and the

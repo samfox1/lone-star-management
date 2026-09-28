@@ -11,7 +11,7 @@
  *   136 / 4 = 34 → 50      61 / 4 = 15 → 20      7 / 4 = 1.75 → 2      217 / 4 = 54 → 50
  *   2 / 4 = 0.5 → 1 (a count axis draws 1, 2 — never 0.5, 1, 1.5, 2)
  */
-export function niceStep(max: number, lines = 4): number {
+function niceStep(max: number, lines = 4): number {
   if (!(max > 0)) return 1
   const raw = max / lines
   const base = 10 ** Math.floor(Math.log10(raw))

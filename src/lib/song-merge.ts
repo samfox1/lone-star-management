@@ -21,7 +21,7 @@ import { normalizeTitle, type PlatformReleaseKind } from '@/lib/sync-match'
 import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
 
 /** Enough of a song to tell whether another one is its duplicate. */
-export type TwinCandidate = { id: string; title: string; release_id?: string | null }
+type TwinCandidate = { id: string; title: string; release_id?: string | null }
 
 /**
  * The songs `song` could be merged into: its likely DUPLICATES, never the whole catalogue.
@@ -87,7 +87,7 @@ export const CURATED_FILLABLE_FIELDS = [
  * `drive_file_id` is what badges a Drive file "imported". Until 2026-09-28 the merge left
  * it on the duplicate, so it died with that row and the file read as never imported.
  */
-export const HANDED_OVER_FIELDS = ['drive_file_id'] as const
+const HANDED_OVER_FIELDS = ['drive_file_id'] as const
 
 /**
  * Hand-edited LISTS that UNION: the merged song carries every entry either row had, the
@@ -95,7 +95,7 @@ export const HANDED_OVER_FIELDS = ['drive_file_id'] as const
  * hand (Sam, 2026-09-11); a pull only seeds an empty list. Two rows of one song each hold
  * credits someone chose, so keeping only one row's list deletes the other's.
  */
-export const UNION_LIST_FIELDS = ['featured_artists'] as const
+const UNION_LIST_FIELDS = ['featured_artists'] as const
 
 /** What a platform sync stamps onto a song's type (sync-match classifyRelease). A Record
  *  over the platform kinds, so a new kind is a compile error here until it is placed. */
@@ -115,7 +115,7 @@ export const HAND_SET_TYPES: readonly ReleaseType[] = RELEASE_TYPES.filter(
  * like a title (kept row wins) turned a hand-tagged Remix or Live set back into a Single
  * (reviewer, 2026-09-28). Two hand-set tags, or two stamped ones: the kept row's stands.
  */
-export const TAG_FIELDS = ['release_type'] as const
+const TAG_FIELDS = ['release_type'] as const
 
 /**
  * Columns of `tracks` a merge deliberately does NOT read or write, each with its reason.
@@ -181,9 +181,9 @@ export const MERGE_COLUMNS = [
   ...CURATED_ABSOLUTE_FIELDS,
 ].join(', ')
 
-export type MergeConflict = { field: string; platform: string; keep: string; drop: string }
+type MergeConflict = { field: string; platform: string; keep: string; drop: string }
 
-export type MergePlan =
+type MergePlan =
   | {
       ok: true
       /** Columns to write onto the kept row. Only genuinely-changing values appear. */
@@ -289,7 +289,7 @@ export function planSongMerge(keep: MergeableSong, drop: MergeableSong): MergePl
 
 /** Manager-facing wording for a refusal. Names the platforms so the fix is obvious:
  *  clear the wrong handle on one row, or accept that these are two different songs. */
-export function mergeConflictMessage(conflicts: MergeConflict[]): string {
+function mergeConflictMessage(conflicts: MergeConflict[]): string {
   const platforms = [...new Set(conflicts.map((c) => c.platform))]
   const list =
     platforms.length === 1
@@ -298,7 +298,7 @@ export function mergeConflictMessage(conflicts: MergeConflict[]): string {
   return `These songs have different ${list} links, so they're probably not the same song. Clear the wrong one first, then merge.`
 }
 
-export type MergeResult =
+type MergeResult =
   | { ok: true; orphanedAudioPath: string | null }
   | { ok: false; error: string }
 

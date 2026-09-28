@@ -97,7 +97,7 @@ export function RestoreVersionMenu({ artistId }: { artistId: string }) {
 }
 
 /** "14 Aug, 6:00 pm" — a moment a manager can recognise, not an ISO string. */
-export function momentLabel(iso: string): string {
+function momentLabel(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     day: 'numeric',
     month: 'short',

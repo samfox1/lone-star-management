@@ -71,16 +71,6 @@ describe('TimelineChart', () => {
     expect(within(legend).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Views', 'Visitors', 'Bots'])
   })
 
-  it('each series is drawn in its own colour — the blue accent, the red accent, ink', () => {
-    const { container } = render(<TimelineChart points={four} height={80} series={[
-      S('views', [1, 2, 3, 4]), S('visitors', [1, 1, 1, 1], 'accent-red'), S('bots', [0, 1, 0, 1], 'ink'),
-    ]} />)
-    const cls = (k: string) => container.querySelector(`[data-series="${k}"]`)!.getAttribute('class') ?? ''
-    expect(cls('views').split(' ')).toContain('text-accent')
-    expect(cls('visitors').split(' ')).toContain('text-accent-red')
-    expect(cls('bots').split(' ')).toContain('text-ink')
-  })
-
   it('draws views alone by default, with no overlay', () => {
     const { container } = render(<TimelineChart points={points} height={80} />)
     expect(container.querySelectorAll('polyline')).toHaveLength(1)

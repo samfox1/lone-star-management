@@ -93,8 +93,8 @@ async function weightFromWoffTables(view: DataView, buf: Uint8Array): Promise<nu
 }
 
 /** The weights a font row can hold: CSS's 100–900 scale, the `artist_fonts.weight` CHECK. */
-export const MIN_FONT_WEIGHT = 100
-export const MAX_FONT_WEIGHT = 900
+const MIN_FONT_WEIGHT = 100
+const MAX_FONT_WEIGHT = 900
 
 /**
  * A weight read off a file, or null when it is outside 100–900.

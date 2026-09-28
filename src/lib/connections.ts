@@ -262,7 +262,7 @@ export function buildConnectionRows(opts: {
 /** Synced first, then anything that needs attention, then the rest; A to Z within each.
  *  A failure sits high because it is the row to act on. Being on the site moves nothing:
  *  that is a button, and buttons live in the editor. */
-export function sortConnectionRows(rows: readonly ConnectionRow[]): ConnectionRow[] {
+function sortConnectionRows(rows: readonly ConnectionRow[]): ConnectionRow[] {
   const rank = (r: ConnectionRow) => (r.state === 'synced' ? 0 : r.state === 'failed' ? 1 : 2)
   return [...rows].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }))
 }

@@ -9,14 +9,14 @@
  * the automatic one returns. The manager's own questions are added at the bottom.
  */
 import { useState } from 'react'
-import { PROBE_VERSION, probePrompts } from '@samfox1/site-bridge/seo'
+import { probePrompts } from '@samfox1/site-bridge/seo'
 import { FAQ_EXTRA, FAQ_KEYS } from '@/lib/site-content-schema'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
 import { cx } from '@/lib/cx'
 import { saveSeoFieldAction } from '../../../../actions'
 
-export { PROBE_VERSION, probePrompts }
+export { probePrompts }
 
 type Row = { key: string; qKey?: string; question: string; answer: string; auto: string; fixed: boolean }
 

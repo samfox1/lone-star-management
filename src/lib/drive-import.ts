@@ -32,7 +32,7 @@ type ImportConfig = {
 
 const MB = 1024 * 1024
 
-export const DRIVE_IMPORT: Record<DriveKind, ImportConfig> = {
+const DRIVE_IMPORT: Record<DriveKind, ImportConfig> = {
   // The same rules TrackAudioUploader enforces (lib/upload.ts), imported instead of
   // copied so the two can't drift.
   audio: { bucket: 'audio', category: 'audio', rules: AUDIO_UPLOAD_RULES, maxBytes: 30 * MB, noun: 'song' },

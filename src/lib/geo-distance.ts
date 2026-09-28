@@ -3,7 +3,7 @@
  * page (lib/analytics-major-cities.ts) and the data builder (scripts/build-major-cities.ts) both
  * import, so the radius the anchors were built with is the radius visitors are counted with.
  */
-export const EARTH_R_MI = 3958.8
+const EARTH_R_MI = 3958.8
 /** A major city has at least this many people. */
 export const MAJOR_CITY_MIN_POP = 250_000
 /** How far a major city reaches — the note under the list says so. */

@@ -82,7 +82,7 @@ const RAIL_ITEM_GAP = 4
  */
 const railColumnTop = (count: number) => (count * RAIL_ITEM_H + (count - 1) * RAIL_ITEM_GAP) / 2
 
-export function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { artistId: string; active: string; collapsed?: boolean; tools?: readonly Tool[] }) {
+function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { artistId: string; active: string; collapsed?: boolean; tools?: readonly Tool[] }) {
   return (
     <div className="hidden flex-none md:block" style={{ width: collapsed ? RAIL_COLLAPSED_W : RAIL_W }}>
       <nav
@@ -137,7 +137,7 @@ export function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }
  * shows the tool's icon, and a second column of icons said nothing the first had not
  * (Sam, 2026-09-22: "I dont need icons on the right rail").
  */
-export function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; tool: Tool; activeSeg: string; railCount: number }) {
+function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; tool: Tool; activeSeg: string; railCount: number }) {
   const tabs = tool.tabs ?? []
   return (
     // THE WIDTH IS THE LONGEST LABEL (Sam, 2026-09-23). The panel is `fixed`, and a fixed
@@ -196,7 +196,7 @@ export function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: st
  * bold black like the panel's. It WRAPS, never scrolls sideways, and every label is nowrap,
  * so at 390px it takes a second line before it would ever widen the page.
  */
-export function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: Tool; activeSeg: string }) {
+function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: Tool; activeSeg: string }) {
   return (
     <nav aria-label={`${tool.label} tabs`} className="-mt-3 mb-5 flex flex-wrap gap-1 md:hidden">
       {(tool.tabs ?? []).map((t) => {

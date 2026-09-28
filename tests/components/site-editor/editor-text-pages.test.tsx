@@ -115,15 +115,13 @@ describe('the panel puts other pages under their own heading', () => {
 
   it('CRITICAL: the About heading is rendered, and its row sits under it', () => {
     // The GROUP HEADING specifically, not just the text "About" — the row's own label is
-    // also "About", so `getByText` alone passes whether or not a heading exists. The
-    // heading is the eyebrow `<span>` GroupLabel renders inside its flex bar.
+    // also "About", so `getByText` alone passes whether or not a heading exists. Proven
+    // by COUNT instead of a layout selector: one "About" is the heading, the other is the
+    // row's own label — a heading that failed to render would leave only one.
     const { container } = render(
       <TextTools textFields={fields} values={{ artist_bio: 'skeen is a band' }} status="idle" />,
     )
-    const headings = [...container.querySelectorAll('div.flex.items-center.gap-2 > span:first-child')].map(
-      (el) => el.textContent,
-    )
-    expect(headings, 'no group heading was rendered for the About page').toContain('About')
+    expect(screen.getAllByText('About'), 'no group heading was rendered for the About page').toHaveLength(2)
     expect(screen.getByText('skeen is a band')).toBeTruthy()
     // And the row is UNDER it, not above: order is what makes it read as a section.
     const text = container.textContent ?? ''

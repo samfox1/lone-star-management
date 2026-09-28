@@ -1,6 +1,6 @@
 // How the Style panel groups regions into a short outline instead of one flat list.
 /**
- * `groupStyleRegions` (lib/site-editor/manifest) — the Style panel's outline.
+ * `groupByPrefix` (lib/site-editor/manifest) — the Style panel's outline.
  *
  * The inspector groups style regions into headed runs so the panel reads as a short
  * outline of the page instead of one flat list. A site MAY declare `group` per region;
@@ -9,7 +9,7 @@
  * become its own heading, which is noise, not structure.
  */
 import { describe, expect, it } from 'vitest'
-import { bridgeOutdated, groupStyleRegions, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
+import { bridgeOutdated, groupByPrefix, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 
 describe('bridgeOutdated — the editor flags a site built against an older bridge', () => {
   it('is TRUE only when the site version is strictly lower than the editor version', () => {
@@ -42,9 +42,9 @@ const SKEEN = [
   r('footer'),
 ]
 
-describe('groupStyleRegions', () => {
+describe('groupByPrefix', () => {
   it('infers a group from a shared key prefix, collecting one-offs under the fallback', () => {
-    const groups = groupStyleRegions(SKEEN)
+    const groups = groupByPrefix(SKEEN)
     expect(groups.map(([heading]) => heading)).toEqual(['Hero', 'Sections'])
     expect(groups[0][1].map((x) => x.key)).toEqual(['hero_wordmark', 'hero_video', 'hero_nav', 'hero_socials'])
     // The six singleton keys (incl. the prefix-less `footer`) collect together.
@@ -60,11 +60,11 @@ describe('groupStyleRegions', () => {
 
   it('does NOT invent a heading when nothing groups — one unlabelled run, manifest order', () => {
     const flat = [r('footer'), r('masthead'), r('sidebar')]
-    expect(groupStyleRegions(flat)).toEqual([['', flat]])
+    expect(groupByPrefix(flat)).toEqual([['', flat]])
   })
 
   it('a declared group always wins over the inferred one', () => {
-    const groups = groupStyleRegions([r('hero_a', 'Top of page'), r('hero_b'), r('hero_c')])
+    const groups = groupByPrefix([r('hero_a', 'Top of page'), r('hero_b'), r('hero_c')])
     // hero_a opted out by declaring; the other two still share the `hero` prefix.
     expect(groups.map(([heading]) => heading)).toEqual(['Top of page', 'Hero'])
     expect(groups[0][1].map((x) => x.key)).toEqual(['hero_a'])
@@ -74,7 +74,7 @@ describe('groupStyleRegions', () => {
   it('a single declared group still suppresses the "nothing groups" shortcut', () => {
     // One declared group among otherwise-ungroupable keys must still be honoured,
     // rather than collapsing to the unlabelled run.
-    const groups = groupStyleRegions([r('footer', 'Chrome'), r('masthead')])
+    const groups = groupByPrefix([r('footer', 'Chrome'), r('masthead')])
     expect(groups).toEqual([
       ['Chrome', [r('footer', 'Chrome')]],
       ['Sections', [r('masthead')]],
@@ -82,7 +82,7 @@ describe('groupStyleRegions', () => {
   })
 
   it('preserves manifest order within a group and first-appearance order across groups', () => {
-    const groups = groupStyleRegions([r('b_one'), r('a_one'), r('b_two'), r('a_two')])
+    const groups = groupByPrefix([r('b_one'), r('a_one'), r('b_two'), r('a_two')])
     expect(groups.map(([heading]) => heading)).toEqual(['B', 'A'])
     expect(groups[0][1].map((x) => x.key)).toEqual(['b_one', 'b_two'])
   })
@@ -92,24 +92,24 @@ describe('groupStyleRegions', () => {
     // labelled ones — the blank run is only ever meant to be the whole-list fallback.
     // An empty prefix can't group, so nothing groups here at all — which is the
     // documented plain-list fallback, NOT a blank heading beside real ones.
-    const groups = groupStyleRegions([r('_a'), r('_b'), r('footer')])
+    const groups = groupByPrefix([r('_a'), r('_b'), r('footer')])
     expect(groups.map(([heading]) => heading)).toEqual([''])
     expect(groups[0][1].map((x) => x.key)).toEqual(['_a', '_b', 'footer'])
   })
 
   it('keeps a real heading when underscore keys sit beside a groupable prefix', () => {
-    const groups = groupStyleRegions([r('_a'), r('_b'), r('hero_x'), r('hero_y')])
+    const groups = groupByPrefix([r('_a'), r('_b'), r('hero_x'), r('hero_y')])
     expect(groups.map(([heading]) => heading)).toEqual(['Sections', 'Hero'])
     expect(groups[0][1].map((x) => x.key)).toEqual(['_a', '_b'])
   })
 
   it('takes a custom fallback heading', () => {
-    const groups = groupStyleRegions([r('hero_a'), r('hero_b'), r('footer')], 'Elsewhere')
+    const groups = groupByPrefix([r('hero_a'), r('hero_b'), r('footer')], 'Elsewhere')
     expect(groups.map(([heading]) => heading)).toEqual(['Hero', 'Elsewhere'])
   })
 
   it('is empty for no regions', () => {
-    expect(groupStyleRegions([])).toEqual([])
+    expect(groupByPrefix([])).toEqual([])
   })
 })
 

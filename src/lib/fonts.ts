@@ -291,7 +291,7 @@ const SAFE_URL = /^https?:\/\/[a-z0-9.\-:]+(\/[a-zA-Z0-9._~\-]+)+$/i
 
 /** Public URL for a font object. The bucket is public-read, so this is the URL a fan's
  *  browser fetches directly — no signing, no server hop. */
-export function fontUrl(path: string, origin: string = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''): string {
+function fontUrl(path: string, origin: string = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''): string {
   return publicObjectUrl(FONTS_BUCKET, path, origin)
 }
 
@@ -357,7 +357,7 @@ export function fontFaceCss(
 /** The CSS custom property for a slot, spelled in ONE place. `custom_1` is
  *  `--font-custom-1`: the variable is CSS, so it wears the sanitized spelling, not the
  *  database's. A consuming site reading `--font-custom_1` would find nothing. */
-export function fontSlotVar(slot: FontSlot): string {
+function fontSlotVar(slot: FontSlot): string {
   return `--font-${slugify(slot)}`
 }
 
@@ -485,7 +485,7 @@ export function fontStyleCss(
 /** The publishable projection of a font: the row plus the slots it fills. Read through
  *  the VIEW, never the bare table, so the UI, the publish snapshot and the payload all
  *  see one shape — see 20260805180000 for why slots ride the font's own row. */
-export const FONTS_VIEW = 'artist_fonts_with_slots'
+const FONTS_VIEW = 'artist_fonts_with_slots'
 
 /** Every font this artist has uploaded, oldest first. RLS scopes the read (the view is
  *  `security_invoker`), so a caller who does not manage the artist gets an empty list

@@ -30,7 +30,7 @@ const ITEMS: { key: AssetKind; label: string; seg: string; icon: IconName }[] = 
  * viewport height so the icon stack can center on the viewport middle (mt = 50vh −
  * header, then −50%); the nav's right border is THE vertical line.
  */
-export function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
+function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind }) {
   return (
     // The spacer holds the layout column; the nav (fixed) sits exactly inside it, both
     // a constant 84px — wide enough for the stacked label, so nothing ever resizes.

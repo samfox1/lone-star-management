@@ -926,7 +926,7 @@ const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON
  * A placement column the snapshot never carried (a revision older than the column) is
  * left alone rather than "restored" to null.
  */
-export async function planRestore(
+async function planRestore(
   supabase: SupabaseClient,
   artistId: string,
   /** The version published at this moment. Omitted = the latest publish (Revert). */

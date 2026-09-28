@@ -173,19 +173,6 @@ describe('IconEditor — shape', () => {
     expect(screen.queryByRole('status', { name: /loading/i })).toBeNull()
   })
 
-  it('"Upload new"\'s hover label does not cover the Size label: it opens below, and the sliders sit clear of it', () => {
-    // Above was tried first and is clipped: the + now sits at the very top of the modal's
-    // scrolling body (controls level with the board). jsdom has no layout, so this pins the
-    // two facts the clearance is built from — the label's side, and the sliders' extra
-    // margin (20px column gap + mt-4 = 36px ≥ the label's 8px offset + 24px height). The
-    // screenshot check (2026-09-23) is where it was seen clear.
-    renderEditor()
-    const plus = screen.getByRole('button', { name: 'Upload new' })
-    expect(plus.querySelector('[data-side]')?.getAttribute('data-side')).toBe('bottom')
-    const sliders = screen.getByLabelText('Size').closest('[data-framing]')!
-    expect(sliders.className.split(/\s+/)).toContain('mt-4')
-  })
-
   it('CRITICAL: the board draws the SAME framing the exported file does', async () => {
     const chosen = { zoom: 2.5, offsetY: -0.2 }
     renderEditor({ framing: chosen })

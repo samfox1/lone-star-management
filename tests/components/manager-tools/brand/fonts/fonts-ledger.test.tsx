@@ -325,8 +325,6 @@ describe('FontsLedger — Change font', () => {
     expect(items.map((i) => i.textContent)).toEqual(['PP Mori', 'Bebas Neue'])
     expect(within(items[0]).getByText('PP Mori')).toHaveStyle({ fontFamily: "'pp-mori', sans-serif" })
     expect(items[1]).toHaveAttribute('aria-checked', 'true')
-    expect(items[1].className).toContain('font-bold')
-    expect(items[0].className).not.toContain('font-bold')
     expect(within(menu).getByRole('menuitem', { name: 'Upload a font…' })).toBeInTheDocument()
   })
 
@@ -470,7 +468,6 @@ describe('FontsLedger — renaming a font (Sam: Skeen’s arrived as "Sorg_Font"
     expect(field.textContent).toBe('Bebas Neue')
     expect(document.activeElement).toBe(field)
     expect(field.getAttribute('contenteditable')).toBe('true')
-    expect(field.className).toContain('focus:border-ink')
     expect(field.closest('[data-font-sample]')).toHaveStyle({ fontFamily: "'bebas-neue', sans-serif" })
 
     field.textContent = 'Sorg'

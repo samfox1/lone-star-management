@@ -3,7 +3,7 @@ import { cx } from '@/lib/cx'
 
 /** The prototype's checkerboard at tile size (8px squares), so a transparent logo reads
  *  as transparent and a logo with a white box shows its box. */
-export const TILE_CHECKER: CSSProperties = {
+const TILE_CHECKER: CSSProperties = {
   backgroundColor: '#ffffff',
   backgroundImage:
     'linear-gradient(45deg,#e6e6e6 25%,transparent 25%),linear-gradient(-45deg,#e6e6e6 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e6e6e6 75%),linear-gradient(-45deg,transparent 75%,#e6e6e6 75%)',

@@ -36,7 +36,7 @@ const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'S
 
 /** How a show is named once it is OUT of the list — in the editor header, where the date
  *  column and the venue line are no longer beside each other to say it. */
-export function showLabel(t: EditorTour): string {
+function showLabel(t: EditorTour): string {
   return [tourDateLabel(t.date), t.venue || 'Untitled venue'].join(' · ')
 }
 

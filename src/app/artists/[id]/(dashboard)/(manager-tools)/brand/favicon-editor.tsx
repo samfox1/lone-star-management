@@ -37,7 +37,7 @@ import { addIconSourceAction, saveFramingAction, setBrandAssetAction, setIconSou
 export const SAVE_AFTER_MS = 700
 
 /** The row preview's canvas, in pixels: 2× the largest row tile (64px), for retina. */
-export const ICON_ROW_CANVAS = 128
+const ICON_ROW_CANVAS = 128
 
 /** The board's canvas, in pixels: the 192px icon on the board at 2×, so it is sharp on a
  *  retina screen. The export is FAVICON_SIZE; both come from the same `drawFavicon`. */

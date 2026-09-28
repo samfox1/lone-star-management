@@ -17,7 +17,7 @@ export const ATTACHMENT_BUCKET = 'enquiry-attachments'
 
 /** Long enough to press play, short enough that a copied URL is useless by the time it is
  *  pasted anywhere. */
-export const SIGNED_URL_TTL_SECONDS = 300
+const SIGNED_URL_TTL_SECONDS = 300
 
 export type AttachmentRow = {
   id: string

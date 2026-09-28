@@ -15,7 +15,7 @@ import { FontSample } from './font-sample'
 
 /** How many families the list shows at once. The search narrows the rest; each shown row
  *  costs its font file, so the list stays short. */
-export const GOOGLE_LIST_MAX = 60
+const GOOGLE_LIST_MAX = 60
 
 /**
  * "GOOGLE FONTS…" (BRAND_SYNC_PLAN.md, Sam 2026-09-24: "pick any Google family by name").

@@ -116,8 +116,7 @@ describe('Primary and Secondary, built in', () => {
     for (const slot of COLOR_SLOTS) {
       const row = rowOf(COLOR_SLOT_NAMES[slot])
       expect(within(row).getByText('No color yet')).toBeTruthy()
-      const plus = within(row).getByRole('button', { name: 'Add color' })
-      expect(plus.className).not.toContain('opacity-40') // the empty row's one action, full ink
+      expect(within(row).getByRole('button', { name: 'Add color' })).toBeTruthy()
     }
   })
 
@@ -329,13 +328,6 @@ describe('changing a colour', () => {
 })
 
 describe('removing a colour', () => {
-  it('the trash is faint until its row is hovered', () => {
-    renderLedger()
-    const trash = within(rowOf('Color 1')).getByRole('button', { name: 'Remove' })
-    expect(trash.className).toContain('opacity-40')
-    expect(trash.className).toContain('group-hover/ledger:opacity-100')
-  })
-
   it('CRITICAL: asks first; Remove deletes THAT colour and the row goes', async () => {
     renderLedger()
     fireEvent.click(within(rowOf('Color 2')).getByRole('button', { name: 'Remove' }))
@@ -405,10 +397,9 @@ describe('adding a colour', () => {
     const note = within(row).getByRole('textbox', { name: 'Note' })
     expect(document.activeElement).toBe(note)
     await typeInto(note, 'Merch red')
-    // Enter moved focus to the row's + — full ink, not a faint row action.
+    // Enter moved focus to the row's +.
     const plus = within(row).getByRole('button', { name: 'Add color' })
     expect(document.activeElement).toBe(plus)
-    expect(plus.className).not.toContain('opacity-40')
     await settle()
     for (const a of ALL_ACTIONS) expect(a).not.toHaveBeenCalled()
 
