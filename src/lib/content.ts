@@ -764,16 +764,6 @@ export async function setSupportActs(
   return clean
 }
 
-/**
- * Reconcile the published state of one content type to match the working rows.
- *
- * Publish is the gate: the live site becomes exactly what the working table
- * looks like NOW. So we (1) snapshot every current working row, and
- * (2) tombstone every entity_id previously published for this type that no
- * longer has a working row — otherwise a deleted row's last snapshot would stay
- * "latest" and remain live forever. get_public_site drops entities whose latest
- * revision is a tombstone. Returns the number of revision rows written.
- */
 /** One moment something was published, newest first, with how many entities changed in
  *  it. Since the 2026-08-15 dedupe every moment is a real change, so this list reads as
  *  the site's versions rather than as a log of no-op republishes. */
@@ -947,25 +937,51 @@ export async function restoreToPublished(
   return { restored, removed, readded, hasPublished }
 }
 
-/** A SLICE of one type to publish, decided on the snapshot (see `publishContent`). */
+/** A SLICE of one type to publish, decided on the snapshot (see `revisionRows`). */
 export type PublishSlice = { keep: (snapshot: Record<string, unknown>) => boolean }
 
-export async function publishContent(
-  supabase: SupabaseClient,
+/** One type in a publish: the whole type, or only the entities its `slice` accepts. */
+export type PublishPart = PublishableEntity | { type: PublishableEntity; slice?: PublishSlice }
+
+/** A `revisions` row as a publish writes it. No `published_at`: the column default, now(),
+ *  is the TRANSACTION's time, which is what makes one insert one publish moment. */
+type RevisionInsert = {
+  artist_id: string
+  entity_type: string
+  entity_id: string | null
+  data: Record<string, unknown>
+  published_by: string | null
+}
+
+type LatestRow = { entity_type: string; entity_id: string | null; data: Record<string, unknown> }
+
+/**
+ * Reconcile the published state of one content type to match the working rows — the
+ * revision rows that would do it, built and NOT written (`publishTogether` writes them,
+ * with every other type's, in one insert).
+ *
+ * Publish is the gate: the live site becomes exactly what the working table
+ * looks like NOW. So we (1) snapshot every current working row, and
+ * (2) tombstone every entity_id previously published for this type that no
+ * longer has a working row — otherwise a deleted row's last snapshot would stay
+ * "latest" and remain live forever. get_public_site drops entities whose latest
+ * revision is a tombstone.
+ *
+ * `slice`: publish only the entities this accepts — the Brand page publishes brand media
+ * and must leave a gallery draft a draft. Judged on the snapshot, so a DELETED entity is
+ * judged by its last published copy: a deleted logo is tombstoned, a deleted gallery photo
+ * is not (tombstoning it would take it off the live site from a page that never showed it).
+ * `liveIds` stays the WHOLE table either way, or every published row outside the slice
+ * would look deleted. Omitted = the whole type.
+ */
+function revisionRows(
   type: PublishableEntity,
   artistId: string,
-  publishedBy?: string,
-  /**
-   * Publish only the entities this accepts — the Brand page publishes brand media and must
-   * leave a gallery draft a draft. Judged on the snapshot, so a DELETED entity is judged by
-   * its last published copy: a deleted logo is tombstoned, a deleted gallery photo is not
-   * (tombstoning it would take it off the live site from a page that never showed it).
-   * `liveIds` stays the WHOLE table either way, or every published row outside the slice
-   * would look deleted. Omitted = the whole type, exactly as before.
-   */
+  rows: ContentRow[],
+  latest: LatestRow[],
+  publishedBy: string | null,
   slice?: PublishSlice,
-): Promise<number> {
-  const rows = await listContent(supabase, type, artistId)
+): RevisionInsert[] {
   const liveIds = new Set(rows.map((row) => row.id))
   const keep = slice?.keep ?? (() => true)
 
@@ -979,10 +995,7 @@ export async function publishContent(
   // the live site because its tombstone was never written. Found because the publish
   // diff (which uses the uncapped RPC) kept reporting deletions the sweep could not
   // see.
-  const { data: latest, error: pubErr } = await supabase.rpc('latest_revisions', { p_artist_id: artistId })
-  if (pubErr) throw new Error(pubErr.message)
-
-  const tombstoneIds = ((latest ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[])
+  const tombstoneIds = latest
     .filter(
       (r) =>
         r.entity_type === type &&
@@ -1001,11 +1014,11 @@ export async function publishContent(
   // newest revision at or before T. What changes is that a publish moment now means
   // "something actually changed", which is exactly what a version list should show.
   const currentSnapshot = new Map<string, string>()
-  for (const r of (latest ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[]) {
+  for (const r of latest) {
     if (r.entity_type === type && r.entity_id) currentSnapshot.set(r.entity_id, stableJson(r.data))
   }
 
-  const revisions = [
+  return [
     ...rows
       .map((row) => ({ row, data: publicSnapshot(type, row) }))
       .filter(({ data }) => keep(data))
@@ -1017,21 +1030,83 @@ export async function publishContent(
         entity_type: type,
         entity_id: row.id,
         data,
-        published_by: publishedBy ?? null,
+        published_by: publishedBy,
       })),
     ...tombstoneIds.map((id) => ({
       artist_id: artistId,
       entity_type: type,
       entity_id: id,
       data: { _deleted: true } as Record<string, unknown>,
-      published_by: publishedBy ?? null,
+      published_by: publishedBy,
     })),
   ]
+}
 
+/** The profile singleton's revision: the allowlisted fan-visible columns as they are now. */
+async function profileRevision(supabase: SupabaseClient, artistId: string, publishedBy: string | null): Promise<RevisionInsert> {
+  // Single source of truth: select exactly the snapshotted columns.
+  const { data: artist, error } = await supabase
+    .from('artists')
+    .select(ARTIST_SNAPSHOT.join(', '))
+    .eq('id', artistId)
+    .single()
+  if (error || !artist) throw new Error(error?.message ?? 'artist not found')
+
+  const row = artist as unknown as Record<string, unknown>
+  const data: Record<string, unknown> = {}
+  for (const k of ARTIST_SNAPSHOT) data[k] = row[k]
+  return { artist_id: artistId, entity_type: 'artist', entity_id: artistId, data, published_by: publishedBy }
+}
+
+/**
+ * Publish several types (and, with `profile`, the artist profile) as ONE publish moment:
+ * every row is built first, then written in a SINGLE insert.
+ *
+ * Why one insert. `publish_moments` — the history's version list — groups the log by exact
+ * `published_at`, whose default is now(): the transaction's time, shared by every row of one
+ * statement and different for the next. Publishing kind by kind made one click several
+ * versions (a Brand Publish was up to four), and a failure between two kinds shipped the
+ * first without the second. One statement is all of it or none of it, under one timestamp.
+ *
+ * All reads happen first, in one wave (the log once, every type's working rows, the profile).
+ * Returns the CONTENT rows written; the profile row, when asked for, is written but not
+ * counted, as `publishAll` never counted it.
+ */
+export async function publishTogether(
+  supabase: SupabaseClient,
+  artistId: string,
+  parts: readonly PublishPart[],
+  publishedBy?: string,
+  { profile = false }: { profile?: boolean } = {},
+): Promise<number> {
+  const specs = parts.map((p) => (typeof p === 'string' ? { type: p, slice: undefined } : p))
+  const by = publishedBy ?? null
+  const [latestRes, profileRow, ...rowsByPart] = await Promise.all([
+    supabase.rpc('latest_revisions', { p_artist_id: artistId }),
+    profile ? profileRevision(supabase, artistId, by) : null,
+    ...specs.map((s) => listContent(supabase, s.type, artistId)),
+  ])
+  if (latestRes.error) throw new Error(latestRes.error.message)
+  const latest = (latestRes.data ?? []) as LatestRow[]
+
+  const content = specs.flatMap((s, i) => revisionRows(s.type, artistId, rowsByPart[i], latest, by, s.slice))
+  const revisions = profileRow ? [...content, profileRow] : content
   if (revisions.length === 0) return 0
   const { error } = await supabase.from('revisions').insert(revisions)
   if (error) throw new Error(error.message)
-  return revisions.length
+  return content.length
+}
+
+/** Publish ONE type — or the slice of it `slice` accepts (see `revisionRows`). Returns the
+ *  number of revision rows written. */
+export function publishContent(
+  supabase: SupabaseClient,
+  type: PublishableEntity,
+  artistId: string,
+  publishedBy?: string,
+  slice?: PublishSlice,
+): Promise<number> {
+  return publishTogether(supabase, artistId, [{ type, slice }], publishedBy)
 }
 
 /**
@@ -1045,44 +1120,27 @@ export async function publishProfile(
   artistId: string,
   publishedBy?: string,
 ): Promise<void> {
-  // Single source of truth: select exactly the snapshotted columns.
-  const { data: artist, error } = await supabase
-    .from('artists')
-    .select(ARTIST_SNAPSHOT.join(', '))
-    .eq('id', artistId)
-    .single()
-  if (error || !artist) throw new Error(error?.message ?? 'artist not found')
-
-  const row = artist as unknown as Record<string, unknown>
-  const data: Record<string, unknown> = {}
-  for (const k of ARTIST_SNAPSHOT) data[k] = row[k]
-
-  const { error: insErr } = await supabase.from('revisions').insert({
-    artist_id: artistId,
-    entity_type: 'artist',
-    entity_id: artistId,
-    data,
-    published_by: publishedBy ?? null,
-  })
-  if (insErr) throw new Error(insErr.message)
+  const { error } = await supabase.from('revisions').insert(await profileRevision(supabase, artistId, publishedBy ?? null))
+  if (error) throw new Error(error.message)
 }
 
-/** Publish everything for an artist: every content type + media, THEN the
- *  profile. The profile is published LAST because a site is "live" exactly when
- *  its profile snapshot exists — so a partial failure mid-publish never flips a
- *  never-published site live with empty content. */
-export async function publishAll(
-  supabase: SupabaseClient,
-  artistId: string,
-  publishedBy?: string,
-): Promise<number> {
-  const types = Object.keys(PUBLISHABLE) as PublishableEntity[]
-  let total = 0
-  for (const type of types) {
-    total += await publishContent(supabase, type, artistId, publishedBy)
-  }
-  await publishProfile(supabase, artistId, publishedBy)
-  return total
+/** Publish everything for an artist: every content type + media, AND the profile, in one
+ *  write. A site is "live" exactly when its profile snapshot exists, so a publish that
+ *  failed partway must not flip a never-published site live with empty content — it
+ *  cannot now: a refused row fails the whole insert (`publishTogether`), profile included. */
+export function publishAll(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
+  return publishTogether(supabase, artistId, Object.keys(PUBLISHABLE) as PublishableEntity[], publishedBy, { profile: true })
+}
+
+/** The Site section's Publish (and the SEO / GEO page's): photos, site text and the
+ *  profile, as one moment. */
+export function publishSite(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
+  return publishTogether(supabase, artistId, ['media', 'site_content'], publishedBy, { profile: true })
+}
+
+/** The Music page's Publish: releases and songs, as one moment. */
+export function publishMusic(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
+  return publishTogether(supabase, artistId, ['release', 'track'], publishedBy)
 }
 
 /** Pending changes for one section: counts + a convenience `dirty` flag. */

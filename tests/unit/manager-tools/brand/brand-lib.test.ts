@@ -431,9 +431,10 @@ describe('the Brand bar\'s subjects', () => {
       if (c.op === 'insert') return { data: (c.payload as unknown[]).map((_, i) => ({ id: `r${i}` })) }
       return { data: [] }
     })
-    // One media revision and one font revision were written (the witness), and both count.
+    // One media revision and one font revision were written (the witness), in ONE insert
+    // (one publish moment), and both count.
     const n = await publishBrand(fake.client, A, 'u1')
-    expect(fake.calls.filter((c) => c.table === 'revisions' && c.op === 'insert').map((c) => (c.payload as unknown[]).length)).toEqual([1, 1])
+    expect(fake.calls.filter((c) => c.table === 'revisions' && c.op === 'insert').map((c) => (c.payload as unknown[]).length)).toEqual([2])
     expect(n).toBe(2)
   })
 })

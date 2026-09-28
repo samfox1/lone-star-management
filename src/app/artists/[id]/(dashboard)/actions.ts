@@ -37,7 +37,8 @@ import {
   diffUnpublished,
   publishAll,
   publishContent,
-  publishProfile,
+  publishMusic,
+  publishSite,
   restoreToPublished,
   setSupportActs,
   setTrackFeatured,
@@ -211,8 +212,8 @@ export async function getUnpublishedDiffAction(artistId: string): Promise<Unpubl
 
 /**
  * Publish EVERYTHING pending from the visual editor — PASSWORD-GATED. Verifies the
- * manager's password, then snapshots all content + the profile (`publishAll`, which
- * orders the profile last for the live-gate invariant) and GCs orphaned video
+ * manager's password, then snapshots all content + the profile (`publishAll`: one
+ * write, so a failure never leaves the site half-live) and GCs orphaned video
  * objects. Returns an error string instead of throwing so the client shows it inline.
  */
 export async function publishAllGatedAction(
@@ -252,16 +253,14 @@ export async function publishSectionAction(
   return {}
 }
 
-/** Publish the Site section: media + site text + the artist profile together. */
+/** Publish the Site section: media + site text + the artist profile together, as one
+ *  version in the history (`publishSite`). */
 export async function publishSiteAction(artistId: string) {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  await publishContent(supabase, 'media', artistId, user?.id)
-  await publishContent(supabase, 'site_content', artistId, user?.id)
-  // Profile LAST (the live-gate invariant — see publishAll).
-  await publishProfile(supabase, artistId, user?.id)
+  await publishSite(supabase, artistId, user?.id)
   await gcMediaObjects(supabase, artistId) // deleted-photo revisions are now tombstoned → sweep orphans
   revalidatePath(`/artists/${artistId}`, 'layout')
 }
@@ -555,13 +554,11 @@ export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
 }
 
 /** The floating Publish bar's action on the SEO / GEO pages: everything that editor
- *  changes (media, site text, then the profile LAST — the live-gate invariant), behind
+ *  changes (media, site text and the profile, in one write — `publishSite`), behind
  *  the same password gate as every other publish. */
 export async function publishSiteWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
   return publishGated(artistId, password, async (supabase, userId) => {
-    await publishContent(supabase, 'media', artistId, userId)
-    await publishContent(supabase, 'site_content', artistId, userId)
-    await publishProfile(supabase, artistId, userId)
+    await publishSite(supabase, artistId, userId)
   })
 }
 
@@ -1180,8 +1177,7 @@ export async function publishMusicAction(
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
   return publishGated(artistId, password, async (supabase, userId) => {
-    await publishContent(supabase, 'release', artistId, userId)
-    await publishContent(supabase, 'track', artistId, userId)
+    await publishMusic(supabase, artistId, userId)
   })
 }
 

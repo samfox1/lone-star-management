@@ -26,7 +26,7 @@ import { canonicalHex } from '@/lib/color'
 import {
   diffEntities,
   listContent,
-  publishContent,
+  publishTogether,
   PUBLISHABLE,
   SNAPSHOT_DEFAULTS,
   type ContentRow,
@@ -840,16 +840,18 @@ export type BrandKind = (typeof BRAND_KINDS)[number]
  * Returns the revision rows written. Only media is SLICED — the other three are the Brand
  * page's whole, so each publishes whole.
  *
+ * ONE write for all four (`publishTogether`), so one click is one version in the history
+ * and a refused row takes the rest with it. It used to publish kind by kind: up to four
+ * versions per click, and a failure between two kinds shipped the fonts without the colours.
+ *
  * No storage sweep here, deliberately. `gcMediaObjects` treats every object no WORKING row
  * names as an orphan, which is only true straight after a WHOLE-media publish. After this
  * one, a gallery photo deleted in draft is still live on the site (its tombstone was not
  * written), and its file must outlive it until the gallery itself is published.
  */
-export async function publishBrand(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
-  let written = 0
-  for (const kind of BRAND_KINDS)
-    written += await publishContent(supabase, kind, artistId, publishedBy, kind === 'media' ? BRAND_MEDIA_SLICE : undefined)
-  return written
+export function publishBrand(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
+  const parts = BRAND_KINDS.map((type) => (type === 'media' ? { type, slice: BRAND_MEDIA_SLICE } : type))
+  return publishTogether(supabase, artistId, parts, publishedBy)
 }
 
 /* ── Revert: the Brand page back to what the site shows ───────────────────────── */

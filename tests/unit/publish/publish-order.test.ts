@@ -1,17 +1,20 @@
-// Publishing writes the profile LAST, so a publish that dies halfway never goes half-live.
+// Publishing writes the content AND the profile in one insert, so a publish that dies
+//   halfway never goes half-live.
 /**
- * publishAll publishes the PROFILE LAST (lib/content.ts).
+ * publishAll writes EVERYTHING in one insert, the profile included (lib/content.ts).
  *
  * A site is "live" exactly when its profile snapshot exists — get_public_site returns null
- * without one. So the order is the whole guarantee that a publish which dies halfway never
- * flips a never-published site live with empty content.
+ * without one. The guarantee used to be ORDER: the profile went last, so a publish that
+ * died halfway never flipped a never-published site live with empty content. It still
+ * shipped whatever kinds had landed before the failure, though, and every kind was its own
+ * version in the history. Now it is ONE statement: all of it lands, under one timestamp,
+ * or none of it does (tests/integration/publish/publish-one-moment.test.ts shows the real
+ * database doing both).
  *
- * Nothing pinned it: every other publish test asserts the end state of a publish that
- * SUCCEEDED, which is identical whichever order the writes went out in. Hoisting
- * publishProfile above the loop, or Promise.all-ing the loop around it, changed no test.
- *
- * A stub client rather than the database: order and partial failure are properties of the
- * call sequence, and the real DB can only show the end state, which is what hid this.
+ * Nothing pinned the order when it was the guarantee: every other publish test asserts the
+ * end state of a publish that SUCCEEDED, which is identical whichever way the writes went
+ * out. A stub client rather than the database: how many writes a publish makes, and what a
+ * refused one leaves behind, are properties of the call sequence.
  */
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -21,13 +24,14 @@ type Row = Record<string, unknown>
 
 /**
  * Minimal Supabase stand-in for the publish path: every content table holds exactly one
- * working row (so each type really does write a revision — with empty tables the ordering
- * question never arises), `revisions` starts empty, and every insert is recorded in call
- * order. `failOn` makes one entity type's insert fail, standing in for the partial failure
- * the ordering exists to survive.
+ * working row (so each type really does write a revision — with empty tables a per-type
+ * publish and a single one look the same), `revisions` starts empty, and every insert is
+ * recorded. `failOn` makes any insert carrying that entity type fail, standing in for a
+ * refused row; like Postgres, a refused statement writes NONE of its rows.
  */
 function stubClient(failOn?: string) {
   const writes: string[] = []
+  const inserts: string[][] = []
   const from = (table: string) => {
     const rows: Row[] =
       table === 'revisions' ? [] : [{ id: `${table}-1`, artist_id: 'a1' }]
@@ -45,10 +49,10 @@ function stubClient(failOn?: string) {
       then: (ok: (v: unknown) => unknown, err: (e: unknown) => unknown) =>
         Promise.resolve(result).then(ok, err),
       insert: async (payload: Row | Row[]) => {
-        for (const r of Array.isArray(payload) ? payload : [payload]) {
-          if (r.entity_type === failOn) return { error: { message: `${failOn} insert failed` } }
-          writes.push(r.entity_type as string)
-        }
+        const types = (Array.isArray(payload) ? payload : [payload]).map((r) => r.entity_type as string)
+        inserts.push(types)
+        if (types.includes(failOn as string)) return { error: { message: `${failOn} insert failed` } }
+        writes.push(...types)
         return { error: null }
       },
     })
@@ -63,26 +67,28 @@ function stubClient(failOn?: string) {
       rpc: async () => ({ data: [], error: null }),
     } as unknown as SupabaseClient,
     writes,
+    inserts,
   }
 }
 
-describe('publishAll ordering', () => {
-  it('CRITICAL: the artist profile is the LAST entity_type written', async () => {
-    const { client, writes } = stubClient()
+describe('publishAll is one write', () => {
+  it('CRITICAL: ONE insert carries every publishable type and the profile', async () => {
+    const { client, inserts } = stubClient()
     await publishAll(client, 'a1')
 
-    expect(writes.at(-1)).toBe('artist')
+    expect(inserts, 'one insert per publish: a second is a second version in the history').toHaveLength(1)
     // Derived from the registry, so adding a publishable type extends this rather than
     // silently escaping the check.
-    expect(writes.slice(0, -1)).toEqual(Object.keys(PUBLISHABLE))
+    expect([...inserts[0]].sort()).toEqual([...Object.keys(PUBLISHABLE), 'artist'].sort())
   })
 
-  it('CRITICAL: a content publish that fails leaves the profile UNpublished', async () => {
-    // The reason for the order: an artist publishing for the first time must not end up
-    // live-but-empty because the publish died before its content landed.
+  it('CRITICAL: a publish with one refused kind writes NOTHING — no content, and no profile', async () => {
+    // The live-gate reason: an artist publishing for the first time must not end up
+    // live-but-empty because the publish died before its content landed — and no longer
+    // with half its content live either.
     const { client, writes } = stubClient('media')
     await expect(publishAll(client, 'a1')).rejects.toThrow('media insert failed')
-    expect(writes).not.toContain('artist')
+    expect(writes).toEqual([])
   })
 })
 
