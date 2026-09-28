@@ -37,6 +37,7 @@
     "src/lib/artist-facts.ts",
     "src/lib/manager-tools/brand/brand-colors.ts",
     "src/lib/brand.ts",
+    "src/lib/brand-media.ts",
     "src/lib/chart.ts",
     "src/lib/color.ts",
     "src/lib/compare-posthog.ts",

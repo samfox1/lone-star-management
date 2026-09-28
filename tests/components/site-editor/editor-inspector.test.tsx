@@ -627,6 +627,43 @@ describe('EditorInspector — Text component', () => {
       vi.useRealTimers()
     }
   })
+
+  it('CRITICAL: text over its cap is REFUSED with a plain message, never cut and never sent', () => {
+    // Sam, 2026-09-28: a 2,500-character text "saved" and kept 2,000. Now the box counts
+    // down near the cap, and past it says so and writes nothing — the stored value stays
+    // what it was, and the screen says the new one is not saved.
+    vi.useFakeTimers()
+    try {
+      const fields = TEXT_FIELDS.map((f) => (f.key === 'hero_tagline' ? { ...f, maxLength: 20 } : f))
+      renderInspector([], { textFields: fields })
+      fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+      fireEvent.click(screen.getByLabelText('Edit Hero tagline'))
+      const box = screen.getByLabelText('Hero tagline') as HTMLInputElement
+
+      fireEvent.change(box, { target: { value: 'x'.repeat(18) } }) // near the cap: counted
+      expect(screen.getByText('18 / 20')).toBeTruthy()
+      expect(screen.queryByRole('alert')).toBeNull()
+
+      fireEvent.change(box, { target: { value: 'x'.repeat(21) } }) // over it
+      expect(box.value).toHaveLength(21) // the box keeps every character, nothing is cut
+      expect(screen.getByRole('alert').textContent).toBe('Too long to save. Keep it to 20 characters.')
+      vi.advanceTimersByTime(1000)
+      expect(saveMock).not.toHaveBeenCalled() // the 18-character draft is not sent either
+
+      // Leaving does not flush it (it was refused), and the list says it is not saved.
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+      expect(saveMock).not.toHaveBeenCalled()
+      expect(screen.getByText('Not saved')).toBeTruthy()
+      fireEvent.click(screen.getByLabelText('Edit Hero tagline'))
+
+      fireEvent.change(screen.getByLabelText('Hero tagline'), { target: { value: 'x'.repeat(20) } }) // trimmed back to fit
+      expect(screen.queryByRole('alert')).toBeNull()
+      vi.advanceTimersByTime(500)
+      expect(saveMock).toHaveBeenCalledWith('artist-1', 'hero_tagline', 'x'.repeat(20), undefined)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 // The Socials group (the site's buttons, each a connection's link, 2026-09-28) has its own
@@ -675,9 +712,20 @@ describe('EditorInspector — Links: Contact rows', () => {
     expect((screen.getByLabelText('Contact link 2 URL') as HTMLInputElement).value).toBe('mailto:press@x.com')
   })
 
-  it('flags an off-site link with an "Off" tag on the row', () => {
+  it('CRITICAL: an OFF-site contact is not listed (only what is on the site)', () => {
+    // Sam, 2026-09-09, for every item panel: the editor is a view of the SITE.
     openLinks()
-    expect(screen.getAllByText('Off')).toHaveLength(1)
+    expect(screen.getByText('Bookings')).toBeTruthy() // the witness: the list rendered
+    expect(screen.queryByText('Phone'), 'an off-site contact is still listed').toBeNull()
+  })
+
+  it('CRITICAL: "Add contact" offers the off-site ones and puts the picked one ON the site', () => {
+    // Contact addresses have no dashboard page of their own, so the way back lives here,
+    // the same shape as the socials' Add button.
+    openLinks()
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Put Phone on the site' }))
+    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c3', 'artist-1', true)
   })
 
   it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
@@ -685,13 +733,6 @@ describe('EditorInspector — Links: Contact rows', () => {
     expandLink(1)
     fireEvent.click(screen.getByRole('button', { name: /On the site/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c1', 'artist-1', false)
-  })
-
-  it('puts an off-site link back ON the site', () => {
-    openLinks()
-    expandLink(3)
-    fireEvent.click(screen.getByRole('button', { name: /Off the site/ }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c3', 'artist-1', true)
   })
 
   it('does NOT save a blank required field and flags it invalid (no false "Saved")', () => {
@@ -770,21 +811,39 @@ describe('EditorInspector — Links: Contact rows', () => {
     expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
   })
 
-  it('removes a contact optimistically via deleteContentAction', () => {
+  it('CRITICAL: Remove asks first — Cancel keeps the contact', async () => {
+    // Sam, 2026-09-28: "'are you sure' is good when its a delete". Revert never re-inserts
+    // a deleted contact (a link off the declared buttons only gets its order back).
     openLinks()
     expandLink(1)
     fireEvent.click(screen.getByRole('button', { name: 'Remove contact link 1' }))
+    const dialog = screen.getByRole('dialog')
+    expect(deleteContentMock).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(deleteContentMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Bookings')).toBeTruthy()
+  })
+
+  it('removes a contact via deleteContentAction once the manager says Delete', async () => {
+    openLinks()
+    expandLink(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove contact link 1' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+    })
     expect(deleteContentMock).toHaveBeenCalledWith('link', 'c1', 'artist-1')
     expect(screen.queryByText('Bookings')).toBeNull()
   })
 
-  it('reorders contacts via drag and persists the new order', () => {
+  it('reorders contacts via drag and persists the WHOLE order, hidden ones in place', () => {
     openLinks()
     const rows = document.querySelectorAll('aside div[draggable="true"]')
-    expect(rows.length).toBe(3)
+    expect(rows.length).toBe(2) // the off-site Phone is not a row…
     fireEvent.dragStart(rows[0])
-    fireEvent.drop(rows[2])
-    expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['c2', 'c3', 'c1'])
+    fireEvent.drop(rows[1])
+    expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['c2', 'c1', 'c3']) // …but keeps its place
   })
 })
 
@@ -1123,7 +1182,7 @@ describe('EditorInspector — Videos component', () => {
     expect(screen.queryByLabelText('Video slot 1 Speed')).toBeNull()
   })
 
-  it('styles a band video under its own per-item key (video:<id>), persisted on Save', async () => {
+  it('styles a band video under its own per-item key (video:<id>), autosaved', () => {
     const onApplyStyle = vi.fn()
     renderInspector([], { videos: VIDEOS, onApplyStyle })
     fireEvent.click(screen.getByRole('button', { name: /Videos/ }))
@@ -1131,14 +1190,12 @@ describe('EditorInspector — Videos component', () => {
     // Size slider index 17 = scale-110 on the widened 25–175% ladder (2026-08-11).
     fireEvent.change(screen.getByLabelText('Video slot 1 Size'), { target: { value: '17' } })
     expect(onApplyStyle).toHaveBeenCalledWith('video:v2', 'scale-110')
-    expect(saveStyleMock).not.toHaveBeenCalled()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    })
+    // Closing writes it (the debounce would have, a moment later).
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'video:v2', 'scale-110')
   })
 
-  it('an uploaded background slot gets the FILE set: Speed saves under slot:<role>', async () => {
+  it('an uploaded background slot gets the FILE set: Speed saves under slot:<role>', () => {
     const onApplyStyle = vi.fn()
     const placed: EditorVideo[] = [
       { id: 'up', title: 'Landing Page (H)', provider: 'uploaded', isShort: false, siteRole: 'hero_landscape', previewUrl: 'https://x/up.mp4#t=0.1', poster: null, onSite: true },
@@ -1154,9 +1211,7 @@ describe('EditorInspector — Videos component', () => {
     // Speed slider: index 5 of [0.25, 0.5, 0.75, Normal, 1.25, 1.5, 2] = 1.5×.
     fireEvent.change(screen.getByLabelText('Landscape · desktop Speed'), { target: { value: '5' } })
     expect(onApplyStyle).toHaveBeenCalledWith('slot:hero_landscape', 'speed-[1.5x]')
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    })
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:hero_landscape', 'speed-[1.5x]')
   })
 
@@ -1249,10 +1304,27 @@ describe('EditorInspector — Merch component', () => {
     expect(reorderContentMock).toHaveBeenCalledWith('merch', 'artist-1', ['p2', 'p1'])
   })
 
-  it('removes a product from inside its editor via deleteContentAction', () => {
+  it('CRITICAL: Remove product asks first — Cancel keeps it', async () => {
+    // Sam, 2026-09-28: "'are you sure' is good when its a delete". Revert never re-inserts
+    // a deleted product (only its on-site state and order are in reach).
     openMerch()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
     fireEvent.click(screen.getByRole('button', { name: /Remove product/ }))
+    const dialog = screen.getByRole('dialog')
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(deleteContentMock).not.toHaveBeenCalled()
+    expect(screen.getByDisplayValue('Tour Tee')).toBeTruthy() // still open, still there
+  })
+
+  it('removes a product from inside its editor once the manager says Delete', async () => {
+    openMerch()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
+    fireEvent.click(screen.getByRole('button', { name: /Remove product/ }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+    })
     expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
     expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
   })
@@ -1957,17 +2029,19 @@ describe('EditorInspector — what is ON the site is unambiguous', () => {
 })
 
 /**
- * Tour tools — where a manager picks which dates the site shows (ADR 0009).
+ * Tour tools — the dates ON THE SITE (Sam, 2026-09-09: the editor's item panels list only
+ * what is on the site; the Tour page is the library and the way back, via Add date).
  *
- * Dates are ENTERED on the Tour page; this panel only places them. The toggle is
- * live: it writes on_site straight away rather than staging a selection for a publish,
- * which is what makes it safe to sit alongside the Tour page's own toggle.
+ * Dates are ENTERED on the Tour page; this panel orders them, opens one, or takes it off.
+ * t4 is OFF the site: the witness that the panel hides it and a drag still keeps its place.
  */
 const TOURS: EditorTour[] = [
   { id: 't1', date: '2026-09-12', venue: 'Mohawk', city: 'Austin', state: 'TX', country: null, ticketUrl: null, support: ['Arlo', 'Crosby, Stills & Nash'], onSite: true },
-  { id: 't2', date: '2026-10-02', venue: 'Empty Bottle', city: 'Chicago', state: 'IL', country: null, ticketUrl: null, support: [], onSite: false },
-  { id: 't3', date: null, venue: 'TBA', city: null, state: null, country: null, ticketUrl: null, support: [], onSite: false },
+  { id: 't2', date: '2026-10-02', venue: 'Empty Bottle', city: 'Chicago', state: 'IL', country: null, ticketUrl: null, support: [], onSite: true },
+  { id: 't3', date: null, venue: 'TBA', city: null, state: null, country: null, ticketUrl: null, support: [], onSite: true },
+  { id: 't4', date: '2025-05-01', venue: 'Old Haunt', city: 'Denton', state: 'TX', country: null, ticketUrl: null, support: [], onSite: false },
 ]
+const ON_SITE_TOURS = TOURS.filter((t) => t.onSite)
 
 describe('EditorInspector — a show’s supporting acts are linked ON the show', () => {
   // MOVED from the Links panel (Sam, 2026-08-09): "Those should just be added on the
@@ -2239,7 +2313,7 @@ describe('EditorInspector — tour tools', () => {
     // and every row is draggable.
     openTour()
     const rows = document.querySelectorAll('aside div[draggable="true"]')
-    expect(rows.length).toBe(TOURS.length)
+    expect(rows.length).toBe(ON_SITE_TOURS.length)
   })
 
   it('persists only the undated shows, in their new order', () => {
@@ -2272,19 +2346,25 @@ describe('EditorInspector — tour tools', () => {
     expect(screen.queryByText(', ')).toBeNull()
   })
 
-  it('CRITICAL: toggling a date on writes on_site LIVE, keyed to the tour kind', () => {
+  it('CRITICAL: an OFF-site date is not in the panel — the Tour page is the library', () => {
     openTour()
-    // 'tour' is the EDITOR kind; it maps to the tour_dates table via LIVE_TOGGLE. If
-    // this were reconciled instead, the next publish would silently undo it.
-    // Off-site toggles, in list order: t2 then t3. OnSiteToggle is a button with
-    // aria-pressed, labelled by what a click will DO.
-    fireEvent.click(screen.getAllByRole('button', { name: /Off the site/ })[0])
-    expect(setOnSiteMock).toHaveBeenCalledWith('tour', 't2', 'artist-1', true)
+    expect(screen.getByText('Mohawk')).toBeTruthy() // the witness: the panel did render
+    expect(screen.queryByText('Old Haunt'), 'an off-site date is still listed').toBeNull()
+    expect(screen.queryByRole('button', { name: /Off the site/ })).toBeNull() // nothing to put back here
   })
 
-  it('takes a date off the site', () => {
+  it('CRITICAL: a drag renumbers the WHOLE list, so the hidden date keeps its place', () => {
     openTour()
-    fireEvent.click(screen.getByRole('button', { name: /On the site/ })) // only t1 is on
+    const rows = document.querySelectorAll('aside div[draggable="true"]')
+    fireEvent.dragStart(rows[0]) // Mohawk…
+    fireEvent.drop(rows[1]) // …onto Empty Bottle
+    expect(reorderContentMock).toHaveBeenCalledWith('tour_date', 'artist-1', ['t2', 't1', 't3', 't4'])
+  })
+
+  it('takes a date off the site, LIVE, keyed to the tour kind', () => {
+    // 'tour' is the EDITOR kind; it maps to the tour_dates table via LIVE_TOGGLE.
+    openTour()
+    fireEvent.click(screen.getAllByRole('button', { name: /On the site/ })[0]) // Mohawk
     expect(setOnSiteMock).toHaveBeenCalledWith('tour', 't1', 'artist-1', false)
   })
 
@@ -2565,7 +2645,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect((screen.getByRole('textbox', { name: /^Alt text for/ }) as HTMLInputElement).placeholder).toBe('Skeen')
   })
 
-  it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls, Revert', () => {
+  it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls', () => {
     openImages(HELD_SLOT)
     // Not editing yet — the wall is shown, not the item editor.
     expect(screen.queryByRole('heading', { name: /^Edit / })).toBeNull()
@@ -2574,7 +2654,9 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.getByRole('heading', { name: 'Edit Slot 1' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Replace' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Revert changes/ })).toBeTruthy()
+    // No Save / Revert pair: it autosaves like every other panel (Sam, 2026-08-14).
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Revert changes/ })).toBeNull()
     // The visual controls, keyed by the slot's label.
     expect(screen.getByLabelText('Slot 1 Size')).toBeTruthy()
     expect(screen.getByLabelText('Slot 1 Transparency')).toBeTruthy()
@@ -2594,68 +2676,61 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.getByRole('button', { name: 'Edit Slot 1' })).toBeTruthy()
   })
 
-  it('changes are STAGED: paint immediately, persist nothing until Save', async () => {
-    const onApplyStyle = vi.fn()
-    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
-    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
-    // Nothing staged yet → both exit buttons idle.
-    expect((screen.getByRole('button', { name: /Revert changes/ }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
-    // The frame paints instantly; the DB is untouched.
-    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px]')
-    expect(saveStyleMock).not.toHaveBeenCalled()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    })
-    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]')
-    // Saved → clean again.
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+  /**
+   * AUTOSAVED, NOT STAGED (Sam removed the middle layer on 2026-08-14; the item editor was
+   * the last panel still holding it, found 2026-09-28). A change paints the frame at once
+   * and writes the DRAFT after the same 500ms debounce every panel uses; Publish is the
+   * only public step. The old Save/Discard question is gone, and with it the bug: a click
+   * on the preview closed the editor without asking and dropped the staged style while
+   * the frame still showed it.
+   */
+  it('CRITICAL: a change paints now and saves itself to the draft — no Save step', () => {
+    vi.useFakeTimers()
+    try {
+      const onApplyStyle = vi.fn()
+      renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
+      fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+      fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+      // The frame paints instantly; the write follows the debounce.
+      expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'rounded-[6px]')
+      expect(saveStyleMock).not.toHaveBeenCalled()
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('Revert restores the last-saved state on the sliders AND the frame, without saving', () => {
-    const onApplyStyle = vi.fn()
-    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
-    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
-    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: /Revert changes/ }))
-    // Repainted back to the saved state ('' — unstyled), nothing written.
-    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
-    expect(saveStyleMock).not.toHaveBeenCalled()
-    // Clean again: Back leaves without any Save/Discard question.
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull()
-  })
-
-  it('backing out with staged changes asks — Discard repaints and leaves, saving nothing', () => {
-    const onApplyStyle = vi.fn()
-    renderInspector(HELD_SLOT, { components: [POLAROID], onApplyStyle })
-    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
-    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    // Still in the editor — the question is up instead.
-    expect(screen.getByRole('dialog', { name: 'Save changes to Slot 1?' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
-    expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', '')
-    expect(saveStyleMock).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull()
-  })
-
-  it('backing out with staged changes asks — Save & close persists, then leaves', async () => {
+  it('CRITICAL: Back inside the debounce window writes the change — nothing asks, nothing is dropped', () => {
     renderInspector(HELD_SLOT, { components: [POLAROID] })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
     fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save & close' }))
-    })
-    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]')
+    expect(screen.queryByRole('dialog')).toBeNull() // no Save/Discard question
     expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull()
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]')
+  })
+
+  it('CRITICAL: a click on the PREVIEW that closes the editor still writes the change', () => {
+    // The reported bug: a routed select dismisses the open editor (closeEditors), and the
+    // staged style went with it while the frame kept painting it.
+    const view = renderInspector(HELD_SLOT, { components: [POLAROID] })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
+    fireEvent.change(screen.getByLabelText('Slot 1 Corners'), { target: { value: '3' } })
+    expect(saveStyleMock).not.toHaveBeenCalled()
+    view.rerender(
+      inspector(HELD_SLOT, {
+        components: [POLAROID],
+        selectedRegion: { target: { kind: 'item', assetType: 'image', id: 'mp' }, nonce: 1 },
+      }),
+    )
+    expect(screen.queryByRole('heading', { name: 'Edit Slot 1' })).toBeNull() // it closed…
+    expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'slot:polaroid_1_photo', 'rounded-[6px]') // …and kept the edit
   })
 
   /** Open the item editor for the held slot, unfold the palette, and hand back its parts.
@@ -2817,7 +2892,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.queryAllByRole('button', { name: /Border color #123abc/ })).toHaveLength(1)
   })
 
-  it('a colour picked on one item is offered on the NEXT, without a reload', async () => {
+  it('a colour picked on one item is offered on the NEXT, without a reload', () => {
     vi.useFakeTimers()
     try {
       renderInspector(TWO_SLOTS, { components: [POLAROID] })
@@ -2830,10 +2905,6 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
       const hex = screen.getByLabelText('Slot 1 Border color hex')
       fireEvent.change(hex, { target: { value: '#ff8800' } })
       fireEvent.blur(hex)
-      // Staged model: Save first, so Back leaves without the Save/Discard question.
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-      })
       fireEvent.click(screen.getByRole('button', { name: 'Back' }))
       // The used-colour record is DEBOUNCED (recording per drag frame re-rendered the
       // whole inspector at pointer rate), so let it settle before the next item looks.

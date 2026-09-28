@@ -1,15 +1,14 @@
 import { MEDIA_KINDS, type MediaKind } from '@samfox1/site-bridge/payload'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { useMemo, useState } from 'react'
-import { PortalModal } from '@/components/ui/portal-modal'
 import { applyStyleValue, buildItemStyleControls, fromItemStored, toItemStored, type StyleControl } from '@/lib/site-editor/style-controls'
-import { EYEBROW, GroupLabel, SaveLine, type SaveStatus } from './inspector-shared'
+import { EYEBROW, GroupLabel, SaveLine } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import { LibraryPicker } from './inspector-grid'
-import { saveEditorStyleAction } from '../actions'
+import { useStyleRegionSave } from './use-style-save'
 
 /**
  * The per-ITEM editor (SITE_EDITOR_PLAN.md — image/video customization). Clicking Edit on an
@@ -17,12 +16,17 @@ import { saveEditorStyleAction } from '../actions'
  * frame, Replace / Remove, and the visual controls (size, transparency, border + colour,
  * corners, shadow — or the video sets).
  *
- * STAGED, not autosaved (Sam, 2026-08-03): dragging a slider paints the frame immediately
- * (`apply-style` over the bridge) but persists NOTHING. The explicit pair at the bottom is
- * the exit contract — Revert restores the last-saved state, Save writes it — and backing
- * out with unsaved changes asks Save/Discard rather than deciding for the manager. The
- * stored value is still one overlay class string per item key (`site_styles`), ADDITIVE
- * over the element's own classes.
+ * AUTOSAVED to the draft, like every other panel (Sam removed the middle layer on
+ * 2026-08-14; this editor kept it until 2026-09-28). Dragging a slider paints the frame at
+ * once (`apply-style` over the bridge) and writes the DRAFT after the shared 500ms
+ * debounce (`useStyleRegionSave`). Leaving by any route (Back, Remove, a click on the
+ * preview, another editor opening, the tab going to the background) writes a change still
+ * waiting, so nothing is dropped. Publish is the only public step. The staged version had
+ * a Save / Revert pair and a Save-or-Discard question on Back, but a preview click closed
+ * it without asking, and the style the frame was still showing was thrown away.
+ *
+ * The stored value is one overlay class string per item key (`site_styles`), ADDITIVE over
+ * the element's own classes.
  */
 
 /** Plain words for the fact-sheet kinds. `Record<MediaKind, …>` is the compile guard:
@@ -146,7 +150,7 @@ function AltModal({
 }
 
 /**
- * The item's name, saved as it is typed (debounced) rather than staged with the styles.
+ * The item's name, saved as it is typed (debounced), like the styles below it.
  * On a site that locks its look this is the ONLY thing about a piece the manager owns:
  * the art is the artist's, the caption is theirs (Sam, 2026-08-21).
  */
@@ -205,9 +209,6 @@ export type ItemReplace = {
   empty?: React.ReactNode
 }
 
-const FOOT_BUTTON =
-  'flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] transition-colors disabled:opacity-40'
-
 export function ItemEditor({
   artistId,
   styleKey,
@@ -252,9 +253,7 @@ export function ItemEditor({
   palette?: SiteStyleOptions
   onRemove: () => void
   /** The item's editable TITLE — what the site shows under it. Present only where the
-   *  site reads one (a gallery photo's `media.label`). Saved on its own, LIVE: it is a
-   *  name, not a staged style change, and pairing it with Save/Revert would mean a
-   *  manager typing a caption is asked what to do about sliders they never touched. */
+   *  site reads one (a gallery photo's `media.label`). Saved on its own, as it is typed. */
   title?: { value: string; onSave: (next: string) => void }
   /** Alt text + JSON-LD kind (SEO_GEO_PLAN B6b). Saved live, like the title. */
   alt?: { value: string; preset: string; onSave: (next: string) => void }
@@ -272,49 +271,29 @@ export function ItemEditor({
   // whatever the site's card looked like on the day of the edit, and connected sites
   // redeploy on their own schedules.
   const [classes, setClasses] = useState(() => fromItemStored(initialClasses))
-  /** What is actually persisted — Revert's target, and what `dirty` compares against.
-   *  Starts at the stored value and moves only when Save succeeds. */
-  const [savedClasses, setSavedClasses] = useState(() => fromItemStored(initialClasses))
-  const [status, setStatus] = useState<SaveStatus>('idle')
   const [picking, setPicking] = useState(false)
-  const [confirmExit, setConfirmExit] = useState(false)
+  // The shared debounced style save: serialized per key, flushed when this editor
+  // unmounts (every way out of it) or the page is hidden. No `onApply` here: the frame is
+  // painted below with the plain tokens, not the stored (sentinel-wearing) form.
+  const { status, save } = useStyleRegionSave(artistId)
+  // A class string the server would refuse (the same cleanClassText gate) is never
+  // queued; say so rather than showing a painted frame that will not be kept.
+  const [refused, setRefused] = useState(false)
   // Built with the palette (the shell's EditorStyleOptions): in phone view the scale
   // control twins to `scalesm-[…]` and tags itself (Mobile).
   const defaultControls = useMemo(() => buildItemStyleControls(palette), [palette])
   const controls = controlsProp ?? defaultControls
-  const dirty = classes !== savedClasses
 
-  /** Stage a change: paint the frame, persist nothing. */
+  /** Paint the frame now; the draft write follows the debounce. */
   function change(next: string) {
     setClasses(next)
     onApplyStyle?.(styleKey, next)
-  }
-
-  async function save(): Promise<boolean> {
-    setStatus('saving')
-    const res = await saveEditorStyleAction(artistId, styleKey, toItemStored(palette, classes))
-    if (!res.ok) {
-      setStatus('error')
-      return false
-    }
-    setSavedClasses(classes)
-    setStatus('saved')
-    return true
-  }
-
-  /** Back to the last-saved state — on the sliders AND on the site frame. */
-  function revert() {
-    change(savedClasses)
-  }
-
-  function requestBack() {
-    if (dirty) setConfirmExit(true)
-    else onBack()
+    setRefused(!save(styleKey, toItemStored(palette, next)))
   }
 
   return (
     <>
-      <EditorPanel label={label} thumb={preview} onBack={requestBack}>
+      <EditorPanel label={label} thumb={preview} onBack={onBack}>
         <div className="px-5 pt-4">
           <div className="flex gap-2">
             <button
@@ -357,28 +336,9 @@ export function ItemEditor({
           ))}
         </div>
 
-        {/* The exit contract: Revert restores the last-saved state, Save commits what's
-            staged. Both idle until something is actually different. */}
-        <div className="flex gap-2 px-5 pt-1">
-          <button
-            type="button"
-            onClick={revert}
-            disabled={!dirty}
-            className={`${FOOT_BUTTON} text-ink-muted enabled:hover:border-accent enabled:hover:text-accent`}
-          >
-            Revert changes
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={!dirty || status === 'saving'}
-            className={`${FOOT_BUTTON} border-ink bg-ink text-white enabled:hover:bg-black`}
-          >
-            Save
-          </button>
-        </div>
-
-        <SaveLine status={status} />
+        {/* Silent on success, like every panel: the line appears only on a failed or
+            refused save, the one state where the frame and the draft disagree. */}
+        <SaveLine status={refused ? 'error' : status} />
       </EditorPanel>
 
       {picking && (
@@ -400,43 +360,6 @@ export function ItemEditor({
           }}
           onCancel={() => setPicking(false)}
         />
-      )}
-
-      {/* Leaving with staged changes: ask, don't decide. Escape / backdrop just closes
-          the question and stays in the editor. */}
-      {confirmExit && (
-        <PortalModal ariaLabel={`Save changes to ${label}?`} onClose={() => setConfirmExit(false)}>
-          <div className={`${EYEBROW} mb-2 pr-6`}>Unsaved changes</div>
-          <p className="mb-3 text-[13px] leading-relaxed text-ink">
-            You changed {label}&apos;s style. Save it, or discard and leave it as it was?
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                revert()
-                setConfirmExit(false)
-                onBack()
-              }}
-              className={`${FOOT_BUTTON} text-ink-muted hover:border-accent-red hover:text-accent-red`}
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void save().then((ok) => {
-                  setConfirmExit(false)
-                  if (ok) onBack()
-                })
-              }}
-              disabled={status === 'saving'}
-              className={`${FOOT_BUTTON} border-ink bg-ink text-white enabled:hover:bg-black`}
-            >
-              Save &amp; close
-            </button>
-          </div>
-        </PortalModal>
       )}
     </>
   )

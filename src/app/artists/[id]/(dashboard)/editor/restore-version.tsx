@@ -158,7 +158,11 @@ function RestoreDialog({
           </p>
         ) : (
           <>
-            <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">Anything changed since then will be lost.</p>
+            {/* What it really does (2026-09-28): the site's text, styles and on-site order
+                go back; songs, shows, products, photos, videos and links are never deleted,
+                only put back on or off the site. "Anything changed since then will be
+                lost" stopped being true when Revert/Restore learned that. */}
+            <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">Nothing in your library is deleted. The site goes back.</p>
             <div role="radiogroup" aria-label="Version" className="mt-3 max-h-52 space-y-1 overflow-y-auto">
               {(moments ?? []).map((m, i) => (
                 <button

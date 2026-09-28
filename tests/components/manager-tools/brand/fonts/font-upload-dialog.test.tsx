@@ -26,11 +26,12 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({ addArtistFontAction: vi.fn(async () => ({})) }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 type WriteRow = (path: string, file: File) => Promise<string | null>
-const upload: { opts: { writeRow: WriteRow; onSuccess?: () => void } | null } = { opts: null }
+/** `busy`: the file is on its way up (the hook's own flag, which UploadField reports). */
+const upload: { opts: { writeRow: WriteRow; onSuccess?: () => void } | null; busy: boolean } = { opts: null, busy: false }
 vi.mock('@/app/artists/[id]/(dashboard)/use-storage-upload', () => ({
   useStorageUpload: (opts: { writeRow: WriteRow; onSuccess?: () => void }) => {
     upload.opts = opts
-    return { busy: false, error: null, upload: vi.fn(), progress: null, reset: vi.fn() }
+    return { busy: upload.busy, error: null, upload: vi.fn(), progress: null, reset: vi.fn() }
   },
 }))
 
@@ -56,8 +57,17 @@ function ttf(weight: number): File {
 const woff2 = () => new File([new Uint8Array([0x77, 0x4f, 0x46, 0x32, 0, 0, 0, 0, 0, 0, 0, 0])], 'archivo.woff2')
 
 const onClose = vi.fn()
-const open = (props: Partial<Parameters<typeof FontUploadDialog>[0]> = {}) =>
-  render(<FontUploadDialog artistId="a1" slot="primary" title="Primary" onClose={onClose} {...props} />)
+/** Render the dialog. `busy(true)` starts the file going up, `busy(false)` ends it — the
+ *  hook's flag flipped and the same dialog re-rendered, its state kept. */
+const open = (props: Partial<Parameters<typeof FontUploadDialog>[0]> = {}) => {
+  const el = () => <FontUploadDialog artistId="a1" slot="primary" title="Primary" onClose={onClose} {...props} />
+  const view = render(el())
+  const busy = (b: boolean) => {
+    upload.busy = b
+    view.rerender(el())
+  }
+  return Object.assign(view, { busy })
+}
 const dialog = () => screen.getByRole('dialog', { name: 'Upload a font' })
 const fileInput = () => dialog().querySelector('input[type="file"]') as HTMLInputElement
 const name = (value: string) => fireEvent.change(screen.getByLabelText('Font name'), { target: { value } })
@@ -75,6 +85,7 @@ async function drop(file: File, path = PATH): Promise<{ done: Promise<string | n
 
 beforeEach(() => {
   upload.opts = null
+  upload.busy = false
   mAdd.mockResolvedValue({})
 })
 afterEach(cleanup)
@@ -256,7 +267,65 @@ describe('FontUploadDialog — the row it fills', () => {
     expect(mAdd.mock.calls[0]).toEqual(['a1', expect.objectContaining({ weight: null })])
   })
 
-  describe('CRITICAL: closed while the file is still uploading, the font is kept — and the manager is told', () => {
+  describe('CRITICAL: Save while the file is still uploading WAITS — the font lands in the row', () => {
+    // Review 2026-09-28: Save used to close mid-upload like × does, so the late font went to
+    // the library only, while the toast said "Font uploaded" and the row stayed empty — a
+    // silent half-save. The plan: "a row is saved when it gets its thing". So while the file
+    // goes up, Save says so and cannot close; the font lands in the row the dialog was
+    // opened from, and the upload's own success closes the dialog.
+    it('Save is busy and does not close; the font is placed in the row; the finished upload closes it', async () => {
+      onClose.mockClear()
+      const onPlaced = vi.fn()
+      const view = open({ onPlaced })
+      name('Archivo')
+      view.busy(true)
+      const save = within(dialog()).getByRole('button', { name: 'Uploading…' })
+      expect(save).toBeDisabled()
+      fireEvent.click(save)
+      expect(onClose).not.toHaveBeenCalled()
+      const { done } = await drop(ttf(400))
+      expect(await done).toBeNull()
+      expect(mAdd.mock.calls).toEqual([['a1', { label: 'Archivo', storagePath: PATH, format: 'ttf', weight: 400 }, 'primary']])
+      expect(onPlaced).toHaveBeenCalledTimes(1)
+      act(() => upload.opts!.onSuccess?.())
+      view.busy(false)
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('an unsaved added row waiting on its upload is saved with it: slot, title and note', async () => {
+      const onPlaced = vi.fn()
+      const view = open({ slot: 'custom_2', title: 'Gig posters', meta: { label: 'Gig posters', note: 'For merch' }, onPlaced })
+      name('Archivo')
+      view.busy(true)
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Uploading…' }))
+      await drop(ttf(400))
+      expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ weight: 400 }), 'custom_2', { label: 'Gig posters', note: 'For merch' })
+      expect(onPlaced).toHaveBeenCalledTimes(1)
+    })
+
+    it('a woff2 mid-upload: Save is Save again at the weight question, and answering it places the font', async () => {
+      const view = open()
+      name('Archivo')
+      view.busy(true)
+      const { done } = await drop(woff2(), 'a1/fonts/44444444-4444-4444-8444-444444444444.woff2')
+      await act(async () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' })))
+      expect(await done).toBeNull()
+      expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ format: 'woff2', weight: 400 }), 'primary')
+    })
+
+    it('an upload that FAILED gives Save back, and Save closes', () => {
+      onClose.mockClear()
+      const view = open()
+      name('Archivo')
+      view.busy(true)
+      view.busy(false) // ended with no row written: the field shows the error
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }))
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(mAdd).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('CRITICAL: closed (× or Escape) while the file is still uploading, the font is kept — and the manager is told', () => {
     // UploadField keeps going after the dialog is gone: the object lands in the bucket and
     // writeRow runs with no dialog to ask the WOFF2 question in. It used to wait on that
     // question forever: no row, the file orphaned, nothing said. Now a question that cannot
@@ -266,8 +335,8 @@ describe('FontUploadDialog — the row it fills', () => {
     // the manager may have picked another font for that row, or dropped the unsaved row it
     // was for; placing it then overwrote their newer choice with nothing on screen. A
     // closed dialog has given up its row: the font arrives in the Change menu instead.
+    // (Save no longer closes mid-upload: it waits — see the describe above.)
     const CLOSERS: [string, () => void][] = [
-      ['Save', () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }))],
       ['×', () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }))],
       ['Escape', () => fireEvent.keyDown(document, { key: 'Escape' })],
     ]
@@ -277,6 +346,7 @@ describe('FontUploadDialog — the row it fills', () => {
         const onPlaced = vi.fn()
         const view = open({ onPlaced })
         name('Archivo')
+        view.busy(true)
         act(close)
         expect(onClose).toHaveBeenCalled()
         view.unmount() // what the ledger does on onClose
@@ -297,7 +367,8 @@ describe('FontUploadDialog — the row it fills', () => {
     it('a ttf closed mid-upload knows its own weight, so nothing is said about it', async () => {
       const view = open()
       name('Archivo')
-      fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }))
+      view.busy(true)
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }))
       view.unmount()
       const { done } = await drop(ttf(700))
       expect(await done).toBeNull()

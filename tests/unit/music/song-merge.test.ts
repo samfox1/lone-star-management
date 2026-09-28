@@ -48,6 +48,7 @@ const song = (o: Partial<MergeableSong> = {}): MergeableSong => ({
   release_id: null,
   audio_path: null,
   featured_artists: [],
+  drive_file_id: null,
   ...o,
 })
 
@@ -306,6 +307,42 @@ describe('mergeTwins — what Merge offers', () => {
  * deleted, so whichever object the merged row does NOT adopt has to be reported to the
  * caller or it sits in the bucket referenced by nothing, forever.
  */
+/**
+ * THE DRIVE FILE a song was imported from (`drive_file_id`) badges that file "imported" in
+ * the Drive browser. A merge used to leave it on the duplicate, so it died with the row
+ * and the file read as never imported — free to import a third copy. It is filled like a
+ * curated field (A's stands; B's fills an empty A), but B HOLDS it under a unique index
+ * (artist_id, drive_file_id) until B is deleted, so the plan hands it over AFTER the
+ * delete (`afterDelete`), never in the first write — which the index would refuse.
+ */
+describe("the Drive file id — handed over after the duplicate is gone", () => {
+  const plan = (keep: string | null, drop: string | null) => {
+    const p = planSongMerge(song({ drive_file_id: keep }), song({ drive_file_id: drop }))
+    if (!p.ok) throw new Error('expected a mergeable pair')
+    return p
+  }
+
+  it("CRITICAL: B's Drive id moves to A, after the delete — not in the first write", () => {
+    const p = plan(null, 'drive-b')
+    expect(p.afterDelete).toEqual({ drive_file_id: 'drive-b' })
+    expect(p.patch).not.toHaveProperty('drive_file_id')
+  })
+
+  it("A's own Drive id stands when both have one", () => {
+    expect(plan('drive-a', 'drive-b').afterDelete).toEqual({})
+  })
+
+  it('nothing to hand over when B has none', () => {
+    expect(plan('drive-a', null).afterDelete).toEqual({})
+    expect(plan(null, null).afterDelete).toEqual({})
+  })
+
+  it('is read by the merge (a column missing from the SELECT reads as null)', () => {
+    expect(MERGE_COLUMNS.split(', ')).toContain('drive_file_id')
+    expect(Object.keys(merge.NOT_MERGED)).not.toContain('drive_file_id')
+  })
+})
+
 describe('audio — one master survives, the other is reported for collection', () => {
   it('A keeps its own audio and B’s object is flagged as orphaned', () => {
     const plan = planSongMerge(song({ audio_path: 'a1/audio/keep.mp3' }), song({ audio_path: 'a1/audio/drop.mp3' }))

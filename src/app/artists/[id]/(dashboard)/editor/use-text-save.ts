@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { type SaveStatus } from './inspector-shared'
 import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { saveEditorFieldAction } from '../actions'
+import { isTooLong, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
 
 /**
  * The Text panel's values and their debounced save, OWNED ABOVE both views.
@@ -21,7 +22,7 @@ import { saveEditorFieldAction } from '../actions'
  */
 export function useTextFieldSave(
   artistId: string,
-  initial: { key: string; value: string; target?: { store: 'artist'; column: 'name' | 'bio' } }[],
+  initial: { key: string; value: string; target?: { store: 'artist'; column: 'name' | 'bio' }; maxLength?: number }[],
   onApplyField?: (key: string, value: string) => void,
 ): {
   values: Record<string, string>
@@ -42,6 +43,13 @@ export function useTextFieldSave(
     // custom site's artist-column fields write the column the page actually renders.
     persist: (key, value) =>
       saveEditorFieldAction(artistId, key, value, initialRef.current.find((f) => f.key === key)?.target),
+    // Over the cap is REFUSED here, before anything is painted or sent (Sam, 2026-09-28).
+    // The server refuses it too; refusing first also cancels any earlier draft still
+    // waiting, so nothing is written while the box says "not saved". The box shows why.
+    normalize: (value, key) => {
+      const max = initialRef.current.find((f) => f.key === key)?.maxLength ?? TEXT_LIMITS.text
+      return isTooLong(value, max) ? null : value
+    },
     onApply: onApplyField,
   })
 

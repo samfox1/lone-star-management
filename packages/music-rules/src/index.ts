@@ -21,15 +21,60 @@
  * purely derived). Everything else is Unreleased (uploaded to Lone Star, not on
  * Spotify/Apple/etc.). See MUSIC_RESTRUCTURE.md. (Decided 2026-07-08: Unreleased is
  * dashboard-only for now.)
+ *
+ * A SOUNDCLOUD LINK IS NEVER PLATFORM PRESENCE — for a song OR a release (Sam, 2026-09-10
+ * for songs; 2026-09-28 for releases: "A soundcloud song can be released or unreleased,
+ * depends on the song"). Both rules read ONE definition, `urlIsPresence`, mirrored in SQL
+ * as `music_url_is_presence` (migration 20260928160000).
  */
 
 export type MusicBucket = 'released' | 'unreleased'
+
+/**
+ * A SoundCloud link, by its host: soundcloud.com or snd.sc, or any subdomain of them
+ * (on.soundcloud.com, m.soundcloud.com). A lookalike (notsoundcloud.com,
+ * soundcloud.com.evil.io) is not. Same hosts as lib/song-links `linkPlatform` — a test
+ * holds the two to the same answers. A REGEX rather than `new URL`, on purpose: the SQL
+ * mirror (`music_url_is_presence`) runs this exact pattern with `~*`, so the two cannot
+ * disagree about how a URL is parsed. Change one, change both.
+ */
+const SOUNDCLOUD_URL =
+  /^\s*(?:[a-z][a-z0-9+.-]*:)?(?:\/\/)?(?:[^/?#@\s]*@)?(?:[^/?#@:\s]*\.)?(?:soundcloud\.com|snd\.sc)(?::[0-9]*)?(?:[/?#]|\s*$)/i
+
+/** A release link filed in the SoundCloud slot (`release.links[].label`). */
+const SOUNDCLOUD_LABEL = /^\s*soundcloud\s*$/i
+
+/** True iff `url` is a string pointing at SoundCloud. */
+export function isSoundCloudUrl(url: unknown): boolean {
+  return typeof url === 'string' && SOUNDCLOUD_URL.test(url)
+}
+
+/**
+ * THE definition of platform presence for a stored LINK — a song's link column or a
+ * release's link: there is one, and it is not SoundCloud's. SoundCloud is where demos
+ * and live sets live, so a link there proves nothing about release; the manager's
+ * `released` flag decides those. Mirrored in SQL as `music_url_is_presence`.
+ */
+export function urlIsPresence(url: unknown): boolean {
+  return url != null && !isSoundCloudUrl(url)
+}
+
+/** One entry of `release.links` (`{ label, url }`) counts as platform presence iff it is
+ *  not in the SoundCloud slot and its URL is presence. Mirrored in SQL as
+ *  `music_release_link_is_presence`. */
+export function releaseLinkIsPresence(link: unknown): boolean {
+  if (typeof link !== 'object' || link === null) return false
+  const { label, url } = link as { label?: unknown; url?: unknown }
+  if (typeof label === 'string' && SOUNDCLOUD_LABEL.test(label)) return false
+  return urlIsPresence(url)
+}
 
 /** The release columns provenance depends on. */
 export type ReleaseProvenance = {
   source: string | null
   spotify_id: string | null
-  /** The DSP links jsonb array; a non-empty list means the release is on platforms. */
+  /** The DSP links jsonb array (`{ label, url }[]`). Any entry that is platform presence
+   *  (releaseLinkIsPresence — so never a SoundCloud one) makes the release Released. */
   links: unknown
   /** The manual "this is released" flag — a hand-added album/EP with no links
    *  can still be public (its songs inherit this bucket). */
@@ -48,7 +93,8 @@ export type TrackProvenance = {
   stream_url: string | null
   /** Apple/iTunes store link from the union model — counts as platform presence. */
   apple_url: string | null
-  /** SoundCloud link (no id column to rebuild from) — counts as platform presence. */
+  /** SoundCloud link (no id column to rebuild from) — NOT platform presence (see
+   *  trackOnPlatform); a badge and a link only. */
   soundcloud_url?: string | null
   /** Manager-entered Deezer link — a stored URL (the synced deezer_id is a separate id). */
   deezer_url?: string | null
@@ -57,10 +103,15 @@ export type TrackProvenance = {
   released?: boolean | null
 }
 
-/** A release is Released iff it has platform presence OR the manual released flag. */
+/**
+ * A release is Released iff it has platform presence OR the manual released flag. A link
+ * counts only when it is presence (releaseLinkIsPresence): until 2026-09-28 ANY link did,
+ * so a record whose only link was SoundCloud's read Released while the same rule for a
+ * song (trackOnPlatform) had already dropped SoundCloud. Now the two agree.
+ */
 export function releaseIsReleased(r: ReleaseProvenance): boolean {
-  const hasLinks = Array.isArray(r.links) && r.links.length > 0
-  return r.source !== 'manual' || r.spotify_id != null || hasLinks || r.released === true
+  const onPlatform = Array.isArray(r.links) && r.links.some(releaseLinkIsPresence)
+  return r.source !== 'manual' || r.spotify_id != null || onPlatform || r.released === true
 }
 
 /**
@@ -77,6 +128,10 @@ export function releaseIsReleased(r: ReleaseProvenance): boolean {
  * toggle is offered at all. `soundcloud_url` still counts as a PLATFORM for badges and
  * links (trackPlatforms); it just stops deciding the bucket. Mirrored in SQL by
  * 20260910120000.
+ *
+ * The link columns go through `urlIsPresence` (2026-09-28), so a SoundCloud URL sitting
+ * in ANY of them (a paste into the Spotify row before that row checked its platform)
+ * does not release the song either. The ids are ids, never SoundCloud's.
  */
 export function trackOnPlatform(t: TrackProvenance): boolean {
   return (
@@ -84,10 +139,10 @@ export function trackOnPlatform(t: TrackProvenance): boolean {
     t.spotify_id != null ||
     t.apple_id != null ||
     t.deezer_id != null ||
-    t.provider_url != null ||
-    t.stream_url != null ||
-    t.apple_url != null ||
-    t.deezer_url != null ||
+    urlIsPresence(t.provider_url) ||
+    urlIsPresence(t.stream_url) ||
+    urlIsPresence(t.apple_url) ||
+    urlIsPresence(t.deezer_url) ||
     t.released === true
   )
 }

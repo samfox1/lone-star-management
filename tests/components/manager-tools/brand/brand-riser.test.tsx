@@ -19,7 +19,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn(), liftToa
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({ publishBrandWithPasswordAction: vi.fn(async () => ({ ok: true })) }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({ revertBrandAction: vi.fn(async () => ({ changed: 2 })) }))
 
-import { BrandRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/brand-riser'
+import { BrandCheckFailed, BrandRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/brand-riser'
 import { revertBrandAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions'
 import { BRAND_REVERTED } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/brand-events'
 
@@ -69,5 +69,18 @@ describe('BrandRiser', () => {
     } finally {
       window.removeEventListener(BRAND_REVERTED, heard)
     }
+  })
+})
+
+describe('BrandCheckFailed (the "unpublished changes" check itself failed)', () => {
+  it('CRITICAL: says the check failed and offers a reload — it never reads as "all published"', () => {
+    // A hidden bar is what "nothing pending" looks like, so a failed check that hid the bar
+    // told the manager everything was on the site (2026-09-28).
+    render(<BrandCheckFailed />)
+    const note = screen.getByRole('alert')
+    expect(note.textContent).toMatch(/Couldn.t check for unpublished changes/)
+    expect(within(note).queryByRole('button', { name: 'Publish' })).toBeNull()
+    fireEvent.click(within(note).getByRole('button', { name: 'Reload' }))
+    expect(h.refresh).toHaveBeenCalled()
   })
 })

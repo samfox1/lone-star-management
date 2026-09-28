@@ -206,14 +206,16 @@ describe('brandPendingMessage (pure)', () => {
 })
 
 describe('loadBrandPending (the layout’s wrapper)', () => {
-  it('reads through the request client, and a failed read FAILS CLOSED — no bar, never a throw', async () => {
+  it('CRITICAL: reads through the request client, and a failed read says it FAILED — never "nothing pending", never a throw', async () => {
+    // It used to fail closed: a hidden bar, which reads as "everything is on the site" — the
+    // one thing a failed check cannot know (2026-09-28). `failed` makes the layout say so.
     const { loadBrandPending } = await import('@/lib/manager-tools/brand/brand-pending')
     // The witness: the same wrapper DOES light the bar when the reads succeed.
     serverClient = world({ live: { media: [media('s1', 'logo_secondary')] }, log: [] }).client
-    expect(await loadBrandPending(A)).toEqual({ dirty: true, message: 'Secondary logo added', canRevert: false })
-    // latest_revisions refused: brandPending throws, the layout gets a hidden bar.
+    expect(await loadBrandPending(A)).toEqual({ failed: false, dirty: true, message: 'Secondary logo added', canRevert: false })
+    // latest_revisions refused: brandPending throws, and the layout is told the check failed.
     serverClient = fakeClient((c) => (c.op === 'rpc' ? { error: { message: 'permission denied' } } : { data: [] })).client
-    expect(await loadBrandPending(A)).toEqual({ dirty: false, message: '', canRevert: false })
+    expect(await loadBrandPending(A)).toEqual({ failed: true })
   })
 })
 

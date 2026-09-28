@@ -25,6 +25,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { saveCursorField, saveEditorField } from '@/lib/site-editor/save'
 import { manifestFor } from '@/lib/site-editor/manifest'
+import { TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
 import { CURSOR_KEYS } from '@/lib/site-content-schema'
 import { CURSOR_CONTENT_KEYS } from '@samfox1/site-bridge/cursor'
 import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
@@ -209,17 +210,75 @@ describe('saveEditorField — custom site (manifest arrives at runtime)', () => 
     expect(data).toBeNull()
   })
 
-  it('caps the stored value at 2000 characters', async () => {
-    // skeen's caption strip is 80px and clips overflow: a long caption is invisible on
-    // the site but still ships in the HTML of every page load.
-    expect((await saveEditorField(asA, artistA, CUSTOM, KEY, 'x'.repeat(2500))).ok).toBe(true)
-    const { data } = await svc
-      .from('site_content')
-      .select('value')
-      .eq('artist_id', artistA)
-      .eq('key', KEY)
-      .maybeSingle<{ value: string }>()
-    expect(data!.value.length).toBe(2000)
+  /**
+   * TOO LONG IS REFUSED, NEVER CUT (Sam, 2026-09-28). This used to read "caps the stored
+   * value at 2000": a 2,500-character text answered ok and kept 2,000, so the panel showed
+   * words the database had thrown away — the one state the save model forbids (a silent
+   * failure: panel and DB disagree with nothing on screen saying so). The caps live in ONE
+   * table (TEXT_LIMITS), read by the panel's counter and by this gate.
+   */
+  describe('length: refused over the cap, stored whole up to it', () => {
+    const read = async () =>
+      (
+        await svc.from('site_content').select('value').eq('artist_id', artistA).eq('key', KEY).maybeSingle<{ value: string }>()
+      ).data?.value
+    const bio = async () =>
+      (await svc.from('artists').select('bio').eq('id', artistA).single<{ bio: string | null }>()).data!.bio
+
+    it('CRITICAL: site text over the cap is REFUSED and the stored value is untouched', async () => {
+      // A planted witness (AGENTS.md rule 2): "the row is unchanged" means nothing unless
+      // the row exists first.
+      expect((await saveEditorField(asA, artistA, CUSTOM, KEY, 'kept')).ok).toBe(true)
+      expect(await read()).toBe('kept')
+      const res = await saveEditorField(asA, artistA, CUSTOM, KEY, 'x'.repeat(TEXT_LIMITS.text + 1))
+      expect(res).toEqual({ ok: false, error: tooLongError(TEXT_LIMITS.text) })
+      expect(await read()).toBe('kept') // not cut to the cap, not written at all
+    })
+
+    it('CRITICAL: site text AT the cap is stored whole', async () => {
+      expect((await saveEditorField(asA, artistA, CUSTOM, KEY, 'y'.repeat(TEXT_LIMITS.text))).ok).toBe(true)
+      expect((await read())?.length).toBe(TEXT_LIMITS.text)
+    })
+
+    it('the cap counts the TRIMMED text: padding around a full-length value is not "too long"', async () => {
+      expect((await saveEditorField(asA, artistA, CUSTOM, KEY, `  ${'z'.repeat(TEXT_LIMITS.text)}  `)).ok).toBe(true)
+      expect(await read()).toBe('z'.repeat(TEXT_LIMITS.text))
+    })
+
+    it('CRITICAL: a long BIO (custom-site target) is stored WHOLE — 2,500 characters was cut to 2,000', async () => {
+      const long = 'b'.repeat(2500)
+      expect((await saveEditorField(asA, artistA, CUSTOM, 'artist_bio', long, { store: 'artist', column: 'bio' })).ok).toBe(true)
+      expect(await bio()).toBe(long)
+    })
+
+    it('CRITICAL: a long BIO (built-in template) is stored WHOLE, up to its own cap', async () => {
+      const full = 'c'.repeat(TEXT_LIMITS.bio)
+      expect((await saveEditorField(asA, artistA, template, 'artist_bio', full)).ok).toBe(true)
+      expect(await bio()).toBe(full)
+    })
+
+    it('CRITICAL: a bio over ITS cap is refused on both paths, and the stored bio is untouched', async () => {
+      await svc.from('artists').update({ bio: 'witness bio' }).eq('id', artistA)
+      const over = 'd'.repeat(TEXT_LIMITS.bio + 1)
+      expect(await saveEditorField(asA, artistA, CUSTOM, 'artist_bio', over, { store: 'artist', column: 'bio' })).toEqual({
+        ok: false,
+        error: tooLongError(TEXT_LIMITS.bio),
+      })
+      expect(await saveEditorField(asA, artistA, template, 'artist_bio', over)).toEqual({
+        ok: false,
+        error: tooLongError(TEXT_LIMITS.bio),
+      })
+      expect(await bio()).toBe('witness bio')
+    })
+
+    it('a NAME over its cap is refused, and the name is untouched', async () => {
+      const { data: before } = await svc.from('artists').select('name').eq('id', artistA).single<{ name: string }>()
+      const over = 'n'.repeat(TEXT_LIMITS.name + 1)
+      expect((await saveEditorField(asA, artistA, CUSTOM, 'artist_name', over, { store: 'artist', column: 'name' })).ok).toBe(false)
+      expect((await saveEditorField(asA, artistA, template, 'artist_name', over)).ok).toBe(false)
+      const { data: after } = await svc.from('artists').select('name').eq('id', artistA).single<{ name: string }>()
+      expect(after!.name).toBe(before!.name)
+    })
   })
 
   it('REFUSES a key that is not a plain lowercase identifier', async () => {

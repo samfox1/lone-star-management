@@ -47,11 +47,40 @@ export function isConfigured(config: Partial<PublicSiteConfig> | undefined): con
 }
 
 /**
+ * Names which pieces of `config` are missing, never their values — this goes to a
+ * server log, not a fan.
+ */
+function missingConfigKeys(config: Partial<PublicSiteConfig> | undefined): string[] {
+  const missing: string[] = [];
+  if (!config?.supabaseUrl) missing.push("supabaseUrl");
+  if (!config?.anonKey) missing.push("anonKey");
+  if (!config?.slug) missing.push("slug");
+  return missing;
+}
+
+/**
+ * The ONE log line for an unconfigured site (2026-09-28). Before this, a missing env var
+ * rendered the empty site with nothing said anywhere — which is exactly how juniper and
+ * operator sat empty in production, unnoticed, for weeks (2026-08-15): the empty site and
+ * the unconfigured site look identical on the page, and only one of them is a bug. Logs
+ * server-side (never reaches the fan's page) and names only which keys are absent, never
+ * a value — an anon key belongs in a log even less than in the bundle.
+ */
+function warnUnconfigured(fn: string, config: Partial<PublicSiteConfig> | undefined): void {
+  console.error(
+    `[site-bridge] ${fn}: site is not configured (missing ${missingConfigKeys(config).join(", ")}) — rendering the empty site instead of the published page.`,
+  );
+}
+
+/**
  * The artist's PUBLISHED payload, or null.
  *
  * Null means "nothing to show": either the site is not configured yet, or the artist has
  * never published. Both render the empty site, which is the no-hardcoded-content rule —
- * what a fan sees when nothing is published is nothing, never invented songs.
+ * what a fan sees when nothing is published is nothing, never invented songs. The two
+ * causes are NOT silent the same way, though: an unconfigured site also logs one
+ * `console.error` naming the missing env piece (2026-09-28), because that state is a bug
+ * to fix, not a fan who published nothing.
  *
  * A FAILED request throws, deliberately. A site that quietly renders empty because the
  * key rotated looks identical to one that was never published, and the difference matters
@@ -63,7 +92,10 @@ export async function fetchPublicSite(
   fetchOptions?: RequestInit,
   deps: FetchDeps = {},
 ): Promise<PublicSitePayload | null> {
-  if (!isConfigured(config)) return null;
+  if (!isConfigured(config)) {
+    warnUnconfigured("fetchPublicSite", config);
+    return null;
+  }
   const doFetch = deps.fetch ?? fetch;
   const res = await doFetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_site`, {
     method: "POST",
@@ -91,7 +123,10 @@ export async function fetchPublicReleases(
   fetchOptions?: RequestInit,
   deps: FetchDeps = {},
 ): Promise<SiteRelease[]> {
-  if (!isConfigured(config)) return [];
+  if (!isConfigured(config)) {
+    warnUnconfigured("fetchPublicReleases", config);
+    return [];
+  }
   const doFetch = deps.fetch ?? fetch;
   const res = await doFetch(`${config.supabaseUrl}/rest/v1/rpc/get_public_releases`, {
     method: "POST",

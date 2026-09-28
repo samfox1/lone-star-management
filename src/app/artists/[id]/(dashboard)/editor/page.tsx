@@ -8,6 +8,7 @@ import { isNewRelease } from '@samfox1/site-bridge/music'
 import { fieldCurrentValue, manifestFor } from '@/lib/site-editor/manifest'
 import { editorFontSlotTitles } from '@/lib/site-editor/style-controls'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
+import { textLimit } from '@/lib/site-editor/text-limits'
 import { getWorkingSitePayload, mediaUrl, type SiteContent } from '@/lib/site'
 import { isCustom } from '@/lib/custom-site'
 import { requireArtist } from '../_data'
@@ -126,6 +127,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     type: (e.field.type === 'email' ? 'email' : 'text') as 'text' | 'email',
     value: fieldCurrentValue(e.field, ctx),
     multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
+    // The cap the server refuses by, from the same manifest target it resolves.
+    maxLength: textLimit(e.field.target),
     styleRegion: e.styleRegion
       ? { key: e.styleRegion.key, label: e.styleRegion.label, base: e.styleRegion.base }
       : null,

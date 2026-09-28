@@ -12,7 +12,6 @@ import {
   SaveLine,
   OnSiteToggle,
   NoSlots,
-  EYEBROW,
   INVALID_FIELD,
   FIELD,
   FIELD_ON_TINT,
@@ -25,6 +24,7 @@ import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { saveEditorLinkAction, updateContentAction } from '../../actions'
 import { ConnectionMark } from '../../(manager-tools)/connections/connection-mark'
 import { AddButtonModal } from '../add-button-modal'
+import { useConfirm } from '../../confirm-dialog'
 
 /* ── Site-link tools: set the href for each manifest-declared link button ────────────
  * Mirrors StyleTools (manifest-driven, Phase 2): the site declares its link-powered
@@ -321,7 +321,13 @@ export function SocialButtons({
 
 /* ── Contact links: edit / reorder / remove a booking address ────────────────────
  * A mailto:/tel: row is a contact route, not a profile to follow, so it is not a button
- * made from a connection: its label and address are edited here, in place. */
+ * made from a connection: its label and address are edited here, in place.
+ *
+ * ON-SITE ONLY, like every item panel (Sam, 2026-09-09; Contact followed 2026-09-28). A
+ * contact taken off the site leaves the list. Contact addresses have no dashboard page of
+ * their own to be the library, so the way back is here: "Add contact" lists the off-site
+ * ones and turns the picked one on (the socials' Add button, in the same place). A drag
+ * renumbers the WHOLE list, so a hidden contact keeps its place. */
 export function ContactLinkTools({
   links,
   artistId,
@@ -368,6 +374,14 @@ export function ContactLinkTools({
     if (focusedRow) setOpen(focusedRow.id)
   }
   const { dragProps, isOver } = useDragReorder(onReorder)
+  const [adding, setAdding] = useState(false)
+  const offSite = links.filter((l) => !l.onSite)
+  // The trash ASKS (Sam, 2026-09-28: "'are you sure' is good when its a delete"). Revert
+  // never re-inserts a deleted contact: only a declared button's link comes back whole.
+  const { ask, dialog } = useConfirm()
+  async function remove(l: EditorLink, label: string) {
+    if (await ask(`Delete ${label || 'this contact'}? This can't be undone.`)) onRemove(l)
+  }
 
   // Both label and url are required — a blank one is dropped, not saved. The pending
   // row itself is what the (unmount) flush persists, so there is no separate values ref.
@@ -395,7 +409,8 @@ export function ContactLinkTools({
 
   return (
     <div className="pb-2 pt-1">
-      {links.map((l, i) => {
+      {dialog}
+      {onSiteOnly(links).map((l, i) => {
         const v = values[l.id] ?? { label: l.label, url: l.url }
         const isOpen = open === l.id
         const labelBlank = !v.label.trim()
@@ -414,15 +429,13 @@ export function ContactLinkTools({
             )}
           >
             {/* The shared version-A row (EditRow): label over URL as plain text, a
-                hover grip (the reorder handle — the whole row still drags), an "Off"
-                tag for an off-site link, and the hover pencil that reveals the box
-                below. */}
+                hover grip (the reorder handle — the whole row still drags), and the
+                hover pencil that reveals the box below. */}
             <EditRow
               grip
               label={v.label.trim() || 'Untitled link'}
               value={v.url.trim() || 'Add a link'}
               empty={urlBlank}
-              trailing={!l.onSite ? <span className={cx(EYEBROW, 'flex-none')}>Off</span> : undefined}
               expanded={isOpen}
               editLabel={`contact link ${i + 1}`}
               onEdit={() => setOpen(isOpen ? null : l.id)}
@@ -455,7 +468,7 @@ export function ContactLinkTools({
                   <button
                     type="button"
                     aria-label={`Remove contact link ${i + 1}`}
-                    onClick={() => onRemove(l)}
+                    onClick={() => void remove(l, v.label.trim())}
                     className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
                   >
                     <Icon name="trash" size={15} />
@@ -467,6 +480,36 @@ export function ContactLinkTools({
           </FocusScroll>
         )
       })}
+
+      {offSite.length > 0 && (
+        <>
+          <button
+            type="button"
+            aria-expanded={adding}
+            onClick={() => setAdding((a) => !a)}
+            className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-accent hover:bg-surface-hover"
+          >
+            <Icon name="plus" size={16} />
+            <span className="text-[13px]">Add contact</span>
+          </button>
+          {adding &&
+            offSite.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                aria-label={`Put ${l.label.trim() || 'this contact'} on the site`}
+                onClick={() => {
+                  setAdding(false)
+                  onToggleOnSite(l)
+                }}
+                className="flex w-full items-center gap-3 px-5 py-2 text-left hover:bg-surface"
+              >
+                <span className="flex-none text-[13px] text-ink">{l.label.trim() || 'Untitled link'}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{displayAddress(l.url)}</span>
+              </button>
+            ))}
+        </>
+      )}
 
       <SaveLine status={status} />
     </div>

@@ -22,7 +22,7 @@ export type Call = {
   cols?: string
   terminal?: 'single' | 'maybeSingle'
   args?: unknown
-  /** An upsert's second argument (`{ onConflict }`). */
+  /** An upsert's second argument (`{ onConflict }`), or an RPC's third (`{ count }`). */
   options?: unknown
 }
 
@@ -80,15 +80,23 @@ export function fakeClient(respond: (call: Call) => Reply = () => ({ data: [] })
 
   const client = {
     from: (table: string) => builder(table),
-    rpc: (name: string, args: unknown) => {
-      const call: Call = { table: name, op: 'rpc', filters: [], selected: true, args }
-      return {
+    rpc: (name: string, args: unknown, options?: unknown) => {
+      const call: Call = { table: name, op: 'rpc', filters: [], selected: true, args, options }
+      // Filters chain onto an RPC as onto a table read (`.eq('entity_type', 'media')`).
+      const rpcChain: Record<string, unknown> = {
         then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => {
           calls.push(call)
           const reply = respond(call)
-          return Promise.resolve({ data: reply.data ?? null, error: reply.error ?? null }).then(ok, bad)
+          return Promise.resolve({ data: reply.data ?? null, error: reply.error ?? null, count: reply.count ?? null }).then(ok, bad)
         },
       }
+      for (const m of ['eq', 'neq', 'in']) {
+        rpcChain[m] = (col: string, value?: unknown) => {
+          call.filters.push([m, col, value])
+          return rpcChain
+        }
+      }
+      return rpcChain
     },
     storage: {
       from: () => ({

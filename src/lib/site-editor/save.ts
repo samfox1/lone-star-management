@@ -22,6 +22,7 @@ import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
 import { ABOUT_PLACEMENTS, safeHttpUrl } from '@samfox1/site-bridge/seo'
 import { safeHref } from '@/lib/url'
+import { isTooLong, textLimit, tooLongError, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
 
 /**
  * The `site_content` keys a CUSTOM site's field key may NOT claim.
@@ -220,9 +221,10 @@ export async function saveEditorField(
 ): Promise<{ ok: boolean; error?: string }> {
   const manifest = template === null ? undefined : manifestFor(template)
 
-  // The 2000-char cap applies to BOTH paths: a caption longer than its strip is invisible
-  // on the site but still ships in the HTML of every page load.
-  const trimmed = value.trim().slice(0, 2000)
+  // Never cut (Sam, 2026-09-28): a value over its cap is REFUSED below, per target, with
+  // the same words the panel shows. Slicing here once answered ok on a 2,500-character
+  // bio and kept 2,000 of it.
+  const trimmed = value.trim()
 
   // A custom site's fields arrive over the bridge, so there is nothing to resolve them
   // against. Route before the membership check, which could only ever refuse them.
@@ -234,6 +236,8 @@ export async function saveEditorField(
       // A blanked NAME stays the old name: the column is the artist's identity across
       // the whole dashboard, and clearing it from a text box is never what was meant.
       if (target.column === 'name' && trimmed === '') return { ok: false, error: 'Give the artist a name.' }
+      const max = textLimit(target)
+      if (isTooLong(trimmed, max)) return { ok: false, error: tooLongError(max) }
       const { error } = await supabase
         .from('artists')
         .update({ [target.column]: trimmed === '' ? null : trimmed })
@@ -241,11 +245,16 @@ export async function saveEditorField(
       if (error) return { ok: false, error: error.message }
       return { ok: true }
     }
+    // Any other target (a non-allowlisted column included) is site text by key.
+    if (isTooLong(trimmed, TEXT_LIMITS.text)) return { ok: false, error: tooLongError(TEXT_LIMITS.text) }
     return saveCustomField(supabase, artistId, fieldKey, trimmed)
   }
 
   const field = fieldByKey(manifest, fieldKey)
   if (!field) return { ok: false, error: 'Unknown field.' }
+
+  const max = textLimit(field.target)
+  if (isTooLong(trimmed, max)) return { ok: false, error: tooLongError(max) }
 
   if (field.target.store === 'site_content') {
     const key = field.target.key

@@ -96,6 +96,35 @@ describe('a real merge keeps what the manager set by hand', () => {
 })
 
 /**
+ * THE DRIVE FILE ID survives a merge (2026-09-28). It is unique per artist and the
+ * duplicate holds it until it is deleted, so this can only be proven against the real
+ * index: written in the same UPDATE as the rest of the merge it would be refused (23505).
+ */
+describe('a real merge keeps the Drive file badged as imported', () => {
+  it("CRITICAL: the duplicate's Drive file id ends on the kept song", async () => {
+    const driveId = `merge-drive-${crypto.randomUUID()}`
+    const keep = await makeSong(artistA, { title: 'MERGE drive keep' })
+    const drop = await makeSong(artistA, { title: 'MERGE drive drop', drive_file_id: driveId })
+
+    expect((await mergeSongs(asA, artistA, keep, drop)).ok).toBe(true)
+
+    expect(await readSong(drop)).toBeNull()
+    expect((await readSong(keep))?.drive_file_id).toBe(driveId)
+  })
+
+  it("the kept song's own Drive file id stands when both have one", async () => {
+    const mine = `merge-drive-${crypto.randomUUID()}`
+    const keep = await makeSong(artistA, { title: 'MERGE drive both keep', drive_file_id: mine })
+    const drop = await makeSong(artistA, { title: 'MERGE drive both drop', drive_file_id: `merge-drive-${crypto.randomUUID()}` })
+
+    expect((await mergeSongs(asA, artistA, keep, drop)).ok).toBe(true)
+
+    expect(await readSong(drop)).toBeNull()
+    expect((await readSong(keep))?.drive_file_id).toBe(mine)
+  })
+})
+
+/**
  * THE LIVE TABLE'S COLUMNS, not a list someone typed. Every column a real `tracks` row
  * has must be either resolved by a merge rule (MERGE_COLUMNS) or named in NOT_MERGED
  * with its reason. A column added by a migration fails this until someone decides what a

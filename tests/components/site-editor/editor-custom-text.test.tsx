@@ -24,6 +24,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EditorShell, runtimeTextFields } from '@/app/artists/[id]/(dashboard)/editor/editor-shell'
+import { TEXT_LIMITS } from '@/lib/site-editor/text-limits'
 import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
@@ -184,6 +185,19 @@ describe('runtimeTextFields — deriving Text controls from a BRIDGED manifest',
     const fields = runtimeTextFields(CUSTOM_MANIFEST, {})
     expect(fields.find((f) => f.key === 'about_copy')!.multiline).toBe(true)
     expect(fields.find((f) => f.key === 'hero_caption')!.multiline).toBe(false)
+  })
+
+  it('each field carries the cap the server refuses by: a bio target gets the bio cap, the rest the text cap', () => {
+    // The panel and saveEditorField read one table (text-limits); this is the wire between
+    // them. Without it the box would never count or refuse, and only "Save failed" would
+    // say why (Sam, 2026-09-28).
+    const withBio = {
+      ...CUSTOM_MANIFEST,
+      fields: [...CUSTOM_MANIFEST.fields, { key: 'artist_bio', label: 'Bio', type: 'text', target: { store: 'artist', column: 'bio' } }],
+    } as unknown as TemplateManifest
+    const fields = runtimeTextFields(withBio, {})
+    expect(fields.find((f) => f.key === 'artist_bio')!.maxLength).toBe(TEXT_LIMITS.bio)
+    expect(fields.find((f) => f.key === 'hero_caption')!.maxLength).toBe(TEXT_LIMITS.text)
   })
 
   it('tolerates a frame that declares no fields at all (older skeen builds send only styles)', () => {

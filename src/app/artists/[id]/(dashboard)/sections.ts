@@ -37,10 +37,19 @@ export const DIFF_SECTIONS = [
  *  `undefined` for the whole time the `link` row's seg was called `connections`. */
 export type DiffSeg = (typeof DIFF_SECTIONS)[number]['seg']
 
-/** Per route-segment dirty state: a segment is dirty if any of its sections is. */
+/** Per route-segment dirty state: a segment is dirty if any of its sections is.
+ *
+ *  MEDIA IS SPLIT (2026-09-28): the Site publish ships the site's photos, the Brand bar
+ *  the logos and icons (`MediaDiff`). So `site` lights for the site's half and `brand` for
+ *  Brand's — a draft logo lit the Site dot, which the Site Publish can no longer clear. A
+ *  diff without the halves (an older caller) falls back to the whole, on `site`. */
 export function dirtyBySeg(diff: UnpublishedDiff): Record<DiffSeg, boolean> {
   const out = {} as Record<DiffSeg, boolean>
-  for (const s of DIFF_SECTIONS) out[s.seg] = (out[s.seg] ?? false) || diff[s.key].dirty
+  for (const s of DIFF_SECTIONS) {
+    const dirty = s.key === 'media' ? (diff.media.site?.dirty ?? diff.media.dirty) : diff[s.key].dirty
+    out[s.seg] = (out[s.seg] ?? false) || dirty
+  }
+  out.brand = out.brand || (diff.media.brand?.dirty ?? false)
   return out
 }
 

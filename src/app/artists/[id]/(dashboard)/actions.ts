@@ -67,7 +67,8 @@ import { createBandsintownClient } from '@/lib/bandsintown'
 import { createTicketmasterClient, ticketmasterAttractionId } from '@/lib/ticketmaster'
 import { createDriveClient, parseDriveFolderId, type DriveFile, type DriveKind } from '@/lib/drive'
 import { importDriveFile } from '@/lib/drive-import'
-import { resolveStreamingSong, type ResolvedSong, type StreamingUrls } from '@/lib/song-links'
+import { resolveStreamingSong, STREAMING_SERVICES, wrongPlatformError, type ResolvedSong, type StreamingUrls } from '@/lib/song-links'
+import { SONG_PLATFORMS } from './music/platforms'
 import {
   syncAppleTracks,
   syncBandsintownTourDates,
@@ -126,6 +127,16 @@ export async function updateContentAction(
 ): Promise<{ error?: string }> {
   const input = extractUpdate(type, formData)
   if (Object.keys(input).length === 0) return {}
+  // Each song link row holds ITS platform's link (SONG_PLATFORMS, the rows the song modal
+  // renders). The modal refuses a wrong-platform paste in the browser; this is the same
+  // check where no caller can skip it (tests/unit/music/song-link-guard.test.ts).
+  if (type === 'track') {
+    for (const { field, platform } of SONG_PLATFORMS) {
+      const value = input[field]
+      const wrong = typeof value === 'string' ? wrongPlatformError(platform, value) : null
+      if (wrong) return { error: wrong }
+    }
+  }
   const supabase = await createClient()
   try {
     await updateContent(supabase, type, id, input)
@@ -193,16 +204,25 @@ export async function deleteContentAction(
   return {}
 }
 
-export async function publishAction(artistId: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  await publishAll(supabase, artistId, user?.id)
-  await gcVideoObjects(supabase, artistId) // publishAll includes videos → collect orphans
-  await gcMediaObjects(supabase, artistId) // …and gallery media
-  await gcFontObjects(supabase, artistId) // …and fonts (safe: keeps anything a live revision names)
-  revalidatePath(`/artists/${artistId}`, 'layout')
+/**
+ * The Overview's "Publish all" — PASSWORD-GATED, like every other publish (Sam,
+ * 2026-09-28: a client-only prompt is not enough). Goes through the same `publishGated`
+ * helper as the editor's `publishAllGatedAction` and the Music/Brand/Site publishes, so
+ * the password check is verified server-side, not just asked for on the client.
+ */
+export async function publishAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  return publishGated(
+    artistId,
+    password,
+    async (supabase, userId) => {
+      await publishAll(supabase, artistId, userId)
+    },
+    async (supabase) => {
+      await gcVideoObjects(supabase, artistId) // publishAll includes videos → collect orphans
+      await gcMediaObjects(supabase, artistId) // …and gallery media
+      await gcFontObjects(supabase, artistId) // …and fonts (safe: keeps anything a live revision names)
+    },
+  )
 }
 
 /** The visual editor's review window: what has changed since the last publish, per
@@ -1154,6 +1174,13 @@ export async function setReleaseTypeAction(
  * persistence), so a wrong password can't publish and the live session is
  * untouched. Returns the user id on success, or an error string. Shared by every
  * password-gated publish.
+ *
+ * Supabase's sign-in error is NOT always "you typed the wrong password" (Sam,
+ * 2026-09-28): a burst of tries can trip its own 429 "Request rate limit reached"
+ * (code `over_request_rate_limit`), and that used to be flattened into "Incorrect
+ * password." along with everything else — telling a manager they're wrong when they
+ * aren't. Only `invalid_credentials` (the real wrong-password answer) says that; a rate
+ * limit says so plainly; anything unrecognized gets a generic message rather than either.
  */
 async function verifyPasswordGate(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -1170,7 +1197,13 @@ async function verifyPasswordGate(
     { auth: { persistSession: false, autoRefreshToken: false } },
   )
   const { error: pwErr } = await verifier.auth.signInWithPassword({ email: user.email, password })
-  if (pwErr) return { error: 'Incorrect password.' }
+  if (pwErr) {
+    if (pwErr.status === 429 || pwErr.code === 'over_request_rate_limit') {
+      return { error: 'Too many tries — wait a minute and try again.' }
+    }
+    if (pwErr.code === 'invalid_credentials') return { error: 'Incorrect password.' }
+    return { error: "Couldn't check the password." }
+  }
   return { userId: user.id }
 }
 
@@ -1395,6 +1428,11 @@ export async function setReleaseLinkAction(
     if (!safe) return { error: 'Enter a valid URL.' }
     url = safe
   }
+  // A slot holds ITS platform's link, like a song's rows: the label names the platform
+  // (STREAMING_SERVICES). An unknown legacy label has no platform to hold it to.
+  const slotPlatform = STREAMING_SERVICES.find((s) => s.label === trimmedLabel)?.key
+  const wrong = slotPlatform && url ? wrongPlatformError(slotPlatform, url) : null
+  if (wrong) return { error: wrong }
   const supabase = await createClient()
   const owned = await requireOwnedArtist(supabase, artistId)
   if (!owned.ok) return { error: owned.error }

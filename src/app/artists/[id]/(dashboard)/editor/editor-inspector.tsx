@@ -15,7 +15,6 @@ import {
   type ManifestLinkRegion,
   type ManifestStyleRegion,
 } from '@/lib/site-editor/manifest'
-import type { DroppedRegion } from '@samfox1/site-bridge/manifest'
 import { type EditorStyleOptions } from '@/lib/site-editor/style-controls'
 import { siteSwatches } from '@/lib/site-editor/style-apply'
 import { mediaUrl } from '@/lib/storage-url'
@@ -162,9 +161,6 @@ const COMPONENTS: Component[] = [
  *  then fired forever — any caller that simply omitted the optional prop crashed the
  *  inspector with "Too many re-renders". Found while fixing the 2026-08-09 review. */
 const NO_STYLES: Record<string, string> = {}
-/** Stable empty default, for the same reason NO_STYLES is one: a fresh `[]` per render is
- *  a new identity in every dependency array that reads it. */
-const NO_DROPPED: DroppedRegion[] = []
 /** Stable empty default for `links`, which re-seeds on identity (below) — a fresh `[]`
  *  would re-seed on every render, the NO_STYLES crash again. */
 const NO_LINKS: EditorLink[] = []
@@ -181,50 +177,6 @@ const parseSiteFieldKey = (storeKey: string): Pick<SiteTextField, 'store' | 'key
  *  control here can write a token the site's applier can't lift yet, so a slider may do
  *  nothing on the live site until it is republished. A STATUS line, not an instruction —
  *  it names why an edit isn't showing so the manager isn't left guessing (Sam, 2026-08-13). */
-/**
- * A region key the site declared twice — the SURFACE half of the duplicate-key guard
- * (SITE_PAGES_PLAN.md A6 / N3).
- *
- * Region keys are one flat namespace across every page (D3), so two pages naming the same
- * region share one stored row: restyle one and the other changes. The D4 merge has always
- * DETECTED this and resolved it first-wins; until now it told nobody, so the symptom
- * reached a manager with no explanation attached.
- *
- * A banner, not a block: the editor works, the region is still editable, and first-wins is
- * a defensible resolution. What was missing was anyone being told — and the editor is the
- * only place that sees every page of a live site at once.
- *
- * `role="status"`, not `alert`: it is a standing condition of the site, not an event.
- */
-function DroppedRegionsBanner({ dropped }: { dropped: DroppedRegion[] }) {
-  return (
-    <div
-      role="status"
-      className="flex items-start gap-2 border-b border-hairline bg-surface px-4 py-2.5 text-[11px] leading-snug text-ink-muted"
-    >
-      <span className="mt-px flex-none text-status-pending" aria-hidden>
-        <Icon name="alert" size={13} />
-      </span>
-      <span>
-        {dropped.map((d) => {
-          // Named once when both sides are the same page — that is the copy-paste-in-the
-          // registry case, and "on merch and on merch" reads as a bug in the message.
-          const where =
-            d.keptPage && d.page && d.keptPage !== d.page
-              ? `${d.keptPage} and ${d.page}`
-              : (d.keptPage ?? d.page ?? 'this site')
-          return (
-            <span key={`${d.kind}:${d.key}:${d.page ?? ''}`} className="block">
-              “{d.key}” is declared twice ({where}). Both share one saved style — renaming
-              one in the site’s code separates them.
-            </span>
-          )
-        })}
-      </span>
-    </div>
-  )
-}
-
 function BridgeOutdatedBanner() {
   return (
     <div className="flex items-start gap-2 border-b border-hairline bg-surface px-4 py-2.5 text-[11px] leading-snug text-ink-muted">
@@ -239,7 +191,6 @@ function BridgeOutdatedBanner() {
 export function EditorInspector({
   artistId,
   bridgeOutdated = false,
-  droppedRegions = NO_DROPPED,
   itemPages,
   photos: initial,
   imageFields = [],
@@ -298,13 +249,11 @@ export function EditorInspector({
   videoSlots?: ManifestVideoSlot[]
   merch?: EditorMerch[]
   releases?: EditorProject[]
-  /** The date LIBRARY, on-site or not — the editor is where they're chosen (ADR 0009). */
+  /** Every date, on-site or not: the Tour panel SHOWS the on-site ones, but reorders the
+   *  whole list so a hidden date keeps its place. */
   tours?: EditorTour[]
   /** Repeated multi-image components (the polaroid wall). Comes from the FRAME's
    *  edit-list at runtime; a site that declares none simply has no component section. */
-  /** Region keys the frame declared twice, from the D4 merge (`useFrameBridge`). Surfaced
-   *  as a banner — detected-and-silent is where this bug started (N3). */
-  droppedRegions?: DroppedRegion[]
   /** Which page each library type's items live on (panel-inputs `itemPages`, P4). An
    *  item highlight names its page from this so the frame can travel first. */
   itemPages?: Partial<Record<string, string>>
@@ -1090,9 +1039,7 @@ export function EditorInspector({
       styleValues={styleMap}
       styleOptions={styleOptions}
       onEdit={(v) => textSave.edit(editingText.key, v)}
-      // Paint AND persist. Unlike the item editor there is no Save button here: a
-      // sentence's font is a small, obvious change, and making the manager confirm it
-      // would sit oddly beside the words above it, which save as they type.
+      // Paint AND persist, like every panel: autosave to the draft, no Save button.
       onStyle={(regionKey, className) => {
         applyItemStyle(regionKey, className)
         saveTextStyle(regionKey, className)
@@ -1277,7 +1224,6 @@ export function EditorInspector({
   return (
     <aside className="flex w-[344px] flex-none flex-col overflow-hidden border-r border-hairline bg-paper font-space">
       {bridgeOutdated && <BridgeOutdatedBanner />}
-      {droppedRegions.length > 0 && <DroppedRegionsBanner dropped={droppedRegions} />}
       {itemEditor ? (
         itemEditor
       ) : siteTextEditor ? (
@@ -1297,8 +1243,8 @@ export function EditorInspector({
       )}
       {/* Revert changes: back to the last PUBLISHED edition (session walk only for a
           never-published artist). Shows while Revert has something to undo OR something
-          was touched this session; hidden while the ITEM editor is open (its own revert
-          owns that surface). */}
+          was touched this session; hidden while a full-panel editor is open, which is a
+          view of ONE thing and gets the bar back the moment it closes. */}
       {!itemEditor && !textEditor && !siteTextEditor && !tourEditor && (journalCount > 0 || canRevert) && (
         <SessionActions busy={reverting} onRemove={revertSession} />
       )}

@@ -29,6 +29,7 @@ export function BrandModal({
   square,
   onClose,
   onSave,
+  saveBusy,
   board,
   footerLeft,
   beforeSave,
@@ -45,6 +46,9 @@ export function BrandModal({
   onClose: () => void
   /** What Save does. Default: close. */
   onSave?: () => void
+  /** Save cannot finish yet: the button shows this ("Uploading…") and is disabled until
+   *  it is gone. For a modal whose Save would otherwise close on work still in flight. */
+  saveBusy?: string
   /** The left column — usually a ModalBoard. Without it the controls take the width. */
   board?: ReactNode
   /** The far left of the footer. */
@@ -62,8 +66,8 @@ export function BrandModal({
   controlsAlign?: 'center' | 'start'
 }) {
   const save = (
-    <button type="button" onClick={onSave ?? onClose} className={SAVE}>
-      Save
+    <button type="button" onClick={onSave ?? onClose} disabled={!!saveBusy} aria-busy={saveBusy ? true : undefined} className={SAVE}>
+      {saveBusy ?? 'Save'}
     </button>
   )
   return (

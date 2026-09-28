@@ -25,7 +25,8 @@ type SaveAction = () => Promise<SaveResult>
  *  • optimistic repaint via `onApply` (the frame bridge), fired only for a valid value;
  *  • SERIALIZED persistence (`runSerialized`), so an older keystroke's write can't land
  *    after a newer one, and one field's failure isn't masked by another's success;
- *  • a flush on unmount, so tabbing away can't drop the last pending change.
+ *  • a flush on unmount AND when the page is hidden, so closing the panel or the tab
+ *    can't drop the last pending change.
  *
  * It deliberately does NOT own the displayed value: each panel keeps its own text/values
  * state (some re-seed from the bridge, some keep raw-vs-trimmed, some are objects), and a
@@ -46,8 +47,10 @@ export function useDebouncedFieldSave<V>({
   persist: (key: string, value: V) => Promise<SaveResult>
   /** Validate/transform the input before it is saved: return the value to persist, or
    *  `null` to reject it (nothing painted, nothing queued, `save` returns false). The
-   *  transform lets a panel save a trimmed/cleaned value while displaying the raw one. */
-  normalize?: (input: V) => V | null
+   *  transform lets a panel save a trimmed/cleaned value while displaying the raw one.
+   *  The key rides along for a rule that differs per field (a bio's cap is not a
+   *  caption's). */
+  normalize?: (input: V, key: string) => V | null
   /** Optimistic live-preview paint over the bridge, for an accepted value only. */
   onApply?: (key: string, value: V) => void
   debounceMs?: number
@@ -84,7 +87,7 @@ export function useDebouncedFieldSave<V>({
 
   const save = useCallback(
     (key: string, input: V): boolean => {
-      const value = normalizeRef.current ? normalizeRef.current(input) : input
+      const value = normalizeRef.current ? normalizeRef.current(input, key) : input
       const existing = timers.current.get(key)
       if (existing) clearTimeout(existing)
       timers.current.delete(key)
@@ -110,17 +113,40 @@ export function useDebouncedFieldSave<V>({
     [debounceMs, runNow],
   )
 
-  // Flush still-pending edits on unmount so a fast tab-away can't drop the last one.
+  // THE LAST EDIT IS NEVER DROPPED. Two ways a pending (still-debouncing) edit can be
+  // left behind, and both write it NOW instead of waiting out the timer:
+  //  • CLOSE: the panel unmounts (Back, a preview click, another editor opening). The
+  //    write is fire-and-forget: there is no component left to show its status.
+  //  • BLUR: the page is hidden (tab switch, window closed, laptop lid). The component is
+  //    still here, so the write goes through the serialized runner like any other and a
+  //    failure still reaches the status line. Best-effort on a real unload — the browser
+  //    may not wait — but a tab switch, the common case, is not an unload at all.
   useEffect(() => {
     const timersMap = timers.current
     const pendingMap = pending.current
+    const flushNow = () => {
+      pendingMap.forEach((value, key) => {
+        const t = timersMap.get(key)
+        if (t) clearTimeout(t)
+        timersMap.delete(key)
+        runNow(key, () => persistRef.current(key, value))
+      })
+      pendingMap.clear()
+    }
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushNow()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', flushNow)
     return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', flushNow)
       timersMap.forEach((t) => clearTimeout(t))
       pendingMap.forEach((value, key) => {
         void persistRef.current(key, value)
       })
     }
-  }, [])
+  }, [runNow])
 
   return { status, save, runNow }
 }

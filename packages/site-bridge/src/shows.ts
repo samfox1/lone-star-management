@@ -54,14 +54,22 @@ export function isPastShow(show: OrderableShow, todayIso: string): boolean {
  * Split shows into upcoming and past, each in the order a fan should read them.
  *
  * Within a bucket: dated first (upcoming ascending — the next show first; past descending
- * — the last one first), then undated. Undated shows have no date to sort by, so they
- * follow the manager's dragged order (`sort_order`) instead of arriving in whatever order
- * the payload happened to hold.
+ * — the last one first), then undated LAST, always — whatever the drag order (Sam,
+ * 2026-09-28: "undated → end", matching the rule `orderMusicProjects` already applies to
+ * music). Undated shows have no date to sort by, so within their own group they keep the
+ * manager's dragged order (`sort_order`) instead of arriving in whatever order the payload
+ * happened to hold.
  *
  * MANUAL MODE (Sam, 2026-08-17): the first drag in the editor writes `sort_order` onto
- * every row it touches, and from then on the manager's order IS the order — date only
- * breaks ties for rows the drag never numbered. Untouched lists (all `sort_order` null)
- * keep the chronological default.
+ * every row it touches, and from then on the manager's order IS the order for the DATED
+ * rows — date only breaks ties for rows the drag never numbered. Untouched lists (all
+ * `sort_order` null) keep the chronological default. Undated rows are never part of that
+ * ordering: they are sliced out first and appended after, sorted by their own
+ * `sort_order` — so a partial drag (some dated rows numbered, an undated row not) can no
+ * longer put a TBA show ahead of a dated one. (Until 2026-09-28 this manual-mode branch
+ * tie-broke a dateless row on `''`, which sorts before every real date ascending — a
+ * quirk ported verbatim from skeen's `lib/mapSite.ts` and flagged for Sam on 2026-09-18.
+ * Answered now: undated always goes last.)
  *
  * The trigger is a DATED row carrying a number, because that is what proves a drag
  * happened over the real list: undated rows have always carried `sort_order` as their only
@@ -75,20 +83,21 @@ export function orderShows<T extends OrderableShow>(
   shows: readonly T[],
   todayIso: string,
 ): { upcoming: T[]; past: T[] } {
+  const byDragOrder = (rows: readonly T[]): T[] =>
+    [...rows].sort((a, b) => (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER));
   const order = (rows: readonly T[], dir: 1 | -1): T[] => {
-    if (rows.some((s) => s.date && s.sort_order != null)) {
-      return [...rows].sort((a, b) => {
+    const dated = rows.filter((s): s is T & { date: string } => !!s.date);
+    const undated = byDragOrder(rows.filter((s) => !s.date));
+    if (dated.some((s) => s.sort_order != null)) {
+      dated.sort((a, b) => {
         const sa = a.sort_order ?? Number.MAX_SAFE_INTEGER;
         const sb = b.sort_order ?? Number.MAX_SAFE_INTEGER;
         if (sa !== sb) return sa - sb;
-        return dir * (a.date ?? '').localeCompare(b.date ?? '');
+        return dir * a.date.localeCompare(b.date);
       });
+    } else {
+      dated.sort((a, b) => dir * a.date.localeCompare(b.date));
     }
-    const dated = rows.filter((s): s is T & { date: string } => !!s.date);
-    dated.sort((a, b) => dir * a.date.localeCompare(b.date));
-    const undated = rows
-      .filter((s) => !s.date)
-      .sort((a, b) => (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER));
     return [...dated, ...undated];
   };
   return {

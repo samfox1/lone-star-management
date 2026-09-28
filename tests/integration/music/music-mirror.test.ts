@@ -40,7 +40,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { releaseBucket, trackBucket, type ReleaseProvenance, type TrackProvenance } from '@/lib/music'
+import { releaseBucket, trackBucket, urlIsPresence, type ReleaseProvenance, type TrackProvenance } from '@/lib/music'
 import * as musicRules from '@lone-star/music-rules'
 import { serviceClient } from '@tests/helpers/supabase'
 
@@ -115,6 +115,16 @@ const RELEASE_SET: Record<keyof ReleaseRow, Partial<ReleaseRow>> = {
   released: { released: true },
 }
 
+/**
+ * A SoundCloud URL is never platform presence, whichever LINK column holds it (Sam,
+ * 2026-09-28; migration 20260928160000). Derived from TRACK_SET — every column whose
+ * fixture is a URL — so a link column added later is covered the day it gets its entry.
+ */
+const SOUNDCLOUD = 'https://on.soundcloud.com/abc'
+const URL_COLUMNS = Object.entries(TRACK_SET)
+  .filter(([column, over]) => /^https?:/.test(String(over[column as keyof TrackRow] ?? '')))
+  .map(([column]) => column as keyof TrackRow)
+
 const TRACKS: TrackFixture[] = [
   trk('bare manual (nothing set)'),
   // The EMPTY spellings, which no per-column entry can express: a column's absence is
@@ -122,6 +132,7 @@ const TRACKS: TrackFixture[] = [
   trk('a null source (never a manual add)', { source: null }),
   trk('released explicitly false', { released: false }),
   ...Object.entries(TRACK_SET).map(([column, over]) => trk(`${column} set`, over)),
+  ...URL_COLUMNS.map((column) => trk(`${column} holds a SoundCloud URL`, { [column]: SOUNDCLOUD })),
 ]
 
 const RELEASES: ReleaseFixture[] = [
@@ -129,6 +140,54 @@ const RELEASES: ReleaseFixture[] = [
   rel('a null source', { source: null }),
   rel('empty links array', { links: [] }),
   ...Object.entries(RELEASE_SET).map(([column, over]) => rel(`${column} set`, over)),
+  // A SoundCloud link alone never releases a record (20260928160000).
+  rel('only a SoundCloud link', { links: [{ label: 'SoundCloud', url: 'https://soundcloud.com/a/sets/b' }] }),
+  rel('only a SoundCloud link, flag set', {
+    links: [{ label: 'SoundCloud', url: 'https://soundcloud.com/a/sets/b' }],
+    released: true,
+  }),
+  rel('SoundCloud + Spotify links', {
+    links: [
+      { label: 'SoundCloud', url: 'https://soundcloud.com/a/sets/b' },
+      { label: 'Spotify', url: 'https://open.spotify.com/album/x' },
+    ],
+  }),
+  rel('a SoundCloud URL under another label', { links: [{ label: 'Listen', url: SOUNDCLOUD }] }),
+  rel('the SoundCloud slot, any URL, odd spelling', { links: [{ label: ' soundCLOUD ', url: 'https://example.com/x' }] }),
+  rel('a lookalike host', { links: [{ label: 'Listen', url: 'https://notsoundcloud.com/x' }] }),
+  rel('a link with no url', { links: [{ label: 'Spotify' }] }),
+  rel('a link with a null url', { links: [{ label: 'Spotify', url: null }] }),
+  rel('a link with a non-string url', { links: [{ label: 'Spotify', url: 42 }] }),
+  rel('a non-object link entry', { links: ['https://open.spotify.com/album/x'] }),
+  rel('a null link entry', { links: [null] }),
+  rel('links is not an array', { links: { label: 'Spotify', url: 'https://open.spotify.com/album/x' } }),
+]
+
+/**
+ * The URL parse itself, both sides. The TS regex and the SQL `~*` are the same pattern
+ * text, but two regex engines can still read one pattern differently (a class shorthand
+ * inside brackets, case folding), so the awkward shapes are fed through both.
+ */
+const URLS: unknown[] = [
+  'https://soundcloud.com/skeen/demo',
+  'https://on.soundcloud.com/abc',
+  'soundcloud.com/skeen/demo',
+  'HTTPS://SOUNDCLOUD.COM/SKEEN',
+  'https://snd.sc/abc',
+  'https://soundcloud.com',
+  'https://soundcloud.com?x=1',
+  'soundcloud.com:8080/x',
+  '  https://soundcloud.com/x',
+  'https://user:pass@soundcloud.com/x',
+  'https://notsoundcloud.com/x',
+  'https://soundcloud.com.evil.io/x',
+  'https://soundcloud.com@evil.io/x',
+  'https://evil.io/soundcloud.com',
+  'https://open.spotify.com/track/1',
+  'not a url',
+  '',
+  null,
+  42,
 ]
 
 async function sqlTrack(row: unknown): Promise<boolean> {
@@ -141,17 +200,30 @@ async function sqlRelease(row: unknown): Promise<boolean> {
   if (error) throw new Error(`music_release_is_released: ${error.message}`)
   return data as boolean
 }
+async function sqlUrl(v: unknown): Promise<boolean> {
+  const { data, error } = await svc.rpc('music_url_is_presence', { v })
+  if (error) throw new Error(`music_url_is_presence: ${error.message}`)
+  return data as boolean
+}
 
 // Every SQL answer is fetched once, in parallel, so the assertions below stay synchronous
 // (each fixture would otherwise cost a transatlantic round-trip inside its own `it`).
 const sqlTrackAnswer = new Map<string, boolean>()
 const sqlReleaseAnswer = new Map<string, boolean>()
+const sqlUrlAnswer = new Map<unknown, boolean>()
 
 beforeAll(async () => {
   await Promise.all([
     ...TRACKS.map(async (f) => sqlTrackAnswer.set(f.name, await sqlTrack(f.row))),
     ...RELEASES.map(async (f) => sqlReleaseAnswer.set(f.name, await sqlRelease(f.row))),
+    ...URLS.map(async (u) => sqlUrlAnswer.set(u, await sqlUrl(u))),
   ])
+})
+
+describe('urlIsPresence mirrors music_url_is_presence', () => {
+  it.each(URLS.map((u) => [JSON.stringify(u), u] as const))('%s', (_name, u) => {
+    expect(sqlUrlAnswer.get(u)).toBe(urlIsPresence(u))
+  })
 })
 
 describe('releaseBucket mirrors music_release_is_released', () => {

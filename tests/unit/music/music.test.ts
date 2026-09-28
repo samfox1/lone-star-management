@@ -270,3 +270,112 @@ describe('a SoundCloud link does not make a song released', () => {
     expect(trackBucket({ ...base, spotify_id: 'sp', released: false })).toBe('released')
   })
 })
+
+/* ── …and a SoundCloud link does not make a RELEASE released either (Sam, 2026-09-28) ─
+ * "Soundcloud songs can be released and unreleased … depends on the song." The song rule
+ * dropped SoundCloud on 2026-09-10, but the release rule still counted ANY link, so a
+ * record whose only link was SoundCloud's read Released. Both rules now read ONE
+ * definition of platform presence (urlIsPresence in packages/music-rules; SQL
+ * music_url_is_presence): a stored link counts iff there is one and it is not SoundCloud's.
+ * Released otherwise comes from real platform presence or the manager's flag. */
+describe('a SoundCloud link does not make a release released', () => {
+  const sc = { label: 'SoundCloud', url: 'https://soundcloud.com/skeen/sets/demos' }
+  const spotify = { label: 'Spotify', url: 'https://open.spotify.com/album/x' }
+
+  it('CRITICAL: a manual release whose only link is SoundCloud is UNRELEASED', () => {
+    expect(releaseBucket(rel({ links: [sc], released: false }))).toBe('unreleased')
+  })
+  it('the same release with the flag set is released — the manager decides', () => {
+    expect(releaseBucket(rel({ links: [sc], released: true }))).toBe('released')
+  })
+  it('CRITICAL: a Spotify link still forces released, even with released:false', () => {
+    expect(releaseBucket(rel({ links: [sc, spotify], released: false }))).toBe('released')
+  })
+  it('a SoundCloud URL under another label is still SoundCloud', () => {
+    expect(releaseBucket(rel({ links: [{ label: 'Listen', url: 'https://on.soundcloud.com/abc' }] }))).toBe('unreleased')
+  })
+  it('a link in the SoundCloud slot is not presence, whatever its URL', () => {
+    expect(releaseBucket(rel({ links: [{ label: ' soundcloud ', url: 'https://example.com/x' }] }))).toBe('unreleased')
+  })
+  it('a link with no URL is not presence', () => {
+    expect(releaseBucket(rel({ links: [{ label: 'Spotify' }] }))).toBe('unreleased')
+    expect(releaseBucket(rel({ links: [{ label: 'Spotify', url: null }] }))).toBe('unreleased')
+  })
+  it('a non-SoundCloud link of any other platform still counts', () => {
+    expect(releaseBucket(rel({ links: [{ label: 'Bandcamp', url: 'https://skeen.bandcamp.com/album/x' }] }))).toBe('released')
+  })
+  it('a lookalike host is not SoundCloud, so it counts', () => {
+    expect(releaseBucket(rel({ links: [{ label: 'Listen', url: 'https://notsoundcloud.com/x' }] }))).toBe('released')
+  })
+})
+
+describe('a SoundCloud URL in any song link column is not presence', () => {
+  // The song's other link columns: a SoundCloud URL pasted into one (before the row
+  // guard existed) must not release the song either — ONE definition, every column.
+  it.each(['provider_url', 'stream_url', 'apple_url', 'deezer_url'] as const)('%s', (field) => {
+    expect(trackBucket(trk({ [field]: 'https://soundcloud.com/x/y', released: false }))).toBe('unreleased')
+    expect(trackBucket(trk({ [field]: 'https://example.com/x', released: false }))).toBe('released')
+  })
+})
+
+/**
+ * isSoundCloudUrl is a PARSER (strict tier). Every case is checked two ways: against the
+ * expected answer, and against lib/song-links' linkPlatform — the host check the link
+ * rows use to refuse a wrong-platform paste. The two must agree, or a link the row
+ * accepts as "not SoundCloud" could still be read as SoundCloud by the rule (or back).
+ */
+import { isSoundCloudUrl, urlIsPresence } from '@/lib/music'
+import { linkPlatform } from '@/lib/song-links'
+
+describe('isSoundCloudUrl', () => {
+  const YES = [
+    'https://soundcloud.com/skeen/demo',
+    'https://on.soundcloud.com/abc',
+    'https://m.soundcloud.com/skeen/demo',
+    'https://www.soundcloud.com/skeen',
+    'soundcloud.com/skeen/demo',
+    'soundcloud.com/skeen/demo?ref=https://x.io',
+    'HTTPS://SOUNDCLOUD.COM/SKEEN',
+    'https://snd.sc/abc',
+    'https://soundcloud.com',
+    'https://soundcloud.com?x=1',
+    'https://soundcloud.com:443/x',
+    'soundcloud.com:8080/x',
+    '  https://soundcloud.com/x',
+    'https://user:pass@soundcloud.com/x',
+  ]
+  const NO = [
+    'https://open.spotify.com/track/abc',
+    'https://notsoundcloud.com/x',
+    'https://soundcloud.com.evil.io/x',
+    'https://soundcloud.com@evil.io/x',
+    'https://evil.io/soundcloud.com',
+    'https://example.com/?next=https://soundcloud.com/x',
+    'https://soundcloud.co/x',
+    'not a url at all',
+    '',
+  ]
+  it.each(YES)('%s is SoundCloud', (url) => {
+    expect(isSoundCloudUrl(url)).toBe(true)
+    expect(linkPlatform(url)).toBe('soundcloud')
+  })
+  it.each(NO)('%s is not SoundCloud', (url) => {
+    expect(isSoundCloudUrl(url)).toBe(false)
+    expect(linkPlatform(url)).not.toBe('soundcloud')
+  })
+  it('a non-string is never SoundCloud', () => {
+    expect(isSoundCloudUrl(null)).toBe(false)
+    expect(isSoundCloudUrl(undefined)).toBe(false)
+    expect(isSoundCloudUrl(42)).toBe(false)
+  })
+})
+
+describe('urlIsPresence — the one definition', () => {
+  it('a stored non-SoundCloud link is presence; nothing, or SoundCloud, is not', () => {
+    expect(urlIsPresence('https://open.spotify.com/track/1')).toBe(true)
+    expect(urlIsPresence('https://example.com/x')).toBe(true)
+    expect(urlIsPresence('https://soundcloud.com/x')).toBe(false)
+    expect(urlIsPresence(null)).toBe(false)
+    expect(urlIsPresence(undefined)).toBe(false)
+  })
+})

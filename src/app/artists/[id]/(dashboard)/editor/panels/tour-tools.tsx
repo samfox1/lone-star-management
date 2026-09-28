@@ -2,7 +2,7 @@ import { cx } from '@/lib/cx'
 import { useDragReorder } from '../use-drag-reorder'
 import { Icon } from '@/components/ui/icons'
 import { type EditorTour } from '../inspector-types'
-import { OnSiteToggle } from '../inspector-shared'
+import { OnSiteToggle, onSiteOnly } from '../inspector-shared'
 import { AddLink, useScrollIntoFocus } from '../inspector-grid'
 import { useConfirm } from '../../confirm-dialog'
 import { type SelectTarget } from '@samfox1/site-bridge/protocol'
@@ -41,10 +41,12 @@ export function showLabel(t: EditorTour): string {
 }
 
 /**
- * The tour-date library, each with a LIVE on-site toggle (ADR 0009): this is where a
- * manager picks which dates the site shows, and the toggle takes effect without a
- * publish. Dates are ENTERED on the Tour page — venue, city, country, supporting acts
- * — so there are no fields here; the editor's job is placement, not data entry.
+ * The dates ON THE SITE, and only those (Sam, 2026-09-09: "only what is on the site"; Tour
+ * followed Music and Merch on 2026-09-28). The Tour page is the library: every date, on
+ * the site or not, and "Add date" goes there. So the toggle here only takes a date OFF,
+ * and the row then leaves the panel. A drag still renumbers the WHOLE list (`onReorder`
+ * works on every date), which is what keeps a hidden date's place. Dates are ENTERED on
+ * the Tour page (venue, city, country, supporting acts), so there are no fields here.
  *
  * A date must be PUBLISHED once before its toggle reaches the site — the door serves
  * the published snapshot and gates it on this flag, so an unpublished date isn't there
@@ -91,7 +93,7 @@ export function TourTools({
       {dialog}
       {/* No empty-state copy (Sam, 2026-08-12): an empty Tour panel just shows nothing —
           dates are entered on the Tour page, and a "No dates yet." line is noise. */}
-      {tours.map((t) => {
+      {onSiteOnly(tours).map((t) => {
         // EVERY show drags (Sam, 2026-08-17): the first drag numbers every row, and
         // connected sites treat a numbered dated row as manual mode, so the dragged
         // order survives. (An undated-only gate lived here before that.)

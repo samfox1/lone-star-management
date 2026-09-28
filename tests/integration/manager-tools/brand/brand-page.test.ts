@@ -666,4 +666,33 @@ describe('storage GC keeps a cut-out’s original in the real bucket', () => {
       await deleteThrowawayArtist(svc, t)
     }
   })
+
+  it('CRITICAL: a logo deleted in draft but still published keeps its file (the Site publish sweeps without tombstoning it)', async () => {
+    // Through the real `latest_revisions` with its filter and exact count: a request the
+    // server refused, or a count it did not send, would sweep nothing and leave the stray.
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64')
+    const t = await createThrowawayArtist(svc, 'Brand gc live')
+    const live = brandPath(t.id)
+    const stray = brandPath(t.id)
+    try {
+      for (const p of [live, stray]) {
+        const up = await svc.storage.from('media').upload(p, png, { contentType: 'image/png' })
+        expect(up.error, p).toBeNull()
+      }
+      const { data: row, error } = await svc
+        .from('media')
+        .insert({ artist_id: t.id, purpose: 'logo_primary', storage_path: live })
+        .select('id')
+        .single()
+      expect(error).toBeNull()
+      await publishContent(svc, 'media', t.id)
+      await svc.from('media').delete().eq('id', row!.id) // deleted in draft: no tombstone yet
+      await gcMediaObjects(svc, t.id, 0)
+      const { data: left } = await svc.storage.from('media').list(`${t.id}/brand`)
+      expect((left ?? []).map((o) => `${t.id}/brand/${o.name}`)).toEqual([live])
+    } finally {
+      await svc.storage.from('media').remove([live, stray])
+      await deleteThrowawayArtist(svc, t)
+    }
+  })
 })

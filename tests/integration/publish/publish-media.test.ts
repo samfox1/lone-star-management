@@ -86,12 +86,25 @@ describe('media is draft until published', () => {
     // door's cherry-pick (20260821130000). A miss in any one of them leaves the manager
     // sorting photos into a pool the site can't see, with nothing failing anywhere.
     const fullPath = `${artistA}/gallery/phase0-collection-test.jpg`
+    // The comparison row this test needs: an ORDINARY gallery photo, no collection tag.
+    // The first test's row (phase0-media-test.jpg) can't serve that purpose any more —
+    // it deletes and republishes itself to prove tombstoning, so by the time this test
+    // runs that path is gone from the public site and `find` would return undefined
+    // forever, making the "still says nothing" assertion below dead code that always
+    // passed. A row planted in THIS test is proven to exist before it's asserted on.
+    const untaggedPath = `${artistA}/gallery/phase0-collection-untagged-test.jpg`
     const { error } = await asA
       .from('media')
       .insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: fullPath, on_site: true, collection: 'photos' })
       .select('id')
       .single()
     expect(error).toBeNull()
+    const { error: untaggedError } = await asA
+      .from('media')
+      .insert({ artist_id: artistA, purpose: 'gallery_image', storage_path: untaggedPath, on_site: true })
+      .select('id')
+      .single()
+    expect(untaggedError).toBeNull()
 
     await publishContent(asA, 'media', artistA)
     const wire = (await publicMedia()).find((m) => m.path === fullPath)
@@ -99,10 +112,12 @@ describe('media is draft until published', () => {
     expect(wire!.collection).toBe('photos')
 
     // …and an ordinary gallery row still says nothing, which is what "the first declared
-    // collection" is encoded as. Asserted on THIS suite's own untagged row (above), so it
-    // cannot pass by finding some other artist's photo.
-    const untagged = (await publicMedia()).find((m) => m.path.endsWith('phase0-media-test.jpg'))
-    if (untagged) expect(untagged.collection ?? null).toBeNull()
+    // collection" is encoded as. Asserted on THIS suite's own untagged row (planted just
+    // above), so it cannot pass by finding some other artist's photo — and the existence
+    // check makes the assertion below unconditional rather than a no-op `if`.
+    const untagged = (await publicMedia()).find((m) => m.path === untaggedPath)
+    expect(untagged, 'the untagged row must actually publish, or the check below is vacuous').toBeTruthy()
+    expect(untagged!.collection ?? null).toBeNull()
   })
 
   it("CRITICAL: a photo's ALT TEXT and KIND reach the wire AND the preview (SEO_GEO_PLAN B6b)", async () => {

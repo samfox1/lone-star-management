@@ -116,6 +116,22 @@ export type FrameBridge = {
   deselectedAt: number
 }
 
+/**
+ * The developer log line for region keys a multi-page site declared twice. Region keys are
+ * one flat namespace across every page (D3), so two pages naming the same region share one
+ * stored style: restyle one and the other changes. The D4 merge keeps the first and drops
+ * the rest; this names what was dropped.
+ */
+export function droppedRegionsWarning(dropped: readonly DroppedRegion[]): string {
+  const lines = dropped.map((d) => {
+    // Named once when both sides are the same page (the copy-paste-in-the-registry case).
+    const where =
+      d.keptPage && d.page && d.keptPage !== d.page ? `${d.keptPage} and ${d.page}` : (d.keptPage ?? d.page ?? 'one page')
+    return `  ${d.kind} "${d.key}" (${where})`
+  })
+  return `[site editor] The site declares these region keys twice. The first wins and both share one saved style; rename one in the site's code.\n${lines.join('\n')}`
+}
+
 export function useFrameBridge({
   artistId,
   customSiteUrl,
@@ -145,6 +161,8 @@ export function useFrameBridge({
    *  the request outlives the click and is posted once the frame reports it arrived. */
   const pendingHighlight = useRef<{ target: SelectTarget; page: string } | null>(null)
   const [droppedRegions, setDroppedRegions] = useState<DroppedRegion[]>([])
+  /** The last collision set logged, so a re-announce (constant) doesn't repeat it. */
+  const droppedLogged = useRef('')
   /** ONE ANNOUNCE PER PAGE, keyed by `manifest.page` (D4). The held manifest is derived
    *  from this map, never accumulated into — that is what lets a region the site STOPS
    *  declaring leave the panels. A flat fold that only ever added kept it for the whole
@@ -344,6 +362,16 @@ export function useFrameBridge({
           // (after paint, and on every `hello`), and an appended list would grow without
           // bound while describing the same one conflict.
           setDroppedRegions(dropped)
+          // A DEVELOPER's problem, logged for developers only (Sam, 2026-09-28). It used to
+          // be a banner in the inspector, which put site-code bookkeeping ("declared twice…
+          // rename one in the site's code") in front of a manager who can do nothing about
+          // it. The site's own contract check (checkContract `duplicate-key`) is where it
+          // gets fixed; this is the runtime echo, once per distinct set.
+          const sig = dropped.map((d) => `${d.kind}:${d.key}:${d.keptPage ?? ''}:${d.page ?? ''}`).join('|')
+          if (sig !== droppedLogged.current) {
+            droppedLogged.current = sig
+            if (sig && process.env.NODE_ENV !== 'production') console.warn(droppedRegionsWarning(dropped))
+          }
           // `framePage` was admitted by checking a `page-change` against the declaration;
           // a page that has left the declaration fails that same check now. Null rather
           // than a guess: only the frame knows what it is showing (Trap 7), and a shell

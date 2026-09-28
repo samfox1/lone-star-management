@@ -78,6 +78,18 @@ export const CURATED_FILLABLE_FIELDS = [
 ] as const
 
 /**
+ * Filled like CURATED_FILLABLE_FIELDS (the kept row's value stands; the duplicate's fills
+ * an empty one), but the duplicate HOLDS the value under a unique index —
+ * `(artist_id, drive_file_id)` — until it is deleted, so writing it with the rest of the
+ * patch would be refused. The plan hands these over separately (`afterDelete`) and
+ * `mergeSongs` writes them once the duplicate is gone.
+ *
+ * `drive_file_id` is what badges a Drive file "imported". Until 2026-09-28 the merge left
+ * it on the duplicate, so it died with that row and the file read as never imported.
+ */
+export const HANDED_OVER_FIELDS = ['drive_file_id'] as const
+
+/**
  * Hand-edited LISTS that UNION: the merged song carries every entry either row had, the
  * kept row's first. `featured_artists` — collaborators live on the SONG and are edited by
  * hand (Sam, 2026-09-11); a pull only seeds an empty list. Two rows of one song each hold
@@ -118,8 +130,6 @@ export const NOT_MERGED = {
   sort_order: "the kept row's place in the catalog, which the manager may have dragged",
   source: "the kept row's provenance; the duplicate's platform handles union in above",
   parent_release_id: 'retired 2026-09-11 (nulled, never read)',
-  drive_file_id:
-    "unique per artist, and the duplicate still holds it when the kept row is written; a merged Drive import is no longer badged 'imported'",
 } as const satisfies Record<string, string>
 
 /**
@@ -154,6 +164,7 @@ export type MergeableSong = {
   release_id: string | null
   audio_path: string | null
   featured_artists: string[] | null
+  drive_file_id: string | null
 }
 
 /** The columns `mergeSongs` must SELECT for a plan to be complete. A column missing here
@@ -164,6 +175,7 @@ export const MERGE_COLUMNS = [
   ...PLATFORM_IDENTITY.map((p) => p.field),
   ...ENRICHMENT_FIELDS,
   ...CURATED_FILLABLE_FIELDS,
+  ...HANDED_OVER_FIELDS,
   ...UNION_LIST_FIELDS,
   ...TAG_FIELDS,
   ...CURATED_ABSOLUTE_FIELDS,
@@ -176,6 +188,8 @@ export type MergePlan =
       ok: true
       /** Columns to write onto the kept row. Only genuinely-changing values appear. */
       patch: Record<string, unknown>
+      /** HANDED_OVER_FIELDS to write onto the kept row once the duplicate is deleted. */
+      afterDelete: Record<string, unknown>
       /** The duplicate's audio object when the merged row does NOT adopt it — paid
        *  storage that nothing will reference once the duplicate row is deleted. */
       orphanedAudioPath: string | null
@@ -243,6 +257,11 @@ export function planSongMerge(keep: MergeableSong, drop: MergeableSong): MergePl
     if (isEmpty(keep[field]) && !isEmpty(drop[field])) patch[field] = drop[field]
   }
 
+  const afterDelete: Record<string, unknown> = {}
+  for (const field of HANDED_OVER_FIELDS) {
+    if (isEmpty(keep[field]) && !isEmpty(drop[field])) afterDelete[field] = drop[field]
+  }
+
   for (const field of UNION_LIST_FIELDS) {
     const own = unionNames(keep[field] ?? [], [])
     const merged = unionNames(own, drop[field] ?? [])
@@ -265,7 +284,7 @@ export function planSongMerge(keep: MergeableSong, drop: MergeableSong): MergePl
   const orphanedAudioPath =
     drop.audio_path && drop.audio_path !== survivingAudio ? drop.audio_path : null
 
-  return { ok: true, patch, orphanedAudioPath }
+  return { ok: true, patch, afterDelete, orphanedAudioPath }
 }
 
 /** Manager-facing wording for a refusal. Names the platforms so the fix is obvious:
@@ -328,6 +347,13 @@ export async function mergeSongs(
 
   const { error: dErr } = await client.from('tracks').delete().eq('id', dropId)
   if (dErr) return { ok: false, error: dErr.message }
+
+  // Only now is the duplicate's Drive file id free to move (HANDED_OVER_FIELDS). The merge
+  // is already done, so a failure here does not fail it: the worst case is the Drive file
+  // reading "not imported", which is what every merge did before this was carried.
+  if (Object.keys(plan.afterDelete).length > 0) {
+    await client.from('tracks').update(plan.afterDelete).eq('id', keepId)
+  }
 
   return { ok: true, orphanedAudioPath: plan.orphanedAudioPath }
 }

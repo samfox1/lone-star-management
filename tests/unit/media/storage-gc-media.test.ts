@@ -49,6 +49,9 @@ function fake(
         },
       }
     },
+    // The sweep's published half (`latest_revisions`): nothing published, read in full.
+    // tests/unit/manager-tools/brand/storage-gc-brand.test.ts pins what it keeps.
+    rpc: () => thenable({ data: [], count: 0, error: null }),
     storage: {
       from() {
         return {

@@ -136,6 +136,26 @@ describe('the Brand publish is brand-scoped', () => {
   })
 })
 
+/**
+ * The other side of the same line (2026-09-28): the Site / SEO Publish sends photos, site
+ * text and the profile, and it used to send the WHOLE media table — so pressing it shipped
+ * the Brand page's draft logos and icons, and tombstoned a logo deleted there, with the
+ * Brand bar still claiming them unpublished. It now sends every media row EXCEPT Brand's.
+ */
+describe('the Site / SEO Publish leaves Brand’s media to Brand', () => {
+  it('CRITICAL: the gallery draft, the hero and the deleted photo go; the logo draft and the deleted logo do not', async () => {
+    const { publishSiteWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
+    expect(await publishSiteWithPasswordAction(A, 'pw')).toEqual({ ok: true })
+    const media = written().filter(([type]) => type === 'media')
+    expect(media).toContainEqual(['media', 'photo-new', false])
+    expect(media).toContainEqual(['media', 'hero-1', false])
+    expect(media).toContainEqual(['media', 'photo-gone', true])
+    const ids = media.map(([, id]) => id)
+    expect(ids).not.toContain('logo-new')
+    expect(ids).not.toContain('logo-gone') // no tombstone: the live logo stays live
+  })
+})
+
 describe('publishContent without a slice is exactly what it was', () => {
   it('the whole media table publishes: every draft, every tombstone', async () => {
     const { publishContent } = await import('@/lib/content')

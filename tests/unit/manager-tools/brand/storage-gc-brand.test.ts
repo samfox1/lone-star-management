@@ -32,9 +32,14 @@ function fake(opts: { reads?: Record<string, Read>; byPrefix?: Record<string, Li
   const removed: string[] = []
   const buckets: string[] = []
   const selected: Record<string, string> = {}
-  const thenable = (result: Read): Record<string, unknown> => {
+  /** Every RPC made: its name, arguments, options and the filters chained onto it. */
+  const rpcs: { name: string; args: unknown; opts: unknown; eq: [string, unknown][] }[] = []
+  const thenable = (result: Read, eqs?: [string, unknown][]): Record<string, unknown> => {
     const p: Record<string, unknown> = {
-      eq: () => p,
+      eq: (col: string, val: unknown) => {
+        eqs?.push([col, val])
+        return p
+      },
       then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
         Promise.resolve({ data: null, error: null, ...result }).then(res, rej),
     }
@@ -48,6 +53,12 @@ function fake(opts: { reads?: Record<string, Read>; byPrefix?: Record<string, Li
           return thenable(reads[table] ?? { data: [] })
         },
       }
+    },
+    // `latest_revisions` answers "nothing published, and that is all of it" unless told.
+    rpc(name: string, args: unknown, opts?: unknown) {
+      const call = { name, args, opts, eq: [] as [string, unknown][] }
+      rpcs.push(call)
+      return thenable(reads[name] ?? { data: [], count: 0 }, call.eq)
     },
     storage: {
       from(bucket: string) {
@@ -63,7 +74,7 @@ function fake(opts: { reads?: Record<string, Read>; byPrefix?: Record<string, Li
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
-  return { client, removed, selected, buckets }
+  return { client, removed, selected, buckets, rpcs }
 }
 
 describe('gcMediaObjects keeps a cut-out logo’s original', () => {
@@ -92,6 +103,85 @@ describe('gcMediaObjects keeps a cut-out logo’s original', () => {
     const { client, selected } = fake({ reads: { media: { data: [], count: 0 } } })
     await gcMediaObjects(client, A)
     expect(selected.media).toContain('source_path')
+  })
+})
+
+/**
+ * 3. WHAT THE LIVE SITE STILL SERVES (2026-09-28). The Site / SEO Publish no longer ships
+ *    brand media (the Brand bar owns it), so it no longer tombstones a logo deleted in
+ *    draft either: that logo is still LIVE, served from its snapshot's `storage_path`, with
+ *    no working row naming the file. The Site publish then sweeps. Keeping only what the
+ *    working rows name would delete the live logo's (or tab icon's) file, and the site would
+ *    404 on it until someone pressed the Brand Publish.
+ *
+ *    So the sweep also keeps what the LATEST published revision of each media entity names
+ *    (`latest_revisions`, what is live now). Not every historical revision: that would keep
+ *    every file ever published, forever. Restore-a-version never needs an older file —
+ *    media restores by placement only (EDITOR_RESTORE: a photo's file is not re-inserted),
+ *    and the Brand revert goes back to the LATEST publish.
+ */
+describe('gcMediaObjects keeps what the live site still serves', () => {
+  const live = (id: string, path: string, purpose = 'logo_primary') => ({
+    entity_type: 'media',
+    entity_id: id,
+    data: { id, purpose, storage_path: path },
+  })
+  const brandFolder = {
+    [`${A}/brand`]: [
+      { name: 'live.png', created_at: OLD },
+      { name: 'stray.png', created_at: OLD },
+    ],
+  }
+
+  it('CRITICAL: a logo deleted in draft but still published keeps its file', async () => {
+    const { client, removed } = fake({
+      reads: { media: { data: [], count: 0 }, latest_revisions: { data: [live('m1', `${A}/brand/live.png`)], count: 1 } },
+      byPrefix: brandFolder,
+    })
+    await gcMediaObjects(client, A)
+    expect(removed).toEqual([`${A}/brand/stray.png`])
+  })
+
+  it('a file no working row and no live revision names IS still swept (the GC still collects)', async () => {
+    // A tombstone names no file: the logo it deleted is off the site, so its file may go.
+    const tombstone = { entity_type: 'media', entity_id: 'm2', data: { _deleted: true } }
+    const { client, removed } = fake({
+      reads: { media: { data: [], count: 0 }, latest_revisions: { data: [tombstone], count: 1 } },
+      byPrefix: brandFolder,
+    })
+    await gcMediaObjects(client, A)
+    expect(removed.sort()).toEqual([`${A}/brand/live.png`, `${A}/brand/stray.png`])
+  })
+
+  it('CRITICAL: a failed live read sweeps nothing', async () => {
+    const { client, removed } = fake({
+      reads: { media: { data: [], count: 0 }, latest_revisions: { data: null, error: { message: 'permission denied' } } },
+      byPrefix: brandFolder,
+    })
+    await gcMediaObjects(client, A)
+    expect(removed).toEqual([])
+  })
+
+  it('CRITICAL: a truncated live read sweeps nothing (the rows past the cap are live too)', async () => {
+    const { client, removed } = fake({
+      reads: { media: { data: [], count: 0 }, latest_revisions: { data: [live('m1', `${A}/brand/live.png`)], count: 1500 } },
+      byPrefix: brandFolder,
+    })
+    await gcMediaObjects(client, A)
+    expect(removed).toEqual([])
+    // No count at all is not "complete" either.
+    const unknown = fake({
+      reads: { media: { data: [], count: 0 }, latest_revisions: { data: [live('m1', `${A}/brand/live.png`)] } },
+      byPrefix: brandFolder,
+    })
+    await gcMediaObjects(unknown.client, A)
+    expect(unknown.removed).toEqual([])
+  })
+
+  it('asks for the latest revision per entity, media only, with an exact count', async () => {
+    const { client, rpcs } = fake({ reads: { media: { data: [], count: 0 } } })
+    await gcMediaObjects(client, A)
+    expect(rpcs).toEqual([{ name: 'latest_revisions', args: { p_artist_id: A }, opts: { count: 'exact' }, eq: [['entity_type', 'media']] }])
   })
 })
 

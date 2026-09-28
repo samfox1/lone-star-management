@@ -82,6 +82,29 @@ link built before this change (or pasted from the old domain) is still recognise
 check both go through `platformFromUrl`. **Site action: none** — sites read `slug`, not
 `urlHint`, and no manifest gate is involved. Not published; `PACKAGE_VERSION` unchanged.
 
+**`orderShows` now puts undated shows LAST, always** (Sam, 2026-09-28, answering the
+0.39.0 flag). The 0.39.0 release ported skeen's manual-mode comparator verbatim, quirk
+included: once a bucket was in manual mode, an unnumbered dateless row tie-broke on `''`,
+which sorts before every real date ascending, so a partial drag could put a TBA show
+ahead of dated ones. Sam's answer: undated goes to the end of the bucket no matter what —
+the same rule `orderMusicProjects` already applies to music ("Last in both"). Undated rows
+are now sliced out before manual mode is decided and appended after the dated rows, still
+in the manager's own drag order (`sort_order`) among themselves. A site that never sees a
+partial drag over a mixed dated/undated list never noticed the old behaviour and needs no
+action; one that does gets the corrected order on its next render with no code change.
+**Site action: none** — same function, same signature. Not published; `PACKAGE_VERSION`
+unchanged.
+
+**An unconfigured site's public-content readers now log.** `fetchPublicSite` and
+`fetchPublicReleases` render the empty site when the site's backend env (Supabase URL,
+anon key, slug) is missing — that choice is unchanged — but now also call
+`console.error` once, naming which piece is absent and never a value, so the gap shows up
+in a server log instead of nowhere. Before this, an unconfigured site and a site with
+nothing published rendered identically with nothing said anywhere; that is how juniper and
+operator sat empty in production, unnoticed, for weeks (2026-08-15). **Site action:
+none** — the log is server-side only and changes no return value. Not published;
+`PACKAGE_VERSION` unchanged.
+
 ---
 
 ## 0.41.0 — the site wears the Brand page (BRAND_SYNC_PLAN phase 2)

@@ -1,12 +1,12 @@
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
-import { Button, Card, buttonClass } from '@/components/ui/ui'
+import { Card, buttonClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/server'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../../_data'
 import { connectedCount } from '../../integrations'
 import { dirtyBySeg, isSegDirty } from '../../sections'
-import { publishAction } from '../../actions'
 import { TOOLS } from '../_shell/tools-registry'
+import { OverviewPublish } from './overview-publish'
 
 /**
  * The Overview of the manager-tools dashboard (Sam, 2026-08-28): what state the site is
@@ -46,9 +46,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
           <Link href={`/artists/${id}/editor`} className={buttonClass('ghost')}>
             Edit site
           </Link>
-          <form action={publishAction.bind(null, id)}>
-            <Button type="submit">Publish all</Button>
-          </form>
+          <OverviewPublish artistId={id} />
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

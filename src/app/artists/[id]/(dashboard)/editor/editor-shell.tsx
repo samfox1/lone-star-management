@@ -6,6 +6,7 @@ import { DEVICE_OPTIONS, fitViewport, isPhone, zoomLabel, type Device } from '@/
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { bridgeOutdated } from '@/lib/site-editor/manifest'
 import { textPanelEntries } from '@/lib/site-editor/text-panel'
+import { textLimit } from '@/lib/site-editor/text-limits'
 import { mediaUrl } from '@/lib/storage-url'
 import { withStyleVars, withUploadedFonts } from '@/lib/site-editor/style-controls'
 import { effectivePage, resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
@@ -87,6 +88,9 @@ export function runtimeTextFields(
     // Same multiline rule the built-in path uses, so a body-copy field gets a textarea
     // on a custom site too.
     multiline: e.key === 'artist_bio' || e.key.endsWith('_copy'),
+    // The cap the server refuses by: only an ALLOWLISTED artist target earns the bio or
+    // name cap there, so the same narrowing decides it here.
+    maxLength: textLimit(artistTarget(e.field)),
     styleRegion: e.styleRegion
       ? { key: e.styleRegion.key, label: e.styleRegion.label, base: e.styleRegion.base }
       : null,
@@ -279,7 +283,6 @@ export function EditorShell({
     setMode,
     frameMode,
     manifest,
-    droppedRegions,
     selectedStyle,
     selectedLink,
     selectedRegion,
@@ -371,7 +374,6 @@ export function EditorShell({
       <EditorInspector
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
-        droppedRegions={droppedRegions}
         canRevert={canRevert}
         photos={photos}
         imageFields={panels.imageFields}

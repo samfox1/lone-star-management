@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useId, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react'
 
 import { useStorageUpload } from './use-storage-upload'
 import { useBudgetGate } from './budget-gate'
@@ -39,6 +39,7 @@ export function UploadField({
   budget,
   kind,
   trigger,
+  onBusyChange,
   ...upload
 }: {
   accept: string
@@ -53,6 +54,10 @@ export function UploadField({
    * (tests/unit/media/upload-field-coverage.test.ts).
    */
   trigger?: (open: () => void, state: { busy: boolean; error: string | null }) => ReactNode
+  /** Told when an upload starts (true) and ends (false) — only on a CHANGE, never on an
+   *  idle mount. For a caller that must not close mid-upload (the Brand font dialog's Save,
+   *  2026-09-28); the drop zone alone knows. */
+  onBusyChange?: (busy: boolean) => void
   bucket: string
   artistId: string
   category: string
@@ -77,6 +82,14 @@ export function UploadField({
 )) {
   const { busy, error, progress, upload: send } = useStorageUpload(upload)
   const gate = useBudgetGate(kind, budget)
+  // The last busy value reported, so a re-render (or a new callback identity) never says
+  // the same thing twice, and an idle mount says nothing.
+  const reported = useRef(false)
+  useEffect(() => {
+    if (busy === reported.current) return
+    reported.current = busy
+    onBusyChange?.(busy)
+  }, [busy, onBusyChange])
   // By id, not by ref: `trigger` is a render prop, so anything handed to it counts as
   // reachable during render, and a ref read there is what the lint rule refuses.
   const inputId = useId()

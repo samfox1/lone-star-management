@@ -18,13 +18,17 @@ import { createClient } from '@/lib/supabase/server'
 
 export type { BrandPending }
 
-export async function loadBrandPending(artistId: string): Promise<BrandPending> {
-  const supabase = await createClient()
+/** The check's answer, or that there IS none. A failed check is its own state, never
+ *  "nothing pending": a hidden bar is what "everything is on the site" looks like, and it
+ *  used to be what a failed read looked like too (2026-09-28). The layout shows
+ *  BrandCheckFailed for it instead. */
+export type BrandPendingState = ({ failed: false } & BrandPending) | { failed: true }
+
+export async function loadBrandPending(artistId: string): Promise<BrandPendingState> {
   try {
-    return await brandPending(supabase, artistId)
+    const supabase = await createClient()
+    return { failed: false, ...(await brandPending(supabase, artistId)) }
   } catch {
-    // The bar has no error state; failing closed (hidden) is the honest default — the
-    // manager can still publish from anywhere else, and nothing is claimed to be live.
-    return { dirty: false, message: '', canRevert: false }
+    return { failed: true }
   }
 }

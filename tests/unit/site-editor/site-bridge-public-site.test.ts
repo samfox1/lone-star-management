@@ -8,7 +8,7 @@
  * the three answers a site can get back.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchPublicSite, isConfigured } from '../../../packages/site-bridge/src/public-site'
+import { fetchPublicReleases, fetchPublicSite, isConfigured } from '../../../packages/site-bridge/src/public-site'
 
 const CONFIG = { supabaseUrl: 'https://proj.supabase.co', anonKey: 'anon-key-123', slug: 'skeen' }
 
@@ -45,6 +45,36 @@ describe('fetchPublicSite', () => {
     expect(await fetchPublicSite({ anonKey: 'k', slug: 'skeen' })).toBeNull() // no url
     expect(spy, 'no request should even be attempted').not.toHaveBeenCalled()
     expect(isConfigured(CONFIG)).toBe(true)
+  })
+
+  it('CRITICAL: an unconfigured site logs ONE server error naming what is missing, never a key value (2026-09-28)', async () => {
+    // This silence is how juniper and operator sat empty in production for weeks,
+    // unnoticed (2026-08-15): the empty site and the unconfigured site render
+    // identically, so the only way to tell them apart is a log.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await fetchPublicSite({ supabaseUrl: 'https://x', anonKey: 'super-secret-key' })).toBeNull() // no slug
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    const [message] = errorSpy.mock.calls[0] as [string]
+    expect(message).toMatch(/slug/i)
+    expect(message).not.toContain('super-secret-key')
+
+    errorSpy.mockClear()
+    expect(await fetchPublicSite(undefined)).toBeNull()
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    const [allMissing] = errorSpy.mock.calls[0] as [string]
+    expect(allMissing).toMatch(/supabaseUrl/)
+    expect(allMissing).toMatch(/anonKey/)
+    expect(allMissing).toMatch(/slug/)
+
+    errorSpy.mockRestore()
+  })
+
+  it('a configured call never logs an error', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch('{"artist":{"slug":"skeen"}}')
+    await fetchPublicSite(CONFIG)
+    expect(errorSpy).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 
   it('an artist who has never published returns null, not a crash', async () => {
@@ -84,5 +114,19 @@ describe('fetchPublicSite', () => {
     const site = await fetchPublicSite(CONFIG)
     expect(site?.artist?.name).toBe('Skeen')
     expect(site?.tracks).toHaveLength(1)
+  })
+})
+
+describe('fetchPublicReleases', () => {
+  it('an unconfigured site also logs the same one clear error, and returns [] not a throw', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const spy = stubFetch('[]')
+    expect(await fetchPublicReleases({ slug: 'skeen' })).toEqual([]) // no url, no key
+    expect(spy, 'no request should even be attempted').not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    const [message] = errorSpy.mock.calls[0] as [string]
+    expect(message).toMatch(/supabaseUrl/)
+    expect(message).toMatch(/anonKey/)
+    errorSpy.mockRestore()
   })
 })

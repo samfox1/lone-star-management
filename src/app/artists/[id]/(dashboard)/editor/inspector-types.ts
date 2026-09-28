@@ -52,6 +52,10 @@ export type EditorTextField = {
    *  and the page (which renders artist.bio) never showed the edit (found wiring
    *  ftbk, 2026-08-20). Absent → site_content by key, the historic behaviour. */
   target?: { store: 'artist'; column: 'name' | 'bio' }
+  /** The most characters this field may hold (lib/site-editor/text-limits, the same
+   *  table the server refuses by). Absent → the site-text cap. Past it the box keeps
+   *  the text but refuses to save it, and says so (Sam, 2026-09-28). */
+  maxLength?: number
   /** Which PAGE this copy lives on, from the site's declaration. Absent on a single-page
    *  site and on the first declared page (the bridge's rule: an untagged region belongs to
    *  the first page). Carried so a click can send the frame there before highlighting. */

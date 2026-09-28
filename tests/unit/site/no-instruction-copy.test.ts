@@ -1,38 +1,59 @@
-// Editor UI and dashboard tool pages must be self-evident: no explanatory paragraphs.
+// Editor UI and dashboard tool pages must be self-evident: no explanatory paragraphs,
+//   except a short, explicitly-approved guidance line in a genuinely confusing spot.
 /**
- * THE STANDING RULE (Sam, repeated many times, most recently 2026-08-12: "the goal is
- * for the ui to be easy enough to not need them"): no instructional caption text in
- * editor UI or dashboard tool pages — no explanatory paragraphs, no headings with an
- * explainer beneath. It has drifted because nothing enforced it (CODE_AUDIT 2026-09-18)
- * — `style-tools.tsx:364-366` even carries a comment recording that such a line was
- * deliberately removed once, and everything added since drifted past it by hand.
+ * THE STANDING RULE, SOFTENED (Sam, 2026-08-12: "the goal is for the ui to be easy
+ * enough to not need them"; Sam, 2026-09-28: "Only brief when it adds nice guidance in
+ * confusing parts"). The rule is no longer a flat ban on every instructional sentence —
+ * it is a ban on FILLER and LONG instruction, with a narrow, reviewed exception for
+ * short guidance that earns its place. It drifted once already because nothing enforced
+ * it (CODE_AUDIT 2026-09-18) — `style-tools.tsx:364-366` even carries a comment
+ * recording that such a line was deliberately removed, and everything added since
+ * drifted past it by hand — so the exception below is deliberately narrow, not a
+ * reopening of that drift.
  *
  * WHAT THIS WALKS: every `.tsx` file under the editor tree and the dashboard tools tree,
  * by READING THE DIRECTORY (never a hand-listed file array — AGENTS.md rule 4), so a
  * file added tomorrow is swept tomorrow.
  *
- * WHAT COUNTS AS A VIOLATION: a `<p>` element whose literal (non-interpolated) text
- * reads as a sentence of guidance — "how this works", "what to do next", "why this
- * looks the way it does" — as opposed to: a value or dynamic status (too short to be a
- * sentence, or built entirely from `{expr}`), a validation/error message (marked
- * `role="alert"` or styled `accent-red` — it reports what went wrong, not how to avoid
- * it next time), a decision prompt in a confirm dialog (ends in `?` — the user must
- * answer it, it is not decoration), or one of four sanctioned shapes defined below: an
- * empty state, a blocked state, a destructive consequence, or a provenance note.
+ * THE RULE THIS TEST NOW ENFORCES: a `<p>` element whose literal (non-interpolated)
+ * text reads as a sentence — six words or more (`MIN_GUIDANCE_WORDS`) — fails UNLESS it
+ * is one of:
+ *   - a value or dynamic status (too short to be a sentence, or built entirely from
+ *     `{expr}`);
+ *   - a validation/error message (marked `role="alert"` or styled `accent-red` — it
+ *     reports what went wrong, not how to avoid it next time);
+ *   - a decision prompt in a confirm dialog (ends in `?` — the user must answer it, it
+ *     is not decoration);
+ *   - one of four STRUCTURALLY sanctioned shapes: an empty state, a blocked state, a
+ *     destructive consequence, or a provenance note; or
+ *   - APPROVED GUIDANCE: text that is BOTH (a) capped at `MAX_GUIDANCE_WORDS` — short
+ *     enough to read as one clarifying sentence, never a paragraph — AND (b) an EXACT
+ *     match to a string in `ALLOWED_GUIDANCE` below. Nothing is approved by matching a
+ *     pattern or a topic; a line qualifies only by being copied into that list verbatim,
+ *     which is a deliberate, reviewable, one-line diff. Filler and long instruction still
+ *     fail: being short is necessary but not sufficient, and being unreviewed fails
+ *     regardless of length.
  *
  * PROVING IT CAN FAIL (AGENTS.md rule 1): the `detector itself` block plants samples
- * both ways — three that teach, which must be caught, and eight sanctioned shapes, which
- * must not be. A sweep that finds nothing proves nothing unless it is also shown to find
- * something, so both halves are CRITICAL, and so is the walker's own precondition test.
+ * every way — copy that teaches and must be caught, sanctioned shapes that must not be,
+ * and the approved-guidance mechanism proven to bite (unapproved, and approved-but-too-
+ * long) as well as to pass (approved and short). A sweep that finds nothing proves
+ * nothing unless it is also shown to find something, so all of this is CRITICAL, and so
+ * is the walker's own precondition test.
  *
- * NO ALLOWLIST. One existed for a single afternoon while other agents held the offending
- * files open; it is gone, and the note above the planted samples records how each of the
- * nine original violations was resolved. Do not reintroduce it — a list of known
- * violations rots as lines move, and becomes the place a rule goes to die.
+ * `ALLOWED_GUIDANCE` IS NOT THE OLD ALLOWLIST. One existed for a single afternoon
+ * (2026-09-18) as a list of KNOWN VIOLATIONS not yet fixed — that rotted by design (a
+ * violation sits there forever, since nothing asks it to be resolved) and is gone for
+ * good; the note above the planted samples records how each of the nine originals was
+ * resolved (deleted, trimmed, or reclassified as one of the four sanctioned shapes).
+ * `ALLOWED_GUIDANCE` is the opposite shape: an opt-IN list of copy Sam has reviewed and
+ * signed off as worth keeping. Nothing lands there by drifting past review — a new
+ * guidance line fails this test by default until someone deliberately adds its exact
+ * text here.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 const ROOT = join(process.cwd(), 'src/app/artists/[id]/(dashboard)')
 /** The editor, and the tools tree (the Overview and SEO / GEO), which moved into the
@@ -120,6 +141,27 @@ function looksLikeProvenance(text: string, words: string[]): boolean {
  *  something, and under six words there isn't any. */
 const MIN_GUIDANCE_WORDS = 6
 
+/** APPROVED GUIDANCE (Sam, 2026-09-28: "Only brief when it adds nice guidance in
+ *  confusing parts"). Two independent conditions, both required:
+ *   1. capped at MAX_GUIDANCE_WORDS — one clarifying sentence, never a paragraph;
+ *   2. an EXACT match to a string in ALLOWED_GUIDANCE — an opt-in list Sam has actually
+ *      reviewed, not a pattern any short line can slide through.
+ *  Editing an approved line at all — a word, a comma, one extra clause — drops it out of
+ *  the list (no longer an exact match), so it has to be re-approved too. The cap is
+ *  enforced even for a listed string: if a future edit stretches an approved line past
+ *  MAX_GUIDANCE_WORDS while somehow keeping the old text ALSO in the list, it still
+ *  fails, so raising the word count is never itself the thing that sneaks past review. */
+const MAX_GUIDANCE_WORDS = 16
+
+/** Empty on purpose: nothing in the swept trees needs this exception today. Add a guide
+ *  line here ONLY as its own reviewed decision — the exact text, copied verbatim from
+ *  the JSX — never to make a failing test pass without reading why it failed. */
+const ALLOWED_GUIDANCE: string[] = []
+
+function looksLikeApprovedGuidance(text: string, words: string[]): boolean {
+  return words.length <= MAX_GUIDANCE_WORDS && ALLOWED_GUIDANCE.includes(text)
+}
+
 /** Every `<p>` element in a file, classified. Deliberately simple (regex, not a real
  *  JSX parser): this codebase's `<p>` elements do not nest another `<p>`, so a
  *  non-greedy match to the next `</p>` is exact for every file this sweep covers. */
@@ -139,6 +181,7 @@ export function instructionalParagraphsIn(src: string, file: string): Hit[] {
     if (words.length < MIN_GUIDANCE_WORDS) continue
     if (looksLikeDestructiveConsequence(text, words)) continue
     if (looksLikeProvenance(text, words)) continue
+    if (looksLikeApprovedGuidance(text, words)) continue
     // "…nothing to publish", "…nothing else to do" — a short status wrapped around the
     // word "nothing" reads as state, not instruction, as long as it stays short.
     if (/\bnothing\b/i.test(text) && words.length <= 10) continue
@@ -159,11 +202,11 @@ function sweep(): Hit[] {
 }
 
 /**
- * THE ALLOWLIST IS GONE, and that is the point.
+ * THE OLD ALLOWLIST STAYED GONE; A DIFFERENT ONE REPLACED IT (2026-09-28).
  *
- * It existed for one afternoon (2026-09-18) because the nine violations this sweep found
- * sat in files other agents held open. Every one has since been resolved, and each was
- * resolved in exactly one of three ways — never by parking it on a list:
+ * The first one existed for one afternoon (2026-09-18) because the nine violations this
+ * sweep found sat in files other agents held open. Every one was resolved, and each in
+ * exactly one of three ways — never by parking it on a list:
  *
  *   DELETED — copy that taught. "Small PNGs with a transparent background work best…",
  *     "A transparent logo turns invisible in dark-mode social clients…".
@@ -176,10 +219,14 @@ function sweep(): Hit[] {
  *     classifiers above rather than by file:line. An empty state, a blocked state, a
  *     destructive consequence, a provenance note.
  *
- * A list of known violations rots: the lines move, the entries go stale, and the list
- * quietly becomes the place a rule goes to die. A classifier does not. If a future case
- * genuinely does not fit one of the three, widen a category deliberately and write down
- * why — do not reintroduce this list.
+ * That list rotted by design: a violation sits on a "known, not yet fixed" list forever,
+ * since nothing about being listed asks anyone to fix it. `ALLOWED_GUIDANCE` (above,
+ * near MIN_GUIDANCE_WORDS) cannot rot the same way, because it is not a list of problems
+ * — it is a list of decisions Sam already made. Nothing joins it by drifting; a line
+ * joins only when someone deliberately copies its exact text there, which is the same
+ * one-line, reviewable diff every time. If a future case genuinely needs a wider
+ * exception than "short and on the list," widen a classifier deliberately and write down
+ * why — do not go back to listing known violations.
  */
 
 /** Planted samples. The detector has to be shown to bite AND shown not to over-bite;
@@ -222,6 +269,42 @@ describe('the detector itself', () => {
     expect(files.length).toBeGreaterThan(30)
     expect(files.some((f) => f.endsWith('site-tools.tsx'))).toBe(true)
     expect(files.some((f) => f.endsWith('og-image-picker.tsx'))).toBe(true)
+  })
+})
+
+/** The approved-guidance exception, proven both ways: default-deny (nothing is exempt
+ *  just for being short), the approval actually working, the cap still applying to an
+ *  approved line, and an edited line falling back out of the list. `ALLOWED_GUIDANCE` is
+ *  cleared after every test here so no planted approval leaks into another test or into
+ *  the real sweep below. */
+describe('approved guidance — exact match AND capped, never a pattern', () => {
+  afterEach(() => {
+    ALLOWED_GUIDANCE.length = 0
+  })
+
+  // 14 words — under MAX_GUIDANCE_WORDS on its own; the cap test below is what pushes a
+  // variant of it over.
+  const SHORT = 'Drop an image here, or paste a link to use it as the cover.'
+
+  it('CRITICAL: a short guidance line is still caught while it is NOT on the list — nothing is exempt by default', () => {
+    expect(instructionalParagraphsIn(`<p className="text-xs">${SHORT}</p>`, 'planted.tsx')).toHaveLength(1)
+  })
+
+  it('CRITICAL: the same line, once approved, is let through', () => {
+    ALLOWED_GUIDANCE.push(SHORT)
+    expect(instructionalParagraphsIn(`<p className="text-xs">${SHORT}</p>`, 'planted.tsx')).toEqual([])
+  })
+
+  it('CRITICAL: an approved line that grows past the cap is caught anyway — short is necessary, not just listed', () => {
+    const long = `${SHORT} Also, here is more text stretching this well past the word cap on purpose today.`
+    ALLOWED_GUIDANCE.push(long)
+    expect(instructionalParagraphsIn(`<p className="text-xs">${long}</p>`, 'planted.tsx')).toHaveLength(1)
+  })
+
+  it('an approved line edited even slightly is no longer an exact match, so it is caught too', () => {
+    ALLOWED_GUIDANCE.push(SHORT)
+    const edited = SHORT.replace('image', 'photo')
+    expect(instructionalParagraphsIn(`<p className="text-xs">${edited}</p>`, 'planted.tsx')).toHaveLength(1)
   })
 })
 

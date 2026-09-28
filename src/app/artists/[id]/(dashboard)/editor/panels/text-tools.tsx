@@ -1,6 +1,8 @@
 import { groupByPrefix, sectionRowLabel } from '@/lib/site-editor/manifest'
 import { type EditorTextField } from '../inspector-types'
-import { GroupLabel, SaveLine, EditRow, type SaveStatus } from '../inspector-shared'
+import { GroupLabel, SaveLine, EditRow, EYEBROW, type SaveStatus } from '../inspector-shared'
+import { isTooLong } from '@/lib/site-editor/text-limits'
+import { cx } from '@/lib/cx'
 
 /* ── Text tools: the site's headings, taglines, bio, booking copy ──────────────
  *
@@ -47,7 +49,19 @@ export function TextTools({
     // them — "Empty" is useless to someone looking at a page of words.
     const shown = value || f.defaultValue || 'Not set'
     const empty = !(value || f.defaultValue)
-    return <EditRow key={f.key} label={rowLabel} value={shown} empty={empty} onEdit={() => onEditField?.(f)} />
+    // Typed past its cap: the words on the row are NOT what is stored (the save refused
+    // them), so the row says so rather than passing them off as saved.
+    const unsaved = f.maxLength !== undefined && isTooLong(value, f.maxLength)
+    return (
+      <EditRow
+        key={f.key}
+        label={rowLabel}
+        value={shown}
+        empty={empty}
+        trailing={unsaved ? <span className={cx(EYEBROW, 'flex-none text-accent-red')}>Not saved</span> : undefined}
+        onEdit={() => onEditField?.(f)}
+      />
+    )
   }
 
   return (

@@ -11,6 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { frontSortOrder, slotByDate } from './insert-position'
 import { isContactLink, looksLikeEmail, safeHref } from '@/lib/url'
+import { BRAND_MEDIA_SLICE, SITE_MEDIA_SLICE } from '@/lib/brand-media'
 
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
@@ -1286,9 +1287,11 @@ export function publishAll(supabase: SupabaseClient, artistId: string, published
 }
 
 /** The Site section's Publish (and the SEO / GEO page's): photos, site text and the
- *  profile, as one moment. */
+ *  profile, as one moment. Every media row EXCEPT the Brand page's (`SITE_MEDIA_SLICE`,
+ *  2026-09-28): logos and icons ship from the Brand bar, and this used to ship their drafts
+ *  too — a deleted logo's tombstone included. */
 export function publishSite(supabase: SupabaseClient, artistId: string, publishedBy?: string): Promise<number> {
-  return publishTogether(supabase, artistId, ['media', 'site_content'], publishedBy, { profile: true })
+  return publishTogether(supabase, artistId, [{ type: 'media', slice: SITE_MEDIA_SLICE }, 'site_content'], publishedBy, { profile: true })
 }
 
 /** The Music page's Publish: releases and songs, as one moment. */
@@ -1298,10 +1301,31 @@ export function publishMusic(supabase: SupabaseClient, artistId: string, publish
 
 /** Pending changes for one section: counts + a convenience `dirty` flag. */
 export type SectionDiff = { added: number; edited: number; deleted: number; dirty: boolean }
+/** Media is split between TWO Publish buttons (2026-09-28), so its diff carries both
+ *  halves beside the whole: `site` is what the Site / SEO Publish ships (SITE_MEDIA_SLICE),
+ *  `brand` what the Brand bar ships. The whole is what publishAll ships. */
+export type MediaDiff = SectionDiff & { site: SectionDiff; brand: SectionDiff }
 /** Per-section pending changes for an artist (profile + every publishable type). */
-export type UnpublishedDiff = { profile: SectionDiff } & Record<PublishableEntity, SectionDiff>
+export type UnpublishedDiff = { profile: SectionDiff } & Record<PublishableEntity, SectionDiff> & { media: MediaDiff }
 
 const emptyDiff = (): SectionDiff => ({ added: 0, edited: 0, deleted: 0, dirty: false })
+
+/** Count a list of changes into a SectionDiff. */
+function tally(changes: readonly EntityChange[]): SectionDiff {
+  const d = emptyDiff()
+  for (const c of changes) d[c.change]++
+  d.dirty = d.added + d.edited + d.deleted > 0
+  return d
+}
+
+/** Is anything the Site / SEO Publish ships (`publishSite`) not on the site yet? The
+ *  profile, the site text and the site's half of the media — never a Brand logo, which only
+ *  the Brand bar publishes, so a bar lit by one would stay lit after its own Publish. */
+export function siteUnpublished(diff: UnpublishedDiff): boolean {
+  // `?.`: a diff cached before the halves existed (dashboardDiff is unstable_cache) has only
+  // the whole — read that for a moment rather than throw on the page.
+  return diff.profile.dirty || diff.site_content.dirty || (diff.media.site?.dirty ?? diff.media.dirty)
+}
 
 /** One key's value for comparison. A key the snapshot does not HAVE (an older revision,
  *  published before the column existed) reads as that column's default — see
@@ -1406,11 +1430,18 @@ export async function diffUnpublished(
   }
 
   const result = { profile: emptyDiff() } as UnpublishedDiff
+  const whole = result as Record<PublishableEntity, SectionDiff>
   types.forEach((type, i) => {
-    const d = (result[type] = emptyDiff())
-    for (const c of diffEntities(type, rowsByType[i], latest)) d[c.change]++
-    d.dirty = d.added + d.edited + d.deleted > 0
+    whole[type] = tally(diffEntities(type, rowsByType[i], latest))
   })
+  // Each half judged by the slice its own Publish sends (the same `keep`), so what a bar
+  // counts is exactly what its button ships.
+  const mediaRows = rowsByType[types.indexOf('media')]
+  result.media = {
+    ...result.media,
+    site: tally(diffEntities('media', mediaRows, latest, SITE_MEDIA_SLICE.keep)),
+    brand: tally(diffEntities('media', mediaRows, latest, BRAND_MEDIA_SLICE.keep)),
+  }
 
   // Profile singleton.
   const profilePub = latest.get(`artist:${artistId}`)

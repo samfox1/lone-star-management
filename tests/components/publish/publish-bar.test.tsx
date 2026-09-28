@@ -13,9 +13,11 @@ afterEach(cleanup)
 
 const publishButton = () => screen.getByRole('button', { name: /publish/i })
 
-/** Open the prompt with a password typed in, ready to submit. */
+/** Open the prompt with a password typed in, ready to submit. Every real caller passes
+ *  `pendingCount={0}` — the selection model it counted was deleted 2026-09-10 — so this
+ *  drives the bar the way it's actually enabled today: `dirty`. */
 function openPrompt(onPublish: (p: string) => Promise<{ ok: boolean; error?: string }>) {
-  render(<PublishBar pendingCount={1} onPublish={onPublish} />)
+  render(<PublishBar pendingCount={0} dirty onPublish={onPublish} />)
   fireEvent.click(publishButton())
   const dialog = screen.getByRole('dialog')
   fireEvent.change(within(dialog).getByPlaceholderText('Your password'), { target: { value: 'pw' } })
@@ -33,13 +35,16 @@ describe('PublishBar', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  // `pendingCount` below is always 0, matching every real caller (music-browser,
+  // videos-browser, tour-browser, merch-browser, connection-list, the SEO top row) — none
+  // of them still reconcile from a selection count. `dirty` is what enables the bar.
   it('opens the prompt and passes the entered password to onPublish', async () => {
     const onPublish = vi.fn(async () => ({ ok: true }))
-    render(<PublishBar pendingCount={3} onPublish={onPublish} noun="videos" />)
+    render(<PublishBar pendingCount={0} dirty onPublish={onPublish} noun="videos" />)
 
     fireEvent.click(publishButton())
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText(/3 changes to your public videos/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Push your latest edits to your public videos/i)).toBeInTheDocument()
 
     fireEvent.change(within(dialog).getByPlaceholderText('Your password'), { target: { value: 's3cret' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' }))
@@ -49,7 +54,7 @@ describe('PublishBar', () => {
 
   it('shows the server error inline and keeps the prompt open on failure', async () => {
     const onPublish = vi.fn(async () => ({ ok: false, error: 'Incorrect password.' }))
-    render(<PublishBar pendingCount={1} onPublish={onPublish} />)
+    render(<PublishBar pendingCount={0} dirty onPublish={onPublish} />)
 
     fireEvent.click(publishButton())
     const dialog = screen.getByRole('dialog')
@@ -62,7 +67,7 @@ describe('PublishBar', () => {
 
   it('closes the prompt on a successful publish', async () => {
     const onPublish = vi.fn(async () => ({ ok: true }))
-    render(<PublishBar pendingCount={2} onPublish={onPublish} />)
+    render(<PublishBar pendingCount={0} dirty onPublish={onPublish} />)
 
     fireEvent.click(publishButton())
     const dialog = screen.getByRole('dialog')

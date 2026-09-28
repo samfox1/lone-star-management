@@ -57,3 +57,29 @@ export function BrandRiser({
     />
   )
 }
+
+/**
+ * The bar's place when the "unpublished changes" check itself FAILED (2026-09-28). The
+ * check cannot say whether anything is waiting, so the bar says that instead — a hidden bar
+ * is what "everything is on the site" looks like. Reload runs the check again (a refresh
+ * re-renders the layout). No Publish here: that is the bar's job once it knows what it
+ * would publish.
+ */
+export function BrandCheckFailed() {
+  const router = useRouter()
+  return (
+    <div
+      role="alert"
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-hairline bg-paper px-4 pt-[18px] pb-[calc(18px+env(safe-area-inset-bottom,0px))] shadow-[0_-8px_24px_rgba(0,0,0,0.05)] sm:px-8"
+    >
+      <p className="min-w-0 text-[15px] leading-snug text-accent-red">Couldn’t check for unpublished changes.</p>
+      <button
+        type="button"
+        onClick={() => router.refresh()}
+        className="flex-none rounded-[10px] border border-hairline px-[18px] py-2.5 text-[14px] font-medium text-ink transition-colors hover:bg-surface-hover"
+      >
+        Reload
+      </button>
+    </div>
+  )
+}

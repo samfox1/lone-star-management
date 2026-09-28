@@ -33,13 +33,19 @@ const DEFAULT_WEIGHT = '400'
  * uploaded and chosen, and the weight only informs the row's "no Bold" line. A file that
  * says a weight outside 100–900 is asked about too (`usableWeight` reads it as unknown).
  *
- * CLOSED MID-UPLOAD (Save, ×, Escape while the file is still going up). The upload does not
- * stop with the dialog: the object lands and `writeRow` runs with nobody to ask. Rather than
- * block the close — UploadField does not say when an upload starts or fails, so a guard
- * would guess, and a wrong guess traps the manager in the dialog — a question that can no
- * longer be asked is answered "unknown" at once, and a toast says the weight was not set.
- * Before this it waited on the question forever: no row, the file orphaned in the bucket,
- * and nothing said.
+ * SAVE WAITS FOR THE UPLOAD (2026-09-28). A row is saved when it gets its thing (the plan),
+ * so Save while the file is still going up does not close: it reads "Uploading…" and is
+ * disabled (UploadField's `onBusyChange` says when an upload starts and ends), the font
+ * lands in THIS row, and the upload's own success closes the dialog. It used to close like
+ * × does, so the font went to the library only while the toast said "Font uploaded" — a
+ * silent half-save. At the weight question Save is Save again: it answers it. A failed
+ * upload ends busy with no row, and Save closes as usual.
+ *
+ * CLOSED MID-UPLOAD (× or Escape while the file is still going up). The upload does not
+ * stop with the dialog: the object lands and `writeRow` runs with nobody to ask. So a
+ * question that can no longer be asked is answered "unknown" at once, and a toast says the
+ * weight was not set. Before this it waited on the question forever: no row, the file
+ * orphaned in the bucket, and nothing said.
  *
  * A CLOSED DIALOG HAS GIVEN UP ITS ROW (review 2, 2026-09-24). The late font is kept — in
  * the library, where the Change menu offers it — but placed nowhere: by then the manager
@@ -74,6 +80,10 @@ export function FontUploadDialog({
   const reserved = named !== '' && isReservedFamily(slugify(named))
   const [asking, setAsking] = useState(false)
   const [weight, setWeight] = useState(DEFAULT_WEIGHT)
+  /** The file is on its way up (UploadField's `onBusyChange`). State drives Save's label;
+   *  the ref is what `save` reads, so a click can never act on a stale render. */
+  const [uploading, setUploading] = useState(false)
+  const uploadingRef = useRef(false)
   /** The pending question's answer. A ref: `writeRow` awaits it across renders. */
   const answer = useRef<((w: number | null) => void) | null>(null)
   /** The dialog is closed or gone: nobody left to ask, no row to place in, nothing of its own
@@ -105,6 +115,18 @@ export function FontUploadDialog({
     gone.current = true
     settle(null)
     onClose()
+  }
+
+  /** Save: answers the weight question; otherwise closes — unless the file is still going
+   *  up, when the dialog stays for it (see "Save waits for the upload" above). */
+  function save() {
+    if (asking) settle(Number(weight))
+    else if (!uploadingRef.current) close()
+  }
+
+  function onBusyChange(busy: boolean) {
+    uploadingRef.current = busy
+    setUploading(busy)
   }
 
   function askWeight(): Promise<number | null> {
@@ -145,7 +167,7 @@ export function FontUploadDialog({
   }
 
   return (
-    <BrandModal label="Upload a font" meta={title} onClose={close} onSave={() => (asking ? settle(Number(weight)) : close())}>
+    <BrandModal label="Upload a font" meta={title} onClose={close} onSave={save} saveBusy={uploading && !asking ? 'Uploading…' : undefined}>
       <label className="flex flex-col gap-1">
         <span className="font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Name</span>
         <input
@@ -173,6 +195,7 @@ export function FontUploadDialog({
         rules={FONT_UPLOAD_RULES}
         successMessage="Font uploaded"
         writeRow={writeRow}
+        onBusyChange={onBusyChange}
         // Only while this dialog is still open: a late success is not its to close.
         onSuccess={() => {
           if (!gone.current) onClose()

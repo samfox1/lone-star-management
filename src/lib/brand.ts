@@ -23,6 +23,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isOwnedStoragePath } from '@/lib/upload'
 import { canonicalHex } from '@/lib/color'
+import { BRAND_MEDIA_SLICE, isBrandMediaPurpose, type BrandMediaPurpose } from '@/lib/brand-media'
 import {
   diffEntities,
   listContent,
@@ -41,20 +42,9 @@ import {
 export type BrandPurpose = 'logo_primary' | 'logo_secondary' | 'favicon' | 'home_icon'
 export const BRAND_ASSET_PURPOSES: readonly BrandPurpose[] = ['logo_primary', 'logo_secondary', 'favicon', 'home_icon']
 
-/** EVERY media purpose the Brand page owns (20260924120000). The brand-scoped Publish bar
- *  and the brand revert both derive from this list, so a purpose added here is counted and
- *  reverted in the same edit — and a gallery photo never is. */
-export const BRAND_MEDIA_PURPOSES = [
-  'logo_primary',
-  'logo_secondary',
-  'logo',
-  'favicon',
-  'home_icon',
-  'icon_source',
-] as const
-export type BrandMediaPurpose = (typeof BRAND_MEDIA_PURPOSES)[number]
-export const isBrandMediaPurpose = (p: unknown): p is BrandMediaPurpose =>
-  (BRAND_MEDIA_PURPOSES as readonly unknown[]).includes(p)
+/** EVERY media purpose the Brand page owns, and the two media slices (Brand's, the
+ *  site's): in `brand-media.ts`, which `content.ts` can import without a cycle. */
+export { BRAND_MEDIA_PURPOSES, BRAND_MEDIA_SLICE, SITE_MEDIA_SLICE, isBrandMediaPurpose, type BrandMediaPurpose } from '@/lib/brand-media'
 
 /** The logo rows: the two built-ins and the added ones. */
 export const LOGO_PURPOSES = ['logo_primary', 'logo_secondary', 'logo'] as const
@@ -820,11 +810,6 @@ export async function brandPending(supabase: SupabaseClient, artistId: string): 
 }
 
 /* ── Publish: the Brand page's slice, and nothing else ─────────────────────────── */
-
-/** The media the Brand page publishes: its own purposes, judged on the snapshot so a
- *  deleted logo is still recognised by its last published copy. The SAME predicate the
- *  bar (`brandPending`) and Revert use — what the bar counts is what Publish sends. */
-export const BRAND_MEDIA_SLICE = { keep: (snap: Record<string, unknown>) => isBrandMediaPurpose(snap.purpose) }
 
 /**
  * Every kind the Brand page publishes, in the order it publishes them: brand media, the

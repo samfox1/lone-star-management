@@ -8,6 +8,7 @@ import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { EditorPanel } from './editor-panel'
 import { updateContentAction } from '../actions'
 import { useRouter } from 'next/navigation'
+import { useConfirm } from '../confirm-dialog'
 
 /**
  * ONE merch item, opened full-panel from the grid's Edit button (Sam, 2026-08-18: "The
@@ -38,6 +39,12 @@ export function MerchEditor({
     url: item.url,
   })
   const [inStock, setInStock] = useState(item.inStock)
+  // Remove ASKS (Sam, 2026-09-28: "'are you sure' is good when its a delete"). Revert
+  // never re-inserts a deleted product: only its on-site state and order are in reach.
+  const { ask, dialog } = useConfirm()
+  async function remove() {
+    if (await ask(`Delete ${item.title.trim() || 'this product'}? This can't be undone.`)) onRemove()
+  }
 
   // Title required; price blank-or-number — the same rules the old inline rows enforced
   // (a bad value is dropped, not sent, so the server never sees it).
@@ -179,7 +186,7 @@ export function MerchEditor({
         <div className="pt-5">
           <button
             type="button"
-            onClick={onRemove}
+            onClick={() => void remove()}
             className="flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:border-accent-red hover:bg-danger-soft hover:text-accent-red"
           >
             <Icon name="trash" size={12} />
@@ -188,6 +195,7 @@ export function MerchEditor({
         </div>
       </div>
       <SaveLine status={status} />
+      {dialog}
     </EditorPanel>
   )
 }

@@ -148,6 +148,15 @@ export const MEDIA_FOLDERS = ['gallery', 'hero-videos', 'profile', BRAND_FOLDER]
  * Sweeps every folder in MEDIA_FOLDERS and keeps anything still referenced by a media
  * row. Scoped to `{artistId}/…`, so it can never reach another tenant's objects.
  * Best-effort: never fails the publish.
+ *
+ * …AND anything the LIVE site still serves (2026-09-28): the path in the LATEST published
+ * revision of each media entity. A SLICED publish does not tombstone what it leaves out —
+ * the Site / SEO Publish now leaves brand media to the Brand bar — so a logo deleted in
+ * draft is still live, named by its snapshot and by no working row. Sweeping it after a
+ * Site publish would 404 the live logo or tab icon. Latest, not every revision: keeping
+ * every file ever published would collect nothing. Nothing needs an older file — media
+ * restores by placement only (EDITOR_RESTORE never re-inserts a photo), and the Brand
+ * revert goes back to the latest publish, which this keeps.
  */
 export async function gcMediaObjects(
   client: SupabaseClient,
@@ -158,27 +167,36 @@ export async function gcMediaObjects(
     // `source_path` is a logo's original, kept after a background cut-out (20260924120000).
     // Nothing else names that object, so without it here the next publish sweeps it and
     // the cut-out can never be undone.
-    const { data: rows, error, count } = await client
-      .from('media')
-      .select('storage_path, source_path', { count: 'exact' })
-      .eq('artist_id', artistId)
+    const [working, published] = await Promise.all([
+      client.from('media').select('storage_path, source_path', { count: 'exact' }).eq('artist_id', artistId),
+      // Server-side latest-per-entity (one row each, tombstones included), media only.
+      client.rpc('latest_revisions', { p_artist_id: artistId }, { count: 'exact' }).eq('entity_type', 'media'),
+    ])
     // A failed read is NOT "no rows". supabase-js returns `{ data: null, error }` rather
     // than throwing, and reading that as empty made every object past the age gate
     // collectable — one network blip during publish would empty the artist's folders.
-    if (error || !rows) return
     // Nor is a SHORT read all the rows. PostgREST caps a read at max-rows (1000) without a
     // word, so for an artist with more media than that, every row past the cap looked
     // unreferenced and its LIVE file was swept (review 2, 2026-09-24). The exact count says
-    // whether `rows` is all of them; short, or unknown, sweeps nothing — the same refusal
+    // whether a read is all of it; short, or unknown, sweeps nothing — the same refusal
     // listContent makes. Such an artist's strays wait (storage, not data, is what it costs).
-    if (count == null || rows.length < count) return
+    // Both halves, either side: a live logo's file is named by the published half alone.
+    const complete = (r: { data: unknown[] | null; error: unknown; count: number | null }) =>
+      !r.error && !!r.data && r.count != null && r.data.length >= r.count
+    if (!complete(working) || !complete(published)) return
     const referenced = new Set<string>()
     // `?? []` although the guard above already returned: the guard must be the ONE thing
     // standing between a failed read and an empty `referenced`, not a TypeError that the
     // catch below happens to swallow (a mutation test could not tell the two apart).
-    for (const r of rows ?? []) {
+    for (const r of working.data ?? []) {
       if (r.storage_path) referenced.add(r.storage_path as string)
       if (r.source_path) referenced.add(r.source_path as string)
+    }
+    // A tombstone (`{ _deleted: true }`) names no file, so a deleted-and-published row's
+    // file is collected here as before.
+    for (const r of (published.data ?? []) as { data: { storage_path?: unknown } | null }[]) {
+      const path = r.data?.storage_path
+      if (typeof path === 'string' && path) referenced.add(path)
     }
 
     // One round-trip per folder, CONCURRENTLY: they're independent, and this runs

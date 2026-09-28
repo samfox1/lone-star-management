@@ -28,7 +28,8 @@ function diff(over: Partial<Record<keyof UnpublishedDiff, SectionDiff>>): Unpubl
   const base = Object.fromEntries(
     ['profile', ...Object.keys(PUBLISHABLE)].map((k) => [k, empty]),
   ) as unknown as UnpublishedDiff
-  return { ...base, ...over }
+  // Cast: `over` hands media a plain SectionDiff; this window reads only the whole counts.
+  return { ...base, ...over } as UnpublishedDiff
 }
 const CHANGED = diff({
   site_content: { added: 0, edited: 2, deleted: 0, dirty: true },

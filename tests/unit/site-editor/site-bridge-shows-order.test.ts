@@ -102,22 +102,38 @@ describe('orderShows', () => {
     expect(names(upcoming)).toEqual(['soon', 'mid', 'later'])
   })
 
-  it('KNOWN ASYMMETRY: in manual mode an UNNUMBERED dateless show sorts to the front, not the back', () => {
-    // Pinned as it BEHAVES, not as it reads. Manual mode breaks ties with the date, and a
-    // dateless row tie-breaks on '' — which sorts before every real date ascending. So a
-    // TBA jumps ahead of the dated shows here, while the chronological branch above puts
-    // undated rows last. Ported verbatim from skeen (lib/mapSite.ts), quirk included,
-    // because changing it would silently re-order a live site's tour list.
+  it('CRITICAL: undated goes LAST even in manual mode, on a partial drag (Sam, 2026-09-28)', () => {
+    // Was a KNOWN ASYMMETRY until 2026-09-18's flag got an answer: undated always goes
+    // last (memory 2026-09-11, "undated → end" — the same rule `orderMusicProjects`
+    // already applies to music). Manual mode used to break ties with the date, and a
+    // dateless row tie-broke on '' — which sorts before every real date ascending — so a
+    // TBA used to jump ahead of the dated shows here. Ported verbatim from skeen
+    // (lib/mapSite.ts) with the quirk included, then fixed once Sam ruled on it.
     //
     // Narrow in practice: it needs a dated row numbered and a dateless row NOT, i.e. a
-    // partial drag. A drag that touches every row gives them all numbers and this branch
-    // never consults the date at all. Flagged for Sam, 2026-09-18 — if the answer is
-    // "TBAs always last", the fix is one comparator and this test is where it goes red.
+    // partial drag. A drag that touches every row gives them all numbers and undated rows
+    // are sliced out before manual mode is even decided, so this branch never consults
+    // the date for them at all.
     const { upcoming } = orderShows(
       [LATER, { venue: 'tba', date: null, sort_order: null }, { ...SOON, sort_order: 0 }],
       TODAY,
     )
-    expect(names(upcoming)).toEqual(['soon', 'tba', 'later'])
+    expect(names(upcoming)).toEqual(['soon', 'later', 'tba'])
+  })
+
+  it('undated shows in manual mode still keep the drag order AMONG THEMSELVES', () => {
+    // Undated goes last as a GROUP, but within that group it is still the manager's own
+    // drag order, not payload order or date order (there is no date). `tba-b` is dragged
+    // ahead of `tba-a` despite arriving first in the payload.
+    const { upcoming } = orderShows(
+      [
+        { venue: 'tba-a', date: null, sort_order: 5 },
+        { venue: 'tba-b', date: null, sort_order: 2 },
+        { ...SOON, sort_order: 0 },
+      ],
+      TODAY,
+    )
+    expect(names(upcoming)).toEqual(['soon', 'tba-b', 'tba-a'])
   })
 
   it('manual mode is decided PER BUCKET — a dragged past list does not renumber upcoming', () => {
