@@ -21,6 +21,20 @@ import { connectShopifyAction, disconnectShopifyAction, probeShopifyAction, sync
 import { syncSectionAction } from '../../sync-section-action'
 
 /**
+ * The connected store's domain, for the edit window to show before a manager changes it —
+ * never the token, which stays in Vault and is read only by the probe/sync RPCs. Reads
+ * `integrations.metadata` the same way the page does (`getShopifyDomain`, `_data.ts`),
+ * duplicated as a plain query rather than imported: `_data.ts` pulls in `unstable_cache`
+ * for its unrelated `dashboardDiff` export, which every test mocking `next/cache` here
+ * would then have to stub too.
+ */
+export async function getShopifyDomainAction(artistId: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data } = await supabase.from('integrations').select('metadata').eq('artist_id', artistId).eq('provider', 'shopify').maybeSingle()
+  return (data?.metadata as { store_domain?: string } | null)?.store_domain ?? null
+}
+
+/**
  * CONNECTING, one platform at a time (Sam, 2026-09-13: "clear error handling… a cool ui
  * to show the process of the services trying to connect").
  *

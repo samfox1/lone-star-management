@@ -1,18 +1,21 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
-import { methodOf, type ConnectionRow } from '@/lib/connections'
+import { SHOPIFY_KEY, methodOf, type ConnectionRow } from '@/lib/connections'
 import { handleFromUrl, parseHandle } from '@/lib/connect-methods'
 import { saveSourceIdAction, updateContentAction } from '../../actions'
 import { CardModal } from '../../card-modal'
 import { KvField, KvRow, ModalHeader } from '../../modal-kit'
 import { toast } from '../../toast'
 import { ConnectionMark } from './connection-mark'
-import { disconnectConnectionAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
+import { connectOneAction, disconnectConnectionAction, getShopifyDomainAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
+
+const FIELD_CLASS =
+  'block h-6 min-w-0 w-full border-b border-hairline bg-transparent p-0 font-space text-[13px] leading-6 text-ink outline-none placeholder:text-hairline focus:border-ink'
 
 /**
  * ONE CONNECTION, opened by clicking its row (Sam, 2026-09-13: "remove the 2 dots… You
@@ -40,6 +43,52 @@ export function ConnectionModal({
   const pullingRef = useRef(false)
   const [result, setResult] = useState<ConnectResult | null>(null)
   const fail = (message: string) => toast(message, 'error')
+
+  // SHOPIFY: change the store domain and/or rotate the storefront token without
+  // disconnecting first (docs review, 2026-09-28). The domain is read the same way the
+  // page already can (`getShopifyDomainAction` → `getShopifyDomain`); the token is NEVER
+  // read back — it lives in Vault — so the field always starts empty.
+  const isShopify = row.def.key === SHOPIFY_KEY
+  const [domain, setDomain] = useState('')
+  const [token, setToken] = useState('')
+  const [savingStore, setSavingStore] = useState(false)
+  const savingStoreRef = useRef(false)
+  const [storeResult, setStoreResult] = useState<ConnectResult | null>(null)
+
+  useEffect(() => {
+    if (!open || !isShopify) return
+    let cancelled = false
+    void getShopifyDomainAction(artistId)
+      .then((d) => {
+        if (!cancelled) setDomain(d ?? '')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [open, isShopify, artistId, row.key])
+
+  /** Runs the SAME connect path as a first connect (`connectOneAction` →
+   *  `connectShopifyAction` + the probe), so a bad token is refused with the probe's
+   *  plain-words advice and the old connection stays intact — `connect_shopify` upserts
+   *  the Vault secret rather than failing or wiping it. */
+  async function saveStore() {
+    if (savingStoreRef.current) return
+    savingStoreRef.current = true
+    setSavingStore(true)
+    setStoreResult(null)
+    try {
+      const res = await connectOneAction(artistId, row.key, { domain, token })
+      setStoreResult(res)
+      if (res.ok) {
+        setToken('')
+        router.refresh()
+      }
+    } finally {
+      savingStoreRef.current = false
+      setSavingStore(false)
+    }
+  }
 
   async function saveUrl(url: string) {
     if (!row.linkId) return
@@ -141,6 +190,38 @@ export function ConnectionModal({
         )}
         {row.def.source?.idField && row.sourceId !== undefined && (
           <KvField label="ID" value={row.sourceId ?? ''} mono onSave={saveId} onError={fail} />
+        )}
+        {isShopify && (
+          <KvRow label="Store" align="start">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <input
+                aria-label="Store domain"
+                placeholder="store.myshopify.com"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                className={cx(FIELD_CLASS, 'font-space')}
+              />
+              <input
+                aria-label="New storefront token"
+                type="password"
+                placeholder="Storefront access token"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                className={cx(FIELD_CLASS, 'font-space')}
+              />
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={saveStore} disabled={savingStore} className={buttonClass('ghost', 'disabled:opacity-50')}>
+                  <Icon name="refresh" size={13} className={cx(savingStore && 'animate-spin')} />
+                  {savingStore ? 'Saving…' : 'Change token'}
+                </button>
+                {storeResult && (
+                  <span className={cx('min-w-0 truncate font-space text-[11px]', storeResult.ok ? 'text-ink-muted' : 'text-accent-red')}>
+                    {storeResult.ok ? storeResult.message ?? 'Saved' : `${storeResult.error}${storeResult.detail ? ` ${storeResult.detail}` : ''}`}
+                  </span>
+                )}
+              </div>
+            </div>
+          </KvRow>
         )}
         {row.def.source && (
           <KvRow label="Catalog">
