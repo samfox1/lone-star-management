@@ -23,6 +23,11 @@ export type SocialPlatform = {
   /** Prefilled when the manager picks this platform, so they paste a handle rather than
    *  reconstruct a URL. Not validation — an artist's page may live anywhere. */
   urlHint: string
+  /** Other registrable hosts (e.g. an old domain that now redirects) that a pasted or
+   *  stored link may still use and that `platformFromUrl` must still recognise as this
+   *  platform, even though `urlHint` no longer points at them (Threads → threads.com,
+   *  2026-09-28: threads.net redirects there but old stored links still use it). */
+  aliasHosts?: readonly string[]
 }
 
 /**
@@ -42,7 +47,7 @@ export const SOCIAL_PLATFORMS: readonly SocialPlatform[] = [
   { slug: 'bandcamp', label: 'Bandcamp', urlHint: 'https://bandcamp.com/' },
   { slug: 'facebook', label: 'Facebook', urlHint: 'https://facebook.com/' },
   { slug: 'x', label: 'X', urlHint: 'https://x.com/' },
-  { slug: 'threads', label: 'Threads', urlHint: 'https://threads.net/@' },
+  { slug: 'threads', label: 'Threads', urlHint: 'https://threads.com/@', aliasHosts: ['threads.net'] },
   { slug: 'substack', label: 'Substack', urlHint: 'https://substack.com/@' },
   { slug: 'patreon', label: 'Patreon', urlHint: 'https://patreon.com/' },
   { slug: 'discord', label: 'Discord', urlHint: 'https://discord.gg/' },
@@ -87,5 +92,5 @@ function registrableHost(url: string): string | null {
 export function platformFromUrl(url: string): SocialPlatform | null {
   const host = registrableHost(url)
   if (!host) return null
-  return SOCIAL_PLATFORMS.find((p) => registrableHost(p.urlHint) === host) ?? null
+  return SOCIAL_PLATFORMS.find((p) => registrableHost(p.urlHint) === host || p.aliasHosts?.includes(host)) ?? null
 }

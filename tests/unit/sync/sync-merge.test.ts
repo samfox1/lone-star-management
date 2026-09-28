@@ -387,6 +387,61 @@ describe('syncTracks — refusing a destructive merge', () => {
     expect(rows.find((r) => r.spotify_id === 'sp-a')!.apple_id).toBeNull()
   })
 
+  it("CRITICAL: a single's copy and an album's copy of one song each find their OWN row", async () => {
+    // One row per release (Sam, 2026-09-11): a song out as a single AND on the album is
+    // two rows with the same title and the same length. Duration cannot tell them apart,
+    // so without the album the first row created took whichever copy arrived first — and
+    // once releases are grouped from songs, that crossed copy drags the single into the
+    // album's release (or the album into the single's). Real shape: Skeen's "Summer Sun".
+    const { db, rows } = fakeDb([
+      { spotify_id: 'sp-album', source: 'spotify', title: 'Summer Sun', duration_ms: 216_190, album_name: 'Heatwaves & Horizons' },
+      { spotify_id: 'sp-single', source: 'spotify', title: 'Summer Sun', duration_ms: 216_190, album_name: 'Summer Sun' },
+    ])
+    // The single's copy arrives FIRST — the order that used to cross them.
+    await syncAppleTracks(db, ARTIST, [
+      ap({ apple_id: 'ap-single', title: 'Summer Sun', duration_ms: 216_190, album_name: 'Summer Sun' }),
+      ap({ apple_id: 'ap-album', title: 'Summer Sun', duration_ms: 216_190, album_name: 'Heatwaves & Horizons' }),
+    ])
+    expect(rows).toHaveLength(2)
+    expect(rows.find((r) => r.spotify_id === 'sp-single')!.apple_id).toBe('ap-single')
+    expect(rows.find((r) => r.spotify_id === 'sp-album')!.apple_id).toBe('ap-album')
+  })
+
+  it('the same album outranks a slightly closer length, but only inside the tolerance', async () => {
+    const { db, rows } = fakeDb([
+      { spotify_id: 'sp-a', source: 'spotify', title: 'Rain', duration_ms: 200_000, album_name: 'Clouds' },
+      { spotify_id: 'sp-b', source: 'spotify', title: 'Rain', duration_ms: 202_000, album_name: 'Rain' },
+    ])
+    await syncAppleTracks(db, ARTIST, [ap({ duration_ms: 200_100, album_name: 'Rain' })])
+    expect(rows.find((r) => r.spotify_id === 'sp-b')!.apple_id).toBe('ap1')
+    expect(rows.find((r) => r.spotify_id === 'sp-a')!.apple_id).toBeNull()
+  })
+
+  it("tells a deluxe edition's copy from the standard edition's — the album's qualifier counts", async () => {
+    // A song TITLE drops "(Deluxe)" (it names the same recording); an ALBUM name must not,
+    // or the standard and deluxe copies of every song cross exactly like a single's did.
+    const { db, rows } = fakeDb([
+      { spotify_id: 'sp-std', source: 'spotify', title: 'Rain', duration_ms: 200_000, album_name: 'Clouds' },
+      { spotify_id: 'sp-dlx', source: 'spotify', title: 'Rain', duration_ms: 200_000, album_name: 'Clouds (Deluxe Edition)' },
+    ])
+    await syncAppleTracks(db, ARTIST, [
+      ap({ apple_id: 'ap-dlx', duration_ms: 200_000, album_name: 'Clouds (Deluxe Edition)' }),
+      ap({ apple_id: 'ap-std', duration_ms: 200_000, album_name: 'Clouds' }),
+    ])
+    expect(rows.find((r) => r.spotify_id === 'sp-dlx')!.apple_id).toBe('ap-dlx')
+    expect(rows.find((r) => r.spotify_id === 'sp-std')!.apple_id).toBe('ap-std')
+  })
+
+  it('an album match outside the tolerance is still a different recording', async () => {
+    const { db, rows } = fakeDb([
+      { spotify_id: 'sp-a', source: 'spotify', title: 'Rain', duration_ms: 200_000, album_name: 'Clouds' },
+      { spotify_id: 'sp-b', source: 'spotify', title: 'Rain', duration_ms: 260_000, album_name: 'Rain' },
+    ])
+    await syncAppleTracks(db, ARTIST, [ap({ duration_ms: 200_100, album_name: 'Rain' })])
+    expect(rows.find((r) => r.spotify_id === 'sp-a')!.apple_id).toBe('ap1')
+    expect(rows.find((r) => r.spotify_id === 'sp-b')!.apple_id).toBeNull()
+  })
+
   it('never claims one existing row twice in a single pull', async () => {
     const { db, rows } = fakeDb([{ spotify_id: 'sp1', source: 'spotify', title: 'Rain', duration_ms: 200_000 }])
     const res = await syncAppleTracks(db, ARTIST, [

@@ -166,7 +166,73 @@ export function createYouTubeClient(opts: Options = {}) {
     return out
   }
 
-  return { getChannelVideos, viewCounts }
+  /** Just the channel id (channels.list?part=id — cheaper than contentDetails, which
+   *  getChannelVideos needs but a plain id lookup doesn't). Used by
+   *  `resolveYouTubeChannelId` to turn a handle or legacy username into a real `UC…`
+   *  id; null when the API finds no matching channel. */
+  async function resolveChannelId(channelRef: string): Promise<string | null> {
+    const channels = await apiGet<{ items?: { id?: string }[] }>(
+      `/channels?part=id&${channelSelector(channelRef)}`,
+    )
+    return channels.items?.[0]?.id ?? null
+  }
+
+  return { getChannelVideos, viewCounts, resolveChannelId }
 }
 
 export type YouTubeClient = ReturnType<typeof createYouTubeClient>
+
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'youtu.be'])
+
+/** A bare id, an `@handle`, or a legacy username never contains a slash — only a pasted
+ *  link does — so this is enough to tell "parse me as a URL" from "hand me to channelSelector
+ *  as-is." */
+function looksLikeLink(text: string): boolean {
+  return text.includes('/')
+}
+
+/**
+ * `artists.youtube_channel_id` should always hold the real `UC…` id (Sam, 2026-09-28) —
+ * never the raw URL or handle the connect flow used to leave there. This resolves
+ * whatever the manager gave down to that id:
+ *
+ * - a bare `UC…` id, or a `youtube.com/channel/UC…` link, resolves LOCALLY, by reusing
+ *   `channelSelector`'s own parsing (its `id=` selector shape) — no network call, no
+ *   second parser.
+ * - an `@handle`, a `youtube.com/@handle` link, or a legacy `/c/name` or `/user/name`
+ *   link resolves through the YouTube Data API, the same `channels.list` call
+ *   `channelSelector` already builds a selector for (here with `part=id`, the cheapest
+ *   field that returns just the id).
+ * - a link on a host that isn't `youtube.com`/`youtu.be` is refused before touching the
+ *   API or `channelSelector` (which has no host check of its own, and would otherwise
+ *   misread the whole URL as a literal handle).
+ *
+ * `client` defaults to a fresh `createYouTubeClient()` (env `YOUTUBE_API_KEY`); tests
+ * inject one with a mocked `fetchImpl`.
+ */
+export async function resolveYouTubeChannelId(
+  input: string,
+  client: Pick<YouTubeClient, 'resolveChannelId'> = createYouTubeClient(),
+): Promise<{ id: string } | { error: string }> {
+  const raw = input.trim()
+  if (!raw) return { error: 'Enter a YouTube channel, handle, or link.' }
+
+  if (looksLikeLink(raw)) {
+    let url: URL
+    try {
+      url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+    } catch {
+      return { error: "That isn't a YouTube link." }
+    }
+    const host = url.hostname.toLowerCase().replace(/^(www|m)\./, '')
+    if (!YOUTUBE_HOSTS.has(host)) return { error: "That isn't a YouTube link." }
+  }
+
+  const selector = channelSelector(raw)
+  const literal = selector.match(/^id=(.+)$/)
+  if (literal) return { id: decodeURIComponent(literal[1]) }
+
+  const id = await client.resolveChannelId(raw)
+  if (!id) return { error: "Couldn't find that YouTube channel." }
+  return { id }
+}

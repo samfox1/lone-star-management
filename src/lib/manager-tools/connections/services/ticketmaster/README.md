@@ -11,14 +11,27 @@ site button (Sam, 2026-09-28: services are not social buttons).
 
 ## What the manager enters
 
-A Ticketmaster **attraction ID** (placeholder: "Ticketmaster attraction ID,"
-`src/lib/integrations-registry.ts`) — Ticketmaster's own internal id for the artist, not a
-name or a URL. There is no lookup-by-name flow in this codebase; the manager has to already
-have the id. It's a single text field (`ConnectField` in `connect-modal.tsx`, the fallback
-branch for a connection with no `social`).
+A Ticketmaster **attraction ID** (placeholder: "Ticketmaster attraction ID or artist link,"
+`src/lib/integrations-registry.ts`) — Ticketmaster's own internal id for the artist. There is
+still no lookup-by-name flow (Sam, 2026-09-28: the field keeps asking for the id itself,
+that's the information the Discovery API actually needs), but the manager doesn't have to
+dig the id out of a link by hand: pasting their Ticketmaster artist page link works too.
+`ticketmasterAttractionId` (`src/lib/ticketmaster.ts`) accepts either — a bare id (letters,
+digits, underscores; not assumed to be numeric) as is, or the id out of
+`ticketmaster.com/<slug>/artist/<id>` (any regional host — `.co.uk`, `.ca`, `.com.au`…,
+query string and all) — and is the one place both shapes are read, so the connect flow and
+the edit-field save both go through it. It's a single text field (`ConnectField` in
+`connect-modal.tsx`, the fallback branch for a connection with no `social`).
 
-Error seen, from `connectInputError` (`src/lib/connections.ts`):
-- `Enter the Ticketmaster attraction ID.` — blank input
+Errors seen:
+- `Enter the Ticketmaster attraction ID or artist link.` — `connectInputError`
+  (`src/lib/connections.ts`) refusing a blank field before the Connect request is even made;
+  it builds this from the registry `placeholder`, so it tracks that text automatically.
+- `Paste the Ticketmaster attraction ID or your artist page link.` — `ticketmasterAttractionId`
+  (`src/lib/ticketmaster.ts`), reached via `saveSourceIdAction`
+  (`src/app/artists/[id]/(dashboard)/actions.ts`): junk text, or a link that isn't
+  Ticketmaster's. The edit field's own save (`connection-modal.tsx`'s `saveId`) goes straight
+  to `saveSourceIdAction` with no earlier blank-check, so a blank there also surfaces this one.
 
 An invalid or unknown attraction id doesn't error at connect time — the Discovery API
 simply returns zero events for it, so the row reads as "failed" (connected, nothing pulled).
@@ -91,7 +104,8 @@ ones pulled from Bandsintown, once the manager publishes them on.
   code: `source`: the registry entry (`idField: 'ticketmaster_attraction_id'`, `section:
   'tour'`).
 - `src/lib/ticketmaster.ts` — the API client: `getArtistEvents`, page-number pagination,
-  event → tour-date mapping.
+  event → tour-date mapping; and `ticketmasterAttractionId`, the pure parser for what the
+  manager pastes (bare id or artist page link, any regional host).
 - `src/lib/http.ts` — shared GET-with-429-retry used by the client.
 - `src/lib/country.ts` — `canonicalCountry`, the shared spelling with Bandsintown.
 - `src/lib/geo.ts` — `coord`, the shared lat/lng string parser.
@@ -105,8 +119,10 @@ ones pulled from Bandsintown, once the manager publishes them on.
   (generated from simple-icons by `scripts/generate-service-icons.ts`).
 - `src/app/artists/[id]/(dashboard)/integrations.ts` — wires `saveTicketmasterIdAction` /
   `syncTicketmasterAction` to the registry entry.
-- `src/app/artists/[id]/(dashboard)/actions.ts` — `saveTicketmasterIdAction`,
-  `syncTicketmasterAction`.
+- `src/app/artists/[id]/(dashboard)/actions.ts` — `saveTicketmasterIdAction` (wired to
+  `INTEGRATIONS['ticketmaster'].save`, currently unreachable — the live save door is
+  `saveSourceIdAction`, which calls `ticketmasterAttractionId` for this `idField`, the
+  same pattern `drive_folder_id`/`parseDriveFolderId` already used), `syncTicketmasterAction`.
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions.ts` —
   `connectOneAction`, `pullConnectionAction` (shared across every connection).
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/connect-modal.tsx`,
@@ -116,7 +132,9 @@ ones pulled from Bandsintown, once the manager publishes them on.
 ## Tests
 
 - `tests/unit/sync/ticketmaster.test.ts` — event mapping, page-number pagination, empty
-  results, 429 backoff, shaped errors, missing-key handling.
+  results, 429 backoff, shaped errors, missing-key handling; and `ticketmasterAttractionId`:
+  a bare id, a `.com`/`.co.uk`/`.com.au` artist link with and without a query string, a
+  link from another site, junk, and a blank input.
 - `tests/integration/sync/sync.ticketmaster.test.ts` — `syncTicketmasterTourDates` against
   the real database: inserts new, refreshes ticketmaster-owned rows, never clobbers a
   manual row, tenancy.
@@ -128,13 +146,17 @@ ones pulled from Bandsintown, once the manager publishes them on.
   `['bandsintown', 'ticketmaster']`.
 - `tests/unit/manager-tools/connections/service-icons.test.ts` — Ticketmaster's brand mark
   exists and matches the committed generated file.
+- `tests/unit/manager-tools/connections/services.test.ts` — pins this service's `placeholder`
+  ("Ticketmaster attraction ID or artist link") as part of the whole-registry snapshot.
 
 ## Known gaps
 
 - A successful pull reports no count and a partial failure is invisible — the action never
   surfaces the `SyncResult` it gets back (see the "Quirk found in code" note above).
-- No lookup-by-artist-name: the manager must already know the numeric/alphanumeric
-  Ticketmaster attraction id. Nothing in this codebase resolves a name to one.
+- No lookup-by-artist-name, and none planned (Sam, 2026-09-28): the field keeps asking for
+  the attraction id itself, deliberately, since that's what the Discovery API needs. A
+  pasted artist page link is read for its id (`ticketmasterAttractionId`), but a bare name
+  is not resolved to one.
 - The env file calls out a public-site attribution requirement when Ticketmaster data is
   live, but no attribution UI exists in the codebase to satisfy it.
 - No cleanup when an event disappears from Ticketmaster; `syncExternal` only

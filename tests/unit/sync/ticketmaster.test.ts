@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createBandsintownClient } from '@/lib/bandsintown'
-import { createTicketmasterClient } from '@/lib/ticketmaster'
+import { createTicketmasterClient, ticketmasterAttractionId } from '@/lib/ticketmaster'
 
 type Resp = { status?: number; headers?: Record<string, string>; body: unknown }
 function res({ status = 200, headers = {}, body }: Resp) {
@@ -206,6 +206,7 @@ describe('country agrees across sources', () => {
     )
     const bit = await createBandsintownClient({
       appId: 'app123',
+      termsCompliant: true,
       fetchImpl: bitFetch as unknown as typeof fetch,
       sleep: () => Promise.resolve(),
     }).getArtistEvents('Lone Pine')
@@ -229,11 +230,71 @@ describe('country agrees across sources', () => {
     )
     const bit = await createBandsintownClient({
       appId: 'app123',
+      termsCompliant: true,
       fetchImpl: bitFetch as unknown as typeof fetch,
       sleep: () => Promise.resolve(),
     }).getArtistEvents('Lone Pine')
 
     expect(tm[0].country).toBe('United States')
     expect(bit[0].country).toBe('United States')
+  })
+})
+
+/**
+ * ticketmasterAttractionId (Sam, 2026-09-28): the field keeps asking for the attraction
+ * id — no name search — but a manager pasting their Ticketmaster artist page link should
+ * not have to dig the id out of it themselves. Pure: no fetch, no real API call.
+ */
+describe('ticketmasterAttractionId', () => {
+  const ERROR = 'Paste the Ticketmaster attraction ID or your artist page link.'
+
+  it('returns a bare attraction id as is, trimmed', () => {
+    // Real ids are Ticketmaster's own global scheme — letters, digits, underscores —
+    // not necessarily numeric, so this is not a digits-only fixture on purpose.
+    expect(ticketmasterAttractionId('  K8vZ917_szV7  ')).toEqual({ id: 'K8vZ917_szV7' })
+  })
+
+  it('reads the id out of a ticketmaster.com artist link', () => {
+    expect(ticketmasterAttractionId('https://www.ticketmaster.com/hozier-tickets/artist/806528')).toEqual({
+      id: '806528',
+    })
+  })
+
+  it('reads the id out of a ticketmaster.co.uk artist link', () => {
+    expect(ticketmasterAttractionId('https://www.ticketmaster.co.uk/hozier-tickets/artist/806528')).toEqual({
+      id: '806528',
+    })
+  })
+
+  it('reads the id out of a ticketmaster.com.au artist link', () => {
+    expect(ticketmasterAttractionId('https://www.ticketmaster.com.au/hozier-tickets/artist/806528')).toEqual({
+      id: '806528',
+    })
+  })
+
+  it('ignores query junk tacked onto the artist link', () => {
+    expect(
+      ticketmasterAttractionId('https://www.ticketmaster.com/hozier-tickets/artist/806528?camefrom=share&tm_link=1'),
+    ).toEqual({ id: '806528' })
+  })
+
+  it('reads the id with no scheme and no query string pasted', () => {
+    expect(ticketmasterAttractionId('ticketmaster.com/hozier-tickets/artist/806528')).toEqual({ id: '806528' })
+  })
+
+  it('rejects a link from another site', () => {
+    expect(ticketmasterAttractionId('https://www.bandsintown.com/a/12345-hozier')).toEqual({ error: ERROR })
+  })
+
+  it('rejects junk text', () => {
+    expect(ticketmasterAttractionId('not an id at all!!')).toEqual({ error: ERROR })
+  })
+
+  it('rejects a blank input', () => {
+    expect(ticketmasterAttractionId('   ')).toEqual({ error: ERROR })
+  })
+
+  it('rejects the bare ticketmaster.com root with no artist in the path', () => {
+    expect(ticketmasterAttractionId('https://www.ticketmaster.com')).toEqual({ error: ERROR })
   })
 })

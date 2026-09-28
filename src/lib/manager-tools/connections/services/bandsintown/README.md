@@ -33,8 +33,18 @@ events" (see Sync / integration below), so the row reads as "failed" (connected,
 
 API: **Bandsintown's public events endpoint**, `https://rest.bandsintown.com/artists/<name>/events`
 (`src/lib/bandsintown.ts`, `createBandsintownClient`). Auth: an `app_id` query param, from
-env var `BANDSINTOWN_APP_ID`. Missing app id throws `Bandsintown app id not configured
-(BANDSINTOWN_APP_ID).`
+env var `BANDSINTOWN_APP_ID`.
+
+**Compliance gate (2026-09-28, enforced in code):** a pull runs only when BOTH
+`BANDSINTOWN_APP_ID` is set AND `BANDSINTOWN_TERMS_COMPLIANT` is the exact string
+`"true"` — set by hand only once the checklist under "Known gaps" below is actually
+done, not just once the app_id is granted. `createBandsintownClient` is the one place
+every Bandsintown call goes through (Connect, Sync, Pull now, Retry all end up calling
+it via `syncBandsintownAction`), so the gate lives there and covers every path. Closed,
+it throws `Bandsintown isn't switched on yet.` before any request is made — nothing is
+fetched and nothing is written. No dev exception: both checks run the same way in every
+environment. Connecting (saving the artist's Bandsintown name) is unaffected either
+way — the gate only blocks the pull.
 
 What it pulls: every upcoming event for the artist name — date, venue name, city, country
 (passed through `canonicalCountry`, `src/lib/country.ts`), a ticket URL (the "Tickets" offer
@@ -59,16 +69,8 @@ Limits/quirks:
 - `country` is canonicalized (`src/lib/country.ts`) specifically because Bandsintown sends
   "United States" while Ticketmaster sends "United States Of America" — without this, the
   same artist's dates would read three different ways in one list.
-- **Compliance is not enforced in code.** Per `TODO.md` and the `bandsintown-compliance-blocked`
-  project note: Bandsintown's API is not self-serve — an `app_id` is granted only by emailing
-  `support@bandsintown.com`, which is acceptance of their terms. Those terms require showing
-  Bandsintown's own Track/RSVP/Notify-Me buttons and branding as the primary ticket links on
-  the public tour page (the current public site renders a plain "Tickets →" link only), allow
-  only session-based caching with upstream-removal cleanup (this app persists events in
-  `tour_dates` indefinitely, with no removal-on-delist cleanup), and require written approval
-  for commercial use. None of this is a code gate — `syncBandsintownAction` runs exactly like
-  any other pull the moment `BANDSINTOWN_APP_ID` is set. Do not treat Bandsintown as "ready"
-  in production until these are resolved.
+- Compliance is enforced by the gate described above (`BANDSINTOWN_TERMS_COMPLIANT`) —
+  see "Known gaps" for the checklist that env var stands for.
 
 How a pull is triggered:
 - **Connect**: typing the artist name and clicking Connect (Sync has no on/off toggle for a
@@ -106,12 +108,14 @@ once the manager publishes them on.
   `connectOneAction`, `pullConnectionAction` (shared across every connection).
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/connect-modal.tsx`,
   `connection-modal.tsx`, `connection-list.tsx`, `connection-mark.tsx` — the Connections UI.
-- `.env.example` — documents `BANDSINTOWN_APP_ID`.
+- `.env.example` — documents `BANDSINTOWN_APP_ID` and `BANDSINTOWN_TERMS_COMPLIANT`.
 
 ## Tests
 
 - `tests/unit/sync/bandsintown.test.ts` — event mapping, 429 retry, error shaping,
-  unknown-artist → `[]`, missing-app-id guard.
+  unknown-artist → `[]`, and the compliance gate: closed without an app id, closed with
+  an app id but no/false terms flag, open with both, reading both env vars directly, and
+  a planted-witness fetch mock proving a closed gate never makes a request.
 - `tests/integration/sync/sync.bandsintown.test.ts` — `syncBandsintownTourDates` against
   the real database: inserts new, refreshes bandsintown-owned rows, never clobbers a
   manual row, tenancy.
@@ -129,9 +133,17 @@ once the manager publishes them on.
 
 ## Known gaps
 
-- **Not compliant for production** per `TODO.md` and project memory: no Bandsintown
-  branding/Track-RSVP-Notify buttons on the public tour page, no upstream-removal cleanup
-  for delisted events, no written approval for commercial use. This is a process gate,
-  not a code one — nothing stops `BANDSINTOWN_APP_ID` from being set and the sync running.
-- No cleanup when an event disappears from Bandsintown (their terms call for removing it);
-  `syncExternal` only inserts/refreshes, it never deletes a row upstream no longer sends.
+- **Not compliant for production yet** per `TODO.md` and project memory — and, since
+  2026-09-28, this is a **code gate**, not just a process note: `createBandsintownClient`
+  refuses to run unless `BANDSINTOWN_TERMS_COMPLIANT=true`, and that env var must not be
+  set until every item below is actually done:
+  - **Attribution + CTA buttons** — no Bandsintown branding or Track/RSVP/Notify-Me
+    buttons on the public tour page (`src/components/artist-site.tsx` renders a plain
+    "Tickets →" link only). Terms require these as the primary ticket links.
+  - **Upstream-removal cleanup** — no cleanup when an event disappears from Bandsintown
+    (their terms require removing cached content once it's gone upstream); `syncExternal`
+    only inserts/refreshes, it never deletes a row upstream no longer sends.
+  - **Commercial-use approval** — needs Bandsintown's written approval if Lone Star is a
+    paid service; not requested yet.
+  - Getting `BANDSINTOWN_APP_ID` itself doesn't clear this list — the app_id and the
+    terms-compliant flag are two separate, both-required gates.

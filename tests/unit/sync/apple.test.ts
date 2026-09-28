@@ -28,15 +28,23 @@ const artist = (id: number) => ({
   artistName: 'Skeen',
   trackId: id,
 })
+// Shaped on a real lookup (Skeen, 1754431714): every song row carries its collection's
+// id, name, link, artwork and a per-song release date, so the release needs no second
+// request.
 const song = (id: number, name: string, extra: Record<string, unknown> = {}) => ({
   wrapperType: 'track',
   kind: 'song',
+  artistId: 42,
   trackId: id,
   trackName: name,
+  collectionId: 900,
   collectionName: 'OutWest - EP',
+  collectionViewUrl: `https://music.apple.com/us/album/outwest/900?i=${id}&uo=4`,
   artworkUrl100: 'https://is1.mzstatic.com/image/thumb/foo/100x100bb.jpg',
   trackViewUrl: `https://music.apple.com/us/album/x/${id}`,
   trackTimeMillis: 98000,
+  trackCount: 4,
+  releaseDate: '2024-01-26T12:00:00Z',
   ...extra,
 })
 
@@ -62,10 +70,21 @@ describe('getArtistTracks (iTunes Search)', () => {
       {
         apple_id: '1',
         title: 'Drive',
-        album_name: 'OutWest - EP',
+        // Apple's " - EP" / " - Single" is store decoration, not the title: Spotify and
+        // Deezer call the same record "OutWest", and the match reads this name.
+        album_name: 'OutWest',
         cover_url: 'https://is1.mzstatic.com/image/thumb/foo/600x600bb.jpg',
         provider_url: 'https://music.apple.com/us/album/x/1',
         duration_ms: 98000,
+        release: {
+          id: '900',
+          title: 'OutWest',
+          release_type: 'ep',
+          cover_url: 'https://is1.mzstatic.com/image/thumb/foo/600x600bb.jpg',
+          release_date: '2024-01-26',
+          // The album's own page: the song's `?i=` pointer (and tracking) stripped.
+          url: 'https://music.apple.com/us/album/outwest/900',
+        },
       },
     ])
   })
@@ -118,10 +137,13 @@ describe('getArtistTracks (iTunes Search)', () => {
 
   it('tolerates missing optional fields (null, not undefined)', async () => {
     const bare = song(2, 'Bare', {
+      collectionId: undefined,
       collectionName: undefined,
+      collectionViewUrl: undefined,
       artworkUrl100: undefined,
       trackViewUrl: undefined,
       trackTimeMillis: undefined,
+      releaseDate: undefined,
     })
     const fetchImpl = vi.fn(async () => res({ body: { results: [bare] } }) as unknown as Response)
     const out = await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
@@ -132,6 +154,7 @@ describe('getArtistTracks (iTunes Search)', () => {
       cover_url: null,
       provider_url: null,
       duration_ms: null,
+      release: null, // no collection id → nothing to group under, never an invented one
     })
   })
 
@@ -153,5 +176,74 @@ describe('getArtistTracks (iTunes Search)', () => {
   it('throws a shaped error on HTTP failure', async () => {
     const fetchImpl = vi.fn(async () => res({ status: 500, body: {} }) as unknown as Response)
     await expect(client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')).rejects.toThrow(/500/)
+  })
+})
+
+/**
+ * THE RELEASE each song came from (Sam, 2026-09-28: Apple songs get grouped into albums,
+ * EPs and singles like Spotify's). Apple has no release-type field on a song, but its
+ * store names every non-album release "<title> - Single" / "<title> - EP" — that suffix is
+ * the explicit type, and an unsuffixed collection is an album.
+ */
+describe('getArtistTracks — the release each song belongs to', () => {
+  async function releaseOf(extra: Record<string, unknown>, artistId = '42') {
+    const fetchImpl = vi.fn(async () => res({ body: { results: [artist(42), song(1, 'Drive', extra)] } }) as unknown as Response)
+    const [t] = await client(fetchImpl as unknown as typeof fetch).getArtistTracks(artistId)
+    return t.release
+  }
+
+  it('" - Single" is a single, with the suffix off its title', async () => {
+    const r = await releaseOf({ collectionName: 'Home Again - Single', trackCount: 1 })
+    expect(r).toMatchObject({ title: 'Home Again', release_type: 'single' })
+  })
+
+  it('" - EP" is an EP', async () => {
+    const r = await releaseOf({ collectionName: 'OutWest - EP', trackCount: 3 })
+    expect(r).toMatchObject({ title: 'OutWest', release_type: 'ep' })
+  })
+
+  it('no suffix is an album — Apple labels every single and EP, so an unlabelled one is not', async () => {
+    const r = await releaseOf({ collectionName: 'Heatwaves & Horizons', trackCount: 10 })
+    expect(r).toMatchObject({ title: 'Heatwaves & Horizons', release_type: 'album' })
+  })
+
+  it('the suffix is matched only at the END — a title that merely contains " - Single" keeps it', async () => {
+    const r = await releaseOf({ collectionName: 'Love - Single Life' })
+    expect(r).toMatchObject({ title: 'Love - Single Life', release_type: 'album' })
+  })
+
+  it('is keyed by the collection id, so every song of one album names the same release', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        res({ body: { results: [song(1, 'Intro', { collectionName: 'H&H' }), song(2, 'Closer!', { collectionName: 'H&H' })] } }) as unknown as Response,
+    )
+    const out = await client(fetchImpl as unknown as typeof fetch).getArtistTracks('42')
+    expect(out.map((t) => t.release?.id)).toEqual(['900', '900'])
+  })
+
+  it('a Various Artists compilation is not the artist\'s release (Spotify never pulls those either)', async () => {
+    // Real shape (Jack Johnson, 909253): a compilation names its own collection artist.
+    const r = await releaseOf({ collectionArtistId: 36270, collectionArtistName: 'Various Artists', collectionName: 'Hawaiian Slack Key Kings' })
+    expect(r).toBeNull()
+  })
+
+  it("an appearance on someone else's album is not the artist's release", async () => {
+    // Real shape: "Paula Fuga & Jack Johnson" on Paula Fuga's album — the song is by
+    // another artist id and the collection is credited to someone else by name.
+    const r = await releaseOf({ artistId: 159380642, artistName: 'Paula Fuga & Jack Johnson', collectionArtistName: 'Paula Fuga', collectionName: 'Rain On Sunday' })
+    expect(r).toBeNull()
+  })
+
+  it('a joint credit that includes the artist IS their release', async () => {
+    // Real shape (Skeen): "#lola! [skeen remix] - Single" by the joint artist
+    // "TSG: AP! & Skeen" — another artist id, but no other collection credit. Spotify
+    // lists it under Skeen's own singles.
+    const r = await releaseOf({ artistId: 1613049935, artistName: 'TSG: AP! & Skeen', collectionName: '#lola! [skeen remix] - Single' })
+    expect(r).toMatchObject({ title: '#lola! [skeen remix]', release_type: 'single' })
+  })
+
+  it('a collection credited to the artist by name is still theirs', async () => {
+    const r = await releaseOf({ artistName: 'Skeen', collectionArtistName: 'Skeen', collectionName: 'Heatwaves & Horizons' })
+    expect(r).toMatchObject({ title: 'Heatwaves & Horizons' })
   })
 })

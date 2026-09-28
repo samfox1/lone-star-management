@@ -1,7 +1,8 @@
 # Apple Music
 
 Connecting Apple Music links the artist's Apple Music profile on the site and pulls
-their songs (metadata + a store link, no audio) into the dashboard.
+their songs (metadata + a store link, no audio) into the dashboard, grouped into the
+albums, EPs and singles they came from.
 
 ## Connection type
 
@@ -56,18 +57,51 @@ sets the iTunes storefront country used in the lookup query (see `.env.example`)
 **What is pulled**: one request per pull — `lookup?id={artistId}&entity=song&limit=200`
 — returns the artist row first, then up to 200 of their songs; the client drops the
 artist row and keeps the tracks (`getArtistTracks`). There is no cursor pagination;
-200 is the iTunes API's own cap.
+200 is the iTunes API's own cap. Every song row already names its collection (id,
+name, link, artwork, a per-song date), so releases cost no extra request.
 
-**Where it lands**: `syncAppleTracks` (`src/lib/sync.ts`) writes/merges into the
-`tracks` table only — Apple Music never creates a `releases` row. Fields written:
-`apple_id`, `title`, `cover_url` (upsized from the 100x100 thumbnail to 600x600),
-`album_name`, `duration_ms`, and the store link in `apple_url` (its own column, kept
-separate from Spotify's `stream_url` so a merged row keeps both platforms' links
-independently). New rows land `on_site: false`.
+**Where it lands**: `syncAppleTracks` (`src/lib/sync.ts`) writes/merges the songs into
+`tracks`, then groups them into `releases` (since 2026-09-28; Sam: "Yes, group them").
+Song fields: `apple_id`, `title`, `cover_url` (upsized from the 100x100 thumbnail to
+600x600), `album_name` (Apple's " - Single" / " - EP" suffix removed), `duration_ms`,
+and the store link in `apple_url` (its own column, kept separate from Spotify's
+`stream_url` so a merged row keeps both platforms' links independently). New rows land
+`on_site: false`.
 
 A song already pulled from another platform is matched by normalized title +
 duration and gets Apple's id + link stamped onto that same row instead of
-duplicating it (`src/lib/sync-match.ts`, `matchTrackCandidate`).
+duplicating it (`src/lib/sync-match.ts`, `matchTrackCandidate`). When a single and
+its album both carry the song (two rows, same title and length), the copy on the same
+album wins the tie, so each copy lands on its own row.
+
+**Releases** (`syncReleases` in `src/lib/sync.ts`, the one release sync all three
+catalog platforms share):
+- *Which songs make a release*: songs are grouped by `collectionId` (`groupReleases`
+  in `src/lib/sync-match.ts`). A collection that is not the artist's own is left out
+  and its songs stay loose — a Various Artists compilation (it names another
+  `collectionArtistId`) or an appearance on someone else's album (another collection
+  credit, on a song by another artist id). A joint credit that includes the artist
+  ("TSG: AP! & Skeen") counts as theirs, as it does on Spotify.
+- *Type*: Apple names every non-album release "<title> - Single" or "<title> - EP";
+  that suffix is the explicit type and is taken as given. No suffix = album. The
+  track count never decides for Apple (it only does where a platform cannot tell a
+  single from an EP — Spotify; `classifyRelease`).
+- *Fields*: title (suffix removed), cover (600x600), date (the LATEST song's date —
+  an album's pre-released singles keep their own earlier dates), and one seed link
+  `{ label: 'Apple Music', url }` to the album page (the song's `?i=` pointer removed).
+  New releases land `on_site: false`, `source: 'apple'`, with a unique slug.
+- *Finding an existing release* (so Spotify, Deezer and Apple never make two):
+  `releases` has no Apple id column, so an Apple release is known by its songs. In
+  order: the release Apple's songs already sit in (most of them — the song merge has
+  just said which songs are the same); else an imported release with the same
+  normalized title, when exactly one is open (reported as "merged by title" in the
+  Sync dialog); else a new release. A hand-made release is only ever joined through
+  its songs, never on a name alone.
+- *What a pull may write*: on a release Apple created, title, cover/date (never null
+  over a value) and the type unless the manager locked it. On a release another
+  platform or the manager made: only an empty cover or date. Never `on_site`, slug,
+  `links`, `released`, `sort_order`. Songs are filed only where unassigned (a manual
+  move wins) and take the release's type only while still at the default `single`.
 
 **Proof of sync**: `TRACK_ID_COLUMN.apple = 'apple_id'`
 (`src/lib/integrations-registry.ts`) — the connection reads "synced" when at least
@@ -100,10 +134,12 @@ shows it as a plain labelled link.
   code: `social` (link method, the artist-id regex as `idFromUrl`) and `source` (the
   registry entry).
 - `src/lib/apple.ts` — `createAppleMusicClient`: the iTunes `lookup` call, artwork
-  upsizing, track mapping.
-- `src/lib/sync.ts` — `syncAppleTracks`: writes/merges into `tracks`.
-- `src/lib/sync-match.ts` — cross-platform title/duration matching shared by all
-  three catalog services.
+  upsizing, track mapping, `appleCollection` (the suffix → type rule), the
+  own-collection rule.
+- `src/lib/sync.ts` — `syncAppleTracks`: writes/merges into `tracks`, then
+  `syncReleases` groups them into `releases`.
+- `src/lib/sync-match.ts` — cross-platform title/duration matching, the release-type
+  law (`classifyRelease`) and `groupReleases`, shared by all three catalog services.
 - `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above), row
   building.
 - `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above.
@@ -124,7 +160,12 @@ shows it as a plain labelled link.
 ## Tests
 
 - `tests/unit/sync/apple.test.ts` — the client: lookup mapping, the artist-row
-  filter, artwork upsizing, 429 backoff.
+  filter, artwork upsizing, 429 backoff, the release each song carries (suffix types,
+  compilations/appearances left out, joint credits kept).
+- `tests/unit/sync/catalog-releases.test.ts` — `classifyRelease` and `groupReleases`.
+- `tests/integration/sync/sync.catalog-releases.test.ts` — Apple-only pull creates the
+  releases; Spotify→Apple, Apple→Spotify, Deezer→Apple meet on one release; the title
+  fallback; manual edits surviving a re-pull (fetch stubbed, real DB).
 - `tests/integration/sync/sync.apple.test.ts` — track sync against the real
   database: insert new, refresh Apple-owned rows, never clobber a manual edit or
   another provider's row, tenancy (throwaway artists, per `AGENTS.md` rule 6).
@@ -141,9 +182,14 @@ shows it as a plain labelled link.
 
 ## Known gaps
 
-- No `releases` sync: a song pulled from Apple Music never creates or joins an
-  album/EP card on its own — it stays a loose track unless a later Spotify pull
-  matches it in by title + duration.
+- A release Apple created has its title/cover/date refreshed by every Apple pull, so a
+  manager's rename of it reverts (Spotify's releases behave the same). Only the type
+  has a lock (`release_type_locked`); a title lock would need a migration.
+- No Apple release id column: joining an existing release relies on the songs having
+  merged (or the title). A pull never adds its own link to a release another platform
+  made — with no id column it cannot tell "never added" from "the manager removed it".
+- The release smart-link snapshot: the Spotify pull publishes a release revision after
+  syncing (`publishContent` in `pullSpotify`); `syncAppleAction` does not yet.
 - No audio: Apple's free lookup endpoint returns a store link, not a stream, so
   Apple-only songs have no in-app playback.
 - Country/storefront is a single global `APPLE_STOREFRONT` env var, not a per-artist

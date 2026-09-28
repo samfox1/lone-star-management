@@ -260,6 +260,69 @@ describe('syncSpotifyReleases', () => {
     expect(byId['t-retag']).toBe('remix') // hand-tagged → left alone
   })
 
+  it("a LOCKED release's songs take the manager's type, so a release and its songs agree", async () => {
+    // The Music page files a project under its SONGS' type. Stamping Spotify's derived type
+    // onto the songs of a release the manager locked as a remix split them: the release
+    // said Remix, its songs said Album.
+    const { data: locked } = await svc
+      .from('releases')
+      .insert({ artist_id: artistA, title: 'Debut', slug: 'debut', release_type: 'remix', release_type_locked: true, source: 'spotify', spotify_id: 'sp-alb' })
+      .select('id')
+      .single()
+    await svc.from('tracks').insert({ artist_id: artistA, title: 'Song', spotify_id: 't-1', source: 'spotify', release_id: locked!.id })
+
+    await syncSpotifyReleases(asA, artistA, [rel({ release_type: 'album', track_spotify_ids: ['t-1'] })])
+
+    const { data } = await svc.from('tracks').select('release_type').eq('artist_id', artistA).single()
+    expect(data!.release_type).toBe('remix')
+  })
+
+  it('a song the manager filed under ANOTHER release keeps its own type', async () => {
+    // The stamp is for the release's own songs. A member the manager moved elsewhere
+    // belongs to that other release now, and takes nothing from this one. The album's own
+    // release already exists (found by its Spotify id), so the move is the only
+    // difference between the two songs.
+    const { data: own } = await svc
+      .from('releases')
+      .insert({ artist_id: artistA, title: 'Debut', slug: 'debut', release_type: 'single', source: 'spotify', spotify_id: 'sp-alb' })
+      .select('id')
+      .single()
+    const { data: other } = await svc
+      .from('releases')
+      .insert({ artist_id: artistA, title: 'Loose ends', slug: 'loose-ends', source: 'manual' })
+      .select('id')
+      .single()
+    await svc.from('tracks').insert([
+      { artist_id: artistA, title: 'Stayed', spotify_id: 't-stayed', source: 'spotify', release_id: own!.id },
+      { artist_id: artistA, title: 'Moved', spotify_id: 't-moved', source: 'spotify', release_id: other!.id },
+    ])
+
+    await syncSpotifyReleases(asA, artistA, [rel({ release_type: 'album', track_spotify_ids: ['t-stayed', 't-moved'] })])
+
+    const { data } = await svc.from('tracks').select('spotify_id, release_id, release_type').eq('artist_id', artistA)
+    const byId = Object.fromEntries((data ?? []).map((t) => [t.spotify_id, t]))
+    expect(byId['t-stayed']).toMatchObject({ release_id: own!.id, release_type: 'album' }) // the stamp ran
+    expect(byId['t-moved']).toMatchObject({ release_id: other!.id, release_type: 'single' }) // …and passed the moved one by
+  })
+
+  it("a Spotify album never joins a release that already carries ANOTHER Spotify album's id", async () => {
+    // Releases are found through their songs now (so Spotify can join an Apple or Deezer
+    // release). A release already holding a different Spotify album is that album's, and
+    // one Spotify album per release is what its smart link and every re-pull key on.
+    const { data: theirs } = await svc
+      .from('releases')
+      .insert({ artist_id: artistA, title: 'Other', slug: 'other', source: 'spotify', spotify_id: 'sp-other' })
+      .select('id')
+      .single()
+    await svc.from('tracks').insert({ artist_id: artistA, title: 'Shared', spotify_id: 't-shared', source: 'spotify', release_id: theirs!.id })
+
+    const result = await syncSpotifyReleases(asA, artistA, [rel({ spotify_id: 'sp-alb', track_spotify_ids: ['t-shared'] })])
+
+    expect(result).toMatchObject({ added: 1 })
+    const { data } = await svc.from('releases').select('spotify_id').eq('artist_id', artistA).order('spotify_id')
+    expect((data ?? []).map((r) => r.spotify_id)).toEqual(['sp-alb', 'sp-other'])
+  })
+
   it("CRITICAL: cannot sync releases into another tenant's artist", async () => {
     // Postgres must be the refusing party, not an incidental throw on the way there.
     // A PLANTED WITNESS (AGENTS.md rule 2). This used to assert that B held ZERO rows

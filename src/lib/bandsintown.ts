@@ -35,13 +35,20 @@ type BandsintownEvent = {
 
 type Options = {
   appId?: string
+  /** Overrides BANDSINTOWN_TERMS_COMPLIANT — for tests. Production never sets this;
+   *  the real gate reads the env var. */
+  termsCompliant?: boolean
   fetchImpl?: typeof fetch
   sleep?: (ms: number) => Promise<void>
   maxRetries?: number
 }
 
+/** The one plain sentence a manager sees when the gate is closed, whatever the reason. */
+export const BANDSINTOWN_GATE_CLOSED_MESSAGE = "Bandsintown isn't switched on yet."
+
 export function createBandsintownClient(opts: Options = {}) {
   const appId = opts.appId ?? process.env.BANDSINTOWN_APP_ID
+  const termsCompliant = opts.termsCompliant ?? process.env.BANDSINTOWN_TERMS_COMPLIANT === 'true'
   const doFetch = opts.fetchImpl ?? fetch
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   const maxRetries = opts.maxRetries ?? 3
@@ -62,8 +69,28 @@ export function createBandsintownClient(opts: Options = {}) {
   }
 
   async function getArtistEvents(artistName: string): Promise<BandsintownTourDate[]> {
-    if (!appId) {
-      throw new Error('Bandsintown app id not configured (BANDSINTOWN_APP_ID).')
+    /**
+     * The compliance gate (Sam, 2026-09-28: TODO.md's Bandsintown note was a promise,
+     * not a lock — nothing stopped a live pull once BANDSINTOWN_APP_ID was set). Every
+     * Bandsintown call goes through this client, so this is the one place it lives:
+     * Connect, Sync, Pull now and Retry all end up in `syncBandsintownAction`, which
+     * always builds its client here.
+     *
+     * Opens only when BOTH are true:
+     * - `BANDSINTOWN_APP_ID` is set (granted by emailing support@bandsintown.com — see
+     *   the README's "Sync / integration" section).
+     * - `BANDSINTOWN_TERMS_COMPLIANT` is the exact string `"true"` — hand-set only once
+     *   the README's compliance checklist is actually done (attribution + Track/RSVP/
+     *   Notify Me buttons on the public tour page, upstream-removal cleanup in the
+     *   sync, written approval for commercial use — see the README's "Known gaps").
+     *
+     * No dev exception: both checks run the same in every environment. Bandsintown's
+     * terms don't change for NODE_ENV, and this repo's existing dev-only hatches
+     * (`custom-site.ts`'s loopback allowance, `supabase/middleware.ts`'s dev auto-login)
+     * exist for local convenience, not for skipping a third party's terms.
+     */
+    if (!appId || !termsCompliant) {
+      throw new Error(BANDSINTOWN_GATE_CLOSED_MESSAGE)
     }
     const url = `${API_BASE}/artists/${encodeURIComponent(artistName)}/events?app_id=${encodeURIComponent(appId)}`
     const body = await httpGetJson<unknown>(url, {

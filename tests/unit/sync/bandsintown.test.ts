@@ -4,8 +4,8 @@
  * Covers: event mapping, 429 retry, error shaping, unknown-artist → [], and the
  * missing-app-id guard.
  */
-import { describe, expect, it, vi } from 'vitest'
-import { createBandsintownClient } from '@/lib/bandsintown'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BANDSINTOWN_GATE_CLOSED_MESSAGE, createBandsintownClient } from '@/lib/bandsintown'
 
 function res({ status = 200, headers = {}, body }: { status?: number; headers?: Record<string, string>; body: unknown }) {
   return {
@@ -16,8 +16,11 @@ function res({ status = 200, headers = {}, body }: { status?: number; headers?: 
   }
 }
 
+// Every non-gate test below is about event mapping/retry/error-shaping, not the gate
+// itself, so it opens the gate explicitly (appId + termsCompliant) rather than relying
+// on ambient env vars nobody set.
 function client(fetchImpl: typeof fetch, appId: string | undefined = 'app123') {
-  return createBandsintownClient({ appId, fetchImpl, sleep: () => Promise.resolve() })
+  return createBandsintownClient({ appId, termsCompliant: true, fetchImpl, sleep: () => Promise.resolve() })
 }
 
 const EVENT = {
@@ -93,9 +96,78 @@ describe('getArtistEvents', () => {
     await expect(client(fetchImpl as unknown as typeof fetch).getArtistEvents('x')).rejects.toThrow(/bandsintown/i)
   })
 
-  it('throws when no app id is configured', async () => {
+  it('throws when no app id is configured (the gate is closed)', async () => {
     const fetchImpl = vi.fn(async () => res({ body: [] }) as unknown as Response)
-    const c = createBandsintownClient({ appId: '', fetchImpl: fetchImpl as unknown as typeof fetch, sleep: () => Promise.resolve() })
-    await expect(c.getArtistEvents('x')).rejects.toThrow(/app id/i)
+    const c = createBandsintownClient({ appId: '', termsCompliant: true, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: () => Promise.resolve() })
+    await expect(c.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+  })
+})
+
+describe('compliance gate (BANDSINTOWN_APP_ID + BANDSINTOWN_TERMS_COMPLIANT)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  /** A fetch mock that fails the test outright if the gate ever lets a call through. */
+  function witnessFetch() {
+    return vi.fn(async () => {
+      throw new Error('fetch must not be called while the Bandsintown gate is closed')
+    }) as unknown as typeof fetch
+  }
+
+  it('is closed without an app id, even when the terms flag is true — and never calls fetch', async () => {
+    const fetchImpl = witnessFetch()
+    const c = createBandsintownClient({ appId: '', termsCompliant: true, fetchImpl, sleep: () => Promise.resolve() })
+    await expect(c.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('is closed with an app id but no compliance flag — and never calls fetch', async () => {
+    const fetchImpl = witnessFetch()
+    const c = createBandsintownClient({ appId: 'app123', fetchImpl, sleep: () => Promise.resolve() })
+    await expect(c.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('is closed with an app id and the compliance flag explicitly false — and never calls fetch', async () => {
+    const fetchImpl = witnessFetch()
+    const c = createBandsintownClient({ appId: 'app123', termsCompliant: false, fetchImpl, sleep: () => Promise.resolve() })
+    await expect(c.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('is open when both the app id and the compliance flag are set', async () => {
+    const fetchImpl = vi.fn(async () => res({ body: [] }) as unknown as Response)
+    const c = createBandsintownClient({ appId: 'app123', termsCompliant: true, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: () => Promise.resolve() })
+    await expect(c.getArtistEvents('x')).resolves.toEqual([])
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads both env vars directly when no options override them (the real production path)', async () => {
+    const fetchImpl = witnessFetch()
+    vi.stubEnv('BANDSINTOWN_APP_ID', '')
+    vi.stubEnv('BANDSINTOWN_TERMS_COMPLIANT', '')
+    const closed = createBandsintownClient({ fetchImpl, sleep: () => Promise.resolve() })
+    await expect(closed.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+    expect(fetchImpl).not.toHaveBeenCalled()
+
+    const openFetch = vi.fn(async () => res({ body: [] }) as unknown as Response)
+    vi.stubEnv('BANDSINTOWN_APP_ID', 'app123')
+    vi.stubEnv('BANDSINTOWN_TERMS_COMPLIANT', 'true')
+    const open = createBandsintownClient({ fetchImpl: openFetch as unknown as typeof fetch, sleep: () => Promise.resolve() })
+    await expect(open.getArtistEvents('x')).resolves.toEqual([])
+    expect(openFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('only "true" (exact string) opens the flag — a typo stays closed', async () => {
+    const fetchImpl = witnessFetch()
+    const c = createBandsintownClient({ appId: 'app123', fetchImpl, sleep: () => Promise.resolve(), termsCompliant: false })
+    vi.stubEnv('BANDSINTOWN_APP_ID', 'app123')
+    vi.stubEnv('BANDSINTOWN_TERMS_COMPLIANT', 'TRUE')
+    // Options were passed explicitly as false above; this second client relies purely on env.
+    const c2 = createBandsintownClient({ fetchImpl, sleep: () => Promise.resolve() })
+    await expect(c.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+    await expect(c2.getArtistEvents('x')).rejects.toThrow(BANDSINTOWN_GATE_CLOSED_MESSAGE)
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 })

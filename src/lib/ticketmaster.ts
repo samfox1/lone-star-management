@@ -6,6 +6,12 @@
  *
  * Resolve the artist to an ATTRACTION id once (cached on the artist); this client
  * pulls events for that attraction. A factory with injectable fetch/sleep.
+ *
+ * Also exports `ticketmasterAttractionId`, a pure parser for what the manager types into
+ * that field: keeps asking for the id itself (Sam, 2026-09-28: no name-search flow — an
+ * attraction id is what the Discovery API needs, so that is what gets asked for), but
+ * reads it straight out of a pasted Ticketmaster artist-page link so the manager never has
+ * to dig it out by hand.
  */
 
 import { canonicalCountry } from '@/lib/country'
@@ -13,6 +19,37 @@ import { coord } from '@/lib/geo'
 import { httpGetJson } from '@/lib/http'
 
 const API_BASE = 'https://app.ticketmaster.com/discovery/v2'
+
+/**
+ * Whatever the manager pastes into the Ticketmaster field — a bare attraction id (used
+ * as is, trimmed) or their artist page link (`ticketmaster.com/<slug>/artist/<id>`, any
+ * regional host — `.co.uk`, `.ca`, `.com.au`… — query string and all) — as the id to
+ * save, or the one sentence explaining what to paste instead. Pure: no network.
+ *
+ * Attraction ids are Ticketmaster's own global id scheme (letters, digits, sometimes an
+ * underscore — e.g. `K8vZ917_szV7`), NOT necessarily numeric, so a bare id is accepted by
+ * shape (URL-safe characters), never assumed to be digits-only.
+ */
+export function ticketmasterAttractionId(input: string): { id: string } | { error: string } {
+  const error = { error: 'Paste the Ticketmaster attraction ID or your artist page link.' }
+  const text = input.trim()
+  if (!text) return error
+
+  const looksLikeLink = /^https?:\/\//i.test(text) || text.includes('/') || text.toLowerCase().includes('ticketmaster.')
+  if (!looksLikeLink) return /^[A-Za-z0-9_-]+$/.test(text) ? { id: text } : error
+
+  let url: URL
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`)
+  } catch {
+    return error
+  }
+  const host = url.hostname.toLowerCase().replace(/^(www|m|mobile)\./, '')
+  if (!/^ticketmaster\.[a-z.]+$/.test(host)) return error
+
+  const artist = url.pathname.match(/\/artist\/([A-Za-z0-9_-]+)/i)
+  return artist ? { id: artist[1] } : error
+}
 
 /** The shape the tour-dates sync consumes (one Ticketmaster event). */
 export type TicketmasterTourDate = {

@@ -105,7 +105,7 @@ const BEFORE_METHODS = {
     fromPath: [null, null, null, null, null, { url: 'https://facebook.com/profile.php?id=123' }, null, null, null, null, null, null, null, null, null, null, null, null],
   },
   x: { kind: 'handle', label: 'X', noun: 'handle', hosts: ['x.com', 'twitter.com'], rule: '/^[A-Za-z0-9_]{1,15}$/', example: 'skeenmusic', before: 'x.com/', after: '', url: 'https://x.com/h4ndle', fromPath: NONE },
-  threads: { kind: 'handle', label: 'Threads', noun: 'handle', hosts: ['threads.net', 'threads.com'], rule: '/^[A-Za-z0-9._]{1,30}$/', example: 'skeenmusic', before: 'threads.net/@', after: '', url: 'https://threads.net/@h4ndle', fromPath: NONE },
+  threads: { kind: 'handle', label: 'Threads', noun: 'handle', hosts: ['threads.com', 'threads.net'], rule: '/^[A-Za-z0-9._]{1,30}$/', example: 'skeenmusic', before: 'threads.com/@', after: '', url: 'https://threads.com/@h4ndle', fromPath: NONE },
   substack: { kind: 'handle', label: 'Substack', noun: 'handle', hosts: ['substack.com'], rule: '/^[A-Za-z0-9_-]{1,40}$/', example: 'skeen', before: 'substack.com/@', after: '', url: 'https://substack.com/@h4ndle', alsoSubdomain: true, fromPath: NONE },
   patreon: { kind: 'handle', label: 'Patreon', noun: 'page name', hosts: ['patreon.com'], rule: '/^[A-Za-z0-9_]{1,64}$/', example: 'skeen', before: 'patreon.com/', after: '', url: 'https://patreon.com/h4ndle', fromPath: NONE },
   discord: {
@@ -127,7 +127,7 @@ const BEFORE_CONNECTIONS = [
   { key: 'bandcamp', label: 'Bandcamp', kind: 'social', social: 'bandcamp', urlHint: 'https://bandcamp.com/' },
   { key: 'facebook', label: 'Facebook', kind: 'social', social: 'facebook', urlHint: 'https://facebook.com/' },
   { key: 'x', label: 'X', kind: 'social', social: 'x', urlHint: 'https://x.com/' },
-  { key: 'threads', label: 'Threads', kind: 'social', social: 'threads', urlHint: 'https://threads.net/@' },
+  { key: 'threads', label: 'Threads', kind: 'social', social: 'threads', urlHint: 'https://threads.com/@' },
   { key: 'substack', label: 'Substack', kind: 'social', social: 'substack', urlHint: 'https://substack.com/@' },
   { key: 'patreon', label: 'Patreon', kind: 'social', social: 'patreon', urlHint: 'https://patreon.com/' },
   { key: 'discord', label: 'Discord', kind: 'social', social: 'discord', urlHint: 'https://discord.gg/' },
@@ -135,7 +135,7 @@ const BEFORE_CONNECTIONS = [
   { key: 'deezer', label: 'Deezer', kind: 'social', social: 'deezer', urlHint: 'https://deezer.com/artist/', source: { key: 'deezer', section: 'music', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID' } },
   { key: 'tidal', label: 'Tidal', kind: 'social', social: 'tidal', urlHint: 'https://tidal.com/artist/' },
   { key: 'bandsintown', label: 'Bandsintown', kind: 'service', source: { key: 'bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name' } },
-  { key: 'ticketmaster', label: 'Ticketmaster', kind: 'service', source: { key: 'ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID' } },
+  { key: 'ticketmaster', label: 'Ticketmaster', kind: 'service', source: { key: 'ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID or artist link' } },
   { key: 'drive', label: 'Google Drive', kind: 'service', source: { key: 'drive', section: 'files', idField: 'drive_folder_id', placeholder: 'Google Drive folder link' } },
   { key: 'shopify', label: 'Shopify', kind: 'service', source: { key: 'shopify', section: 'merch', placeholder: 'store.myshopify.com' } },
 ]
@@ -146,7 +146,7 @@ const BEFORE_REGISTRY = [
   { key: 'deezer', label: 'Deezer', section: 'music', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID', pullLabel: 'Pull from Deezer' },
   { key: 'youtube', label: 'YouTube', section: 'videos', idField: 'youtube_channel_id', placeholder: 'YouTube @handle, channel ID, or URL', pullLabel: 'Import uploads' },
   { key: 'bandsintown', label: 'Bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name', pullLabel: 'Pull tour dates' },
-  { key: 'ticketmaster', label: 'Ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID', pullLabel: 'Pull tour dates' },
+  { key: 'ticketmaster', label: 'Ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID or artist link', pullLabel: 'Pull tour dates' },
   { key: 'drive', label: 'Google Drive', section: 'files', idField: 'drive_folder_id', placeholder: 'Google Drive folder link', pullLabel: 'Check folder' },
 ]
 

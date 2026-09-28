@@ -28,10 +28,12 @@ import type { AppleTrackInput } from '@/lib/apple'
 import type { YouTubeVideoInput } from '@/lib/youtube'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { TicketmasterTourDate } from '@/lib/ticketmaster'
-import { matchTrackCandidate, normalizeTitle } from '@/lib/sync-match'
+import type { ReleaseType } from '@/lib/releases'
+import { groupReleases, matchTrackCandidate, normalizeTitle, type CatalogRelease, type CatalogReleaseRef } from '@/lib/sync-match'
 
 // The merge DECISIONS live in sync-match (pure, mutation-tested); this module writes.
 export { normalizeTitle, matchTrackCandidate } from '@/lib/sync-match'
+export type { CatalogRelease } from '@/lib/sync-match'
 
 export type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
 
@@ -415,113 +417,332 @@ export function syncSpotifyTracks(
   )
 }
 
+// ── Releases: one per album, whichever platform brings it ─────────────────────────
+// Sam, 2026-09-28: "Songs pulled from Apple Music or Deezer never get grouped into albums,
+// EPs or singles. Only Spotify does that." → "Yes, group them." All three platforms now
+// create and join releases through ONE function, so a release Spotify made is the one
+// Apple and Deezer file their songs under, and the other way round.
+
+/** The catalog platforms that bring releases. */
+type ReleasePlatform = 'spotify' | 'apple' | 'deezer'
+
 /**
- * Sync the artist's Spotify releases (albums/EPs/singles) into `releases` and
- * link their tracks. Deduped by `spotify_id`:
- *  - existing spotify releases get their metadata refreshed (title/cover/date/
- *    type) but NEVER their `on_site` toggle, slug, or DSP links — those are
- *    manager-owned;
- *  - new releases are inserted OFF-SITE (`on_site=false`) with a unique slug and a
- *    seed Spotify link, for the manager to toggle on.
- * Tracks are linked to their release by member Spotify id, but only where the
- * track isn't already assigned — so a manual assignment (or a prior link) wins.
- * Run AFTER the tracks sync, so the tracks exist to be linked.
+ * Per platform: the track column its song ids live in, the label of the DSP link a NEW
+ * release is seeded with, and its release-id column on `releases`. Only Spotify has one
+ * (`releases.spotify_id`); an Apple or Deezer release is known by its SONGS instead, which
+ * the schema already records (`tracks.apple_id` / `deezer_id` + `tracks.release_id`).
  */
-export async function syncSpotifyReleases(
+const RELEASE_PLATFORM: Record<ReleasePlatform, { trackIdCol: TrackIdCol; linkLabel: string; releaseIdCol: 'spotify_id' | null }> = {
+  spotify: { trackIdCol: 'spotify_id', linkLabel: 'Spotify', releaseIdCol: 'spotify_id' },
+  apple: { trackIdCol: 'apple_id', linkLabel: 'Apple Music', releaseIdCol: null },
+  deezer: { trackIdCol: 'deezer_id', linkLabel: 'Deezer', releaseIdCol: null },
+}
+
+/** What a release sync did. `merged` = joined a release another platform (or the
+ *  manager) made; `notes` name the judgement calls, in the song sync's own words. */
+export type ReleaseSyncResult = { added: number; updated: number; merged: number; notes: SyncNote[] }
+
+type ReleaseRow = {
+  id: string
+  slug: string
+  title: string
+  source: string
+  spotify_id: string | null
+  cover_url: string | null
+  release_date: string | null
+  release_type: ReleaseType
+  release_type_locked: boolean | null
+}
+
+/**
+ * Sync one platform's releases (albums/EPs/singles) into `releases` and file their songs
+ * under them. Run AFTER that platform's song sync, so its songs exist (inserted, or
+ * stamped onto another platform's copy) to be filed and to be read as evidence.
+ *
+ * FINDING THE RELEASE — the song sync's own tiers, strongest first:
+ *   1. its id: `releases.spotify_id` (Spotify only — the one release-id column);
+ *   2. its SONGS: the release this platform's songs already sit in. The song merge has
+ *      just decided which songs are the same across platforms, so when Apple's copies were
+ *      stamped onto Spotify's rows, those rows already name Spotify's release. The most
+ *      common one wins (a manager may have moved a song or two). A release carrying a
+ *      DIFFERENT Spotify album id is another Spotify album's, never this one's;
+ *   3. its TITLE, through the song matcher's no-length tier (matchTrackCandidate): the
+ *      normalized title must leave exactly ONE open release, and the pull names it.
+ *      Only releases a platform IMPORTED are candidates — a hand-made release is joined
+ *      only through its songs (tier 2), never on a name alone — and a release already on
+ *      this platform (its id, or songs from it) is out of the running;
+ *   4. none of those: a NEW release, off-site, owned by this platform, with a unique slug
+ *      and one seed DSP link.
+ *
+ * WHAT A MATCH MAY WRITE — the song sync's union rule, applied to releases:
+ *   - the platform that CREATED the release (source) refreshes what Spotify always
+ *     refreshed: title, and cover/date when it has them (never null over a value), and
+ *     the type unless the manager locked it;
+ *   - any other platform only fills what is empty (cover, date) and, for Spotify, stamps
+ *     its album id — never the title or type another platform (or the manager) set;
+ *   - NOBODY touches on_site, slug, links, released, sort_order: manager-owned. Links are
+ *     seeded on insert only; with no Apple/Deezer id column there is no telling "never
+ *     added" from "the manager deleted it", so a pull never re-adds one.
+ * Songs are filed only where still unassigned (a manual move wins), and take the release's
+ * type only while at the column default 'single' (a manual re-tag wins).
+ */
+async function syncReleases(
   supabase: SupabaseClient,
   artistId: string,
-  releases: SpotifyReleaseInput[],
-): Promise<{ added: number; updated: number }> {
-  const { data: existing, error } = await supabase
+  platform: ReleasePlatform,
+  incoming: CatalogRelease[],
+): Promise<ReleaseSyncResult> {
+  const { trackIdCol, linkLabel, releaseIdCol } = RELEASE_PLATFORM[platform]
+
+  // Pinned order for the same reason as the song sync: a tie must not be decided by
+  // Postgres row order.
+  const { data: relData, error: relErr } = await supabase
     .from('releases')
-    .select('id, slug, spotify_id, release_type_locked')
+    .select('id, slug, title, source, spotify_id, cover_url, release_date, release_type, release_type_locked')
     .eq('artist_id', artistId)
-  if (error) throw new Error(error.message)
-  const rows = (existing ?? []) as {
-    id: string
-    slug: string
-    spotify_id: string | null
-    release_type_locked: boolean | null
-  }[]
-  const idBySpotify = new Map<string, string>()
-  const lockedById = new Map<string, boolean>()
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+  if (relErr) throw new Error(relErr.message)
+  const rows = (relData ?? []) as unknown as ReleaseRow[]
+
+  // Every song of the artist: which release each of this platform's songs sits in, and
+  // which releases already hold a song from this platform.
+  const { data: songData, error: songErr } = await supabase
+    .from('tracks')
+    .select(`id, release_id, ${trackIdCol}`)
+    .eq('artist_id', artistId)
+  if (songErr) throw new Error(songErr.message)
+  const songs = (songData ?? []) as unknown as Record<string, string | null>[]
+
+  const byId = new Map<string, ReleaseRow>()
+  const byExternal = new Map<string, ReleaseRow>()
+  const byTitle = new Map<string, ReleaseRow[]>()
   const slugs = new Set<string>()
   for (const r of rows) {
-    if (r.spotify_id) idBySpotify.set(r.spotify_id, r.id)
-    lockedById.set(r.id, !!r.release_type_locked)
+    byId.set(r.id, r)
+    if (releaseIdCol && r[releaseIdCol]) byExternal.set(r[releaseIdCol]!, r)
     slugs.add(r.slug)
+    if (r.source === 'manual') continue // joined through its songs only (see tier 3)
+    const key = normalizeTitle(r.title)
+    const bucket = byTitle.get(key)
+    if (bucket) bucket.push(r)
+    else byTitle.set(key, [r])
+  }
+  const releaseOfSong = new Map<string, string | null>()
+  const onPlatform = new Set<string>()
+  for (const t of songs) {
+    const ext = t[trackIdCol]
+    if (!ext) continue
+    releaseOfSong.set(ext, t.release_id)
+    if (t.release_id) onPlatform.add(t.release_id)
   }
 
+  /** Tier 2: the release most of this release's songs already sit in. */
+  function bySongs(rel: CatalogRelease): ReleaseRow | undefined {
+    const tally = new Map<string, number>()
+    for (const tid of rel.trackIds) {
+      const rid = releaseOfSong.get(tid)
+      const row = rid ? byId.get(rid) : undefined
+      if (!row) continue
+      if (releaseIdCol && row[releaseIdCol] != null && row[releaseIdCol] !== rel.externalId) continue
+      tally.set(row.id, (tally.get(row.id) ?? 0) + 1)
+    }
+    let best: ReleaseRow | undefined
+    let bestCount = 0
+    for (const [rid, n] of tally) {
+      if (n > bestCount) {
+        best = byId.get(rid)
+        bestCount = n
+      }
+    }
+    return best
+  }
+
+  // Upstream can repeat a release id; collapse last-wins.
+  const deduped = Array.from(new Map(incoming.map((r) => [r.externalId, r])).values())
+  const claimed = new Set<string>()
   let added = 0
   let updated = 0
+  let merged = 0
+  const notes: SyncNote[] = []
 
-  for (const rel of releases) {
-    const existingId = idBySpotify.get(rel.spotify_id)
-    // A locked release keeps its manager-set type (Sync still refreshes title/cover/date).
-    const meta: Record<string, unknown> = {
-      title: rel.title,
-      cover_url: rel.cover_url,
-      release_date: rel.release_date,
+  for (const rel of deduped) {
+    let target = releaseIdCol ? byExternal.get(rel.externalId) : undefined
+    if (!target) target = bySongs(rel)
+    let sawCandidate = false
+    if (!target) {
+      const cands = (byTitle.get(normalizeTitle(rel.title)) ?? []).map((r) => ({
+        id: r.id,
+        title: r.title,
+        duration_ms: null,
+        on_platform: (releaseIdCol ? r[releaseIdCol] : null) ?? (onPlatform.has(r.id) ? r.id : null),
+      }))
+      const m = matchTrackCandidate(cands, { title: rel.title, duration_ms: null }, 'on_platform', claimed)
+      if (m.kind === 'match') {
+        target = byId.get(m.row.id)
+        notes.push({ title: target!.title, kind: 'merged-by-title' })
+      } else sawCandidate = m.sawCandidate
     }
-    if (!(existingId && lockedById.get(existingId))) meta.release_type = rel.release_type
-    if (existingId) {
-      const { error: uErr } = await supabase.from('releases').update(meta).eq('id', existingId)
-      if (uErr) throw new Error(uErr.message)
-      updated++
-      continue
-    }
-    // Unique slug within the artist.
-    const base = slugify(rel.title) || rel.spotify_id.slice(0, 8)
-    let slug = base
-    for (let n = 2; slugs.has(slug); n++) slug = `${base}-${n}`
-    slugs.add(slug)
-    const links = rel.spotify_url ? [{ label: 'Spotify', url: rel.spotify_url }] : []
-    const { data: ins, error: iErr } = await supabase
-      .from('releases')
-      .insert({ artist_id: artistId, ...meta, slug, links, on_site: false, source: 'spotify', spotify_id: rel.spotify_id })
-      .select('id')
-      .single()
-    if (iErr) throw new Error(iErr.message)
-    idBySpotify.set(rel.spotify_id, ins!.id as string)
-    added++
-  }
 
-  // Link each release's tracks by Spotify id — only unassigned ones, so a manual
-  // (or earlier) assignment is never clobbered — and stamp the release's TYPE onto them,
-  // so a Spotify album's songs read as 'album' (etc.) rather than the default 'single'.
-  // Type is a per-song tag now (20260726120000); only stamp songs still at the default,
-  // so a manual re-tag (e.g. flagging one track a remix) is never clobbered.
-  for (const rel of releases) {
-    const releaseId = idBySpotify.get(rel.spotify_id)
-    if (!releaseId || rel.track_spotify_ids.length === 0) continue
+    let releaseId: string
+    let effectiveType: ReleaseType
+    if (target) {
+      releaseId = target.id
+      claimed.add(target.id)
+      onPlatform.add(target.id)
+      const owner = target.source === platform
+      const patch: Record<string, unknown> = {}
+      if (owner) {
+        patch.title = rel.title
+        if (rel.cover_url != null) patch.cover_url = rel.cover_url
+        if (rel.release_date != null) patch.release_date = rel.release_date
+        if (!target.release_type_locked) patch.release_type = rel.release_type
+      } else {
+        if (target.cover_url == null && rel.cover_url != null) patch.cover_url = rel.cover_url
+        if (target.release_date == null && rel.release_date != null) patch.release_date = rel.release_date
+      }
+      if (releaseIdCol && target[releaseIdCol] == null) patch[releaseIdCol] = rel.externalId
+      if (Object.keys(patch).length > 0) {
+        const { error: uErr } = await supabase.from('releases').update(patch).eq('id', target.id)
+        if (uErr) throw new Error(uErr.message)
+        Object.assign(target, patch)
+        if (releaseIdCol && patch[releaseIdCol]) byExternal.set(rel.externalId, target)
+      }
+      if (owner) updated++
+      else merged++
+      effectiveType = target.release_type
+    } else {
+      // Unique slug within the artist.
+      const base = slugify(rel.title) || rel.externalId.slice(0, 8)
+      let slug = base
+      for (let n = 2; slugs.has(slug); n++) slug = `${base}-${n}`
+      slugs.add(slug)
+      const links = rel.url ? [{ label: linkLabel, url: rel.url }] : []
+      const { data: ins, error: iErr } = await supabase
+        .from('releases')
+        .insert({
+          artist_id: artistId,
+          title: rel.title,
+          cover_url: rel.cover_url,
+          release_date: rel.release_date,
+          release_type: rel.release_type,
+          slug,
+          links,
+          on_site: false,
+          source: platform,
+          ...(releaseIdCol ? { [releaseIdCol]: rel.externalId } : {}),
+        })
+        .select('id')
+        .single()
+      if (iErr) throw new Error(iErr.message)
+      releaseId = ins!.id as string
+      const row: ReleaseRow = {
+        id: releaseId,
+        slug,
+        title: rel.title,
+        source: platform,
+        spotify_id: releaseIdCol ? rel.externalId : null,
+        cover_url: rel.cover_url,
+        release_date: rel.release_date,
+        release_type: rel.release_type,
+        release_type_locked: false,
+      }
+      byId.set(releaseId, row)
+      if (releaseIdCol) byExternal.set(rel.externalId, row)
+      claimed.add(releaseId)
+      onPlatform.add(releaseId)
+      effectiveType = rel.release_type
+      added++
+      // A release by this name was already here and could not take this one.
+      if (sawCandidate) notes.push({ title: rel.title, kind: 'possible-duplicate' })
+    }
+
+    if (rel.trackIds.length === 0) continue
+    // File the songs — only unassigned ones, so a manual (or earlier) assignment wins.
     const { error: lErr } = await supabase
       .from('tracks')
       .update({ release_id: releaseId })
       .eq('artist_id', artistId)
       .is('release_id', null)
-      .in('spotify_id', rel.track_spotify_ids)
+      .in(trackIdCol, rel.trackIds)
     if (lErr) throw new Error(lErr.message)
+    for (const tid of rel.trackIds) if (releaseOfSong.get(tid) == null) releaseOfSong.set(tid, releaseId)
+    // Stamp the release's type onto its songs (the Music page reads the SONG's tag), only
+    // where a song is still at the column default — a manual re-tag is never clobbered.
+    // The type is the release's own after this pull (a locked type, or the creating
+    // platform's), so a release's songs agree with it.
+    if (effectiveType === 'single') continue
     const { error: tErr } = await supabase
       .from('tracks')
-      .update({ release_type: rel.release_type })
+      .update({ release_type: effectiveType })
       .eq('artist_id', artistId)
+      .eq('release_id', releaseId)
       .eq('release_type', 'single')
-      .in('spotify_id', rel.track_spotify_ids)
+      .in(trackIdCol, rel.trackIds)
     if (tErr) throw new Error(tErr.message)
   }
 
-  return { added, updated }
+  return { added, updated, merged, notes }
+}
+
+/**
+ * Sync the artist's Spotify releases (albums/EPs/singles) into `releases` and file their
+ * songs — through the one release sync all three platforms share (see syncReleases). A
+ * release Apple or Deezer already made is found through its songs (or its title) and
+ * gets Spotify's album id stamped on it, instead of a second copy.
+ * Run AFTER the tracks sync, so the tracks exist to be linked.
+ */
+export function syncSpotifyReleases(
+  supabase: SupabaseClient,
+  artistId: string,
+  releases: SpotifyReleaseInput[],
+): Promise<ReleaseSyncResult> {
+  return syncReleases(
+    supabase,
+    artistId,
+    'spotify',
+    releases.map((r) => ({
+      externalId: r.spotify_id,
+      title: r.title,
+      release_type: r.release_type,
+      cover_url: r.cover_url,
+      release_date: r.release_date,
+      url: r.spotify_url,
+      trackIds: r.track_spotify_ids,
+    })),
+  )
+}
+
+/**
+ * The song sync, then the releases those songs came from. The Apple and Deezer pulls
+ * hand over one flat song list (each song carrying its release), so their sync step is
+ * where the list folds back into releases — the actions that call these need no change.
+ * Songs with no release (a compilation, an appearance, a fixture without one) stay loose;
+ * a list with none at all never touches `releases`. The release sync's notes join the
+ * song sync's, so the Sync dialog names a release joined on its title alone.
+ */
+async function thenReleases(
+  supabase: SupabaseClient,
+  artistId: string,
+  platform: 'apple' | 'deezer',
+  songResult: SyncResult,
+  songs: { trackId: string; release?: CatalogReleaseRef | null }[],
+): Promise<SyncResult> {
+  const releases = groupReleases(songs)
+  if (releases.length === 0) return songResult
+  const rel = await syncReleases(supabase, artistId, platform, releases)
+  return { ...songResult, notes: [...songResult.notes, ...rel.notes] }
 }
 
 /** Apple Music is a metadata + link-out source (no hosted audio). Its link lives in
  *  `apple_url` (not the shared legacy `provider_url`) so a merged row keeps each
  *  platform's link independently. */
-export function syncAppleTracks(
+export async function syncAppleTracks(
   supabase: SupabaseClient,
   artistId: string,
   tracks: AppleTrackInput[],
 ): Promise<SyncResult> {
-  return syncTracks(
+  const songs = await syncTracks(
     supabase,
     artistId,
     'apple_id',
@@ -536,16 +757,17 @@ export function syncAppleTracks(
       mergeFill: { apple_url: t.provider_url },
     })),
   )
+  return thenReleases(supabase, artistId, 'apple', songs, tracks.map((t) => ({ trackId: t.apple_id, release: t.release })))
 }
 
 /** Deezer is a metadata + link-out source: no stream_url, a deezer.com link in
  *  `provider_url`. On a merge the link is omitted (it rebuilds from `deezer_id`). */
-export function syncDeezerTracks(
+export async function syncDeezerTracks(
   supabase: SupabaseClient,
   artistId: string,
   tracks: DeezerTrackInput[],
 ): Promise<SyncResult> {
-  return syncTracks(
+  const songs = await syncTracks(
     supabase,
     artistId,
     'deezer_id',
@@ -560,6 +782,7 @@ export function syncDeezerTracks(
       mergeFill: {},
     })),
   )
+  return thenReleases(supabase, artistId, 'deezer', songs, tracks.map((t) => ({ trackId: t.deezer_id, release: t.release })))
 }
 
 export function syncBandsintownTourDates(

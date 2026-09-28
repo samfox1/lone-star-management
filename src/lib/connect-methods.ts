@@ -101,6 +101,7 @@ export function parseHandle(method: HandleMethod, raw: string): ParsedHandle {
   const looksLikeLink =
     /^https?:\/\//i.test(text) || text.includes('/') || method.hosts.some((h) => text.toLowerCase().includes(h))
   let handle: string
+  let keepUrl: string | null = null
   if (looksLikeLink) {
     let url: URL
     try {
@@ -120,7 +121,11 @@ export function parseHandle(method: HandleMethod, raw: string): ParsedHandle {
       if (!sub) return enter
       handle = sub
     } else if (method.alsoSubdomain && sub) {
+      // A pasted subdomain link is its OWN page (Substack's publication, not its
+      // `@handle` profile) — keep it as the manager pasted it, share junk (path, query,
+      // trailing slash) stripped, rather than rebuilding the other page's link.
       handle = sub
+      keepUrl = `https://${host}`
     } else {
       const special = method.fromPath?.(segments, url)
       if (special && 'url' in special) return { handle: null, url: special.url }
@@ -132,7 +137,7 @@ export function parseHandle(method: HandleMethod, raw: string): ParsedHandle {
   handle = handle.replace(/^@/, '')
   if (!handle) return enter
   if (!method.rule.test(handle)) return bad
-  return { handle, url: method.url(handle) }
+  return { handle, url: keepUrl ?? method.url(handle) }
 }
 
 /** A stored profile link, shown as its handle again — or null when the link is not a plain

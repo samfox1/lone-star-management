@@ -1,7 +1,8 @@
 # Deezer
 
-Connecting Deezer links the artist's Deezer profile on the site and pulls their top
-songs (metadata + a link-out, no audio) into the dashboard.
+Connecting Deezer links the artist's Deezer profile on the site and pulls their songs
+(metadata + a link-out, no audio) into the dashboard, grouped into the albums, EPs and
+singles they came from.
 
 ## Connection type
 
@@ -48,24 +49,56 @@ authentication of any kind.
 **Auth / env vars**: none. `.env.example` lists no Deezer variable, matching the
 code comment "Deezer's public catalog API needs none."
 
-**What is pulled**: the artist's top tracks,
-`GET /artist/{id}/top?limit=100`, following `next` cursors up to a hard cap of 50
-pages (`maxPages`, so a self-referential or looping cursor can't spin forever). The
-result is de-duplicated by lowercased, trimmed title before being handed to the
-sync step.
+**What is pulled** (since 2026-09-28): the artist's discography, walked the way
+Spotify's pull walks it — `GET /artist/{id}/albums?limit=100`, then
+`GET /album/{albumId}/tracks?limit=100` for each release, every list following `next`
+cursors up to a hard cap of 50 pages (`maxPages`, so a self-referential or looping
+cursor can't spin forever). Compilations (`record_type: 'compile'`) are skipped before
+their tracks are requested, mirroring Spotify's `album,single` groups. One row per
+release: a single that is also an album track comes through twice (Deezer gives each
+copy its own id); only a literal repeat of one track id is dropped.
 
-**Where it lands**: `syncDeezerTracks` (`src/lib/sync.ts`) writes/merges into the
-`tracks` table only — Deezer never creates a `releases` row. Fields written:
-`deezer_id`, `title`, `cover_url`, `album_name`, `duration_ms`, and the deezer.com
-link-out in `provider_url`. New rows land `on_site: false`. Deezer has no
-`stream_url` — its ToS bars exposing audio, per the file header comment, so it is a
-metadata + link-out source only (same as Apple Music).
+It used to read `GET /artist/{id}/top`. Measured against the live API on 2026-09-28,
+`top` returned ONE track for an artist with six releases and ZERO for artists with
+eight and nineteen — it ranks popularity, and small artists barely register — so it
+could not feed releases.
+
+**Where it lands**: `syncDeezerTracks` (`src/lib/sync.ts`) writes/merges the songs
+into `tracks`, then groups them into `releases`. Song fields: `deezer_id`, `title`,
+`cover_url` (the album's `cover_big`, 500x500, else `cover_medium`), `album_name`,
+`duration_ms`, and the deezer.com link-out in `provider_url`. New rows land
+`on_site: false`. Deezer has no `stream_url` — its ToS bars exposing audio, per the
+file header comment, so it is a metadata + link-out source only (same as Apple Music).
 
 A song already pulled from another platform is matched by normalized title +
 duration and gets Deezer's id stamped onto that same row instead of duplicating it
 (`src/lib/sync-match.ts`, `matchTrackCandidate`); on a merge Deezer's link is
 deliberately left out of the fill (`mergeFill: {}` in `syncDeezerTracks`) because it
-rebuilds from `deezer_id` rather than needing to be stored twice.
+rebuilds from `deezer_id` rather than needing to be stored twice. When a single and
+its album both carry the song (two rows, same title and length), the copy on the same
+album wins the tie, so each copy lands on its own row.
+
+**Releases** (`syncReleases` in `src/lib/sync.ts`, the one release sync all three
+catalog platforms share):
+- *Type*: Deezer's `record_type` names albums, EPs and singles explicitly and is
+  taken as given (a 4-track `single` stays a single). Only a missing/unknown
+  `record_type` falls back to Spotify's rule: 4+ tracks is an EP, else a single
+  (`classifyRelease` in `src/lib/sync-match.ts`). `compile` is not the artist's
+  release and is never walked.
+- *Fields*: title, cover (`cover_big`), date (`release_date`; Deezer's `0000-00-00`
+  becomes null), and one seed link `{ label: 'Deezer', url }` to the album page. New
+  releases land `on_site: false`, `source: 'deezer'`, with a unique slug.
+- *Finding an existing release* (so Spotify, Apple and Deezer never make two):
+  `releases` has no Deezer id column, so a Deezer release is known by its songs. In
+  order: the release Deezer's songs already sit in (most of them); else an imported
+  release with the same normalized title, when exactly one is open (reported as
+  "merged by title" in the Sync dialog); else a new release. A hand-made release is
+  only ever joined through its songs.
+- *What a pull may write*: on a release Deezer created, title, cover/date (never null
+  over a value) and the type unless the manager locked it. On a release another
+  platform or the manager made: only an empty cover or date. Never `on_site`, slug,
+  `links`, `released`, `sort_order`. Songs are filed only where unassigned (a manual
+  move wins) and take the release's type only while still at the default `single`.
 
 **Proof of sync**: `TRACK_ID_COLUMN.deezer = 'deezer_id'`
 (`src/lib/integrations-registry.ts`) — the connection reads "synced" when at least
@@ -77,7 +110,10 @@ nothing does.
 `onBody` in the shared `httpGetJson` helper detects code 4 and retries with a 1s
 backoff; any other body-level error throws. Standard HTTP 429s back off using
 `Retry-After` and retry up to 3 times, same as Spotify and Apple Music
-(`src/lib/http.ts`).
+(`src/lib/http.ts`). The walk costs one request per release plus the albums list (an
+artist with 19 releases: 20 requests), so a quota hit is likelier mid-walk than
+before; it is retried the same way, and a pull that still runs out fails whole
+(nothing written) and can simply be retried.
 
 **How a pull is triggered**: automatically on Connect (if Sync is on); the list
 row's "Sync" action for a linked-but-never-pulled profile (`syncProfileAction`);
@@ -97,11 +133,12 @@ shows it as a plain labelled link.
 - `src/lib/manager-tools/connections/services/deezer/index.ts` — this service's own code:
   `social` (link method, the artist-id regex as `idFromUrl`) and `source` (the registry
   entry).
-- `src/lib/deezer.ts` — `createDeezerClient`: pagination, title dedupe, the
-  in-body quota-error handling.
-- `src/lib/sync.ts` — `syncDeezerTracks`: writes/merges into `tracks`.
-- `src/lib/sync-match.ts` — cross-platform title/duration matching shared by all
-  three catalog services.
+- `src/lib/deezer.ts` — `createDeezerClient`: the discography walk, pagination,
+  `record_type` → type, the in-body quota-error handling.
+- `src/lib/sync.ts` — `syncDeezerTracks`: writes/merges into `tracks`, then
+  `syncReleases` groups them into `releases`.
+- `src/lib/sync-match.ts` — cross-platform title/duration matching, the release-type
+  law (`classifyRelease`) and `groupReleases`, shared by all three catalog services.
 - `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above), row
   building.
 - `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above.
@@ -121,8 +158,14 @@ shows it as a plain labelled link.
 
 ## Tests
 
-- `tests/unit/sync/deezer.test.ts` — the client: mapping, `next` pagination, title
-  dedupe, HTTP-429 backoff, Deezer's in-body quota error (code 4) backoff.
+- `tests/unit/sync/deezer.test.ts` — the client: the albums → tracks walk, the
+  release each song carries, `record_type` rules, compilations skipped, one row per
+  release, `next` pagination, HTTP-429 backoff, Deezer's in-body quota error (code 4)
+  backoff mid-walk.
+- `tests/unit/sync/catalog-releases.test.ts` — `classifyRelease` and `groupReleases`.
+- `tests/integration/sync/sync.catalog-releases.test.ts` — Deezer-only pull creates the
+  releases; Spotify→Deezer and Deezer→Apple meet on one release (fetch stubbed, real
+  DB).
 - `tests/integration/sync/sync.deezer.test.ts` — track sync against the real
   database: insert new, refresh Deezer-owned rows, never clobber a manual edit or
   another provider's row, tenancy (throwaway artists, per `AGENTS.md` rule 6).
@@ -140,12 +183,16 @@ shows it as a plain labelled link.
 
 ## Known gaps
 
-- No `releases` sync: a song pulled from Deezer never creates or joins an album/EP
-  card on its own — it stays a loose track unless a later Spotify pull matches it in
-  by title + duration.
 - No audio: Deezer's terms bar exposing streams, so Deezer-only songs have no
   in-app playback, only a link-out.
-- `getArtistTracks` reads the artist's **top** tracks endpoint (`/top?limit=100`),
-  not a full discography endpoint — an artist with a large catalog may not have
-  every song pulled, only what Deezer ranks as their top tracks across up to 50
-  pages.
+- `/artist/{id}/albums` lists releases where the artist is the main artist, so an
+  appearance on someone else's record is not pulled at all (it was, occasionally,
+  when the pull read `/top`).
+- A release Deezer created has its title/cover/date refreshed by every Deezer pull,
+  so a manager's rename of it reverts (Spotify's releases behave the same). Only the
+  type has a lock (`release_type_locked`); a title lock would need a migration.
+- No Deezer release id column: joining an existing release relies on the songs having
+  merged (or the title). A pull never adds its own link to a release another platform
+  made — with no id column it cannot tell "never added" from "the manager removed it".
+- The release smart-link snapshot: the Spotify pull publishes a release revision after
+  syncing (`publishContent` in `pullSpotify`); `syncDeezerAction` does not yet.

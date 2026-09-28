@@ -9,6 +9,7 @@
 
 import { httpGetJson } from '@/lib/http'
 import { type ReleaseType } from '@/lib/releases'
+import { classifyRelease as classifyReleaseType } from '@/lib/sync-match'
 
 const ACCOUNTS_URL = 'https://accounts.spotify.com/api/token'
 const API_BASE = 'https://api.spotify.com/v1'
@@ -135,10 +136,11 @@ export function createSpotifyClient(opts: Options = {}) {
     return getAllPages<SpotifyAlbumTrack>(`/albums/${albumId}/tracks`)
   }
 
-  /** album_type + track count → our release type (Spotify has no 'ep' group). */
+  /** album_type + track count → our release type. Spotify has no 'ep' group, so its
+   *  'single' is 'single-or-ep' under the shared law (lib/sync-match `classifyRelease`),
+   *  the one Apple and Deezer releases are typed by too. */
   function classifyRelease(album: SpotifyAlbum): ReleaseType {
-    if (album.album_type === 'album') return 'album'
-    return (album.total_tracks ?? 1) >= 4 ? 'ep' : 'single'
+    return classifyReleaseType(album.album_type === 'album' ? 'album' : 'single-or-ep', album.total_tracks ?? 1)
   }
 
   /** Spotify release_date is year / year-month / full — pad to a valid DATE. */

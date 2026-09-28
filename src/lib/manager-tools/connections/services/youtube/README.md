@@ -34,10 +34,13 @@ and again in the server action, so the modal and the door agree.
 - A `links` row: `label: 'YouTube'`, `url` (the handle's profile link, or the channel link as
   pasted), added **off-site** (`addContentAction(..., { offSite: true })` in
   `connections/actions.ts`) — connecting never turns on a site button by itself.
-- `artists.youtube_channel_id` — despite the name, this column can hold a raw channel URL, an
-  `@handle`, or a bare `UC…` id, whatever the connect flow resolved
-  (`idFromProfileUrl` returns the YouTube URL itself rather than extracting an id, because
-  `channelSelector` in `src/lib/youtube.ts` resolves any of those shapes server-side).
+- `artists.youtube_channel_id` — always a real `UC…` id from now on (Sam, 2026-09-28: it used
+  to hold whatever shape the connect flow gave it — a raw channel URL, an `@handle`, or the
+  id). The shared save door (`saveSourceIdAction`) resolves anything else down to the id via
+  `resolveYouTubeChannelId` (`src/lib/youtube.ts`) before writing the column, the same way it
+  normalises `drive_folder_id`. `idFromProfileUrl` still returns the YouTube URL itself rather
+  than extracting an id — resolution happens once, at the save door, not there — and older
+  rows saved before this change may still hold a URL or handle until re-saved (not migrated).
 - The site button is **off by default**. A manager turns a connected profile into a button
   from the site editor's Socials picker (`buttonChoices` in `lib/connections.ts`) — editing
   the handle here changes that same button, because it is the same `links` row.
@@ -99,7 +102,10 @@ placed — YouTube has no hosted audio/video of its own on this platform.
   `social` (the handle spec, `fromPath` for channel/c/user links, `idFromUrl`) and
   `source` (the registry entry).
 - `src/lib/youtube.ts` — the API client: `channelSelector`, `getChannelVideos`,
-  `viewCounts`, Shorts probing.
+  `viewCounts`, Shorts probing, `resolveChannelId` (channels.list?part=id, on the client),
+  and `resolveYouTubeChannelId` (the pure-ish resolver `saveSourceIdAction` calls: a UC id
+  or `/channel/UC…` link resolves with no network call by reusing `channelSelector`'s own
+  parsing; an `@handle` or legacy `/c/`, `/user/` link resolves through the API).
 - `src/lib/http.ts` — shared GET-with-429-retry used by the client.
 - `src/lib/sync.ts` — `syncYouTubeVideos`: writes the `videos` table, filters out Shorts,
   `on_site: false` on insert.
@@ -126,6 +132,10 @@ placed — YouTube has no hosted audio/video of its own on this platform.
 
 - `tests/unit/sync/youtube.test.ts` — `getChannelVideos` mapping, `channelSelector`
   shapes, Shorts classification via the `/shorts/` probe.
+- `tests/unit/sync/youtube-resolve.test.ts` — `resolveYouTubeChannelId`: UC id and
+  `/channel/` link resolve with a fetch mock that fails if called; `@handle`, the
+  `@handle` link, and legacy `/c/`, `/user/` links resolve via a mocked API; not-found
+  and a non-YouTube link each give a plain error.
 - `tests/unit/sync/youtube-views.test.ts` — `viewCounts` batching and parsing, skips
   missing/non-numeric counts.
 - `tests/integration/sync/sync.youtube.test.ts` — `syncYouTubeVideos` against the real
@@ -150,9 +160,9 @@ placed — YouTube has no hosted audio/video of its own on this platform.
   TODO filed).
 - No OAuth: only a channel's public uploads can be read. A private or unlisted upload
   never appears.
-- `youtube_channel_id` is a loosely-typed field in practice — it can hold a URL, a
-  handle, or a raw id depending on how it was connected, which is easy to misread as "the
-  channel's actual ID" when inspecting the database directly.
+- Rows saved before 2026-09-28 may still hold a URL or handle in `youtube_channel_id`
+  instead of the real id — not migrated; a re-save (editing the field, or reconnecting)
+  resolves it through `resolveYouTubeChannelId` and fixes it going forward.
 - A pull that partially fails (some videos error on write) is reported as a full success —
   `pullYouTube` throws away the `SyncResult`'s `failed`/`errors` fields. `lib/sync.ts`'s own
   header warns against exactly this ("a partial failure is not `ok`"); Bandsintown's pull

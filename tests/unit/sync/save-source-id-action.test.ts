@@ -40,11 +40,20 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }))
 
+// The YouTube resolver calls the Data API for a handle; its own tests cover that
+// (youtube-resolve.test.ts). Here only the WIRING is under test.
+const resolveYouTubeChannelId = vi.fn()
+vi.mock('@/lib/youtube', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/youtube')>()),
+  resolveYouTubeChannelId: (...args: unknown[]) => resolveYouTubeChannelId(...args),
+}))
+
 const load = () => import('@/app/artists/[id]/(dashboard)/actions')
 
 beforeEach(() => {
   writes.length = 0
   vi.mocked(createClient).mockClear()
+  resolveYouTubeChannelId.mockReset()
 })
 
 describe('saveSourceIdAction: drive_folder_id normalises a pasted link', () => {
@@ -106,5 +115,50 @@ describe('saveSourceIdAction: every other id field is saved exactly as before', 
     const res = await saveSourceIdAction(ARTIST, 'not_a_real_column', 'x')
     expect(res.error).toBe('Unknown source.')
     expect(writes).toEqual([])
+  })
+})
+
+describe('saveSourceIdAction: ticketmaster_attraction_id takes the ID or the artist page link', () => {
+  it('CRITICAL: a pasted artist page link saves the attraction id', async () => {
+    const { saveSourceIdAction } = await load()
+    const res = await saveSourceIdAction(ARTIST, 'ticketmaster_attraction_id', 'https://www.ticketmaster.com/skeen-tickets/artist/K8vZ917_szV7?src=share')
+    expect(res.error).toBeUndefined()
+    expect(writes).toEqual([{ table: 'artists', patch: { ticketmaster_attraction_id: 'K8vZ917_szV7' } }])
+  })
+
+  it('a bare id saves as it is; junk is refused and writes nothing', async () => {
+    const { saveSourceIdAction } = await load()
+    expect((await saveSourceIdAction(ARTIST, 'ticketmaster_attraction_id', ' K8vZ917_szV7 ')).error).toBeUndefined()
+    expect(writes).toEqual([{ table: 'artists', patch: { ticketmaster_attraction_id: 'K8vZ917_szV7' } }])
+    writes.length = 0
+    const res = await saveSourceIdAction(ARTIST, 'ticketmaster_attraction_id', 'https://example.com/x')
+    expect(res.error).toBe('Paste the Ticketmaster attraction ID or your artist page link.')
+    expect(writes).toEqual([])
+  })
+})
+
+describe('saveSourceIdAction: youtube_channel_id always saves the real channel id', () => {
+  it('CRITICAL: a handle is resolved and the UC id is what lands', async () => {
+    resolveYouTubeChannelId.mockResolvedValue({ id: 'UC1234567890abcdefghijkl' })
+    const { saveSourceIdAction } = await load()
+    const res = await saveSourceIdAction(ARTIST, 'youtube_channel_id', 'https://youtube.com/@Sskeen')
+    expect(res.error).toBeUndefined()
+    expect(resolveYouTubeChannelId).toHaveBeenCalledWith('https://youtube.com/@Sskeen')
+    expect(writes).toEqual([{ table: 'artists', patch: { youtube_channel_id: 'UC1234567890abcdefghijkl' } }])
+  })
+
+  it('a channel YouTube cannot find is refused and writes nothing', async () => {
+    resolveYouTubeChannelId.mockResolvedValue({ error: 'Couldn’t find that YouTube channel.' })
+    const { saveSourceIdAction } = await load()
+    const res = await saveSourceIdAction(ARTIST, 'youtube_channel_id', '@nobody-here')
+    expect(res.error).toBe('Couldn’t find that YouTube channel.')
+    expect(writes).toEqual([])
+  })
+
+  it('a blank clears the field without asking YouTube', async () => {
+    const { saveSourceIdAction } = await load()
+    expect((await saveSourceIdAction(ARTIST, 'youtube_channel_id', '  ')).error).toBeUndefined()
+    expect(resolveYouTubeChannelId).not.toHaveBeenCalled()
+    expect(writes).toEqual([{ table: 'artists', patch: { youtube_channel_id: null } }]) // cleared
   })
 })

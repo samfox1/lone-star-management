@@ -74,7 +74,13 @@ announces `bridgeVersion: '0.32.0'` and the editor is on 0.38.0.
 
 ## Unreleased
 
-Nothing since 0.41.0.
+**`SOCIAL_PLATFORMS` gains an optional `aliasHosts` field, and `platformFromUrl` reads it**
+(Sam, 2026-09-28: Threads moved to threads.com, and threads.net now redirects there).
+Threads' `urlHint` moved to `https://threads.com/@`, with `aliasHosts: ['threads.net']` so a
+link built before this change (or pasted from the old domain) is still recognised as Threads
+— the dashboard's "that's a Threads link" check and every site's "is this link one of ours"
+check both go through `platformFromUrl`. **Site action: none** — sites read `slug`, not
+`urlHint`, and no manifest gate is involved. Not published; `PACKAGE_VERSION` unchanged.
 
 ---
 

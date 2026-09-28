@@ -55,7 +55,7 @@ import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
 import { fetchOpenGraph } from '@/lib/og'
-import { createYouTubeClient } from '@/lib/youtube'
+import { createYouTubeClient, resolveYouTubeChannelId } from '@/lib/youtube'
 import { extractFields, extractUpdate } from '@/lib/content-form'
 import { safeHref } from '@/lib/url'
 import { toReleaseType } from '@/lib/releases'
@@ -64,7 +64,7 @@ import { createSpotifyClient } from '@/lib/spotify'
 import { createDeezerClient } from '@/lib/deezer'
 import { createAppleMusicClient } from '@/lib/apple'
 import { createBandsintownClient } from '@/lib/bandsintown'
-import { createTicketmasterClient } from '@/lib/ticketmaster'
+import { createTicketmasterClient, ticketmasterAttractionId } from '@/lib/ticketmaster'
 import { createDriveClient, parseDriveFolderId, type DriveFile, type DriveKind } from '@/lib/drive'
 import { importDriveFile } from '@/lib/drive-import'
 import { resolveStreamingSong, type ResolvedSong, type StreamingUrls } from '@/lib/song-links'
@@ -1025,13 +1025,27 @@ async function saveArtistField(
 export async function saveSourceIdAction(artistId: string, idField: string, value: string): Promise<{ error?: string }> {
   if (!INTEGRATION_REGISTRY.some((i) => i.idField === idField)) return { error: 'Unknown source.' }
   let toSave = value
-  if (idField === 'drive_folder_id') {
-    const raw = value.trim()
-    if (raw) {
-      const folderId = parseDriveFolderId(raw)
-      if (!folderId) return { error: "That doesn't look like a Google Drive folder link." }
-      toSave = folderId
-    }
+  // Each source saves the id it needs, whatever shape the manager pasted (Sam, 2026-09-28:
+  // "as easy as they can be"); a shape that isn't one is refused and nothing is written.
+  // A blank clears the field, as it always has.
+  const raw = value.trim()
+  if (raw && idField === 'drive_folder_id') {
+    const folderId = parseDriveFolderId(raw)
+    if (!folderId) return { error: "That doesn't look like a Google Drive folder link." }
+    toSave = folderId
+  }
+  if (raw && idField === 'ticketmaster_attraction_id') {
+    // The attraction ID, or the artist page link it sits in.
+    const parsed = ticketmasterAttractionId(raw)
+    if ('error' in parsed) return { error: parsed.error }
+    toSave = parsed.id
+  }
+  if (raw && idField === 'youtube_channel_id') {
+    // Always the real `UC…` channel id: a handle or a legacy /c/ /user/ link is resolved
+    // through the Data API here, once, instead of at every pull.
+    const resolved = await resolveYouTubeChannelId(raw)
+    if ('error' in resolved) return { error: resolved.error }
+    toSave = resolved.id
   }
   const fd = new FormData()
   fd.set(idField, toSave)
