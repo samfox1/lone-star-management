@@ -72,8 +72,10 @@ describe('the token field', () => {
     fireEvent.change(token, { target: { value: 'shpat_supersecret' } })
     fireEvent.click(within(dialog).getByRole('button', { name: /change token/i }))
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledTimes(1))
+    // The field clears once the save RESOLVES, a tick after the action is called — wait for
+    // it (a full, loaded run once checked in between and read the typed value).
+    await waitFor(() => expect(within(dialog).getByLabelText(/token/i)).toHaveValue(''))
     expect(dialog).not.toHaveTextContent('shpat_supersecret')
-    expect(within(dialog).getByLabelText(/token/i)).toHaveValue('')
   })
 })
 
