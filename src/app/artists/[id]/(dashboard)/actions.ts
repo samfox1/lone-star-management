@@ -1012,11 +1012,29 @@ async function saveArtistField(
  * Save (or clear) ONE source id by its column, for the Connections page — where a pasted
  * Spotify profile also sets `spotify_artist_id`. The column must be one the registry
  * names; anything else is refused rather than written.
+ *
+ * The ONE door both Connections paths write a source id through (`connectSource` in
+ * connections/actions.ts and the per-connection edit field's `saveId`), so `drive_folder_id`
+ * is normalised HERE, not in either caller: the registry's own placeholder for it says
+ * "Google Drive folder link," and a manager who pastes the share link it asks for must not
+ * have the raw URL land in the column (see lib/drive.ts's `parseDriveFolderId` and the
+ * README's "Known gaps" — found in a 2026-09-28 docs review). Something that is neither a
+ * link nor a bare id is refused, and nothing is written, the same wording `saveDriveFolderAction`
+ * already used for its own (currently unreachable) save path.
  */
 export async function saveSourceIdAction(artistId: string, idField: string, value: string): Promise<{ error?: string }> {
   if (!INTEGRATION_REGISTRY.some((i) => i.idField === idField)) return { error: 'Unknown source.' }
+  let toSave = value
+  if (idField === 'drive_folder_id') {
+    const raw = value.trim()
+    if (raw) {
+      const folderId = parseDriveFolderId(raw)
+      if (!folderId) return { error: "That doesn't look like a Google Drive folder link." }
+      toSave = folderId
+    }
+  }
   const fd = new FormData()
-  fd.set(idField, value)
+  fd.set(idField, toSave)
   return saveArtistField(artistId, idField, fd)
 }
 
