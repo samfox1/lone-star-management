@@ -1,18 +1,21 @@
 /**
  * THE SUBSCRIBERS TOOL'S RULES (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html).
  *
- * The page is a read-only ledger of the emails the site's signup door (`subscribe()`, the
- * only writer) collected. Everything it decides that is not layout lives here, pure, so it is
- * pinned without a DOM or a database (tests/unit/manager-tools/subscribers/subscribers-lib.test.ts) and
- * mutated by Stryker: the search, the three sorts, the highlight, the dates, the CSV the export
- * route sends, and the mailto link.
+ * The page is a ledger of the emails the site's signup door (`subscribe()`, the only INSERT
+ * path) collected. A manager may also REMOVE one (Sam, 2026-09-28; `deleteSubscriber` below,
+ * `subscribers_delete` RLS policy, 20260928140500). Everything else it decides that is not
+ * layout lives here, pure, so it is pinned without a DOM or a database
+ * (tests/unit/manager-tools/subscribers/subscribers-lib.test.ts) and mutated by Stryker: the
+ * search, the three sorts, the highlight, the dates, the CSV the export route sends, the
+ * export link, and the mailto link.
  *
  * Dates are UTC everywhere. The ledger renders on the server AND in the browser, and a local
  * time zone would let the two disagree (a hydration mismatch) and let the page and the CSV
  * name different days for the same signup.
  */
+import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type Subscriber = { email: string; created_at: string }
+export type Subscriber = { id: string; email: string; created_at: string }
 
 export type SubscriberSort = 'new' | 'old' | 'az'
 
@@ -143,4 +146,35 @@ export function mailtoHref(email: string): string {
 /** The shown emails as one line for a BCC field: "a@x.com, b@y.com". */
 export function emailList(rows: readonly Subscriber[]): string {
   return rows.map((r) => r.email).join(', ')
+}
+
+/**
+ * The export route's link for the CURRENT search (Sam, 2026-09-28: "Download CSV" and
+ * "Copy all" both follow the toolbar's search now, instead of the CSV always being the
+ * full list). Trimmed exactly the way the search itself is (`filterSubscribers`'s
+ * `needleOf`), so trailing spaces never change the URL, and the plain path with no query
+ * string when there is nothing to filter by — a link a test (or a person) can compare
+ * against the base route.
+ */
+export function exportHref(artistId: string, query: string): string {
+  const q = query.trim()
+  const base = `/artists/${artistId}/subscribers/export`
+  return q ? `${base}?q=${encodeURIComponent(q)}` : base
+}
+
+export type DeleteResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Remove one subscriber (Sam, 2026-09-28). `.eq('artist_id', artistId)` scopes the delete
+ * to THIS artist even though `id` alone already identifies the row, so a mismatched
+ * artistId can never reach a row it does not belong to. `.select('id')` reads back what
+ * was actually removed: the `subscribers_delete` RLS policy turns a stranger's delete into
+ * `error: null` over zero matched rows (AGENTS.md rule 3), so the caller (the server
+ * action) can tell that apart from a real removal instead of reporting a silent success.
+ */
+export async function deleteSubscriber(supabase: SupabaseClient, artistId: string, id: string): Promise<DeleteResult> {
+  const { data, error } = await supabase.from('subscribers').delete().eq('id', id).eq('artist_id', artistId).select('id')
+  if (error) return { ok: false, error: 'Could not remove that subscriber.' }
+  if (!(data ?? []).length) return { ok: false, error: 'That subscriber is no longer there.' }
+  return { ok: true }
 }

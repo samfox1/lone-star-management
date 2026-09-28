@@ -6,6 +6,7 @@ import { cx } from '@/lib/cx'
 import {
   SUBSCRIBER_SORTS,
   emailList,
+  exportHref,
   filterSubscribers,
   formatSubscribedDate,
   highlightSegments,
@@ -14,16 +15,24 @@ import {
   type Subscriber,
   type SubscriberSort,
 } from '@/lib/manager-tools/subscribers/subscribers'
+import { useConfirm } from '../../confirm-dialog'
+import { toast } from '../../toast'
+import { removeSubscriberAction } from './actions'
 import { FOCUS_RING } from '../_ui/focus-ring'
 import { HoverLabel, RowIcon } from '../_ui/row-icon'
 
 /**
  * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html). The emails the
- * site's signup door collected, read-only, in the Brand ledger's look. The list is a CENTRED
- * column: the gap on its left equals the gap on its right (Sam, 2026-09-24 — Brand's empty
- * 150px left column left twice the gap on the left). No "Subscribers" label, no count, no
+ * site's signup door collected, in the Brand ledger's look. The list is a CENTRED column:
+ * the gap on its left equals the gap on its right (Sam, 2026-09-24 — Brand's empty 150px
+ * left column left twice the gap on the left). No "Subscribers" label, no count, no
  * heading, no instruction copy, and every action is an icon with a hover label.
  *
+ * REMOVE (Sam, 2026-09-28): a manager may remove one subscriber, the trash-on-hover pattern
+ * every ledger uses (`useConfirm` asks first, `removeSubscriberAction`, the RLS delete
+ * policy is `subscribers_delete`, 20260928140500). `subscribe()` is still the only INSERT.
+ *
+
  * THE TOOLBAR STAYS, THE PAGE SCROLLS (Sam, 2026-09-24). The toolbar is `sticky` just under
  * the dashboard header and the rows scroll beneath it with the page. Not a scroll box of its
  * own: the page keeps its one native scrollbar, a phone's browser bars still collapse, and
@@ -109,8 +118,13 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
   const [copiedAll, flashCopiedAll] = useFlash<number>()
   const [said, setSaid] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const { ask, dialog } = useConfirm()
+  // Seeded ONCE from the server, then this component's own truth: a successful Remove drops
+  // the row locally (the same "seed once" rule Brand's ledgers use — a revalidated page's
+  // fresh props only reach this copy on the NEXT mount, e.g. a real navigation).
+  const [rows, setRows] = useState(subscribers)
 
-  const shown = useMemo(() => sortSubscribers(filterSubscribers(subscribers, query), sort), [subscribers, query, sort])
+  const shown = useMemo(() => sortSubscribers(filterSubscribers(rows, query), sort), [rows, query, sort])
   const needle = query.trim()
 
   const copyAll = async () => {
@@ -123,6 +137,19 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
   }
   const copied = useCallback((email: string) => setSaid(`Copied ${email}`), [])
 
+  const remove = useCallback(
+    async (s: Subscriber) => {
+      if (!(await ask(`Remove ${s.email}?`, { action: 'Remove' }))) return
+      const res = await removeSubscriberAction(artistId, s.id)
+      if (res.error) {
+        toast(res.error, 'error')
+        return
+      }
+      setRows((all) => all.filter((r) => r.id !== s.id))
+    },
+    [artistId, ask],
+  )
+
   return (
     // md:pr-8 mirrors the 32px the tools shell puts between the rail and the page (gap-8,
     // tools-rail.tsx), so the list is centred on what the eye sees: rail edge to window edge.
@@ -130,7 +157,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
     <div className="pb-16 md:pr-8">
       <div data-subscribers-frame="" className={FRAME}>
         <div className="min-w-0">
-          {subscribers.length === 0 ? (
+          {rows.length === 0 ? (
             <p className={QUIET}>No subscribers yet.</p>
           ) : (
             <>
@@ -201,13 +228,13 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                   onClick={copyAll}
                   className={copiedAll !== null ? 'text-accent!' : undefined}
                 />
-                <RowIcon variant="boxed" size="sm" tone="accent" labelAlign="end" icon="download" label="Download CSV" href={`/artists/${artistId}/subscribers/export`} />
+                <RowIcon variant="boxed" size="sm" tone="accent" labelAlign="end" icon="download" label="Download CSV" href={exportHref(artistId, query)} />
               </div>
 
               {shown.length ? (
                 <ul aria-label="Emails">
                   {shown.map((s) => (
-                    <Row key={s.email} email={s.email} createdAt={s.created_at} needle={needle} onCopied={copied} />
+                    <Row key={s.id} email={s.email} createdAt={s.created_at} needle={needle} onCopied={copied} onRemove={() => remove(s)} />
                   ))}
                 </ul>
               ) : (
@@ -221,6 +248,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
       <span role="status" className="sr-only">
         {said}
       </span>
+      {dialog}
     </div>
   )
 }
@@ -230,7 +258,19 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
  * highlight could change. Below `sm` the date drops under the email and the two icons sit
  * beside both, so nothing is squeezed off a phone.
  */
-const Row = memo(function Row({ email, createdAt, needle, onCopied }: { email: string; createdAt: string; needle: string; onCopied: (email: string) => void }) {
+const Row = memo(function Row({
+  email,
+  createdAt,
+  needle,
+  onCopied,
+  onRemove,
+}: {
+  email: string
+  createdAt: string
+  needle: string
+  onCopied: (email: string) => void
+  onRemove: () => void
+}) {
   const [copied, flash] = useFlash<true>()
   const copy = async () => {
     if (await copyText(email)) {
@@ -261,6 +301,7 @@ const Row = memo(function Row({ email, createdAt, needle, onCopied }: { email: s
           className={cx(TOUCH_VISIBLE, copied && 'opacity-100! text-accent!')}
         />
         <RowIcon icon="mail" label="Email" tone="accent" labelAlign="end" href={mailtoHref(email)} className={TOUCH_VISIBLE} />
+        <RowIcon icon="trash" label="Remove" tone="danger" labelAlign="end" onClick={onRemove} className={TOUCH_VISIBLE} />
       </span>
     </li>
   )

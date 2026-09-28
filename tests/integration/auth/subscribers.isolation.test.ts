@@ -1,15 +1,17 @@
-// The public email signup: one guarded write door, and fan emails nobody else can read.
+// The public email signup: one guarded write door, a manager's own removal door, and fan
+//   emails nobody else can read.
 /**
- * Security for the public email-list signup. `subscribers` holds anonymous fan
- * emails keyed to one artist, so — like analytics_events — the ONLY write path
- * is the SECURITY DEFINER door `subscribe`, there is no anon insert/select
- * policy, and reads are scoped to the artist's managers (+ admins). Verified
- * against the real DB; RLS can't be mocked.
+ * Security for the public email-list signup. `subscribers` holds anonymous fan emails
+ * keyed to one artist, so — like analytics_events — the ONLY INSERT path is the SECURITY
+ * DEFINER door `subscribe`, there is no anon insert/select policy, and reads are scoped to
+ * the artist's managers (+ admins). Since 20260928140500 a manager (or admin) may also
+ * DELETE one of their own artist's subscribers (Sam, 2026-09-28); UPDATE still has no door
+ * at all. Verified against the real DB; RLS can't be mocked.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
-import { expectDeniedByMissingPolicy } from '@tests/helpers/rls'
+import { expectDeniedByMissingPolicy, expectRlsDenied } from '@tests/helpers/rls'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 
 /** Used by the door tests only — `subscribe` must be the thing that creates it. */
@@ -220,11 +222,13 @@ describe('subscribers isolation', () => {
   })
 })
 
-describe('subscribers — nobody writes this table through a session', () => {
-  // The read policy is the ONLY policy on `subscribers`. That is a deliberate omission,
-  // and nothing pinned it: a later migration adding an innocuous-looking
-  // `subscribers_owner_write` would hand every manager (and anything holding their
-  // token) the ability to forge or quietly erase fan emails, with no test turning red.
+describe('subscribers — INSERT and UPDATE still have no door', () => {
+  // The read policy and (since 20260928140500) the delete policy are the ONLY policies on
+  // `subscribers`. INSERT and UPDATE staying policy-less is deliberate — subscribe() is
+  // still the sole way a row is created or changed — and nothing else pins it: a later
+  // migration adding an innocuous-looking `subscribers_owner_write` would hand every
+  // manager (and anything holding their token) the ability to forge or rewrite fan
+  // emails, with no test turning red.
 
   it("CRITICAL: even the artist's OWN manager cannot insert a fan email", async () => {
     const { error } = await asManagerA
@@ -237,17 +241,6 @@ describe('subscribers — nobody writes this table through a session', () => {
     expect(data ?? []).toHaveLength(0)
   })
 
-  it("CRITICAL: the OWN manager cannot delete a fan email (silent no-op, so check state)", async () => {
-    // No DELETE policy means RLS filters the row out of the statement entirely, so
-    // PostgREST reports success over zero rows. `error === null` proves nothing here —
-    // the only evidence is that the row survived.
-    const { error } = await asManagerA.from('subscribers').delete().eq('id', plantedId)
-    expect(error).toBeNull()
-
-    const { data } = await svc.from('subscribers').select('id').eq('id', plantedId)
-    expect(data, 'the owning manager deleted a fan email').toHaveLength(1)
-  })
-
   it("CRITICAL: the OWN manager cannot rewrite a fan's address", async () => {
     await asManagerA
       .from('subscribers')
@@ -256,5 +249,80 @@ describe('subscribers — nobody writes this table through a session', () => {
 
     const { data } = await svc.from('subscribers').select('email').eq('id', plantedId).single()
     expect(data?.email).toBe(PLANTED_EMAIL)
+  })
+})
+
+/**
+ * A MANAGER CAN REMOVE A SUBSCRIBER (Sam, 2026-09-28), for DELETE only — replacing the
+ * test above that used to pin "even the artist's OWN manager cannot delete a fan email" as
+ * CRITICAL. The `subscribers_delete` policy (20260928140500) is `is_admin() or
+ * is_manager_of(artist_id)`, so it is scoped exactly like the read policy above it.
+ *
+ * Each test plants its OWN row (never `plantedId`, which the read and rewrite tests above
+ * still depend on surviving) so a negative test's "the row is still there" is proven
+ * against a row known to exist a moment before (AGENTS.md rule 2), and the positive test's
+ * delete has a row of its own to remove.
+ */
+describe('subscribers — a manager can remove a subscriber', () => {
+  const DELETE_EMAILS = {
+    otherManager: 'iso-sub-delete-other-manager@example.test',
+    anon: 'iso-sub-delete-anon@example.test',
+    owner: 'iso-sub-delete-owner@example.test',
+    admin: 'iso-sub-delete-admin@example.test',
+  } as const
+
+  afterAll(async () => {
+    await svc.from('subscribers').delete().in('email', Object.values(DELETE_EMAILS))
+  })
+
+  /** Plant one fresh row on artist A, service-role, and return its id. */
+  async function plantOnArtistA(email: string): Promise<string> {
+    await svc.from('subscribers').delete().eq('email', email)
+    const { data, error } = await svc.from('subscribers').insert({ artist_id: artistAId, email }).select('id').single()
+    if (error || !data) throw error ?? new Error('subscribers delete-fixture insert failed')
+    return data.id
+  }
+
+  it("CRITICAL: a manager of ANOTHER artist cannot remove this artist's subscriber (row survives)", async () => {
+    const id = await plantOnArtistA(DELETE_EMAILS.otherManager)
+    // Row-filtered, not rejected: RLS excludes it from the DELETE entirely, so PostgREST
+    // reports success over zero matched rows. `error === null` proves nothing on its own —
+    // the only evidence is that the row is still there.
+    const { error } = await asManagerB.from('subscribers').delete().eq('id', id)
+    expect(error).toBeNull()
+
+    const { data } = await svc.from('subscribers').select('id').eq('id', id)
+    expect(data, 'a manager of a different artist removed a fan email').toHaveLength(1)
+  })
+
+  it('CRITICAL: anon cannot remove a subscriber (row survives)', async () => {
+    const id = await plantOnArtistA(DELETE_EMAILS.anon)
+    // 20260928140500 REVOKES delete from anon: the table refuses outright (42501,
+    // "permission denied for table"), before any policy is consulted — stronger than the
+    // quiet zero-row answer RLS alone gives.
+    const { error } = await anonClient().from('subscribers').delete().eq('id', id)
+    expectRlsDenied(error, 'anon delete')
+    expect(error?.message ?? '').toContain('permission denied for table subscribers')
+
+    const { data } = await svc.from('subscribers').select('id').eq('id', id)
+    expect(data, 'anon removed a fan email').toHaveLength(1)
+  })
+
+  it("CRITICAL: the artist's own manager CAN remove their subscriber", async () => {
+    const id = await plantOnArtistA(DELETE_EMAILS.owner)
+    const { error } = await asManagerA.from('subscribers').delete().eq('id', id)
+    expect(error).toBeNull()
+
+    const { data } = await svc.from('subscribers').select('id').eq('id', id)
+    expect(data, 'the owning manager could not remove their own fan email').toHaveLength(0)
+  })
+
+  it('admin can remove any subscriber', async () => {
+    const id = await plantOnArtistA(DELETE_EMAILS.admin)
+    const { error } = await asAdmin.from('subscribers').delete().eq('id', id)
+    expect(error).toBeNull()
+
+    const { data } = await svc.from('subscribers').select('id').eq('id', id)
+    expect(data).toHaveLength(0)
   })
 })

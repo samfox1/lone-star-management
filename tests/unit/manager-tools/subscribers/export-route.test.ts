@@ -1,12 +1,15 @@
 // The subscribers CSV export: who gets it, and exactly what is in it.
 /**
- * GET /artists/[id]/subscribers/export (Sam, 2026-09-24). The toolbar's "Download CSV" is a
- * plain link here. What this pins:
+ * GET /artists/[id]/subscribers/export (Sam, 2026-09-24; filter/search 2026-09-28). The
+ * toolbar's "Download CSV" is a plain link here. What this pins:
  *   - OWNER-ONLY, by the same check the dashboard actions make (`requireOwnedArtist`), and
  *     FIRST: a signed-out caller or a non-owner gets a 404 before a single subscriber row is
  *     read, and the 404 carries no CSV headers;
- *   - the read goes through the CALLER's client (RLS), scoped to this artist, and it is the
- *     FULL list: every page past PostgREST's 1000-row cap, and never the page's search;
+ *   - the read goes through the CALLER's client (RLS), scoped to this artist, and it is
+ *     ALWAYS the full list off the database: every page past PostgREST's 1000-row cap;
+ *   - `?q=` then narrows that list with `filterSubscribers` — the SAME function the ledger's
+ *     search box calls — so the CSV matches exactly what the toolbar's search shows. No
+ *     `?q=`: every subscriber, as before;
  *   - the body is `email,subscribed_at`, newest first, escaped and injection-guarded, and the
  *     response is an uncached attachment named `<slug>-subscribers-<YYYY-MM-DD>.csv`.
  *
@@ -207,9 +210,24 @@ describe('subscribers export — the file', () => {
     expect(lines).toHaveLength(1 + 600)
   })
 
-  it('ignores the page’s search: a ?q= on the link still exports everyone', async () => {
+  it('CRITICAL: ?q= filters the CSV exactly like the page search (case-insensitive substring)', async () => {
     const lines = (await (await call('a1', '?q=new')).text()).trimEnd().split('\r\n')
+    expect(lines).toEqual(['email,subscribed_at', 'new@x.io,2026-09-22'])
+  })
+
+  it('no ?q=: exports everyone, as before', async () => {
+    const lines = (await (await call()).text()).trimEnd().split('\r\n')
     expect(lines).toHaveLength(1 + SUBS.length)
+  })
+
+  it('a ?q= that matches nothing exports the header alone', async () => {
+    const body = await (await call('a1', '?q=zzz')).text()
+    expect(body).toBe('email,subscribed_at\r\n')
+  })
+
+  it('the query is trimmed and case-insensitive, exactly like filterSubscribers', async () => {
+    const lines = (await (await call('a1', `?q=${encodeURIComponent('  NEW  ')}`)).text()).trimEnd().split('\r\n')
+    expect(lines).toEqual(['email,subscribed_at', 'new@x.io,2026-09-22'])
   })
 
   it('no subscribers: the header alone, still a CSV', async () => {

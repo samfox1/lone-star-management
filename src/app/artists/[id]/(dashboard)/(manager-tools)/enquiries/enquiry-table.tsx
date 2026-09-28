@@ -2,16 +2,22 @@
 
 import { useState, useTransition } from 'react'
 import { fileSize, type PlayableAttachment } from '@/lib/enquiries/attachments'
-import { artistsIn, filterByArtist, filterRows, snippet, type InboxFilter, type InboxRow } from '@/lib/enquiries/inbox'
+import {
+  artistsIn,
+  filterByArtist,
+  filterRows,
+  kindFilter,
+  kindOptions,
+  snippet,
+  type InboxFilter,
+  type InboxRow,
+  type KindOption,
+} from '@/lib/enquiries/inbox'
 import { safeHref } from '@/lib/url'
 import { Icon } from '@/components/ui/icons'
-import { setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
-
-const FILTERS: { key: InboxFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'unread', label: 'Unread' },
-  { key: 'demos', label: 'Demos' },
-]
+import { useConfirm } from '../../confirm-dialog'
+import { toast } from '../../toast'
+import { deleteEnquiryAction, setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
 
 function received(iso: string): string {
   const d = new Date(iso)
@@ -36,15 +42,23 @@ function received(iso: string): string {
  * and a table cannot show a paragraph.
  */
 export function EnquiryTable({
-  rows,
+  rows: allRows,
   showArtist = false,
+  kinds = [],
 }: {
   rows: InboxRow[]
   /** Label each row with the artist it came in for — on for the roster-wide table, off on
    *  one artist's page where it would repeat on every line. */
   showArtist?: boolean
+  /** The artist's own enquiry kinds, in their order, for the filter bar. Left out on the
+   *  roster inbox, where each artist has their own list: the rows' kinds are offered. */
+  kinds?: KindOption[]
 }) {
   const [filter, setFilter] = useState<InboxFilter>('all')
+  // Deleted here and not yet gone from `allRows`: the server revalidates, but the row
+  // should leave the moment the database says it went.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set())
+  const rows = allRows.filter((r) => !deletedIds.has(r.id))
   const [artistId, setArtistId] = useState<string>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [readIds, setReadIds] = useState<Set<string>>(
@@ -64,6 +78,24 @@ export function EnquiryTable({
   // an option that can only ever return nothing.
   const artistOptions = artistsIn(rows)
   const unreadCount = rows.filter((r) => !readIds.has(r.id)).length
+  const filters: { key: InboxFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'unread', label: 'Unread' },
+    ...kindOptions(kinds, allRows).map((k) => ({ key: kindFilter(k.slug), label: k.label })),
+  ]
+  const { ask, dialog } = useConfirm()
+
+  async function remove(row: InboxRow) {
+    if (!(await ask(`Delete the enquiry from ${row.name}? This can't be undone.`))) return
+    const res = await deleteEnquiryAction(row.artistId, row.id)
+    if (!res.ok) {
+      toast(res.error ?? 'Could not delete that enquiry.', 'error')
+      return
+    }
+    setDeletedIds((prev) => new Set(prev).add(row.id))
+    setOpenId(null)
+    toast('Enquiry deleted')
+  }
 
   function toggle(row: InboxRow) {
     const opening = openId !== row.id
@@ -123,8 +155,8 @@ export function EnquiryTable({
             </select>
           </label>
         )}
-        <div className="ml-auto flex gap-1">
-          {FILTERS.map((f) => (
+        <div className="ml-auto flex flex-wrap gap-1">
+          {filters.map((f) => (
             <button
               key={f.key}
               type="button"
@@ -157,8 +189,8 @@ export function EnquiryTable({
               <tr>
                 <td colSpan={colSpan} className="px-4 py-10 text-center font-space text-xs text-ink-faint">
                   {/* Name the NARROWEST true reason. With an artist and a filter both
-                      active, "no demos yet" is false — there are demos, just not this
-                      artist's — and a message that is wrong about why is worse than a
+                      active, "nothing in Demo yet" is false — there are demos, just not
+                      this artist's — and a message that is wrong about why is worse than a
                       vague one. */}
                   {rows.length === 0
                     ? 'No enquiries yet. Booking and demo messages from the site’s contact form land here.'
@@ -166,7 +198,7 @@ export function EnquiryTable({
                       ? `Nothing here for ${artistOptions.find((a) => a.id === artistId)?.name ?? 'this artist'}.`
                       : filter === 'unread'
                         ? 'Nothing unread.'
-                        : 'No demos yet.'}
+                        : `Nothing in ${filters.find((f) => f.key === filter)?.label ?? 'this kind'} yet.`}
                 </td>
               </tr>
             ) : (
@@ -184,6 +216,7 @@ export function EnquiryTable({
                     audio={audio?.id === r.id ? audio.items : null}
                     onToggle={() => toggle(r)}
                     onMarkUnread={() => markUnread(r)}
+                    onDelete={() => void remove(r)}
                   />
                 )
               })
@@ -191,6 +224,7 @@ export function EnquiryTable({
           </tbody>
         </table>
       </div>
+      {dialog}
     </div>
   )
 }
@@ -216,6 +250,7 @@ function FragmentRow({
   audio,
   onToggle,
   onMarkUnread,
+  onDelete,
 }: {
   row: InboxRow
   isRead: boolean
@@ -225,6 +260,7 @@ function FragmentRow({
   audio: PlayableAttachment[] | null
   onToggle: () => void
   onMarkUnread: () => void
+  onDelete: () => void
 }) {
   return (
     <>
@@ -262,7 +298,7 @@ function FragmentRow({
           {/* Not emailed. Says so plainly, because a table of messages reads as a record of
               messages DELIVERED, and right now none of them are. */}
           {(row.status === 'unroutable' || row.status === 'failed') && (
-            <span title={row.status === 'unroutable' ? 'Not emailed — mail is not configured' : 'Email failed to send'}>
+            <span title={row.status === 'unroutable' ? 'Not emailed — nobody is set to receive it' : 'Email failed to send'}>
               {' '}
               <Icon name="alert" size={11} />
             </span>
@@ -275,8 +311,11 @@ function FragmentRow({
           <td colSpan={colSpan} className="px-4 pb-4 pt-1">
             {(row.status === 'unroutable' || row.status === 'failed') && (
               <p className="mb-3 font-space text-[11px] text-ink-muted">
+                {/* Since 2026-09-28 there is no global inbox: an enquiry is emailed only to
+                    the addresses this artist's managers set, so "unroutable" almost always
+                    means none were set when it arrived. */}
                 {row.status === 'unroutable'
-                  ? 'Not emailed — no sending address is configured yet. The message is safe here.'
+                  ? 'Not emailed — nobody was set to receive it. The message is safe here.'
                   : 'The notification email failed to send. The message is safe here.'}
               </p>
             )}
@@ -358,6 +397,16 @@ function FragmentRow({
                   Mark unread
                 </button>
               )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+                className="ml-auto text-ink-muted underline underline-offset-2 hover:text-accent-red"
+              >
+                Delete
+              </button>
             </div>
           </td>
         </tr>

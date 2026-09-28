@@ -451,7 +451,9 @@ Deno.serve(async (req: Request) => {
       )
     }
     if (decision.unroutable) {
-      console.error('contact: stored but unroutable — mail not configured', {
+      // No recipient set for this artist + kind (there is no global inbox since
+      // 2026-09-28), or no sender configured.
+      console.error('contact: stored but unroutable — no recipient set, or no sender', {
         slug: body.slug,
         enquiry: row.enquiry_id,
       })

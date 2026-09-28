@@ -7,7 +7,8 @@ export const metadata = { title: 'Subscribers — Lone Star Management' }
 
 /**
  * SUBSCRIBERS (Sam, 2026-09-24): the emails the site's signup door collected, as a ledger
- * (subscribers-ledger.tsx). Read-only: `subscribe()` is the only writer.
+ * (subscribers-ledger.tsx). `subscribe()` is the only INSERT path; a manager may REMOVE one
+ * (Sam, 2026-09-28, subscribers-ledger.tsx's Remove action / actions.ts).
  *
  * `requireArtist` is the non-owner → 404 gate; the read goes through the caller's client, so
  * RLS (owner-read) scopes it too. Every row, past PostgREST's 1000-row cap (`readSubscribers`).

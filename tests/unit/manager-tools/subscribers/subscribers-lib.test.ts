@@ -1,9 +1,11 @@
-// The Subscribers tool's pure rules: search, sort, highlight, the CSV, the mailto link.
+// The Subscribers tool's pure rules: search, sort, highlight, the CSV, the mailto link,
+//   the export link, and deleteSubscriber's own promises over a fake PostgREST client.
 /**
- * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html). The page is a
- * read-only ledger of the emails the site's signup door collected. Everything it decides
- * that is not layout lives in src/lib/manager-tools/subscribers/subscribers.ts, so it is pinned here without a DOM or
- * a database, and Stryker mutates it (stryker.config.json `mutate`).
+ * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html; Remove and the
+ * filtered export, 2026-09-28). The page is a ledger of the emails the site's signup door
+ * collected. Everything it decides that is not layout lives in
+ * src/lib/manager-tools/subscribers/subscribers.ts, so it is pinned here without a DOM or a
+ * live database, and Stryker mutates it (stryker.config.json `mutate`).
  *
  * The sort cases are keyed by the SUBSCRIBER_SORTS registry (`Record<SubscriberSort, …>`),
  * so a new sort that nobody wrote an expectation for is a compile error, not a gap.
@@ -13,8 +15,10 @@ import {
   CSV_HEADER,
   SUBSCRIBER_SORTS,
   csvCell,
+  deleteSubscriber,
   emailList,
   exportFilename,
+  exportHref,
   filterSubscribers,
   formatSubscribedDate,
   highlightSegments,
@@ -27,10 +31,10 @@ import {
 } from '@/lib/manager-tools/subscribers/subscribers'
 
 const ROWS: Subscriber[] = [
-  { email: 'maya.chen@example.com', created_at: '2026-09-22T14:03:11.123456+00:00' },
-  { email: 'Ben.Walsh@Example.com', created_at: '2026-07-09T08:00:00+00:00' },
-  { email: 'theo.park@example.com', created_at: '2026-09-19T20:15:00.5+00:00' },
-  { email: 'ava+news@example.com', created_at: '2026-08-11T00:00:00+00:00' },
+  { id: 'r1', email: 'maya.chen@example.com', created_at: '2026-09-22T14:03:11.123456+00:00' },
+  { id: 'r2', email: 'Ben.Walsh@Example.com', created_at: '2026-07-09T08:00:00+00:00' },
+  { id: 'r3', email: 'theo.park@example.com', created_at: '2026-09-19T20:15:00.5+00:00' },
+  { id: 'r4', email: 'ava+news@example.com', created_at: '2026-08-11T00:00:00+00:00' },
 ]
 const emails = (rows: readonly Subscriber[]) => rows.map((r) => r.email)
 
@@ -50,8 +54,8 @@ describe('filterSubscribers', () => {
   it('treats regex characters literally: "." is a dot and "+" is a plus', () => {
     // As a regex, "a.c" would also match "abc"; as text it must not.
     const rows = [
-      { email: 'abc@x.io', created_at: '2026-01-01T00:00:00Z' },
-      { email: 'a.c@x.io', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'x1', email: 'abc@x.io', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'x2', email: 'a.c@x.io', created_at: '2026-01-01T00:00:00Z' },
     ]
     expect(emails(filterSubscribers(rows, 'a.c'))).toEqual(['a.c@x.io'])
     expect(emails(filterSubscribers(ROWS, 'ava+news'))).toEqual(['ava+news@example.com'])
@@ -95,9 +99,9 @@ describe('sortSubscribers', () => {
   it('orders by the INSTANT, not the string: an offset and a fraction do not fool it', () => {
     // 11:00+02:00 is 09:00Z, an hour BEFORE 10:00Z, though it sorts after it as text.
     const rows = [
-      { email: 'b@x.io', created_at: '2026-09-22T10:00:00+00:00' },
-      { email: 'a@x.io', created_at: '2026-09-22T11:00:00+02:00' },
-      { email: 'c@x.io', created_at: '2026-09-22T10:00:00.25+00:00' },
+      { id: 'x1', email: 'b@x.io', created_at: '2026-09-22T10:00:00+00:00' },
+      { id: 'x2', email: 'a@x.io', created_at: '2026-09-22T11:00:00+02:00' },
+      { id: 'x3', email: 'c@x.io', created_at: '2026-09-22T10:00:00.25+00:00' },
     ]
     expect(emails(sortSubscribers(rows, 'new'))).toEqual(['c@x.io', 'b@x.io', 'a@x.io'])
     expect(emails(sortSubscribers(rows, 'old'))).toEqual(['a@x.io', 'b@x.io', 'c@x.io'])
@@ -106,9 +110,9 @@ describe('sortSubscribers', () => {
   it('a tie on time falls back to the email, so the order never depends on the input', () => {
     const t = '2026-09-22T10:00:00+00:00'
     const rows = [
-      { email: 'c@x.io', created_at: t },
-      { email: 'A@x.io', created_at: t },
-      { email: 'b@x.io', created_at: t },
+      { id: 'x1', email: 'c@x.io', created_at: t },
+      { id: 'x2', email: 'A@x.io', created_at: t },
+      { id: 'x3', email: 'b@x.io', created_at: t },
     ]
     expect(emails(sortSubscribers(rows, 'new'))).toEqual(['A@x.io', 'b@x.io', 'c@x.io'])
     expect(emails(sortSubscribers(rows, 'old'))).toEqual(['A@x.io', 'b@x.io', 'c@x.io'])
@@ -117,8 +121,8 @@ describe('sortSubscribers', () => {
 
   it('A–Z breaks a same-letters tie by case, then newest first', () => {
     const rows = [
-      { email: 'sam@x.io', created_at: '2026-01-01T00:00:00Z' },
-      { email: 'Sam@x.io', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'x1', email: 'sam@x.io', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'x2', email: 'Sam@x.io', created_at: '2026-01-01T00:00:00Z' },
     ]
     expect(emails(sortSubscribers(rows, 'az'))).toEqual(['Sam@x.io', 'sam@x.io'])
   })
@@ -237,7 +241,7 @@ describe('subscribersCsv', () => {
   })
 
   it('escapes and guards every cell', () => {
-    const csv = subscribersCsv([{ email: '=cmd|"/c calc"!A0,x@y.io', created_at: '2026-09-22T00:00:00Z' }])
+    const csv = subscribersCsv([{ id: 'x1', email: '=cmd|"/c calc"!A0,x@y.io', created_at: '2026-09-22T00:00:00Z' }])
     expect(csv.split('\r\n')[1]).toBe(`"'=cmd|""/c calc""!A0,x@y.io",2026-09-22`)
   })
 
@@ -287,5 +291,86 @@ describe('emailList', () => {
   it('joins the given rows, in order, as "a, b" for a BCC field', () => {
     expect(emailList(ROWS.slice(0, 2))).toBe('maya.chen@example.com, Ben.Walsh@Example.com')
     expect(emailList([])).toBe('')
+  })
+})
+
+describe('exportHref', () => {
+  it('the plain route with no search', () => {
+    expect(exportHref('a1', '')).toBe('/artists/a1/subscribers/export')
+    // Trimmed exactly like the search box: whitespace alone is "no query".
+    expect(exportHref('a1', '   ')).toBe('/artists/a1/subscribers/export')
+  })
+
+  it('CRITICAL: appends the trimmed, encoded search as ?q=, matching what filterSubscribers would match', () => {
+    expect(exportHref('a1', '  maya  ')).toBe('/artists/a1/subscribers/export?q=maya')
+    // "&" and "=" in a query must not add a second parameter to the URL.
+    expect(exportHref('a1', 'a&b=c')).toBe('/artists/a1/subscribers/export?q=a%26b%3Dc')
+  })
+})
+
+describe('deleteSubscriber', () => {
+  // A minimal PostgREST-shaped fake: only what `deleteSubscriber` calls
+  // (.from().delete().eq().eq().select()), self-contained so this file does not reach into
+  // another tool's test helper.
+  type Call = { table: string; op: 'select' | 'delete'; eq: [string, unknown][]; selected: boolean }
+
+  function fakeSupabase(reply: { data?: unknown; error?: { message: string } | null }) {
+    const calls: Call[] = []
+    const client = {
+      from: (table: string) => {
+        const call: Call = { table, op: 'select', eq: [], selected: false }
+        const chain = {
+          delete: () => {
+            call.op = 'delete'
+            return chain
+          },
+          eq: (col: string, v: unknown) => {
+            call.eq.push([col, v])
+            return chain
+          },
+          select: () => {
+            call.selected = true
+            return chain
+          },
+          then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => {
+            calls.push(call)
+            // Real PostgREST: a write returns rows only when `.select()` was chained.
+            const data = call.op !== 'select' && !call.selected ? null : (reply.data ?? null)
+            return Promise.resolve({ data, error: reply.error ?? null }).then(ok, bad)
+          },
+        }
+        return chain
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any
+    return { client, calls }
+  }
+
+  it('CRITICAL: scopes the delete by id AND artist_id, and reads back what was removed', async () => {
+    const { client, calls } = fakeSupabase({ data: [{ id: 's1' }] })
+    expect(await deleteSubscriber(client, 'a1', 's1')).toEqual({ ok: true })
+    const [call] = calls
+    expect(call.table).toBe('subscribers')
+    expect(call.op).toBe('delete')
+    expect(call.eq).toEqual([
+      ['id', 's1'],
+      ['artist_id', 'a1'],
+    ])
+    expect(call.selected).toBe(true)
+  })
+
+  it('CRITICAL: a zero-row match (RLS filtered a stranger’s delete, or the row is already gone) is an error, never a silent success', async () => {
+    const { client } = fakeSupabase({ data: [] })
+    expect(await deleteSubscriber(client, 'a1', 's1')).toEqual({ ok: false, error: 'That subscriber is no longer there.' })
+  })
+
+  it('null data (no rows came back) reads the same as zero rows', async () => {
+    const { client } = fakeSupabase({ data: null })
+    expect(await deleteSubscriber(client, 'a1', 's1')).toEqual({ ok: false, error: 'That subscriber is no longer there.' })
+  })
+
+  it('a database error is reported, not thrown, and never read as success', async () => {
+    const { client } = fakeSupabase({ error: { message: 'boom' } })
+    expect(await deleteSubscriber(client, 'a1', 's1')).toEqual({ ok: false, error: 'Could not remove that subscriber.' })
   })
 })

@@ -18,9 +18,12 @@
  * created" and the absolute counts below are true about a genuinely empty table. The seed
  * artists are shared fixtures and are never touched — AGENTS.md rule 6.
  *
- * THE SINGLETON IS NOT PER-ARTIST. `mail_settings` is global config and rung 4 reads it, so
- * this file owns its value while it runs or its assertions change meaning the day mail goes
- * live. See the note above `priorMailSettings`.
+ * THE HOUSE ROW IS NEVER WRITTEN. `mail_settings` is live config. This file used to
+ * overwrite it for its whole run and restore it afterwards, which misrouted real enquiries
+ * while it ran and leaked a fake row when a run crashed or two runs nested (2026-09-28). It
+ * no longer needs it at all: since 20260928141000 there is NO global inbox (rung 4 is gone,
+ * Sam: "my email shouldn't be involved here"), so what an artist resolves depends only on
+ * rows under that artist.
  *
  * The end-to-end half — what `submit_enquiry` returns and freezes on the enquiry row —
  * lives in enquiry-door.test.ts, which already owns that singleton and the throwaway artist
@@ -44,25 +47,7 @@ let asB: SupabaseClient
 const LINK_TO = 'booking-link@example.com'
 const MANAGER_TO = 'the-manager@example.com'
 const ARTIST_TO = 'the-artist@example.com'
-/** Rung 4, owned by this file while it runs. See the note below. */
-const DEFAULT_TO = 'recipients-fallback@example.com'
 
-/**
- * WHY THIS FILE OWNS mail_settings.
- *
- * Rung 4 of resolve_booking_recipient is `mail_settings.default_to_email`, which is NOT
- * NULL — so whenever the singleton row exists, EVERY artist resolves a primary. Left to
- * whatever the project happens to hold, "an artist with no booking rung" would mean one
- * thing today (mail is unconfigured, so no rung at all) and the opposite the day Sam
- * verifies a domain and seeds the row. These assertions would flip from passing to failing
- * at exactly the moment someone is working on this code.
- *
- * So the file pins it to a KNOWN address and puts back whatever it found. `fileParallelism`
- * is false in vitest.config.ts, so this cannot race enquiry-door.test.ts, which owns the
- * same row for the same reason. null means there was no row and afterAll should delete ours.
- */
-type MailSettings = { default_to_email: string; sending_domain: string; from_local_part: string }
-let priorMailSettings: MailSettings | null = null
 
 type Resolved = { to_email: string; recipient_source: string; is_primary: boolean; ordinal: number }
 
@@ -123,28 +108,11 @@ beforeAll(async () => {
   asB = await signInAs(SEED.managerB)
   artistA = await createThrowawayArtist(svc, 'enquiry-recipients A', asA)
   artistB = await createThrowawayArtist(svc, 'enquiry-recipients B', asB)
-
-  const { data: existing } = await svc
-    .from('mail_settings')
-    .select('default_to_email, sending_domain, from_local_part')
-    .maybeSingle()
-  priorMailSettings = (existing as MailSettings | null) ?? null
-
-  const { error } = await svc.from('mail_settings').upsert({
-    id: true,
-    default_to_email: DEFAULT_TO,
-    sending_domain: 'mail.example.com',
-    from_local_part: 'noreply',
-  })
-  if (error) throw new Error(`mail_settings seed failed: ${error.message}`)
 })
 
 afterAll(async () => {
   await deleteThrowawayArtist(svc, artistA)
   await deleteThrowawayArtist(svc, artistB)
-
-  if (priorMailSettings) await svc.from('mail_settings').upsert({ id: true, ...priorMailSettings })
-  else await svc.from('mail_settings').delete().eq('id', true)
 })
 
 describe('enquiry_kinds — every artist starts with the three the sites send', () => {
@@ -450,18 +418,44 @@ describe('resolve_enquiry_recipients — the list ADDS, and stays in its own kin
     }
   })
 
-  it('appends to the LAST-RESORT rung too, not just to a booking link', async () => {
-    // With no per-artist rung, rung 4 (mail_settings.default_to_email) is the primary. The
-    // list still has to be added on top — an artist whose enquiries go to the house address
-    // is exactly the artist whose manager most needs copying in.
-    const a = await createThrowawayArtist(svc, 'default plus list')
+  it('CRITICAL: with no booking address, the kind’s list alone — its first person is the primary', async () => {
+    // Sam, 2026-09-28: no global inbox; "when the managers log in and put their email it can
+    // be theirs". Rung 4 used to be the primary here (the house default_to_email). Now the
+    // earliest-added person on the list is, so a manager who only filled in the list still
+    // receives mail. NEEDS 20260928141000.
+    const a = await createThrowawayArtist(svc, 'list alone')
     try {
-      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager')
+      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager', '2026-01-01T00:00:00Z')
+      await addRecipient(a.id, 'booking', ARTIST_TO, 'Artist', '2026-01-02T00:00:00Z')
 
       expect(await resolve(a.id, 'booking')).toEqual([
-        { to_email: DEFAULT_TO, recipient_source: 'default', is_primary: true, ordinal: 0 },
-        { to_email: MANAGER_TO, recipient_source: 'recipient_list', is_primary: false, ordinal: 1 },
+        { to_email: MANAGER_TO, recipient_source: 'recipient_list', is_primary: true, ordinal: 1 },
+        { to_email: ARTIST_TO, recipient_source: 'recipient_list', is_primary: false, ordinal: 2 },
       ])
+    } finally {
+      await deleteThrowawayArtist(svc, a)
+    }
+  })
+
+  it('CRITICAL: no booking address and no list resolves NOBODY — there is no global inbox', async () => {
+    // RED before 20260928141000 whenever the live house row holds a default_to_email.
+    const a = await createThrowawayArtist(svc, 'nobody')
+    try {
+      expect(await resolve(a.id, 'booking')).toEqual([])
+      const { data, error } = await svc.rpc('resolve_booking_recipient', { p_artist_id: a.id })
+      expect(error).toBeNull()
+      expect(data ?? []).toEqual([])
+    } finally {
+      await deleteThrowawayArtist(svc, a)
+    }
+  })
+
+  it("a list only makes a primary for ITS kind — another kind's list is never borrowed", async () => {
+    const a = await createThrowawayArtist(svc, 'list per kind')
+    try {
+      await addRecipient(a.id, 'demo', ARTIST_TO)
+      expect(await resolve(a.id, 'booking')).toEqual([])
+      expect((await resolve(a.id, 'demo')).map((r) => [r.to_email, r.is_primary])).toEqual([[ARTIST_TO, true]])
     } finally {
       await deleteThrowawayArtist(svc, a)
     }

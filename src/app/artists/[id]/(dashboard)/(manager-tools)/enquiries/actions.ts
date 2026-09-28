@@ -11,7 +11,7 @@
  * since the page rendered. A signed URL should start its life when someone asks for it.
  */
 import { revalidatePath } from 'next/cache'
-import { toPlayable, type AttachmentRow, type PlayableAttachment } from '@/lib/enquiries/attachments'
+import { ATTACHMENT_BUCKET, toPlayable, type AttachmentRow, type PlayableAttachment } from '@/lib/enquiries/attachments'
 import { createClient } from '@/lib/supabase/server'
 import { LABEL_MAX, slugFromLabel, uniqueSlug, type EnquiryKindRow } from '@/lib/enquiries/kinds'
 import { requireOwnedArtist } from '../../_owns'
@@ -70,6 +70,59 @@ export async function setEnquiryReadAction(
     .eq('artist_id', artistId)
   if (error) return { ok: false, error: read ? 'Could not mark that as read.' : 'Could not mark that unread.' }
   revalidatePath(`/artists/${artistId}/enquiries`)
+  return { ok: true }
+}
+
+/**
+ * Delete one enquiry — spam, mostly (Sam, 2026-09-28: "a manager can delete an inquiry").
+ *
+ * WHO may is the database's call: the `enquiries_delete` policy (20260928140000) scopes it
+ * to the artist's managers and admins, and anon holds no DELETE grant. `requireOwnedArtist`
+ * is the belt to those braces, and the `.select` is what tells a refused or stale delete
+ * (zero rows, `error: null` — AGENTS.md rule 3) apart from a real one.
+ *
+ * THE AUDIO GOES TOO. The attachment ROWS cascade with the enquiry, and the 90-day sweep
+ * finds objects only through those rows — so an object not removed here is never removed
+ * at all. The paths are read BEFORE the delete (after it they are gone), and removed only
+ * AFTER it succeeds: a refused delete must never cost an enquiry that is still in the inbox
+ * its audio. The removal is best-effort — the enquiry is already gone, and a leaked object
+ * costs storage, not the manager's answer. It runs with the caller's session, and the
+ * bucket's manager-delete policy scopes it to their artist's folder.
+ */
+export async function deleteEnquiryAction(
+  artistId: string,
+  enquiryId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { ok: false, error: owned.error }
+
+  const { data: files } = await supabase
+    .from('enquiry_attachments')
+    .select('storage_path')
+    .eq('enquiry_id', enquiryId)
+    .not('storage_path', 'is', null)
+
+  const { data, error } = await supabase
+    .from('enquiries')
+    .delete()
+    .eq('id', enquiryId)
+    .eq('artist_id', artistId)
+    .select('id')
+  if (error) return { ok: false, error: 'Could not delete that enquiry.' }
+  if (!data?.length) return { ok: false, error: 'That enquiry is no longer there — refresh the page.' }
+
+  const paths = ((files ?? []) as { storage_path: string | null }[])
+    .map((f) => f.storage_path)
+    .filter((p): p is string => !!p)
+  if (paths.length) {
+    const { error: rmError } = await supabase.storage.from(ATTACHMENT_BUCKET).remove(paths)
+    if (rmError) console.error('deleteEnquiryAction: audio left in the bucket', rmError.message)
+  }
+
+  // Both inboxes show it: this artist's page and the roster-wide one.
+  revalidatePath(`/artists/${artistId}/enquiries`)
+  revalidatePath('/artists')
   return { ok: true }
 }
 

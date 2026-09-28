@@ -221,7 +221,8 @@ Shipped: migrations `20260722120000` (tables) + `20260722130000` (functions), bo
 **applied**; `supabase/functions/contact/`; manager inbox at
 `/artists/<id>/enquiries`; 77 tests. Recipient is resolved SERVER-SIDE only —
 `artist_mail_settings.booking_email` → `links.role='booking'` →
-`site_content.booking_email` → `mail_settings.default_to_email` — because accepting it
+`site_content.booking_email` (no global fallback since 2026-09-28: with none of those and
+no per-kind list, the enquiry is stored unroutable, not emailed) — because accepting it
 from the request body would make the endpoint an open relay on our verified domain.
 
 **Blocked on Sam, in order — nothing sends until all four are done:**

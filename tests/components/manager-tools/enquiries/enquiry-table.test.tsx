@@ -12,6 +12,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { EnquiryTable } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/enquiry-table'
 import {
+  deleteEnquiryAction,
   setEnquiryReadAction,
   signEnquiryAttachmentsAction,
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
@@ -20,10 +21,19 @@ import type { InboxRow } from '@/lib/enquiries/inbox'
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
   setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
   signEnquiryAttachmentsAction: vi.fn(async () => []),
+  deleteEnquiryAction: vi.fn(async () => ({ ok: true })),
 }))
 
 const setRead = vi.mocked(setEnquiryReadAction)
 const sign = vi.mocked(signEnquiryAttachmentsAction)
+const del = vi.mocked(deleteEnquiryAction)
+
+/** The three kinds every artist starts with (the seeding trigger, 20260921120000). */
+const SEEDED = [
+  { slug: 'booking', label: 'Booking' },
+  { slug: 'demo', label: 'Demo' },
+  { slug: 'other', label: 'Contact' },
+]
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
@@ -46,6 +56,8 @@ beforeEach(() => {
   setRead.mockClear()
   sign.mockClear()
   sign.mockResolvedValue([])
+  del.mockClear()
+  del.mockResolvedValue({ ok: true })
 })
 afterEach(cleanup)
 
@@ -59,11 +71,11 @@ describe('EnquiryTable — the empty case', () => {
   it('CRITICAL: renders the table and its filters with NO enquiries at all', async () => {
     // The screenshot that prompted this: an empty page showed one dashed box and nothing
     // else — no columns, no filters, no clue what would ever appear or how to find it.
-    render(<EnquiryTable rows={[]} />)
+    render(<EnquiryTable rows={[]} kinds={SEEDED} />)
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'From' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Received' })).toBeInTheDocument()
-    for (const f of ['All', 'Unread', 'Demos']) {
+    for (const f of ['All', 'Unread', 'Booking', 'Demo', 'Contact']) {
       expect(screen.getByRole('button', { name: f })).toBeInTheDocument()
     }
   })
@@ -87,7 +99,8 @@ describe('EnquiryTable — rows', () => {
   it('shows the sender, type, snippet and time without opening anything', async () => {
     render(<EnquiryTable rows={[row()]} />)
     expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
-    expect(screen.getByText('Booking')).toBeInTheDocument()
+    // The Type CELL: the same label is also a filter button now.
+    expect(screen.getByRole('cell', { name: 'Booking' })).toBeInTheDocument()
     expect(screen.getByText(/Can you play/)).toBeInTheDocument()
   })
 
@@ -132,17 +145,91 @@ describe('EnquiryTable — rows', () => {
     expect(screen.getAllByText('Lone Pine').length).toBeGreaterThan(0)
   })
 
-  it('filters to demos regardless of read state', async () => {
+})
+
+describe("EnquiryTable — filters are the ARTIST'S kinds", () => {
+  // The bar used to be All · Unread · Demos, with "Demos" hard-coded. Kinds are the
+  // artist's to invent since 2026-09-21, so the bar offers theirs.
+  const kinds = [
+    { slug: 'booking', label: 'Booking' },
+    { slug: 'press', label: 'Press' },
+  ]
+
+  it('offers All, Unread, then each of the artist’s kinds — and no hard-coded Demos', () => {
+    render(<EnquiryTable rows={[]} kinds={kinds} />)
+    const labels = screen.getAllByRole('button').map((b) => b.textContent)
+    expect(labels).toEqual(['All', 'Unread', 'Booking', 'Press'])
+  })
+
+  it('filters to an artist-invented kind, regardless of read state', async () => {
     const rows = [
       row({ id: 'b', name: 'Booker', purpose: 'booking' }),
-      row({ id: 'd', name: 'Demoer', purpose: 'demo', read_at: '2026-08-04T11:00:00Z' }),
+      row({ id: 'p', name: 'Journalist', purpose: 'press', purposeLabel: 'Press', read_at: '2026-08-04T11:00:00Z' }),
     ]
-    render(<EnquiryTable rows={rows} />)
+    render(<EnquiryTable rows={rows} kinds={kinds} />)
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Demos' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Press' }))
     })
-    expect(screen.getByText('Demoer')).toBeInTheDocument()
+    expect(screen.getByText('Journalist')).toBeInTheDocument()
     expect(screen.queryByText('Booker')).toBeNull()
+  })
+
+  it('says the kind is empty, not that the inbox is', async () => {
+    render(<EnquiryTable rows={[row({ purpose: 'booking' })]} kinds={kinds} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Press' }))
+    })
+    expect(screen.getByRole('cell', { name: /Press/ })).toBeInTheDocument()
+    expect(screen.queryByText(/No enquiries yet/)).toBeNull()
+  })
+
+  it('with no kind list (the roster inbox), offers the kinds the rows carry', () => {
+    render(<EnquiryTable rows={[row({ purpose: 'demo', purposeLabel: 'Demo' })]} showArtist />)
+    expect(screen.getByRole('button', { name: 'Demo' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Demos' })).toBeNull()
+  })
+})
+
+describe('EnquiryTable — deleting an enquiry', () => {
+  // Sam, 2026-09-28: "a manager can delete an inquiry" (spam). Irreversible, so it asks
+  // first, in the app's own confirm dialog.
+  const openAndAskToDelete = async () => {
+    await openRow('Jamie Rowe')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    })
+    return screen.getByRole('dialog')
+  }
+
+  it('deletes after the manager confirms, and the row leaves the table', async () => {
+    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    const dialog = await openAndAskToDelete()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    })
+    expect(del).toHaveBeenCalledWith('a1', 'x')
+    expect(screen.queryByText('Jamie Rowe')).toBeNull()
+  })
+
+  it('CRITICAL: Cancel deletes nothing', async () => {
+    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    const dialog = await openAndAskToDelete()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(del).not.toHaveBeenCalled()
+    expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
+  })
+
+  it('keeps the row when the server refuses', async () => {
+    del.mockResolvedValue({ ok: false, error: 'That enquiry is no longer there — refresh the page.' })
+    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    const dialog = await openAndAskToDelete()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    })
+    expect(del).toHaveBeenCalledWith('a1', 'x')
+    expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
   })
 })
 
@@ -232,10 +319,15 @@ describe('EnquiryTable — the artist selector', () => {
   })
 
   it('CRITICAL: names the artist, not the filter, when the artist is the reason', async () => {
-    render(<EnquiryTable rows={[...two, row({ id: 'c', purpose: 'demo', artistId: 'a3', artistName: 'Third' })]} showArtist />)
+    render(
+      <EnquiryTable
+        rows={[...two, row({ id: 'c', purpose: 'demo', purposeLabel: 'Demo', artistId: 'a3', artistName: 'Third' })]}
+        showArtist
+      />,
+    )
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Filter by artist'), { target: { value: 'a1' } })
-      fireEvent.click(screen.getByRole('button', { name: 'Demos' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Demo' }))
     })
     expect(screen.getByText('Nothing here for Lone Pine.')).toBeInTheDocument()
   })
@@ -248,7 +340,7 @@ describe('the Type column reads the kind\'s label from the row', () => {
     // read as the manager named them.
     render(<EnquiryTable rows={[row({ purpose: 'sync-licensing', purposeLabel: 'Sync licensing' })]} />)
 
-    expect(screen.getByText('Sync licensing')).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'Sync licensing' })).toBeTruthy()
     expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 })

@@ -30,8 +30,28 @@
  * The artist is now created by this file and dropped by it. "Delete every rung / every
  * enquiry for this artist" IS "delete exactly what I created", the counts below are true
  * about a genuinely empty table, and the random slug is what lets the flood-cap test run
- * twice in a row. The global `mail_settings` singleton is NOT per-artist, so it keeps its
- * save-then-restore treatment.
+ * twice in a row.
+ *
+ * THE HOUSE MAIL ROW IS NEVER WRITTEN (2026-09-28). `mail_settings` is the shared sender and
+ * the last-resort inbox: live config, holding the real sender and Sam's inbox. This file
+ * used to overwrite it for its whole run, DELETE it in three tests, and "restore" it in
+ * afterAll. While it ran, a real enquiry went to `fallback-desk@example.com`; a crashed run
+ * left that fake row behind; two runs at once nested and restored each other's fake value.
+ * On 2026-09-28 the live row was watched going fake, then gone, during an ordinary run.
+ *
+ * Now the artist carries its OWN mail settings with `use_house_mail = false`
+ * (20260928141000): its sender is `noreply@mail.example.com` from its own row, and it never
+ * uses the house sender. "No sender" is therefore a state of THIS artist's row, set and
+ * cleared here, gone with the artist. The one test about the house sender only READS the
+ * row, on a second throwaway artist. tests/unit/enquiries/no-live-mail-writes.test.ts fails
+ * if any test file writes it.
+ *
+ * NO GLOBAL INBOX (Sam, 2026-09-28): rung 4 (`mail_settings.default_to_email`) is gone. An
+ * enquiry goes only to addresses the artist's managers set; with none it is stored
+ * `unroutable` and nothing is sent.
+ *
+ * NEEDS 20260928141000 (the `use_house_mail` column, rung 4 removed). Before it is pushed,
+ * beforeAll fails on the unknown column: loudly, and without touching any live config.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { serviceClient } from '@tests/helpers/supabase'
@@ -52,20 +72,30 @@ function freshIp(): string {
 }
 
 /**
- * The mail_settings singleton this suite found on arrival, so afterAll can put it back
- * exactly as it was. The precedence tests assert on a KNOWN default address, so this
- * file has to own the singleton's value while it runs — but it is real infrastructure
- * config, and clobbering it permanently would silently repoint every unrouted enquiry.
- * null means there was no row and afterAll should delete ours.
+ * This artist's own mail settings: its own sender, and OFF the house row, so nothing here
+ * depends on (or can change) the live `mail_settings` row. clearRungs() puts it back
+ * before every test; the tests that need "no sender" clear its sender for themselves.
  */
-type MailSettings = {
-  default_to_email: string
-  sending_domain: string
-  from_local_part: string
-}
-let priorMailSettings: MailSettings | null = null
+const OWN_MAIL = {
+  use_house_mail: false,
+  sending_domain: 'mail.example.com',
+  from_local_part: 'noreply',
+  from_name: null,
+  booking_email: null,
+} as const
 
-const DEFAULT_TO = 'fallback-desk@example.com'
+type HouseRow = { sending_domain: string; from_local_part: string }
+
+/** The live house row, READ ONLY. Never written by any test (see the header). */
+async function readHouse(): Promise<HouseRow | null> {
+  const { data, error } = await svc
+    .from('mail_settings')
+    .select('sending_domain, from_local_part')
+    .maybeSingle()
+  if (error) throw new Error(`read mail_settings: ${error.message}`)
+  return (data as HouseRow | null) ?? null
+}
+
 const OPS_TO = 'ops-override@example.com'
 const LINK_TO = 'booking-link@example.com'
 const CONTENT_TO = 'booking-content@example.com'
@@ -99,16 +129,49 @@ async function submit(over: Partial<Record<string, string>> = {}): Promise<DoorR
 }
 
 /**
- * Strip every rung so each precedence test starts from a known floor.
+ * The floor every test starts from: rung 3 (the site-text booking address) holding
+ * FLOOR_TO, so a plain submission has somewhere to go — there is no global inbox to fall
+ * back on any more. Rung 3 is the LOWEST rung, so every precedence test sets something
+ * ABOVE it. Tests about "no recipient at all" remove it (dropFloor).
+ */
+const FLOOR_TO = 'floor-desk@example.com'
+
+async function setSiteText(value: string) {
+  const { error } = await svc
+    .from('site_content')
+    .upsert({ artist_id: artistA, key: 'booking_email', value }, { onConflict: 'artist_id,key' })
+  if (error) throw new Error(`site_content booking_email: ${error.message}`)
+}
+
+/** No rung at all: no floor. On this artist (off the house row) that means no recipient. */
+async function dropFloor() {
+  await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', 'booking_email')
+}
+
+/** Clear the artist's OWN sender. Off the house row, that leaves it with none. */
+async function dropSender() {
+  const { error } = await svc
+    .from('artist_mail_settings')
+    .update({ sending_domain: null, from_local_part: null })
+    .eq('artist_id', artistA)
+  if (error) throw new Error(`drop sender: ${error.message}`)
+}
+
+/**
+ * Put every rung back to the floor so each precedence test starts from a known place.
  *
  * A blanket per-artist delete, which is safe ONLY because this file created the artist:
  * no other suite and no human has a row under it. On the seed artist this same code was
  * destroying the booking address `booking-email-door.test.ts` had snapshotted.
  */
 async function clearRungs() {
-  await svc.from('artist_mail_settings').delete().eq('artist_id', artistA)
+  // Rung 1 (booking_email) and the from_name override are cleared by resetting the
+  // artist's OWN mail row to its baseline. Not deleted: without it the artist would fall
+  // back to the live house row.
+  const { error } = await svc.from('artist_mail_settings').upsert({ artist_id: artistA, ...OWN_MAIL })
+  if (error) throw new Error(`reset own mail settings: ${error.message}`)
   await svc.from('links').delete().eq('artist_id', artistA).eq('role', 'booking')
-  await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', 'booking_email')
+  await setSiteText(FLOOR_TO)
   // The lists are not rungs, but they change `to_emails`, so the precedence assertions
   // above are only about rungs if these start empty. The KINDS are left alone: they were
   // seeded by the trigger when this file created the artist, and every test below looks
@@ -119,25 +182,6 @@ async function clearRungs() {
 beforeAll(async () => {
   artist = await createThrowawayArtist(svc, 'Enquiry door')
   artistA = artist.id
-
-  // Take ownership of the singleton for the duration of this file, remembering what
-  // was there so afterAll restores it. Upserting unconditionally (rather than "seed
-  // only if absent") is what makes the precedence assertions deterministic no matter
-  // what ran before us.
-  const { data: existing } = await svc
-    .from('mail_settings')
-    .select('default_to_email, sending_domain, from_local_part')
-    .maybeSingle()
-  priorMailSettings = (existing as MailSettings | null) ?? null
-
-  const { error } = await svc.from('mail_settings').upsert({
-    id: true,
-    default_to_email: DEFAULT_TO,
-    sending_domain: 'mail.example.com',
-    from_local_part: 'noreply',
-  })
-  if (error) throw new Error(`mail_settings seed failed: ${error.message}`)
-
   await clearRungs()
 })
 
@@ -167,30 +211,41 @@ afterAll(async () => {
   // swept by the ip_hashes this file minted.
   await deleteThrowawayArtist(svc, artist)
   if (usedIps.length) await svc.from('contact_attempts').delete().in('ip_hash', usedIps)
-  if (priorMailSettings) {
-    await svc.from('mail_settings').upsert({ id: true, ...priorMailSettings })
-  } else {
-    await svc.from('mail_settings').delete().eq('id', true)
-  }
 })
 
 describe('submit_enquiry — recipient precedence', () => {
-  it('rung 4: falls back to the configured default when nothing else is set', async () => {
-    await clearRungs()
-    const row = await submit()
-    expect(row).toMatchObject({ status: 'ok', recipient_source: 'default', to_email: DEFAULT_TO })
+  it('CRITICAL: there is NO global inbox — an artist nobody gave an address is stored, not sent', async () => {
+    // Sam, 2026-09-28: "my email shouldn't be involved here". Rung 4 used to route this to
+    // `mail_settings.default_to_email` (his inbox). An artist ON the house row (no mail row
+    // of its own) with no booking address and no list: nobody to send to, so `unroutable`,
+    // and the stored row names nobody. RED before 20260928141000 whenever the live row
+    // holds a default.
+    const onHouse = await createThrowawayArtist(svc, 'Enquiry door (no inbox)')
+    try {
+      const row = await submit({ p_slug: onHouse.slug })
+      expect(row.status).toBe('no_recipient')
+      expect(row.to_email).toBeNull()
+      const { data: stored } = await svc
+        .from('enquiries')
+        .select('status, to_email, to_emails, recipient_source')
+        .eq('id', row.enquiry_id!)
+        .single()
+      expect(stored).toEqual({ status: 'unroutable', to_email: null, to_emails: null, recipient_source: null })
+    } finally {
+      await deleteThrowawayArtist(svc, onHouse)
+    }
   })
 
-  it('rung 3: site_content.booking_email beats the default', async () => {
+  it('rung 3: site_content.booking_email is used when nothing above it is set', async () => {
     await clearRungs()
-    await svc.from('site_content').insert({ artist_id: artistA, key: 'booking_email', value: CONTENT_TO })
+    await setSiteText(CONTENT_TO)
     const row = await submit()
     expect(row).toMatchObject({ status: 'ok', recipient_source: 'site_content', to_email: CONTENT_TO })
   })
 
   it('rung 2: the booking link beats site_content, and a mailto: prefix is stripped', async () => {
     await clearRungs()
-    await svc.from('site_content').insert({ artist_id: artistA, key: 'booking_email', value: CONTENT_TO })
+    await setSiteText(CONTENT_TO)
     await svc.from('links').insert({
       artist_id: artistA,
       role: 'booking',
@@ -203,16 +258,16 @@ describe('submit_enquiry — recipient precedence', () => {
 
   it('rung 1: the ops override beats everything', async () => {
     await clearRungs()
-    await svc.from('site_content').insert({ artist_id: artistA, key: 'booking_email', value: CONTENT_TO })
+    await setSiteText(CONTENT_TO)
     await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
-    await svc.from('artist_mail_settings').insert({ artist_id: artistA, booking_email: OPS_TO })
+    await svc.from('artist_mail_settings').update({ booking_email: OPS_TO }).eq('artist_id', artistA)
     const row = await submit()
     expect(row).toMatchObject({ status: 'ok', recipient_source: 'mail_settings', to_email: OPS_TO })
   })
 
   it('a booking link holding an https page URL FALLS THROUGH instead of being emailed', async () => {
     await clearRungs()
-    await svc.from('site_content').insert({ artist_id: artistA, key: 'booking_email', value: CONTENT_TO })
+    await setSiteText(CONTENT_TO)
     await svc.from('links').insert({
       artist_id: artistA,
       role: 'booking',
@@ -225,7 +280,33 @@ describe('submit_enquiry — recipient precedence', () => {
 })
 
 describe('submit_enquiry — sender identity', () => {
-  it('derives "<Artist> Site" from the artist record by default', async () => {
+  it('an artist ON the house row sends from the house sender (read, never written)', async (ctx) => {
+    // Every real artist's path. The house row is READ and compared, never set: this file
+    // must not decide what the house sender is (see the header).
+    const house = await readHouse()
+    if (!house) {
+      ctx.skip('no house mail_settings row on this project: the house sender cannot be observed without writing live config')
+      return
+    }
+    // A second throwaway with NO mail row of its own: that is an artist on the house row.
+    const onHouse = await createThrowawayArtist(svc, 'Enquiry door (house sender)')
+    try {
+      const { error } = await svc
+        .from('links')
+        .insert({ artist_id: onHouse.id, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+      if (error) throw new Error(`booking link: ${error.message}`)
+      const row = await submit({ p_slug: onHouse.slug })
+      expect(row).toMatchObject({
+        status: 'ok',
+        to_email: LINK_TO,
+        from_email: `${house.from_local_part}@${house.sending_domain}`,
+      })
+    } finally {
+      await deleteThrowawayArtist(svc, onHouse)
+    }
+  })
+
+  it('derives "<Artist> Site" from the artist record, and the address from its own sender', async () => {
     await clearRungs()
     const row = await submit()
     expect(row.from_name).toMatch(/ Site$/)
@@ -234,16 +315,27 @@ describe('submit_enquiry — sender identity', () => {
 
   it('honours a per-artist from_name override', async () => {
     await clearRungs()
-    await svc.from('artist_mail_settings').insert({ artist_id: artistA, from_name: 'Lone Pine Bookings' })
+    await svc.from('artist_mail_settings').update({ from_name: 'Lone Pine Bookings' }).eq('artist_id', artistA)
     const row = await submit()
     expect(row.from_name).toBe('Lone Pine Bookings')
+  })
+
+  it('CRITICAL: an artist scoped off the house row never borrows the house SENDER', async () => {
+    // Its own sender cleared, recipients known. With the house row present, ignoring
+    // use_house_mail would send from the house domain and this would read `ok`.
+    await clearRungs()
+    await dropSender()
+    const row = await submit()
+    expect(row.status).toBe('no_recipient')
+    expect(row.from_email).toBeNull()
   })
 
   it('rejects CR/LF in from_name at the storage layer (header injection)', async () => {
     await clearRungs()
     const { error } = await svc
       .from('artist_mail_settings')
-      .insert({ artist_id: artistA, from_name: 'Evil\r\nBcc: victim@example.com' })
+      .update({ from_name: 'Evil\r\nBcc: victim@example.com' })
+      .eq('artist_id', artistA)
     // 23514 (CHECK violation), not just "an error": anything else — a permission
     // failure, a typo'd table — would also be non-null and prove nothing about the
     // header-injection guard this test is named for.
@@ -323,16 +415,13 @@ describe('submit_enquiry — validation', () => {
   })
 
   it('purpose_label is returned on the UNROUTABLE path too', async () => {
+    // Unroutable by having no sender: this artist's own, since it is off the house row.
+    // clearRungs() at the top of the next test puts the sender back.
     await clearRungs()
-    const { data: prior } = await svc.from('mail_settings').select('default_to_email, sending_domain, from_local_part').maybeSingle()
-    await svc.from('mail_settings').delete().eq('id', true)
-    try {
-      const row = await submit({ p_purpose: 'demo' })
-      expect(row.status).toBe('no_recipient')
-      expect(row.purpose_label).toBe('Demo')
-    } finally {
-      if (prior) await svc.from('mail_settings').upsert({ id: true, ...(prior as MailSettings) })
-    }
+    await dropSender()
+    const row = await submit({ p_purpose: 'demo' })
+    expect(row.status).toBe('no_recipient')
+    expect(row.purpose_label).toBe('Demo')
   })
 
   it('a MALFORMED purpose is still coerced to other, never rejected', async () => {
@@ -372,11 +461,10 @@ describe('submit_enquiry — validation', () => {
     expect(row.enquiry_id).not.toBeNull()
   })
 
-  it('reports no_recipient when no rung resolves and there is no default', async () => {
+  it('reports no_recipient when no one is set to receive it', async () => {
+    // No rung and no list. This used to DELETE the live house row to get here.
     await clearRungs()
-    // The CHECK constraint forbids storing a non-address, so the only way to have
-    // "no default" is to have no row. We restore it immediately after.
-    await svc.from('mail_settings').delete().eq('id', true)
+    await dropFloor()
     const row = await submit()
     expect(row.status).toBe('no_recipient')
     // The enquiry is STILL STORED, as status='unroutable' — while mail is unconfigured
@@ -390,11 +478,6 @@ describe('submit_enquiry — validation', () => {
       .eq('id', row.enquiry_id!)
       .single()
     expect(stored?.status).toBe('unroutable')
-    await svc.from('mail_settings').insert({
-      default_to_email: DEFAULT_TO,
-      sending_domain: 'mail.example.com',
-      from_local_part: 'noreply',
-    })
   })
 })
 
@@ -547,8 +630,9 @@ describe('mark_enquiry_sent', () => {
 })
 
 describe('submit_enquiry — forwarding to more than one person', () => {
-  /** The list for ONE KIND, on top of whichever rung resolved the primary. */
-  async function addRecipient(slug: string, email: string, label?: string) {
+  /** The list for ONE KIND, on top of whichever rung resolved the primary. `createdAt` where
+   *  ORDER is asserted: two inserts can share a clock tick, and the tie-break is a random id. */
+  async function addRecipient(slug: string, email: string, label?: string, createdAt?: string) {
     const { data: kind, error: e1 } = await svc
       .from('enquiry_kinds')
       .select('id')
@@ -561,6 +645,7 @@ describe('submit_enquiry — forwarding to more than one person', () => {
       kind_id: (kind as { id: string }).id,
       email,
       label: label ?? null,
+      ...(createdAt ? { created_at: createdAt } : {}),
     })
     if (error) throw new Error(`addRecipient(${slug}, ${email}): ${error.message}`)
   }
@@ -605,6 +690,36 @@ describe('submit_enquiry — forwarding to more than one person', () => {
     expect(row.to_emails).toEqual([LINK_TO, 'skeen@example.com', 'manager@example.com'])
   })
 
+  it('CRITICAL: a list with no booking address is enough — its first person is the primary', async () => {
+    // Sam, 2026-09-28: "when the managers log in and put their email it can be theirs". A
+    // manager who filled in Settings → Email but never set a booking address must still
+    // receive mail. Before 20260928141000 this was the global inbox's job.
+    await clearRungs()
+    await dropFloor()
+    await addRecipient('booking', 'first@example.com', 'First', '2026-01-01T00:00:00Z')
+    await addRecipient('booking', 'second@example.com', 'Second', '2026-01-02T00:00:00Z')
+
+    const row = await submit()
+
+    expect(row).toMatchObject({ status: 'ok', to_email: 'first@example.com', recipient_source: 'recipient_list' })
+    expect(row.to_emails).toEqual(['first@example.com', 'second@example.com'])
+    const stored = await storedRow(row.enquiry_id!)
+    expect(stored).toMatchObject({ status: 'queued', to_email: 'first@example.com', recipient_source: 'recipient_list' })
+  })
+
+  it("another kind's list is never borrowed when this kind has nobody", async () => {
+    // Demo has a list; booking has nobody and there is no booking address. A booking
+    // enquiry is stored, not sent to the demo people.
+    await clearRungs()
+    await dropFloor()
+    await addRecipient('demo', 'demo-person@example.com')
+
+    const row = await submit({ p_purpose: 'booking' })
+
+    expect(row.status).toBe('no_recipient')
+    expect((await storedRow(row.enquiry_id!)).to_emails).toBeNull()
+  })
+
   it('freezes the whole addressed set on the enquiry row', async () => {
     // Same reason to_email was frozen in the first place: recipient resolution reads
     // WORKING rows, so after the manager edits the list, the row is the only record of
@@ -642,29 +757,22 @@ describe('submit_enquiry — forwarding to more than one person', () => {
     await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
     await addRecipient('booking', 'waiting@example.com')
 
-    // Remove the SENDER, not the recipient: no verified domain means unroutable while the
-    // recipients are perfectly well known.
-    const { data: prior } = await svc
-      .from('mail_settings')
-      .select('default_to_email, sending_domain, from_local_part')
-      .maybeSingle()
-    await svc.from('mail_settings').delete().eq('id', true)
-    try {
-      const row = await submit()
+    // Remove the SENDER, not the recipient: no sending domain means unroutable while the
+    // recipients are perfectly well known. The artist's own sender, since it is off the
+    // house row; clearRungs() in the next test puts it back.
+    await dropSender()
+    const row = await submit()
 
-      expect(row.status).toBe('no_recipient')
-      expect(row.enquiry_id).not.toBeNull()
+    expect(row.status).toBe('no_recipient')
+    expect(row.enquiry_id).not.toBeNull()
 
-      const stored = await storedRow(row.enquiry_id!)
-      expect(stored.status).toBe('unroutable')
-      // The booking LINK above is rung 2 and still resolves — removing the singleton took
-      // away the SENDER and rung 4, not the recipients. That is the whole point of this
-      // test: an enquiry nobody can send still records exactly who it was for, so the
-      // backlog is answerable on the day mail is finally configured.
-      expect(stored.to_emails).toEqual([LINK_TO, 'waiting@example.com'])
-    } finally {
-      if (prior) await svc.from('mail_settings').upsert({ id: true, ...(prior as MailSettings) })
-    }
+    const stored = await storedRow(row.enquiry_id!)
+    expect(stored.status).toBe('unroutable')
+    // The booking LINK above is rung 2 and still resolves: dropping the sender took away
+    // the SENDER, not the recipients. That is the whole point of this test: an enquiry
+    // nobody can send still records exactly who it was for, so the backlog is answerable on
+    // the day mail is finally configured.
+    expect(stored.to_emails).toEqual([LINK_TO, 'waiting@example.com'])
   })
 })
 

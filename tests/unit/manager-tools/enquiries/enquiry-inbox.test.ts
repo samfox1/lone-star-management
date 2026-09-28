@@ -7,7 +7,7 @@
  * scannable archive with no row open by default.
  */
 import { describe, expect, it } from 'vitest'
-import { artistsIn, filterByArtist, filterRows, snippet, type InboxRow } from '@/lib/enquiries/inbox'
+import { artistsIn, filterByArtist, filterRows, kindFilter, kindOptions, snippet, type InboxRow } from '@/lib/enquiries/inbox'
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
@@ -72,20 +72,80 @@ describe('filterRows', () => {
     expect(filterRows([unread, read], 'unread').map((r) => r.id)).toEqual(['u'])
   })
 
-  it('shows only demos under "demos"', () => {
-    // Its own filter because demos are the ones with audio to listen to, which is a
-    // different job from answering a booking — and the one a manager batches.
-    expect(filterRows([unread, read, demo], 'demos').map((r) => r.id)).toEqual(['d'])
+  // A KIND filter, not a hard-coded "demos". Kinds are the artist's to invent since
+  // 2026-09-21, so the filter names a slug from their list rather than one the code knew.
+  it('shows only that kind under a kind filter', () => {
+    expect(filterRows([unread, read, demo], kindFilter('demo')).map((r) => r.id)).toEqual(['d'])
   })
 
-  it('demos filter ignores read state — it is a kind, not a status', () => {
+  it('filters an artist-invented kind the same way', () => {
+    const press = row({ id: 'p', purpose: 'press', purposeLabel: 'Press' })
+    expect(filterRows([unread, press, demo], kindFilter('press')).map((r) => r.id)).toEqual(['p'])
+  })
+
+  it('matches the WHOLE slug, not a prefix of it', () => {
+    const tape = row({ id: 't', purpose: 'demo-tape' })
+    expect(filterRows([demo, tape], kindFilter('demo')).map((r) => r.id)).toEqual(['d'])
+  })
+
+  it('a kind filter ignores read state — it is a kind, not a status', () => {
     const unreadDemo = row({ id: 'ud', purpose: 'demo' })
-    expect(filterRows([demo, unreadDemo], 'demos').map((r) => r.id)).toEqual(['d', 'ud'])
+    expect(filterRows([demo, unreadDemo], kindFilter('demo')).map((r) => r.id)).toEqual(['d', 'ud'])
   })
 
   it('preserves order — the caller already sorted newest first', () => {
     const older = row({ id: 'old', created_at: '2026-01-01T00:00:00Z' })
     expect(filterRows([unread, older], 'all').map((r) => r.id)).toEqual(['u', 'old'])
+  })
+})
+
+describe('kindOptions — the kind filters on offer', () => {
+  const kinds = [
+    { slug: 'booking', label: 'Booking' },
+    { slug: 'demo', label: 'Demo' },
+    { slug: 'other', label: 'Contact' },
+  ]
+
+  it("offers the artist's own kinds, in the artist's order", () => {
+    // Every kind, even one with no enquiries yet: the filters say what CAN land here.
+    expect(kindOptions(kinds, [])).toEqual(kinds)
+  })
+
+  it('does not offer a kind twice when rows carry it', () => {
+    const rows = [row({ purpose: 'demo', purposeLabel: 'Demo' }), row({ id: 'e2', purpose: 'booking' })]
+    expect(kindOptions(kinds, rows).map((k) => k.slug)).toEqual(['booking', 'demo', 'other'])
+  })
+
+  it('keeps a DELETED kind reachable while rows still carry it, labelled as the row says', () => {
+    // The kind was deleted after these arrived. Its messages are still in the table, so a
+    // filter for them stays; dropping it would leave them reachable only through All.
+    const rows = [row({ purpose: 'weddings', purposeLabel: 'Weddings' })]
+    expect(kindOptions(kinds, rows)).toEqual([...kinds, { slug: 'weddings', label: 'Weddings' }])
+  })
+
+  it('orders the extra kinds by label, so the filter bar does not reshuffle as mail arrives', () => {
+    const rows = [
+      row({ id: '1', purpose: 'sync', purposeLabel: 'Sync' }),
+      row({ id: '2', purpose: 'press', purposeLabel: 'Press' }),
+      row({ id: '3', purpose: 'sync', purposeLabel: 'Sync' }),
+    ]
+    expect(kindOptions([], rows)).toEqual([
+      { slug: 'press', label: 'Press' },
+      { slug: 'sync', label: 'Sync' },
+    ])
+  })
+
+  it('with no kind list (the roster inbox), offers each kind the rows carry, once', () => {
+    // Two artists both have `booking`; one filter covers both.
+    const rows = [
+      row({ id: '1', artistId: 'a1', purpose: 'booking', purposeLabel: 'Booking' }),
+      row({ id: '2', artistId: 'a2', purpose: 'booking', purposeLabel: 'Booking' }),
+    ]
+    expect(kindOptions([], rows)).toEqual([{ slug: 'booking', label: 'Booking' }])
+  })
+
+  it('offers nothing for an empty roster inbox', () => {
+    expect(kindOptions([], [])).toEqual([])
   })
 })
 

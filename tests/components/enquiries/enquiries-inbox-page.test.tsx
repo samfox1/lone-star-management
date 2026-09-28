@@ -25,6 +25,7 @@ vi.mock('@/app/roster-chrome', () => ({
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
   setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
   signEnquiryAttachmentsAction: vi.fn(async () => []),
+  deleteEnquiryAction: vi.fn(async () => ({ ok: true })),
 }))
 
 let enquiries: unknown[] = []

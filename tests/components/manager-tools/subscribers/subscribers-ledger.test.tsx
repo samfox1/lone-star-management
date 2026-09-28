@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-// The Subscribers ledger: search, sort, copy, email, download, and the sticky toolbar.
+// The Subscribers ledger: search, sort, copy, email, download, remove, and the sticky toolbar.
 /**
- * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html). A read-only
- * list of the emails the site's signup door collected, in the Brand ledger's frame: an empty
- * centred column (no label, no count), then a toolbar and the rows.
+ * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html; Remove and the
+ * filtered export, 2026-09-28). A list of the emails the site's signup door collected, in
+ * the Brand ledger's frame: an empty centred column (no label, no count), then a toolbar and
+ * the rows.
  *
- * What has to hold, and is pinned here with the clipboard mocked:
+ * What has to hold, and is pinned here with the clipboard and `removeSubscriberAction` mocked:
  *   - search filters as you type, ignoring case, and marks the matched part in each email
  *     WITHOUT turning an email or a query into HTML; × clears it and gives focus back;
  *   - Newest · Oldest · A–Z reorder the rows;
@@ -13,7 +14,9 @@
  *     copies that one address; both flash a check for ~1.4s; a refused clipboard falls back
  *     to select + execCommand;
  *   - Email is a mailto: with the address URL-encoded; Download CSV is a real link to the
- *     export route (the full list, never the search);
+ *     export route, carrying the CURRENT search as `?q=` so it matches what's on screen;
+ *   - CRITICAL: Remove asks first (`useConfirm`), deletes THAT subscriber and only that row
+ *     goes; a refusal is a toast and the row stays;
  *   - the empty and no-match states;
  *   - THE STICKY TOOLBAR (Sam, 2026-09-24): the page scrolls and the toolbar stays. jsdom
  *     does no layout and no scrolling, so the class contract is what is pinned: sticky under
@@ -23,13 +26,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { SubscribersLedger, STICKY_TOP } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/subscribers-ledger'
+import { removeSubscriberAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/actions'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import { SUBSCRIBER_SORTS, type Subscriber, type SubscriberSort } from '@/lib/manager-tools/subscribers/subscribers'
 
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/actions', () => ({
+  removeSubscriberAction: vi.fn(async () => ({})),
+}))
+vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
+
 const ROWS: Subscriber[] = [
-  { email: 'theo.park@example.com', created_at: '2026-09-19T20:15:00+00:00' },
-  { email: 'Ben.Walsh@Example.com', created_at: '2026-07-09T08:00:00+00:00' },
-  { email: 'maya.chen@example.com', created_at: '2026-09-22T14:03:11.123456+00:00' },
-  { email: 'ava.moreno@example.com', created_at: '2026-08-11T00:00:00+00:00' },
+  { id: 'theo', email: 'theo.park@example.com', created_at: '2026-09-19T20:15:00+00:00' },
+  { id: 'ben', email: 'Ben.Walsh@Example.com', created_at: '2026-07-09T08:00:00+00:00' },
+  { id: 'maya', email: 'maya.chen@example.com', created_at: '2026-09-22T14:03:11.123456+00:00' },
+  { id: 'ava', email: 'ava.moreno@example.com', created_at: '2026-08-11T00:00:00+00:00' },
 ]
 
 let writeText: ReturnType<typeof vi.fn>
@@ -37,6 +47,8 @@ let writeText: ReturnType<typeof vi.fn>
 beforeEach(() => {
   writeText = vi.fn(async () => undefined)
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  vi.mocked(removeSubscriberAction).mockClear().mockResolvedValue({})
+  vi.mocked(toast).mockClear()
 })
 afterEach(() => {
   cleanup()
@@ -114,7 +126,7 @@ describe('search', () => {
   it('CRITICAL: an email or a query full of HTML stays text — nothing is injected', () => {
     // subscribe() allows any non-space, non-@ characters, so this is a storable address.
     const evil = '<img/src=x/onerror=alert(1)>@x.io'
-    mount([{ email: evil, created_at: '2026-09-01T00:00:00Z' }, ...ROWS])
+    mount([{ id: 'evil', email: evil, created_at: '2026-09-01T00:00:00Z' }, ...ROWS])
     expect(document.querySelector('img')).toBeNull()
     type('<img')
     expect(document.querySelector('img')).toBeNull()
@@ -244,19 +256,77 @@ describe('copy', () => {
 
 describe('email and download', () => {
   it('Email is a mailto: link with the address URL-encoded', () => {
-    mount([{ email: 'x?cc=boss@evil.io', created_at: '2026-09-01T00:00:00Z' }, ...ROWS])
+    mount([{ id: 'cc', email: 'x?cc=boss@evil.io', created_at: '2026-09-01T00:00:00Z' }, ...ROWS])
     const row = rows().find((r) => r.textContent?.includes('x?cc=boss'))!
     expect(within(row).getByRole('link', { name: 'Email' })).toHaveAttribute('href', 'mailto:x%3Fcc%3Dboss@evil.io')
     const maya = rows().find((r) => r.textContent?.includes('maya.chen'))!
     expect(within(maya).getByRole('link', { name: 'Email' })).toHaveAttribute('href', 'mailto:maya.chen@example.com')
   })
 
-  it('Download CSV is a real link to the export route, the same whatever the search', () => {
+  it('CRITICAL: Download CSV carries the CURRENT search as ?q=, so the CSV matches what’s shown', () => {
     mount()
-    const href = '/artists/a1/subscribers/export'
-    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', href)
+    const base = '/artists/a1/subscribers/export'
+    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', base)
     type('maya')
-    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', href)
+    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', `${base}?q=maya`)
+    // Cleared search: back to the plain route, not a trailing "?q=".
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', base)
+  })
+
+  it('the query is URL-encoded in the CSV link', () => {
+    mount()
+    type('a&b=c')
+    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', '/artists/a1/subscribers/export?q=a%26b%3Dc')
+  })
+})
+
+describe('remove (Sam, 2026-09-28)', () => {
+  it('CRITICAL: asks first; confirming removes THAT subscriber and only that row goes', async () => {
+    mount()
+    const maya = rows().find((r) => r.textContent?.includes('maya.chen'))!
+    fireEvent.click(within(maya).getByRole('button', { name: 'Remove' }))
+    const ask = screen.getByRole('dialog', { name: 'Remove maya.chen@example.com?' })
+    expect(removeSubscriberAction).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(within(ask).getByRole('button', { name: 'Remove' }))
+    })
+    expect(removeSubscriberAction).toHaveBeenCalledWith('a1', 'maya')
+    expect(shownEmails()).not.toContain('maya.chen@example.com')
+    expect(shownEmails()).toHaveLength(3)
+  })
+
+  it('Cancel leaves the row exactly where it was, and never calls the action', async () => {
+    mount()
+    const before = shownEmails()
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Remove' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog', { name: /^Remove .+\?$/ })).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(removeSubscriberAction).not.toHaveBeenCalled()
+    expect(shownEmails()).toEqual(before)
+  })
+
+  it('a refused removal toasts the error and the row stays', async () => {
+    vi.mocked(removeSubscriberAction).mockResolvedValueOnce({ error: 'That subscriber is no longer there.' })
+    mount()
+    const before = shownEmails()
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Remove' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog', { name: /^Remove .+\?$/ })).getByRole('button', { name: 'Remove' }))
+    })
+    expect(toast).toHaveBeenCalledWith('That subscriber is no longer there.', 'error')
+    expect(shownEmails()).toEqual(before)
+  })
+
+  it('removing the last subscriber shows the empty state', async () => {
+    mount([ROWS[0]])
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Remove' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+    })
+    expect(screen.getByText('No subscribers yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('list')).toBeNull()
   })
 })
 
@@ -273,6 +343,7 @@ describe('empty', () => {
 
 describe('the toolbar stays put while the list scrolls (Sam, 2026-09-24)', () => {
   const many = Array.from({ length: 500 }, (_, i) => ({
+    id: `fan${i}`,
     email: `fan${String(i).padStart(3, '0')}@example.com`,
     created_at: new Date(Date.UTC(2026, 0, 1) + i * 3_600_000).toISOString(),
   }))

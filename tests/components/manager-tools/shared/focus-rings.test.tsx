@@ -138,7 +138,7 @@ describe('focus and selected rings paint (Tailwind v4 outline-style)', () => {
   })
 
   it('CRITICAL: the Subscribers toolbar and rows have keyboard rings that paint', () => {
-    render(<SubscribersLedger artistId="a1" subscribers={[{ email: 'a@example.com', created_at: '2026-09-01T00:00:00Z' }]} />)
+    render(<SubscribersLedger artistId="a1" subscribers={[{ id: 's1', email: 'a@example.com', created_at: '2026-09-01T00:00:00Z' }]} />)
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search emails' }), { target: { value: 'a' } })
     expectFocusRing(screen.getByRole('button', { name: 'Clear search' }))
     for (const b of within(screen.getByRole('group', { name: 'Sort' })).getAllByRole('button')) expectFocusRing(b)

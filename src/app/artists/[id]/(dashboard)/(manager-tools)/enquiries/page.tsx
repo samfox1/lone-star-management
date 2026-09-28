@@ -23,10 +23,17 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     .order('created_at', { ascending: false })
   const enquiries = (data ?? []) as Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'>[]
 
-  // The kinds, for their LABELS only. The table used to carry its own three-entry map,
-  // which went stale the moment a manager renamed a kind; RLS scopes this to the artist.
-  const { data: kindRows } = await supabase.from('enquiry_kinds').select('slug, label').eq('artist_id', id)
-  const labelFor = kindLabeller((kindRows ?? []) as { slug: string; label: string }[])
+  // The kinds: their LABELS for each row, and the list itself for the filter bar, in the
+  // artist's order. The table used to carry its own three-entry map and a hard-coded
+  // "Demos" filter, both stale the moment a manager renamed or invented a kind. RLS scopes
+  // this to the artist.
+  const { data: kindRows } = await supabase
+    .from('enquiry_kinds')
+    .select('slug, label, sort_order')
+    .eq('artist_id', id)
+    .order('sort_order')
+  const kinds = ((kindRows ?? []) as { slug: string; label: string }[]).map((k) => ({ slug: k.slug, label: k.label }))
+  const labelFor = kindLabeller(kinds)
 
   const counts = await attachmentCounts(supabase, enquiries.map((r) => r.id))
   // Artist identity rides on every row even here, where the label is hidden: the
@@ -42,7 +49,7 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
 
   return (
     <SectionShell title="Enquiries" artistId={id}>
-      <EnquiryTable rows={rows} />
+      <EnquiryTable rows={rows} kinds={kinds} />
     </SectionShell>
   )
 }

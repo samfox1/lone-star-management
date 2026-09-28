@@ -31,6 +31,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () =
   renameEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(),
   setEnquiryRecipientsAction: vi.fn(),
+  deleteEnquiryAction: vi.fn(async () => ({ ok: true })),
 }))
 
 const tables: Record<string, unknown[]> = {
@@ -97,8 +98,17 @@ describe('/artists/[id]/enquiries', () => {
 
   it("labels the inbox row with the kind's LABEL from the table, not the slug", async () => {
     await renderPage()
-    expect(screen.getByText('Sync licensing')).toBeTruthy()
+    // The Type CELL: the label is also a filter button now.
+    expect(screen.getByRole('cell', { name: 'Sync licensing' })).toBeTruthy()
     expect(screen.queryByText('sync-licensing')).toBeNull()
+  })
+
+  it("offers the artist's kinds as filters, from the kinds table, in the artist's order", async () => {
+    // Booking has no enquiries yet and is still offered: the filters say what CAN land here.
+    await renderPage()
+    expect(screen.getByRole('button', { name: 'Booking' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Sync licensing' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Demos' })).toBeNull()
   })
 
   it('is the inbox and nothing else — no kind rows, no Add kind', async () => {

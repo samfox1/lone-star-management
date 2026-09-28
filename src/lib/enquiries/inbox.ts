@@ -37,7 +37,22 @@ export type InboxRow = {
   status: string
 }
 
-export type InboxFilter = 'all' | 'unread' | 'demos'
+/**
+ * Everything, the unread pile, or ONE kind by its slug. The kind filters used to be one
+ * hard-coded "demos"; kinds are the artist's to invent now (2026-09-21), so a filter names
+ * a slug from their list. Prefixed so a kind slugged `all` or `unread` cannot collide.
+ */
+export type InboxFilter = 'all' | 'unread' | `kind:${string}`
+
+const KIND_PREFIX = 'kind:'
+
+/** The filter for one kind. */
+export function kindFilter(slug: string): InboxFilter {
+  return `${KIND_PREFIX}${slug}`
+}
+
+/** One kind, as the filter bar shows it. */
+export type KindOption = { slug: string; label: string }
 
 /**
  * One line of the message, for the list.
@@ -58,12 +73,34 @@ export function snippet(message: string, max = 90): string {
   return `${body.replace(/[.,;:!?-]+$/, '')}…`
 }
 
-/** `demos` is a KIND, not a status, so it deliberately ignores read state: the manager
- *  batching demos wants all of them, not only the new ones. */
+/** A kind is a KIND, not a status, so its filter deliberately ignores read state: the
+ *  manager batching demos wants all of them, not only the new ones. */
 export function filterRows(rows: InboxRow[], filter: InboxFilter): InboxRow[] {
   if (filter === 'unread') return rows.filter((r) => !r.read_at)
-  if (filter === 'demos') return rows.filter((r) => r.purpose === 'demo')
+  if (filter.startsWith(KIND_PREFIX)) {
+    const slug = filter.slice(KIND_PREFIX.length)
+    return rows.filter((r) => r.purpose === slug)
+  }
   return rows
+}
+
+/**
+ * The kind filters to offer.
+ *
+ * The artist's own kinds first, in the artist's order, whether or not anything has arrived
+ * under them yet — the filters say what CAN land here. Then any kind a row still carries
+ * that is not on that list (deleted since, or, on the roster inbox where no list is passed,
+ * every kind the rows carry), once per slug, labelled as the row has it and sorted by label
+ * so the bar does not reshuffle each time new mail arrives.
+ */
+export function kindOptions(kinds: KindOption[], rows: InboxRow[]): KindOption[] {
+  const listed = new Set(kinds.map((k) => k.slug))
+  const extra = new Map<string, string>()
+  for (const r of rows) {
+    if (!listed.has(r.purpose) && !extra.has(r.purpose)) extra.set(r.purpose, r.purposeLabel)
+  }
+  const extras = [...extra].map(([slug, label]) => ({ slug, label })).sort((a, b) => a.label.localeCompare(b.label))
+  return [...kinds.map((k) => ({ slug: k.slug, label: k.label })), ...extras]
 }
 
 /** The artists that actually appear in these rows, for the roster-wide filter. Built from

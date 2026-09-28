@@ -12,6 +12,8 @@ export default defineConfig({
     // Integration tests share ONE real database and the two seeded artists.
     // Running test files sequentially keeps their fixtures from interleaving
     // (e.g. a publish snapshotting another file's leftover working rows).
+    // This only orders ONE process. Across processes (two runs at once) the same rule is
+    // kept by the machine-wide lock in vitest.setup.ts → tests/helpers/db-lock.ts.
     fileParallelism: false,
     // Most of this suite crosses the internet to a HOSTED Postgres — a single
     // `publishAll` is ~30 round-trips. Vitest's 5s default is a unit-test budget: it

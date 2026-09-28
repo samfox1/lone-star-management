@@ -53,13 +53,22 @@ typo in those files ships it to every visitor's browser.
 
 ### 3. Seed the `mail_settings` singleton
 
-One row, admin-only. Until it exists, `submit_enquiry` returns `no_recipient` for any
-artist without their own booking address, and the endpoint 500s.
+One row, admin-only. It is the SENDER only: the verified domain and the local part every
+enquiry goes out from. Until it exists, every enquiry is stored `unroutable` (in the
+inbox, not emailed).
 
 ```sql
-insert into public.mail_settings (default_to_email, sending_domain, from_local_part)
-values ('<where-unrouted-enquiries-go>@<domain>', '<verified-domain>', 'noreply');
+insert into public.mail_settings (sending_domain, from_local_part)
+values ('tapirwebsites.com', 'noreply');
 ```
+
+`default_to_email` is **unused since 2026-09-28** and stays null. It used to be a global
+last-resort inbox (Sam's); Sam: "my email shouldn't be involved here". See below.
+
+**Tests never write this row.** It is live config and the suites run against the hosted
+project. A test that needs "no sender" sets `artist_mail_settings.use_house_mail = false`
+on its own throwaway artist; `tests/unit/enquiries/no-live-mail-writes.test.ts` fails if
+any test file writes `mail_settings`.
 
 ### 4. Deploy
 
@@ -121,7 +130,7 @@ delete from public.contact_attempts where created_at > now() - interval '1 hour'
 Resolved server-side, **never** from the request body — accepting it from the client
 would make this an open relay and get the sending domain blacklisted.
 
-`resolve_booking_recipient(artist_id)` walks four rungs, and **falls through any rung
+`resolve_booking_recipient(artist_id)` walks three rungs, and **falls through any rung
 that doesn't look like an email address**:
 
 | # | Source | Who sets it |
@@ -129,7 +138,12 @@ that doesn't look like an email address**:
 | 1 | `artist_mail_settings.booking_email` | Lone Star admin — ops override |
 | 2 | `links` row with `role = 'booking'` | the manager, in the editor (custom sites) |
 | 3 | `site_content.booking_email` | the manager, in Site text (built-in templates) |
-| 4 | `mail_settings.default_to_email` | the configured last resort |
+
+There is **no rung 4** since 2026-09-28 (`20260928141000`): no global inbox. An enquiry is
+emailed only to addresses the artist's managers set — the booking address above, then the
+kind's recipient list (next section). With a list but no booking address, the list's first
+person is the primary (`recipient_source = 'recipient_list'`). With neither, the enquiry
+is stored with `status = 'unroutable'`, shows in the inbox, and nothing is sent.
 
 Rung 2 sits above rung 3 because custom sites (skeen) have no `TEMPLATE_FIELDS` entry and
 carry it as a link. Rung 2 falling through matters: `links.url` is a free-text URL field,
@@ -188,7 +202,8 @@ a new purpose value before this side knows about it.
 `purpose` is no longer one of three values. Each artist has their own **kinds**
 (`enquiry_kinds`: `booking`, `demo`, `other` seeded on every artist, plus any the manager
 adds), and each kind has a **recipient list** (`enquiry_recipients`, at most 10) that is
-ADDED to the booking address the four rungs above resolve. One message goes out with all
+ADDED to the booking address the three rungs above resolve (and stands alone, first person
+as primary, when there is none). One message goes out with all
 of them in `to`. A `purpose` that matches none of the artist's kinds is filed under `other`.
 
 Where the code lives:
@@ -202,4 +217,6 @@ Where the code lives:
 
 Migrations: `20260921120000_enquiry_recipients.sql` (the model), `20260922120000_enquiry_hardening.sql`
 (atomic list write, rate-limit locks restored, `log_contact_attempt` fixed, unknown purpose
-→ `other`, slug bound).
+→ `other`, slug bound), `20260928140000_enquiry_delete.sql` (a manager can delete an
+enquiry; the action removes its audio too), `20260928141000_enquiry_house_sender_only.sql`
+(no global inbox; `mail_settings` is the sender only; `use_house_mail` per artist).

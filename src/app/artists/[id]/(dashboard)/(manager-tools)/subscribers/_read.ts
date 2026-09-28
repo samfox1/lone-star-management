@@ -22,7 +22,7 @@ export async function readSubscribers(supabase: Awaited<ReturnType<typeof create
   for (;;) {
     const { data, error, count } = await supabase
       .from('subscribers')
-      .select('email, created_at', { count: 'exact' })
+      .select('id, email, created_at', { count: 'exact' })
       .eq('artist_id', artistId)
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
