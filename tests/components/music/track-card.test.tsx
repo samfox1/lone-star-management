@@ -25,6 +25,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
 import { RELEASE_TYPE_LABEL, RELEASE_TYPES } from '@/lib/releases'
 import { setTrackFeaturedAction, setTrackOnSiteAction, setTrackReleasedAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
@@ -36,6 +37,8 @@ vi.mock('@/lib/supabase/client', () => ({
     storage: { from: () => ({ createSignedUrl: async () => ({ data: null }) }) },
   }),
 }))
+// The toast is spied, so a refusal's message is something a test can read.
+vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   updateContentAction: vi.fn(async () => ({})),
   deleteContentAction: vi.fn(async () => ({})),
@@ -86,14 +89,34 @@ function editRow(dialog: HTMLElement, label: string, next: string) {
 }
 
 describe('TrackCard listen link', () => {
-  it('saves a pasted Spotify link on blur through updateContentAction (promotes the song)', async () => {
+  it('saves a pasted Spotify link on blur through updateContentAction', async () => {
     const dialog = openModal()
-    editRow(dialog, 'Spotify', 'https://soundcloud.com/x/song')
+    editRow(dialog, 'Spotify', 'https://open.spotify.com/track/abc')
     await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
     const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
     expect([type, id, artistId]).toEqual(['track', 't1', 'a1'])
     expect([...(fd as FormData).keys()]).toEqual(['stream_url'])
-    expect((fd as FormData).get('stream_url')).toBe('https://soundcloud.com/x/song')
+    expect((fd as FormData).get('stream_url')).toBe('https://open.spotify.com/track/abc')
+  })
+
+  /* The Spotify row writes `stream_url`, and any stream_url forces Released. This test used
+   * to paste a SoundCloud link into it and call that "promotes the song" — so a SoundCloud
+   * link marked a song Released. Sam: SoundCloud songs "can be released and unreleased …
+   * depends on the song"; Released stays the manager's choice (reviewer, 2026-09-28). */
+  it('CRITICAL: a SoundCloud link in the Spotify row is refused — nothing saved, nothing promoted', async () => {
+    const dialog = openModal()
+    editRow(dialog, 'Spotify', 'https://soundcloud.com/x/song')
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringMatching(/SoundCloud/), 'error'))
+    expect(updateContentAction).not.toHaveBeenCalled()
+    // The row goes back to empty rather than showing a link that was never saved.
+    expect(within(dialog).queryByText('https://soundcloud.com/x/song')).toBeNull()
+  })
+
+  it('the SoundCloud row takes the same link, and it does not touch stream_url', async () => {
+    const dialog = openModal()
+    editRow(dialog, 'SoundCloud', 'https://soundcloud.com/x/song')
+    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
+    expect([...(vi.mocked(updateContentAction).mock.calls[0][3] as FormData).keys()]).toEqual(['soundcloud_url'])
   })
 
   it('shows the current Spotify link as text, with a way to open it', () => {

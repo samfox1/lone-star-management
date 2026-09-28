@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
-import { compareLibrary, sortLibrary } from '@/lib/library-order'
+import { sortLibrary } from '@/lib/library-order'
 import { KLabel } from '@/components/ui/ui'
 import { FilterBar } from '../filter-bar'
 import { CardGrid } from '../card-grid'
@@ -151,22 +151,22 @@ const TYPE_LABEL: Record<ReleaseType, string> = {
 }
 const TYPE_ORDER = RELEASE_TYPES
 
-// The order itself lives in lib/library-order (review, 2026-09-09): one rule for this
-// page and the Videos page, in a pure module Stryker can see. What stays here is the
+// The order itself lives in lib/library-order: one rule for this page and the Videos
+// page, and its date step is the SITE's law (the bridge's orderMusicProjects), so undated
+// music is last here as it is on the site (Sam, 2026-09-28). What stays here is the
 // SHAPE this page needs — releases and orphan songs sorted AGAINST EACH OTHER, because a
 // SoundCloud single creates no release row and used to sit behind every release in its
 // section however the sort was set.
 const sorted = sortLibrary
-const compareBy = compareLibrary
 
 /**
  * The ONE Music surface: every release and song, filtered by two segmented
  * controls — release state (All / Released / Unreleased) and site visibility
  * (All / On site / Off site) — with a shared toolbar (Refresh · Add Music ·
- * sort) in the same place for every view. Refresh greys out on
- * Unreleased (platform pulls only ever produce Released music). Unreleased
- * items are never public, so the site filter treats them as off-site; every
- * other card — releases AND orphan singles — is filtered by its own `on_site`.
+ * sort) in the same place for every view. Sync is absent on
+ * Unreleased (platform pulls only ever produce Released music). The site
+ * filter reads every card's OWN `on_site` — releases, orphan singles AND the
+ * unreleased half — because Released never gates the site (ADR 0007).
  * A tick writes the working row at once (a DRAFT — PRESENCE_PLAN S1); the
  * password-gated publish pill commits it along with content edits (`dirty`).
  */
@@ -240,10 +240,14 @@ export function MusicBrowser({
   // separate 'loose' pile.
   const shownOrphans = filterBySite(orphanSingles, site)
 
-  // ----- Unreleased half (hidden when bucket === 'released'; never on site) --
-  const showUnreleased = bucket !== 'released' && site !== 'on'
-  const shownUnreleasedReleases = ofType(sorted(unreleasedReleases, sort))
-  const shownUnreleasedSongs = ofType(unreleasedSongs)
+  // ----- Unreleased half (hidden when bucket === 'released') ----------------
+  // Filtered by the site lens like the released half. Released is a LIBRARY label with no
+  // effect on the site (ADR 0007): an unreleased song the manager ticked IS on the site,
+  // so it belongs under "On site". This half used to vanish under "On site" and show whole
+  // under "Off site", which hid every on-site demo from the lens that should find it.
+  const showUnreleased = bucket !== 'released'
+  const shownUnreleasedReleases = ofType(sorted(filterBySite(unreleasedReleases, site), sort))
+  const shownUnreleasedSongs = ofType(filterBySite(unreleasedSongs, site))
   const releaseOrder = [...new Set(shownUnreleasedSongs.filter((s) => s.group !== LOOSE).map((s) => s.group))]
   const labels = new Map(shownUnreleasedSongs.map((s) => [s.group, s.groupLabel]))
   const songGroups = groupByOrigin(
@@ -286,10 +290,15 @@ export function MusicBrowser({
         // ONE list, sorted together (Sam, 2026-09-09). Rendering releases then orphans
         // pinned every SoundCloud single behind every release in its section, whatever
         // the sort said — the kind of thing an item is must not decide where it sits.
-        const entries: ({ kind: 'release'; item: Release } | { kind: 'song'; item: MusicSong })[] = [
-          ...rels.map((item) => ({ kind: 'release' as const, item })),
-          ...orphs.map((item) => ({ kind: 'song' as const, item })),
-        ].sort((a, b) => compareBy(sort)(a.item, b.item))
+        // Each entry carries its item's sort keys, so ONE sortLibrary call orders both kinds.
+        const keys = (x: Release | MusicSong) => ({ title: x.title, release_date: x.release_date, created_at: x.created_at })
+        const entries = sorted(
+          [
+            ...rels.map((item) => ({ kind: 'release' as const, item, ...keys(item) })),
+            ...orphs.map((item) => ({ kind: 'song' as const, item, ...keys(item) })),
+          ],
+          sort,
+        )
         return (
           <OriginSection key={type} label={TYPE_LABEL[type as ReleaseType]} count={rels.length + orphs.length}>
             {/* Releases and orphan tracks of this type share ONE wrapping row (both 192px),

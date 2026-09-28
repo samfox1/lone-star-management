@@ -11,7 +11,8 @@ import { CardModal } from '../card-modal'
 import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { SONG_PLATFORMS } from '../music/platforms'
-import { normalizeTitle } from '@/lib/sync'
+import { mergeTwins } from '@/lib/song-merge'
+import { wrongPlatformError } from '@/lib/song-links'
 import { FeaturedChips } from './featured-chips'
 import { TrackAudio } from '../track-audio'
 import { toast } from '../toast'
@@ -111,13 +112,20 @@ export function SongModal({
   }
 
   /** One row → one field. Absent keys are skipped server-side (extractUpdate), so a
-   *  FormData with a single entry writes exactly that column. A link pasted here promotes
-   *  an upload to Released by derivation; a cleared one is dropped. */
+   *  FormData with a single entry writes exactly that column. */
   const saveField = (field: string) => async (value: string) => {
     if (field === 'title' && !value) return { error: 'Give the song a title.' }
     const fd = new FormData()
     fd.set(field, value)
     return updateContentAction('track', track.id, artistId, fd)
+  }
+
+  /** A listen-link row. Each row holds ITS platform's link: a SoundCloud link in the
+   *  Spotify row became `stream_url`, which forces Released — so a demo was released by
+   *  a paste (reviewer, 2026-09-28). A link recognisably another platform's is refused. */
+  const saveLink = (p: (typeof SONG_PLATFORMS)[number]) => async (value: string) => {
+    const wrong = wrongPlatformError(p.platform, value)
+    return wrong ? { error: wrong } : saveField(p.field)(value)
   }
 
   // Only when it actually CHANGED (KvField guarantees that): a no-op write would stamp
@@ -139,18 +147,10 @@ export function SongModal({
   }
 
   const releaseOptions = releases.map((r) => ({ value: r.id, label: r.title }))
-  // "Merge duplicate…" only when there IS a likely duplicate: another song whose title
-  // normalises to this one's (the sync's own match rule) AND that is not the SAME song
-  // on another release — a single that is also an album track is two rows on purpose
-  // (2026-09-11), not a duplicate. A twin on the same release, or with no release (a
-  // stray upload, a refused sync match), is one. Sam could not tell what the button
-  // was for on a song with no twin — now it appears only when there is one to fold in.
-  const twins = mergeTargets.filter((t) => {
-    if (normalizeTitle(t.title) !== normalizeTitle(track.title)) return false
-    const theirs = t.release_id ?? null
-    const ours = releaseId || null
-    return theirs === null || ours === null || theirs === ours
-  })
+  // "Merge duplicate…" only when there IS a likely duplicate (lib/song-merge mergeTwins,
+  // the one rule a release's tracklist uses too). Sam could not tell what the button was
+  // for on a song with no twin — now it appears only when there is one to fold in.
+  const twins = mergeTwins({ id: track.id, title: track.title, release_id: releaseId || null }, mergeTargets)
   const date = track.release_date?.slice(0, 10) ?? ''
 
   // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP
@@ -330,7 +330,7 @@ export function SongModal({
                   value={value}
                   type="url"
                   mono
-                  onSave={saveField(p.field)}
+                  onSave={saveLink(p)}
                   onError={fail}
                   trailing={
                     href ? (

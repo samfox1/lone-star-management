@@ -8,10 +8,12 @@
  * offered the merge that standalone song cards (TrackCard) already have. These pin
  * the affordance to the SAME modal and server action the song cards use:
  *
+ *   - "Merge" shows ONLY on a row whose title another song's normalises to — the same
+ *     rule the song modal uses (Sam, 2026-09-11). It once offered every song in the
+ *     catalogue on every row, a delete-a-song button pointed at unrelated songs;
  *   - the modal opens from a tracklist row with THAT row's song as the one that
- *     will be deleted (preselecting the wrong song deletes the wrong row);
- *   - the row's own song is never offered as its target (merging a song into
- *     itself is refused server-side, but offering it invites the attempt);
+ *     will be deleted (preselecting the wrong song deletes the wrong row), and offers
+ *     only its twins — never itself, never an unrelated song;
  *   - confirm accepted → mergeSongsAction gets (artistId, keepId, dropId) in that
  *     order — backwards deletes the keeper;
  *   - confirm declined → NOTHING is called (the merge deletes a row; the confirm
@@ -24,6 +26,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { ReleaseCard, type Release, type ReleaseSong } from '@/app/artists/[id]/(dashboard)/releases/release-card'
 import { mergeSongsAction } from '@/app/artists/[id]/(dashboard)/music/actions'
+import type { MergeTarget } from '@/app/artists/[id]/(dashboard)/music/merge-song-modal'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/track-audio-uploader', () => ({
@@ -71,11 +74,14 @@ const release = (over: Partial<Release> = {}): Release => ({
   ...over,
 })
 
-/** The full catalog, as the page passes it: EVERY song, including this release's own. */
-const catalog = [
-  { id: 's1', title: 'Alpha' },
-  { id: 's2', title: 'Beta' },
-  { id: 'x9', title: 'Gamma (standalone)' },
+/** The full catalog, as the page passes it: EVERY song, including this release's own.
+ *  'Beta (feat. Kay)' normalises to 'beta' — a stray duplicate of the EP's Beta with no
+ *  release. Alpha has no twin anywhere. */
+const catalog: MergeTarget[] = [
+  { id: 's1', title: 'Alpha', release_id: 'r1' },
+  { id: 's2', title: 'Beta', release_id: 'r1' },
+  { id: 'x8', title: 'Beta (feat. Kay)', release_id: null },
+  { id: 'x9', title: 'Gamma (standalone)', release_id: null },
 ]
 
 function openTracklist(r: Release = release(), targets = catalog) {
@@ -84,25 +90,39 @@ function openTracklist(r: Release = release(), targets = catalog) {
 }
 
 describe('ReleaseCard tracklist merge', () => {
-  it('opens the merge modal from a row with THAT song as the one to be deleted, never offering it as its own target', () => {
+  it('CRITICAL: Merge shows only on a row that has a same-title twin', () => {
+    openTracklist()
+    expect(screen.getByRole('button', { name: 'Merge Beta into…' })).toBeInTheDocument()
+    // Alpha has no twin: offering to delete it into Beta or Gamma is how a real song
+    // gets folded into an unrelated one.
+    expect(screen.queryByRole('button', { name: 'Merge Alpha into…' })).toBeNull()
+  })
+
+  it('CRITICAL: opens with THAT row as the one to be deleted, and offers only its twins', () => {
     openTracklist()
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
 
     // The modal names the row's song as the one that disappears…
     expect(screen.getByText('Merge song')).toBeInTheDocument()
     expect(screen.getByText('Beta', { selector: 'span' })).toBeInTheDocument()
-    // …and the keeper selector offers everything EXCEPT it.
+    // …and the keeper selector offers its twin and nothing else (the placeholder aside).
     const select = screen.getByLabelText(/Keep this song/i)
     const options = within(select).getAllByRole('option').map((o) => o.textContent)
-    expect(options).toContain('Alpha')
-    expect(options).toContain('Gamma (standalone)')
-    expect(options).not.toContain('Beta')
+    expect(options.slice(1)).toEqual(['Beta (feat. Kay)'])
+  })
+
+  it('the same song on ANOTHER release is not a twin (one row per release, 2026-09-11)', () => {
+    openTracklist(release(), [
+      ...catalog.filter((t) => t.id !== 'x8'),
+      { id: 'x7', title: 'Beta', release_id: 'r-single' },
+    ])
+    expect(screen.queryByRole('button', { name: 'Merge Beta into…' })).toBeNull()
   })
 
   /** Fill in the keeper and press Merge; returns the question that raises. */
   async function askToMerge() {
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
-    fireEvent.change(screen.getByLabelText(/Keep this song/i), { target: { value: 's1' } })
+    fireEvent.change(screen.getByLabelText(/Keep this song/i), { target: { value: 'x8' } })
     fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
     return screen.findByRole('dialog', { name: /Merge/ })
   }
@@ -115,7 +135,7 @@ describe('ReleaseCard tracklist merge', () => {
     fireEvent.click(within(ask).getByRole('button', { name: 'Merge' }))
 
     await waitFor(() => expect(mergeSongsAction).toHaveBeenCalledTimes(1))
-    expect(mergeSongsAction).toHaveBeenCalledWith('a1', 's1', 's2')
+    expect(mergeSongsAction).toHaveBeenCalledWith('a1', 'x8', 's2')
   })
 
   it('CRITICAL: confirm declined → nothing is called', async () => {

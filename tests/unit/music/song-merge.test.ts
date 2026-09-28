@@ -13,15 +13,19 @@
  * a refactor that collapses them into one would silently change two of them.
  */
 import { describe, expect, it } from 'vitest'
+import * as merge from '@/lib/song-merge'
 import {
   MERGE_COLUMNS,
   planSongMerge,
+  mergeTwins,
   CURATED_ABSOLUTE_FIELDS,
   CURATED_FILLABLE_FIELDS,
   ENRICHMENT_FIELDS,
   PLATFORM_IDENTITY,
   type MergeableSong,
 } from '@/lib/song-merge'
+import { CRUD, PUBLISHABLE } from '@/lib/content'
+import { RELEASE_TYPES } from '@/lib/releases'
 
 const song = (o: Partial<MergeableSong> = {}): MergeableSong => ({
   id: 'x',
@@ -43,6 +47,7 @@ const song = (o: Partial<MergeableSong> = {}): MergeableSong => ({
   release_type: 'single',
   release_id: null,
   audio_path: null,
+  featured_artists: [],
   ...o,
 })
 
@@ -192,6 +197,111 @@ describe('curated fields — A is the row the manager chose to keep', () => {
 })
 
 /**
+ * COLLABORATORS live on the SONG and are hand-edited (Sam, 2026-09-11: the Featuring row;
+ * a Spotify pull only seeds an EMPTY list, so "a hand edit survives"). Two rows of one
+ * song each carry credits someone chose to type or keep. The merge used to not read the
+ * column at all, so the duplicate's credits were deleted with its row (reviewer,
+ * 2026-09-28). The merged song carries every name either row had, A's first.
+ */
+describe('collaborators — the merged song keeps EVERY credit', () => {
+  const feat = (keep: string[] | null, drop: string[] | null) =>
+    patchOf(song({ featured_artists: keep }), song({ featured_artists: drop }))
+
+  it("CRITICAL: B's collaborators join A's, A's first", () => {
+    expect(feat(['Arlo'], ['Bo Reed', 'Cy'])).toMatchObject({ featured_artists: ['Arlo', 'Bo Reed', 'Cy'] })
+  })
+
+  it('CRITICAL: an empty A takes all of B', () => {
+    expect(feat([], ['Bo Reed'])).toMatchObject({ featured_artists: ['Bo Reed'] })
+  })
+
+  it('a name on both rows is kept once, in A\'s spelling (trim, any case)', () => {
+    expect(feat(['Arlo', 'Bo Reed'], [' arlo ', 'BO REED', 'Cy'])).toMatchObject({ featured_artists: ['Arlo', 'Bo Reed', 'Cy'] })
+  })
+
+  it('nothing new on B writes nothing', () => {
+    expect(feat(['Arlo'], ['arlo'])).not.toHaveProperty('featured_artists')
+    expect(feat(['Arlo'], [])).not.toHaveProperty('featured_artists')
+  })
+
+  it("a repeat inside A's own list does not hide a new name from B", () => {
+    expect(feat(['Arlo', 'arlo'], ['Cy'])).toMatchObject({ featured_artists: ['Arlo', 'Cy'] })
+  })
+
+  it('a null list on either side reads as none', () => {
+    expect(feat(null, ['Bo Reed'])).toMatchObject({ featured_artists: ['Bo Reed'] })
+    expect(feat(['Arlo'], null)).not.toHaveProperty('featured_artists')
+  })
+})
+
+/**
+ * THE TYPE TAG. A platform sync only ever stamps single / EP / album (sync-match's
+ * classifyRelease). Remix, Live set and Featured are only ever set BY HAND (Sam,
+ * 2026-08-21 / 09-10). The merge treated release_type like a title — A wins whenever it
+ * has one — and A always has one (the column defaults to 'single'), so tidying a duplicate
+ * silently turned a hand-tagged Remix or Live set back into a Single (reviewer, 2026-09-28).
+ */
+describe('the type tag — a hand-set tag survives the merge', () => {
+  const hand: readonly string[] = merge.HAND_SET_TYPES ?? []
+  const stamped = RELEASE_TYPES.filter((t) => !hand.includes(t))
+
+  it('CRITICAL: the reported case — B tagged Remix / Live set by hand, A at the default Single', () => {
+    expect(patchOf(song({ release_type: 'single' }), song({ release_type: 'remix' }))).toMatchObject({ release_type: 'remix' })
+    expect(patchOf(song({ release_type: 'single' }), song({ release_type: 'live' }))).toMatchObject({ release_type: 'live' })
+  })
+
+  it('remix and live set are hand-set; single, EP and album are what a sync stamps', () => {
+    expect(hand).toEqual(expect.arrayContaining(['remix', 'live']))
+    expect(stamped).toEqual(['single', 'ep', 'album'])
+  })
+
+  it.each(hand.flatMap((h) => stamped.map((st) => [h, st] as const)))(
+    "CRITICAL: B's hand-set %s beats A's %s",
+    (h, st) => {
+      expect(patchOf(song({ release_type: st }), song({ release_type: h }))).toMatchObject({ release_type: h })
+    },
+  )
+
+  it.each(hand.map((h) => [h] as const))("CRITICAL: A's hand-set %s is kept, whatever B says", (h) => {
+    for (const other of RELEASE_TYPES) {
+      expect(patchOf(song({ release_type: h }), song({ release_type: other }))).not.toHaveProperty('release_type')
+    }
+  })
+
+  it('two stamped types: A stands (no write)', () => {
+    expect(patchOf(song({ release_type: 'single' }), song({ release_type: 'album' }))).not.toHaveProperty('release_type')
+  })
+
+  it('an empty A takes B', () => {
+    expect(patchOf(song({ release_type: null }), song({ release_type: 'ep' }))).toMatchObject({ release_type: 'ep' })
+  })
+})
+
+/** Which songs "Merge" offers: likely DUPLICATES only (the song modal and a release's
+ *  tracklist both use this). */
+describe('mergeTwins — what Merge offers', () => {
+  const me = { id: 'me', title: 'Night Drive', release_id: 'r1' }
+  const ids = (targets: { id: string; title: string; release_id?: string | null }[]) => mergeTwins(me, targets).map((t) => t.id)
+
+  it('CRITICAL: only songs whose title normalises to this one\'s', () => {
+    expect(ids([{ id: 'a', title: 'Night Drive (feat. Kay)' }, { id: 'b', title: 'Day Drive' }])).toEqual(['a'])
+  })
+
+  it('CRITICAL: never itself', () => {
+    expect(ids([{ id: 'me', title: 'Night Drive', release_id: 'r1' }])).toEqual([])
+  })
+
+  it('the same title on ANOTHER release is the intended twin row, not a duplicate', () => {
+    expect(ids([{ id: 'a', title: 'Night Drive', release_id: 'r2' }])).toEqual([])
+  })
+
+  it('the same title on the SAME release, or with no release on either side, is a duplicate', () => {
+    expect(ids([{ id: 'a', title: 'Night Drive', release_id: 'r1' }, { id: 'b', title: 'night drive', release_id: null }])).toEqual(['a', 'b'])
+    expect(mergeTwins({ ...me, release_id: null }, [{ id: 'c', title: 'Night Drive', release_id: 'r9' }]).map((t) => t.id)).toEqual(['c'])
+  })
+})
+
+/**
  * B's uploaded master. The audio bucket is paid storage and B's row is about to be
  * deleted, so whichever object the merged row does NOT adopt has to be reported to the
  * caller or it sits in the bucket referenced by nothing, forever.
@@ -269,56 +379,32 @@ describe('the plan as a whole', () => {
     expect(plan.ok && plan.patch).toEqual({})
   })
 
-  // The three field lists must not overlap: a field appearing in two of them would be
-  // resolved twice, and the later rule would silently win.
+  // The field lists must not overlap: a field appearing in two of them would be
+  // resolved twice, and the later rule would silently win. Nor may a column be both
+  // merged and "deliberately left alone".
   it('every field belongs to exactly one resolution rule', () => {
-    const all = [
-      ...PLATFORM_IDENTITY.map((p) => p.field),
-      ...ENRICHMENT_FIELDS,
-      ...CURATED_FILLABLE_FIELDS,
-      ...CURATED_ABSOLUTE_FIELDS,
-    ]
-    expect(new Set(all).size).toBe(all.length)
+    const merged = MERGE_COLUMNS.split(', ')
+    expect(new Set(merged).size).toBe(merged.length)
+    const left = Object.keys(merge.NOT_MERGED ?? {})
+    expect(left.filter((c) => merged.includes(c))).toEqual([])
   })
 
   /**
-   * ...and TOTAL, which is the failure MERGE_COLUMNS' own docblock names and nothing
-   * checked: "A column missing here reads as null, which silently makes the kept row
-   * look empty and lets the duplicate overwrite it."
+   * ...and TOTAL, derived from the REGISTRY, never from a hand list. The old version of
+   * this test compared MERGE_COLUMNS with a hand-written Record of MergeableSong's keys —
+   * both written by the same hand, so `featured_artists` was missing from BOTH and the
+   * merge deleted every collaborator on the duplicate while this stayed green (reviewer,
+   * 2026-09-28).
    *
-   * The non-overlap test above cannot see that. A field added to `MergeableSong` and to
-   * the resolution code but to NO list is resolved by no rule, selected by no query, and
-   * arrives as undefined — the kept row's real value never reaches `planSongMerge`, so
-   * the duplicate's wins by default. Silent, one-way data loss, on a feature whose whole
-   * premise (see this file's header) is that a wrong winner has no undo.
-   *
-   * Derived from the TYPE, not hand-listed: `Record<keyof MergeableSong, true>` is a
-   * compile error the moment a column joins the row type without joining a list.
+   * Every track column the app reads or writes (content.ts: the publish snapshot and the
+   * manager-editable fields) must be either resolved by a merge rule or listed in
+   * NOT_MERGED with its reason. A new column joins those registries to reach the site or
+   * the editor, and this fails until someone decides what a merge does with it. The same
+   * check against the LIVE table's columns is in tests/integration/music/song-merge.db.test.ts.
    */
-  it('MERGE_COLUMNS selects exactly the columns MergeableSong names', () => {
-    const everyColumn: Record<keyof MergeableSong, true> = {
-      id: true,
-      title: true,
-      spotify_id: true,
-      apple_id: true,
-      deezer_id: true,
-      apple_url: true,
-      deezer_url: true,
-      soundcloud_url: true,
-      stream_url: true,
-      provider_url: true,
-      album_name: true,
-      cover_url: true,
-      duration_ms: true,
-      release_date: true,
-      on_site: true,
-      released: true,
-      release_type: true,
-      release_id: true,
-      audio_path: true,
-    }
-    // Both directions: a column the type names but the select omits arrives as null, and
-    // a column the select fetches but no rule resolves is dead weight nobody will notice.
-    expect(MERGE_COLUMNS.split(', ').sort()).toEqual(Object.keys(everyColumn).sort())
+  it('CRITICAL: every track column in the content registry is merged or deliberately left', () => {
+    const known = new Set([...PUBLISHABLE.track.snapshot, ...CRUD.track.fields])
+    const handled = new Set([...MERGE_COLUMNS.split(', '), ...Object.keys(merge.NOT_MERGED ?? {})])
+    expect([...known].filter((c) => !handled.has(c))).toEqual([])
   })
 })

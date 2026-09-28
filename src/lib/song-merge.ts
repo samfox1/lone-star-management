@@ -17,6 +17,31 @@
  * plan over an injected client, inside the caller's RLS scope.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeTitle, type PlatformReleaseKind } from '@/lib/sync-match'
+import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
+
+/** Enough of a song to tell whether another one is its duplicate. */
+export type TwinCandidate = { id: string; title: string; release_id?: string | null }
+
+/**
+ * The songs `song` could be merged into: its likely DUPLICATES, never the whole catalogue.
+ * "Merge" offers only these, wherever a song opens (the song modal, a release's tracklist).
+ *
+ * A twin is another song whose title normalises to this one's (the sync's own match rule)
+ * AND that is not the same song on ANOTHER release — a single that is also an album track
+ * is two rows on purpose (Sam, 2026-09-11), not a duplicate. A twin on the same release,
+ * or with no release (a stray upload, a refused sync match), is one. Offering every song
+ * put a delete-this-song button beside songs that had nothing to do with it.
+ */
+export function mergeTwins<T extends TwinCandidate>(song: TwinCandidate, targets: readonly T[]): T[] {
+  const key = normalizeTitle(song.title)
+  const ours = song.release_id || null
+  return targets.filter((t) => {
+    if (t.id === song.id || normalizeTitle(t.title) !== key) return false
+    const theirs = t.release_id || null
+    return theirs === null || ours === null || theirs === ours
+  })
+}
 
 /**
  * The platform handles. Two rows carrying DIFFERENT non-null values for the same one are
@@ -48,10 +73,54 @@ export const ENRICHMENT_FIELDS = ['album_name', 'cover_url', 'duration_ms', 'rel
  *  case taking the duplicate's value is strictly better than dropping it. */
 export const CURATED_FILLABLE_FIELDS = [
   'title',
-  'release_type',
   'release_id',
   'audio_path',
 ] as const
+
+/**
+ * Hand-edited LISTS that UNION: the merged song carries every entry either row had, the
+ * kept row's first. `featured_artists` — collaborators live on the SONG and are edited by
+ * hand (Sam, 2026-09-11); a pull only seeds an empty list. Two rows of one song each hold
+ * credits someone chose, so keeping only one row's list deletes the other's.
+ */
+export const UNION_LIST_FIELDS = ['featured_artists'] as const
+
+/** What a platform sync stamps onto a song's type (sync-match classifyRelease). A Record
+ *  over the platform kinds, so a new kind is a compile error here until it is placed. */
+const SYNC_STAMPED: Record<Exclude<PlatformReleaseKind, 'single-or-ep'>, true> = { album: true, ep: true, single: true }
+
+/**
+ * The type tags only a MANAGER sets — every registry type a sync never stamps: Remix,
+ * Live set, Featured. Derived from RELEASE_TYPES, so a new hand-only type joins by itself.
+ */
+export const HAND_SET_TYPES: readonly ReleaseType[] = RELEASE_TYPES.filter(
+  (t) => (SYNC_STAMPED as Partial<Record<ReleaseType, true>>)[t] !== true,
+)
+
+/**
+ * The song's TYPE tag. A hand-set tag beats a platform-stamped one, whichever row has it:
+ * the column defaults to 'single', so the kept row always "has" a type, and treating it
+ * like a title (kept row wins) turned a hand-tagged Remix or Live set back into a Single
+ * (reviewer, 2026-09-28). Two hand-set tags, or two stamped ones: the kept row's stands.
+ */
+export const TAG_FIELDS = ['release_type'] as const
+
+/**
+ * Columns of `tracks` a merge deliberately does NOT read or write, each with its reason.
+ * Every live column must be here or in a rule above: tests/unit/music/song-merge.test.ts
+ * checks the content registry, and tests/integration/music/song-merge.db.test.ts checks
+ * the REAL table, so a new column cannot slip past a merge unnoticed.
+ */
+export const NOT_MERGED = {
+  artist_id: 'both rows are the same artist (the pair is re-read scoped to it)',
+  created_at: 'bookkeeping; the kept row keeps its own',
+  updated_at: 'bookkeeping; the kept row keeps its own',
+  sort_order: "the kept row's place in the catalog, which the manager may have dragged",
+  source: "the kept row's provenance; the duplicate's platform handles union in above",
+  parent_release_id: 'retired 2026-09-11 (nulled, never read)',
+  drive_file_id:
+    "unique per artist, and the duplicate still holds it when the kept row is written; a merged Drive import is no longer badged 'imported'",
+} as const satisfies Record<string, string>
 
 /**
  * Manager-owned booleans where `false` is a DECISION, not an absence — so the kept row
@@ -84,6 +153,7 @@ export type MergeableSong = {
   release_type: string | null
   release_id: string | null
   audio_path: string | null
+  featured_artists: string[] | null
 }
 
 /** The columns `mergeSongs` must SELECT for a plan to be complete. A column missing here
@@ -94,6 +164,8 @@ export const MERGE_COLUMNS = [
   ...PLATFORM_IDENTITY.map((p) => p.field),
   ...ENRICHMENT_FIELDS,
   ...CURATED_FILLABLE_FIELDS,
+  ...UNION_LIST_FIELDS,
+  ...TAG_FIELDS,
   ...CURATED_ABSOLUTE_FIELDS,
 ].join(', ')
 
@@ -113,6 +185,30 @@ export type MergePlan =
 /** Null, undefined and '' are all "nothing here". `false` and `0` are values. */
 function isEmpty(v: unknown): boolean {
   return v === null || v === undefined || v === ''
+}
+
+const isHandSet = (t: string | null) => (HAND_SET_TYPES as readonly (string | null)[]).includes(t)
+
+/** The type tag to write onto the kept row, or undefined to leave it. See TAG_FIELDS. */
+function pickTag(keep: string | null, drop: string | null): string | undefined {
+  if (isHandSet(keep)) return undefined
+  if (isHandSet(drop)) return drop!
+  return isEmpty(keep) && !isEmpty(drop) ? drop! : undefined
+}
+
+/** A's names, then B's that A lacks. Same name = same after trimming, in any case; A's
+ *  spelling wins. Blank entries are dropped. */
+function unionNames(a: readonly string[], b: readonly string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of [...a, ...b]) {
+    const name = raw.trim()
+    const key = name.toLowerCase()
+    if (!name || seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+  }
+  return out
 }
 
 /**
@@ -145,6 +241,18 @@ export function planSongMerge(keep: MergeableSong, drop: MergeableSong): MergePl
 
   for (const field of CURATED_FILLABLE_FIELDS) {
     if (isEmpty(keep[field]) && !isEmpty(drop[field])) patch[field] = drop[field]
+  }
+
+  for (const field of UNION_LIST_FIELDS) {
+    const own = unionNames(keep[field] ?? [], [])
+    const merged = unionNames(own, drop[field] ?? [])
+    // Written only when the duplicate brings a name the kept row lacks.
+    if (merged.length > own.length) patch[field] = merged
+  }
+
+  for (const field of TAG_FIELDS) {
+    const tag = pickTag(keep[field], drop[field])
+    if (tag !== undefined) patch[field] = tag
   }
 
   // CURATED_ABSOLUTE_FIELDS are intentionally absent: the kept row's value stands, so

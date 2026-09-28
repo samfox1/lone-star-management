@@ -16,11 +16,10 @@ import { syncSectionAction } from '../sync-section-action'
 
 /**
  * The Music tab — ONE surface for the artist's whole catalog, classified by
- * provenance (lib/music.ts): Released (on a platform → public site material) vs
- * Unreleased (uploads/demos — dashboard-only, never public). The MusicBrowser
- * filters it with two segmented lenses (release state + site visibility) under
- * one shared toolbar. No manual toggle: a song moves buckets by joining a
- * released release or gaining a listen link.
+ * provenance (lib/music.ts): Released vs Unreleased. That split is a LIBRARY label
+ * only (ADR 0007); whether a song is on the site is its own `on_site`, in either
+ * half. The MusicBrowser filters it with two segmented lenses (release state + site
+ * visibility) under one shared toolbar.
  */
 export default async function MusicPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

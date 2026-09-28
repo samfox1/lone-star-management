@@ -15,7 +15,53 @@ export const STREAMING_SERVICES = [
   { key: 'deezer', label: 'Deezer', placeholder: 'https://www.deezer.com/track/…' },
 ] as const
 
-export type StreamingUrls = Partial<Record<(typeof STREAMING_SERVICES)[number]['key'], string>>
+export type SongPlatform = (typeof STREAMING_SERVICES)[number]['key']
+export type StreamingUrls = Partial<Record<SongPlatform, string>>
+
+/** The hosts each platform's song links live on. A subdomain counts (on.soundcloud.com,
+ *  geo.music.apple.com); a lookalike does not (notsoundcloud.com). */
+const PLATFORM_HOSTS: Record<SongPlatform, readonly string[]> = {
+  spotify: ['spotify.com', 'spotify.link', 'spotify.app.link'],
+  apple: ['music.apple.com', 'itunes.apple.com', 'apple.co'],
+  soundcloud: ['soundcloud.com', 'snd.sc'],
+  deezer: ['deezer.com', 'deezer.page.link', 'dzr.page.link'],
+}
+
+/** Which platform a pasted link belongs to, by its host — or null for a host this does not
+ *  know, or for something that is not a link. A link pasted without a scheme still counts. */
+export function linkPlatform(url: string): SongPlatform | null {
+  const raw = url.trim()
+  if (/^spotify:/i.test(raw)) return 'spotify'
+  let host: string
+  try {
+    host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+  for (const [platform, hosts] of Object.entries(PLATFORM_HOSTS) as [SongPlatform, readonly string[]][]) {
+    if (hosts.some((h) => host === h || host.endsWith(`.${h}`))) return platform
+  }
+  return null
+}
+
+/**
+ * The refusal for a link pasted in the wrong platform's row, or null when it may be saved.
+ *
+ * WHY (reviewer, 2026-09-28). A song's Spotify row saves `stream_url`, and ANY stream_url
+ * is platform presence, which forces Released. A SoundCloud link pasted there therefore
+ * marked the song Released — but SoundCloud is where demos and live sets live, and a
+ * SoundCloud song "can be released and unreleased … depends on the song" (Sam). Released
+ * stays the manager's per-song choice, so each row holds its OWN platform's link.
+ *
+ * Only a link that is recognisably ANOTHER platform's is refused. An unknown host passes
+ * (as before), and an empty value is clearing the row, which is always allowed.
+ */
+export function wrongPlatformError(row: SongPlatform, url: string): string | null {
+  const actual = linkPlatform(url)
+  if (!actual || actual === row) return null
+  const label = (p: SongPlatform) => STREAMING_SERVICES.find((s) => s.key === p)!.label
+  return `That's a ${label(actual)} link, not ${label(row)}. Put it in the ${label(actual)} row.`
+}
 
 /**
  * Map pasted service URLs onto the union-model columns: Spotify/Deezer ids

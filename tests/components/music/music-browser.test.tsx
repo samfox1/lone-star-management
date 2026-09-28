@@ -6,8 +6,8 @@
  * single shared toolbar (Import · Sync · + Song · + Release · sort) that
  * stays put across views, with Sync absent on Unreleased — a platform pull only ever
  * produces RELEASED music, so the control does not apply there (it was a greyed-out
- * button until 2026-09-09, when Sync became a dialog the page builds). Unreleased
- * items count as off-site for the site lens; heavy cards are stubbed.
+ * button until 2026-09-09, when Sync became a dialog the page builds). The site lens
+ * reads every card's own `on_site`, unreleased ones too (ADR 0007); heavy cards are stubbed.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
@@ -103,19 +103,36 @@ describe('MusicBrowser lenses', () => {
     expect(screen.getByRole('button', { name: 'Sync' })).toBeTruthy()
   })
 
-  it('On site shows only live released items (unreleased is never on site)', () => {
-    setup()
+  /* ADR 0007 (2026-07-10): Released is a LIBRARY label with no effect on the site. The
+   * site shows a song because its own `on_site` says so, released or not. This lens once
+   * treated everything unreleased as off-site, so an unreleased song that WAS on the site
+   * could not be found under "On site" and showed under "Off site" instead (reviewer,
+   * 2026-09-28). Every card, in both halves, is filtered by its own `on_site`. */
+  const lensFixture = () =>
+    setup({
+      unreleasedReleases: [
+        release({ id: 'u1', title: 'Demo EP', release_type: 'ep', on_site: false }),
+        release({ id: 'u2', title: 'Live Tape', release_type: 'ep', on_site: true }),
+      ],
+      unreleasedSongs: [
+        song({ id: 's1', title: 'Bedroom Demo', on_site: false }),
+        song({ id: 's2', title: 'Garage Take', on_site: true }),
+      ],
+    })
+  const songTitles = () => screen.queryAllByTestId('song').map((el) => el.textContent)
+
+  it('CRITICAL: On site shows every on-site song and release, released or not', () => {
+    lensFixture()
     fireEvent.click(siteBtn('On site'))
-    expect(releaseTitles()).toEqual(['Public Single'])
-    expect(screen.queryByTestId('song')).not.toBeInTheDocument()
+    expect(releaseTitles().sort()).toEqual(['Live Tape', 'Public Single'])
+    expect(songTitles()).toEqual(['Garage Take'])
   })
 
-  it('Off site shows hidden released items and everything unreleased', () => {
-    setup()
+  it('CRITICAL: Off site shows only what is off the site, released or not', () => {
+    lensFixture()
     fireEvent.click(siteBtn('Off site'))
-    expect(releaseTitles()).toEqual(expect.arrayContaining(['Hidden Single', 'Demo EP']))
-    expect(releaseTitles()).not.toContain('Public Single')
-    expect(screen.getByTestId('song')).toBeInTheDocument()
+    expect(releaseTitles().sort()).toEqual(['Demo EP', 'Hidden Single'])
+    expect(songTitles()).toEqual(['Bedroom Demo'])
   })
 })
 
@@ -194,20 +211,14 @@ describe('MusicBrowser toolbar', () => {
   })
 })
 
-/* ── a just-added item stacks on top of its section ────────────────────────────────────
- * Sam, 2026-09-09: "the newest ones should be in the top left of their respective
- * section. It should enter the list as a stack, not a append to the end list."
- *
- * The defect was a sentinel that disagreed with itself. `oldest` read an undated release
- * as `'9999'` — far future, therefore NEWEST, therefore last in an ascending sort, which
- * is right. `newest` read the same release as `''` — therefore OLDEST, therefore last
- * again. Undated items sank to the bottom in BOTH directions, and a release you had just
- * typed in (no date yet) appeared at the end of its section.
- *
- * Undated means JUST ADDED. It sorts first under Newest and last under Oldest, and the
- * two are now the same sentinel rather than two guesses.
+/* ── undated music goes LAST, on this page as on the site ──────────────────────────────
+ * Sam, 2026-09-28: "Last in both." The site already put undated music at the end (the
+ * date fallback of the bridge's orderMusicProjects). This page read an undated release as
+ * "just added" and put it FIRST under Newest (2026-09-09), so one song sat top-left here
+ * and bottom-right on the site. The page now runs the site's law: dated newest first,
+ * undated after them. Oldest reverses the dates; the undated tail stays the tail.
  */
-describe('MusicBrowser — an undated release is the newest thing there is', () => {
+describe('MusicBrowser — undated music goes last, like on the site', () => {
   const dated = (id: string, title: string, date: string | null) =>
     release({ id, title, release_date: date, release_type: 'single' })
 
@@ -217,59 +228,48 @@ describe('MusicBrowser — an undated release is the newest thing there is', () 
   const only = (releases: Release[]) =>
     setup({ releases, unreleasedReleases: [], unreleasedSongs: [], orphanSingles: [] })
 
-  it('CRITICAL: under Newest, a release with no date sorts ABOVE every dated one', () => {
+  it('CRITICAL: under Newest, a release with no date sorts BELOW every dated one', () => {
     only([
       dated('r1', 'Old Song', '2020-01-01'),
-      dated('r2', 'Just Added', null),
+      dated('r2', 'Undated', null),
       dated('r3', 'Recent Song', '2026-01-01'),
     ])
     // 'newest' is the default sort, which is the state a manager lands in.
-    expect(titlesIn('release')).toEqual(['Just Added', 'Recent Song', 'Old Song'])
+    expect(titlesIn('release')).toEqual(['Recent Song', 'Old Song', 'Undated'])
   })
 
   it('CRITICAL: an EMPTY-STRING date counts as undated too', () => {
-    // The old `?? ''` only caught null. A row whose date column holds '' — which the
-    // add form produces from a blank input — fell through to a string compare against
-    // every real date and lost every one of them.
-    only([dated('r1', 'Old Song', '2020-01-01'), dated('r2', 'Just Added', '')])
-    expect(titlesIn('release')).toEqual(['Just Added', 'Old Song'])
+    // A blank date input stores ''. It must land in the undated tail, not compare as a
+    // string against every real date.
+    only([dated('r2', 'Blank Date', ''), dated('r1', 'Old Song', '2020-01-01')])
+    expect(titlesIn('release')).toEqual(['Old Song', 'Blank Date'])
   })
 
-  it('CRITICAL: under Oldest it goes LAST — the sentinel means one thing in both directions', () => {
-    // The half that stops "undated first" from being implemented as "undated always
-    // first". Newest and Oldest must be each other's reverse.
+  it('CRITICAL: under Oldest it is STILL last — "last in both"', () => {
     only([
       dated('r1', 'Old Song', '2020-01-01'),
-      dated('r2', 'Just Added', null),
+      dated('r2', 'Undated', null),
       dated('r3', 'Recent Song', '2026-01-01'),
     ])
     fireEvent.click(screen.getByRole('button', { name: 'Oldest' }))
-    expect(titlesIn('release')).toEqual(['Old Song', 'Recent Song', 'Just Added'])
+    expect(titlesIn('release')).toEqual(['Old Song', 'Recent Song', 'Undated'])
   })
 
   it('dated releases still sort by their DATE, not by when they were typed in', () => {
-    // The rule is "newest release first", and a back-catalogue record added today is not
-    // new. Only the undated case is about arrival order.
     only([dated('r1', 'Newer', '2026-05-01'), dated('r2', 'Older', '2019-01-01')])
     expect(titlesIn('release')).toEqual(['Newer', 'Older'])
   })
 })
 
-/* ── a section is ONE list, newest first, whatever kind of thing is in it ──────────────
- * Sam, 2026-09-09: "for putting the assets first, it doesnt seem to work with the
- * soundcloud songs. When I add a song, it should be stamped with a date field to indicate
- * when it was added to assets, and the ones added most recently should show up first."
- *
- * A SoundCloud single creates no release row, so it renders as an ORPHAN song. The section
- * used to draw every release, then every orphan — two consecutive lists sharing one
- * wrapping row — so a single imported five minutes ago sat after a release from 2019 no
- * matter how the sort was set. Sorting each list alone would not have fixed it: they have
- * to be ONE list to interleave.
- *
- * The order key is the same for both kinds:
- *   1. release date, descending, with an undated item counting as JUST ADDED (first);
- *   2. then created_at descending — when it was added to assets — which is what separates
- *      two things that share a date, and what orders the undated ones among themselves.
+/* ── a section is ONE list, whatever kind of thing is in it ────────────────────────────
+ * Sam, 2026-09-09: a SoundCloud single creates no release row, so it renders as an ORPHAN
+ * song. The section used to draw every release, then every orphan — two consecutive lists
+ * sharing one wrapping row — so the orphan's place never depended on its date. They are
+ * ONE list, sorted by one key:
+ *   1. release date, descending; an undated item goes after every dated one (the site's
+ *      rule, 2026-09-28);
+ *   2. then created_at descending — when it was added — which separates two things that
+ *      share a date, and orders the undated tail.
  */
 describe('MusicBrowser — releases and orphan songs share one newest-first order', () => {
   const rel = (id: string, title: string, date: string | null, added = '2020-01-01T00:00:00Z') =>
@@ -288,14 +288,13 @@ describe('MusicBrowser — releases and orphan songs share one newest-first orde
   const only = (releases: Release[], orphans: MusicSong[]) =>
     setup({ releases, orphanSingles: orphans, unreleasedReleases: [], unreleasedSongs: [] })
 
-  it('CRITICAL: a just-added orphan single outranks an older release in the same section', () => {
-    // The exact report. Before the fix this read ['Old Album', 'Fresh Import'] — the
-    // orphan could not reach the front of its own section however it was dated.
+  it('CRITICAL: an undated orphan single goes after the dated releases in its section', () => {
+    // Same law for both kinds: it is undated, so it joins the tail, as it does on the site.
     only(
       [rel('r1', 'Old Release', '2019-01-01')],
       [orphan('o1', 'Fresh Import', null, '2026-09-09T12:00:00Z')],
     )
-    expect(shelf()).toEqual(['Fresh Import', 'Old Release'])
+    expect(shelf()).toEqual(['Old Release', 'Fresh Import'])
   })
 
   it('CRITICAL: a DATED orphan still sorts by its date, in among the releases', () => {
@@ -309,8 +308,8 @@ describe('MusicBrowser — releases and orphan songs share one newest-first orde
   })
 
   it('CRITICAL: two undated items order by WHEN THEY WERE ADDED, newest first', () => {
-    // "the ones added most recently should show up first". This is the tie-break, and the
-    // only thing that separates a batch of imports that share no release date.
+    // The tie-break, and the only thing that separates a batch of imports that share no
+    // release date.
     only(
       [],
       [
@@ -322,13 +321,13 @@ describe('MusicBrowser — releases and orphan songs share one newest-first orde
     expect(shelf()).toEqual(['Added last', 'Added second', 'Added first'])
   })
 
-  it('CRITICAL: Oldest reverses the whole thing, both kinds together', () => {
+  it('CRITICAL: Oldest reverses the dates, both kinds together, undated still last', () => {
     only(
-      [rel('r1', 'Old Release', '2019-01-01')],
-      [orphan('o1', 'Fresh Import', null, '2026-09-09T12:00:00Z')],
+      [rel('r1', 'From 2026', '2026-01-01'), rel('r2', 'From 2019', '2019-01-01')],
+      [orphan('o1', 'Fresh Import', null, '2026-09-09T12:00:00Z'), orphan('o2', 'From 2022', '2022-01-01', '2026-01-01T00:00:00Z')],
     )
     fireEvent.click(screen.getByRole('button', { name: 'Oldest' }))
-    expect(shelf()).toEqual(['Old Release', 'Fresh Import'])
+    expect(shelf()).toEqual(['From 2019', 'From 2022', 'From 2026', 'Fresh Import'])
   })
 })
 

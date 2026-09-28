@@ -361,6 +361,22 @@ describe('streaming: Unreleased is offered for SoundCloud only', () => {
     expect(inserted[0]).toMatchObject({ released: true, on_site: true, release_type: 'live' })
   })
 
+  // A SoundCloud link in the SPOTIFY box was stored as stream_url, which forces Released,
+  // and hid the switch (the box was not the SoundCloud one) — so a demo pasted in the
+  // wrong box was released with no way to say otherwise (reviewer, 2026-09-28).
+  it('CRITICAL: a SoundCloud link in the Spotify box is refused before anything resolves or saves', async () => {
+    const dialog = openModal()
+    fireEvent.click(within(dialog).getByText('Upload from Streaming Service'))
+    fireEvent.change(within(dialog).getByPlaceholderText('https://open.spotify.com/track/…'), {
+      target: { value: 'https://soundcloud.com/skeen/demo' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/SoundCloud/)
+    expect(resolveStreamingSongAction).not.toHaveBeenCalled()
+    expect(within(dialog).queryByPlaceholderText('Song title')).toBeNull()
+    expect(inserted).toHaveLength(0)
+  })
+
   it('CRITICAL: a Spotify link offers NO switch — being on Spotify is being released', async () => {
     const dialog = await review('https://open.spotify.com/track/ZZ9', 'https://open.spotify.com/track/…')
     expect(within(dialog).queryByRole('switch', { name: 'Unreleased' })).toBeNull()

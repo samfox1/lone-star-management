@@ -7,6 +7,7 @@ import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
 import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
+import { mergeTwins } from '@/lib/song-merge'
 import { STREAMING_PLATFORMS } from '../music/platforms'
 import { SongModal, type ReleaseOption, type Track } from '../tracks/song-modal'
 import { FeaturedChips } from '../tracks/featured-chips'
@@ -97,9 +98,10 @@ export function ReleaseCard({
   // The tracklist song being merged away. Same modal + server action as the standalone
   // song cards — one merge implementation, wherever the song lives.
   const [mergeSong, setMergeSong] = useState<ReleaseSong | null>(null)
-  // A song can never be its own merge target — the server refuses it, but offering it at
-  // all invites the manager to delete the row they are standing on.
-  const targetsFor = (id: string) => mergeTargets.filter((t) => t.id !== id)
+  // A row's merge targets are its likely DUPLICATES only (mergeTwins — the song modal's
+  // rule): never the row itself, never an unrelated song. This offered the whole catalogue
+  // on every row, so "Merge" sat beside songs that had no twin to fold into.
+  const targetsFor = (s: ReleaseSong) => mergeTwins(s, mergeTargets)
 
   const year = date.slice(0, 4)
   const songCount = release.songs.length
@@ -331,7 +333,7 @@ export function ReleaseCard({
                         {s.title}
                       </button>
                       {feat(s) && <span className="max-w-[40%] flex-none truncate font-space text-[11px] text-ink-faint">{feat(s)}</span>}
-                      {targetsFor(s.id).length > 0 && (
+                      {targetsFor(s).length > 0 && (
                         <button
                           type="button"
                           onClick={() => setMergeSong(s)}
@@ -388,7 +390,7 @@ export function ReleaseCard({
           onClose={() => setMergeSong(null)}
           artistId={artistId}
           song={{ id: mergeSong.id, title: mergeSong.title }}
-          targets={targetsFor(mergeSong.id)}
+          targets={targetsFor(mergeSong)}
         />
       )}
 
@@ -407,7 +409,7 @@ export function ReleaseCard({
           artistSlug={artistSlug}
           open
           onClose={() => setSong(null)}
-          mergeTargets={targetsFor(song.id)}
+          mergeTargets={mergeTargets}
         />
       )}
     </div>

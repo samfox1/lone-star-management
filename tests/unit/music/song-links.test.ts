@@ -5,7 +5,7 @@
  * Deterministic: injected fetch, no network.
  */
 import { describe, expect, it } from 'vitest'
-import { parseStreamingLinks, resolveStreamingSong } from '@/lib/song-links'
+import { linkPlatform, parseStreamingLinks, resolveStreamingSong, wrongPlatformError } from '@/lib/song-links'
 
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -74,5 +74,77 @@ describe('resolveStreamingSong', () => {
     await expect(resolveStreamingSong({ spotify: 'https://open.spotify.com/track/x' }, fetchImpl)).rejects.toThrow(
       /check them and try again/,
     )
+  })
+})
+
+/* ── which platform a pasted link belongs to (reviewer, 2026-09-28) ─────────────────────
+ * The song modal's Spotify row saves `stream_url`, and ANY stream_url counts as platform
+ * presence, which forces Released. A SoundCloud link pasted there therefore marked the
+ * song Released — but SoundCloud is where demos and live sets live, and a SoundCloud song
+ * "can be released and unreleased … depends on the song" (Sam). Each row holds its own
+ * platform's link; a link that is recognisably ANOTHER platform's is refused. */
+describe('linkPlatform', () => {
+  it.each([
+    ['https://open.spotify.com/track/abc', 'spotify'],
+    ['https://spotify.link/xyz', 'spotify'],
+    ['spotify:track:abc', 'spotify'],
+    ['https://music.apple.com/us/album/x/1?i=2', 'apple'],
+    ['https://geo.music.apple.com/x', 'apple'],
+    ['https://itunes.apple.com/us/album/x', 'apple'],
+    ['https://soundcloud.com/skeen/demo', 'soundcloud'],
+    ['https://on.soundcloud.com/abc', 'soundcloud'],
+    ['https://m.soundcloud.com/skeen/demo', 'soundcloud'],
+    ['soundcloud.com/skeen/demo', 'soundcloud'], // pasted without a scheme
+    ['soundcloud.com/skeen/demo?ref=https://x.io', 'soundcloud'], // no scheme, a URL later on
+    ['  spotify:track:abc', 'spotify'], // pasted with a leading space
+    ['HTTPS://SOUNDCLOUD.COM/SKEEN', 'soundcloud'],
+    ['https://www.deezer.com/track/1', 'deezer'],
+    ['https://deezer.page.link/abc', 'deezer'],
+    // the platforms' own share short-links
+    ['https://spotify.app.link/abc', 'spotify'],
+    ['https://apple.co/abc', 'apple'],
+    ['https://snd.sc/abc', 'soundcloud'],
+    ['https://dzr.page.link/abc', 'deezer'],
+  ] as const)('%s → %s', (url, platform) => {
+    expect(linkPlatform(url)).toBe(platform)
+  })
+
+  it.each([
+    'https://example.com/song',
+    'https://notsoundcloud.com/x', // a lookalike is not the platform
+    'https://soundcloud.com.evil.io/x',
+    'https://example.com/?next=spotify:track:1', // "spotify:" only counts as the scheme
+    'not a url at all',
+    '',
+  ])('%s → null', (url) => {
+    expect(linkPlatform(url)).toBeNull()
+  })
+})
+
+describe('wrongPlatformError', () => {
+  it("CRITICAL: a SoundCloud link in the Spotify row is refused, naming where it goes", () => {
+    expect(wrongPlatformError('spotify', 'https://soundcloud.com/skeen/demo')).toMatch(/SoundCloud/)
+  })
+
+  it('CRITICAL: every platform refuses every OTHER platform\'s link, and accepts its own', () => {
+    const sample = {
+      spotify: 'https://open.spotify.com/track/abc',
+      apple: 'https://music.apple.com/us/song/x/1',
+      soundcloud: 'https://soundcloud.com/skeen/demo',
+      deezer: 'https://www.deezer.com/track/1',
+    } as const
+    const keys = Object.keys(sample) as (keyof typeof sample)[]
+    for (const row of keys) {
+      for (const link of keys) {
+        const err = wrongPlatformError(row, sample[link])
+        if (row === link) expect(err, `${row} row refused its own link`).toBeNull()
+        else expect(err, `${row} row accepted a ${link} link`).not.toBeNull()
+      }
+    }
+  })
+
+  it('an unrecognised host, and an empty value (clearing the row), are not refused', () => {
+    expect(wrongPlatformError('spotify', 'https://example.com/listen')).toBeNull()
+    expect(wrongPlatformError('spotify', '')).toBeNull()
   })
 })

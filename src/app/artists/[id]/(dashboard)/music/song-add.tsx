@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { mediaUrl } from '@/lib/site'
 import { slugify } from '@/lib/slug'
 import { acceptFor, AUDIO_UPLOAD_RULES, buildStoragePath, contentTypeFor, friendlyUploadError, validateUpload } from '@/lib/upload'
-import { STREAMING_SERVICES, parseStreamingLinks, type StreamingUrls } from '@/lib/song-links'
+import { STREAMING_SERVICES, parseStreamingLinks, wrongPlatformError, type SongPlatform, type StreamingUrls } from '@/lib/song-links'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { resolveStreamingSongAction } from '../actions'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
@@ -155,6 +155,12 @@ export function SongAddButton({ artistId }: { artistId: string }) {
     if (busyRef.current) return
     setError(null)
     if (!hasUrls) return setError('Paste at least one streaming link.')
+    // Each box holds ITS platform's link. A SoundCloud link in the Spotify box would be
+    // stored as stream_url, which forces Released (and hides the Unreleased switch).
+    for (const [key, url] of Object.entries(urls) as [SongPlatform, string | undefined][]) {
+      const wrong = url?.trim() ? wrongPlatformError(key, url) : null
+      if (wrong) return setError(wrong)
+    }
     setBusyBoth(true)
     try {
       const resolved = await resolveStreamingSongAction(urls)

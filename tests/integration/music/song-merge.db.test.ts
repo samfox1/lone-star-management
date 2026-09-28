@@ -14,7 +14,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { mergeSongs } from '@/lib/song-merge'
+import * as merge from '@/lib/song-merge'
+import { MERGE_COLUMNS, mergeSongs } from '@/lib/song-merge'
 import { SEED, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 const svc = serviceClient()
@@ -74,6 +75,41 @@ describe('a real merge', () => {
       duration_ms: 203_000,
     })
     expect(await readSong(drop)).toBeNull()
+  })
+})
+
+/**
+ * Two hand-kept facts the merge used to throw away (reviewer, 2026-09-28): the
+ * duplicate's collaborators (featured_artists was never even selected) and a hand-set
+ * Remix / Live set tag (the kept row's default 'single' beat it). Real rows, real merge.
+ */
+describe('a real merge keeps what the manager set by hand', () => {
+  it("CRITICAL: the kept song ends with BOTH rows' collaborators and the hand-set tag", async () => {
+    const keep = await makeSong(artistA, { title: 'MERGE feat keep', featured_artists: ['Arlo'], release_type: 'single' })
+    const drop = await makeSong(artistA, { title: 'MERGE feat drop', featured_artists: ['arlo', 'Bo Reed'], release_type: 'remix' })
+
+    expect((await mergeSongs(asA, artistA, keep, drop)).ok).toBe(true)
+
+    expect(await readSong(keep)).toMatchObject({ featured_artists: ['Arlo', 'Bo Reed'], release_type: 'remix' })
+    expect(await readSong(drop)).toBeNull()
+  })
+})
+
+/**
+ * THE LIVE TABLE'S COLUMNS, not a list someone typed. Every column a real `tracks` row
+ * has must be either resolved by a merge rule (MERGE_COLUMNS) or named in NOT_MERGED
+ * with its reason. A column added by a migration fails this until someone decides what a
+ * merge does with it — the way featured_artists went unmerged for two weeks.
+ */
+describe('every column of the real table is accounted for', () => {
+  it('CRITICAL: no tracks column is silently dropped by a merge', async () => {
+    const id = await makeSong(artistA, { title: 'MERGE schema probe' })
+    const row = await readSong(id)
+    expect(row, 'the probe row must exist, or this check runs over nothing').not.toBeNull()
+    const columns = Object.keys(row!)
+    expect(columns.length).toBeGreaterThan(10)
+    const handled = new Set([...MERGE_COLUMNS.split(', '), ...Object.keys(merge.NOT_MERGED ?? {})])
+    expect(columns.filter((c) => !handled.has(c)).sort()).toEqual([])
   })
 })
 
