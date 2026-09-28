@@ -4,7 +4,7 @@
  *
  * The list is BUNDLED, not fetched: the Google Fonts Developer API needs a key we do not
  * have, so `scripts/build-google-fonts.ts` read Google's own catalogue once and checked it in
- * as `src/data/google-fonts.json` — `[family, category]`, most popular first. It is loaded
+ * as `src/data/google-fonts.json` — `[family, category, weights]`, most popular first. It is loaded
  * with a dynamic import (`loadGoogleFonts`), so ~60 KB of names reach a browser only when the
  * picker opens, never in the pages that merely import this module.
  *
@@ -41,6 +41,21 @@ export function hasUprightStyle(styles: unknown): boolean {
   return Object.keys(styles).some((k) => /^\d+$/.test(k))
 }
 
+/**
+ * The UPRIGHT weights a family really has, as ascending digits — 1–9 for 100–900 — from the
+ * same metadata (`"400"`, `"700"`; `"400i"` is italic and skipped). The font preview offers
+ * exactly these (Sam, 2026-09-28: "all real weights … via toggle"), so it never shows a
+ * weight the browser would have to fake. A key off the 100–900 scale is ignored.
+ */
+export function uprightWeights(styles: unknown): string {
+  if (!styles || typeof styles !== 'object') return ''
+  const digits = new Set<number>()
+  for (const key of Object.keys(styles)) {
+    if (/^[1-9]00$/.test(key)) digits.add(Number(key) / 100)
+  }
+  return [...digits].sort((a, b) => a - b).join('')
+}
+
 /** Google's categories, as one letter each in the bundled list. */
 export const CATEGORY_CODE = {
   'Sans Serif': 's',
@@ -61,13 +76,27 @@ export const CATEGORY_LABEL: Record<GoogleCategory, string> = {
   m: 'Mono',
 }
 
-/** One family in the bundled list. */
-export type GoogleFontRow = [family: string, category: GoogleCategory]
+/** One family in the bundled list: its name, its category, and its real upright weights
+ *  (`uprightWeights`: "123456789" for Archivo, "4" for Bebas Neue). The weights are
+ *  optional in the TYPE only, so a test fixture can name a family without them; every
+ *  bundled row carries them (google-fonts.test.ts). */
+export type GoogleFontRow = [family: string, category: GoogleCategory, weights?: string]
 
 /** The bundled catalogue, most popular first. A dynamic import: see the top of the file. */
 export async function loadGoogleFonts(): Promise<GoogleFontRow[]> {
   const mod = await import('@/data/google-fonts.json')
   return (mod.default ?? mod) as unknown as GoogleFontRow[]
+}
+
+/**
+ * The real weights of a family, by Google's EXACT spelling (the name comes off the database
+ * already in it), as CSS numbers: [100, …, 900] for Archivo, [400] for Bebas Neue, [] for a
+ * family the list does not hold.
+ */
+export function googleWeights(rows: readonly GoogleFontRow[], family: unknown): number[] {
+  if (typeof family !== 'string') return []
+  const row = rows.find(([name]) => name === family)
+  return [...(row?.[2] ?? '')].map((d) => Number(d) * 100)
 }
 
 /** A typed name as a comparison key: case and runs of spaces do not matter. */

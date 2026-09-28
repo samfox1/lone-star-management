@@ -18,7 +18,7 @@
  * css2 never serves it for the upright request sites and the picker make (hasUprightStyle).
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { CATEGORY_CODE, GOOGLE_FAMILY_RE, MAX_GOOGLE_FAMILY, hasUprightStyle, type GoogleFontRow } from '../src/lib/google-fonts'
+import { CATEGORY_CODE, GOOGLE_FAMILY_RE, MAX_GOOGLE_FAMILY, hasUprightStyle, uprightWeights, type GoogleFontRow } from '../src/lib/google-fonts'
 
 const SOURCE = 'https://fonts.google.com/metadata/fonts'
 const OUT = 'src/data/google-fonts.json'
@@ -46,7 +46,11 @@ async function main() {
 
   const rows: GoogleFontRow[] = upright
     .sort((a, b) => a.popularity - b.popularity || a.family.localeCompare(b.family))
-    .map((f) => [f.family, CATEGORY_CODE[f.category as keyof typeof CATEGORY_CODE]])
+    .map((f) => [f.family, CATEGORY_CODE[f.category as keyof typeof CATEGORY_CODE], uprightWeights(f.fonts)])
+  // hasUprightStyle kept every row; a row whose weights still came out empty has an upright
+  // style off the 100–900 scale, and the preview would offer it nothing. Fail, don't ship it.
+  const weightless = rows.filter(([, , w]) => !w)
+  if (weightless.length) throw new Error(`upright styles off the 100–900 scale: ${weightless.map(([f]) => f).join(', ')}`)
   writeFileSync(OUT, JSON.stringify(rows) + '\n')
   console.log(`google fonts: ${rows.length} families → ${OUT}`)
   if (italicOnly.length) console.log(`left out, no upright style: ${italicOnly.map((f) => f.family).join(', ')}`)

@@ -7,7 +7,7 @@
  * no canvas, so the maths is pinned here, on the pure function all three samples use.
  */
 import { describe, expect, it } from 'vitest'
-import { faceOf, fittedFontSize, SAMPLE_CAP_PX, SAMPLE_MAX_PX, SAMPLE_MIN_PX } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/fonts/face'
+import { faceOf, fittedFontSize, previewStartWeight, SAMPLE_CAP_PX, SAMPLE_MAX_PX, SAMPLE_MIN_PX } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/fonts/face'
 
 describe('fittedFontSize', () => {
   it('gives a short-capped face a bigger size than a tall-capped one, to the same cap height', () => {
@@ -55,5 +55,22 @@ describe('faceOf', () => {
   it('CRITICAL: a Google name that is not Google-shaped never reaches the style — the token does', () => {
     expect(faceOf('evil', "Evil'); } body{")).toBe("'evil', sans-serif")
     expect(faceOf('inter', null)).toBe("'inter', sans-serif")
+  })
+})
+
+describe('previewStartWeight — where the preview’s weight toggle starts', () => {
+  it('Regular when the family has it', () => {
+    expect(previewStartWeight([100, 200, 300, 400, 500, 600, 700, 800, 900])).toBe(400)
+    expect(previewStartWeight([400])).toBe(400)
+  })
+
+  it('otherwise the real weight nearest Regular, the lighter on a tie', () => {
+    expect(previewStartWeight([700, 800, 900])).toBe(700)
+    expect(previewStartWeight([100, 200])).toBe(200)
+    expect(previewStartWeight([300, 500])).toBe(300)
+  })
+
+  it('Regular when nothing is known', () => {
+    expect(previewStartWeight([])).toBe(400)
   })
 })

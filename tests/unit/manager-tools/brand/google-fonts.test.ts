@@ -27,6 +27,8 @@ import {
   loadGoogleFonts,
   searchGoogleFonts,
   type GoogleFontRow,
+  googleWeights,
+  uprightWeights,
 } from '@/lib/google-fonts'
 import { MAX_FONTS_PER_ARTIST, addGoogleFont } from '@/lib/fonts'
 import { fakeClient, isOwnershipRead, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
@@ -242,5 +244,37 @@ describe('addGoogleFontAction', () => {
     const res = await (await load()).addGoogleFontAction(A, 'Not A Real Family', 'primary')
     expect(res.error).toBe('That isn’t a Google font.')
     expect(fake.writes()).toEqual([])
+  })
+})
+
+/**
+ * The weights each family REALLY has (Sam, 2026-09-28: the font preview shows "all real
+ * weights … via toggle"). Stored per row as digits, 1–9 for 100–900, from Google's own
+ * metadata, so the preview never offers a weight the browser would have to fake.
+ */
+describe('real weights', () => {
+  it('uprightWeights: the upright style keys as ascending digits; italics and junk ignored', () => {
+    expect(uprightWeights({ '700': {}, '400': {}, '400i': {}, '700i': {} })).toBe('47')
+    expect(uprightWeights({ '100': {}, '200': {}, '300': {}, '400': {}, '500': {}, '600': {}, '700': {}, '800': {}, '900': {} })).toBe('123456789')
+    expect(uprightWeights({ '400i': {} })).toBe('')
+    expect(uprightWeights({ '350': {}, '1000': {}, 'x': {} })).toBe('') // not on the 100–900 scale
+    expect(uprightWeights(null)).toBe('')
+    expect(uprightWeights('400')).toBe('')
+  })
+
+  it('CRITICAL: every bundled family carries its real weights (non-empty, ascending, 1–9)', async () => {
+    const rows = await loadGoogleFonts()
+    const bad = rows.filter(([, , w]) => typeof w !== 'string' || !/^[1-9]+$/.test(w) || [...w].sort().join('') !== w || new Set(w).size !== w.length)
+    expect(bad.map(([f]) => f)).toEqual([])
+  })
+
+  it('googleWeights: Archivo has all nine, Bebas Neue only Regular, an unknown family none', async () => {
+    const rows = await loadGoogleFonts()
+    expect(googleWeights(rows, 'Archivo')).toEqual([100, 200, 300, 400, 500, 600, 700, 800, 900])
+    expect(googleWeights(rows, 'Bebas Neue')).toEqual([400])
+    expect(googleWeights(rows, 'No Such Family')).toEqual([])
+    // Google's spelling, exactly: the name comes off the database already in it.
+    expect(googleWeights(rows, 'archivo')).toEqual([])
+    expect(googleWeights(rows, null)).toEqual([])
   })
 })

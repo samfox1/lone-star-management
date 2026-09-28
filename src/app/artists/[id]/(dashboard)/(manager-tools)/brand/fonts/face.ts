@@ -42,3 +42,21 @@ export const WEIGHT_CHOICES = [100, 200, 300, 400, 500, 600, 700, 800, 900].map(
   value: String(w),
   label: weightName(w),
 }))
+
+/**
+ * Where the preview's weight toggle starts: Regular when the family has it, else the real
+ * weight nearest it (the lighter on a tie), else Regular. The toggle only ever offers real
+ * weights, so this only picks among them.
+ */
+export function previewStartWeight(weights: readonly number[]): number {
+  let best = 400
+  let bestDistance = Infinity
+  for (const w of weights) {
+    const d = Math.abs(w - 400)
+    if (d < bestDistance || (d === bestDistance && w < best)) {
+      best = w
+      bestDistance = d
+    }
+  }
+  return best
+}
